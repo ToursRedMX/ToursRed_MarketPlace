@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
     );
 
     const authHeader = req.headers.get("Authorization");
-    const { bookingId, amount, description, context, extrasBody } = await req.json();
+    const { bookingId, amount, description, context, extrasBody, plan_id, effective_amount, pay_full_balance } = await req.json();
 
     if (context !== "gift_card") {
       if (!authHeader) {
@@ -64,7 +64,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (!bookingId || !amount) {
+    const isPlanInstallment = context === "payment_plan_installment";
+    if (isPlanInstallment ? (!plan_id || !amount) : (!bookingId || !amount)) {
       return new Response(JSON.stringify({ error: "Datos incompletos" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -113,6 +114,12 @@ Deno.serve(async (req: Request) => {
       if (extraType === 'optional_service' && extrasBody?.tour_optional_service_id) {
         returnParams += `&tour_optional_service_id=${extrasBody.tour_optional_service_id}&quantity=${extrasBody.quantity || 1}`;
       }
+      returnUrl = `${origin}/payment-return?${returnParams}`;
+      cancelUrl = `${origin}/traveler/bookings`;
+    } else if (context === "payment_plan_installment") {
+      const payAmt = effective_amount ?? amount;
+      let returnParams = `provider=paypal&context=payment_plan_installment&plan_id=${plan_id}&amount=${payAmt}&tr_status=success`;
+      if (pay_full_balance) returnParams += `&pay_full_balance=true`;
       returnUrl = `${origin}/payment-return?${returnParams}`;
       cancelUrl = `${origin}/traveler/bookings`;
     } else {
@@ -178,7 +185,7 @@ Deno.serve(async (req: Request) => {
         .from("gift_cards")
         .update({ paypal_order_id: order.id })
         .eq("id", bookingId);
-    } else if (context !== "supplement" && context !== "extras") {
+    } else if (context !== "supplement" && context !== "extras" && context !== "payment_plan_installment") {
       await supabase
         .from("bookings")
         .update({ paypal_order_id: order.id })

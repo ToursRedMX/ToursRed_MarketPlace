@@ -16,6 +16,9 @@ export default function PaymentReturnPage() {
   const giftCardId = searchParams.get('gift_card_id');
   const bookingSupplementId = searchParams.get('booking_supplement_id');
   const paypalOrderId = searchParams.get('token');
+  const planId = searchParams.get('plan_id');
+  const payFullBalance = searchParams.get('pay_full_balance') === 'true';
+  const returnUrlContext = searchParams.get('context');
   // Post-booking extras (insurance / optional_service)
   const extraType = searchParams.get('extra_type'); // 'insurance' | 'optional_service'
   const extraBosId = searchParams.get('bos_id');
@@ -186,6 +189,37 @@ export default function PaymentReturnPage() {
           } else {
             setStatus('error');
             setMessage(extrasResult.error || 'Hubo un problema al confirmar tu pago. Contacta soporte si el cargo fue aplicado.');
+          }
+          return;
+        }
+
+        if (returnUrlContext === 'payment_plan_installment' && planId) {
+          const planAmount = searchParams.get('amount') || '0';
+          const planResponse = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment-plan-installment`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token}`,
+              },
+              body: JSON.stringify({
+                plan_id: planId,
+                amount: parseFloat(planAmount),
+                payment_method: 'paypal',
+                paypal_order_id: paypalOrderId,
+                pay_full_balance: payFullBalance,
+              }),
+            }
+          );
+          const planResult = await planResponse.json();
+          if (planResult.success) {
+            setStatus('success');
+            setMessage(planResult.message || 'Abono a tu plan de pagos completado.');
+            setTimeout(() => navigate(`/payment-plan-success?plan_id=${planId}`), 2000);
+          } else {
+            setStatus('error');
+            setMessage(planResult.error || 'Hubo un problema al confirmar tu abono. Contacta soporte si el cargo fue aplicado.');
           }
           return;
         }

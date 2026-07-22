@@ -82,6 +82,30 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
+
+      if (paymentProvider === 'paypal') {
+        const ppRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-paypal-order`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            plan_id: plan.id,
+            amount,
+            effective_amount: amount,
+            context: 'payment_plan_installment',
+          }),
+        });
+        const ppResult = await ppRes.json();
+        if (!ppRes.ok) {
+          setPaymentError(ppResult.error || 'Error al crear orden de PayPal');
+        } else if (ppResult.url) {
+          window.location.href = ppResult.url;
+        }
+        return;
+      }
+
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment-plan-installment`, {
         method: 'POST',
         headers: {
@@ -122,6 +146,31 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
+
+      if (paymentProvider === 'paypal') {
+        const ppRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-paypal-order`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          plan_id: plan.id,
+          amount: plan.pending_balance,
+          effective_amount: plan.pending_balance,
+          context: 'payment_plan_installment',
+          pay_full_balance: true,
+        }),
+        });
+        const ppResult = await ppRes.json();
+        if (!ppRes.ok) {
+          setPaymentError(ppResult.error || 'Error al crear orden de PayPal');
+        } else if (ppResult.url) {
+          window.location.href = ppResult.url;
+        }
+        return;
+      }
+
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment-plan-installment`, {
         method: 'POST',
         headers: {
