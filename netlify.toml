@@ -1,0 +1,15 @@
+[build]
+command = "npx vite build"
+publish = "dist"
+
+[build.environment]
+SECRETS_SCAN_ENABLED = "false"
+NODE_VERSION = "20"
+
+[[edge_functions]]
+function = "tour-slug-redirect"
+path = "/tours/*"
+
+[[edge_functions]]
+function = "sitemap"
+path = "/sitemap.xml"

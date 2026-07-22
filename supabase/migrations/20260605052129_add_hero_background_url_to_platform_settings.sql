@@ -1,0 +1,1 @@
+ALTER TABLE platform_settings ADD COLUMN IF NOT EXISTS hero_background_url TEXT DEFAULT NULL;

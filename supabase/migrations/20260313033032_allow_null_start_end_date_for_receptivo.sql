@@ -1,0 +1,3 @@
+
+ALTER TABLE public.tours ALTER COLUMN start_date DROP NOT NULL;
+ALTER TABLE public.tours ALTER COLUMN end_date DROP NOT NULL;

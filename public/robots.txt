@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /agency-signup
+Disallow: /admin
+Disallow: /agency
+Disallow: /traveler
+Disallow: /executive
+Disallow: /accounting
+Disallow: /auth
+Disallow: /messages
+Disallow: /mantenimiento-admin
+
+Sitemap: https://toursredmx.netlify.app/sitemap.xml

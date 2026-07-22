@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION activate_featured_slot(uuid, uuid, uuid) TO authenticated;

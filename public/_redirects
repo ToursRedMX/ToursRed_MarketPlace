@@ -1,0 +1,20 @@
+# Redirects 301 permanentes de UUIDs a slugs compuestos para tours
+# Generado en build time desde la migración de slugs (Fase 1 SEO)
+# El universo de UUIDs viejos es finito y conocido en este momento.
+# De aquí en adelante todo el código enlaza con slug.
+
+# UUIDs → slugs compuestos ({tour}-{agencia})
+/tours/24a45977-053f-41f6-9cd5-64e80f6b8253  /tours/tlaxcala-aventourax  301
+/tours/3c005f2f-5959-451b-8e82-fb27b9501fad  /tours/tour-a-teotihuacan-aventourax  301
+/tours/fcac1662-c34b-4741-8a29-628b694c1396  /tours/tlaxcala-agosto-aventourax  301
+/tours/d463b7d1-b933-4b56-8688-85cbea3d57e2  /tours/islas-marias-ma-alob-kiin-excursions  301
+
+# Slugs viejos (pre-composite) → slugs compuestos
+# Respaldo estático en caso de que la Netlify Edge Function no intercepte
+/tours/tlaxcala  /tours/tlaxcala-aventourax  301
+/tours/tour-a-teotihuacan  /tours/tour-a-teotihuacan-aventourax  301
+/tours/tlaxcala-agosto  /tours/tlaxcala-agosto-aventourax  301
+/tours/islas-marias  /tours/islas-marias-ma-alob-kiin-excursions  301
+
+# SPA fallback — debe ir al final
+/*    /index.html   200

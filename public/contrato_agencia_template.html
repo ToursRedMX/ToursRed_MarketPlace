@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+<meta charset="UTF-8">
+<title>Contrato de Uso de Plataforma Digital, Intermediación y Comisión Mercantil — {{razon_social}}</title>
+<style>
+  @page {
+    size: letter;
+    margin: 2.2cm 2cm 2.6cm 2cm;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 11pt;
+    line-height: 1.55;
+    color: #1a1a1a;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 24px;
+    background: #f4f4f2;
+  }
+  @media print {
+    body { background: #fff; padding: 0; max-width: none; }
+    .no-print { display: none !important; }
+    .cover-page { page-break-after: always; }
+    h1, h2, strong { page-break-after: avoid; }
+    p { orphans: 3; widows: 3; }
+  }
+
+  /* ---- Cover page ---- */
+  .cover-page {
+    background: #fff;
+    border: 1px solid #d8d5cc;
+    border-radius: 4px;
+    padding: 48px 44px;
+    margin-bottom: 40px;
+  }
+  .cover-brand {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: #b8862b;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .cover-title {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0 0 4px 0;
+  }
+  .cover-sub {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12.5px;
+    color: #6b6b6b;
+    margin-bottom: 28px;
+  }
+  .cover-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px 28px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
+    border-top: 1px solid #e4e1d8;
+    padding-top: 24px;
+  }
+  .cover-grid .full { grid-column: 1 / -1; }
+  .cover-label {
+    display: block;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #9a9a9a;
+    margin-bottom: 3px;
+  }
+  .cover-value {
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+  .cover-folio {
+    margin-top: 28px;
+    padding: 14px 16px;
+    background: #faf6ec;
+    border: 1px dashed #d8b96a;
+    border-radius: 3px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    color: #7a5c1e;
+  }
+
+  /* ---- Legal body ---- */
+  .legal-body {
+    background: #fff;
+    border: 1px solid #d8d5cc;
+    border-radius: 4px;
+    padding: 52px 56px;
+  }
+  .legal-body p { text-align: justify; margin: 0 0 12px 0; }
+  .legal-body strong { color: #111; }
+  .legal-body h1, .legal-body h2, .legal-body h3 {
+    font-family: Arial, Helvetica, sans-serif;
+  }
+  .legal-body ol, .legal-body ul { margin: 0 0 12px 0; padding-left: 24px; }
+  .legal-body li { margin-bottom: 6px; text-align: justify; }
+  u { text-decoration-thickness: 1px; }
+
+  .fill {
+    display: inline-block;
+    min-width: 90px;
+    padding: 0 4px;
+    border-bottom: 1px solid #999;
+    background: #fff8e0;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: 600;
+    color: #8a6d1f;
+  }
+
+  .signature-block {
+    display: flex;
+    gap: 40px;
+    margin: 36px 0 8px 0;
+  }
+  .sig-col { flex: 1; text-align: center; }
+  .sig-line {
+    border-top: 1px solid #333;
+    margin-bottom: 8px;
+    height: 46px;
+  }
+  .sig-name {
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: 700;
+    font-size: 11.5px;
+    margin: 0 0 2px 0;
+  }
+  .sig-role {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10.5px;
+    color: #555;
+    margin: 0;
+  }
+
+  /* ---- OTP acceptance appendix ---- */
+  .otp-appendix {
+    background: #fff;
+    border: 1px solid #d8d5cc;
+    border-radius: 4px;
+    padding: 44px 56px;
+    margin-top: 40px;
+    page-break-before: always;
+  }
+  .otp-appendix h2 {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #1a1a1a;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+  .otp-appendix p { text-align: justify; }
+  .evidence-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12.5px;
+  }
+  .evidence-table td {
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+  }
+  .evidence-table td:first-child {
+    width: 42%;
+    background: #f8f6f0;
+    color: #6b6b6b;
+    font-weight: 600;
+  }
+  .evidence-table td.pending {
+    color: #b8862b;
+    font-style: italic;
+  }
+  .hash-value {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+
+<div class="cover-page">
+  <div class="cover-brand">ToursRed</div>
+  <h1 class="cover-title">Contrato de Uso de Plataforma Digital, Intermediación y Comisión Mercantil</h1>
+  <p class="cover-sub">Carátula de identificación — generada automáticamente al completar el registro de agencia</p>
+
+  <div class="cover-grid">
+    <div>
+      <span class="cover-label">Razón social / Nombre</span>
+      <span class="cover-value">{{razon_social}}</span>
+    </div>
+    <div>
+      <span class="cover-label">RFC</span>
+      <span class="cover-value">{{rfc_agencia}}</span>
+    </div>
+    <div>
+      <span class="cover-label">Representante legal</span>
+      <span class="cover-value">{{representante_legal}}</span>
+    </div>
+    <div>
+      <span class="cover-label">Correo de contacto</span>
+      <span class="cover-value">{{email_contacto}}</span>
+    </div>
+    <div class="full">
+      <span class="cover-label">Domicilio fiscal</span>
+      <span class="cover-value">{{domicilio_fiscal}}</span>
+    </div>
+    <div>
+      <span class="cover-label">Fecha de generación</span>
+      <span class="cover-value">{{fecha_dia}} de {{fecha_mes}} de {{fecha_anio}}</span>
+    </div>
+    <div>
+      <span class="cover-label">Folio de contrato</span>
+      <span class="cover-value">{{folio_contrato}}</span>
+    </div>
+  </div>
+
+  <div class="cover-folio">
+    Este documento fue generado automáticamente por la plataforma ToursRed con los datos proporcionados por LA AGENCIA durante su registro. La versión con validez legal es la aceptada electrónicamente conforme al Anexo B de este contrato.
+  </div>
+</div>
+
+<div class="legal-body">
+
+<p><strong>CONTRATO DE USO DE PLATAFORMA DIGITAL, INTERMEDIACIÓN Y COMISIÓN MERCANTIL</strong></p>
+<p>QUE CELEBRAN POR UNA PARTE TOURS RED GLOBAL S.A.S. DE C.V., A QUIEN EN LO SUCESIVO SE LE DENOMINARÁ “<strong>TOURSRED Y/O COMISIONISTA E INTERMEDIARIO</strong>”, Y POR LA OTRA PARTE LA PERSONA FÍSICA O MORAL QUE COMPLETE EL PROCESO DE REGISTRO, ACEPTACIÓN Y CONTRATACIÓN DENTRO DE LA PLATAFORMA DIGITAL, A QUIEN EN LO SUCESIVO SE LE DENOMINARÁ “<strong>LA AGENCIA Y/O EL COMITENTE</strong>”, Y CUANDO ACTÚEN CONJUNTAMENTE SE LES DENOMINARÁ “<strong>LAS PARTES</strong>”, DE CONFORMIDAD CON LAS SIGUIENTES DECLARACIONES Y CLÁUSULAS.</p>
+<p><strong><u>DECLARACIONES</u></strong></p>
+<ol type="I">
+<li><p>Declara “<strong>LA AGENCIA”</strong> por medio de su representante que:</p></li>
+</ol>
+<ol type="a">
+<li><p>La información y documentación proporcionada a TOURSRED durante su proceso de registro, así como en el formulario de registro es verídica, actual y auténtica.</p></li>
+<li><p>Que la información se mantiene vigente durante el proceso de operación.</p></li>
+<li><p>Es una persona física o moral legalmente facultada para organizar, operar y comercializar servicios turísticos conforme a la legislación aplicable en su lugar de operación.</p></li>
+<li><p>Cuenta con los permisos, licencias, acreditaciones, seguros y documentación necesaria para prestar servicios turísticos.</p></li>
+<li><p>Tiene interés en utilizar la plataforma TOURSRED para publicar, promocionar y comercializar sus tours, actividades o servicios turísticos.</p></li>
+<li><p>Ser el único responsable de: la operación, logística y de los servicios (Tours)que ofrece a través de TOURSRED.</p></li>
+<li><p>Ser único responsable de la seguridad de los clientes que adquieren sus servicios a través de TOURSRED, así como del personal asignado por su parte para la prestación de los servicios que ofrece a través de TOURSRED.</p></li>
+<li><p>Ser una persona física con actividad empresarial o una persona moral debidamente constituida conforme a las leyes aplicables en su jurisdicción de operación.</p></li>
+<li><p>Que, tratándose de persona moral, su representante legal cuenta con las facultades suficientes para obligarla en los términos del presente contrato, manifestando que las mismas no le han sido modificadas o revocadas a la fecha; o que, tratándose de persona física con actividad empresarial, cuenta con la capacidad legal suficiente para obligarse por su propio derecho en los términos del presente contrato.</p></li>
+<li><p>Tiene su domicilio en: <span class="fill">{{domicilio_fiscal}}</span>, mismo que se señala para los fines y efectos legales de este contrato.</p></li>
+<li><p>Que está inscrito en el Registro Federal de Contribuyentes bajo el RFC:<span class="fill">{{rfc_agencia}}</span> y la Razón Social:<span class="fill">{{razon_social}}</span></p></li>
+<li><p>Reconoce que TOURSRED no forma parte de su estructura operativa, corporativa o administrativa, ni participa en la ejecución material de los servicios turísticos publicados.</p></li>
+<li><p>Reconoce y acepta que será exclusivamente responsable frente al CLIENTE FINAL respecto de cualquier situación que derive de la prestación de sus servicios turísticos a través de TOURSRED.</p></li>
+<li><p>Reconocen que la aceptación electrónica del presente contrato mediante registro digital, checkbox, firma electrónica, autenticación electrónica, correo electrónico, OTP o cualquier mecanismo tecnológico implementado por TOURSRED tendrá plena validez jurídica conforme a la legislación aplicable en México.</p></li>
+</ol>
+<ol start="2" type="I">
+<li><p>Declara “<strong>TOURSRED</strong>” que:</p></li>
+</ol>
+<ol type="a">
+<li><p>Que es una sociedad mercantil constituida bajo la denominación <em>TOURS RED GLOBAL S.A.S. de C.V.</em>, mediante Acta Constitutiva generada a través del Sistema Electrónico de Constitución de Sociedades por Acciones Simplificadas de la Secretaría de Economía, con folio de constitución SAS2025902471, de fecha 11 de julio de 2025.</p></li>
+<li><p>Que dicha Acta Constitutiva quedó debidamente inscrita en el Registro Público de Comercio de la Ciudad de México, bajo el Número de Control de Ingreso (NCI) 202500191277, según la Boleta de Inscripción emitida por la Dirección General de Normatividad Mercantil.</p></li>
+<li><p>Que su duración es indefinida, conforme a lo asentado tanto en el Acta Constitutiva como en el Registro Público de Comercio.</p></li>
+<li><p>Que su domicilio social y fiscal se encuentra ubicado en:<br />
+Homero 229 Int. 501 Polanco V Secc, Miguel Hidalgo, CDMX CP. 11560.</p></li>
+<li><p>Que su objeto social, conforme al Acta Constitutiva y registro mercantil, incluye actividades de:</p>
+<ol type="a">
+<li><blockquote>
+<p>la intermediación digital de servicios turísticos;</p>
+</blockquote></li>
+<li><blockquote>
+<p>la promoción y comercialización de tours, excursiones y experiencias;</p>
+</blockquote></li>
+<li><blockquote>
+<p>la operación de plataformas tecnológicas relacionadas con reservaciones turísticas;</p>
+</blockquote></li>
+<li><blockquote>
+<p>y la celebración de contratos de comisión mercantil e intermediación comercial.</p>
+</blockquote></li>
+</ol></li>
+<li><p>Que ALAN AXEL ÁLVAREZ HERNÁNDEZ, en su carácter de accionista único y administrador, cuenta con las facultades generales para pleitos, cobranzas, administración y dominio, mismas que derivan del propio Acta Constitutiva y se encuentran plenamente vigentes.</p></li>
+<li><p>Que cuenta con Registro Federal de Contribuyentes <em>TRG250711JWA</em>, siendo éste el RFC oficial registrado ante el SAT y utilizado para efectos fiscales y contractuales.</p></li>
+<li><p>Que es titular y operador de la plataforma digital denominada “TOURSRED”, mediante la cual terceros prestadores de servicios turísticos pueden publicar, promocionar y comercializar tours, actividades y experiencias, actuando TOURSRED únicamente como intermediario digital y comisionista, sin participar en la preparación, ejecución, operación o logística de los servicios ofrecidos por LA AGENCIA.</p></li>
+<li><p>Ha adoptado todas las resoluciones necesarias tanto corporativas como de cualquier otra naturaleza para autorizar la celebración de este Contrato y que sus estatutos sociales lo facultan para firmar este Contrato.</p></li>
+<li><p>Que tienen interés y capacidad jurídica suficiente para celebrar el presente contrato con “LA AGENCIA”.</p></li>
+<li><p>Que funge como intermediario entre LA AGENCIA y el CLIENTE FINAL, para promover, promocionar y ofrecer los servicios de LA AGENCIA, mediante la plataforma de TOURSRED.</p></li>
+<li><p>Cuenta con los elementos físicos, materiales y económicos propios suficientes para cumplir con las obligaciones que se deriven y las demás que adquiera con el presente contrato.</p></li>
+<li><p>entre otras actividades, se dedica a actuar como comisionista, por lo que es su libre voluntad celebrar el presente contrato en los términos y condiciones que se establecen en el mismo.</p></li>
+<li><p>Que cuenta con la experiencia, el conocimiento y demás elementos necesarios para la promoción, generación y comercialización de las operaciones, productos y servicios de arrendamiento puro y las operaciones que se deriven de las mismas y aquellas que promocione "LA AGENCIA" de acuerdo con este contrato.</p></li>
+</ol>
+<ol start="3" type="I">
+<li><p>Declaran “LAS PARTES” que:</p></li>
+</ol>
+<ol type="1">
+<li><p>Tienen la capacidad legal para obligarse en los términos del presente contrato.</p></li>
+<li><p>Reconocen que el presente instrumento establece una relación estrictamente mercantil, por lo que no existe entre ellas relación laboral, subordinación, sociedad, asociación, representación laboral, Joint venture, franquicia, ni exclusividad de ningún tipo.</p></li>
+<li><p>Manifiestan que celebran el presente contrato de manera libre y voluntaria, sin existir error, dolo, mala fe o cualquier otro vicio del consentimiento.</p></li>
+</ol>
+<p>Con base en las declaraciones que anteceden, las partes convienen en otorgar y obligarse en los términos de las siguientes:</p>
+<p><strong><u>CLAUSULAS</u></strong></p>
+<p><strong>PRIMERA. OBJETO</strong></p>
+<p>El presente contrato tiene por objeto regular la relación mercantil, tecnológica y de intermediación digital entre TOURSRED y LA AGENCIA, derivada del uso de la plataforma digital TOURSRED para la publicación, promoción, comercialización y administración de tours, actividades y servicios turísticos ofrecidos y operados por LA AGENCIA. Los términos que se utilicen con mayúscula inicial dentro del presente contrato tendrán el significado que se les atribuye en el Anexo A (Definiciones Generales), el cual forma parte integral de este instrumento.</p>
+<p>En virtud de lo anterior:</p>
+<p>a) TOURSRED otorgará a LA AGENCIA acceso a la plataforma digital para que pueda publicar, administrar y comercializar sus tours y servicios turísticos.</p>
+<p>b) TOURSRED podrá actuar como intermediario de cobro, procesamiento de pagos y gestión de reservaciones realizadas por CLIENTES FINALES dentro de la plataforma.</p>
+<p>c) TOURSRED podrá promocionar, difundir y comercializar los tours publicados por LA AGENCIA mediante herramientas digitales, campañas publicitarias, motores de búsqueda, redes sociales, programas de afiliados, alianzas comerciales u otros mecanismos de promoción.</p>
+<p>d) LA AGENCIA será la única responsable de la operación, ejecución, logística, prestación y cumplimiento de los servicios turísticos ofrecidos a través de la plataforma.</p>
+<p>e) TOURSRED actuará exclusivamente como intermediario digital y comisionista mercantil, sin participar directamente en la operación material de los tours publicados por LA AGENCIA.</p>
+<p>LAS PARTES reconocen expresamente que el presente contrato no implica sociedad, asociación, representación laboral, franquicia, exclusividad ni relación de subordinación entre ellas.</p>
+<p>Asimismo, LAS PARTES reconocen que TOURSRED podrá operar e integrar dentro de la plataforma funcionalidades comerciales, tecnológicas y operativas, incluyendo de manera enunciativa más no limitativa:</p>
+<p>a) programas de recompensas;</p>
+<p>b) membresías;</p>
+<p>c) sistemas de puntos o beneficios;</p>
+<p>d) TOURSRED CASH;</p>
+<p>e) códigos promocionales y descuentos;</p>
+<p>f) campañas promocionales;</p>
+<p>g) programas de referidos;</p>
+<p>h) herramientas de reputación y calificaciones;</p>
+<p>i) Marketplace de tours tipo excursión y tours receptivos;</p>
+<p>j) sistemas de reservación y disponibilidad;</p>
+<p>k) herramientas de mensajería y comunicación;</p>
+<p>l) mecanismos de compensación, bonificación o crédito interno;</p>
+<p>m) integraciones tecnológicas con terceros;</p>
+<p>n) y demás funcionalidades relacionadas con la operación comercial y tecnológica de la plataforma.</p>
+<p>La incorporación, modificación o eliminación de funcionalidades no modificará la naturaleza jurídica de intermediación digital y comisión mercantil establecida en el presente contrato.</p>
+<p><strong>SEGUNDA. NATURALEZA DE LA RELACIÓN, INDEPENDENCIA Y NO SUBORDINACIÓN</strong></p>
+<p>LAS PARTES reconocen y aceptan expresamente que la relación derivada del presente contrato es de naturaleza estrictamente mercantil, tecnológica y de intermediación digital, por lo que no existe ni existirá entre ellas relación laboral, subordinación, representación laboral, asociación, sociedad, Joint venture, franquicia, mandato laboral, dependencia económica exclusiva o vínculo similar.</p>
+<p>LA AGENCIA actuará en todo momento como un prestador independiente, conservando plena autonomía técnica, administrativa, operativa, financiera y comercial respecto de sus actividades y servicios turísticos.</p>
+<p>En consecuencia, LA AGENCIA será exclusivamente responsable de:</p>
+<p>a) la operación y ejecución de los tours;</p>
+<p>b) la contratación y administración de su personal;</p>
+<p>c) la selección de proveedores;</p>
+<p>d) la logística de sus servicios;</p>
+<p>e) los vehículos, equipos o herramientas utilizados;</p>
+<p>f) permisos, licencias, seguros y autorizaciones;</p>
+<p>g) cumplimiento de obligaciones fiscales, laborales y regulatorias;</p>
+<p>h) atención al CLIENTE FINAL durante la prestación del servicio.</p>
+<p>TOURSRED no tendrá facultades de dirección, subordinación, supervisión laboral ni control operativo sobre LA AGENCIA, su personal o sus proveedores, por lo que:</p>
+<p>a) no asigna horarios;</p>
+<p>b) no designa personal;</p>
+<p>c) no impone rutas o itinerarios obligatorios;</p>
+<p>d) no proporciona herramientas de trabajo;</p>
+<p>e) no supervisa físicamente la ejecución de los tours;</p>
+<p>f) no actúa como patrón, empleador o responsable laboral de LA AGENCIA o de su personal.</p>
+<p>LAS PARTES reconocen que las funcionalidades tecnológicas, políticas operativas, lineamientos de calidad, sistemas de reputación, mecanismos de calificación, estándares de publicación, controles antifraude, reglas de uso de plataforma, programas de membresías, recompensas, promociones, campañas comerciales, herramientas de soporte o procesos automatizados implementados por TOURSRED tienen únicamente fines comerciales, tecnológicos, operativos y de seguridad de la plataforma, y no constituyen subordinación laboral ni control operativo directo sobre LA AGENCIA.</p>
+<p>Cada parte será exclusivamente responsable de sus obligaciones fiscales, laborales, administrativas, regulatorias y de seguridad social frente a autoridades, trabajadores, proveedores y terceros.</p>
+<p>LA AGENCIA libera y mantendrá en paz y a salvo a TOURSRED, así como a sus representantes, colaboradores, respecto de cualquier reclamación, demanda, procedimiento, sanción o controversia derivada presentes y futuras derivadas de:</p>
+<p>a) relaciones laborales;</p>
+<p>b) accidentes durante los servicios ofrecidos por LA AGENCIA en TOURSRED;</p>
+<p>c) incumplimientos operativos;</p>
+<p>d) obligaciones fiscales;</p>
+<p>e) seguridad social;</p>
+<p>f) prestación de servicios turísticos;</p>
+<p>g) o cualquier actividad relacionada con la operación de LA AGENCIA.</p>
+<p>En caso de que TOURSRED se viera afectado por alguna reclamación, demanda o cualquier cosa que le afecte derivado de la prestación, mala gestión, daños, incumplimiento, etc., por parte de LA AGENCIA y/o sus colaboradores (empleados, agentes de viajes, coordinadores, unidades de transporte, empleados directos, proveedores, etc). LA AGENCIA estará obligada a responder de los daños y perjuicios que se le causen con ello a TOURSRED y/o colaboradores de esta.</p>
+<p><strong>TERCERA. REGISTRO, ACCESO A LA PLATAFORMA Y USO DE CUENTA</strong></p>
+<ol type="1">
+<li><p>Registro dentro de la plataforma.</p></li>
+</ol>
+<p>Para utilizar la plataforma TOURSRED, LA AGENCIA deberá completar el proceso de registro correspondiente, proporcionando información verídica, actualizada, completa y auténtica, incluyendo información fiscal, comercial, operativa y de contacto.</p>
+<p>TOURSRED podrá solicitar documentación adicional para validar la identidad, operación, actividad comercial, situación fiscal, permisos, licencias o cualquier otra información necesaria para la operación de la plataforma.</p>
+<p>LA AGENCIA reconoce que, conforme a la legislación aplicable, deberá contar con la cobertura de seguro correspondiente al transporte de pasajeros durante la prestación de cada TOUR que así lo requiera. TOURSRED podrá, en cualquier momento y de forma aleatoria o aplicada a un TOUR en específico, solicitar a LA AGENCIA que exhiba la póliza, constancia o comprobante vigente de dicha cobertura, sin que ello implique obligación de TOURSRED de verificar dicha cobertura previamente a cada reservación.</p>
+<ol start="2" type="1">
+<li><p>Creación de cuenta y acceso.</p></li>
+</ol>
+<p>Una vez aprobado el registro, TOURSRED podrá otorgar a LA AGENCIA acceso a la plataforma mediante credenciales electrónicas, cuentas administrativas, usuarios, contraseñas, códigos de autenticación u otros mecanismos tecnológicos de acceso.</p>
+<p>El acceso otorgado será personal, limitado, revocable y exclusivamente para fines relacionados con la operación de LA AGENCIA dentro de la plataforma.</p>
+<ol start="3" type="1">
+<li><p>Responsabilidad sobre credenciales.</p></li>
+</ol>
+<p>LA AGENCIA será la única y exclusiva responsable de:</p>
+<p>a) custodiar sus credenciales de acceso;</p>
+<p>b) mantener la confidencialidad de usuarios y contraseñas;</p>
+<p>c) controlar los accesos autorizados a su cuenta;</p>
+<p>d) todas las operaciones realizadas desde su cuenta dentro de la plataforma.</p>
+<p>Toda actividad realizada mediante la cuenta de LA AGENCIA se presumirá efectuada por esta, incluyendo:</p>
+<p>a) publicación de tours;</p>
+<p>b) actualización de disponibilidad;</p>
+<p>c) cambios de precios;</p>
+<p>d) confirmaciones;</p>
+<p>e) cancelaciones;</p>
+<p>f) mensajes;</p>
+<p>g) promociones;</p>
+<p>h) configuraciones operativas;</p>
+<p>i) solicitudes de pago;</p>
+<p>j) y cualquier otra acción realizada dentro de la plataforma.</p>
+<ol start="4" type="1">
+<li><p>Prohibiciones sobre uso de cuenta.</p></li>
+</ol>
+<p>LA AGENCIA no podrá:</p>
+<p>a) compartir credenciales con terceros no autorizados;</p>
+<p>b) vender, ceder, prestar o transferir su cuenta;</p>
+<p>c) utilizar cuentas paralelas o duplicadas sin autorización de TOURSRED;</p>
+<p>d) permitir accesos que comprometan la seguridad o integridad de la plataforma;</p>
+<p>e) manipular funcionalidades tecnológicas con fines fraudulentos o indebidos.</p>
+<ol start="5" type="1">
+<li><p>Seguridad y accesos no autorizados.</p></li>
+</ol>
+<p>LA AGENCIA deberá notificar inmediatamente a TOURSRED cualquier:</p>
+<p>a) acceso sospechoso;</p>
+<p>b) uso no autorizado;</p>
+<p>c) vulneración de seguridad;</p>
+<p>d) pérdida de credenciales;</p>
+<p>e) intento de fraude;</p>
+<p>f) o incidente relacionado con su cuenta.</p>
+<p>TOURSRED podrá implementar medidas adicionales de seguridad, incluyendo autenticación multifactor, validaciones automáticas, bloqueos preventivos, monitoreo antifraude, verificaciones documentales o restricciones temporales de acceso.</p>
+<ol start="6" type="1">
+<li><p>Facultades de TOURSRED.</p></li>
+</ol>
+<p>TOURSRED podrá suspender, restringir, limitar o cancelar temporal o definitivamente el acceso de LA AGENCIA cuando detecte:</p>
+<p>a) información falsa o inconsistente;</p>
+<p>b) actividades fraudulentas;</p>
+<p>c) incumplimientos contractuales;</p>
+<p>d) riesgos operativos o financieros;</p>
+<p>e) afectaciones a CLIENTES FINALES;</p>
+<p>f) incumplimientos regulatorios;</p>
+<p>g) intentos de evasión de comisiones;</p>
+<p>h) manipulación indebida de la plataforma;</p>
+<p>i) conductas que afecten la reputación, seguridad o estabilidad de TOURSRED.</p>
+<ol start="7" type="1">
+<li><p>Propiedad y control de la plataforma.</p></li>
+</ol>
+<p>LA AGENCIA reconoce que:</p>
+<p>a) la plataforma TOURSRED, incluyendo sus sistemas, algoritmos, diseños, funcionalidades, herramientas, procesos, integraciones, bases de datos y desarrollos tecnológicos, son propiedad exclusiva de TOURSRED;</p>
+<p>b) el acceso otorgado no implica cesión de derechos de propiedad intelectual ni derechos sobre la tecnología utilizada;</p>
+<p>c) TOURSRED podrá actualizar, modificar, limitar o evolucionar funcionalidades de la plataforma conforme a sus necesidades operativas, comerciales, regulatorias o tecnológicas.</p>
+<ol start="8" type="1">
+<li><p>Limitación de responsabilidad tecnológica.</p></li>
+</ol>
+<p>TOURSRED no será responsable por:</p>
+<p>a) fallas de internet;</p>
+<p>b) interrupciones de servicios de terceros;</p>
+<p>c) caídas temporales de plataforma;</p>
+<p>d) fallas eléctricas;</p>
+<p>e) ataques informáticos externos;</p>
+<p>f) mantenimientos;</p>
+<p>g) incompatibilidades tecnológicas;</p>
+<p>h) o cualquier situación fuera de su control razonable que afecte temporalmente el acceso o funcionamiento de la plataforma.</p>
+<p><strong>CUARTA. PUBLICACIÓN DE TOURS, CONTENIDO Y OPERACIÓN</strong></p>
+<ol type="1">
+<li><p>Publicación de tours y servicios turísticos.</p></li>
+</ol>
+<p>LA AGENCIA podrá publicar dentro de la plataforma TOURSRED tours, excursiones, actividades, experiencias, circuitos, traslados y demás servicios turísticos permitidos por TOURSRED, incluyendo tours de tipo excursión y tours de tipo receptivo.</p>
+<p>Toda publicación deberá cumplir con las políticas operativas, comerciales y tecnológicas establecidas por TOURSRED.</p>
+<ol start="2" type="1">
+<li><p>Responsabilidad sobre el contenido.</p></li>
+</ol>
+<p>LA AGENCIA será la única y exclusiva responsable de toda la información, contenido y material publicado dentro de la plataforma, incluyendo de manera enunciativa más no limitativa:</p>
+<p>a) descripciones;</p>
+<p>b) itinerarios;</p>
+<p>c) fotografías;</p>
+<p>d) videos;</p>
+<p>e) precios;</p>
+<p>f) promociones;</p>
+<p>g) políticas de cancelación;</p>
+<p>h) restricciones;</p>
+<p>i) horarios;</p>
+<p>j) puntos de encuentro;</p>
+<p>k) disponibilidad;</p>
+<p>l) requisitos del servicio;</p>
+<p>m) duración;</p>
+<p>n) capacidad operativa;</p>
+<p>o) información logística y comercial.</p>
+<ol start="3" type="1">
+<li><p>Veracidad y actualización.</p></li>
+</ol>
+<p>LA AGENCIA se obliga a que toda la información publicada sea:</p>
+<p>a) verídica;</p>
+<p>b) precisa;</p>
+<p>c) actualizada;</p>
+<p>d) completa;</p>
+<p>e) coherente con el servicio efectivamente prestado;</p>
+<p>f) y conforme a la capacidad operativa real de LA AGENCIA.</p>
+<p>LA AGENCIA deberá actualizar inmediatamente cualquier cambio que afecte la disponibilidad, operación, precios, condiciones o características del servicio.</p>
+<ol start="4" type="1">
+<li><p>Prohibiciones sobre contenido y publicaciones.</p></li>
+</ol>
+<p>LA AGENCIA no podrá publicar contenido que:</p>
+<p>a) sea falso, engañoso o inexacto;</p>
+<p>b) induzca a error al CLIENTE FINAL;</p>
+<p>c) infrinja derechos de terceros;</p>
+<p>d) contenga información ilegal, discriminatoria, ofensiva o contraria a la legislación aplicable;</p>
+<p>e) promueva actividades ilícitas;</p>
+<p>f) vulnere derechos de propiedad intelectual;</p>
+<p>g) afecte la reputación o integridad de TOURSRED.</p>
+<ol start="5" type="1">
+<li><p>Disponibilidad, sobreventa y capacidad operativa.</p></li>
+</ol>
+<p>LA AGENCIA será exclusivamente responsable de garantizar que la disponibilidad publicada dentro de la plataforma corresponda a cupos, fechas, horarios y servicios efectivamente operables.</p>
+<p>LA AGENCIA se obliga a mantener actualizada en todo momento la disponibilidad de sus tours, evitando sobreventas, duplicidades, errores operativos o confirmaciones de reservaciones que no pueda atender adecuadamente.</p>
+<p>La confirmación de una RESERVACIÓN implicará que LA AGENCIA cuenta con:</p>
+<p>a) disponibilidad real;</p>
+<p>b) capacidad operativa suficiente;</p>
+<p>c) personal necesario;</p>
+<p>d) logística requerida;</p>
+<p>e) y todos los recursos necesarios para prestar correctamente el servicio contratado.</p>
+<p>En caso de que LA AGENCIA incurra en:</p>
+<p>a) sobreventa;</p>
+<p>b) falta de disponibilidad;</p>
+<p>c) cancelaciones imputables a su operación;</p>
+<p>d) incumplimientos logísticos;</p>
+<p>e) o imposibilidad de prestar el servicio confirmado;</p>
+<p>LA AGENCIA acepta expresamente que el CLIENTE FINAL tendrá derecho al reembolso del 100% del monto efectivamente pagado.</p>
+<p>TOURSRED podrá realizar dicho reembolso directamente al CLIENTE FINAL utilizando el método de pago original, TOURSRED CASH, créditos promocionales, compensaciones internas o cualquier otro mecanismo operativo implementado por la plataforma.</p>
+<p>LA AGENCIA autoriza expresamente a TOURSRED para descontar, retener o compensar dichos montos de:</p>
+<p>a) liquidaciones pendientes;</p>
+<p>b) pagos futuros;</p>
+<p>c) saldos dentro de la plataforma;</p>
+<p>d) garantías operativas;</p>
+<p>e) o cualquier cantidad adeudada a favor de LA AGENCIA.</p>
+<p>La reincidencia en errores de disponibilidad, sobreventa o cancelaciones operativas podrá derivar en restricciones, suspensiones temporales o cancelación definitiva de la cuenta de LA AGENCIA dentro de la plataforma.</p>
+<ol start="6" type="1">
+<li><p>Uso de imágenes, marcas y contenido.</p></li>
+</ol>
+<p>LA AGENCIA declara y garantiza que cuenta con todos los derechos, licencias, permisos y autorizaciones necesarias respecto del contenido, imágenes, fotografías, videos, logotipos, marcas y material publicado dentro de la plataforma.</p>
+<p>LA AGENCIA otorga a TOURSRED una autorización no exclusiva, gratuita y revocable para utilizar dicho contenido con fines de:</p>
+<p>a) publicación dentro de la plataforma;</p>
+<p>b) promoción comercial;</p>
+<p>c) campañas publicitarias;</p>
+<p>d) redes sociales;</p>
+<p>e) motores de búsqueda;</p>
+<p>f) alianzas comerciales;</p>
+<p>g) marketing digital;</p>
+<p>h) difusión de los tours y servicios turísticos publicados.</p>
+<ol start="7" type="1">
+<li><p>Facultades de moderación de TOURSRED.</p></li>
+</ol>
+<p>TOURSRED podrá revisar, ocultar, limitar, suspender o eliminar cualquier contenido o publicación que:</p>
+<p>a) incumpla el presente contrato;</p>
+<p>b) vulnere políticas de plataforma;</p>
+<p>c) represente riesgos operativos o legales;</p>
+<p>d) afecte la experiencia del CLIENTE FINAL;</p>
+<p>e) genere reclamaciones recurrentes;</p>
+<p>f) afecte la reputación o seguridad de la plataforma.</p>
+<p>Lo anterior no implica obligación de supervisión permanente ni responsabilidad editorial de TOURSRED respecto del contenido publicado por LA AGENCIA.</p>
+<ol start="8" type="1">
+<li><p>Responsabilidad por reclamaciones.</p></li>
+</ol>
+<p>LA AGENCIA será responsable de cualquier daño, perjuicio, reclamación, multa, procedimiento, sanción o afectación derivada de:</p>
+<p>a) información falsa o inexacta;</p>
+<p>b) errores de disponibilidad;</p>
+<p>c) incumplimientos operativos;</p>
+<p>d) publicidad engañosa;</p>
+<p>e) violaciones de propiedad intelectual;</p>
+<p>f) o cualquier contenido publicado por LA AGENCIA dentro de la plataforma.</p>
+<p><strong>QUINTA. PAGOS, COMISIONES Y PROCESAMIENTO DE COBROS</strong></p>
+<ol type="1">
+<li><p>Intermediación de cobro.</p></li>
+</ol>
+<p>LA AGENCIA autoriza expresamente a TOURSRED para actuar como intermediario de cobro respecto de las reservaciones realizadas por CLIENTES FINALES dentro de la plataforma.</p>
+<p>TOURSRED podrá recibir, procesar, administrar, retener temporalmente y transferir pagos relacionados con los tours y servicios turísticos publicados por LA AGENCIA.</p>
+<ol start="2" type="1">
+<li><p>Procesamiento de pagos.</p></li>
+</ol>
+<p>Los pagos realizados por CLIENTES FINALES podrán procesarse mediante PASARELAS DE PAGO, instituciones financieras, procesadores electrónicos, transferencias bancarias, monederos digitales, TOURSRED CASH u otros mecanismos habilitados por TOURSRED.</p>
+<p>TOURSRED podrá implementar validaciones antifraude, revisiones manuales, verificaciones de identidad, autenticaciones adicionales o cualquier medida razonable de seguridad antes de liberar pagos o confirmar operaciones.</p>
+<ol start="3" type="1">
+<li><p>Comisión de TOURSRED.</p></li>
+</ol>
+<p>Como contraprestación por el uso de la plataforma, intermediación digital, promoción y comercialización de tours, LA AGENCIA pagará a TOURSRED la COMISIÓN correspondiente conforme al plan comercial vigente dentro de la plataforma.</p>
+<p>La COMISIÓN podrá calcularse mediante:</p>
+<p>a) porcentaje sobre el monto de la reservación;</p>
+<p>b) tarifas fijas;</p>
+<p>c) comisiones variables;</p>
+<p>d) membresias;</p>
+<p>e) modelos híbridos;</p>
+<p>f) o cualquier esquema comercial informado por TOURSRED.</p>
+<p>La COMISIÓN se generará únicamente respecto de reservaciones efectivamente pagadas y confirmadas dentro de la plataforma.</p>
+<p>Salvo que se indique expresamente lo contrario en el plan comercial vigente, la COMISIÓN se expresará y cobrará en pesos mexicanos (MXN) con el Impuesto al Valor Agregado (IVA) incluido, conforme a la legislación fiscal vigente.</p>
+<p>Salvo que el plan comercial vigente determine lo contrario, LA AGENCIA deberá configurar el ANTICIPO cobrado a través de la plataforma en un porcentaje no menor al 30% (treinta por ciento) del valor total del TOUR. La COMISIÓN de TOURSRED, conforme al porcentaje o esquema comercial vigente acordado con LA AGENCIA, se descontará directamente del ANTICIPO procesado a través de la plataforma. El saldo restante no cubierto por el ANTICIPO podrá ser cobrado directamente por LA AGENCIA al CLIENTE FINAL el día de la prestación del servicio, sin que ello genere comisión adicional a favor de TOURSRED ni constituya una conducta prohibida conforme a la Cláusula Octava.</p>
+<ol start="4" type="1">
+<li><p>Liberación y liquidación de pagos.</p></li>
+</ol>
+<p>TOURSRED podrá retener temporalmente los montos cobrados al CLIENTE FINAL hasta:</p>
+<p>a) la confirmación de la reservación;</p>
+<p>b) validaciones antifraude;</p>
+<p>c) verificación operativa;</p>
+<p>d) cumplimiento de políticas internas;</p>
+<p>e) finalización del tour;</p>
+<p>f) o cualquier otra validación razonable relacionada con la seguridad operativa o financiera de la plataforma.</p>
+<p>Posteriormente, TOURSRED realizará la liquidación correspondiente a LA AGENCIA descontando:</p>
+<p>a) la COMISIÓN aplicable;</p>
+<p>b) reembolsos;</p>
+<p>c) penalizaciones;</p>
+<p>d) promociones absorbidas por LA AGENCIA;</p>
+<p>e) impuestos retenidos cuando legalmente correspondan;</p>
+<p>f) y cualquier otro monto autorizado en el presente contrato.</p>
+<p>Salvo que existan validaciones pendientes conforme a lo señalado en esta cláusula, TOURSRED realizará la liquidación correspondiente a LA AGENCIA dentro de un plazo no mayor a 5 (cinco) días hábiles contados a partir de la finalización del TOUR o de la liberación del pago conforme a las políticas vigentes de la plataforma.</p>
+<ol start="5" type="1">
+<li><p>Contracargos, disputas financieras e incumplimientos operativos.</p></li>
+</ol>
+<p>TOURSRED podrá recibir reclamaciones, disputas bancarias, contracargos o reversos de pago derivados de operaciones realizadas dentro de la plataforma.</p>
+<p>LAS PARTES reconocen que, debido al modelo de intermediación y retención temporal de fondos implementado por TOURSRED, los pagos realizados por el CLIENTE FINAL podrán permanecer temporalmente bajo administración de TOURSRED hasta la finalización del servicio turístico o liberación correspondiente.</p>
+<p>En consecuencia:</p>
+<p>a) Los contracargos o disputas financieras derivados exclusivamente de fraudes bancarios, desconocimiento de cargos, uso indebido de medios de pago o situaciones atribuibles al sistema financiero o al CLIENTE FINAL podrán ser absorbidos por TOURSRED, las PASARELAS DE PAGO o las entidades financieras correspondientes, conforme a sus procesos internos y políticas aplicables.</p>
+<p>b) Cuando la reclamación, devolución, compensación o reembolso derive de incumplimientos operativos imputables a LA AGENCIA, incluyendo:</p>
+<p>i) sobreventa;</p>
+<p>ii) falta de disponibilidad;</p>
+<p>iii) cancelaciones imputables a LA AGENCIA;</p>
+<p>iv) no show operativo;</p>
+<p>v) prestación deficiente del servicio;</p>
+<p>vi) información falsa o incorrecta;</p>
+<p>vii) incumplimientos logísticos;</p>
+<p>LA AGENCIA será responsable de los montos correspondientes relacionados con dicho incumplimiento operativo.</p>
+<p>TOURSRED podrá descontar, compensar o retener dichos montos de futuras liquidaciones, saldos pendientes, garantías operativas o cualquier cantidad a favor de LA AGENCIA dentro de la plataforma.</p>
+<p>LA AGENCIA se obliga a colaborar razonablemente con TOURSRED proporcionando información, documentación o evidencia necesaria para la atención de reclamaciones relacionadas con sus servicios turísticos.</p>
+<ol start="6" type="1">
+<li><p>Reembolsos y compensaciones.</p></li>
+</ol>
+<p>TOURSRED podrá realizar reembolsos, compensaciones, bonificaciones, créditos promocionales o devoluciones al CLIENTE FINAL cuando:</p>
+<p>a) exista incumplimiento operativo;</p>
+<p>b) proceda conforme a políticas de cancelación;</p>
+<p>c) exista resolución de disputa;</p>
+<p>d) se detecte fraude;</p>
+<p>e) exista sobreventa;</p>
+<p>f) o resulte necesario para proteger la operación, reputación o seguridad de la plataforma.</p>
+<p>Dichos montos podrán ser descontados posteriormente a LA AGENCIA cuando el origen sea imputable a esta.</p>
+<ol start="7" type="1">
+<li><p>Monedero interno y mecanismos de compensación.</p></li>
+</ol>
+<p>TOURSRED podrá utilizar TOURSRED CASH como mecanismo de:</p>
+<p>a) reembolso;</p>
+<p>b) compensación;</p>
+<p>c) promoción;</p>
+<p>d) bonificación;</p>
+<p>e) saldo a favor;</p>
+<p>f) campañas comerciales;</p>
+<p>g) programas de recompensas;</p>
+<p>h) programas de referidos;</p>
+<p>i) membresías;</p>
+<p>j) o cualquier funcionalidad comercial implementada dentro de la plataforma.</p>
+<ol start="8" type="1">
+<li><p>Modificaciones operativas y financieras.</p></li>
+</ol>
+<p>TOURSRED podrá modificar procesos operativos relacionados con pagos, validaciones, liquidaciones, calendarios, pasarelas, medidas antifraude, métodos de cobro o mecanismos financieros internos cuando resulte necesario por razones:</p>
+<p>a) operativas;</p>
+<p>b) regulatorias;</p>
+<p>c) fiscales;</p>
+<p>d) tecnológicas;</p>
+<p>e) comerciales;</p>
+<p>f) de seguridad;</p>
+<p>g) o derivadas de cambios en PASARELAS DE PAGO o legislación aplicable.</p>
+<p><strong>SEXTA. FACTURACIÓN A CUENTA DE TERCEROS Y OBLIGACIONES FISCALES</strong></p>
+<ol type="1">
+<li><p>Naturaleza fiscal de la intermediación.</p></li>
+</ol>
+<p>LAS PARTES reconocen y aceptan que TOURSRED actúa exclusivamente como intermediario digital y comisionista mercantil en la comercialización de los tours y servicios turísticos publicados por LA AGENCIA dentro de la plataforma.</p>
+<p>En consecuencia, los servicios turísticos son prestados directamente por LA AGENCIA, quien tendrá el carácter de prestador real del servicio frente al CLIENTE FINAL para efectos operativos, fiscales y regulatorios.</p>
+<ol start="2" type="1">
+<li><p>Facturación a cuenta de terceros.</p></li>
+</ol>
+<p>LA AGENCIA autoriza expresamente a TOURSRED para que, cuando resulte aplicable conforme al modelo operativo de la plataforma y la legislación fiscal vigente, pueda emitir Comprobantes Fiscales Digitales por Internet (CFDI) bajo la figura de “facturación a cuenta de terceros” respecto de los montos cobrados al CLIENTE FINAL por concepto de tours y servicios turísticos operados por LA AGENCIA.</p>
+<p>TOURSRED podrá emitir dichos comprobantes utilizando la información fiscal proporcionada por LA AGENCIA y conforme a las disposiciones fiscales aplicables.</p>
+<ol start="3" type="1">
+<li><p>Reconocimiento de ingresos.</p></li>
+</ol>
+<p>LA AGENCIA reconoce expresamente que:</p>
+<p>a) los ingresos generados por la venta de tours y servicios turísticos publicados dentro de TOURSRED corresponden fiscalmente a LA AGENCIA;</p>
+<p>b) dichos ingresos deberán ser acumulados, declarados y enterados ante el Servicio de Administración Tributaria (SAT) por LA AGENCIA conforme a sus obligaciones fiscales;</p>
+<p>c) TOURSRED únicamente reconocerá como ingreso propio las comisiones, cargos por servicio, membresías u otras contraprestaciones derivadas de la intermediación digital y uso de plataforma;</p>
+<p>d) la administración temporal de fondos por parte de TOURSRED no modifica la naturaleza fiscal de los ingresos correspondientes a LA AGENCIA.</p>
+<ol start="4" type="1">
+<li><p>Obligaciones fiscales de LA AGENCIA.</p></li>
+</ol>
+<p>LA AGENCIA será exclusivamente responsable de:</p>
+<p>a) cumplir con sus obligaciones fiscales;</p>
+<p>b) emitir los comprobantes fiscales que legalmente correspondan;</p>
+<p>c) presentar declaraciones;</p>
+<p>d) enterar contribuciones e impuestos;</p>
+<p>e) mantener actualizada su información fiscal;</p>
+<p>f) conservar permisos, registros y documentación fiscal aplicable;</p>
+<p>g) atender requerimientos de autoridades fiscales relacionados con sus operaciones.</p>
+<ol start="5" type="1">
+<li><p>Información fiscal.</p></li>
+</ol>
+<p>LA AGENCIA se obliga a proporcionar información fiscal verídica, actualizada y válida, incluyendo:</p>
+<p>a) RFC;</p>
+<p>b) régimen fiscal;</p>
+<p>c) domicilio fiscal;</p>
+<p>d) constancia de situación fiscal;</p>
+<p>e) y cualquier otra documentación requerida para procesos de facturación o cumplimiento normativo.</p>
+<p>LA AGENCIA será responsable de cualquier error, omisión o inconsistencia en la información proporcionada.</p>
+<ol start="6" type="1">
+<li><p>Modificaciones regulatorias.</p></li>
+</ol>
+<p>TOURSRED podrá modificar procesos relacionados con facturación, cobro, retención, emisión de CFDI, comprobación fiscal, cargos por servicio o administración de pagos cuando resulte necesario por:</p>
+<p>a) cambios legislativos;</p>
+<p>b) disposiciones fiscales;</p>
+<p>c) criterios del SAT;</p>
+<p>d) resoluciones regulatorias;</p>
+<p>e) actualizaciones tecnológicas;</p>
+<p>f) o cambios en el modelo operativo de la plataforma.</p>
+<ol start="7" type="1">
+<li><p>Liberación de responsabilidad fiscal. LA AGENCIA libera y mantendrá en paz y a salvo a TOURSRED respecto de cualquier contingencia, diferencia, multa, sanción, crédito fiscal, reclamación o procedimiento derivado del incumplimiento de obligaciones fiscales atribuibles a LA AGENCIA.</p></li>
+</ol>
+<p><strong>SÉPTIMA. CANCELACIONES, REEMBOLSOS Y COMPENSACIONES</strong></p>
+<ol type="1">
+<li><p>Política general de cancelaciones.</p></li>
+</ol>
+<p>LAS PARTES reconocen que TOURSRED opera bajo un modelo de reservaciones con políticas estándar de cancelación aplicables a los tours publicados dentro de la plataforma, sin perjuicio de que determinados tours puedan clasificarse como “No Cancelables” conforme a las condiciones definidas por LA AGENCIA y autorizadas por TOURSRED.</p>
+<ol start="2" type="1">
+<li><p>Cancelaciones realizadas por el CLIENTE FINAL.</p></li>
+</ol>
+<p>Salvo que el tour haya sido clasificado expresamente como “No Cancelable”, las cancelaciones realizadas por el CLIENTE FINAL estarán sujetas a la siguiente política estándar de TOURSRED:</p>
+<ol type="a">
+<li><p>Cancelaciones realizadas con 15 (quince) días naturales o más de anticipación al inicio del tour: El CLIENTE FINAL tendrá derecho al reembolso del 100% del monto aplicable mediante TOURSRED CASH.</p></li>
+<li><p>Cancelaciones realizadas entre 7 (siete) y 14 (catorce) días naturales antes del inicio del tour: El CLIENTE FINAL tendrá derecho al reembolso del 50% del monto aplicable mediante TOURSRED CASH. El 50% restante no reembolsado se distribuirá de la siguiente manera:</p></li>
+</ol>
+<ol type="I">
+<li><p>60% corresponderá a LA AGENCIA como compensación operativa y administrativa derivada de la reservación cancelada;</p></li>
+<li><p>40% corresponderá a TOURSRED por concepto de intermediación, costos operativos, procesamiento, comercialización y afectación derivada de la cancelación.</p></li>
+<li><p>Dicha distribución podrá ser aplicada mediante compensaciones internas, liquidaciones automáticas o ajustes operativos dentro de la plataforma. El 60% (sesenta por ciento) correspondiente a LA AGENCIA se aplicará como abono dentro de su liquidación ordinaria conforme a los mecanismos de pago previstos en la Cláusula Quinta del presente contrato.</p></li>
+</ol>
+<p>c) Cancelaciones realizadas con menos de 7 (siete) días naturales de anticipación:</p>
+<p>No generarán derecho a reembolso para el CLIENTE FINAL.</p>
+<ol start="3" type="1">
+<li><p>Tours no cancelables.</p></li>
+</ol>
+<p>LA AGENCIA podrá clasificar determinados tours, promociones, tarifas, experiencias o servicios como “No Cancelables”, siempre que dicha condición:</p>
+<p>a) sea claramente visible para el CLIENTE FINAL antes de finalizar la reservación;</p>
+<p>b) cumpla con las políticas internas de TOURSRED;</p>
+<p>c) y no contravenga disposiciones legales aplicables.</p>
+<ol start="4" type="1">
+<li><p>Forma de los reembolsos.</p></li>
+</ol>
+<p>Salvo disposición legal aplicable o determinación expresa de TOURSRED, los reembolsos derivados de cancelaciones se realizarán preferentemente mediante TOURSRED CASH.</p>
+<p>Únicamente en casos excepcionales determinados por TOURSRED, o cuando exista obligación legal aplicable, podrán realizarse devoluciones mediante transferencia bancaria u otro método distinto.</p>
+<ol start="5" type="1">
+<li><p>Cargo por servicio.</p></li>
+</ol>
+<p>Los cargos por servicio, costos operativos, comisiones financieras o tarifas relacionadas con procesamiento de pagos no serán reembolsables.</p>
+<p>No obstante, dichos cargos sí podrán ser reembolsados cuando la cancelación, incumplimiento o afectación derive de causas imputables a LA AGENCIA, incluyendo:</p>
+<p>a) sobreventa;</p>
+<p>b) falta de disponibilidad;</p>
+<p>c) cancelación imputable a LA AGENCIA;</p>
+<p>d) incumplimiento operativo;</p>
+<p>e) o imposibilidad de prestar el servicio confirmado.</p>
+<ol start="6" type="1">
+<li><p>Cancelaciones imputables a LA AGENCIA.</p></li>
+</ol>
+<p>Cuando LA AGENCIA cancele, incumpla o no pueda prestar un servicio previamente confirmado, el CLIENTE FINAL tendrá derecho al reembolso del 100% del monto efectivamente pagado, incluyendo cargos por servicio cuando resulten aplicables.</p>
+<p>TOURSRED podrá realizar directamente dicho reembolso utilizando:</p>
+<p>a) TOURSRED CASH;</p>
+<p>b) transferencias bancarias;</p>
+<p>c) compensaciones internas;</p>
+<p>d) créditos promocionales;</p>
+<p>e) o cualquier mecanismo operativo implementado por la plataforma.</p>
+<p>LA AGENCIA autoriza expresamente a TOURSRED para descontar, compensar o retener dichos montos de futuras liquidaciones o saldos pendientes a su favor.</p>
+<ol start="7" type="1">
+<li><p>Fuerza mayor y caso fortuito.</p></li>
+</ol>
+<p>Cuando existan eventos de fuerza mayor o caso fortuito que afecten la prestación del servicio, incluyendo fenómenos naturales, condiciones climáticas, cierres gubernamentales, bloqueos, disturbios, riesgos de seguridad, contingencias sanitarias o causas ajenas al control razonable de LAS PARTES, TOURSRED podrá priorizar, según corresponda:</p>
+<p>a) la reprogramación del servicio;</p>
+<p>b) el otorgamiento de TOURSRED CASH;</p>
+<p>c) compensaciones internas;</p>
+<p>d) o reembolsos parciales o totales según las circunstancias del caso.</p>
+<ol start="8" type="1">
+<li><p>Compensaciones comerciales y goodwill.</p></li>
+</ol>
+<p>TOURSRED podrá, de manera discrecional y sin que ello constituya obligación permanente, otorgar al CLIENTE FINAL:</p>
+<p>a) créditos promocionales;</p>
+<p>b) cupones;</p>
+<p>c) puntos;</p>
+<p>d) recompensas;</p>
+<p>e) bonificaciones;</p>
+<p>f) upgrades;</p>
+<p>g) o cualquier otra compensación comercial o de goodwill destinada a preservar la experiencia del usuario, reputación de la plataforma o resolución de incidencias.</p>
+<ol start="9" type="1">
+<li><p>Facultades operativas de TOURSRED.</p></li>
+</ol>
+<p>TOURSRED podrá establecer procesos, validaciones, tiempos de revisión, mecanismos operativos y políticas complementarias relacionadas con cancelaciones, reembolsos, compensaciones y resolución de disputas dentro de la plataforma.</p>
+<p><strong>OCTAVA. CONDUCTAS PROHIBIDAS Y USO INDEBIDO DE LA PLATAFORMA</strong></p>
+<ol type="1">
+<li><p>Uso adecuado de la plataforma.</p></li>
+</ol>
+<p>LA AGENCIA se obliga a utilizar la plataforma TOURSRED de manera legal, ética, responsable y conforme al presente contrato, políticas internas y legislación aplicable.</p>
+<ol start="2" type="1">
+<li><p>Conductas prohibidas.</p></li>
+</ol>
+<p>LA AGENCIA no podrá realizar, directa o indirectamente, cualquiera de las siguientes conductas:</p>
+<p>a) publicar información falsa, engañosa o inexacta;</p>
+<p>b) manipular de forma fraudulenta o engañosa precios, disponibilidad, promociones, reservaciones o condiciones comerciales dentro de la plataforma;</p>
+<p>c) generar reservaciones simuladas, fraudulentas o artificiales;</p>
+<p>d) utilizar métodos engañosos para alterar calificaciones, reputación o posicionamiento dentro de la plataforma;</p>
+<p>e) evadir comisiones o concretar operaciones fuera de la plataforma derivadas de contactos obtenidos mediante TOURSRED;</p>
+<p>f) solicitar pagos directos al CLIENTE FINAL respecto de montos, anticipos o conceptos que deban procesarse obligatoriamente a través de TOURSRED conforme al modelo operativo de la plataforma;</p>
+<p>g) utilizar la plataforma para actividades ilícitas, fraudulentas o contrarias a la legislación aplicable;</p>
+<p>h) vulnerar sistemas de seguridad, automatizaciones, integraciones o funcionalidades tecnológicas de TOURSRED;</p>
+<p>i) utilizar bots, automatizaciones no autorizadas, scraping, extracción masiva de información o herramientas que afecten la estabilidad de la plataforma;</p>
+<p>j) infringir derechos de propiedad intelectual de TOURSRED o terceros;</p>
+<p>k) utilizar marcas, identidad visual o reputación de TOURSRED de manera no autorizada;</p>
+<p>l) realizar prácticas discriminatorias, abusivas, ofensivas o contrarias a la experiencia del CLIENTE FINAL;</p>
+<p>m) incumplir reservaciones confirmadas de manera recurrente;</p>
+<p>n) generar afectaciones reputacionales graves a TOURSRED derivadas de malas prácticas operativas.</p>
+<ol start="3" type="1">
+<li><p>Desviación de clientes y evasión de plataforma.</p></li>
+</ol>
+<p>LA AGENCIA reconoce que los CLIENTES FINALES obtenidos mediante TOURSRED forman parte del ecosistema comercial de la plataforma.</p>
+<p>En consecuencia, LA AGENCIA se abstendrá de:</p>
+<p>a) promover pagos externos respecto de conceptos que deban procesarse obligatoriamente mediante TOURSRED;</p>
+<p>b) redirigir clientes fuera de la plataforma con el propósito de evitar comisiones;</p>
+<p>c) compartir medios de contacto con fines de evasión comercial;</p>
+<p>d) concretar operaciones paralelas derivadas de reservaciones originadas en TOURSRED sin autorización expresa de la plataforma;</p>
+<p>e) solicitar, inducir o presionar al CLIENTE FINAL para cancelar una reservación realizada dentro de TOURSRED con el propósito de concretar la operación de manera directa fuera de la plataforma.</p>
+<p>Dicha conducta será considerada una falta grave y podrá derivar en la suspensión inmediata de la cuenta de LA AGENCIA, cancelación definitiva de acceso a la plataforma, retención temporal de pagos pendientes y demás medidas operativas o legales que TOURSRED considere procedentes.</p>
+<p>Lo anterior no será aplicable al cobro del saldo restante del TOUR no cubierto mediante el ANTICIPO, el cual podrá ser cobrado directamente por LA AGENCIA al CLIENTE FINAL conforme a lo establecido en la Cláusula Quinta del presente contrato. La prohibición señalada en este numeral se refiere exclusivamente a conductas mediante las cuales LA AGENCIA induzca, solicite o presione al CLIENTE FINAL a cancelar una RESERVACIÓN realizada dentro de la plataforma con el propósito de contratar el servicio de manera directa y evitar el pago del ANTICIPO o la COMISIÓN correspondiente a TOURSRED.</p>
+<ol start="4" type="1">
+<li><p>Facultades de monitoreo y validación.</p></li>
+</ol>
+<p>TOURSRED podrá implementar mecanismos razonables de monitoreo, validación, análisis antifraude, revisión operativa, auditoría tecnológica y detección de riesgos para proteger la seguridad, estabilidad y correcto funcionamiento de la plataforma.</p>
+<ol start="5" type="1">
+<li><p>Medidas correctivas.</p></li>
+</ol>
+<p>En caso de detectar incumplimientos o conductas prohibidas, TOURSRED podrá, según la gravedad del caso:</p>
+<p>a) emitir advertencias;</p>
+<p>b) limitar funcionalidades;</p>
+<p>c) suspender publicaciones;</p>
+<p>d) retener pagos o liquidaciones;</p>
+<p>e) cancelar promociones;</p>
+<p>f) restringir temporalmente la cuenta;</p>
+<p>g) cancelar definitivamente la cuenta de LA AGENCIA;</p>
+<p>h) bloquear accesos;</p>
+<p>i) o ejercer las acciones legales correspondientes.</p>
+<ol start="6" type="1">
+<li><p>Responsabilidad por daños.</p></li>
+</ol>
+<p>LA AGENCIA será responsable de cualquier daño, perjuicio, reclamación, sanción, multa, pérdida económica o afectación reputacional ocasionada a TOURSRED derivada de conductas prohibidas o uso indebido de la plataforma.</p>
+<p><strong>NOVENA. RESPONSABILIDAD, LIMITACIONES Y LIBERACIÓN</strong></p>
+<ol type="1">
+<li><p>Naturaleza de intermediación.</p></li>
+</ol>
+<p>LAS PARTES reconocen que TOURSRED opera exclusivamente como plataforma digital de intermediación y comercialización de servicios turísticos, por lo que no organiza, ejecuta, supervisa físicamente ni presta directamente los tours publicados por LA AGENCIA.</p>
+<p>En consecuencia, LA AGENCIA será la única responsable frente al CLIENTE FINAL respecto de la operación y prestación efectiva de los servicios turísticos contratados.</p>
+<ol start="2" type="1">
+<li><p>Responsabilidad operativa de LA AGENCIA.</p></li>
+</ol>
+<p>LA AGENCIA será exclusivamente responsable de:</p>
+<p>a) la correcta ejecución de los tours;</p>
+<p>b) seguridad de los CLIENTES FINALES;</p>
+<p>c) logística operativa;</p>
+<p>d) transportación;</p>
+<p>e) guías, coordinadores y personal;</p>
+<p>f) cumplimiento de itinerarios;</p>
+<p>g) calidad del servicio;</p>
+<p>h) permisos, seguros y autorizaciones;</p>
+<p>i) atención de emergencias;</p>
+<p>j) cumplimiento normativo aplicable;</p>
+<p>k) y cualquier obligación derivada de la prestación de sus servicios turísticos.</p>
+<ol start="3" type="1">
+<li><p>Limitación de responsabilidad de TOURSRED.</p></li>
+</ol>
+<p>TOURSRED no será responsable por:</p>
+<p>a) accidentes;</p>
+<p>b) lesiones;</p>
+<p>c) pérdidas;</p>
+<p>d) robos;</p>
+<p>e) daños materiales;</p>
+<p>f) retrasos;</p>
+<p>g) cancelaciones;</p>
+<p>h) incumplimientos operativos;</p>
+<p>i) conductas de terceros;</p>
+<p>j) actos de proveedores;</p>
+<p>k) hechos atribuibles a LA AGENCIA;</p>
+<p>l) o cualquier situación derivada de la prestación efectiva del servicio turístico.</p>
+<ol start="4" type="1">
+<li><p>Información publicada por LA AGENCIA.</p></li>
+</ol>
+<p>TOURSRED no garantiza la veracidad, exactitud o calidad de la información publicada por LA AGENCIA dentro de la plataforma, siendo esta última la única responsable del contenido publicado y de las condiciones ofrecidas al CLIENTE FINAL.</p>
+<ol start="5" type="1">
+<li><p>Fallas tecnológicas y disponibilidad de plataforma.</p></li>
+</ol>
+<p>TOURSRED procurará mantener la disponibilidad y funcionamiento razonable de la plataforma; sin embargo, no garantiza operación ininterrumpida ni libre de errores.</p>
+<p>TOURSRED no será responsable por interrupciones temporales, fallas técnicas, mantenimientos, problemas de conectividad, ataques informáticos, errores de terceros, caídas de servicios externos o situaciones fuera de su control razonable.</p>
+<ol start="6" type="1">
+<li><p>Fuerza mayor y caso fortuito.</p></li>
+</ol>
+<p>TOURSRED no será responsable por incumplimientos, retrasos o afectaciones derivados de eventos de fuerza mayor o caso fortuito, incluyendo fenómenos naturales, contingencias sanitarias, disturbios, actos gubernamentales, cierres, bloqueos, fallas masivas de infraestructura, conflictos sociales o cualquier situación ajena a su control razonable.</p>
+<ol start="7" type="1">
+<li><p>Liberación y mantenimiento en paz y a salvo.</p></li>
+</ol>
+<p>LA AGENCIA libera y se obliga a mantener en paz y a salvo a TOURSRED, sus representantes, directivos, empleados, afiliados y proveedores respecto de cualquier reclamación, procedimiento, demanda, sanción, multa, daño, perjuicio o gasto derivado de:</p>
+<p>a) la operación de los tours;</p>
+<p>b) incumplimientos de LA AGENCIA;</p>
+<p>c) actos u omisiones de su personal o proveedores;</p>
+<p>d) reclamaciones de CLIENTES FINALES;</p>
+<p>e) incumplimientos fiscales, laborales o regulatorios;</p>
+<p>f) accidentes o afectaciones ocurridas durante la prestación de los servicios turísticos.</p>
+<ol start="8" type="1">
+<li><p>Responsabilidad máxima de TOURSRED.</p></li>
+</ol>
+<p>En caso de que legalmente se determine responsabilidad directa de TOURSRED, esta quedará limitada, en la máxima medida permitida por la legislación aplicable, al monto efectivamente cobrado por TOURSRED como comisión respecto de la reservación específica que origine la reclamación.</p>
+<p><strong>DÉCIMA. PROPIEDAD INTELECTUAL Y USO DE CONTENIDO</strong></p>
+<ol type="1">
+<li><p>Propiedad intelectual de TOURSRED.</p></li>
+</ol>
+<p>LA AGENCIA reconoce que TOURSRED es titular o licenciatario legítimo de todos los derechos relacionados con la plataforma, incluyendo de manera enunciativa más no limitativa:</p>
+<p>a) software;</p>
+<p>b) código fuente;</p>
+<p>c) diseño visual;</p>
+<p>d) interfaces;</p>
+<p>e) funcionalidades;</p>
+<p>f) bases de datos;</p>
+<p>g) algoritmos;</p>
+<p>h) procesos tecnológicos;</p>
+<p>i) identidad gráfica;</p>
+<p>j) marcas;</p>
+<p>k) logotipos;</p>
+<p>l) nombres comerciales;</p>
+<p>m) documentación;</p>
+<p>n) desarrollos tecnológicos;</p>
+<p>o) y demás elementos relacionados con la operación de la plataforma.</p>
+<p>El acceso a la plataforma no implica cesión, transmisión ni otorgamiento de derechos de propiedad intelectual a favor de LA AGENCIA.</p>
+<ol start="2" type="1">
+<li><p>Restricciones de uso.</p></li>
+</ol>
+<p>LA AGENCIA no podrá:</p>
+<p>a) copiar, reproducir, modificar o distribuir elementos tecnológicos de TOURSRED;</p>
+<p>b) descompilar, alterar o intentar acceder al código fuente;</p>
+<p>c) replicar funcionalidades, modelos operativos o herramientas tecnológicas de TOURSRED;</p>
+<p>d) utilizar marcas, logotipos o identidad visual de TOURSRED sin autorización expresa;</p>
+<p>e) utilizar contenido o materiales de TOURSRED para fines distintos a la operación autorizada dentro de la plataforma.</p>
+<ol start="3" type="1">
+<li><p>Propiedad del contenido de LA AGENCIA.</p></li>
+</ol>
+<p>LAS PARTES reconocen que las fotografías, videos, descripciones, logotipos, itinerarios y demás contenido publicado por LA AGENCIA continuarán siendo propiedad de LA AGENCIA o de sus respectivos titulares.</p>
+<p>No obstante, LA AGENCIA otorga a TOURSRED una autorización no exclusiva, gratuita, revocable y sin limitación territorial para utilizar dicho contenido con fines relacionados con:</p>
+<p>a) operación de la plataforma;</p>
+<p>b) comercialización;</p>
+<p>c) promoción turística;</p>
+<p>d) campañas publicitarias;</p>
+<p>e) redes sociales;</p>
+<p>f) posicionamiento digital;</p>
+<p>g) motores de búsqueda;</p>
+<p>h) programas de recompensas;</p>
+<p>i) membresías;</p>
+<p>j) campañas de referidos;</p>
+<p>k) afiliaciones comerciales;</p>
+<p>l) y difusión general de los tours y servicios turísticos publicados.</p>
+<ol start="4" type="1">
+<li><p>Garantía sobre contenido.</p></li>
+</ol>
+<p>LA AGENCIA declara y garantiza que cuenta con todos los derechos, permisos, autorizaciones y licencias necesarias respecto del contenido publicado dentro de TOURSRED.</p>
+<p>LA AGENCIA será exclusivamente responsable de cualquier reclamación relacionada con:</p>
+<p>a) derechos de autor;</p>
+<p>b) marcas;</p>
+<p>c) propiedad intelectual;</p>
+<p>d) derechos de imagen;</p>
+<p>e) uso indebido de contenido;</p>
+<p>f) o cualquier violación de derechos de terceros.</p>
+<ol start="5" type="1">
+<li><p>Facultades de TOURSRED.</p></li>
+</ol>
+<p>TOURSRED podrá:</p>
+<p>a) adaptar formatos;</p>
+<p>b) optimizar imágenes;</p>
+<p>c) ajustar contenido para fines técnicos o comerciales;</p>
+<p>d) generar versiones promocionales;</p>
+<p>e) traducir contenido;</p>
+<p>f) destacar publicaciones;</p>
+<p>g) categorizar tours;</p>
+<p>h) y realizar ajustes razonables necesarios para la operación y promoción de la plataforma.</p>
+<p>Lo anterior no implicará modificación sustancial de la naturaleza del servicio ofrecido por LA AGENCIA.</p>
+<ol start="6" type="1">
+<li><p>Uso no autorizado de marca y reputación.</p></li>
+</ol>
+<p>LA AGENCIA se abstendrá de utilizar la marca, reputación, identidad visual o nombre comercial de TOURSRED para fines distintos a los autorizados por la plataforma o que puedan generar confusión, afectación reputacional o falsa representación comercial.</p>
+<ol start="7" type="1">
+<li><p>Supervivencia de derechos.</p></li>
+</ol>
+<p>Las disposiciones relacionadas con propiedad intelectual, uso de contenido, confidencialidad y protección tecnológica continuarán vigentes aun después de la terminación de la relación contractual entre LAS PARTES.</p>
+<p><strong>DÉCIMA PRIMERA. PROTECCIÓN DE DATOS Y CONFIDENCIALIDAD</strong></p>
+<ol type="1">
+<li><p>Protección de datos personales.</p></li>
+</ol>
+<p>LAS PARTES se obligan a cumplir con la legislación aplicable en materia de protección de datos personales, incluyendo la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y demás disposiciones aplicables en los Estados Unidos Mexicanos.</p>
+<ol start="2" type="1">
+<li><p>Tratamiento de información.</p></li>
+</ol>
+<p>TOURSRED podrá recopilar, almacenar, procesar, utilizar y administrar información relacionada con:</p>
+<p>a) CLIENTES FINALES;</p>
+<p>b) reservaciones;</p>
+<p>c) pagos;</p>
+<p>d) operaciones;</p>
+<p>e) actividad dentro de la plataforma;</p>
+<p>f) comportamiento transaccional;</p>
+<p>g) métricas operativas;</p>
+<p>h) historial de uso;</p>
+<p>i) y demás información necesaria para la operación de la plataforma.</p>
+<p>Dicho tratamiento se realizará conforme al Aviso de Privacidad y políticas internas de TOURSRED.</p>
+<ol start="3" type="1">
+<li><p>Uso de información por LA AGENCIA.</p></li>
+</ol>
+<p>LA AGENCIA únicamente podrá utilizar la información de CLIENTES FINALES para fines directamente relacionados con:</p>
+<p>a) operación del tour;</p>
+<p>b) logística;</p>
+<p>c) atención al cliente;</p>
+<p>d) cumplimiento de reservaciones;</p>
+<p>e) soporte relacionado con el servicio contratado.</p>
+<p>LA AGENCIA se abstendrá de:</p>
+<p>a) comercializar bases de datos;</p>
+<p>b) transferir información a terceros sin autorización;</p>
+<p>c) utilizar información para fines ajenos a la reservación;</p>
+<p>d) realizar campañas no autorizadas utilizando datos obtenidos mediante TOURSRED;</p>
+<p>e) utilizar información de CLIENTES FINALES para evadir la operación de la plataforma.</p>
+<ol start="4" type="1">
+<li><p>Confidencialidad.</p></li>
+</ol>
+<p>LAS PARTES reconocen como información confidencial toda aquella información técnica, comercial, operativa, financiera, estratégica o tecnológica a la que tengan acceso con motivo de la relación contractual, incluyendo de manera enunciativa más no limitativa:</p>
+<p>a) bases de datos;</p>
+<p>b) estrategias comerciales;</p>
+<p>c) información financiera;</p>
+<p>d) procesos operativos;</p>
+<p>e) información de clientes;</p>
+<p>f) métricas;</p>
+<p>g) documentación interna;</p>
+<p>h) modelos comerciales;</p>
+<p>i) algoritmos;</p>
+<p>j) desarrollos tecnológicos;</p>
+<p>k) información no pública relacionada con TOURSRED.</p>
+<ol start="5" type="1">
+<li><p>Obligaciones de confidencialidad.</p></li>
+</ol>
+<p>LAS PARTES se obligan a:</p>
+<p>a) mantener estricta confidencialidad respecto de la información recibida;</p>
+<p>b) utilizarla únicamente para fines relacionados con la ejecución del presente contrato;</p>
+<p>c) implementar medidas razonables de seguridad y resguardo;</p>
+<p>d) abstenerse de divulgar información a terceros no autorizados.</p>
+<ol start="6" type="1">
+<li><p>Excepciones.</p></li>
+</ol>
+<p>No se considerará información confidencial aquella que:</p>
+<p>a) sea de dominio público;</p>
+<p>b) haya sido obtenida legítimamente por terceros;</p>
+<p>c) deba revelarse por mandato de autoridad competente;</p>
+<p>d) o cuya divulgación sea requerida por disposición legal aplicable.</p>
+<ol start="7" type="1">
+<li><p>Incidentes de seguridad.</p></li>
+</ol>
+<p>LA AGENCIA deberá notificar a TOURSRED de manera inmediata cualquier:</p>
+<p>a) acceso no autorizado;</p>
+<p>b) vulneración de seguridad;</p>
+<p>c) filtración de datos;</p>
+<p>d) uso indebido de información;</p>
+<p>e) incidente tecnológico;</p>
+<p>f) o afectación relacionada con información de CLIENTES FINALES o de la plataforma.</p>
+<ol start="8" type="1">
+<li><p>Supervivencia de obligaciones.</p></li>
+</ol>
+<p>Las obligaciones de confidencialidad y protección de datos continuarán vigentes aun después de la terminación de la relación contractual entre LAS PARTES.</p>
+<p><strong>DÉCIMA SEGUNDA. SUSPENSIÓN, TERMINACIÓN Y BAJA DE LA PLATAFORMA</strong></p>
+<ol type="1">
+<li><p>Facultades de suspensión y restricción.</p></li>
+</ol>
+<p>TOURSRED podrá suspender, limitar, restringir o bloquear temporalmente el acceso de LA AGENCIA a la plataforma cuando detecte o considere razonablemente la existencia de:</p>
+<p>a) incumplimientos al presente contrato;</p>
+<p>b) conductas prohibidas;</p>
+<p>c) actividades fraudulentas o sospechosas;</p>
+<p>d) riesgos operativos, financieros o reputacionales;</p>
+<p>e) afectaciones a CLIENTES FINALES;</p>
+<p>f) incumplimientos regulatorios o fiscales;</p>
+<p>g) uso indebido de la plataforma;</p>
+<p>h) reclamaciones recurrentes;</p>
+<p>i) incumplimientos operativos reiterados;</p>
+<p>j) sobreventas recurrentes;</p>
+<p>k) evasión de comisiones;</p>
+<p>l) manipulación fraudulenta de reservaciones;</p>
+<p>m) vulneraciones de seguridad;</p>
+<p>n) o cualquier situación que pueda afectar la estabilidad, seguridad o reputación de TOURSRED.</p>
+<ol start="2" type="1">
+<li><p>Terminación de la relación contractual.</p></li>
+</ol>
+<p>TOURSRED podrá cancelar definitivamente la cuenta de LA AGENCIA y dar por terminada la relación contractual de manera inmediata cuando:</p>
+<p>a) exista fraude comprobado;</p>
+<p>b) LA AGENCIA promueva evasión deliberada de la plataforma;</p>
+<p>c) solicite a CLIENTES FINALES cancelar reservaciones para contratar directamente;</p>
+<p>d) exista uso ilegal de la plataforma;</p>
+<p>e) se detecten actividades que afecten gravemente la reputación de TOURSRED;</p>
+<p>f) LA AGENCIA reincida en incumplimientos graves;</p>
+<p>g) exista falsificación de documentación o información;</p>
+<p>h) se detecten riesgos legales, regulatorios o financieros relevantes;</p>
+<p>i) o cuando la continuidad de LA AGENCIA represente un riesgo para la operación de la plataforma.</p>
+<ol start="3" type="1">
+<li><p>Terminación sin causa.</p></li>
+</ol>
+<p>Independientemente de las causales señaladas en el numeral anterior, TOURSRED podrá dar por terminada la relación contractual sin necesidad de invocar causa alguna, mediante aviso previo por escrito o por medios electrónicos con al menos 15 (quince) días naturales de anticipación, sin que ello genere responsabilidad ni indemnización a cargo de TOURSRED, salvo por las obligaciones pendientes derivadas de reservaciones confirmadas y no concluidas a la fecha de terminación.</p>
+<ol start="4" type="1">
+<li><p>Terminación voluntaria.</p></li>
+</ol>
+<p>LA AGENCIA podrá solicitar en cualquier momento la baja de su cuenta y terminación de la relación contractual, siempre que:</p>
+<p>a) no existan reservaciones activas pendientes de ejecución;</p>
+<p>b) no existan disputas abiertas;</p>
+<p>c) no existan adeudos pendientes;</p>
+<p>d) y se encuentren concluidas las obligaciones operativas relacionadas con CLIENTES FINALES.</p>
+<ol start="5" type="1">
+<li><p>Efectos de la suspensión o terminación.</p></li>
+</ol>
+<p>La suspensión o terminación podrá implicar:</p>
+<p>a) bloqueo de accesos;</p>
+<p>b) ocultamiento de publicaciones;</p>
+<p>c) cancelación de promociones;</p>
+<p>d) restricción de funcionalidades;</p>
+<p>e) retención temporal de pagos pendientes;</p>
+<p>f) revisión de operaciones;</p>
+<p>g) cancelación de reservaciones futuras cuando resulte necesario para proteger a CLIENTES FINALES o la operación de la plataforma.</p>
+<ol start="6" type="1">
+<li><p>Retención y compensación de saldos.</p></li>
+</ol>
+<p>TOURSRED podrá retener temporalmente saldos, liquidaciones o pagos pendientes de LA AGENCIA cuando:</p>
+<p>a) existan disputas activas;</p>
+<p>b) reclamaciones pendientes;</p>
+<p>c) riesgos de fraude;</p>
+<p>d) reembolsos en proceso;</p>
+<p>e) posibles afectaciones a CLIENTES FINALES;</p>
+<p>f) incumplimientos contractuales;</p>
+<p>g) o investigaciones relacionadas con operaciones realizadas dentro de la plataforma.</p>
+<p>TOURSRED podrá aplicar compensaciones, descuentos o retenciones conforme a lo establecido en el presente contrato.</p>
+<ol start="7" type="1">
+<li><p>Reservaciones activas.</p></li>
+</ol>
+<p>En caso de suspensión o terminación, TOURSRED podrá adoptar las medidas razonables necesarias para proteger a los CLIENTES FINALES con reservaciones activas, incluyendo:</p>
+<p>a) reprogramaciones;</p>
+<p>b) reembolsos;</p>
+<p>c) compensaciones;</p>
+<p>d) reasignación operativa cuando resulte posible;</p>
+<p>e) comunicación directa con los CLIENTES FINALES afectados.</p>
+<ol start="8" type="1">
+<li><p>Conservación de información.</p></li>
+</ol>
+<p>TOURSRED podrá conservar información, historiales operativos, reservaciones, registros financieros, documentación y evidencias relacionadas con LA AGENCIA durante el tiempo que resulte necesario para:</p>
+<p>a) cumplimiento legal;</p>
+<p>b) obligaciones regulatorias;</p>
+<p>c) prevención de fraude;</p>
+<p>d) atención de reclamaciones;</p>
+<p>e) auditorías;</p>
+<p>f) defensa jurídica;</p>
+<p>g) o cumplimiento de políticas internas.</p>
+<ol start="9" type="1">
+<li><p>Supervivencia de obligaciones.</p></li>
+</ol>
+<p>La terminación de la relación contractual no extinguirá obligaciones pendientes relacionadas con:</p>
+<p>a) pagos;</p>
+<p>b) reembolsos;</p>
+<p>c) reclamaciones;</p>
+<p>d) confidencialidad;</p>
+<p>e) protección de datos;</p>
+<p>f) propiedad intelectual;</p>
+<p>g) obligaciones fiscales;</p>
+<p>h) responsabilidades derivadas de reservaciones realizadas durante la vigencia del contrato.</p>
+<p><strong>DÉCIMA TERCERA. MODIFICACIONES A LA PLATAFORMA, POLÍTICAS Y FUNCIONALIDADES</strong></p>
+<ol type="1">
+<li><p>Evolución de la plataforma.</p></li>
+</ol>
+<p>LA AGENCIA reconoce y acepta que TOURSRED es una plataforma tecnológica en constante evolución, por lo que TOURSRED podrá actualizar, modificar, incorporar, limitar, suspender o eliminar funcionalidades, herramientas, procesos, integraciones, diseños, módulos o características operativas de la plataforma.</p>
+<ol start="2" type="1">
+<li><p>Modificaciones operativas y comerciales.</p></li>
+</ol>
+<p>TOURSRED podrá realizar ajustes relacionados con:</p>
+<p>a) procesos operativos;</p>
+<p>b) políticas internas;</p>
+<p>c) medidas antifraude;</p>
+<p>d) funcionalidades tecnológicas;</p>
+<p>e) herramientas de reservación;</p>
+<p>f) sistemas de reputación;</p>
+<p>g) programas de recompensas;</p>
+<p>h) membresías;</p>
+<p>i) TOURSRED CASH;</p>
+<p>j) campañas promocionales;</p>
+<p>k) programas de referidos;</p>
+<p>l) integraciones tecnológicas;</p>
+<p>m) modelos de comisión;</p>
+<p>n) cargos por servicio;</p>
+<p>o) validaciones operativas;</p>
+<p>p) procesos fiscales o regulatorios;</p>
+<p>q) y cualquier otro aspecto relacionado con la operación de la plataforma.</p>
+<ol start="3" type="1">
+<li><p>Notificación de cambios relevantes.</p></li>
+</ol>
+<p>TOURSRED procurará notificar a LA AGENCIA sobre modificaciones relevantes que impacten significativamente la operación de la plataforma mediante:</p>
+<p>a) correo electrónico;</p>
+<p>b) notificaciones dentro de la plataforma;</p>
+<p>c) publicación de políticas actualizadas;</p>
+<p>d) panel administrativo;</p>
+<p>e) o cualquier medio de comunicación razonablemente utilizado por TOURSRED.</p>
+<ol start="4" type="1">
+<li><p>Aceptación de modificaciones.</p></li>
+</ol>
+<p>El uso continuo de la plataforma por parte de LA AGENCIA posterior a la entrada en vigor de modificaciones, políticas o actualizaciones constituirá aceptación de las mismas.</p>
+<ol start="5" type="1">
+<li><p>Cambios regulatorios o legales.</p></li>
+</ol>
+<p>TOURSRED podrá implementar modificaciones inmediatas cuando resulten necesarias para cumplir con:</p>
+<p>a) legislación aplicable;</p>
+<p>b) disposiciones fiscales;</p>
+<p>c) requerimientos regulatorios;</p>
+<p>d) lineamientos de autoridades;</p>
+<p>e) medidas de seguridad;</p>
+<p>f) prevención de fraude;</p>
+<p>g) cambios tecnológicos críticos;</p>
+<p>h) o requerimientos de PASARELAS DE PAGO y proveedores tecnológicos.</p>
+<ol start="6" type="1">
+<li><p>Nuevas funcionalidades y servicios.</p></li>
+</ol>
+<p>TOURSRED podrá incorporar nuevos servicios, módulos, herramientas o funcionalidades relacionadas con:</p>
+<p>a) inteligencia artificial;</p>
+<p>b) automatización;</p>
+<p>c) APIs;</p>
+<p>d) integraciones externas;</p>
+<p>e) sistemas avanzados de comercialización;</p>
+<p>f) programas de afiliados;</p>
+<p>g) soluciones tecnológicas complementarias;</p>
+<p>h) o nuevas líneas de negocio compatibles con la operación de la plataforma.</p>
+<ol start="7" type="1">
+<li><p>Limitación de responsabilidad por cambios.</p></li>
+</ol>
+<p>TOURSRED no será responsable por afectaciones derivadas de ajustes razonables, actualizaciones tecnológicas, mejoras operativas, cambios regulatorios o modificaciones necesarias para la evolución y seguridad de la plataforma, siempre que dichas modificaciones no impliquen incumplimientos legales aplicables.</p>
+<p><strong>DÉCIMA CUARTA. LEGISLACIÓN APLICABLE Y JURISDICCIÓN</strong></p>
+<ol type="1">
+<li><p>Legislación aplicable.</p></li>
+</ol>
+<p>El presente contrato se regirá e interpretará conforme a las leyes aplicables de los Estados Unidos Mexicanos, incluyendo legislación mercantil, civil, fiscal, tecnológica, de protección de datos personales y demás disposiciones aplicables relacionadas con la operación de la plataforma TOURSRED.</p>
+<ol start="2" type="1">
+<li><p>Resolución de controversias.</p></li>
+</ol>
+<p>LAS PARTES acuerdan que cualquier controversia, reclamación, interpretación, incumplimiento o disputa derivada del presente contrato, de la operación de la plataforma o de la relación comercial entre LAS PARTES, procurará resolverse de buena fe mediante negociación directa entre LAS PARTES y/o los medios alternativos de solución de controversias.</p>
+<p>En caso de no alcanzar un acuerdo entre LAS PARTES, se someterán a la siguiente:</p>
+<p>Cláusula arbitral:</p>
+<p>Todas las desavenencias que deriven de este contrato serán</p>
+<p>resueltas definitivamente de acuerdo con las Reglas de Arbitraje del Centro de Arbitraje de México (CAM adoptadas por ARIAS México, por uno o más árbitros nombrados conforme a dichas Reglas. Cuando la controversia involucre un monto igual o superior a $100,000.00 (cien mil pesos 00/100 M.N.), el tribunal de arbitraje estará compuesto por tres árbitros; cuando el monto en controversia sea inferior a dicha cantidad, el arbitraje se sustanciará ante árbitro único. El arbitraje se llevará a cabo en español y tendrá lugar en Ciudad de México. Esta cláusula conservará su validez aun en caso de anulación del presente contrato.</p>
+<ol start="3" type="1">
+<li><p>Jurisdicción.</p></li>
+</ol>
+<p>En caso de no alcanzarse una solución amistosa, LAS PARTES se someten expresamente a la jurisdicción y competencia de los tribunales competentes de la Ciudad de México, renunciando expresamente a cualquier otro fuero que pudiera corresponderles por razón de sus domicilios presentes o futuros o por cualquier otra causa.</p>
+<ol start="4" type="1">
+<li><p>Idioma oficial.</p></li>
+</ol>
+<p>El idioma oficial del presente contrato será el español. Cualquier traducción, versión adaptada o interpretación en otro idioma tendrá únicamente fines informativos y no sustituirá la versión oficial en español.</p>
+<ol start="5" type="1">
+<li><p>Conservación electrónica de evidencia.</p></li>
+</ol>
+<p>LAS PARTES reconocen que los registros electrónicos, bitácoras, logs, respaldos digitales, confirmaciones, notificaciones, accesos, aceptaciones electrónicas, comunicaciones realizadas dentro de la plataforma y demás evidencias digitales generadas por TOURSRED podrán utilizarse como medios de prueba válidos respecto de operaciones, reservaciones, pagos, aceptaciones y actividades realizadas dentro de la plataforma.</p>
+<p><strong>DÉCIMA QUINTA. FIRMA ELECTRÓNICA Y ACEPTACIÓN DIGITAL</strong></p>
+<ol type="1">
+<li><p>Validez de medios electrónicos.</p></li>
+</ol>
+<p>LAS PARTES reconocen y aceptan que el presente contrato podrá celebrarse, aceptarse y formalizarse mediante medios electrónicos, digitales, tecnológicos o automatizados conforme a la legislación aplicable en los Estados Unidos Mexicanos.</p>
+<ol start="2" type="1">
+<li><p>Aceptación electrónica.</p></li>
+</ol>
+<p>LA AGENCIA reconoce y acepta que cualquiera de las siguientes acciones podrá constituir manifestación válida de consentimiento y aceptación del presente contrato:</p>
+<p>a) registro dentro de la plataforma;</p>
+<p>b) creación de cuenta;</p>
+<p>c) aceptación mediante checkbox;</p>
+<p>d) autenticación electrónica;</p>
+<p>e) ingreso de códigos OTP;</p>
+<p>f) firma electrónica;</p>
+<p>g) acceso al panel administrativo;</p>
+<p>h) uso de funcionalidades de la plataforma;</p>
+<p>i) publicación de tours;</p>
+<p>j) aceptación digital de políticas;</p>
+<p>k) o cualquier mecanismo electrónico implementado por TOURSRED.</p>
+<ol start="3" type="1">
+<li><p>Equivalencia jurídica.</p></li>
+</ol>
+<p>LAS PARTES reconocen que los medios electrónicos utilizados por TOURSRED producirán efectos jurídicos válidos conforme al Código de Comercio, legislación mercantil aplicable y demás disposiciones legales correspondientes en materia de comercio electrónico y mensajes de datos.</p>
+<ol start="4" type="1">
+<li><p>Evidencia electrónica.</p></li>
+</ol>
+<p>LAS PARTES reconocen como medios de prueba válidos:</p>
+<p>a) registros electrónicos;</p>
+<p>b) logs de actividad;</p>
+<p>c) direcciones IP;</p>
+<p>d) timestamps;</p>
+<p>e) bitácoras;</p>
+<p>f) confirmaciones electrónicas;</p>
+<p>g) correos electrónicos;</p>
+<p>h) comunicaciones dentro de la plataforma;</p>
+<p>i) registros de acceso;</p>
+<p>j) historial de operaciones;</p>
+<p>k) respaldos digitales;</p>
+<p>l) y cualquier evidencia tecnológica generada por TOURSRED.</p>
+<ol start="5" type="1">
+<li><p>Comunicaciones electrónicas.</p></li>
+</ol>
+<p>LA AGENCIA acepta que TOURSRED podrá realizar comunicaciones, avisos, notificaciones, alertas, actualizaciones, requerimientos o información relacionada con la operación de la plataforma mediante:</p>
+<p>a) correo electrónico;</p>
+<p>b) notificaciones dentro de la plataforma;</p>
+<p>c) panel administrativo;</p>
+<p>d) mensajes automatizados;</p>
+<p>e) aplicaciones móviles;</p>
+<p>f) SMS;</p>
+<p>g) WhatsApp;</p>
+<p>h) o cualquier medio electrónico proporcionado por LA AGENCIA.</p>
+<ol start="6" type="1">
+<li><p>Responsabilidad sobre medios de acceso.</p></li>
+</ol>
+<p>LA AGENCIA será responsable de todas las acciones realizadas mediante sus credenciales, usuarios, dispositivos, correos electrónicos o mecanismos de autenticación asociados a su cuenta dentro de la plataforma.</p>
+<ol start="7" type="1">
+<li><p>Conservación de evidencia digital.</p></li>
+</ol>
+<p>TOURSRED podrá conservar registros electrónicos, respaldos y evidencia digital relacionada con la aceptación del contrato, operaciones, reservaciones, pagos y actividad dentro de la plataforma durante el tiempo que resulte necesario para fines legales, regulatorios, operativos, fiscales o de seguridad.</p>
+<p><strong>CLÁUSULA DÉCIMA SEXTA. DISPOSICIONES GENERALES</strong></p>
+<ol type="1">
+<li><p>Integridad contractual.</p></li>
+</ol>
+<p>El presente contrato constituye el acuerdo total entre LAS PARTES respecto de la relación comercial y operación dentro de la plataforma TOURSRED, dejando sin efectos cualquier acuerdo, negociación, comunicación o entendimiento previo relacionado con su objeto.</p>
+<ol start="2" type="1">
+<li><p>Relación con políticas y documentos complementarios.</p></li>
+</ol>
+<p>LAS PARTES reconocen que las políticas internas, lineamientos operativos, avisos, términos complementarios, reglas de uso, políticas de privacidad, políticas de cancelación y demás disposiciones publicadas por TOURSRED forman parte integral del presente contrato cuando resulten aplicables a la operación de la plataforma.</p>
+<ol start="3" type="1">
+<li><p>Nulidad parcial.</p></li>
+</ol>
+<p>En caso de que cualquier disposición del presente contrato sea declarada inválida, ilegal o inaplicable por autoridad competente, las demás disposiciones continuarán en pleno vigor y efecto en la máxima medida permitida por la legislación aplicable.</p>
+<ol start="4" type="1">
+<li><p>No renuncia de derechos.</p></li>
+</ol>
+<p>La falta de ejercicio o retraso por parte de TOURSRED respecto de cualquier derecho, facultad o acción derivada del presente contrato no constituirá renuncia a dicho derecho ni limitará su ejercicio posterior.</p>
+<ol start="5" type="1">
+<li><p>Cesión.</p></li>
+</ol>
+<p>LA AGENCIA no podrá ceder, transferir o delegar derechos u obligaciones derivados del presente contrato sin autorización previa y por escrito de TOURSRED.</p>
+<p>TOURSRED podrá ceder o transferir total o parcialmente derechos u obligaciones relacionadas con la operación de la plataforma a empresas afiliadas, subsidiarias, adquirentes, inversionistas, sucesores o entidades relacionadas con procesos corporativos o comerciales.</p>
+<ol start="6" type="1">
+<li><p>Independencia de cláusulas.</p></li>
+</ol>
+<p>Las cláusulas y disposiciones contenidas en el presente contrato deberán interpretarse de manera independiente entre sí.</p>
+<ol start="7" type="1">
+<li><p>Encabezados y estructura.</p></li>
+</ol>
+<p>Los títulos, numeraciones y encabezados utilizados dentro del presente contrato tienen únicamente fines de orden y referencia, por lo que no limitarán ni afectarán la interpretación jurídica de sus disposiciones.</p>
+<ol start="8" type="1">
+<li><p>Supervivencia de obligaciones.</p></li>
+</ol>
+<p>Las obligaciones relacionadas con:</p>
+<p>a) pagos;</p>
+<p>b) reembolsos;</p>
+<p>c) confidencialidad;</p>
+<p>d) protección de datos;</p>
+<p>e) propiedad intelectual;</p>
+<p>f) obligaciones fiscales;</p>
+<p>g) responsabilidades pendientes;</p>
+<p>h) reclamaciones;</p>
+<p>i) y resolución de disputas;</p>
+<p>continuarán vigentes aun después de la terminación de la relación contractual entre LAS PARTES.</p>
+<ol start="9" type="1">
+<li><p>Actualización de información.</p></li>
+</ol>
+<p>LA AGENCIA será responsable de mantener actualizada toda la información relacionada con su operación, incluyendo datos fiscales, comerciales, bancarios, operativos y de contacto dentro de la plataforma.</p>
+<ol start="10" type="1">
+<li><p>Entrada en vigor.</p></li>
+</ol>
+<p>El presente contrato entrará en vigor a partir de la aceptación electrónica realizada por LA AGENCIA mediante cualquiera de los mecanismos autorizados por TOURSRED.</p>
+<p>Leído que fue el presente contrato y enteradas LAS PARTES de su contenido, alcance y efectos legales, lo aceptan de conformidad mediante firma autógrafa, firma electrónica o aceptación digital a través de los mecanismos implementados por TOURSRED.</p>
+<p>El presente contrato surtirá efectos legales a partir de la fecha de aceptación electrónica realizada por LA AGENCIA dentro de la plataforma.</p>
+<p>Firmado en la Ciudad de México, el día <span class="fill">{{fecha_dia}}</span> de <span class="fill">{{fecha_mes}}</span> de <span class="fill">{{fecha_anio}}</span></p>
+<blockquote>
+<div class="signature-block"><div class="sig-col"><div class="sig-line"></div><p class="sig-name">TOURS RED GLOBAL S.A.S. DE C.V.</p><p class="sig-role">Alan Axel Álvarez Hernández<br/>Administrador Único</p></div><div class="sig-col"><div class="sig-line"></div><p class="sig-name">{{razon_social}}</p><p class="sig-role">{{representante_legal}}<br/>LA AGENCIA</p></div></div>
+</blockquote>
+<p><strong><br />
+</strong></p>
+<p><strong>ANEXO A.</strong></p>
+<p><strong><u>DEFINICIONES GENERALES</u></strong></p>
+<p>Para efectos del presente contrato, los términos utilizados con mayúscula inicial tendrán el significado que se les atribuye a continuación:</p>
+<ul>
+<li><p><strong>PLATAFORMA</strong>:<br />
+Sistema digital operado por TOURSRED, incluyendo sitio web, aplicaciones, paneles administrativos, herramientas tecnológicas, sistemas de reservación y demás funcionalidades relacionadas con la publicación, promoción, comercialización y administración de tours y servicios turísticos.</p></li>
+<li><p><strong>CLIENTE</strong> <strong>FINAL</strong>:<br />
+Persona física o moral que realiza una reservación o contratación de servicios turísticos publicados por LA AGENCIA dentro de la plataforma TOURSRED.</p></li>
+<li><p><strong>TOUR</strong>:<br />
+Cualquier excursión, actividad, experiencia, traslado, circuito, servicio turístico, actividad recreativa o producto relacionado con turismo publicado por LA AGENCIA dentro de la plataforma.</p></li>
+<li><p><strong>RESERVACIÓN</strong>:<br />
+Solicitud confirmada de contratación de un TOUR realizada por un CLIENTE FINAL mediante la plataforma TOURSRED.</p></li>
+<li><p><strong>ANTICIPO</strong>:<br />
+Monto pagado por el CLIENTE FINAL a través de la plataforma TOURSRED al momento de confirmar una RESERVACIÓN, el cual será configurado por LA AGENCIA conforme al porcentaje mínimo y demás condiciones establecidas en la Cláusula Quinta del presente contrato, y de cuyo monto se descontará la COMISIÓN correspondiente a TOURSRED.</p></li>
+<li><p><strong>COMISIÓN</strong>:<br />
+Porcentaje, tarifa o contraprestación económica que TOURSRED cobra a LA AGENCIA por concepto de intermediación digital, comercialización y uso de la plataforma.</p></li>
+<li><p><strong>TOURSRED</strong> <strong>CASH</strong>”:<br />
+Sistema interno de saldo electrónico, crédito virtual, monedero promocional o mecanismo digital de compensación operado por TOURSRED, utilizable exclusivamente dentro de la plataforma para la contratación de tours, servicios turísticos, promociones, bonificaciones, reembolsos, compensaciones o ajustes operativos autorizados por TOURSRED.</p></li>
+</ul>
+<p>TOURSRED CASH no constituye cuenta bancaria, instrumento financiero, depósito monetario, inversión ni saldo retirable en efectivo, salvo que TOURSRED determine expresamente lo contrario mediante políticas internas publicadas en la plataforma.</p>
+<ul>
+<li><p><strong>PASARELAS DE PAGO</strong>:<br />
+Terceros autorizados para el procesamiento de pagos electrónicos, incluyendo bancos, adquirentes, agregadores, procesadores o plataformas financieras utilizadas por TOURSRED.</p></li>
+<li><p><strong>POLÍTICAS DE PLATAFORMA</strong>:<br />
+Lineamientos, reglas operativas, políticas comerciales, términos complementarios, manuales, criterios técnicos o disposiciones publicadas por TOURSRED dentro de la plataforma o comunicadas electrónicamente a LA AGENCIA.</p></li>
+<li><p><strong>CONTENIDO</strong>:<br />
+Toda información, imágenes, fotografías, videos, textos, descripciones, precios, itinerarios, disponibilidad, logotipos, material gráfico o cualquier otro elemento publicado por LA AGENCIA dentro de la plataforma.</p></li>
+<li><p><strong>CONTRACARGO</strong>:<br />
+Proceso mediante el cual un banco, institución financiera o procesador de pagos revierte, cancela o disputa un cargo previamente procesado, derivado de reclamaciones realizadas por el CLIENTE FINAL.</p></li>
+</ul>
+</div>
+
+<div class="otp-appendix">
+  <h2>Anexo B — Constancia de Aceptación Electrónica</h2>
+  <p>
+    De conformidad con la Cláusula Décima Quinta (Firma Electrónica y Aceptación Digital) del presente
+    contrato, LA AGENCIA manifestó su consentimiento y aceptación mediante el mecanismo de autenticación
+    por código de un solo uso (OTP) enviado al correo electrónico registrado, mismo que constituye
+    evidencia electrónica válida conforme al Código de Comercio y demás legislación mercantil aplicable
+    en los Estados Unidos Mexicanos.
+  </p>
+  <p>
+    A continuación se detalla la constancia de dicha aceptación:
+  </p>
+
+  <table class="evidence-table">
+    <tr>
+      <td>Folio de contrato</td>
+      <td>{{folio_contrato}}</td>
+    </tr>
+    <tr>
+      <td>Versión del contrato aceptado</td>
+      <td>{{version_contrato}}</td>
+    </tr>
+    <tr>
+      <td>Agencia / Comitente</td>
+      <td>{{razon_social}} — RFC {{rfc_agencia}}</td>
+    </tr>
+    <tr>
+      <td>Correo electrónico verificado</td>
+      <td>{{email_contacto}}</td>
+    </tr>
+    <tr>
+      <td>Fecha y hora de aceptación</td>
+      <td class="pending">{{fecha_hora_aceptacion}}</td>
+    </tr>
+    <tr>
+      <td>Dirección IP de origen</td>
+      <td class="pending">{{ip_aceptacion}}</td>
+    </tr>
+    <tr>
+      <td>Navegador / dispositivo</td>
+      <td class="pending">{{user_agent_aceptacion}}</td>
+    </tr>
+    <tr>
+      <td>Código OTP</td>
+      <td class="pending">{{otp_estatus}}</td>
+    </tr>
+    <tr>
+      <td>Hash SHA-256 del documento aceptado</td>
+      <td class="pending hash-value">{{hash_documento}}</td>
+    </tr>
+  </table>
+
+  <p>
+    Este anexo forma parte integral del contrato y constituye, junto con los registros electrónicos,
+    bitácoras y respaldos digitales conservados por TOURSRED conforme a la Cláusula Décima Cuarta,
+    numeral 5, y la Cláusula Décima Quinta, medio de prueba de la manifestación de voluntad de LA AGENCIA
+    respecto de la totalidad de las declaraciones y cláusulas contenidas en el presente instrumento.
+  </p>
+</div>
+
+</body>
+</html>

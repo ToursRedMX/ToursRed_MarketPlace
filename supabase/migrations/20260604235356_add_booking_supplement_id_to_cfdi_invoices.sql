@@ -1,0 +1,1 @@
+ALTER TABLE cfdi_invoices ADD COLUMN IF NOT EXISTS booking_supplement_id UUID REFERENCES booking_supplements(id) ON DELETE SET NULL;
