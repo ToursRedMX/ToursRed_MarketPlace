@@ -1726,6 +1726,8 @@ interface CancellationPolicy {
   refundPercentage: number;
   daysBeforeTour: number;
   originalDepositAmount: number;
+  installmentsPaid: number;
+  principalPaid: number;
   originalServiceCharge: number;
   refundAmountToTraveler: number;
   amountToAgency: number;
@@ -1823,6 +1825,17 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
   const originalServiceCharge = Number(booking.service_charge || 0);
   const isPending = booking.approval_status === 'pending';
 
+  let installmentsPaid = 0;
+  const { data: installments } = await supabase
+    .from('booking_payment_plan_installments')
+    .select('amount_paid')
+    .eq('booking_id', booking.id)
+    .in('status', ['paid', 'partially_paid']);
+  for (const inst of (installments || [])) {
+    installmentsPaid += Number((inst as any).amount_paid || 0);
+  }
+  const principalPaid = originalDepositAmount + installmentsPaid;
+
   const { data: platformSettings } = await supabase
     .from('platform_settings')
     .select('agency_commission_percentage')
@@ -1857,6 +1870,8 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
       refundPercentage: 100,
       daysBeforeTour: 0,
       originalDepositAmount: 0,
+      installmentsPaid: 0,
+      principalPaid: 0,
       originalServiceCharge: 0,
       refundAmountToTraveler: 0,
       amountToAgency: 0,
@@ -1890,14 +1905,16 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
     const moderateRefundPct = Number(tour.moderate_refund_percentage ?? 50) / 100;
 
     if (hoursBeforeTour >= flexibleHours) {
-      const refundAmount = originalDepositAmount * flexibleRefundPct;
-      const penaltyAmount = originalDepositAmount * (1 - flexibleRefundPct);
+      const refundAmount = principalPaid * flexibleRefundPct;
+      const penaltyAmount = principalPaid * (1 - flexibleRefundPct);
       const totalRefund = refundAmount + optionalServicesRefundable;
       return {
         policyType: flexibleRefundPct >= 1 ? '100_percent' : '50_percent',
         refundPercentage: Math.round(flexibleRefundPct * 100),
         daysBeforeTour: Math.ceil(hoursBeforeTour / 24),
         originalDepositAmount,
+        installmentsPaid,
+        principalPaid,
         originalServiceCharge,
         refundAmountToTraveler: totalRefund,
         amountToAgency: penaltyAmount * 0.7,
@@ -1905,19 +1922,21 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
         canCancel: true,
         optionalServicesRefundable,
         optionalServicesNonRefundable,
-        refundMessage: `Se reembolsará el ${Math.round(flexibleRefundPct * 100)}% del anticipo ($${formatCurrency(refundAmount)})${optionalServicesRefundable > 0 ? ` más los servicios opcionales reembolsables ($${formatCurrency(optionalServicesRefundable)})` : ''} a tu ToursRed Cash. El cargo por servicio ($${formatCurrency(originalServiceCharge)}) no es reembolsable.${optionalServicesNonRefundable > 0 ? ` Los servicios no reembolsables ($${formatCurrency(optionalServicesNonRefundable)}) no se devuelven.` : ''}`
+        refundMessage: `Se reembolsará el ${Math.round(flexibleRefundPct * 100)}% de lo pagado (${formatCurrency(principalPaid)} = ${formatCurrency(refundAmount)})${optionalServicesRefundable > 0 ? ` más los servicios opcionales reembolsables (${formatCurrency(optionalServicesRefundable)})` : ''} a tu ToursRed Cash. El cargo por servicio (${formatCurrency(originalServiceCharge)}) no es reembolsable.${optionalServicesNonRefundable > 0 ? ` Los servicios no reembolsables (${formatCurrency(optionalServicesNonRefundable)}) no se devuelven.` : ''}`
       };
     }
 
     if (hoursBeforeTour >= moderateHours) {
-      const refundAmount = originalDepositAmount * moderateRefundPct;
-      const penaltyAmount = originalDepositAmount * (1 - moderateRefundPct);
+      const refundAmount = principalPaid * moderateRefundPct;
+      const penaltyAmount = principalPaid * (1 - moderateRefundPct);
       const totalRefund = refundAmount + optionalServicesRefundable;
       return {
         policyType: moderateRefundPct > 0 ? '50_percent' : 'no_refund',
         refundPercentage: Math.round(moderateRefundPct * 100),
         daysBeforeTour: Math.ceil(hoursBeforeTour / 24),
         originalDepositAmount,
+        installmentsPaid,
+        principalPaid,
         originalServiceCharge,
         refundAmountToTraveler: totalRefund,
         amountToAgency: penaltyAmount * 0.7,
@@ -1925,18 +1944,20 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
         canCancel: true,
         optionalServicesRefundable,
         optionalServicesNonRefundable,
-        refundMessage: `Se reembolsará el ${Math.round(moderateRefundPct * 100)}% del anticipo ($${formatCurrency(refundAmount)})${optionalServicesRefundable > 0 ? ` más los servicios opcionales reembolsables ($${formatCurrency(optionalServicesRefundable)})` : ''} a tu ToursRed Cash. El cargo por servicio ($${formatCurrency(originalServiceCharge)}) no es reembolsable.${optionalServicesNonRefundable > 0 ? ` Los servicios no reembolsables ($${formatCurrency(optionalServicesNonRefundable)}) no se devuelven.` : ''}`
+        refundMessage: `Se reembolsará el ${Math.round(moderateRefundPct * 100)}% de lo pagado (${formatCurrency(principalPaid)} = ${formatCurrency(refundAmount)})${optionalServicesRefundable > 0 ? ` más los servicios opcionales reembolsables (${formatCurrency(optionalServicesRefundable)})` : ''} a tu ToursRed Cash. El cargo por servicio (${formatCurrency(originalServiceCharge)}) no es reembolsable.${optionalServicesNonRefundable > 0 ? ` Los servicios no reembolsables (${formatCurrency(optionalServicesNonRefundable)}) no se devuelven.` : ''}`
       };
     }
 
     if (hoursBeforeTour > 0) {
-      const agencyAmount = originalDepositAmount * (1 - commissionRate);
-      const platformCommission = originalDepositAmount * commissionRate;
+      const agencyAmount = principalPaid * (1 - commissionRate);
+      const platformCommission = principalPaid * commissionRate;
       return {
         policyType: 'no_refund',
         refundPercentage: 0,
         daysBeforeTour: Math.ceil(hoursBeforeTour / 24),
         originalDepositAmount,
+        installmentsPaid,
+        principalPaid,
         originalServiceCharge,
         refundAmountToTraveler: optionalServicesRefundable,
         amountToAgency: agencyAmount,
@@ -1944,7 +1965,7 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
         canCancel: true,
         optionalServicesRefundable,
         optionalServicesNonRefundable,
-        refundMessage: `No se reembolsará el anticipo del tour (menos de ${moderateHours} horas antes).${optionalServicesRefundable > 0 ? ` Los servicios opcionales reembolsables ($${formatCurrency(optionalServicesRefundable)}) sí se devuelven.` : ''} Cancelar evita una penalización de No Show en tu perfil.`
+        refundMessage: `No se reembolsará lo pagado del tour (${formatCurrency(principalPaid)}) (menos de ${moderateHours} horas antes).${optionalServicesRefundable > 0 ? ` Los servicios opcionales reembolsables (${formatCurrency(optionalServicesRefundable)}) sí se devuelven.` : ''} Cancelar evita una penalización de No Show en tu perfil.`
       };
     }
 
@@ -1953,15 +1974,17 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
       refundPercentage: 0,
       daysBeforeTour: 0,
       originalDepositAmount,
+      installmentsPaid,
+      principalPaid,
       originalServiceCharge,
       refundAmountToTraveler: optionalServicesRefundable,
-      amountToAgency: originalDepositAmount * (1 - commissionRate),
-      amountToPlatform: originalDepositAmount * commissionRate,
+      amountToAgency: principalPaid * (1 - commissionRate),
+      amountToPlatform: principalPaid * commissionRate,
       canCancel: true,
       optionalServicesRefundable,
       optionalServicesNonRefundable,
       warningMessage: 'ADVERTENCIA: Cancelar con la hora de salida ya pasada resultará en una marca de No Show en tu perfil.',
-      refundMessage: 'No hay reembolso del anticipo y se te marcará como No Show. Esto puede afectar tu capacidad de hacer reservas futuras.'
+      refundMessage: 'No hay reembolso de lo pagado y se te marcará como No Show. Esto puede afectar tu capacidad de hacer reservas futuras.'
     };
   }
 
@@ -1974,12 +1997,14 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
   const daysBeforeTour = Math.ceil((tourStartDate.getTime() - today.getTime()) / millisecondsPerDay);
 
   if (daysBeforeTour >= 15) {
-    const totalRefund = originalDepositAmount + optionalServicesRefundable;
+    const totalRefund = principalPaid + optionalServicesRefundable;
     return {
       policyType: '100_percent',
       refundPercentage: 100,
       daysBeforeTour,
       originalDepositAmount,
+      installmentsPaid,
+      principalPaid,
       originalServiceCharge,
       refundAmountToTraveler: totalRefund,
       amountToAgency: 0,
@@ -1987,13 +2012,13 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
       canCancel: true,
       optionalServicesRefundable,
       optionalServicesNonRefundable,
-      refundMessage: `Se reembolsará el 100% del anticipo ($${formatCurrency(originalDepositAmount)})${optionalServicesRefundable > 0 ? ` más los servicios opcionales reembolsables ($${formatCurrency(optionalServicesRefundable)})` : ''} a tu ToursRed Cash. El cargo por servicio ($${formatCurrency(originalServiceCharge)}) no es reembolsable.${optionalServicesNonRefundable > 0 ? ` Los servicios no reembolsables ($${formatCurrency(optionalServicesNonRefundable)}) no se devuelven.` : ''}`
+      refundMessage: `Se reembolsará el 100% de lo pagado (${formatCurrency(principalPaid)})${optionalServicesRefundable > 0 ? ` más los servicios opcionales reembolsables (${formatCurrency(optionalServicesRefundable)})` : ''} a tu ToursRed Cash. El cargo por servicio (${formatCurrency(originalServiceCharge)}) no es reembolsable.${optionalServicesNonRefundable > 0 ? ` Los servicios no reembolsables (${formatCurrency(optionalServicesNonRefundable)}) no se devuelven.` : ''}`
     };
   }
 
   if (daysBeforeTour >= 7 && daysBeforeTour < 15) {
-    const refundAmount = originalDepositAmount * 0.5;
-    const penaltyAmount = originalDepositAmount * 0.5;
+    const refundAmount = principalPaid * 0.5;
+    const penaltyAmount = principalPaid * 0.5;
     const agencyShare = penaltyAmount * 0.7;
     const platformShare = penaltyAmount * 0.3;
     const totalRefund = refundAmount + optionalServicesRefundable;
@@ -2003,6 +2028,8 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
       refundPercentage: 50,
       daysBeforeTour,
       originalDepositAmount,
+      installmentsPaid,
+      principalPaid,
       originalServiceCharge,
       refundAmountToTraveler: totalRefund,
       amountToAgency: agencyShare,
@@ -2010,19 +2037,21 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
       canCancel: true,
       optionalServicesRefundable,
       optionalServicesNonRefundable,
-      refundMessage: `Se reembolsará el 50% del anticipo ($${formatCurrency(refundAmount)})${optionalServicesRefundable > 0 ? ` más los servicios opcionales reembolsables ($${formatCurrency(optionalServicesRefundable)})` : ''} a tu ToursRed Cash. El cargo por servicio ($${formatCurrency(originalServiceCharge)}) no es reembolsable.${optionalServicesNonRefundable > 0 ? ` Los servicios no reembolsables ($${formatCurrency(optionalServicesNonRefundable)}) no se devuelven.` : ''}`
+      refundMessage: `Se reembolsará el 50% de lo pagado (${formatCurrency(principalPaid)} = ${formatCurrency(refundAmount)})${optionalServicesRefundable > 0 ? ` más los servicios opcionales reembolsables (${formatCurrency(optionalServicesRefundable)})` : ''} a tu ToursRed Cash. El cargo por servicio (${formatCurrency(originalServiceCharge)}) no es reembolsable.${optionalServicesNonRefundable > 0 ? ` Los servicios no reembolsables (${formatCurrency(optionalServicesNonRefundable)}) no se devuelven.` : ''}`
     };
   }
 
   if (daysBeforeTour >= 1 && daysBeforeTour < 7) {
-    const agencyAmount = originalDepositAmount * (1 - commissionRate);
-    const platformCommission = originalDepositAmount * commissionRate;
+    const agencyAmount = principalPaid * (1 - commissionRate);
+    const platformCommission = principalPaid * commissionRate;
 
     return {
       policyType: 'no_refund',
       refundPercentage: 0,
       daysBeforeTour,
       originalDepositAmount,
+      installmentsPaid,
+      principalPaid,
       originalServiceCharge,
       refundAmountToTraveler: optionalServicesRefundable,
       amountToAgency: agencyAmount,
@@ -2033,7 +2062,7 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
       warningMessage: tour.cancellation_not_allowed
         ? 'Este tour NO permite cancelaciones con reembolso. Solo puedes cancelar para evitar la penalización de No Show.'
         : undefined,
-      refundMessage: `No se reembolsará el anticipo del tour.${optionalServicesRefundable > 0 ? ` Los servicios opcionales reembolsables ($${formatCurrency(optionalServicesRefundable)}) sí se devuelven.` : ''}${optionalServicesNonRefundable > 0 ? ` Los servicios no reembolsables ($${formatCurrency(optionalServicesNonRefundable)}) no se devuelven.` : ''} Cancelar evita una penalización de No Show en tu perfil.`
+      refundMessage: `No se reembolsará lo pagado del tour (${formatCurrency(principalPaid)}).${optionalServicesRefundable > 0 ? ` Los servicios opcionales reembolsables (${formatCurrency(optionalServicesRefundable)}) sí se devuelven.` : ''}${optionalServicesNonRefundable > 0 ? ` Los servicios no reembolsables (${formatCurrency(optionalServicesNonRefundable)}) no se devuelven.` : ''} Cancelar evita una penalización de No Show en tu perfil.`
     };
   }
 
@@ -2042,249 +2071,18 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
     refundPercentage: 0,
     daysBeforeTour,
     originalDepositAmount,
+    installmentsPaid,
+    principalPaid,
     originalServiceCharge,
     refundAmountToTraveler: optionalServicesRefundable,
-    amountToAgency: originalDepositAmount * (1 - commissionRate),
-    amountToPlatform: originalDepositAmount * commissionRate,
+    amountToAgency: principalPaid * (1 - commissionRate),
+    amountToPlatform: principalPaid * commissionRate,
     canCancel: true,
     optionalServicesRefundable,
     optionalServicesNonRefundable,
     warningMessage: 'ADVERTENCIA: Cancelar con menos de 1 día de anticipación resultará en una marca de No Show en tu perfil.',
-    refundMessage: 'No hay reembolso del anticipo y se te marcará como No Show. Esto puede afectar tu capacidad de hacer reservas futuras.'
+    refundMessage: 'No hay reembolso de lo pagado y se te marcará como No Show. Esto puede afectar tu capacidad de hacer reservas futuras.'
   };
-};
-
-export const addCancellationRefund = async (
-  userId: string,
-  bookingId: string,
-  refundAmount: number,
-  tourName: string
-) => {
-  try {
-    const { data, error } = await supabase.rpc('update_wallet_balance', {
-      p_user_id: userId,
-      p_amount: refundAmount,
-      p_type: 'refund',
-      p_description: `Reembolso por cancelación de ${tourName}`,
-      p_reference_id: bookingId,
-      p_reference_type: 'booking_cancellation'
-    });
-
-    if (error) throw error;
-
-    return {
-      data: {
-        id: data.transaction_id,
-        amount: data.amount,
-        balance_after: data.new_balance
-      },
-      error: null
-    };
-  } catch (error: any) {
-    console.error('❌ Error en addCancellationRefund:', error);
-    return { data: null, error };
-  }
-};
-
-export const processCancellation = async (
-  bookingId: string,
-  userId: string,
-  cancellationReason?: string
-) => {
-  try {
-    console.log('🚫 Procesando cancelación de reserva:', bookingId);
-
-    const eligibility = await validateCancellationEligibility(bookingId);
-    if (!eligibility.eligible || !eligibility.booking) {
-      throw new Error(eligibility.error || 'La reserva no es elegible para cancelación');
-    }
-
-    const booking = eligibility.booking;
-    const policy = await calculateCancellationPolicy(booking);
-
-    console.log('📋 Política de cancelación:', policy);
-
-    let transactionId: string | null = null;
-
-    if (policy.refundAmountToTraveler > 0) {
-      const refundResult = await addCancellationRefund(
-        userId,
-        bookingId,
-        policy.refundAmountToTraveler,
-        (booking.tours as any).name
-      );
-
-      if (refundResult.error) {
-        throw new Error(`Error al procesar reembolso: ${refundResult.error.message}`);
-      }
-
-      transactionId = refundResult.data!.id;
-      console.log('💰 Reembolso procesado:', transactionId);
-    }
-
-    // Cancel optional services (traveler cancellation — non-refundable ones are NOT refunded)
-    await supabase.rpc('cancel_booking_optional_services', {
-      p_booking_id: bookingId,
-      p_cancelled_by_agency: false
-    });
-
-    const { data: cancellation, error: cancellationError } = await supabase
-      .from('booking_cancellations')
-      .insert({
-        booking_id: bookingId,
-        cancelled_by_user_id: userId,
-        tour_start_date: (booking.tours as any).start_date,
-        days_before_tour: policy.daysBeforeTour,
-        cancellation_policy_type: policy.policyType,
-        original_deposit_amount: policy.originalDepositAmount,
-        original_service_charge: policy.originalServiceCharge,
-        refund_amount_to_traveler: policy.refundAmountToTraveler,
-        amount_to_agency: policy.amountToAgency,
-        amount_to_platform: policy.amountToPlatform,
-        toursred_cash_transaction_id: transactionId,
-        refund_processed: policy.refundAmountToTraveler > 0,
-        cancellation_reason: cancellationReason || null
-      })
-      .select()
-      .single();
-
-    if (cancellationError) throw cancellationError;
-
-    console.log('📝 Cancelación registrada:', cancellation.id);
-
-    // Generar póliza contable solo cuando hay retención (50% o sin reembolso)
-    if (policy.policyType === '50_percent' || policy.policyType === 'no_refund') {
-      supabase.rpc('create_accounting_entry_for_cancellation', {
-        p_cancellation_id: cancellation.id,
-        p_cancellation_type: 'full'
-      }).then(({ error: accErr }) => {
-        if (accErr) console.error('⚠️ Error generando póliza contable de cancelación:', accErr);
-      });
-    }
-
-    const { error: updateBookingError } = await supabase
-      .from('bookings')
-      .update({
-        status: 'cancelled',
-        cancelled_at: new Date().toISOString(),
-        cancellation_type: policy.policyType,
-        cancellation_refund_amount: policy.refundAmountToTraveler,
-        is_no_show: policy.policyType === 'no_show'
-      })
-      .eq('id', bookingId);
-
-    if (updateBookingError) throw updateBookingError;
-
-    if (policy.policyType === 'no_show') {
-      const { error: noShowError } = await supabase
-        .from('users')
-        .update({
-          no_show_count: supabase.raw('no_show_count + 1')
-        })
-        .eq('id', userId);
-
-      if (noShowError) {
-        console.error('⚠️ Error incrementando no_show_count:', noShowError);
-      }
-    }
-
-    if (policy.amountToAgency > 0 && (policy.policyType === '50_percent' || policy.policyType === 'no_refund')) {
-      const { error: penaltyError } = await supabase
-        .from('cancellation_penalty_records')
-        .insert({
-          booking_id: bookingId,
-          agency_id: booking.agency_id,
-          tour_id: booking.tour_id,
-          cancellation_type: 'full',
-          cancellation_id: cancellation.id,
-          cancellation_policy_type: policy.policyType,
-          original_booking_amount: policy.originalDepositAmount,
-          gross_penalty: policy.originalDepositAmount - policy.refundAmountToTraveler,
-          agency_net_amount: policy.amountToAgency,
-          platform_amount: policy.amountToPlatform,
-          status: 'pending'
-        });
-
-      if (penaltyError) {
-        throw new Error(`Error creando cancellation_penalty_record: ${penaltyError.message}`);
-      }
-    }
-
-    try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-      console.log('📧 Enviando emails de notificación...');
-
-      const responses = await Promise.all([
-        fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-traveler`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`
-          },
-          body: JSON.stringify({ booking_id: bookingId, cancellation_id: cancellation.id })
-        }),
-        fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-agency`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`
-          },
-          body: JSON.stringify({ booking_id: bookingId, cancellation_id: cancellation.id })
-        }),
-        fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-admin`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`
-          },
-          body: JSON.stringify({ booking_id: bookingId, cancellation_id: cancellation.id })
-        })
-      ]);
-
-      const results = await Promise.all(
-        responses.map(async (response, index) => {
-          const type = ['traveler', 'agency', 'admin'][index];
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`❌ Error enviando email a ${type}:`, response.status, errorText);
-            return false;
-          }
-          console.log(`✅ Email enviado a ${type}`);
-          return true;
-        })
-      );
-
-      const allSent = results.every(r => r);
-
-      await supabase
-        .from('booking_cancellations')
-        .update({ emails_sent: allSent })
-        .eq('id', cancellation.id);
-
-      console.log(`📧 Resultado envío emails: ${results.filter(r => r).length}/${results.length} exitosos`);
-    } catch (emailError) {
-      console.error('⚠️ Error enviando emails (no crítico):', emailError);
-    }
-
-    console.log('✅ Cancelación completada exitosamente');
-
-    return {
-      data: {
-        cancellation,
-        policy,
-        booking
-      },
-      error: null
-    };
-  } catch (error: any) {
-    console.error('❌ Error en processCancellation:', error);
-    return {
-      data: null,
-      error: error.message || 'Error al procesar la cancelación'
-    };
-  }
 };
 
 // ─── PARTIAL CANCELLATION SYSTEM ────────────────────────────────────────────
