@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -10,6 +10,7 @@ export default function PaymentReturnPage() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<ReturnStatus>('loading');
   const [message, setMessage] = useState('');
+  const hasRunRef = useRef(false);
 
   const provider = searchParams.get('provider');
   const bookingId = searchParams.get('booking_id');
@@ -33,6 +34,8 @@ export default function PaymentReturnPage() {
   const mpCollectionStatus = searchParams.get('collection_status');
 
   useEffect(() => {
+    if (hasRunRef.current) return;
+    hasRunRef.current = true;
     handleReturn();
   }, []);
 
