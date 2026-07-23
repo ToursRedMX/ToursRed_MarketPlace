@@ -1406,6 +1406,58 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
     setRefundAmount(totalPaid + insurance);
   }, [booking]);
 
+  // Detect in-progress cancellation when modal opens so we can resume the refund-lines flow
+  const [resumingCancellation, setResumingCancellation] = useState(false);
+
+  useEffect(() => {
+    if (booking.status !== 'cancellation_processing') return;
+    let cancelled = false;
+    setResumingCancellation(true);
+    (async () => {
+      try {
+        const { data: cancRow, error: cancErr } = await supabase
+          .from('booking_cancellations')
+          .select('id, refund_processed')
+          .eq('booking_id', booking.id)
+          .eq('refund_processed', false)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancErr) throw cancErr;
+        if (cancelled) return;
+
+        const { data: adminRow, error: adminErr } = await supabase
+          .from('admin_booking_cancellations')
+          .select('id')
+          .eq('booking_id', booking.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (adminErr) throw adminErr;
+        if (cancelled) return;
+
+        if (cancRow?.id && adminRow?.id) {
+          setCancellationId(cancRow.id);
+          setAdminCancellationId(adminRow.id);
+          setBookingCancelled(true);
+          setRefundMethod('original_payment_method');
+          setWithRefund(true);
+          await loadRefundLines();
+        } else {
+          setError('Esta reserva está en proceso de cancelación pero no se encontró el registro de cancelación asociado. Contactar a soporte técnico.');
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setError(e.message || 'Error al reanudar la cancelación en proceso');
+        }
+      } finally {
+        if (!cancelled) setResumingCancellation(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking.id, booking.status]);
+
   const loadRefundLines = async () => {
     setLoadingLines(true);
     try {
@@ -1716,6 +1768,15 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
             </div>
           )}
 
+          {resumingCancellation && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              <span className="ml-2 text-sm text-gray-500">Reanudando cancelación en proceso...</span>
+            </div>
+          )}
+
+          {!resumingCancellation && !bookingCancelled && (
+            <>
           {/* Booking summary */}
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -1924,6 +1985,8 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
                 </div>
               </div>
             </div>
+          )}
+            </>
           )}
         </div>
 
