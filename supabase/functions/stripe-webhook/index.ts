@@ -1339,6 +1339,8 @@ Deno.serve(async (req) => {
             status: 'succeeded',
             payment_method_type: paymentMethod,
             net_amount: session.amount_total / 100,
+            charge_context: 'booking_deposit',
+            charge_reference_id: bookingId,
             metadata: session
           });
 

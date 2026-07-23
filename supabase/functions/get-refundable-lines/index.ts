@@ -116,6 +116,15 @@ Deno.serve(async (req: Request) => {
       .filter((t) => t.charge_reference_id)
       .map((t) => t.charge_reference_id);
 
+    // For booking_deposit lines without charge_reference_id, points are stored
+    // with reference_id = booking_id. Include it so we can look them up.
+    const bookingDepositTxWithoutRef = transactions.filter(
+      (t) => (!t.charge_context || t.charge_context === "booking_deposit") && !t.charge_reference_id
+    );
+    if (bookingDepositTxWithoutRef.length > 0) {
+      referenceIds.push(booking_id);
+    }
+
     // Fetch points earned per reference_id
     let pointsMap: Record<string, number> = {};
     if (referenceIds.length > 0) {
@@ -286,7 +295,10 @@ Deno.serve(async (req: Request) => {
           description = "Pago";
       }
 
-      let pointsEarned = refId ? pointsMap[refId] || 0 : 0;
+      // For booking_deposit without charge_reference_id, points are stored
+      // with reference_id = booking_id (via award_points_for_booking trigger)
+      const pointsLookupKey = refId || (ctx === "booking_deposit" ? booking_id : null);
+      let pointsEarned = pointsLookupKey ? pointsMap[pointsLookupKey] || 0 : 0;
       let pointsEstimated = false;
 
       // Legacy fallback: if no direct points found and this is a payment plan
