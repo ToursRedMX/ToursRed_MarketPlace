@@ -3108,7 +3108,7 @@ const TravelerBookings: React.FC = () => {
                         {cancellationModal.policy.originalServiceCharge > 0 && (
                           <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mb-4">
                             <p className="text-sm text-orange-800">
-                              <strong>Nota importante:</strong> El cargo por servicio de ${formatCurrencyMXN(cancellationModal.policy.originalServiceCharge)} no es reembolsable. Si utilizaste beneficios de ToursRed+, estos tampoco son recuperables ya que fueron cobrados por Stripe.
+                              <strong>Nota importante:</strong> El cargo por servicio de ${formatCurrencyMXN(cancellationModal.policy.originalServiceCharge)} no es reembolsable. Si utilizaste beneficios de ToursRed+, estos tampoco son recuperables.
                             </p>
                           </div>
                         )}
