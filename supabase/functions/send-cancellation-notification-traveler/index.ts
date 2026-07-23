@@ -293,7 +293,7 @@ Deno.serve(async (req: Request) => {
               ${!admin_cancellation && cancellation.original_service_charge > 0 ? `
               <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
                 <p style="color: #92400e; font-size: 13px; line-height: 1.6; margin: 0;">
-                  <strong>Nota:</strong> El cargo por servicio de $${cancellation.original_service_charge.toFixed(2)} no es reembolsable. Si utilizaste beneficios de ToursRed+, estos tampoco son recuperables ya que fueron cobrados por Stripe en el momento de la reserva.
+                  <strong>Nota:</strong> El cargo por servicio de $${cancellation.original_service_charge.toFixed(2)} no es reembolsable. Si utilizaste beneficios de ToursRed+, estos tampoco son recuperables.
                 </p>
               </div>
               ` : ''}

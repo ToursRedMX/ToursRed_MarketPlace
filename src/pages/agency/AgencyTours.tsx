@@ -6547,7 +6547,7 @@ const AgencyTours: React.FC = () => {
                               {cancelModal.activeBookingsCount} {cancelModal.activeBookingsCount === 1 ? 'viajero será afectado' : 'viajeros serán afectados'}
                             </p>
                             <p className="text-xs text-red-800 mt-1">
-                              Todos los viajeros recibirán un reembolso del 100% del anticipo pagado en su monedero ToursRed Cash. Los cargos por servicio no son reembolsables ya que fueron cobrados por Stripe.
+                              Todos los viajeros recibirán un reembolso del 100% del anticipo pagado en su monedero ToursRed Cash. Los cargos por servicio no son reembolsables.
                             </p>
                           </div>
                         </div>
