@@ -82,6 +82,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (booking.status === 'cancellation_processing') {
+      return new Response(JSON.stringify({ error: "Esta reserva tiene una cancelación en proceso" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Verificar permisos: admin/super_admin, dueño de agencia, o staff de la agencia
     const { data: currentUser } = await supabase
       .from("users")

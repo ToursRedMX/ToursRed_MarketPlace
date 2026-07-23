@@ -158,6 +158,7 @@ const AdminDashboard: React.FC = () => {
       case 'confirmed': return 'text-success-600 bg-success-100';
       case 'pending': return 'text-warning-600 bg-warning-100';
       case 'cancelled': return 'text-error-600 bg-error-100';
+      case 'cancellation_processing': return 'text-amber-600 bg-amber-100';
       case 'completed': return 'text-primary-600 bg-primary-100';
       default: return 'text-gray-600 bg-gray-100';
     }
@@ -168,6 +169,7 @@ const AdminDashboard: React.FC = () => {
       case 'confirmed': return 'Confirmada';
       case 'pending': return 'Pendiente';
       case 'cancelled': return 'Cancelada';
+      case 'cancellation_processing': return 'Cancelación en Proceso';
       case 'completed': return 'Completada';
       default: return status;
     }

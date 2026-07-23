@@ -899,7 +899,7 @@ const TravelerBookings: React.FC = () => {
   const canCancelBooking = (booking: Booking) => {
     if (!booking.tours) return false;
 
-    if (booking.status === 'cancelled') return false;
+    if (booking.status === 'cancelled' || booking.status === 'cancellation_processing') return false;
     if ((booking as any).is_no_show) return false;
     if ((booking as any).approval_status === 'rejected') return false;
     if (!['pending', 'confirmed'].includes(booking.status)) return false;
@@ -915,7 +915,7 @@ const TravelerBookings: React.FC = () => {
 
   const canPartialCancelBooking = (booking: Booking) => {
     if (!booking.tours) return false;
-    if (booking.status === 'cancelled') return false;
+    if (booking.status === 'cancelled' || booking.status === 'cancellation_processing') return false;
     if ((booking as any).is_no_show) return false;
     if ((booking as any).approval_status === 'rejected') return false;
     if (!['confirmed'].includes(booking.status)) return false;
@@ -1441,6 +1441,10 @@ const TravelerBookings: React.FC = () => {
         case 'cancelled':
           statusText = 'Cancelada';
           statusClass = 'bg-red-100 text-red-800';
+          break;
+        case 'cancellation_processing':
+          statusText = 'Cancelación en Proceso';
+          statusClass = 'bg-amber-100 text-amber-800';
           break;
         default:
           statusText = status;

@@ -72,6 +72,7 @@ Deno.serve(async (req: Request) => {
       receipt_base64,
       receipt_filename,
       requested_by = "admin_override",
+      mode = "full",
     } = body;
 
     if (!booking_id) return err("booking_id es requerido");
@@ -85,6 +86,10 @@ Deno.serve(async (req: Request) => {
       return err("El comprobante de transferencia es obligatorio");
     if (!["traveler_default", "traveler_profeco_request", "admin_override"].includes(requested_by))
       return err("requested_by inválido");
+    if (!["prepare", "full"].includes(mode))
+      return err("mode debe ser 'prepare' o 'full'");
+
+    const isPrepare = mode === "prepare" && refund_method === "original_payment_method";
 
     // Load booking with related data
     const { data: booking, error: bookingError } = await supabase
@@ -104,6 +109,8 @@ Deno.serve(async (req: Request) => {
     if (bookingError || !booking) return err("Reserva no encontrada");
     if (booking.cancelled_at || booking.status === "cancelled")
       return err("Esta reserva ya fue cancelada");
+    if (booking.status === "cancellation_processing")
+      return err("Esta reserva ya tiene una cancelación en proceso. Usa admin-finalize-cancellation para completarla.");
 
     const tour = (booking as any).tours;
     const agency = (booking as any).agencies;
@@ -261,8 +268,9 @@ Deno.serve(async (req: Request) => {
     // Deduct points: 1 peso = 1 punto. For original_payment_method, points are
     // clawed back per-line via claw_back_points_for_refund when each refund is
     // processed from the modal — deducting here too would double-count.
+    // In prepare mode, skip points entirely — they're handled in admin-finalize-cancellation.
     let pointsDeducted = 0;
-    if (refund_method !== "original_payment_method") {
+    if (refund_method !== "original_payment_method" && !isPrepare) {
       const pointsToDeduct = Math.floor(Number(refund_amount));
       if (pointsToDeduct > 0) {
         try {
@@ -284,39 +292,41 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Cancel optional services
-    try {
-      await supabase.rpc("cancel_booking_optional_services", {
-        p_booking_id: booking_id,
-        p_cancelled_by_agency: false,
-      });
-    } catch (e) {
-      console.error("Error cancelling optional services:", e);
-    }
-
-    // Cancel paid supplements that are cancellable
-    try {
-      const { data: paidSupplements } = await supabase
-        .from("booking_supplements")
-        .select("id, tour_supplements(is_cancellable)")
-        .eq("booking_id", booking_id)
-        .eq("status", "paid");
-
-      for (const supp of (paidSupplements || [])) {
-        if ((supp as any).tour_supplements?.is_cancellable !== false) {
-          await supabase.from("booking_supplements")
-            .update({
-              status: "cancelled",
-              cancelled_at: new Date().toISOString(),
-              cancelled_by: "tour_cancellation",
-              refund_amount: (supp as any).total_paid || 0,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", supp.id);
-        }
+    // Cancel optional services and supplements.
+    // In prepare mode, skip — these are handled in admin-finalize-cancellation.
+    if (!isPrepare) {
+      try {
+        await supabase.rpc("cancel_booking_optional_services", {
+          p_booking_id: booking_id,
+          p_cancelled_by_agency: false,
+        });
+      } catch (e) {
+        console.error("Error cancelling optional services:", e);
       }
-    } catch (e) {
-      console.error("Error cancelling supplements:", e);
+
+      try {
+        const { data: paidSupplements } = await supabase
+          .from("booking_supplements")
+          .select("id, tour_supplements(is_cancellable)")
+          .eq("booking_id", booking_id)
+          .eq("status", "paid");
+
+        for (const supp of (paidSupplements || [])) {
+          if ((supp as any).tour_supplements?.is_cancellable !== false) {
+            await supabase.from("booking_supplements")
+              .update({
+                status: "cancelled",
+                cancelled_at: new Date().toISOString(),
+                cancelled_by: "tour_cancellation",
+                refund_amount: (supp as any).total_paid || 0,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", supp.id);
+          }
+        }
+      } catch (e) {
+        console.error("Error cancelling supplements:", e);
+      }
     }
 
     // Insert admin_booking_cancellations record
@@ -371,7 +381,8 @@ Deno.serve(async (req: Request) => {
 
     // Cierre de trazabilidad: inserta registros clawback amount=0 por cada
     // fuente de puntos earned, para que un reporte por fuente cuadre.
-    if (refund_method !== "original_payment_method" && pointsDeducted > 0) {
+    // In prepare mode, skip — handled in admin-finalize-cancellation.
+    if (refund_method !== "original_payment_method" && !isPrepare && pointsDeducted > 0) {
       await markPointsAsClawedBack(supabase, booking_id, cancellationRecord?.id || null, "administrativa");
     }
 
@@ -383,12 +394,15 @@ Deno.serve(async (req: Request) => {
     // booking (status, points, optionals/supplements, notifications).
     // ============================================================
 
-    // Update booking status
+    // Status update: in prepare mode, use 'cancellation_processing' instead
+    // of 'cancelled'. The booking stays in this intermediate state until
+    // admin-finalize-cancellation confirms all refund lines are initiated.
+    const newStatus = isPrepare ? "cancellation_processing" : "cancelled";
     const { error: updateErr } = await supabase
       .from("bookings")
       .update({
-        status: "cancelled",
-        cancelled_at: now,
+        status: newStatus,
+        cancelled_at: isPrepare ? null : now,
         cancellation_type: "admin_cancelled",
         cancellation_refund_amount: refund_method === "original_payment_method" ? 0 : (Number(refund_amount) || 0),
         admin_cancellation_id: adminCancellation.id,
@@ -408,10 +422,10 @@ Deno.serve(async (req: Request) => {
         p_actor_role: adminUser.role,
         p_target_id: booking_id,
         p_target_table: "bookings",
-        p_action: "admin_cancel",
+        p_action: isPrepare ? "admin_cancel_prepare" : "admin_cancel",
         p_severity: "high",
         p_old_values: { status: booking.status },
-        p_new_values: { status: "cancelled", cancellation_type: "admin_cancelled", refund_method, refund_amount },
+        p_new_values: { status: newStatus, cancellation_type: "admin_cancelled", refund_method, refund_amount },
         p_metadata: { admin_cancellation_id: adminCancellation.id, points_deducted: pointsDeducted },
       });
     } catch (e) {
@@ -425,39 +439,16 @@ Deno.serve(async (req: Request) => {
         .from("cancellation-receipts")
         .getPublicUrl(receiptFilePath);
       receiptPublicUrl = urlData.publicUrl;
-
-      // For email attachment, download the file
-      // We'll pass the URL to the notification function
     }
 
-    // Send notifications (non-blocking)
-    const notificationPromises: Promise<void>[] = [];
-
-    // 1. Notify traveler
-    notificationPromises.push(
-      fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-traveler`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({
-          booking_id,
-          cancellation_id: cancellationRecord?.id,
-          admin_cancellation: true,
-          admin_reason: reason_for_traveler.trim(),
-          refund_amount: Number(refund_amount) || 0,
-          refund_method,
-          receipt_url: receiptPublicUrl,
-          receipt_file_path: receiptFilePath,
-        }),
-      }).then(() => {}).catch((e) => console.error("Error notifying traveler:", e))
-    );
-
-    // 2. Notify agency
-    if (agency?.contact_email) {
-      notificationPromises.push(
-        fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-agency`, {
+    // ============================================================
+    // Notifications: in prepare mode, send only a light notice to the
+    // traveler. Full notifications (traveler/agency/admin) are sent by
+    // admin-finalize-cancellation once all refunds are confirmed.
+    // ============================================================
+    if (isPrepare) {
+      EdgeRuntime.waitUntil(
+        fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-traveler`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -467,47 +458,90 @@ Deno.serve(async (req: Request) => {
             booking_id,
             cancellation_id: cancellationRecord?.id,
             admin_cancellation: true,
-            admin_reason: reason_for_agency.trim(),
+            admin_reason: reason_for_traveler.trim(),
+            refund_amount: 0,
+            refund_method,
+            receipt_url: null,
+            receipt_file_path: null,
+            is_intermediate_notice: true,
           }),
-        }).then(() => {}).catch((e) => console.error("Error notifying agency:", e))
+        }).then(() => {}).catch((e) => console.error("Error notifying traveler (prepare):", e))
       );
-    }
+    } else {
+      // Send full notifications (existing behavior)
+      const notificationPromises: Promise<void>[] = [];
 
-    // 3. Notify admin (contacto@toursred.com)
-    notificationPromises.push(
-      fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-admin`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({
-          booking_id,
-          cancellation_id: cancellationRecord?.id,
-          admin_cancellation: true,
-          admin_reason_for_traveler: reason_for_traveler.trim(),
-          admin_reason_for_agency: reason_for_agency.trim(),
-          refund_amount: Number(refund_amount) || 0,
-          refund_method,
-          receipt_url: receiptPublicUrl,
-        }),
-      }).then(() => {}).catch((e) => console.error("Error notifying admin:", e))
-    );
+      notificationPromises.push(
+        fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-traveler`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            booking_id,
+            cancellation_id: cancellationRecord?.id,
+            admin_cancellation: true,
+            admin_reason: reason_for_traveler.trim(),
+            refund_amount: Number(refund_amount) || 0,
+            refund_method,
+            receipt_url: receiptPublicUrl,
+            receipt_file_path: receiptFilePath,
+          }),
+        }).then(() => {}).catch((e) => console.error("Error notifying traveler:", e))
+      );
 
-    // Wait for all notifications
-    await Promise.allSettled(notificationPromises);
+      if (agency?.contact_email) {
+        notificationPromises.push(
+          fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-agency`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({
+              booking_id,
+              cancellation_id: cancellationRecord?.id,
+              admin_cancellation: true,
+              admin_reason: reason_for_agency.trim(),
+            }),
+          }).then(() => {}).catch((e) => console.error("Error notifying agency:", e))
+        );
+      }
 
-    // Mark emails as sent
-    if (cancellationRecord) {
-      await supabase
-        .from("booking_cancellations")
-        .update({ emails_sent: true })
-        .eq("id", cancellationRecord.id);
+      notificationPromises.push(
+        fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-admin`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            booking_id,
+            cancellation_id: cancellationRecord?.id,
+            admin_cancellation: true,
+            admin_reason_for_traveler: reason_for_traveler.trim(),
+            admin_reason_for_agency: reason_for_agency.trim(),
+            refund_amount: Number(refund_amount) || 0,
+            refund_method,
+            receipt_url: receiptPublicUrl,
+          }),
+        }).then(() => {}).catch((e) => console.error("Error notifying admin:", e))
+      );
+
+      await Promise.allSettled(notificationPromises);
+
+      if (cancellationRecord) {
+        await supabase
+          .from("booking_cancellations")
+          .update({ emails_sent: true })
+          .eq("id", cancellationRecord.id);
+      }
     }
 
     return ok({
       success: true,
-      message: "Reserva cancelada exitosamente",
+      message: isPrepare ? "Cancelación preparada. Procede con los reembolsos." : "Reserva cancelada exitosamente",
       admin_cancellation_id: adminCancellation.id,
       refund_method,
       refund_amount: Number(refund_amount) || 0,
@@ -515,7 +549,9 @@ Deno.serve(async (req: Request) => {
       suggested_refund: suggestedRefund,
       tour_refund_bucket: tourRefundBucket,
       optionals_refund_bucket: optionalsRefundBucket,
+      supplements_refundable: supplementsRefundable,
       cancellation_id: cancellationRecord?.id || null,
+      booking_status: newStatus,
     });
   } catch (e: any) {
     console.error("admin-cancel-booking error:", e);

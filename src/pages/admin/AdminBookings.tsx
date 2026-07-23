@@ -207,6 +207,7 @@ const BOOKING_STATUS_MAP: Record<string, { label: string; cls: string }> = {
   confirmed: { label: 'Confirmada', cls: 'bg-green-100 text-green-800' },
   completed: { label: 'Completada', cls: 'bg-teal-100 text-teal-800' },
   cancelled: { label: 'Cancelada', cls: 'bg-red-100 text-red-800' },
+  cancellation_processing: { label: 'Cancelación en Proceso', cls: 'bg-amber-100 text-amber-800' },
   payment_not_received: { label: 'Pago no recibido', cls: 'bg-orange-100 text-orange-800' },
 };
 
@@ -586,6 +587,7 @@ function AdminBookings() {
               <option value="confirmed">Confirmada</option>
               <option value="completed">Completada</option>
               <option value="cancelled">Cancelada</option>
+              <option value="cancellation_processing">Cancelación en Proceso</option>
               <option value="payment_not_received">Pago no recibido</option>
             </select>
             <select
@@ -1323,7 +1325,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
 
         {/* Footer */}
         <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
-          {canCancel && b.status !== 'cancelled' && !b.cancelled_at ? (
+          {canCancel && b.status !== 'cancelled' && b.status !== 'cancellation_processing' && !b.cancelled_at ? (
             <button
               onClick={() => setShowCancelModal(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-sm transition"
@@ -1382,11 +1384,15 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
   // Two-phase flow for original_payment_method
   const [bookingCancelled, setBookingCancelled] = useState(false);
   const [cancellationId, setCancellationId] = useState<string | null>(null);
+  const [adminCancellationId, setAdminCancellationId] = useState<string | null>(null);
   const [refundLines, setRefundLines] = useState<any[]>([]);
   const [loadingLines, setLoadingLines] = useState(false);
   const [lineStates, setLineStates] = useState<Record<string, 'pending' | 'processing' | 'succeeded' | 'failed'>>({});
   const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
   const [refundAllProcessing, setRefundAllProcessing] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  const [manualRefundTxId, setManualRefundTxId] = useState<string | null>(null);
+  const [manualRefundMethod, setManualRefundMethod] = useState<'toursred_cash' | 'bank_transfer'>('toursred_cash');
 
   useEffect(() => {
     // Suggest refund amount based on total actually paid by traveler
@@ -1490,6 +1496,81 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
     setRefundAllProcessing(false);
   };
 
+  const allLinesReady = refundLines.length > 0 && refundLines.every(l => {
+    const st = lineStates[l.payment_transaction_id];
+    return st === 'succeeded' || st === 'processing';
+  });
+
+  const handleFinalizeCancellation = async () => {
+    setFinalizing(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-finalize-cancellation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          booking_id: booking.id,
+          cancellation_id: cancellationId,
+          admin_cancellation_id: adminCancellationId,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Error al finalizar cancelación');
+      }
+
+      onSuccess();
+    } catch (e: any) {
+      setError(e.message || 'Error al finalizar la cancelación');
+    } finally {
+      setFinalizing(false);
+    }
+  };
+
+  const handleManualRefund = async (txId: string) => {
+    const line = refundLines.find(l => l.payment_transaction_id === txId);
+    if (!line) return;
+
+    setLineStates(prev => ({ ...prev, [txId]: 'processing' }));
+    setLineErrors(prev => { const n = { ...prev }; delete n[txId]; return n; });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+
+      const { error: insertError } = await supabase
+        .from('payment_refunds')
+        .insert({
+          booking_id: booking.id,
+          cancellation_id: cancellationId,
+          payment_transaction_id: txId,
+          refund_method: manualRefundMethod,
+          payment_processor: manualRefundMethod,
+          requested_amount: line.amount,
+          currency: line.currency || 'mxn',
+          status: 'succeeded',
+          requested_by: 'admin_override',
+          created_by_user_id: session.user.id,
+          processed_at: new Date().toISOString(),
+        });
+
+      if (insertError) throw new Error(insertError.message);
+
+      setLineStates(prev => ({ ...prev, [txId]: 'succeeded' }));
+      setManualRefundTxId(null);
+    } catch (e: any) {
+      setLineStates(prev => ({ ...prev, [txId]: 'failed' }));
+      setLineErrors(prev => ({ ...prev, [txId]: e.message || 'Error' }));
+    }
+  };
+
   const handleSubmit = async () => {
     setError(null);
 
@@ -1549,6 +1630,7 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
           receipt_base64: receiptBase64,
           receipt_filename: receiptFilename,
           requested_by: 'admin_override',
+          mode: withRefund && refundMethod === 'original_payment_method' ? 'prepare' : 'full',
         }),
       });
 
@@ -1561,6 +1643,7 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
       if (withRefund && refundMethod === 'original_payment_method') {
         setBookingCancelled(true);
         setCancellationId(result.cancellation_id || null);
+        setAdminCancellationId(result.admin_cancellation_id || null);
         await loadRefundLines();
       } else {
         onSuccess();
@@ -1937,13 +2020,46 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
                           <CheckCircle className="h-5 w-5 text-emerald-500" />
                         )}
                         {state === 'failed' && line.refundable_to_original && (
-                          <button
-                            onClick={() => handleRefundLine(line.payment_transaction_id)}
-                            disabled={refundAllProcessing}
-                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition disabled:opacity-50"
-                          >
-                            Reintentar
-                          </button>
+                          <div className="flex flex-col gap-1.5 items-end">
+                            <button
+                              onClick={() => handleRefundLine(line.payment_transaction_id)}
+                              disabled={refundAllProcessing}
+                              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition disabled:opacity-50"
+                            >
+                              Reintentar
+                            </button>
+                            {manualRefundTxId === line.payment_transaction_id ? (
+                              <div className="flex flex-col gap-1.5 w-48">
+                                <select
+                                  value={manualRefundMethod}
+                                  onChange={e => setManualRefundMethod(e.target.value as 'toursred_cash' | 'bank_transfer')}
+                                  className="text-xs border border-gray-200 rounded px-2 py-1"
+                                >
+                                  <option value="toursred_cash">ToursRed Cash</option>
+                                  <option value="bank_transfer">Transferencia</option>
+                                </select>
+                                <button
+                                  onClick={() => handleManualRefund(line.payment_transaction_id)}
+                                  className="px-2 py-1 bg-gray-700 hover:bg-gray-800 text-white text-xs rounded transition"
+                                >
+                                  Confirmar manual
+                                </button>
+                                <button
+                                  onClick={() => setManualRefundTxId(null)}
+                                  className="text-xs text-gray-500 hover:underline"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setManualRefundTxId(line.payment_transaction_id)}
+                                className="text-xs text-gray-600 hover:text-gray-800 underline"
+                              >
+                                Reembolso manual
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     );
@@ -1951,12 +2067,30 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
                 </div>
               )}
 
-              <div className="mt-4 pt-3 border-t border-gray-200">
+              <div className="mt-4 pt-3 border-t border-gray-200 space-y-3">
+                {allLinesReady ? (
+                  <button
+                    onClick={handleFinalizeCancellation}
+                    disabled={finalizing}
+                    className="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition disabled:opacity-50"
+                  >
+                    {finalizing ? (
+                      <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Finalizando...</span>
+                    ) : (
+                      'Finalizar cancelación'
+                    )}
+                  </button>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 flex items-start gap-2">
+                    <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span>Reembolsa todas las líneas para habilitar el botón de finalización. La reserva permanece en estado "Cancelación en Proceso" hasta entonces.</span>
+                  </div>
+                )}
                 <button
                   onClick={onSuccess}
-                  className="w-full px-4 py-2.5 bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium rounded-lg transition"
+                  className="w-full px-4 py-2 text-gray-500 hover:text-gray-700 text-sm transition"
                 >
-                  Finalizar y cerrar
+                  Cerrar sin finalizar
                 </button>
               </div>
             </div>

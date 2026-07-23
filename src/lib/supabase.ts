@@ -1087,6 +1087,7 @@ export const getUserBookings = async (userId: string) => {
       .neq('status', 'draft')
       .neq('status', 'cancelled')
       .neq('status', 'completed')
+      .neq('status', 'cancellation_processing')
       .order('created_at', { ascending: false });
 
     if (error || !bookings) {
@@ -1188,7 +1189,7 @@ export const getUserCancelledBookings = async (userId: string) => {
       .from('bookings')
       .select(BOOKING_SELECT_FIELDS)
       .eq('user_id', userId)
-      .eq('status', 'cancelled')
+      .in('status', ['cancelled', 'cancellation_processing'])
       .order('created_at', { ascending: false })
       .limit(100);
 

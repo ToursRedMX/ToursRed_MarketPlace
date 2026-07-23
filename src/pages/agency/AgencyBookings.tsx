@@ -78,7 +78,7 @@ const AgencyBookings: React.FC = () => {
   }, [resolvedAgencyId, agencyLoading]);
 
   const isBookingActive = (booking: any): boolean => {
-    if (booking.status === 'cancelled') return false;
+    if (booking.status === 'cancelled' || booking.status === 'cancellation_processing') return false;
     const dateStr = booking.selected_date || booking.tours?.end_date;
     if (!dateStr) return true;
     try {
@@ -116,8 +116,8 @@ const AgencyBookings: React.FC = () => {
       setBookings(allBookings);
 
       const active = allBookings.filter((b: any) => isBookingActive(b));
-      const past = allBookings.filter((b: any) => b.status !== 'cancelled' && !isBookingActive(b));
-      const cancelled = allBookings.filter((b: any) => b.status === 'cancelled');
+      const past = allBookings.filter((b: any) => b.status !== 'cancelled' && b.status !== 'cancellation_processing' && !isBookingActive(b));
+      const cancelled = allBookings.filter((b: any) => b.status === 'cancelled' || b.status === 'cancellation_processing');
       setActiveBookings(active);
       setPastBookings(past);
       setCancelledBookings(cancelled);
@@ -677,8 +677,8 @@ const AgencyBookings: React.FC = () => {
   };
 
   const handleOpenCancelBookingModal = (booking: Booking) => {
-    if (booking.cancelled_at || booking.status === 'cancelled') {
-      alert('Esta reserva ya fue cancelada');
+    if (booking.cancelled_at || booking.status === 'cancelled' || booking.status === 'cancellation_processing') {
+      alert('Esta reserva ya fue cancelada o está en proceso de cancelación');
       return;
     }
 

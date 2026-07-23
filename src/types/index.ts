@@ -402,7 +402,7 @@ export interface Booking {
   deposit_amount: number;
   commission_amount: number;
   total_price: number;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'cancellation_processing';
   booking_date: string;
   travelers_count: number;
   created_at: string;
