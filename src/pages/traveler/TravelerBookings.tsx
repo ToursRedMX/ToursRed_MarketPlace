@@ -2267,7 +2267,11 @@ const TravelerBookings: React.FC = () => {
                       <div>
                         <div className="text-gray-500">Saldo Restante:</div>
                         <div className="font-medium">
-                          {formatCurrencyMXN((booking.total_price || 0) - (booking.deposit_amount || 0))}
+                          {formatCurrencyMXN(
+                            (booking as any).has_payment_plan
+                              ? ((booking as any).payment_plan_total || 0) - ((booking as any).payment_plan_paid || 0)
+                              : (booking.total_price || 0) - (booking.deposit_amount || 0)
+                          )}
                         </div>
                       </div>
                       {(booking as any).paypal_transaction_id && (

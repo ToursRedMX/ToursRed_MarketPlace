@@ -1393,7 +1393,12 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
       totalsByCategory.mascotas;
 
     const totalDeposit = bookingsWithTravelers.reduce((sum, b) => sum + Number(b.deposit_amount || 0), 0);
-    const totalRemaining = bookingsWithTravelers.reduce((sum, b) => sum + (Number(b.total_price || 0) - Number(b.deposit_amount || 0)), 0);
+    const totalRemaining = bookingsWithTravelers.reduce((sum, b) => {
+      if ((b as any).has_payment_plan) {
+        return sum + (Number((b as any).payment_plan_total || 0) - Number((b as any).payment_plan_paid || 0));
+      }
+      return sum + (Number(b.total_price || 0) - Number(b.deposit_amount || 0));
+    }, 0);
     const totalRevenue = bookingsWithTravelers.reduce((sum, b) => sum + Number(b.total_price || 0), 0);
 
     return {
@@ -1822,17 +1827,33 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
   const isReceptivo = tour.tour_type === 'receptivo';
 
   const originalDepositAmount = Number(booking.deposit_amount || 0);
-  const originalServiceCharge = Number(booking.service_charge || 0);
+  let originalServiceCharge = Number(booking.service_charge || 0);
   const isPending = booking.approval_status === 'pending';
 
+  // When has_payment_plan, installment 1 ("Anticipo") already represents the
+  // deposit — adding deposit_amount on top would double-count it.
   let installmentsPaid = 0;
-  const { data: installments } = await supabase
-    .from('booking_payment_plan_installments')
-    .select('amount_paid')
-    .eq('booking_id', booking.id)
-    .in('status', ['paid', 'partially_paid']);
-  for (const inst of (installments || [])) {
-    installmentsPaid += Number((inst as any).amount_paid || 0);
+  if (booking.has_payment_plan) {
+    const { data: installments } = await supabase
+      .from('booking_payment_plan_installments')
+      .select('installment_number, amount_paid')
+      .eq('booking_id', booking.id)
+      .in('status', ['paid', 'partially_paid']);
+    for (const inst of (installments || [])) {
+      if ((inst as any).installment_number > 1) {
+        installmentsPaid += Number((inst as any).amount_paid || 0);
+      }
+    }
+
+    // Add service charges from completed payment plan transactions
+    const { data: ppTransactions } = await supabase
+      .from('booking_payment_plan_transactions')
+      .select('service_charge')
+      .eq('booking_id', booking.id)
+      .eq('status', 'completed');
+    for (const tx of (ppTransactions || [])) {
+      originalServiceCharge += Number((tx as any).service_charge || 0);
+    }
   }
   const principalPaid = originalDepositAmount + installmentsPaid;
 

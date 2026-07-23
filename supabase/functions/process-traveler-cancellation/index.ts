@@ -121,17 +121,32 @@ Deno.serve(async (req: Request) => {
     const commissionRate = ((platformSettings as any)?.agency_commission_percentage || 15) / 100;
 
     const originalDepositAmount = Number((booking as any).deposit_amount || 0);
-    const originalServiceCharge = Number((booking as any).service_charge || 0);
+    let originalServiceCharge = Number((booking as any).service_charge || 0);
 
-    // Bug 2 fix: incluir parcialidades pagadas en el calculo del reembolso
+    // When has_payment_plan, installment 1 ("Anticipo") already represents the
+    // deposit — adding deposit_amount on top would double-count it.
     let installmentsPaid = 0;
-    const { data: installments } = await supabase
-      .from("booking_payment_plan_installments")
-      .select("amount_paid")
-      .eq("booking_id", booking_id)
-      .in("status", ["paid", "partially_paid"]);
-    for (const inst of (installments || [])) {
-      installmentsPaid += Number((inst as any).amount_paid || 0);
+    if ((booking as any).has_payment_plan) {
+      const { data: installments } = await supabase
+        .from("booking_payment_plan_installments")
+        .select("installment_number, amount_paid")
+        .eq("booking_id", booking_id)
+        .in("status", ["paid", "partially_paid"]);
+      for (const inst of (installments || [])) {
+        if ((inst as any).installment_number > 1) {
+          installmentsPaid += Number((inst as any).amount_paid || 0);
+        }
+      }
+
+      // Add service charges from completed payment plan transactions
+      const { data: ppTransactions } = await supabase
+        .from("booking_payment_plan_transactions")
+        .select("service_charge")
+        .eq("booking_id", booking_id)
+        .eq("status", "completed");
+      for (const tx of (ppTransactions || [])) {
+        originalServiceCharge += Number((tx as any).service_charge || 0);
+      }
     }
     const principalPaid = originalDepositAmount + installmentsPaid;
 
