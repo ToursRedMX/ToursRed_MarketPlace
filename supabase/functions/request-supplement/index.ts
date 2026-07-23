@@ -57,8 +57,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (booking.status === "cancelled") {
-      return new Response(JSON.stringify({ error: "No se pueden agregar suplementos a una reserva cancelada" }), {
+    if (booking.status === "cancelled" || booking.status === "cancellation_processing") {
+      return new Response(JSON.stringify({ error: "No se pueden agregar suplementos a una reserva cancelada o en proceso de cancelación" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

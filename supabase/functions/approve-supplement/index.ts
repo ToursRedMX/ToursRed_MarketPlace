@@ -49,7 +49,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, booking_id, status, quantity, unit_price,
         tour_supplements!inner(id, name, tour_id),
-        bookings!inner(id, user_id)
+        bookings!inner(id, user_id, status)
       `)
       .eq("id", booking_supplement_id)
       .maybeSingle();
@@ -57,6 +57,12 @@ Deno.serve(async (req: Request) => {
     if (!supplementRequest) {
       return new Response(JSON.stringify({ error: "Solicitud de suplemento no encontrada" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if ((supplementRequest.bookings as any)?.status === "cancellation_processing") {
+      return new Response(JSON.stringify({ error: "La reserva está en proceso de cancelación" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

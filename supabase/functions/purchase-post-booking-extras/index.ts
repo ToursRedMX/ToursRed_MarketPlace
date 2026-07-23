@@ -84,7 +84,7 @@ Deno.serve(async (req: Request) => {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (["cancelled", "draft"].includes(booking.status)) {
+    if (["cancelled", "cancellation_processing", "draft"].includes(booking.status)) {
       return new Response(JSON.stringify({ error: "No se pueden agregar extras a esta reserva" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

@@ -69,6 +69,7 @@ Deno.serve(async (req: Request) => {
 
     // Eligibility checks
     if (booking.cancelled_at || booking.status === "cancelled") return err("Esta reserva ya fue cancelada");
+    if (booking.status === "cancellation_processing") return err("Esta reserva ya tiene una cancelación en proceso");
     if ((booking as any).is_no_show) return err("Esta reserva está marcada como No Show y no puede cancelarse");
     if ((booking as any).approval_status === "rejected") return err("Esta reserva fue rechazada y no puede cancelarse");
     if (!["pending", "confirmed"].includes(booking.status)) return err("Solo se pueden cancelar reservas pendientes o confirmadas");

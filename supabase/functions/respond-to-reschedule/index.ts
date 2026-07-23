@@ -70,6 +70,10 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log("✅ Booking encontrado:", booking.booking_code);
+
+    if (booking.status === 'cancelled' || booking.status === 'cancellation_processing') {
+      throw new Error("No puedes responder a un reagendamiento de una reserva cancelada o en proceso de cancelación");
+    }
     console.log("✅ Agencia:", booking.agency.name);
     console.log("✅ Email agencia:", booking.agency.contact_email || "NO TIENE EMAIL");
 

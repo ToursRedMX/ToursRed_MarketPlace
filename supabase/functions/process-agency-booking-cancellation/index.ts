@@ -78,8 +78,8 @@ Deno.serve(async (req: Request) => {
       throw new Error("No tienes permiso para cancelar esta reserva");
     }
 
-    if (booking.cancelled_at || booking.status === "cancelled") {
-      throw new Error("Esta reserva ya fue cancelada");
+    if (booking.cancelled_at || booking.status === "cancelled" || booking.status === "cancellation_processing") {
+      throw new Error("Esta reserva ya fue cancelada o está en proceso de cancelación");
     }
 
     if (!["confirmed", "pending"].includes(booking.status) || booking.payment_status !== "succeeded") {

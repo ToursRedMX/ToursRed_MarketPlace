@@ -125,23 +125,28 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // Step 1: Deduct points (for original_payment_method, points
-    // were NOT deducted in prepare phase). Use the same logic as
-    // admin-cancel-booking's full mode.
+    // Step 1: Clawback earned points — 1 peso reembolsado = 1 punto.
+    // Sum all refund amounts (processing or succeeded) and deduct
+    // Math.floor(total) points. This matches process-traveler-cancellation.
     // ============================================================
+    const totalRefundAmount = (refunds || []).reduce(
+      (sum, r) => sum + Number(r.requested_amount || 0),
+      0
+    );
+    const pointsToDeduct = Math.floor(totalRefundAmount);
     let pointsDeducted = 0;
-    if (booking.points_used && booking.points_used > 0) {
+    if (pointsToDeduct > 0) {
       try {
         const { error: pointsError } = await serviceClient.rpc("deduct_points", {
           p_user_id: booking.user_id,
-          p_points: booking.points_used,
-          p_description: `Devolución de puntos por cancelación administrativa (reserva ${booking_id.slice(0, 8)})`,
+          p_amount: pointsToDeduct,
+          p_description: `Puntos revertidos por cancelación administrativa (reserva ${booking_id.slice(0, 8)})`,
           p_reference_id: booking_id,
           p_reference_type: "booking_cancellation",
         });
 
         if (!pointsError) {
-          pointsDeducted = booking.points_used;
+          pointsDeducted = pointsToDeduct;
         } else {
           console.error("Error deducting points in finalize:", pointsError);
         }

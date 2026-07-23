@@ -60,6 +60,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id,
         user_id,
+        status,
         user_payment,
         points_used,
         toursred_cash_used,

@@ -218,13 +218,20 @@ Deno.serve(async (req: Request) => {
 
     const { data: booking, error: bookingError } = await adminClient
       .from("bookings")
-      .select("id, user_id, deposit_amount, toursred_cash_used, tour_id, has_pending_slot_reschedule, slot_reschedule_response, selected_seats, travelers_count")
+      .select("id, user_id, status, deposit_amount, toursred_cash_used, tour_id, has_pending_slot_reschedule, slot_reschedule_response, selected_seats, travelers_count")
       .eq("id", booking_id)
       .single();
 
     if (bookingError || !booking) {
       return new Response(JSON.stringify({ success: false, error: "Reserva no encontrada" }), {
         status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (booking.status === "cancellation_processing") {
+      return new Response(JSON.stringify({ success: false, error: "Esta reserva está en proceso de cancelación" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

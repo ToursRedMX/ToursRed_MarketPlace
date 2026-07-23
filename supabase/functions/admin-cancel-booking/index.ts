@@ -265,10 +265,10 @@ Deno.serve(async (req: Request) => {
       receiptFilePath = filePath;
     }
 
-    // Deduct points: 1 peso = 1 punto. For original_payment_method, points are
-    // clawed back per-line via claw_back_points_for_refund when each refund is
-    // processed from the modal — deducting here too would double-count.
-    // In prepare mode, skip points entirely — they're handled in admin-finalize-cancellation.
+    // Points: 1 peso = 1 punto. In prepare mode, skip — handled in
+    // admin-finalize-cancellation after all refund lines are initiated.
+    // For original_payment_method, process-payment-refund does NOT claw back
+    // points, so in non-prepare mode we deduct here.
     let pointsDeducted = 0;
     if (refund_method !== "original_payment_method" && !isPrepare) {
       const pointsToDeduct = Math.floor(Number(refund_amount));

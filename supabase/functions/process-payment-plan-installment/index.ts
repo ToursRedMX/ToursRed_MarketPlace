@@ -70,7 +70,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, booking_id, mode, total_plan_amount, total_amount_paid, pending_balance, status,
         bookings!inner(
-          id, user_id, tour_id, booking_code,
+          id, user_id, tour_id, booking_code, status,
           tours!inner(
             id, name, agency_id,
             late_payment_penalty_pct, late_payment_penalty_fixed, late_payment_grace_days
@@ -89,6 +89,13 @@ Deno.serve(async (req: Request) => {
 
     const booking = plan.bookings as any;
     const tour = booking.tours as any;
+
+    if (booking.status === "cancellation_processing") {
+      return new Response(JSON.stringify({ error: "La reserva está en proceso de cancelación" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (booking.user_id !== user.id) {
       return new Response(JSON.stringify({ error: "No autorizado" }), {
