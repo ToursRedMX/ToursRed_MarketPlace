@@ -2105,7 +2105,7 @@ const TravelerBookings: React.FC = () => {
                       <DollarSign className="h-4 w-4 text-gray-400 mr-2" />
                       <div>
                         <div className="text-sm text-gray-500">Total Pagado</div>
-                        <div className="font-medium">{formatCurrencyMXN(booking.user_payment ?? booking.deposit_amount ?? 0)}</div>
+                        <div className="font-medium">{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (booking.user_payment ?? booking.deposit_amount ?? 0))}</div>
                       </div>
                     </div>
 
@@ -2740,7 +2740,7 @@ const TravelerBookings: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-6 text-sm text-gray-600 mb-4">
                       <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5 text-gray-400" />{booking.travelers_count} viajero{booking.travelers_count !== 1 ? 's' : ''}</span>
-                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5 text-gray-400" />{formatCurrencyMXN(booking.user_payment ?? booking.deposit_amount ?? 0)}</span>
+                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5 text-gray-400" />{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (booking.user_payment ?? booking.deposit_amount ?? 0))}</span>
                       {booking.agencies?.name && <span className="text-gray-500">Operado por: <strong>{booking.agencies.name}</strong></span>}
                     </div>
                     {(pastOptionalServices[booking.id] || []).length > 0 && (
@@ -2822,7 +2822,7 @@ const TravelerBookings: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-6 text-sm text-gray-400 mb-3">
                       <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{booking.travelers_count} viajero{booking.travelers_count !== 1 ? 's' : ''}</span>
-                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" />{formatCurrencyMXN(booking.user_payment ?? booking.deposit_amount ?? 0)}</span>
+                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" />{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (booking.user_payment ?? booking.deposit_amount ?? 0))}</span>
                     </div>
                     <div className="p-3 bg-red-50 border border-red-100 rounded-md text-sm text-red-600">
                       <strong>Reserva cancelada.</strong> Si tienes preguntas, contacta a nuestro equipo de soporte.
