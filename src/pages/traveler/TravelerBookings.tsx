@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, Users, DollarSign, Clock, Eye, AlertCircle, Star, X, CreditCard as Edit, UserCheck, XCircle, CalendarX, Check, Wallet, Lock, UserMinus, Car, Globe, Tag, Plus, AlertTriangle, ShoppingBag, Shield } from 'lucide-react';
+import { Calendar, MapPin, Users, DollarSign, Clock, Eye, AlertCircle, Star, X, CreditCard as Edit, UserCheck, XCircle, CalendarX, Check, Wallet, Lock, UserMinus, Car, Globe, Tag, Plus, AlertTriangle, ShoppingBag, Shield, Loader2 } from 'lucide-react';
 import SeatReselectionModal from '../../components/SeatReselectionModal';
 import PaymentPlanCalendar from '../../components/PaymentPlanCalendar';
 import { useAuth } from '../../context/AuthContext';
@@ -937,6 +937,73 @@ const TravelerBookings: React.FC = () => {
     if (tourDate < today) return false;
 
     return true;
+  };
+
+  const [cancelingOptServiceId, setCancelingOptServiceId] = useState<string | null>(null);
+  const [cancelingSupplementId, setCancelingSupplementId] = useState<string | null>(null);
+
+  const handleCancelOptionalService = async (bookingId: string, optServiceId: string, serviceName: string) => {
+    if (!confirm(`¿Cancelar "${serviceName}"? El reembolso irá a tu ToursRed Cash.`)) return;
+    setCancelingOptServiceId(optServiceId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-optional-service`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ booking_id: bookingId, booking_optional_service_id: optServiceId }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Error al cancelar servicio');
+      await fetchBookings();
+    } catch (err: any) {
+      alert(err.message || 'Error al cancelar el servicio opcional');
+    } finally {
+      setCancelingOptServiceId(null);
+    }
+  };
+
+  const handleCancelIndividualSupplement = async (bookingId: string, supplementId: string, supplementName: string) => {
+    if (!confirm(`¿Cancelar "${supplementName}"? El reembolso irá a tu ToursRed Cash.`)) return;
+    setCancelingSupplementId(supplementId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-individual-supplement`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ booking_id: bookingId, booking_supplement_id: supplementId }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Error al cancelar suplemento');
+      await fetchBookings();
+      if (supplementsModal.open && supplementsModal.booking) {
+        const updated = await supabase
+          .from('booking_supplements')
+          .select('*, tour_supplements(name, description, price, is_cancellable, requires_approval)')
+          .eq('booking_id', supplementsModal.booking.id)
+          .order('requested_at', { ascending: false });
+        if (updated.data) {
+          setBookingSupplements(prev => ({ ...prev, [supplementsModal.booking!.id]: updated.data! }));
+        }
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error al cancelar el suplemento');
+    } finally {
+      setCancelingSupplementId(null);
+    }
   };
 
   const handleOpenPartialCancellationModal = async (booking: Booking) => {
@@ -2239,14 +2306,30 @@ const TravelerBookings: React.FC = () => {
                                 </span>
                               )}
                             </div>
-                            <div className="text-right">
-                              <span className={`font-medium ${bos.is_cancelled ? 'text-gray-400' : 'text-amber-700'}`}>
-                                {formatCurrencyMXN(Number(bos.subtotal))}
-                              </span>
-                              {bos.is_cancelled && bos.refund_amount > 0 && (
-                                <span className="block text-xs text-green-600">
-                                  Reembolso: {formatCurrencyMXN(Number(bos.refund_amount))}
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <span className={`font-medium ${bos.is_cancelled ? 'text-gray-400' : 'text-amber-700'}`}>
+                                  {formatCurrencyMXN(Number(bos.subtotal))}
                                 </span>
+                                {bos.is_cancelled && bos.refund_amount > 0 && (
+                                  <span className="block text-xs text-green-600">
+                                    Reembolso: {formatCurrencyMXN(Number(bos.refund_amount))}
+                                  </span>
+                                )}
+                              </div>
+                              {!bos.is_cancelled && bos.tour_optional_services?.is_refundable && (booking.status === 'confirmed' || booking.status === 'pending') && (
+                                <button
+                                  onClick={() => handleCancelOptionalService(booking.id, bos.id, bos.description || bos.tour_optional_services?.name || 'Servicio opcional')}
+                                  disabled={cancelingOptServiceId === bos.id}
+                                  className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded border border-red-200 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                >
+                                  {cancelingOptServiceId === bos.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <XCircle className="h-3 w-3" />
+                                  )}
+                                  Cancelar
+                                </button>
                               )}
                             </div>
                           </div>
@@ -3406,20 +3489,22 @@ const TravelerBookings: React.FC = () => {
                                 </div>
                               </div>
                               <div className="text-right">
-                                {Number((traveler as any).promo_discount_per_traveler) > 0 ? (
-                                  <>
-                                    <div className="flex items-center gap-1.5 justify-end">
-                                      <span className="text-xs text-gray-400 line-through">${formatCurrencyMXN(Number(traveler.precio_aplicado) + Number((traveler as any).promo_discount_per_traveler))}</span>
-                                      <span className="font-semibold text-sm text-emerald-600">${formatCurrencyMXN(Number(traveler.precio_aplicado))}</span>
-                                    </div>
-                                    <div className="text-xs text-gray-500">precio pagado</div>
-                                  </>
-                                ) : (
-                                  <>
-                                    <div className="font-semibold text-sm text-gray-800">${formatCurrencyMXN(Number(traveler.precio_aplicado))}</div>
-                                    <div className="text-xs text-gray-500">precio pagado</div>
-                                  </>
-                                )}
+                                {(() => {
+                                  const b = partialCancellationModal.booking!;
+                                  const totalPrice = Number((b as any).total_price) || 0;
+                                  const depositAmount = Number((b as any).deposit_amount) || totalPrice;
+                                  const ratio = totalPrice > 0 ? depositAmount / totalPrice : 1;
+                                  const anticipo = Math.round(Number(traveler.precio_aplicado) * ratio * 100) / 100;
+                                  const hasPromo = Number((traveler as any).promo_discount_per_traveler) > 0;
+                                  return (
+                                    <>
+                                      <div className={`font-semibold text-sm ${hasPromo ? 'text-emerald-600' : 'text-gray-800'}`}>
+                                        ${formatCurrencyMXN(anticipo)}
+                                      </div>
+                                      <div className="text-xs text-gray-500">anticipo pagado</div>
+                                    </>
+                                  );
+                                })()}
                               </div>
                             </button>
                           );
@@ -3471,6 +3556,12 @@ const TravelerBookings: React.FC = () => {
                               <span className="text-gray-600">Anticipo de viajeros cancelados:</span>
                               <span className="font-medium">${formatCurrencyMXN(Number(partialCancellationModal.policy.originalPartialAmount))}</span>
                             </div>
+                            {Number(partialCancellationModal.policy.insuranceRefund) > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Seguro de viaje reembolsado:</span>
+                                <span className="font-medium text-green-700">${formatCurrencyMXN(Number(partialCancellationModal.policy.insuranceRefund))}</span>
+                              </div>
+                            )}
                             <div className="flex justify-between">
                               <span className="text-gray-600">Reembolso a ToursRed Cash:</span>
                               <span className={`font-bold ${partialCancellationModal.policy.refundAmountToTraveler > 0 ? 'text-green-700' : 'text-red-600'}`}>
@@ -4462,6 +4553,20 @@ const TravelerBookings: React.FC = () => {
                                     className="mt-2 btn btn-sm bg-teal-600 text-white hover:bg-teal-700 text-xs px-3 py-1.5"
                                   >
                                     Pagar
+                                  </button>
+                                )}
+                                {bs.status === 'paid' && bs.tour_supplements?.is_cancellable && (booking.status === 'confirmed' || booking.status === 'pending') && (
+                                  <button
+                                    onClick={() => handleCancelIndividualSupplement(booking.id, bs.id, bs.tour_supplements?.name || 'Suplemento')}
+                                    disabled={cancelingSupplementId === bs.id}
+                                    className="mt-2 text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded border border-red-200 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                  >
+                                    {cancelingSupplementId === bs.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <XCircle className="h-3 w-3" />
+                                    )}
+                                    Cancelar
                                   </button>
                                 )}
                               </div>

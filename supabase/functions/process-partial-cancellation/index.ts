@@ -41,6 +41,7 @@ interface PolicyResult {
   refundAmountToTraveler: number;
   amountToAgency: number;
   amountToPlatform: number;
+  insuranceRefund: number;
   refundMessage: string;
   warningMessage?: string;
 }
@@ -80,6 +81,7 @@ Deno.serve(async (req: Request) => {
       .from("bookings")
       .select(`
         id, status, user_id, total_price, deposit_amount, points_earned, agency_id,
+        has_payment_plan, travel_insurance_included, travel_insurance_cost,
         tours (id, name, start_date, cancellation_not_allowed),
         agencies (id, user_id)
       `)
@@ -138,9 +140,44 @@ Deno.serve(async (req: Request) => {
 
     const totalPrice = Number((booking as any).total_price) || 0;
     const depositAmount = Number((booking as any).deposit_amount) || totalPrice;
-    const depositRatio = totalPrice > 0 ? depositAmount / totalPrice : 1;
+
+    // Include installments paid (excluding the anticipo, installment_number > 1) when a payment plan exists
+    let totalPrincipalPaid = depositAmount;
+    if ((booking as any).has_payment_plan) {
+      const { data: installments } = await supabase
+        .from("booking_payment_plan_installments")
+        .select("amount, status")
+        .eq("booking_id", bookingId)
+        .in("status", ["paid", "partially_paid"])
+        .gt("installment_number", 1);
+      const installmentsPaid = (installments || []).reduce(
+        (sum: number, inst: any) => sum + Number(inst.amount),
+        0
+      );
+      totalPrincipalPaid = depositAmount + installmentsPaid;
+    }
+    const depositRatio = totalPrice > 0 ? totalPrincipalPaid / totalPrice : 1;
 
     const originalPartialAmount = Math.round(fullPriceOfCancelledTravelers * depositRatio * 100) / 100;
+
+    // Calculate proportional travel insurance refund
+    const insuranceIncluded = (booking as any).travel_insurance_included === true;
+    const insuranceCost = Number((booking as any).travel_insurance_cost) || 0;
+    let insuranceRefund = 0;
+    if (insuranceIncluded && insuranceCost > 0) {
+      // Total traveler count (including already-cancelled) is the base for per-traveler insurance
+      const { count: totalTravelerCount } = await supabase
+        .from("booking_travelers")
+        .select("id", { count: "exact", head: true })
+        .eq("booking_id", bookingId);
+      const baseCount = totalTravelerCount || currentActiveCount;
+      if (baseCount > 0) {
+        const refundPct =
+          daysBeforeTour >= 15 ? 1 :
+          daysBeforeTour >= 7 ? 0.5 : 0;
+        insuranceRefund = Math.round((insuranceCost / baseCount) * travelerIds.length * refundPct * 100) / 100;
+      }
+    }
 
     // Fetch platform commission rate
     const { data: platformSettings } = await supabase
@@ -157,10 +194,11 @@ Deno.serve(async (req: Request) => {
         policyType: "100_percent",
         daysBeforeTour,
         originalPartialAmount,
-        refundAmountToTraveler: originalPartialAmount,
+        refundAmountToTraveler: originalPartialAmount + insuranceRefund,
         amountToAgency: 0,
         amountToPlatform: 0,
-        refundMessage: `Se reembolsará el 100% del anticipo parcial ($${formatCurrency(originalPartialAmount)}) a tu ToursRed Cash.`,
+        insuranceRefund,
+        refundMessage: `Se reembolsará el 100% del anticipo parcial (${formatCurrency(originalPartialAmount)}) a tu ToursRed Cash.`,
       };
     } else if (daysBeforeTour >= 7 && daysBeforeTour < 15) {
       const refundAmount = originalPartialAmount * 0.5;
@@ -169,10 +207,11 @@ Deno.serve(async (req: Request) => {
         policyType: "50_percent",
         daysBeforeTour,
         originalPartialAmount,
-        refundAmountToTraveler: refundAmount,
+        refundAmountToTraveler: refundAmount + insuranceRefund,
         amountToAgency: penaltyAmount * 0.7,
         amountToPlatform: penaltyAmount * 0.3,
-        refundMessage: `Se reembolsará el 50% del anticipo parcial ($${formatCurrency(refundAmount)}) a tu ToursRed Cash.`,
+        insuranceRefund,
+        refundMessage: `Se reembolsará el 50% del anticipo parcial (${formatCurrency(refundAmount)}) a tu ToursRed Cash.`,
       };
     } else {
       const agencyAmount = originalPartialAmount * (1 - commissionRate);
@@ -181,9 +220,10 @@ Deno.serve(async (req: Request) => {
         policyType: "no_refund",
         daysBeforeTour,
         originalPartialAmount,
-        refundAmountToTraveler: 0,
+        refundAmountToTraveler: insuranceRefund,
         amountToAgency: agencyAmount,
         amountToPlatform: platformAmount,
+        insuranceRefund,
         warningMessage: tour.cancellation_not_allowed
           ? "Este tour NO permite cancelaciones con reembolso."
           : daysBeforeTour < 1
@@ -243,6 +283,7 @@ Deno.serve(async (req: Request) => {
         toursred_cash_transaction_id: transactionId,
         refund_processed: policy.refundAmountToTraveler > 0,
         cancellation_reason: cancellationReason || null,
+        insurance_refund_amount: policy.insuranceRefund,
       })
       .select()
       .single();
@@ -298,12 +339,17 @@ Deno.serve(async (req: Request) => {
 
     // 6. Update booking flags
     const newActiveCount = currentActiveCount - travelerIds.length;
+    const bookingUpdate: Record<string, any> = {
+      has_partial_cancellations: true,
+      active_travelers_count: newActiveCount,
+    };
+    // Reduce travel_insurance_cost by the refunded amount to prevent double refunds
+    if (policy.insuranceRefund > 0) {
+      bookingUpdate.travel_insurance_cost = Math.max(0, insuranceCost - policy.insuranceRefund);
+    }
     const { error: updateBookingError } = await supabase
       .from("bookings")
-      .update({
-        has_partial_cancellations: true,
-        active_travelers_count: newActiveCount,
-      })
+      .update(bookingUpdate)
       .eq("id", bookingId);
 
     if (updateBookingError) return err("Error actualizando reserva: " + updateBookingError.message);
