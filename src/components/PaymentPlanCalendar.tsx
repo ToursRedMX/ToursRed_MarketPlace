@@ -11,6 +11,7 @@ interface PaymentPlanCalendarProps {
   bookingId: string;
   agencyView?: boolean;
   onPaymentSuccess?: () => void;
+  adjustedTotal?: number;
 }
 
 const INSTALLMENT_STATUS_CONFIG: Record<InstallmentStatus, { label: string; color: string; icon: React.ReactNode }> = {
@@ -30,7 +31,7 @@ const PLAN_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   cancelled: { label: 'Cancelado', color: 'text-gray-500 bg-gray-100' },
 };
 
-const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, agencyView = false, onPaymentSuccess }) => {
+const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, agencyView = false, onPaymentSuccess, adjustedTotal }) => {
   const { user } = useAuth();
   const [plan, setPlan] = useState<BookingPaymentPlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -251,7 +252,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
               </span>
             </div>
             <p className="text-xs text-gray-500">
-              {formatCurrencyMXN(plan.total_amount_paid)} de {formatCurrencyMXN(plan.total_plan_amount)} pagados
+              {formatCurrencyMXN(plan.total_amount_paid)} de {formatCurrencyMXN(adjustedTotal ?? plan.total_plan_amount)} pagados
               {plan.pending_balance > 0 && ` · Saldo: ${formatCurrencyMXN(plan.pending_balance)}`}
             </p>
           </div>

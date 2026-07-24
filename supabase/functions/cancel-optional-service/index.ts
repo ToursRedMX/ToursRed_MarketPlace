@@ -34,7 +34,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { booking_id, booking_optional_service_id } = await req.json();
+    const { booking_id, booking_optional_service_id, quantity_to_cancel } = await req.json();
     if (!booking_id || !booking_optional_service_id) {
       return new Response(JSON.stringify({ error: "Faltan parámetros: booking_id y booking_optional_service_id son requeridos" }), {
         status: 400,
@@ -70,6 +70,28 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const currentQuantity = Number(optService.quantity) || 1;
+
+    // Validate quantity_to_cancel
+    let qtyToCancel: number | null = null;
+    if (quantity_to_cancel !== undefined && quantity_to_cancel !== null) {
+      qtyToCancel = Number(quantity_to_cancel);
+      if (!Number.isInteger(qtyToCancel) || qtyToCancel <= 0) {
+        return new Response(JSON.stringify({ error: "quantity_to_cancel debe ser un entero positivo" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (qtyToCancel > currentQuantity) {
+        return new Response(JSON.stringify({ error: "quantity_to_cancel no puede exceder la cantidad actual" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    const isFullCancel = qtyToCancel === null || qtyToCancel === currentQuantity;
+
     // Verify booking ownership
     const { data: booking, error: bookingError } = await serviceClient
       .from("bookings")
@@ -99,9 +121,53 @@ Deno.serve(async (req: Request) => {
     }
 
     const isRefundable = (optService as any).tour_optional_services?.is_refundable === true;
-    const refundAmount = isRefundable ? Number(optService.subtotal) : 0;
     const serviceName = (optService as any).tour_optional_services?.name || "Servicio opcional";
     const tourName = (booking as any).tours?.name || "Tour";
+
+    const oldSubtotal = Number(optService.subtotal) || 0;
+    const oldServiceCharge = Number(optService.service_charge) || 0;
+    const oldTotalPaid = Number(optService.total_paid) || 0;
+
+    let refundAmount: number;
+    let updatePayload: Record<string, any>;
+    const exemptionUsedTotal = Number(optService.membership_exemption_used) || 0;
+
+    if (isFullCancel) {
+      refundAmount = isRefundable ? oldSubtotal : 0;
+      updatePayload = {
+        is_cancelled: true,
+        cancelled_at: new Date().toISOString(),
+        cancelled_by_agency: false,
+        refund_amount: refundAmount,
+        updated_at: new Date().toISOString(),
+      };
+    } else {
+      const effectiveQty = qtyToCancel!;
+      const unitSubtotal = currentQuantity > 0 ? oldSubtotal / currentQuantity : 0;
+      const unitServiceCharge = currentQuantity > 0 ? oldServiceCharge / currentQuantity : 0;
+      const unitTotalPaid = currentQuantity > 0 ? oldTotalPaid / currentQuantity : 0;
+      const newQuantity = currentQuantity - effectiveQty;
+
+      refundAmount = isRefundable ? Math.round(unitSubtotal * effectiveQty * 100) / 100 : 0;
+      const newSubtotal = Math.round(unitSubtotal * newQuantity * 100) / 100;
+      const newServiceCharge = Math.round(unitServiceCharge * newQuantity * 100) / 100;
+      const newTotalPaid = Math.round(unitTotalPaid * newQuantity * 100) / 100;
+      const willBeZero = newQuantity === 0;
+
+      updatePayload = {
+        quantity: newQuantity,
+        subtotal: newSubtotal,
+        service_charge: newServiceCharge,
+        total_paid: newTotalPaid,
+        refund_amount: refundAmount,
+        ...(willBeZero ? {
+          is_cancelled: true,
+          cancelled_at: new Date().toISOString(),
+          cancelled_by_agency: false,
+        } : {}),
+        updated_at: new Date().toISOString(),
+      };
+    }
 
     // Refund to ToursRed Cash wallet (only subtotal, never service_charge)
     let transactionId: string | null = null;
@@ -124,16 +190,10 @@ Deno.serve(async (req: Request) => {
       transactionId = refundData?.transaction_id || null;
     }
 
-    // Mark the optional service as cancelled
+    // Update the optional service row
     const { error: updateError } = await serviceClient
       .from("booking_optional_services")
-      .update({
-        is_cancelled: true,
-        cancelled_at: new Date().toISOString(),
-        cancelled_by_agency: false,
-        refund_amount: refundAmount,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", booking_optional_service_id);
 
     if (updateError) {
@@ -143,27 +203,34 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const exemptionUsed = Number(optService.membership_exemption_used) || 0;
-    if (exemptionUsed > 0) {
+    // Revert membership exemption proportionally
+    if (exemptionUsedTotal > 0) {
       try {
-        const { data: activeMembership } = await serviceClient
-          .from("memberships")
-          .select("id, service_fee_exemption_used")
-          .eq("user_id", user.id)
-          .neq("status", "expired")
-          .gt("current_period_end", new Date().toISOString())
-          .order("current_period_end", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (activeMembership) {
-          const currentUsed = Number(activeMembership.service_fee_exemption_used) || 0;
-          const newUsed = Math.max(0, currentUsed - exemptionUsed);
-          await serviceClient
+        const exemptionToRevert = isFullCancel
+          ? exemptionUsedTotal
+          : Math.round(exemptionUsedTotal * (qtyToCancel! / currentQuantity) * 100) / 100;
+          )
+          )
+        if (exemptionToRevert > 0) {
+          const { data: activeMembership } = await serviceClient
             .from("memberships")
-            .update({
-              service_fee_exemption_used: newUsed,
-            })
-            .eq("id", activeMembership.id);
+            .select("id, service_fee_exemption_used")
+            .eq("user_id", user.id)
+            .neq("status", "expired")
+            .gt("current_period_end", new Date().toISOString())
+            .order("current_period_end", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (activeMembership) {
+            const currentUsed = Number(activeMembership.service_fee_exemption_used) || 0;
+            const newUsed = Math.max(0, currentUsed - exemptionToRevert);
+            await serviceClient
+              .from("memberships")
+              .update({
+                service_fee_exemption_used: newUsed,
+              })
+              .eq("id", activeMembership.id);
+          }
         }
       } catch (exemptionErr) {
         console.error("Error revirtiendo exención de membresía (no crítico):", exemptionErr);

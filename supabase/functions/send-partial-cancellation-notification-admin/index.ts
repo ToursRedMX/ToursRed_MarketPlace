@@ -198,8 +198,14 @@ Deno.serve(async (req: Request) => {
                   </tr>
                   <tr>
                     <td style="padding: 10px 16px; color: #6b7280; font-size: 13px; border-bottom: 1px solid #f3f4f6;">Reembolso al viajero (ToursRed Cash):</td>
-                    <td style="padding: 10px 16px; color: ${pc.refund_amount_to_traveler > 0 ? '#10b981' : '#6b7280'}; font-size: 13px; font-weight: 600; text-align: right; border-bottom: 1px solid #f3f4f6;">$${Number(pc.refund_amount_to_traveler).toFixed(2)}</td>
+                    <td style="padding: 10px 16px; color: ${pc.refund_amount_to_traveler > 0 ? '#10b981' : '#6b7280'}; font-size: 13px; font-weight: 600; text-align: right; border-bottom: 1px solid #f3f4f6;">${Number(pc.refund_amount_to_traveler).toFixed(2)}</td>
                   </tr>
+                  ${Number(pc.insurance_refund_amount) > 0 ? `
+                  <tr>
+                    <td style="padding: 10px 16px; color: #6b7280; font-size: 13px; border-bottom: 1px solid #f3f4f6;">Seguro de viaje reembolsado:</td>
+                    <td style="padding: 10px 16px; color: #10b981; font-size: 13px; font-weight: 600; text-align: right; border-bottom: 1px solid #f3f4f6;">${Number(pc.insurance_refund_amount).toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
                   <tr style="background-color: #fafafa;">
                     <td style="padding: 10px 16px; color: #6b7280; font-size: 13px; border-bottom: 1px solid #f3f4f6;">Monto para agencia (penalización):</td>
                     <td style="padding: 10px 16px; color: #1f2937; font-size: 13px; font-weight: 600; text-align: right; border-bottom: 1px solid #f3f4f6;">$${Number(pc.amount_to_agency).toFixed(2)}</td>

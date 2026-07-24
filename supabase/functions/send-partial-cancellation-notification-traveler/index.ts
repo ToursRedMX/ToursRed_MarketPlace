@@ -183,8 +183,14 @@ Deno.serve(async (req: Request) => {
                 <table width="100%" style="border-collapse: collapse;">
                   <tr>
                     <td style="padding: 7px 0; color: #047857; font-size: 14px;">Anticipo parcial original:</td>
-                    <td style="padding: 7px 0; color: #047857; font-size: 14px; text-align: right;">$${Number(pc.original_partial_amount).toFixed(2)}</td>
+                    <td style="padding: 7px 0; color: #047857; font-size: 14px; text-align: right;">${Number(pc.original_partial_amount).toFixed(2)}</td>
                   </tr>
+                  ${Number(pc.insurance_refund_amount) > 0 ? `
+                  <tr>
+                    <td style="padding: 7px 0; color: #047857; font-size: 14px;">Seguro de viaje reembolsado:</td>
+                    <td style="padding: 7px 0; color: #047857; font-size: 14px; text-align: right;">${Number(pc.insurance_refund_amount).toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
                   <tr>
                     <td style="padding: 7px 0; color: #047857; font-size: 14px; font-weight: 600;">Reembolso acreditado:</td>
                     <td style="padding: 7px 0; color: #065f46; font-size: 18px; font-weight: bold; text-align: right;">$${Number(pc.refund_amount_to_traveler).toFixed(2)}</td>

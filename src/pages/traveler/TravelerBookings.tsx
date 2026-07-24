@@ -84,25 +84,27 @@ const TravelerBookings: React.FC = () => {
     booking: Booking | null;
     activeTab: 'servicios' | 'seguro';
     tourOptionalServices: any[];
-    existingBosIds: Set<string>;
+    existingBos: Record<string, { id: string; quantity: number; subtotal: number; is_cancelled: boolean; is_refundable: boolean }>;
     insuranceAlreadyBought: boolean;
     insuranceCost: number;
     insurancePricePerDay: number;
     insuranceDays: number;
     insuranceConditionsAccepted: boolean;
     isLoading: boolean;
+    cancelQty: Record<string, number>;
   }>({
     open: false,
     booking: null,
     activeTab: 'servicios',
     tourOptionalServices: [],
-    existingBosIds: new Set(),
+    existingBos: {},
     insuranceAlreadyBought: false,
     insuranceCost: 0,
     insurancePricePerDay: 0,
     insuranceDays: 1,
     insuranceConditionsAccepted: false,
     isLoading: false,
+    cancelQty: {},
   });
   const [extrasPaymentModal, setExtrasPaymentModal] = useState<{
     open: boolean;
@@ -284,6 +286,7 @@ const TravelerBookings: React.FC = () => {
   const [pastOptionalServices, setPastOptionalServices] = useState<Record<string, any[]>>({});
   const [pastSupplements, setPastSupplements] = useState<Record<string, any[]>>({});
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
+  const [partialCancellationsByBooking, setPartialCancellationsByBooking] = useState<Record<string, any[]>>({});
 
   const cancellationFormPersistence = useFormPersistence(
     { cancellationReason: cancellationModal.cancellationReason },
@@ -376,7 +379,7 @@ const TravelerBookings: React.FC = () => {
         const bookingsWithReschedule = activeList.filter((b: any) => b.has_pending_reschedule);
         const bookingsWithSlotReschedule = activeList.filter((b: any) => b.has_pending_slot_reschedule);
 
-        const [optSvcsResult, , slotReschedulesResult] = await Promise.all([
+        const [optSvcsResult, , slotReschedulesResult, partialCancResult] = await Promise.all([
           supabase
             .from('booking_optional_services')
             .select('*, tour_optional_services(name, is_refundable)')
@@ -396,6 +399,10 @@ const TravelerBookings: React.FC = () => {
                 .in('booking_id', bookingsWithSlotReschedule.map((b: any) => b.id))
                 .eq('response', 'pending')
             : Promise.resolve({ data: [], error: null }),
+          supabase
+            .from('booking_partial_cancellations')
+            .select('id, booking_id, travellers_cancelled, original_partial_amount, insurance_refund_amount, refund_amount_to_traveler, cancelled_at')
+            .in('booking_id', ids),
         ]);
 
         if (optSvcsResult.data) {
@@ -405,6 +412,15 @@ const TravelerBookings: React.FC = () => {
             grouped[bos.booking_id].push(bos);
           }
           setBookingOptionalServices(grouped);
+        }
+
+        if (partialCancResult.data) {
+          const groupedPc: Record<string, any[]> = {};
+          for (const pc of partialCancResult.data) {
+            if (!groupedPc[pc.booking_id]) groupedPc[pc.booking_id] = [];
+            groupedPc[pc.booking_id].push(pc);
+          }
+          setPartialCancellationsByBooking(groupedPc);
         }
 
         // Load supplements for all bookings
@@ -944,8 +960,44 @@ const TravelerBookings: React.FC = () => {
   const [cancelingOptServiceId, setCancelingOptServiceId] = useState<string | null>(null);
   const [cancelingSupplementId, setCancelingSupplementId] = useState<string | null>(null);
 
-  const handleCancelOptionalService = async (bookingId: string, optServiceId: string, serviceName: string) => {
-    if (!confirm(`¿Cancelar "${serviceName}"? El reembolso irá a tu ToursRed Cash.`)) return;
+  const computeAdjustedTotals = (booking: any) => {
+    const partialCancs = partialCancellationsByBooking[booking.id] || [];
+    if (partialCancs.length === 0) return null;
+
+    let cancelledPrecioAplicadoSum = 0;
+    let totalPrincipalRefunded = 0;
+    for (const pc of partialCancs) {
+      const travelers = Array.isArray(pc.travellers_cancelled) ? pc.travellers_cancelled : [];
+      for (const t of travelers) {
+        cancelledPrecioAplicadoSum += Number(t.precio_aplicado) || 0;
+      }
+      totalPrincipalRefunded += Number(pc.original_partial_amount) || 0;
+    }
+
+    const originalTotal = Number(booking.total_price) || 0;
+    const adjustedTotal = Math.max(0, originalTotal - cancelledPrecioAplicadoSum);
+
+    const totalPaidHistorical = booking.has_payment_plan
+      ? (booking.payment_plan_paid ?? 0)
+      : (booking.user_payment ?? booking.deposit_amount ?? 0);
+    const adjustedBalance = Math.max(0, adjustedTotal - (totalPaidHistorical - totalPrincipalRefunded));
+
+    const cancelledTravelerNames: string[] = [];
+    for (const pc of partialCancs) {
+      const travelers = Array.isArray(pc.travellers_cancelled) ? pc.travellers_cancelled : [];
+      for (const t of travelers) {
+        if (t.nombre) cancelledTravelerNames.push(t.nombre);
+      }
+    }
+
+    return { adjustedTotal, adjustedBalance, totalPrincipalRefunded, cancelledTravelerNames, partialCancs };
+  };
+
+  const handleCancelOptionalService = async (bookingId: string, optServiceId: string, serviceName: string, quantityToCancel?: number) => {
+    const cancelMsg = quantityToCancel
+      ? `¿Cancelar ${quantityToCancel} unidad(es) de "${serviceName}"? El reembolso irá a tu ToursRed Cash.`
+      : `¿Cancelar "${serviceName}"? El reembolso irá a tu ToursRed Cash.`;
+    if (!confirm(cancelMsg)) return;
     setCancelingOptServiceId(optServiceId);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -958,12 +1010,16 @@ const TravelerBookings: React.FC = () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ booking_id: bookingId, booking_optional_service_id: optServiceId }),
+          body: JSON.stringify({ booking_id: bookingId, booking_optional_service_id: optServiceId, quantity_to_cancel: quantityToCancel }),
         }
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Error al cancelar servicio');
       await fetchBookings();
+      // Refresh extrasModal if open for this booking
+      if (extrasModal.open && extrasModal.booking?.id === bookingId) {
+        await refreshExtrasModalBos(bookingId);
+      }
     } catch (err: any) {
       alert(err.message || 'Error al cancelar el servicio opcional');
     } finally {
@@ -1765,6 +1821,24 @@ const TravelerBookings: React.FC = () => {
     setSupplementsModal({ open: true, booking, activeTab });
   };
 
+  const refreshExtrasModalBos = async (bookingId: string) => {
+    const { data: bosData } = await supabase
+      .from('booking_optional_services')
+      .select('id, tour_optional_service_id, quantity, subtotal, is_cancelled, tour_optional_services(is_refundable)')
+      .eq('booking_id', bookingId);
+    const newExistingBos: Record<string, { id: string; quantity: number; subtotal: number; is_cancelled: boolean; is_refundable: boolean }> = {};
+    for (const bos of bosData || []) {
+      newExistingBos[bos.tour_optional_service_id] = {
+        id: bos.id,
+        quantity: Number(bos.quantity) || 0,
+        subtotal: Number(bos.subtotal) || 0,
+        is_cancelled: bos.is_cancelled,
+        is_refundable: (bos as any).tour_optional_services?.is_refundable ?? false,
+      };
+    }
+    setExtrasModal(prev => ({ ...prev, existingBos: newExistingBos, cancelQty: {} }));
+  };
+
   const handleOpenExtrasModal = async (booking: Booking) => {
     setExtrasModal(prev => ({ ...prev, open: true, booking, isLoading: true, activeTab: 'servicios' }));
     try {
@@ -1777,15 +1851,21 @@ const TravelerBookings: React.FC = () => {
           .order('display_order'),
         supabase
           .from('booking_optional_services')
-          .select('id, tour_optional_service_id, is_cancelled')
+          .select('id, tour_optional_service_id, quantity, subtotal, is_cancelled, tour_optional_services(is_refundable)')
           .eq('booking_id', booking.id),
       ]);
 
-      const existingBosIds = new Set(
-        (bosRes.data || [])
-          .filter((bos: any) => !bos.is_cancelled)
-          .map((bos: any) => bos.tour_optional_service_id)
-      );
+      const existingBos: Record<string, { id: string; quantity: number; subtotal: number; is_cancelled: boolean; is_refundable: boolean }> = {};
+      for (const bos of bosRes.data || []) {
+        existingBos[bos.tour_optional_service_id] = {
+          id: bos.id,
+          quantity: Number(bos.quantity) || 0,
+          subtotal: Number(bos.subtotal) || 0,
+          is_cancelled: bos.is_cancelled,
+          is_refundable: (bos as any).tour_optional_services?.is_refundable ?? false,
+        };
+      }
+      const hasActiveServices = Object.values(existingBos).some(b => !b.is_cancelled);
 
       const alreadyBought = (booking as any).travel_insurance_included === true;
       let insuranceCost = Number((booking as any).travel_insurance_cost || 0);
@@ -1830,15 +1910,14 @@ const TravelerBookings: React.FC = () => {
         ...prev,
         isLoading: false,
         tourOptionalServices: optSvcsRes.data || [],
-        existingBosIds,
+        existingBos,
         insuranceAlreadyBought: alreadyBought,
         insuranceCost,
         insurancePricePerDay,
         insuranceDays: 1,
         insuranceConditionsAccepted: false,
-        activeTab: (optSvcsRes.data || []).filter(
-          (s: any) => !existingBosIds.has(s.id)
-        ).length > 0 ? 'servicios' : 'seguro',
+        cancelQty: {},
+        activeTab: hasActiveServices || (optSvcsRes.data || []).some((s: any) => !existingBos[s.id]) ? 'servicios' : 'seguro',
       }));
     } catch {
       setExtrasModal(prev => ({ ...prev, isLoading: false }));
@@ -2205,12 +2284,24 @@ const TravelerBookings: React.FC = () => {
                     </div>
                   </div>
 
-                  {(booking as any).has_partial_cancellations && (
-                    <div className="mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-medium">
-                      <UserMinus className="h-3 w-3" />
-                      Cancelación parcial aplicada &mdash; {(booking as any).active_travelers_count ?? booking.travelers_count} de {booking.travelers_count} viajeros activos
+                  {(() => {
+                    const adj = computeAdjustedTotals(booking);
+                    if (!adj) return null;
+                    return (
+                    <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 p-3">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-xs text-amber-800">
+                          <p className="font-semibold">Esta reserva tuvo una cancelación parcial — {adj.cancelledTravelerNames.length} viajero(s) removido(s)</p>
+                          <p className="mt-0.5 text-amber-700">{adj.cancelledTravelerNames.join(', ')}</p>
+                          {adj.partialCancs.length > 0 && adj.partialCancs[0].cancelled_at && (
+                            <p className="mt-0.5 text-amber-600">Fecha: {new Date(adj.partialCancs[0].cancelled_at).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                     <div className="flex items-center">
@@ -2325,8 +2416,7 @@ const TravelerBookings: React.FC = () => {
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
+                            <div className="text-right">
                                 <span className={`font-medium ${bos.is_cancelled ? 'text-gray-400' : 'text-amber-700'}`}>
                                   {formatCurrencyMXN(Number(bos.subtotal))}
                                 </span>
@@ -2336,21 +2426,6 @@ const TravelerBookings: React.FC = () => {
                                   </span>
                                 )}
                               </div>
-                              {!bos.is_cancelled && bos.tour_optional_services?.is_refundable && (booking.status === 'confirmed' || booking.status === 'pending') && (
-                                <button
-                                  onClick={() => handleCancelOptionalService(booking.id, bos.id, bos.description || bos.tour_optional_services?.name || 'Servicio opcional')}
-                                  disabled={cancelingOptServiceId === bos.id}
-                                  className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded border border-red-200 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-                                >
-                                  {cancelingOptServiceId === bos.id ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <XCircle className="h-3 w-3" />
-                                  )}
-                                  Cancelar
-                                </button>
-                              )}
-                            </div>
                           </div>
                         ))}
                       </div>
@@ -2388,7 +2463,16 @@ const TravelerBookings: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <div className="text-gray-500">Precio Total del Tour:</div>
-                        <div className="font-medium">{formatCurrencyMXN(booking.total_price ?? 0)}</div>
+                        {(() => {
+                          const adj = computeAdjustedTotals(booking);
+                          if (!adj) return <div className="font-medium">{formatCurrencyMXN(booking.total_price ?? 0)}</div>;
+                          return (
+                            <div className="font-medium">
+                              <span className="text-gray-400 line-through">{formatCurrencyMXN(booking.total_price ?? 0)}</span>
+                              <span className="text-teal-700 ml-2">{formatCurrencyMXN(adj.adjustedTotal)}</span>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div>
                         <div className="text-gray-500">Depósito Pagado:</div>
@@ -2407,11 +2491,15 @@ const TravelerBookings: React.FC = () => {
                       <div>
                         <div className="text-gray-500">Saldo Restante:</div>
                         <div className="font-medium">
-                          {formatCurrencyMXN(
-                            (booking as any).has_payment_plan
-                              ? ((booking as any).payment_plan_total || 0) - ((booking as any).payment_plan_paid || 0)
-                              : (booking.total_price || 0) - (booking.deposit_amount || 0)
-                          )}
+                          {(() => {
+                            const adj = computeAdjustedTotals(booking);
+                            if (adj) return formatCurrencyMXN(adj.adjustedBalance);
+                            return formatCurrencyMXN(
+                              (booking as any).has_payment_plan
+                                ? ((booking as any).payment_plan_total || 0) - ((booking as any).payment_plan_paid || 0)
+                                : (booking.total_price || 0) - (booking.deposit_amount || 0)
+                            );
+                          })()}
                         </div>
                       </div>
                       {(booking as any).paypal_transaction_id && (
@@ -2528,7 +2616,10 @@ const TravelerBookings: React.FC = () => {
                   {/* Plan de Pagos */}
                   {((booking as any).has_payment_plan || (booking as any).payment_plan_status === 'active') && (
                     <div className="mt-4">
-                      <PaymentPlanCalendar bookingId={booking.id} />
+                      <PaymentPlanCalendar
+                        bookingId={booking.id}
+                        adjustedTotal={computeAdjustedTotals(booking)?.adjustedTotal}
+                      />
                     </div>
                   )}
 
@@ -4779,17 +4870,61 @@ const TravelerBookings: React.FC = () => {
                         <p className="text-sm text-gray-500 text-center py-8">No hay servicios opcionales disponibles para este tour.</p>
                       ) : (
                         extrasModal.tourOptionalServices.map((svc: any) => {
-                          const alreadyAdded = extrasModal.existingBosIds.has(svc.id);
+                          const bosEntry = extrasModal.existingBos[svc.id];
+                          const isCancelled = bosEntry?.is_cancelled === true || (bosEntry && bosEntry.quantity === 0);
+                          const isActive = bosEntry && !isCancelled;
                           return (
-                            <div key={svc.id} className={`rounded-xl p-4 border ${alreadyAdded ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-white border-gray-200 hover:border-teal-300 transition-colors'}`}>
+                            <div key={svc.id} className={`rounded-xl p-4 border ${isCancelled ? 'bg-gray-50 border-gray-200 opacity-60' : isActive ? 'bg-green-50/50 border-green-200' : 'bg-white border-gray-200 hover:border-teal-300 transition-colors'}`}>
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                   <p className="font-semibold text-gray-900 text-sm">{svc.name}</p>
                                   {svc.description && <p className="text-xs text-gray-500 mt-0.5">{svc.description}</p>}
                                   <p className="text-sm font-bold text-teal-700 mt-1.5">{formatCurrencyMXN(Number(svc.price_per_person))} / persona</p>
+                                  {isActive && (
+                                    <p className="text-xs text-green-700 mt-1">Contratado: {bosEntry.quantity} unidad(es) &middot; {formatCurrencyMXN(Number(bosEntry.subtotal))}</p>
+                                  )}
                                 </div>
-                                {alreadyAdded ? (
-                                  <span className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-medium flex-shrink-0">Incluido</span>
+                                {isCancelled ? (
+                                  <span className="text-xs bg-red-100 text-red-700 px-2.5 py-1 rounded-full font-medium flex-shrink-0">Cancelado</span>
+                                ) : isActive ? (
+                                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                    {bosEntry.quantity > 1 ? (
+                                      <>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => setExtrasModal(prev => ({
+                                              ...prev,
+                                              cancelQty: { ...prev.cancelQty, [svc.id]: Math.max(1, (prev.cancelQty[svc.id] || 1) - 1) }
+                                            }))}
+                                            className="w-7 h-7 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100"
+                                          >-</button>
+                                          <span className="text-sm font-semibold w-6 text-center">{extrasModal.cancelQty[svc.id] || 1}</span>
+                                          <button
+                                            onClick={() => setExtrasModal(prev => ({
+                                              ...prev,
+                                              cancelQty: { ...prev.cancelQty, [svc.id]: Math.min(bosEntry.quantity, (prev.cancelQty[svc.id] || 1) + 1) }
+                                            }))}
+                                            className="w-7 h-7 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100"
+                                          >+</button>
+                                        </div>
+                                        <button
+                                          onClick={() => handleCancelOptionalService(extrasModal.booking!.id, bosEntry.id, svc.name, extrasModal.cancelQty[svc.id] || 1)}
+                                          disabled={cancelingOptServiceId === bosEntry.id}
+                                          className="btn btn-sm bg-red-600 text-white hover:bg-red-700 text-xs px-3 flex items-center gap-1"
+                                        >
+                                          {cancelingOptServiceId === bosEntry.id ? '...' : `Cancelar ${extrasModal.cancelQty[svc.id] || 1}`}
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleCancelOptionalService(extrasModal.booking!.id, bosEntry.id, svc.name, 1)}
+                                        disabled={cancelingOptServiceId === bosEntry.id}
+                                        className="btn btn-sm bg-red-600 text-white hover:bg-red-700 text-xs px-3 flex items-center gap-1"
+                                      >
+                                        {cancelingOptServiceId === bosEntry.id ? '...' : 'Cancelar'}
+                                      </button>
+                                    )}
+                                  </div>
                                 ) : (
                                   <button
                                     onClick={() => handleOpenExtrasPayment('optional_service', svc, extrasModal.booking!)}
