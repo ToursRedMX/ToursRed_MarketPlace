@@ -174,11 +174,6 @@ Deno.serve(async (req: Request) => {
     }
     const principalPaid = originalDepositAmount + installmentsPaid;
 
-    // BUG FIX 1: include travel insurance in refund calculation
-    const insuranceRefund = (booking as any).travel_insurance_included
-      ? Number((booking as any).travel_insurance_cost || 0) * refundPct
-      : 0;
-
     // Fetch optional services
     const { data: optionalServicesData } = await supabase
       .from("booking_optional_services")
@@ -227,6 +222,10 @@ Deno.serve(async (req: Request) => {
         policyType = "no_refund";
       }
     }
+
+    const insuranceRefund = (booking as any).travel_insurance_included
+      ? Number((booking as any).travel_insurance_cost || 0) * refundPct
+      : 0;
 
     const principalRefund = principalPaid * refundPct;
     const refundAmountToTraveler = principalRefund + optionalServicesRefundable + insuranceRefund;
