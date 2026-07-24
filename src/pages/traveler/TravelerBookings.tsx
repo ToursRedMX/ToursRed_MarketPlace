@@ -3,7 +3,7 @@ import { Calendar, MapPin, Users, DollarSign, Clock, Eye, AlertCircle, Star, X, 
 import SeatReselectionModal from '../../components/SeatReselectionModal';
 import PaymentPlanCalendar from '../../components/PaymentPlanCalendar';
 import { useAuth } from '../../context/AuthContext';
-import { getUserBookings, getUserPastBookings, getUserCancelledBookings, parseDateFromDB, supabase, calculateCancellationPolicy, calculatePartialCancellationPolicy, processPartialCancellation, PartialCancellationTraveler } from '../../lib/supabase';
+import { getUserBookings, getUserPastBookings, getUserCancelledBookings, parseDateFromDB, supabase, calculateCancellationPolicy } from '../../lib/supabase';
 import { Booking, PendingReschedule } from '../../types';
 import { format } from 'date-fns';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -163,7 +163,7 @@ const TravelerBookings: React.FC = () => {
   const [partialCancellationModal, setPartialCancellationModal] = useState<{
     open: boolean;
     booking: Booking | null;
-    travelers: PartialCancellationTraveler[];
+    travelers: { id: string; nombre: string; categoria_viajero: string; precio_aplicado: number }[];
     selectedIds: Set<string>;
     policy: any;
     isCalculating: boolean;
@@ -1025,15 +1025,29 @@ const TravelerBookings: React.FC = () => {
     setPartialCancellationModal(prev => ({ ...prev, selectedIds: newSelected, isCalculating: true }));
 
     try {
-      const { data: fullBooking } = await supabase
-        .from('bookings')
-        .select('*, tours:tour_id(id, name, start_date, cancellation_not_allowed)')
-        .eq('id', partialCancellationModal.booking!.id)
-        .single();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
 
-      if (!fullBooking) throw new Error('No se pudo cargar la reserva');
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-partial-cancellation`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            booking_id: partialCancellationModal.booking!.id,
+            traveler_ids: Array.from(newSelected),
+            preview: true,
+          }),
+        }
+      );
 
-      const policy = await calculatePartialCancellationPolicy(fullBooking, selectedTravelers);
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Error al calcular la política');
+
+      const policy = result.policy;
 
       setPartialCancellationModal(prev => ({
         ...prev,
@@ -1082,14 +1096,27 @@ const TravelerBookings: React.FC = () => {
     setPartialCancellationModal(prev => ({ ...prev, isCancelling: true, error: '' }));
 
     try {
-      const result = await processPartialCancellation(
-        partialCancellationModal.booking.id,
-        user.id,
-        selectedTravelers,
-        partialCancellationModal.cancellationReason || undefined
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-partial-cancellation`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            booking_id: partialCancellationModal.booking.id,
+            traveler_ids: Array.from(partialCancellationModal.selectedIds),
+            cancellation_reason: partialCancellationModal.cancellationReason || undefined,
+          }),
+        }
       );
 
-      if (result.error) throw new Error(result.error);
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Error al procesar la cancelación parcial');
 
       setPartialCancellationModal(prev => ({ ...prev, isCancelling: false, success: true }));
       await fetchBookings();
