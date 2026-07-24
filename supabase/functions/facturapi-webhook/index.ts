@@ -97,7 +97,7 @@ Deno.serve(async (req: Request) => {
         .from("cfdi_cancellation_requests")
         .update({ status: "accepted", processed_at: new Date().toISOString() })
         .eq("cfdi_invoice_id", cfdi.id)
-        .eq("status", "verifying");
+        .in("status", ["pending", "verifying"]);
 
       // If linked to a booking cancellation, generate replacement commission CFDI
       if (cfdi.cancellation_id && cfdi.booking_id) {
@@ -130,7 +130,7 @@ Deno.serve(async (req: Request) => {
         .from("cfdi_cancellation_requests")
         .update({ status: "rejected", processed_at: new Date().toISOString() })
         .eq("cfdi_invoice_id", cfdi.id)
-        .eq("status", "verifying");
+        .in("status", ["pending", "verifying"]);
 
       console.warn(`CFDI ${cfdi.id} cancellation rejected by SAT — manual review needed`);
     } else {

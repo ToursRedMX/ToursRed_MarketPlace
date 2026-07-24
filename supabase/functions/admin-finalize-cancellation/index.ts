@@ -185,11 +185,22 @@ Deno.serve(async (req: Request) => {
 
     // ============================================================
     // Step 2: Cancel optional services
+    // Retrieve service_charge_refunded from admin_booking_cancellations
+    // to pass the admin's refund decision to the RPC.
     // ============================================================
+    const { data: adminCxlRecord } = await serviceClient
+      .from("admin_booking_cancellations")
+      .select("service_charge_refunded")
+      .eq("id", admin_cancellation_id)
+      .maybeSingle();
+
+    const refundServiceCharge = Boolean(adminCxlRecord?.service_charge_refunded);
+
     try {
       await serviceClient.rpc("cancel_booking_optional_services", {
         p_booking_id: booking_id,
         p_cancelled_by_agency: false,
+        p_refund_service_charge: refundServiceCharge,
       });
     } catch (e) {
       console.error("Error cancelling optional services in finalize:", e);

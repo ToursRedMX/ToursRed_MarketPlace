@@ -194,7 +194,6 @@ Deno.serve(async (req: Request) => {
     }
     optionalsRefundBucket = Math.round(optionalsRefundBucket * 100) / 100;
 
-    // Keep legacy variable for backward compatibility in the response
     let optionalServicesRefundable = optionalsRefundBucket;
     let optionalServicesServiceCharge = 0;
     for (const os of (optionalServices || [])) {
@@ -323,6 +322,7 @@ Deno.serve(async (req: Request) => {
         await supabase.rpc("cancel_booking_optional_services", {
           p_booking_id: booking_id,
           p_cancelled_by_agency: false,
+          p_refund_service_charge: refund_service_charge,
         });
       } catch (e) {
         console.error("Error cancelling optional services:", e);
@@ -375,7 +375,7 @@ Deno.serve(async (req: Request) => {
                   .eq("booking_id", booking_id)
                   .eq("status", "completed")
                   .then(({ data }: any) => (data || []).reduce((s: number, t: any) => s + Number(t.service_charge || 0), 0)))
-              : 0))
+              : 0) + optionalServicesServiceCharge)
           : 0,
       })
       .select()
@@ -397,7 +397,14 @@ Deno.serve(async (req: Request) => {
         days_before_tour: 0,
         cancellation_policy_type: "admin_cancelled",
         original_deposit_amount: Number(booking.deposit_amount || 0),
-        original_service_charge: Number(booking.service_charge || 0),
+        original_service_charge: Number(booking.service_charge || 0) + optionalServicesServiceCharge + (booking.has_payment_plan
+          ? (await supabase
+              .from("booking_payment_plan_transactions")
+              .select("service_charge")
+              .eq("booking_id", booking_id)
+              .eq("status", "completed")
+              .then(({ data }: any) => (data || []).reduce((s: number, t: any) => s + Number(t.service_charge || 0), 0)))
+          : 0),
         total_principal_paid: totalPaidByTraveler,
         refund_amount_to_traveler: Number(refund_amount) || 0,
         amount_to_agency: 0,
@@ -414,7 +421,7 @@ Deno.serve(async (req: Request) => {
                   .eq("booking_id", booking_id)
                   .eq("status", "completed")
                   .then(({ data }: any) => (data || []).reduce((s: number, t: any) => s + Number(t.service_charge || 0), 0)))
-              : 0))
+              : 0) + optionalServicesServiceCharge)
           : 0,
       })
       .select()

@@ -146,13 +146,15 @@ Deno.serve(async (req: Request) => {
     // Optional services refund
     const { data: optionalServicesData } = await supabase
       .from("booking_optional_services")
-      .select("subtotal, total_paid, tour_optional_services(is_refundable)")
+      .select("subtotal, service_charge, total_paid, tour_optional_services(is_refundable)")
       .eq("booking_id", booking_id)
       .eq("is_cancelled", false);
 
     let optionalServicesRefundable = 0;
+    let optionalServicesServiceCharge = 0;
     for (const bos of (optionalServicesData || [])) {
       optionalServicesRefundable += Number((bos as any).total_paid || (bos as any).subtotal || 0);
+      optionalServicesServiceCharge += Number((bos as any).service_charge || 0);
     }
 
     // Total refund = principal + service charge + insurance + optionals
@@ -215,6 +217,7 @@ Deno.serve(async (req: Request) => {
     await supabase.rpc("cancel_booking_optional_services", {
       p_booking_id: booking_id,
       p_cancelled_by_agency: true,
+      p_refund_service_charge: true,
     });
 
     // Create booking_cancellations record with correct amounts
@@ -228,7 +231,7 @@ Deno.serve(async (req: Request) => {
         days_before_tour: daysBeforeTour,
         cancellation_policy_type: "100_percent",
         original_deposit_amount: principalPaid,
-        original_service_charge: originalServiceCharge,
+        original_service_charge: originalServiceCharge + optionalServicesServiceCharge,
         total_principal_paid: principalPaid,
         refund_amount_to_traveler: refundAmount,
         amount_to_agency: 0,
@@ -237,7 +240,7 @@ Deno.serve(async (req: Request) => {
         refund_processed: refundAmount > 0,
         cancelled_by_agency: true,
         agency_cancellation_reason: cancellation_reason || "Cancelación por agencia",
-        service_charge_refunded_amount: originalServiceCharge,
+        service_charge_refunded_amount: originalServiceCharge + optionalServicesServiceCharge,
       })
       .select()
       .single();

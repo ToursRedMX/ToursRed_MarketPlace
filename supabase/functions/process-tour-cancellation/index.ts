@@ -136,13 +136,15 @@ Deno.serve(async (req: Request) => {
 
         const { data: optionalServicesData } = await supabase
           .from("booking_optional_services")
-          .select("subtotal, total_paid")
+          .select("subtotal, service_charge, total_paid")
           .eq("booking_id", booking.id)
           .eq("is_cancelled", false);
 
         let optionalServicesRefundable = 0;
+        let optionalServicesServiceCharge = 0;
         for (const bos of (optionalServicesData || [])) {
           optionalServicesRefundable += Number((bos as any).total_paid || (bos as any).subtotal || 0);
+          optionalServicesServiceCharge += Number((bos as any).service_charge || 0);
         }
 
         const refundAmount = principalPaid + originalServiceCharge + insuranceRefund + optionalServicesRefundable;
@@ -190,15 +192,26 @@ Deno.serve(async (req: Request) => {
             tour_start_date: tour.start_date,
             days_before_tour: Math.floor((tourStartDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
             cancellation_policy_type: "100_percent",
-            original_deposit_amount: principalPaid, original_service_charge: originalServiceCharge,
+            original_deposit_amount: principalPaid, original_service_charge: originalServiceCharge + optionalServicesServiceCharge,
             total_principal_paid: principalPaid, refund_amount_to_traveler: refundAmount,
             amount_to_agency: 0, amount_to_platform: 0, refund_processed: true,
             cancelled_by_agency: true,
             cancellation_reason: `Cancelación de tour completo por agencia: ${cancellation_reason.trim()}`,
-            service_charge_refunded_amount: originalServiceCharge,
+            service_charge_refunded_amount: originalServiceCharge + optionalServicesServiceCharge,
           })
           .select()
           .maybeSingle();
+
+        // Cancel optional services (agency cancellation: refund everything including service charge)
+        try {
+          await supabase.rpc("cancel_booking_optional_services", {
+            p_booking_id: booking.id,
+            p_cancelled_by_agency: true,
+            p_refund_service_charge: true,
+          });
+        } catch (rpcErr) {
+          console.error("Error cancelling optional services (tour cancellation):", rpcErr);
+        }
 
         // Update booking status
         const { error: bookingUpdateError } = await supabase

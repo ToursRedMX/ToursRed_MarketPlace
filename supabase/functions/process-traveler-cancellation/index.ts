@@ -176,20 +176,22 @@ Deno.serve(async (req: Request) => {
 
     // BUG FIX 1: include travel insurance in refund calculation
     const insuranceRefund = (booking as any).travel_insurance_included
-      ? Number((booking as any).travel_insurance_cost || 0)
+      ? Number((booking as any).travel_insurance_cost || 0) * refundPct
       : 0;
 
     // Fetch optional services
     const { data: optionalServicesData } = await supabase
       .from("booking_optional_services")
-      .select("subtotal, tour_optional_service_id, tour_optional_services(is_refundable)")
+      .select("subtotal, service_charge, tour_optional_service_id, tour_optional_services(is_refundable)")
       .eq("booking_id", booking_id)
       .eq("is_cancelled", false);
 
     let optionalServicesRefundable = 0;
+    let optionalServicesServiceCharge = 0;
     for (const bos of (optionalServicesData || [])) {
       const isRefundable = (bos as any).tour_optional_services?.is_refundable !== false;
       if (isRefundable) optionalServicesRefundable += Number((bos as any).subtotal || 0);
+      optionalServicesServiceCharge += Number((bos as any).service_charge || 0);
     }
 
     // Calculate cancellation policy
@@ -227,7 +229,6 @@ Deno.serve(async (req: Request) => {
     }
 
     const principalRefund = principalPaid * refundPct;
-    // BUG FIX 1: sum insurance refund into total
     const refundAmountToTraveler = principalRefund + optionalServicesRefundable + insuranceRefund;
     // Penalty split: 60% to agency, 40% to platform (only applies when penaltyAmount > 0)
     const PENALTY_AGENCY_SHARE = 0.60;
@@ -239,6 +240,7 @@ Deno.serve(async (req: Request) => {
     await supabase.rpc("cancel_booking_optional_services", {
       p_booking_id: booking_id,
       p_cancelled_by_agency: false,
+      p_refund_service_charge: false,
     });
 
     // Process refund to ToursRed Cash wallet if there's a refund
@@ -305,7 +307,7 @@ Deno.serve(async (req: Request) => {
         days_before_tour: daysBeforeTour,
         cancellation_policy_type: policyType,
         original_deposit_amount: originalDepositAmount,
-        original_service_charge: originalServiceCharge,
+        original_service_charge: originalServiceCharge + optionalServicesServiceCharge,
         total_principal_paid: principalPaid,
         refund_amount_to_traveler: refundAmountToTraveler,
         amount_to_agency: amountToAgency,
