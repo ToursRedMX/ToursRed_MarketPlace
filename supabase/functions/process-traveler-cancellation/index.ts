@@ -2,6 +2,29 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 
+async function cancelStampedCfds(
+  supabase: ReturnType<typeof createClient>,
+  bookingId: string,
+  cancellationId: string
+): Promise<void> {
+  const { data: stampedCfds } = await supabase
+    .from("cfdi_invoices")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .in("invoice_type", ["booking", "booking_installment"])
+    .eq("status", "stamped");
+
+  for (const cfdi of stampedCfds || []) {
+    try {
+      await supabase.functions.invoke("cancel-cfdi", {
+        body: { cfdi_invoice_id: cfdi.id, motivo: "03", cancellation_id: cancellationId },
+      });
+    } catch (e) {
+      console.error(`Error cancelling CFDI ${cfdi.id} for booking ${bookingId}:`, e);
+    }
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -290,6 +313,7 @@ Deno.serve(async (req: Request) => {
         toursred_cash_transaction_id: transactionId,
         refund_processed: refundAmountToTraveler > 0,
         cancellation_reason: cancellation_reason || null,
+        service_charge_refunded_amount: 0,
       })
       .select()
       .single();
@@ -382,7 +406,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Generate accounting entry (awaited — fire-and-forget may not execute before response is sent)
-    if (policyType === "50_percent" || policyType === "no_refund") {
+    // Applies to all policy types EXCEPT pending_approval (no confirmed payment to account)
+    if (policyType === "100_percent" || policyType === "50_percent" || policyType === "no_refund") {
       try {
         const { error: accErr } = await supabase.rpc("create_accounting_entry_for_cancellation", {
           p_cancellation_id: cancellationRecord.id,
@@ -392,6 +417,14 @@ Deno.serve(async (req: Request) => {
       } catch (e: unknown) {
         console.error("Excepción generando póliza de cancelación:", e);
       }
+    }
+
+    // Cancel stamped CFDIs when there's a refund to the traveler (non-blocking)
+    // pending_approval has no confirmed payment, so no CFDI exists to cancel
+    if (refundAmountToTraveler > 0 && policyType !== "pending_approval") {
+      EdgeRuntime.waitUntil(
+        cancelStampedCfds(supabase, booking_id, cancellationRecord.id)
+      );
     }
 
     // Send notifications (fire-and-forget)

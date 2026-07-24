@@ -7,13 +7,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface FacturapiCancelResult {
+  pacInvoiceId: string;
+  cancellationStatus: string | null;
+}
+
 async function facturapiCancel(
   apiKey: string,
   orgId: string,
   pacInvoiceId: string,
   motivo: string,
   uuidSustitucion?: string
-): Promise<string> {
+): Promise<FacturapiCancelResult> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
@@ -28,17 +33,14 @@ async function facturapiCancel(
 
   if (checkRes.ok) {
     const invoiceData = await checkRes.json();
-    // If already cancelled in FacturAPI, treat as success
     if (invoiceData.status === "canceled" || invoiceData.cancellation_status === "accepted") {
-      return pacInvoiceId;
+      return { pacInvoiceId, cancellationStatus: "accepted" };
     }
-    // If not cancellable (test mode or other reason), treat as success to allow DB update
     if (invoiceData.cancellation?.cancellation_type === "not_cancellable") {
-      return pacInvoiceId;
+      return { pacInvoiceId, cancellationStatus: "accepted" };
     }
   } else if (checkRes.status === 404) {
-    // Invoice not found in FacturAPI (old invoice with different key) - allow DB update
-    return pacInvoiceId;
+    return { pacInvoiceId, cancellationStatus: "accepted" };
   }
 
   const params = new URLSearchParams({ motive: motivo });
@@ -54,20 +56,21 @@ async function facturapiCancel(
     let errData: { message?: string; cancellation_type?: string } = {};
     try { errData = JSON.parse(errText); } catch (_) { /* ignore */ }
     if (errData.cancellation_type === "not_cancellable") {
-      return pacInvoiceId;
+      return { pacInvoiceId, cancellationStatus: "accepted" };
     }
     throw new Error(`FacturAPI cancel error ${res.status}: ${errText}`);
   }
 
   const data = await res.json();
-  return data.id ?? pacInvoiceId;
+  const cancellationStatus = data.cancellation_status ?? null;
+  return { pacInvoiceId: data.id ?? pacInvoiceId, cancellationStatus };
 }
 
 async function zohoBooksCancel(
   supabaseClient: ReturnType<typeof createClient>,
   orgId: string,
   pacInvoiceId: string
-): Promise<string> {
+): Promise<FacturapiCancelResult> {
   const { data: tokenRow } = await supabaseClient
     .from("zoho_oauth_tokens")
     .select("access_token, refresh_token, access_token_expires_at, api_domain")
@@ -113,7 +116,7 @@ async function zohoBooksCancel(
     const err = await res.text();
     throw new Error(`Zoho Books cancel error ${res.status}: ${err}`);
   }
-  return pacInvoiceId;
+  return { pacInvoiceId, cancellationStatus: "accepted" };
 }
 
 async function cancelWithProvider(
@@ -124,7 +127,7 @@ async function cancelWithProvider(
   motivo: string,
   uuidSustitucion?: string,
   supabaseClient?: ReturnType<typeof createClient>
-): Promise<string> {
+): Promise<FacturapiCancelResult> {
   switch (provider) {
     case "zoho_books":
       if (!supabaseClient) throw new Error("supabaseClient required for zoho_books provider");
@@ -147,7 +150,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { cfdi_invoice_id, motivo, uuid_sustitucion } = await req.json();
+    const { cfdi_invoice_id, motivo, uuid_sustitucion, cancellation_id } = await req.json();
 
     if (!cfdi_invoice_id || !motivo) {
       return new Response(
@@ -222,9 +225,9 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Failed to create cancellation record: ${cancellationError?.message}`);
     }
 
-    let pacCancellationId: string;
+    let cancelResult: FacturapiCancelResult;
     try {
-      pacCancellationId = await cancelWithProvider(
+      cancelResult = await cancelWithProvider(
         cfdi.pac_provider,
         settings.pac_api_key_encrypted!,
         settings.pac_organization_id || "",
@@ -245,24 +248,62 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Mark cancellation as accepted
+    const pacCancellationId = cancelResult.pacInvoiceId;
+    const cancellationStatus = cancelResult.cancellationStatus;
+
+    if (cancellationStatus === "accepted") {
+      // SAT confirmed immediately — mark as fully cancelled
+      await supabase
+        .from("cfdi_cancellation_requests")
+        .update({
+          status: "accepted",
+          pac_cancellation_id: pacCancellationId,
+          processed_at: new Date().toISOString(),
+        })
+        .eq("id", cancellationRecord.id);
+
+      await supabase
+        .from("cfdi_invoices")
+        .update({
+          status: "cancelled",
+          ...(cancellation_id ? { cancellation_id } : {}),
+        })
+        .eq("id", cfdi_invoice_id);
+
+      return new Response(
+        JSON.stringify({ success: true, cancellation_id: cancellationRecord.id, cfdi_status: "cancelled" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Async cancellation: SAT is still processing (pending or verifying)
+    const reqStatus = cancellationStatus === "verifying" ? "verifying" : "pending";
+
     await supabase
       .from("cfdi_cancellation_requests")
       .update({
-        status: "accepted",
+        status: reqStatus,
         pac_cancellation_id: pacCancellationId,
         processed_at: new Date().toISOString(),
       })
       .eq("id", cancellationRecord.id);
 
-    // Mark CFDI as cancelled
     await supabase
       .from("cfdi_invoices")
-      .update({ status: "cancelled" })
+      .update({
+        status: "cancellation_pending",
+        ...(cancellation_id ? { cancellation_id } : {}),
+      })
       .eq("id", cfdi_invoice_id);
 
     return new Response(
-      JSON.stringify({ success: true, cancellation_id: cancellationRecord.id }),
+      JSON.stringify({
+        success: true,
+        cancellation_id: cancellationRecord.id,
+        cfdi_status: "cancellation_pending",
+        cancellation_status: cancellationStatus,
+        message: "Cancelación enviada al SAT. El webhook de FacturAPI confirmará cuando se procese.",
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

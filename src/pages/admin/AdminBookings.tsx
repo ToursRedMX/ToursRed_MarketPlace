@@ -1380,6 +1380,7 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmStep, setConfirmStep] = useState(false);
+  const [refundServiceCharge, setRefundServiceCharge] = useState(false);
 
   // Two-phase flow for original_payment_method
   const [bookingCancelled, setBookingCancelled] = useState(false);
@@ -1683,6 +1684,7 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
           receipt_filename: receiptFilename,
           requested_by: 'admin_override',
           mode: withRefund && refundMethod === 'original_payment_method' ? 'prepare' : 'full',
+          refund_service_charge: withRefund && refundServiceCharge,
         }),
       });
 
@@ -1738,7 +1740,9 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
         .filter(sp => sp.status === 'paid' && Number(sp.total_paid || 0) > 0)
         .reduce((s, sp) => s + Number(sp.total_paid || 0), 0)
     : 0;
-  const suggestedAmount = totalPaidByTraveler + insuranceCost + optionalServicesRefundable + supplementsRefundable;
+  const serviceChargeAmount = Number(booking.service_charge || 0)
+    + (booking.payment_plan?.installments?.reduce((s: number, i: any) => s + Number(i.service_charge || 0), 0) || 0);
+  const suggestedAmount = totalPaidByTraveler + insuranceCost + optionalServicesRefundable + supplementsRefundable + (refundServiceCharge ? serviceChargeAmount : 0);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
@@ -1860,8 +1864,34 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
                       Sugerido: {formatCurrencyMXN(suggestedAmount)}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">Sugerido: pagado + seguro + opcionales + suplementos = {formatCurrencyMXN(suggestedAmount)}</p>
+                  <p className="text-xs text-gray-400 mt-1">Sugerido: pagado + seguro + opcionales + suplementos{refundServiceCharge ? ' + cargo de servicio' : ''} = {formatCurrencyMXN(suggestedAmount)}</p>
                 </div>
+
+                {serviceChargeAmount > 0 && (
+                  <label className="flex items-center gap-3 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg p-3 hover:bg-gray-100 transition">
+                    <input
+                      type="checkbox"
+                      checked={refundServiceCharge}
+                      onChange={(e) => {
+                        setRefundServiceCharge(e.target.checked);
+                        if (e.target.checked) {
+                          setRefundAmount(prev => prev + serviceChargeAmount);
+                        } else {
+                          setRefundAmount(prev => Math.max(0, prev - serviceChargeAmount));
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">
+                        Tambien reembolsar el cargo de servicio ({formatCurrencyMXN(serviceChargeAmount)})
+                      </span>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Marca esta opcion si el viajero debe recibir el cargo de servicio ademas del principal (ej. fraude de agencia, PROFECO, apoyo al cliente).
+                      </p>
+                    </div>
+                  </label>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-2">Método de reembolso</label>

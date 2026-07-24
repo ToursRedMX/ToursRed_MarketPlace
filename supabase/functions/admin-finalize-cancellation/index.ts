@@ -2,6 +2,29 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 
+async function cancelStampedCfds(
+  supabase: ReturnType<typeof createClient>,
+  bookingId: string,
+  cancellationId: string
+): Promise<void> {
+  const { data: stampedCfds } = await supabase
+    .from("cfdi_invoices")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .in("invoice_type", ["booking", "booking_installment"])
+    .eq("status", "stamped");
+
+  for (const cfdi of stampedCfds || []) {
+    try {
+      await supabase.functions.invoke("cancel-cfdi", {
+        body: { cfdi_invoice_id: cfdi.id, motivo: "03", cancellation_id: cancellationId },
+      });
+    } catch (e) {
+      console.error(`Error cancelling CFDI ${cfdi.id} for booking ${bookingId}:`, e);
+    }
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -219,11 +242,35 @@ Deno.serve(async (req: Request) => {
 
     // ============================================================
     // Step 5: Mark booking_cancellations.refund_processed = true
+    //         + generate accounting entry + cancel stamped CFDIs
     // ============================================================
     await serviceClient
       .from("booking_cancellations")
       .update({ refund_processed: true })
       .eq("id", cancellation_id);
+
+    // Generate accounting entry for the cancellation
+    try {
+      await serviceClient.rpc("create_accounting_entry_for_cancellation", {
+        p_cancellation_id: cancellation_id,
+        p_cancellation_type: "full",
+      });
+    } catch (accountingError) {
+      console.error("Error generando póliza contable (finalize):", accountingError);
+    }
+
+    // Cancel stamped CFDIs if there's a refund to the traveler (non-blocking)
+    const { data: cancellationRow } = await serviceClient
+      .from("booking_cancellations")
+      .select("refund_amount_to_traveler")
+      .eq("id", cancellation_id)
+      .maybeSingle();
+
+    if (cancellationRow && Number(cancellationRow.refund_amount_to_traveler) > 0) {
+      EdgeRuntime.waitUntil(
+        cancelStampedCfds(serviceClient, booking_id, cancellation_id)
+      );
+    }
 
     // ============================================================
     // Step 6: Audit log

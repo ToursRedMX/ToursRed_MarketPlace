@@ -8,6 +8,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+async function cancelStampedCfds(
+  supabase: ReturnType<typeof createClient>,
+  bookingId: string,
+  cancellationId: string
+): Promise<void> {
+  const { data: stampedCfds } = await supabase
+    .from("cfdi_invoices")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .in("invoice_type", ["booking", "booking_installment"])
+    .eq("status", "stamped");
+
+  for (const cfdi of stampedCfds || []) {
+    try {
+      await supabase.functions.invoke("cancel-cfdi", {
+        body: { cfdi_invoice_id: cfdi.id, motivo: "03", cancellation_id: cancellationId },
+      });
+    } catch (e) {
+      console.error(`Error cancelling CFDI ${cfdi.id} for booking ${bookingId}:`, e);
+    }
+  }
+}
+
 function ok(data: unknown) {
   return new Response(JSON.stringify(data), {
     status: 200,
@@ -73,6 +96,7 @@ Deno.serve(async (req: Request) => {
       receipt_filename,
       requested_by = "admin_override",
       mode = "full",
+      refund_service_charge = false,
     } = body;
 
     if (!booking_id) return err("booking_id es requerido");
@@ -342,6 +366,17 @@ Deno.serve(async (req: Request) => {
         receipt_file_path: receiptFilePath,
         points_deducted: pointsDeducted,
         cancelled_at: now,
+        service_charge_refunded: Boolean(refund_service_charge),
+        service_charge_refunded_amount: refund_service_charge
+          ? (Number(booking.service_charge || 0) + (booking.has_payment_plan
+              ? (await supabase
+                  .from("booking_payment_plan_transactions")
+                  .select("service_charge")
+                  .eq("booking_id", booking_id)
+                  .eq("status", "completed")
+                  .then(({ data }: any) => (data || []).reduce((s: number, t: any) => s + Number(t.service_charge || 0), 0)))
+              : 0))
+          : 0,
       })
       .select()
       .single();
@@ -371,6 +406,16 @@ Deno.serve(async (req: Request) => {
         refund_processed: Number(refund_amount) > 0,
         cancellation_reason: reason_for_traveler.trim(),
         emails_sent: false,
+        service_charge_refunded_amount: refund_service_charge
+          ? (Number(booking.service_charge || 0) + (booking.has_payment_plan
+              ? (await supabase
+                  .from("booking_payment_plan_transactions")
+                  .select("service_charge")
+                  .eq("booking_id", booking_id)
+                  .eq("status", "completed")
+                  .then(({ data }: any) => (data || []).reduce((s: number, t: any) => s + Number(t.service_charge || 0), 0)))
+              : 0))
+          : 0,
       })
       .select()
       .single();
@@ -387,12 +432,24 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // Refund processing for original_payment_method is handled by the
-    // frontend (AdminBookings modal), which calls process-payment-refund
-    // per line using the cancellation_id returned here. This function's
-    // only responsibility for original_payment_method is to cancel the
-    // booking (status, points, optionals/supplements, notifications).
+    // Accounting entry + CFDI cancellation (non-blocking)
     // ============================================================
+    if (cancellationRecord && !isPrepare) {
+      try {
+        await supabase.rpc("create_accounting_entry_for_cancellation", {
+          p_cancellation_id: cancellationRecord.id,
+          p_cancellation_type: "full",
+        });
+      } catch (accountingError) {
+        console.error("Error generando póliza contable:", accountingError);
+      }
+
+      if (Number(refund_amount) > 0) {
+        EdgeRuntime.waitUntil(
+          cancelStampedCfds(supabase, booking_id, cancellationRecord.id)
+        );
+      }
+    }
 
     // Status update: in prepare mode, use 'cancellation_processing' instead
     // of 'cancelled'. The booking stays in this intermediate state until
