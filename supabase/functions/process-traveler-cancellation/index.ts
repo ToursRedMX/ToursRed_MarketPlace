@@ -137,6 +137,68 @@ Deno.serve(async (req: Request) => {
     // Validate tour hasn't started
     if (hoursBeforeTour <= 0) return err("No se puede cancelar una reserva de un tour que ya inició o ha pasado");
 
+    // Unpaid booking: simple withdrawal — no refunds, no wallet, no points, no CFDI, no accounting
+    if (booking.payment_status !== "succeeded") {
+      const { data: cancellationRecord, error: cancellationError } = await supabase
+        .from("booking_cancellations")
+        .insert({
+          booking_id: booking_id,
+          cancelled_by_user_id: user.id,
+          cancelled_at: now.toISOString(),
+          tour_start_date: tourStartDateForRecord,
+          days_before_tour: daysBeforeTour,
+          cancellation_policy_type: "unpaid_withdrawal",
+          original_deposit_amount: 0,
+          original_service_charge: 0,
+          total_principal_paid: 0,
+          refund_amount_to_traveler: 0,
+          amount_to_agency: 0,
+          amount_to_platform: 0,
+          refund_processed: false,
+          cancellation_reason: cancellation_reason || null,
+          service_charge_refunded_amount: 0,
+        })
+        .select()
+        .single();
+
+      if (cancellationError) {
+        return err("Error registrando cancelación: " + cancellationError.message);
+      }
+
+      await supabase.rpc("cancel_booking_optional_services", {
+        p_booking_id: booking_id,
+        p_cancelled_by_agency: false,
+        p_refund_service_charge: false,
+      });
+
+      const { error: updateBookingError } = await supabase
+        .from("bookings")
+        .update({
+          status: "cancelled",
+          cancelled_at: now.toISOString(),
+          cancellation_type: "unpaid_withdrawal",
+          cancellation_refund_amount: 0,
+        })
+        .eq("id", booking_id);
+
+      if (updateBookingError) {
+        return err("Error actualizando reserva: " + updateBookingError.message);
+      }
+
+      const notificationBody = { booking_id, cancellation_id: cancellationRecord.id };
+      supabase.functions.invoke("send-cancellation-notification-traveler", { body: notificationBody })
+        .catch((e: unknown) => console.error("Error enviando email viajero:", e));
+      supabase.functions.invoke("send-cancellation-notification-agency", { body: notificationBody })
+        .catch((e: unknown) => console.error("Error enviando email agencia:", e));
+
+      return ok({
+        success: true,
+        cancellation_id: cancellationRecord.id,
+        refund_amount: 0,
+        policy_type: "unpaid_withdrawal",
+      });
+    }
+
     // Fetch platform commission rate
     const { data: platformSettings } = await supabase
       .from("platform_settings")

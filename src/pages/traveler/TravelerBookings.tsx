@@ -791,6 +791,11 @@ const TravelerBookings: React.FC = () => {
     cancellationFormPersistence.setIsRestoring(true);
     setTimeout(() => cancellationFormPersistence.setIsRestoring(false), 100);
 
+    if (booking.payment_status !== 'succeeded') {
+      setCancellationModal(prev => ({ ...prev, isCalculating: false }));
+      return;
+    }
+
     try {
       const { data: fullBooking, error } = await supabase
         .from('bookings')
@@ -837,9 +842,11 @@ const TravelerBookings: React.FC = () => {
   };
 
   const handleCancelBooking = async () => {
-    if (!cancellationModal.booking || !cancellationModal.policy || !user?.id) return;
+    const isUnpaid = cancellationModal.booking?.payment_status !== 'succeeded';
+    if (!cancellationModal.booking || !user?.id) return;
+    if (!isUnpaid && !cancellationModal.policy) return;
 
-    if (!cancellationModal.acceptPolicy) {
+    if (!isUnpaid && !cancellationModal.acceptPolicy) {
       setCancellationModal(prev => ({
         ...prev,
         error: 'Debes aceptar la política de cancelación para continuar',
@@ -3054,6 +3061,72 @@ const TravelerBookings: React.FC = () => {
                     <div className="flex justify-center py-8">
                       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
                     </div>
+                  ) : (cancellationModal.booking as any).payment_status !== 'succeeded' ? (
+                    <>
+                      <div className="mb-6">
+                        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+                          <div className="flex items-start">
+                            <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+                            <p className="text-sm text-blue-800 font-medium">
+                              Esta reserva no ha sido pagada todavía. Se cancelará sin ningún cargo.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Motivo de cancelación (opcional)
+                          </label>
+                          <textarea
+                            value={cancellationModal.cancellationReason}
+                            onChange={(e) => setCancellationModal(prev => ({
+                              ...prev,
+                              cancellationReason: e.target.value
+                            }))}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            placeholder="¿Por qué deseas cancelar esta reserva?"
+                            disabled={cancellationModal.isCancelling}
+                          />
+                        </div>
+
+                        {cancellationModal.error && (
+                          <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-3">
+                            <div className="flex items-start">
+                              <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+                              <p className="text-sm text-red-800">{cancellationModal.error}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <button
+                          onClick={handleCloseCancellationModal}
+                          className="btn btn-outline flex-1"
+                          disabled={cancellationModal.isCancelling}
+                        >
+                          Mantener Mi Reserva
+                        </button>
+                        <button
+                          onClick={handleCancelBooking}
+                          className="btn bg-red-600 hover:bg-red-700 text-white flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={cancellationModal.isCancelling}
+                        >
+                          {cancellationModal.isCancelling ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                              Procesando...
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="h-4 w-4 mr-2" />
+                              Cancelar Reserva
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </>
                   ) : cancellationModal.policy ? (
                     <>
                       <div className="mb-6">
