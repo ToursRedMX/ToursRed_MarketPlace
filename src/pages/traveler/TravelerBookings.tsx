@@ -173,6 +173,7 @@ const TravelerBookings: React.FC = () => {
     error: string;
     success: boolean;
     refundAmount: number;
+    installmentsPaid: number;
   }>({
     open: false,
     booking: null,
@@ -186,6 +187,7 @@ const TravelerBookings: React.FC = () => {
     error: '',
     success: false,
     refundAmount: 0,
+    installmentsPaid: 0,
   });
 
   const [paymentModal, setPaymentModal] = useState<{
@@ -1020,27 +1022,43 @@ const TravelerBookings: React.FC = () => {
       error: '',
       success: false,
       refundAmount: 0,
+      installmentsPaid: 0,
     });
 
     try {
-      const { data: travelersData, error } = await supabase
-        .from('booking_travelers')
-        .select('id, nombre, categoria_viajero, precio_aplicado, promo_discount_per_traveler')
-        .eq('booking_id', booking.id)
-        .eq('is_cancelled', false)
-        .order('created_at', { ascending: true });
+      const [travelersRes, installmentsRes] = await Promise.all([
+        supabase
+          .from('booking_travelers')
+          .select('id, nombre, categoria_viajero, precio_aplicado, promo_discount_per_traveler')
+          .eq('booking_id', booking.id)
+          .eq('is_cancelled', false)
+          .order('created_at', { ascending: true }),
+        (booking as any).has_payment_plan
+          ? supabase
+              .from('booking_payment_plan_installments')
+              .select('amount_paid, status')
+              .eq('booking_id', booking.id)
+              .in('status', ['paid', 'partially_paid'])
+              .gt('installment_number', 1)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
 
-      if (error) throw error;
+      if (travelersRes.error) throw travelersRes.error;
+
+      const installmentsPaid = (installmentsRes.data || []).reduce(
+        (sum: number, inst: any) => sum + Number(inst.amount_paid), 0
+      );
 
       setPartialCancellationModal(prev => ({
         ...prev,
-        travelers: (travelersData || []).map((t: any) => ({
+        travelers: (travelersRes.data || []).map((t: any) => ({
           id: t.id,
           nombre: t.nombre,
           categoria_viajero: t.categoria_viajero,
           precio_aplicado: Number(t.precio_aplicado),
           promo_discount_per_traveler: Number(t.promo_discount_per_traveler) || 0,
         })),
+        installmentsPaid,
         isCalculating: false,
       }));
     } catch (err: any) {
@@ -1066,6 +1084,7 @@ const TravelerBookings: React.FC = () => {
       error: '',
       success: false,
       refundAmount: 0,
+      installmentsPaid: 0,
     });
   };
 
@@ -3493,7 +3512,8 @@ const TravelerBookings: React.FC = () => {
                                   const b = partialCancellationModal.booking!;
                                   const totalPrice = Number((b as any).total_price) || 0;
                                   const depositAmount = Number((b as any).deposit_amount) || totalPrice;
-                                  const ratio = totalPrice > 0 ? depositAmount / totalPrice : 1;
+                                  const totalPaid = depositAmount + (partialCancellationModal.installmentsPaid || 0);
+                                  const ratio = totalPrice > 0 ? totalPaid / totalPrice : 1;
                                   const anticipo = Math.round(Number(traveler.precio_aplicado) * ratio * 100) / 100;
                                   const hasPromo = Number((traveler as any).promo_discount_per_traveler) > 0;
                                   return (

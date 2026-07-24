@@ -146,12 +146,12 @@ Deno.serve(async (req: Request) => {
     if ((booking as any).has_payment_plan) {
       const { data: installments } = await supabase
         .from("booking_payment_plan_installments")
-        .select("amount, status")
+        .select("amount_paid, status")
         .eq("booking_id", bookingId)
         .in("status", ["paid", "partially_paid"])
         .gt("installment_number", 1);
       const installmentsPaid = (installments || []).reduce(
-        (sum: number, inst: any) => sum + Number(inst.amount),
+        (sum: number, inst: any) => sum + Number(inst.amount_paid),
         0
       );
       totalPrincipalPaid = depositAmount + installmentsPaid;

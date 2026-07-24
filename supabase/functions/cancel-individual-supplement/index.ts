@@ -143,15 +143,28 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Revert membership_exemption_used
     const exemptionUsed = Number(supplement.membership_exemption_used) || 0;
     if (exemptionUsed > 0) {
       try {
-        await serviceClient.rpc("revert_membership_exemption", {
-          p_user_id: user.id,
-          p_amount: exemptionUsed,
-          p_period: "monthly",
-        });
+        const { data: activeMembership } = await serviceClient
+          .from("memberships")
+          .select("id, service_fee_exemption_used")
+          .eq("user_id", user.id)
+          .neq("status", "expired")
+          .gt("current_period_end", new Date().toISOString())
+          .order("current_period_end", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (activeMembership) {
+          const currentUsed = Number(activeMembership.service_fee_exemption_used) || 0;
+          const newUsed = Math.max(0, currentUsed - exemptionUsed);
+          await serviceClient
+            .from("memberships")
+            .update({
+              service_fee_exemption_used: newUsed,
+            })
+            .eq("id", activeMembership.id);
+        }
       } catch (exemptionErr) {
         console.error("Error revirtiendo exención de membresía (no crítico):", exemptionErr);
       }
