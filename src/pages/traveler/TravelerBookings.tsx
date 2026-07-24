@@ -401,7 +401,7 @@ const TravelerBookings: React.FC = () => {
             : Promise.resolve({ data: [], error: null }),
           supabase
             .from('booking_partial_cancellations')
-            .select('id, booking_id, travellers_cancelled, original_partial_amount, insurance_refund_amount, refund_amount_to_traveler, cancelled_at')
+            .select('id, booking_id, travelers_cancelled, original_partial_amount, insurance_refund_amount, refund_amount_to_traveler, cancelled_at')
             .in('booking_id', ids),
         ]);
 
@@ -967,7 +967,7 @@ const TravelerBookings: React.FC = () => {
     let cancelledPrecioAplicadoSum = 0;
     let totalPrincipalRefunded = 0;
     for (const pc of partialCancs) {
-      const travelers = Array.isArray(pc.travellers_cancelled) ? pc.travellers_cancelled : [];
+      const travelers = Array.isArray(pc.travelers_cancelled) ? pc.travelers_cancelled : [];
       for (const t of travelers) {
         cancelledPrecioAplicadoSum += Number(t.precio_aplicado) || 0;
       }
@@ -984,7 +984,7 @@ const TravelerBookings: React.FC = () => {
 
     const cancelledTravelerNames: string[] = [];
     for (const pc of partialCancs) {
-      const travelers = Array.isArray(pc.travellers_cancelled) ? pc.travellers_cancelled : [];
+      const travelers = Array.isArray(pc.travelers_cancelled) ? pc.travelers_cancelled : [];
       for (const t of travelers) {
         if (t.nombre) cancelledTravelerNames.push(t.nombre);
       }
