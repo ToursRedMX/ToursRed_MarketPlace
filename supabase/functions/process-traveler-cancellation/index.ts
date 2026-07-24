@@ -157,6 +157,8 @@ Deno.serve(async (req: Request) => {
           refund_processed: false,
           cancellation_reason: cancellation_reason || null,
           service_charge_refunded_amount: 0,
+          insurance_refund_amount: 0,
+          optional_services_refund_amount: 0,
         })
         .select()
         .single();
@@ -377,6 +379,8 @@ Deno.serve(async (req: Request) => {
         refund_processed: refundAmountToTraveler > 0,
         cancellation_reason: cancellation_reason || null,
         service_charge_refunded_amount: 0,
+        insurance_refund_amount: insuranceRefund,
+        optional_services_refund_amount: optionalServicesRefundable,
       })
       .select()
       .single();

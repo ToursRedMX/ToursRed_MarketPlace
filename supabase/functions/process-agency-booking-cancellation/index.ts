@@ -241,6 +241,8 @@ Deno.serve(async (req: Request) => {
         cancelled_by_agency: true,
         agency_cancellation_reason: cancellation_reason || "Cancelación por agencia",
         service_charge_refunded_amount: originalServiceCharge + optionalServicesServiceCharge,
+        insurance_refund_amount: insuranceRefund,
+        optional_services_refund_amount: optionalServicesRefundable,
       })
       .select()
       .single();

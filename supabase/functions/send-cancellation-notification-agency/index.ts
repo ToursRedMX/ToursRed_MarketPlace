@@ -138,6 +138,12 @@ Deno.serve(async (req: Request) => {
           policyDescription = 'El viajero canceló una reserva que aún estaba pendiente de su aprobación. No se había realizado ningún pago.';
           paymentInfo = 'No había pago asociado a esta reserva.';
           break;
+        case 'unpaid_withdrawal':
+          policyTitle = 'Reserva Cancelada (Sin Pago)';
+          policyColor = '#6b7280';
+          policyDescription = 'El viajero retiró una reserva que no había sido pagada.';
+          paymentInfo = 'No había pago asociado a esta reserva.';
+          break;
       }
     }
 

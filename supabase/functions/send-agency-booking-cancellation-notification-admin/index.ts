@@ -92,6 +92,8 @@ Deno.serve(async (req: Request) => {
     const bookingDateTime = formatDateTime(booking.created_at);
     const refundAmount = Number(cancellation.refund_amount_to_traveler || 0);
     const serviceCharge = Number(booking.service_charge || 0);
+    const insuranceRefundAmount = Number(cancellation.insurance_refund_amount || 0);
+    const optionalServicesRefundAmount = Number(cancellation.optional_services_refund_amount || 0);
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -209,12 +211,24 @@ Deno.serve(async (req: Request) => {
                 <table width="100%" style="border-collapse: collapse;">
                   <tr>
                     <td style="padding: 8px 0; color: #854d0e; font-size: 14px; border-bottom: 1px solid #fde68a;">Anticipo original:</td>
-                    <td style="padding: 8px 0; color: #854d0e; font-size: 14px; font-weight: 600; text-align: right; border-bottom: 1px solid #fde68a;">$${Number(booking.deposit_amount || 0).toFixed(2)}</td>
+                    <td style="padding: 8px 0; color: #854d0e; font-size: 14px; font-weight: 600; text-align: right; border-bottom: 1px solid #fde68a;">${Number(booking.deposit_amount || 0).toFixed(2)}</td>
                   </tr>
                   <tr>
-                    <td style="padding: 8px 0; color: #854d0e; font-size: 14px; border-bottom: 1px solid #fde68a;">Cargo por servicio (no reembolsable):</td>
-                    <td style="padding: 8px 0; color: #854d0e; font-size: 14px; font-weight: 600; text-align: right; border-bottom: 1px solid #fde68a;">$${serviceCharge.toFixed(2)}</td>
+                    <td style="padding: 8px 0; color: #854d0e; font-size: 14px; border-bottom: 1px solid #fde68a;">Cargo por servicio reembolsado:</td>
+                    <td style="padding: 8px 0; color: #854d0e; font-size: 14px; font-weight: 600; text-align: right; border-bottom: 1px solid #fde68a;">${serviceCharge.toFixed(2)}</td>
                   </tr>
+                  ${insuranceRefundAmount > 0 ? `
+                  <tr>
+                    <td style="padding: 8px 0; color: #854d0e; font-size: 14px; border-bottom: 1px solid #fde68a;">Seguro de viaje reembolsado:</td>
+                    <td style="padding: 8px 0; color: #854d0e; font-size: 14px; font-weight: 600; text-align: right; border-bottom: 1px solid #fde68a;">${insuranceRefundAmount.toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
+                  ${optionalServicesRefundAmount > 0 ? `
+                  <tr>
+                    <td style="padding: 8px 0; color: #854d0e; font-size: 14px; border-bottom: 1px solid #fde68a;">Servicios opcionales reembolsados:</td>
+                    <td style="padding: 8px 0; color: #854d0e; font-size: 14px; font-weight: 600; text-align: right; border-bottom: 1px solid #fde68a;">${optionalServicesRefundAmount.toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
                   <tr>
                     <td style="padding: 12px 0 8px 0; color: #10b981; font-size: 15px; font-weight: bold;">Reembolsado al viajero (ToursRed Cash):</td>
                     <td style="padding: 12px 0 8px 0; color: #10b981; font-size: 18px; font-weight: bold; text-align: right;">$${refundAmount.toFixed(2)}</td>
@@ -223,10 +237,7 @@ Deno.serve(async (req: Request) => {
                     <td style="padding: 8px 0; color: #dc2626; font-size: 14px; font-weight: bold; border-top: 2px solid #fde68a;">Comisión NO pagada a la agencia:</td>
                     <td style="padding: 8px 0; color: #dc2626; font-size: 14px; font-weight: bold; text-align: right; border-top: 2px solid #fde68a;">$${Number(booking.commission_amount || 0).toFixed(2)}</td>
                   </tr>
-                  <tr>
-                    <td style="padding: 8px 0; color: #16a34a; font-size: 14px; font-weight: bold;">Cargo por servicio retenido por plataforma:</td>
-                    <td style="padding: 8px 0; color: #16a34a; font-size: 14px; font-weight: bold; text-align: right;">$${serviceCharge.toFixed(2)}</td>
-                  </tr>
+
                 </table>
               </div>
 
@@ -250,7 +261,7 @@ Deno.serve(async (req: Request) => {
 
               <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
                 <p style="color: #1e40af; font-size: 13px; line-height: 1.6; margin: 0;">
-                  <strong>📌 Nota Importante:</strong> Esta cancelación fue iniciada por la agencia, no por el viajero. El viajero ha recibido un reembolso completo del 100% en ToursRed Cash. Los cargos por servicio fueron cobrados por Stripe y no son reembolsables. La agencia NO recibirá comisión por esta reserva.
+                  <strong>📌 Nota Importante:</strong> Esta cancelación fue iniciada por la agencia, no por el viajero. El viajero ha recibido un reembolso completo del 100% en ToursRed Cash, incluyendo anticipo, cargo por servicio, seguro y servicios opcionales. La agencia NO recibirá comisión por esta reserva.
                 </p>
               </div>
 

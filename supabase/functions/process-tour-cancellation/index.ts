@@ -198,6 +198,8 @@ Deno.serve(async (req: Request) => {
             cancelled_by_agency: true,
             cancellation_reason: `Cancelación de tour completo por agencia: ${cancellation_reason.trim()}`,
             service_charge_refunded_amount: originalServiceCharge + optionalServicesServiceCharge,
+            insurance_refund_amount: insuranceRefund,
+            optional_services_refund_amount: optionalServicesRefundable,
           })
           .select()
           .maybeSingle();

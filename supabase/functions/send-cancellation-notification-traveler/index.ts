@@ -128,6 +128,11 @@ Deno.serve(async (req: Request) => {
           policyColor = '#6b7280';
           policyBadge = 'Sin Cargos';
           break;
+        case 'unpaid_withdrawal':
+          policyTitle = 'Reserva Cancelada (Sin Pago)';
+          policyColor = '#6b7280';
+          policyBadge = 'Sin Cargos';
+          break;
       }
     }
 
@@ -253,8 +258,26 @@ Deno.serve(async (req: Request) => {
                 <table width="100%" style="border-collapse: collapse;">
                   <tr>
                     <td style="padding: 8px 0; color: #047857; font-size: 14px;">Anticipo original:</td>
-                    <td style="padding: 8px 0; color: #047857; font-size: 14px; font-weight: 600; text-align: right;">$${cancellation.original_deposit_amount.toFixed(2)}</td>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px; font-weight: 600; text-align: right;">${cancellation.original_deposit_amount.toFixed(2)}</td>
                   </tr>
+                  ${cancellation.service_charge_refunded_amount > 0 ? `
+                  <tr>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px;">Cargo por servicio reembolsado:</td>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px; font-weight: 600; text-align: right;">${cancellation.service_charge_refunded_amount.toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
+                  ${cancellation.insurance_refund_amount > 0 ? `
+                  <tr>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px;">Seguro de viaje reembolsado:</td>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px; font-weight: 600; text-align: right;">${cancellation.insurance_refund_amount.toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
+                  ${cancellation.optional_services_refund_amount > 0 ? `
+                  <tr>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px;">Servicios opcionales reembolsados:</td>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px; font-weight: 600; text-align: right;">${cancellation.optional_services_refund_amount.toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
                   <tr>
                     <td style="padding: 8px 0; color: #047857; font-size: 14px;">Reembolsado a ToursRed Cash:</td>
                     <td style="padding: 8px 0; color: #065f46; font-size: 18px; font-weight: bold; text-align: right;">$${cancellation.refund_amount_to_traveler.toFixed(2)}</td>

@@ -217,7 +217,7 @@ Deno.serve(async (req: Request) => {
 
               <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
                 <p style="color: #1e40af; font-size: 13px; line-height: 1.6; margin: 0;">
-                  <strong>📌 Nota Importante:</strong> Todos los viajeros han recibido un reembolso del 100% de su anticipo en ToursRed Cash. Los cargos por servicio no son reembolsables.
+                  <strong>📌 Nota Importante:</strong> Todos los viajeros han recibido un reembolso del 100% de su anticipo, cargo por servicio, seguro y servicios opcionales en ToursRed Cash. Las agencias no reciben comisión por tours cancelados.
                 </p>
               </div>
 

@@ -60,6 +60,14 @@ Deno.serve(async (req: Request) => {
 
     const currentBalance = wallet?.balance || 0;
 
+    const { data: cancellationRecord } = await supabase
+      .from("booking_cancellations")
+      .select("original_deposit_amount, service_charge_refunded_amount, insurance_refund_amount, optional_services_refund_amount, refund_amount_to_traveler")
+      .eq("booking_id", booking_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     const [{ data: emailSettings }, { data: platformSettingsData }] = await Promise.all([
       supabase.from("email_settings").select("*").single(),
       supabase.from("platform_settings").select("platform_url").maybeSingle(),
@@ -74,7 +82,11 @@ Deno.serve(async (req: Request) => {
     const recipientEmail = booking.user.email;
     const recipientName = `${booking.user.first_name} ${booking.user.last_name}`;
     const tourName = booking.tour.name;
-    const refundAmount = Number(booking.cancellation_refund_amount || 0);
+    const refundAmount = Number(cancellationRecord?.refund_amount_to_traveler || booking.cancellation_refund_amount || 0);
+    const originalDeposit = Number(cancellationRecord?.original_deposit_amount || 0);
+    const serviceChargeRefunded = Number(cancellationRecord?.service_charge_refunded_amount || 0);
+    const insuranceRefundAmount = Number(cancellationRecord?.insurance_refund_amount || 0);
+    const optionalServicesRefundAmount = Number(cancellationRecord?.optional_services_refund_amount || 0);
 
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
@@ -158,31 +170,43 @@ Deno.serve(async (req: Request) => {
               <div style="background-color: #ecfdf5; border: 2px solid #10b981; padding: 20px; margin: 30px 0; border-radius: 8px;">
                 <h3 style="color: #065f46; margin: 0 0 15px 0; font-size: 18px;">💰 Reembolso Procesado</h3>
                 <p style="color: #047857; font-size: 14px; line-height: 1.6; margin: 0 0 15px 0;">
-                  Como no fuiste responsable de esta cancelación, has recibido un <strong>reembolso del 100%</strong> de tu anticipo.
+                  Como no fuiste responsable de esta cancelación, has recibido un <strong>reembolso del 100%</strong> que incluye tu anticipo, cargo por servicio${insuranceRefundAmount > 0 ? ', seguro de viaje' : ''}${optionalServicesRefundAmount > 0 ? ' y servicios opcionales' : ''}.
                 </p>
                 <table width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="padding: 8px 0; color: #047857; font-size: 14px;">Anticipo original:</td>
-                    <td style="padding: 8px 0; color: #047857; font-weight: 600; text-align: right;">$${refundAmount.toFixed(2)}</td>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px; font-weight: 600; text-align: right;">${originalDeposit.toFixed(2)}</td>
                   </tr>
+                  ${serviceChargeRefunded > 0 ? `
+                  <tr>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px;">Cargo por servicio reembolsado:</td>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px; font-weight: 600; text-align: right;">${serviceChargeRefunded.toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
+                  ${insuranceRefundAmount > 0 ? `
+                  <tr>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px;">Seguro de viaje reembolsado:</td>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px; font-weight: 600; text-align: right;">${insuranceRefundAmount.toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
+                  ${optionalServicesRefundAmount > 0 ? `
+                  <tr>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px;">Servicios opcionales reembolsados:</td>
+                    <td style="padding: 8px 0; color: #047857; font-size: 14px; font-weight: 600; text-align: right;">${optionalServicesRefundAmount.toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
                   <tr>
                     <td style="padding: 8px 0; color: #047857; font-size: 14px;">Reembolsado a ToursRed Cash:</td>
-                    <td style="padding: 8px 0; color: #065f46; font-size: 18px; font-weight: bold; text-align: right;">$${refundAmount.toFixed(2)}</td>
+                    <td style="padding: 8px 0; color: #065f46; font-size: 18px; font-weight: bold; text-align: right;">${refundAmount.toFixed(2)}</td>
                   </tr>
                   <tr>
                     <td colspan="2" style="padding-top: 15px; border-top: 1px solid #10b981; margin-top: 10px;">
                       <p style="color: #047857; font-size: 14px; margin: 10px 0 0 0;">
-                        Tu nuevo balance de ToursRed Cash: <strong>$${currentBalance.toFixed(2)}</strong>
+                        Tu nuevo balance de ToursRed Cash: <strong>${currentBalance.toFixed(2)}</strong>
                       </p>
                     </td>
                   </tr>
                 </table>
-              </div>
-
-              <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; margin: 30px 0; border-radius: 4px;">
-                <p style="color: #92400e; font-size: 13px; line-height: 1.6; margin: 0;">
-                  <strong>Nota:</strong> El cargo por servicio de $${(booking.service_charge || 0).toFixed(2)} no es reembolsable ya que fue cobrado por Stripe al momento de la reserva.
-                </p>
               </div>
 
               <div style="background-color: #dbeafe; border: 2px solid #3b82f6; padding: 20px; margin: 30px 0; border-radius: 8px; text-align: center;">
