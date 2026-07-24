@@ -79,7 +79,7 @@ Deno.serve(async (req: Request) => {
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .select(`
-        id, status, total_price, deposit_amount, points_earned, agency_id,
+        id, status, user_id, total_price, deposit_amount, points_earned, agency_id,
         tours (id, name, start_date, cancellation_not_allowed),
         agencies (id, user_id)
       `)
