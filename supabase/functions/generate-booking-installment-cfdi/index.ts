@@ -284,16 +284,45 @@ Deno.serve(async (req: Request) => {
       .eq("id", booking.user_id)
       .maybeSingle();
 
-    // Total amount for this installment (including penalty if any)
-    const installmentTotal = parseFloat((Number(installment.amount_due) + Number(installment.penalty_applied)).toFixed(2));
+    // Load the specific transaction to get service_charge + principal amount.
+    // transaction_id is optional, so fall back to the latest completed allocation for this installment.
+    let transaction: { amount: number; service_charge: number } | null = null;
+    if (transaction_id) {
+      const { data: txnRow } = await supabase
+        .from("booking_payment_plan_transactions")
+        .select("amount, service_charge")
+        .eq("id", transaction_id)
+        .maybeSingle();
+      transaction = txnRow as { amount: number; service_charge: number } | null;
+    }
+    if (!transaction) {
+      const { data: allocRow } = await supabase
+        .from("booking_payment_plan_transaction_allocations")
+        .select("transaction_id")
+        .eq("installment_id", installment_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (allocRow) {
+        const { data: txnRow } = await supabase
+          .from("booking_payment_plan_transactions")
+          .select("amount, service_charge")
+          .eq("id", allocRow.transaction_id)
+          .maybeSingle();
+        transaction = txnRow as { amount: number; service_charge: number } | null;
+      }
+    }
+    const txnAmount = transaction ? Number(transaction.amount) : Number(installment.amount_due);
+    const txnServiceCharge = transaction ? Number(transaction.service_charge) : 0;
+    const penaltyAmount = Number(installment.penalty_applied) || 0;
+
     const r6 = (n: number) => Math.round(n * 1000000) / 1000000;
 
-    const exactTotal = installmentTotal;
-    const iva = Math.round(exactTotal * 16 / 116 * 100) / 100;
-    const subtotal = Math.round((exactTotal - iva) * 100) / 100;
-    const total = exactTotal;
-
-    const precioTourBruto = r6(installmentTotal / 1.16);
+    // Recalcular subtotal / iva / total desde la suma real de los conceptos (principal + penalidad + cargo)
+    const conceptosTotal = txnAmount + penaltyAmount + txnServiceCharge;
+    const iva = Math.round(conceptosTotal * 16 / 116 * 100) / 100;
+    const subtotal = Math.round((conceptosTotal - iva) * 100) / 100;
+    const total = conceptosTotal;
 
     // Receptor logic (same rules as generate-booking-cfdi)
     const fullName = [traveler?.first_name, traveler?.last_name].filter(Boolean).join(" ").trim();
@@ -341,20 +370,48 @@ Deno.serve(async (req: Request) => {
       };
     }
 
+    // Build up to 3 separate concepts: principal (agency third-party), penalty (agency), service charge (ToursRed direct)
     const tourName = tour?.name || "";
     const bookingCode = booking.booking_code ?? booking.id;
     const serie = settings.cfdi_serie_installment || "AI";
 
-    const conceptos: CfdiConcepto[] = [
-      {
+    const conceptos: CfdiConcepto[] = [];
+
+    // Concepto 1 — Parcialidad (principal, CON tercero = agencia)
+    const principalBruto = r6(txnAmount / 1.16);
+    conceptos.push({
+      clave_prod_serv: "90121500",
+      cantidad: 1,
+      clave_unidad: "E48",
+      descripcion: `${installment.label}: ${tourName} (Reserva ${bookingCode}) - Parcialidad ${installment.installment_number}`,
+      valor_unitario: principalBruto,
+      tercero: terceroAgencia,
+    });
+
+    // Concepto 2 — Penalización por pago tardío (CON tercero = agencia), solo si hubo penalidad
+    if (penaltyAmount > 0) {
+      const penaltyBruto = r6(penaltyAmount / 1.16);
+      conceptos.push({
         clave_prod_serv: "90121500",
         cantidad: 1,
         clave_unidad: "E48",
-        descripcion: `${installment.label}: ${tourName} (Reserva ${bookingCode}) - Parcialidad ${installment.installment_number}`,
-        valor_unitario: precioTourBruto,
+        descripcion: `Penalización por pago tardío - ${tourName} (Reserva ${bookingCode}) - Parcialidad ${installment.installment_number}`,
+        valor_unitario: penaltyBruto,
         tercero: terceroAgencia,
-      },
-    ];
+      });
+    }
+
+    // Concepto 3 — Cargo de servicio (SIN tercero, ingreso directo de ToursRed), solo si hubo cargo
+    if (txnServiceCharge > 0) {
+      const serviceBruto = r6(txnServiceCharge / 1.16);
+      conceptos.push({
+        clave_prod_serv: "81141600",
+        cantidad: 1,
+        clave_unidad: "E48",
+        descripcion: `Cargo por servicio de plataforma (Reserva ${bookingCode}) - Parcialidad ${installment.installment_number}`,
+        valor_unitario: serviceBruto,
+      });
+    }
 
     const cfdiRequest: CfdiRequest = {
       tipo_de_comprobante: "I",

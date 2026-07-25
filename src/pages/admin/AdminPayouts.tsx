@@ -738,7 +738,9 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
         const { data: penalties } = await penaltyQuery;
 
         const commissionTotal = data?.reduce((sum, r) => sum + Number(r.agency_net_amount), 0) || 0;
-        const platformCommissionTotal = data?.reduce((sum, r) => sum + Number(r.agency_commission_amount), 0) || 0;
+        const platformCommissionFromBookings = data?.reduce((sum, r) => sum + Number(r.agency_commission_amount), 0) || 0;
+        const platformCommissionFromPenalties = slotId ? 0 : (penalties?.reduce((sum, r) => sum + Number(r.platform_amount), 0) || 0);
+        const platformCommissionTotal = platformCommissionFromBookings + platformCommissionFromPenalties;
         const totalTourPrice = data?.reduce((sum, r) => sum + Number(r.total_tour_price), 0) || 0;
         const penaltyTotal = slotId ? 0 : (penalties?.reduce((sum, r) => sum + Number(r.agency_net_amount), 0) || 0);
 
@@ -746,7 +748,7 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
           records: data,
           penalties: slotId ? [] : (penalties || []),
           totalAmount: commissionTotal + penaltyTotal,
-          commissionTotal, platformCommissionTotal, totalTourPrice, penaltyTotal,
+          commissionTotal, platformCommissionTotal, platformCommissionFromBookings, platformCommissionFromPenalties, totalTourPrice, penaltyTotal,
           recordsCount: data?.length || 0,
           penaltiesCount: slotId ? 0 : (penalties?.length || 0),
           agencyName: data?.[0]?.agencies?.name || penalties?.[0]?.agencies?.name || '',
@@ -897,8 +899,14 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
                   )}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">Comisión retenida por ToursRed</span>
-                    <span className="font-semibold text-blue-700">− {formatCurrency(paymentDetails.platformCommissionTotal)}</span>
+                    <span className="font-semibold text-blue-700">− {formatCurrency(paymentDetails.platformCommissionFromBookings)}</span>
                   </div>
+                  {paymentDetails.platformCommissionFromPenalties > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Comisión sobre penalizaciones</span>
+                      <span className="font-semibold text-blue-700">− {formatCurrency(paymentDetails.platformCommissionFromPenalties)}</span>
+                    </div>
+                  )}
                   <div className="border-t border-gray-300 pt-2 flex items-center justify-between text-sm">
                     <span className="font-medium text-gray-700">Neto a pagar</span>
                     <span className="font-bold text-green-700">{formatCurrency(paymentDetails.commissionTotal)}</span>
