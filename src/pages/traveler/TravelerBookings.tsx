@@ -57,7 +57,8 @@ const TravelerBookings: React.FC = () => {
     open: boolean;
     booking: Booking | null;
     activeTab: 'mis_suplementos' | 'disponibles';
-  }>({ open: false, booking: null, activeTab: 'mis_suplementos' });
+    cancelQty: Record<string, number>;
+  }>({ open: false, booking: null, activeTab: 'mis_suplementos', cancelQty: {} });
   const [supplementDirectPayModal, setSupplementDirectPayModal] = useState<{
     open: boolean;
     bookingSupplement: any | null;
@@ -1027,8 +1028,11 @@ const TravelerBookings: React.FC = () => {
     }
   };
 
-  const handleCancelIndividualSupplement = async (bookingId: string, supplementId: string, supplementName: string) => {
-    if (!confirm(`¿Cancelar "${supplementName}"? El reembolso irá a tu ToursRed Cash.`)) return;
+  const handleCancelIndividualSupplement = async (bookingId: string, supplementId: string, supplementName: string, quantityToCancel?: number) => {
+    const cancelMsg = quantityToCancel
+      ? `¿Cancelar ${quantityToCancel} unidad(es) de "${supplementName}"? El reembolso irá a tu ToursRed Cash.`
+      : `¿Cancelar "${supplementName}"? El reembolso irá a tu ToursRed Cash.`;
+    if (!confirm(cancelMsg)) return;
     setCancelingSupplementId(supplementId);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -1041,7 +1045,7 @@ const TravelerBookings: React.FC = () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ booking_id: bookingId, booking_supplement_id: supplementId }),
+          body: JSON.stringify({ booking_id: bookingId, booking_supplement_id: supplementId, quantity_to_cancel: quantityToCancel }),
         }
       );
       const data = await response.json();
@@ -1718,7 +1722,7 @@ const TravelerBookings: React.FC = () => {
       .eq('user_id', user!.id)
       .maybeSingle();
 
-    setSupplementsModal(prev => ({ ...prev, open: false }));
+    setSupplementsModal(prev => ({ ...prev, open: false, cancelQty: {} }));
     setSupplementDirectPayModal({
       open: true,
       bookingSupplement: bs,
@@ -1818,7 +1822,7 @@ const TravelerBookings: React.FC = () => {
   const handleOpenSupplementsModal = (booking: Booking) => {
     const hasRequested = (bookingSupplements[booking.id] || []).length > 0;
     const activeTab = hasRequested ? 'mis_suplementos' : 'disponibles';
-    setSupplementsModal({ open: true, booking, activeTab });
+    setSupplementsModal({ open: true, booking, activeTab, cancelQty: {} });
   };
 
   const refreshExtrasModalBos = async (bookingId: string) => {
@@ -4667,18 +4671,54 @@ const TravelerBookings: React.FC = () => {
                                   </button>
                                 )}
                                 {bs.status === 'paid' && bs.tour_supplements?.is_cancellable && (booking.status === 'confirmed' || booking.status === 'pending') && (
-                                  <button
-                                    onClick={() => handleCancelIndividualSupplement(booking.id, bs.id, bs.tour_supplements?.name || 'Suplemento')}
-                                    disabled={cancelingSupplementId === bs.id}
-                                    className="mt-2 text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded border border-red-200 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-                                  >
-                                    {cancelingSupplementId === bs.id ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                    {Number(bs.quantity) > 1 ? (
+                                      <>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => setSupplementsModal(prev => ({
+                                              ...prev,
+                                              cancelQty: { ...prev.cancelQty, [bs.id]: Math.max(1, (prev.cancelQty[bs.id] || 1) - 1) }
+                                            }))}
+                                            className="w-7 h-7 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100"
+                                          >-</button>
+                                          <span className="text-sm font-semibold w-6 text-center">{supplementsModal.cancelQty[bs.id] || 1}</span>
+                                          <button
+                                            onClick={() => setSupplementsModal(prev => ({
+                                              ...prev,
+                                              cancelQty: { ...prev.cancelQty, [bs.id]: Math.min(Number(bs.quantity), (prev.cancelQty[bs.id] || 1) + 1) }
+                                            }))}
+                                            className="w-7 h-7 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100"
+                                          >+</button>
+                                        </div>
+                                        <button
+                                          onClick={() => handleCancelIndividualSupplement(booking.id, bs.id, bs.tour_supplements?.name || 'Suplemento', supplementsModal.cancelQty[bs.id] || 1)}
+                                          disabled={cancelingSupplementId === bs.id}
+                                          className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded border border-red-200 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                        >
+                                          {cancelingSupplementId === bs.id ? (
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                          ) : (
+                                            <XCircle className="h-3 w-3" />
+                                          )}
+                                          Cancelar {supplementsModal.cancelQty[bs.id] || 1}
+                                        </button>
+                                      </>
                                     ) : (
-                                      <XCircle className="h-3 w-3" />
+                                      <button
+                                        onClick={() => handleCancelIndividualSupplement(booking.id, bs.id, bs.tour_supplements?.name || 'Suplemento')}
+                                        disabled={cancelingSupplementId === bs.id}
+                                        className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded border border-red-200 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                      >
+                                        {cancelingSupplementId === bs.id ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <XCircle className="h-3 w-3" />
+                                        )}
+                                        Cancelar
+                                      </button>
                                     )}
-                                    Cancelar
-                                  </button>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -4722,7 +4762,7 @@ const TravelerBookings: React.FC = () => {
                                 </div>
                                 <button
                                   onClick={() => {
-                                    setSupplementsModal(prev => ({ ...prev, open: false }));
+                                    setSupplementsModal(prev => ({ ...prev, open: false, cancelQty: {} }));
                                     handleOpenSupplementRequest(booking, ts);
                                   }}
                                   className="btn btn-sm bg-teal-600 text-white hover:bg-teal-700 text-xs px-3 flex items-center gap-1 flex-shrink-0"

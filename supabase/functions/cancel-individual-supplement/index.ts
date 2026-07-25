@@ -1,3 +1,4 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.108.2";
 
 const corsHeaders = {
@@ -34,7 +35,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { booking_id, booking_supplement_id } = await req.json();
+    const { booking_id, booking_supplement_id, quantity_to_cancel } = await req.json();
     if (!booking_id || !booking_supplement_id) {
       return new Response(JSON.stringify({ error: "Faltan parámetros: booking_id y booking_supplement_id son requeridos" }), {
         status: 400,
@@ -44,12 +45,11 @@ Deno.serve(async (req: Request) => {
 
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Load the supplement row with its parent tour_supplements
     const { data: supplement, error: suppError } = await serviceClient
       .from("booking_supplements")
       .select(`
         id, booking_id, tour_supplement_id, quantity, unit_price, service_charge,
-        membership_exemption_used, total_paid, status, points_earned,
+        membership_exemption_used, total_paid, status, points_earned, cfdi_invoice_id,
         tour_supplements (id, name, is_cancellable)
       `)
       .eq("id", booking_supplement_id)
@@ -70,10 +70,30 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Verify booking ownership
+    const currentQuantity = Number(supplement.quantity) || 1;
+
+    let qtyToCancel: number | null = null;
+    if (quantity_to_cancel !== undefined && quantity_to_cancel !== null) {
+      qtyToCancel = Number(quantity_to_cancel);
+      if (!Number.isInteger(qtyToCancel) || qtyToCancel <= 0) {
+        return new Response(JSON.stringify({ error: "quantity_to_cancel debe ser un entero positivo" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (qtyToCancel > currentQuantity) {
+        return new Response(JSON.stringify({ error: "quantity_to_cancel no puede exceder la cantidad actual" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    const isFullCancel = qtyToCancel === null || qtyToCancel === currentQuantity;
+
     const { data: booking, error: bookingError } = await serviceClient
       .from("bookings")
-      .select("id, user_id, status, tours (name), agencies (id, user_id)")
+      .select("id, user_id, status, tours (name), agencies (id, user_id, rfc, razon_social, regimen_fiscal, codigo_postal_fiscal)")
       .eq("id", booking_id)
       .maybeSingle();
 
@@ -99,11 +119,51 @@ Deno.serve(async (req: Request) => {
     }
 
     const isCancellable = (supplement as any).tour_supplements?.is_cancellable === true;
-    const refundAmount = isCancellable ? Number(supplement.total_paid) : 0;
     const supplementName = (supplement as any).tour_supplements?.name || "Suplemento";
     const tourName = (booking as any).tours?.name || "Tour";
 
-    // Refund to ToursRed Cash wallet (only total_paid, never service_charge)
+    const oldTotalPaid = Number(supplement.total_paid) || 0;
+    const oldServiceCharge = Number(supplement.service_charge) || 0;
+    const unitPrice = Number(supplement.unit_price) || 0;
+
+    let refundAmount: number;
+    let updatePayload: Record<string, any>;
+    const exemptionUsedTotal = Number(supplement.membership_exemption_used) || 0;
+
+    if (isFullCancel) {
+      refundAmount = isCancellable ? oldTotalPaid : 0;
+      updatePayload = {
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: "traveler",
+        refund_amount: refundAmount,
+        updated_at: new Date().toISOString(),
+      };
+    } else {
+      const effectiveQty = qtyToCancel!;
+      const unitTotalPaid = currentQuantity > 0 ? oldTotalPaid / currentQuantity : 0;
+      const unitServiceCharge = currentQuantity > 0 ? oldServiceCharge / currentQuantity : 0;
+      const newQuantity = currentQuantity - effectiveQty;
+
+      refundAmount = isCancellable ? Math.round(unitTotalPaid * effectiveQty * 100) / 100 : 0;
+      const newTotalPaid = Math.round(unitTotalPaid * newQuantity * 100) / 100;
+      const newServiceCharge = Math.round(unitServiceCharge * newQuantity * 100) / 100;
+      const willBeZero = newQuantity === 0;
+
+      updatePayload = {
+        quantity: newQuantity,
+        total_paid: newTotalPaid,
+        service_charge: newServiceCharge,
+        refund_amount: refundAmount,
+        ...(willBeZero ? {
+          status: "cancelled",
+          cancelled_at: new Date().toISOString(),
+          cancelled_by: "traveler",
+        } : {}),
+        updated_at: new Date().toISOString(),
+      };
+    }
+
     let transactionId: string | null = null;
     if (refundAmount > 0) {
       const { data: refundData, error: refundError } = await serviceClient.rpc("update_wallet_balance", {
@@ -124,16 +184,9 @@ Deno.serve(async (req: Request) => {
       transactionId = refundData?.transaction_id || null;
     }
 
-    // Mark the supplement as cancelled
     const { error: updateError } = await serviceClient
       .from("booking_supplements")
-      .update({
-        status: "cancelled",
-        cancelled_at: new Date().toISOString(),
-        cancelled_by: "traveler",
-        refund_amount: refundAmount,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", booking_supplement_id);
 
     if (updateError) {
@@ -146,31 +199,33 @@ Deno.serve(async (req: Request) => {
     const exemptionUsed = Number(supplement.membership_exemption_used) || 0;
     if (exemptionUsed > 0) {
       try {
-        const { data: activeMembership } = await serviceClient
-          .from("memberships")
-          .select("id, service_fee_exemption_used")
-          .eq("user_id", user.id)
-          .neq("status", "expired")
-          .gt("current_period_end", new Date().toISOString())
-          .order("current_period_end", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (activeMembership) {
-          const currentUsed = Number(activeMembership.service_fee_exemption_used) || 0;
-          const newUsed = Math.max(0, currentUsed - exemptionUsed);
-          await serviceClient
+        const exemptionToRevert = isFullCancel
+          ? exemptionUsed
+          : Math.round(exemptionUsed * (qtyToCancel! / currentQuantity) * 100) / 100;
+        if (exemptionToRevert > 0) {
+          const { data: activeMembership } = await serviceClient
             .from("memberships")
-            .update({
-              service_fee_exemption_used: newUsed,
-            })
-            .eq("id", activeMembership.id);
+            .select("id, service_fee_exemption_used")
+            .eq("user_id", user.id)
+            .neq("status", "expired")
+            .gt("current_period_end", new Date().toISOString())
+            .order("current_period_end", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (activeMembership) {
+            const currentUsed = Number(activeMembership.service_fee_exemption_used) || 0;
+            const newUsed = Math.max(0, currentUsed - exemptionToRevert);
+            await serviceClient
+              .from("memberships")
+              .update({ service_fee_exemption_used: newUsed })
+              .eq("id", activeMembership.id);
+          }
         }
       } catch (exemptionErr) {
         console.error("Error revirtiendo exención de membresía (no crítico):", exemptionErr);
       }
     }
 
-    // Deduct points (1 peso = 1 punto)
     const pointsEarned = Number(supplement.points_earned) || 0;
     if (pointsEarned > 0 && refundAmount > 0) {
       try {
@@ -187,7 +242,63 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Notify the agency in-app
+    // CFDI handling: cancel CFDI (motivo 03) for total, credit note for partial
+    const cfdiInvoiceId = supplement.cfdi_invoice_id as string | null;
+    if (cfdiInvoiceId && refundAmount > 0) {
+      try {
+        const { data: cfdiRow } = await serviceClient
+          .from("cfdi_invoices")
+          .select("id, uuid_fiscal, status")
+          .eq("id", cfdiInvoiceId)
+          .maybeSingle();
+
+        if (cfdiRow && cfdiRow.status === "stamped" && cfdiRow.uuid_fiscal) {
+          if (isFullCancel) {
+            // Total cancellation: cancel CFDI with motivo "03"
+            EdgeRuntime.waitUntil(
+              (async () => {
+                try {
+                  await serviceClient.functions.invoke("cancel-cfdi", {
+                    body: { cfdi_invoice_id: cfdiInvoiceId, motivo: "03" },
+                  });
+                } catch (cancelErr) {
+                  console.error("Error cancelling supplement CFDI (no crítico):", cancelErr);
+                }
+              })()
+            );
+          } else {
+            // Partial cancellation: generate credit note (tipo E, tipo_relacion "01")
+            const agency = (booking as any).agencies;
+            const terceroAgencia = agency?.rfc && agency?.codigo_postal_fiscal
+              ? {
+                  rfc: agency.rfc,
+                  nombre: agency.razon_social || supplementName,
+                  regimen_fiscal: agency.regimen_fiscal || "601",
+                  domicilio_fiscal: agency.codigo_postal_fiscal,
+                }
+              : null;
+
+            EdgeRuntime.waitUntil(
+              serviceClient.functions.invoke("generate-credit-note-for-item-cancellation", {
+                body: {
+                  booking_id,
+                  user_id: user.id,
+                  refund_amount: refundAmount,
+                  item_description: `Suplemento: ${supplementName} — ${tourName}`,
+                  related_cfdi_invoice_id: cfdiInvoiceId,
+                  related_cfdi_uuid: cfdiRow.uuid_fiscal,
+                  item_type: "supplement",
+                  tercero_agencia: terceroAgencia,
+                },
+              }).catch((err: any) => console.error("Credit note generation failed (no crítico):", err))
+            );
+          }
+        }
+      } catch (cfdiLookupErr) {
+        console.error("Error looking up supplement CFDI (no crítico):", cfdiLookupErr);
+      }
+    }
+
     try {
       const agencyUserId = (booking as any).agencies?.user_id;
       if (agencyUserId) {

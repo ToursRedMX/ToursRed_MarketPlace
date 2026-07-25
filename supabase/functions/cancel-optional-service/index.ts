@@ -209,8 +209,6 @@ Deno.serve(async (req: Request) => {
         const exemptionToRevert = isFullCancel
           ? exemptionUsedTotal
           : Math.round(exemptionUsedTotal * (qtyToCancel! / currentQuantity) * 100) / 100;
-          )
-          )
         if (exemptionToRevert > 0) {
           const { data: activeMembership } = await serviceClient
             .from("memberships")
@@ -250,6 +248,100 @@ Deno.serve(async (req: Request) => {
         }
       } catch (pointsErr) {
         console.error("Error descontando puntos (no crítico):", pointsErr);
+      }
+    }
+
+    // CFDI handling — cancel CFDI (motivo 03) for total with own CFDI, credit note for partial/bundled
+    if (refundAmount > 0) {
+      try {
+        // Check if this optional service has its own CFDI (generated via generate-optional-service-cfdi)
+        const { data: ownCfdi } = await serviceClient
+          .from("cfdi_invoices")
+          .select("id, uuid_fiscal, status")
+          .eq("booking_optional_service_id", booking_optional_service_id)
+          .eq("status", "stamped")
+          .maybeSingle();
+
+        if (ownCfdi && ownCfdi.uuid_fiscal) {
+          if (isFullCancel) {
+            // Total cancellation of an optional with its own CFDI: cancel with motivo "03"
+            EdgeRuntime.waitUntil(
+              (async () => {
+                try {
+                  await serviceClient.functions.invoke("cancel-cfdi", {
+                    body: { cfdi_invoice_id: ownCfdi.id, motivo: "03" },
+                  });
+                } catch (cancelErr) {
+                  console.error("Error cancelling optional service CFDI (no crítico):", cancelErr);
+                }
+              })()
+            );
+          } else {
+            // Partial cancellation: generate credit note (tipo E, tipo_relacion "01")
+            const agency = (booking as any).agencies;
+            const terceroAgencia = agency?.rfc && agency?.codigo_postal_fiscal
+              ? {
+                  rfc: agency.rfc,
+                  nombre: agency.razon_social || serviceName,
+                  regimen_fiscal: agency.regimen_fiscal || "601",
+                  domicilio_fiscal: agency.codigo_postal_fiscal,
+                }
+              : null;
+
+            EdgeRuntime.waitUntil(
+              serviceClient.functions.invoke("generate-credit-note-for-item-cancellation", {
+                body: {
+                  booking_id,
+                  user_id: user.id,
+                  refund_amount: refundAmount,
+                  item_description: `Servicio opcional: ${serviceName} — ${tourName}`,
+                  related_cfdi_invoice_id: ownCfdi.id,
+                  related_cfdi_uuid: ownCfdi.uuid_fiscal,
+                  item_type: "optional_service",
+                  tercero_agencia: terceroAgencia,
+                },
+              }).catch((err: any) => console.error("Credit note generation failed (no crítico):", err))
+            );
+          }
+        } else {
+          // No own CFDI — it's bundled in the booking deposit CFDI. Generate credit note referencing that.
+          const { data: depositCfdi } = await serviceClient
+            .from("cfdi_invoices")
+            .select("id, uuid_fiscal, status")
+            .eq("booking_id", booking_id)
+            .eq("invoice_type", "booking")
+            .eq("status", "stamped")
+            .maybeSingle();
+
+          if (depositCfdi && depositCfdi.uuid_fiscal) {
+            const agency = (booking as any).agencies;
+            const terceroAgencia = agency?.rfc && agency?.codigo_postal_fiscal
+              ? {
+                  rfc: agency.rfc,
+                  nombre: agency.razon_social || serviceName,
+                  regimen_fiscal: agency.regimen_fiscal || "601",
+                  domicilio_fiscal: agency.codigo_postal_fiscal,
+                }
+              : null;
+
+            EdgeRuntime.waitUntil(
+              serviceClient.functions.invoke("generate-credit-note-for-item-cancellation", {
+                body: {
+                  booking_id,
+                  user_id: user.id,
+                  refund_amount: refundAmount,
+                  item_description: `Servicio opcional: ${serviceName} — ${tourName}`,
+                  related_cfdi_invoice_id: depositCfdi.id,
+                  related_cfdi_uuid: depositCfdi.uuid_fiscal,
+                  item_type: "optional_service",
+                  tercero_agencia: terceroAgencia,
+                },
+              }).catch((err: any) => console.error("Credit note generation failed (no crítico):", err))
+            );
+          }
+        }
+      } catch (cfdiErr) {
+        console.error("Error in CFDI handling for optional service cancellation (no crítico):", cfdiErr);
       }
     }
 

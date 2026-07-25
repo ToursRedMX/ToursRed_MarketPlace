@@ -423,6 +423,16 @@ Deno.serve(async (req: Request) => {
       console.error("Error enviando emails de cancelación parcial (no crítico):", emailError);
     }
 
+    // 10. Substitute CFDIs for partial cancellation (fire and forget, async)
+    // Recalculates Tour/Seguro concepts on existing stamped CFDIs to reflect the new
+    // active traveler count, generates sustituto CFDIs (tipo_relacion "04"), then
+    // cancels the originals (motivo "01").
+    EdgeRuntime.waitUntil(
+      supabase.functions.invoke("substitute-cfdi-for-partial-cancellation", {
+        body: { booking_id: bookingId, partial_cancellation_id: partialCancellation.id },
+      }).catch((err: any) => console.error("Error substituting CFDIs (no crítico):", err))
+    );
+
     return ok({
       success: true,
       partial_cancellation_id: partialCancellation.id,
