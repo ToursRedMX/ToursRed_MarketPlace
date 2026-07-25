@@ -102,7 +102,7 @@ async function facturapiStamp(
   if (request.related_documents && request.related_documents.length > 0) {
     body.related_documents = request.related_documents.map((rd) => ({
       relationship: rd.relationship,
-      cfdi_uuids: rd.cfdi_uuids,
+      documents: rd.cfdi_uuids,
     }));
   }
 
