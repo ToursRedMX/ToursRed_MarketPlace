@@ -196,6 +196,7 @@ Deno.serve(async (req: Request) => {
           p_description: `Pago de reserva para ${(booking as any).tours?.name || "tour"}`,
           p_reference_id: booking_id,
           p_reference_type: "booking",
+          p_idempotency_key: `${booking_id}_charge_booking`,
         });
 
         if (walletError) {

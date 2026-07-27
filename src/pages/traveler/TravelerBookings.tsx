@@ -1386,7 +1386,8 @@ const TravelerBookings: React.FC = () => {
               p_type: 'debit',
               p_description: `Pago de reserva para ${booking.tours?.name}`,
               p_reference_id: booking.id,
-              p_reference_type: 'booking'
+              p_reference_type: 'booking',
+              p_idempotency_key: `${booking.id}_charge_booking`
             }
           );
 

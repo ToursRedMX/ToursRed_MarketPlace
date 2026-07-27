@@ -603,7 +603,8 @@ const TravelersInfoPage: React.FC = () => {
               p_type: 'debit',
               p_description: `Pago de reserva para ${tour?.name}`,
               p_reference_id: bookingId,
-              p_reference_type: 'booking'
+              p_reference_type: 'booking',
+              p_idempotency_key: `${bookingId}_charge_booking`
             }
           );
 

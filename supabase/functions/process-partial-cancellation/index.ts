@@ -246,6 +246,7 @@ Deno.serve(async (req: Request) => {
     let transactionId: string | null = null;
 
     // 1. Refund to wallet (server-calculated amount, not client-supplied)
+    const partialCancellationId = crypto.randomUUID();
     if (policy.refundAmountToTraveler > 0) {
       const tourName = tour.name;
       const { data: refundData, error: refundError } = await supabase.rpc("update_wallet_balance", {
@@ -255,6 +256,7 @@ Deno.serve(async (req: Request) => {
         p_description: `Reembolso por cancelación parcial de ${tourName}`,
         p_reference_id: bookingId,
         p_reference_type: "booking_partial_cancellation",
+        p_idempotency_key: partialCancellationId,
       });
 
       if (refundError) return err("Error al procesar reembolso: " + refundError.message);
@@ -265,6 +267,7 @@ Deno.serve(async (req: Request) => {
     const { data: partialCancellation, error: insertError } = await supabase
       .from("booking_partial_cancellations")
       .insert({
+        id: partialCancellationId,
         booking_id: bookingId,
         cancelled_by_user_id: user.id,
         tour_start_date: tour.start_date,

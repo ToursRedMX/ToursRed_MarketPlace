@@ -278,7 +278,7 @@ Deno.serve(async (req: Request) => {
                 p_reference_type: "tour_cancellation",
               });
               if (deductErr) console.error("Error deducting points (tour cancellation):", deductErr);
-              else await markPointsAsClawedBack(supabase, booking.id, bookingCancellationRecord?.id || null, "tour_cancellation");
+              else await markPointsAsClawedBack(supabase, booking.id, bookingCancellationRecord?.id || null, "administrativa");
             } catch (e: unknown) {
               console.error("Exception deducting points (tour cancellation):", e);
             }

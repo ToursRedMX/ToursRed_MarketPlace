@@ -169,7 +169,7 @@ Deno.serve(async (req: Request) => {
     const bookingCode = booking.booking_code ?? booking.id;
 
     // Helper: consume exemption, award points, create transaction + allocations
-    const finalizePayment = async (provider: string, providerTransactionId: string | null) => {
+    const finalizePayment = async (provider: string, providerTransactionId: string | null, presetTxId?: string) => {
       // Exemption already consumed atomically by apply_membership_service_fee_exemption RPC above
 
       // Calculate points earned (actual award happens after txRecord creation)
@@ -190,6 +190,7 @@ Deno.serve(async (req: Request) => {
       const { data: txRecord, error: txError } = await supabase
         .from("booking_payment_plan_transactions")
         .insert({
+          ...(presetTxId ? { id: presetTxId } : {}),
           plan_id,
           booking_id: booking.id,
           user_id: user.id,
@@ -386,6 +387,7 @@ Deno.serve(async (req: Request) => {
         }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      const installmentTxId = crypto.randomUUID();
       const { error: walletError } = await supabase.rpc("update_wallet_balance", {
         p_user_id: user.id,
         p_amount: -totalToPay,
@@ -393,6 +395,7 @@ Deno.serve(async (req: Request) => {
         p_description: `Abono a plan de pago: ${tourName} (${bookingCode})`,
         p_reference_id: plan_id,
         p_reference_type: "payment_plan",
+        p_idempotency_key: installmentTxId,
       });
 
       if (walletError) {
@@ -402,7 +405,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const { pointsEarned } = await finalizePayment("toursred_cash", null);
+      const { pointsEarned } = await finalizePayment("toursred_cash", null, installmentTxId);
       return new Response(JSON.stringify({
         success: true,
         amount_paid: effectiveAmount,

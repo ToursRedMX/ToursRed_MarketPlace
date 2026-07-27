@@ -427,6 +427,7 @@ Deno.serve(async (req: Request) => {
         p_description: `${type === "insurance" ? "Seguro de viaje" : `Servicio extra: ${itemName}`} - Reserva ${booking_id.slice(0, 8).toUpperCase()}`,
         p_reference_id: bookingOptionalServiceId || booking_id,
         p_reference_type: type === "optional_service" ? "optional_service_payment" : "insurance_payment",
+        p_idempotency_key: `${bookingOptionalServiceId || booking_id}_charge`,
       });
 
       if (walletError) {

@@ -362,6 +362,7 @@ Deno.serve(async (req: Request) => {
         p_description: `Reembolso por cancelacion de slot: ${tourName} - ${slot.slot_date}`,
         p_reference_id: booking.id,
         p_reference_type: "slot_cancellation",
+        p_idempotency_key: `${booking.id}_refund_slot_cancel`,
       });
 
       await adminClient

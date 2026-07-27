@@ -173,6 +173,7 @@ Deno.serve(async (req: Request) => {
         p_description: `Reembolso por cancelación de "${supplementName}" en ${tourName}`,
         p_reference_id: supplement.id,
         p_reference_type: "supplement_cancellation",
+        p_idempotency_key: `${supplement.id}_refund`,
       });
 
       if (refundError) {

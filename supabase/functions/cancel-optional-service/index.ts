@@ -179,6 +179,7 @@ Deno.serve(async (req: Request) => {
         p_description: `Reembolso por cancelación de "${serviceName}" en ${tourName}`,
         p_reference_id: optService.id,
         p_reference_type: "optional_service_cancellation",
+        p_idempotency_key: `${optService.id}_refund`,
       });
 
       if (refundError) {

@@ -577,6 +577,7 @@ Deno.serve(async (req: Request) => {
           p_description: `Reembolso por rechazo de reagendado de slot`,
           p_reference_id: booking_id,
           p_reference_type: "slot_reschedule_rejection",
+          p_idempotency_key: `${rescheduleResponse.id}_refund_slot_reschedule`,
         });
 
         if (refundError) throw refundError;

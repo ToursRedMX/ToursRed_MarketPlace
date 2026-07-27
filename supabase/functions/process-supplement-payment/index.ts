@@ -316,6 +316,7 @@ Deno.serve(async (req: Request) => {
         p_description: `Suplemento: ${supplementName} (${suppReq.quantity}x $${Number(suppReq.unit_price).toFixed(2)})`,
         p_reference_id: booking_supplement_id,
         p_reference_type: "supplement_payment",
+        p_idempotency_key: `${booking_supplement_id}_charge`,
       });
 
       if (walletError) {

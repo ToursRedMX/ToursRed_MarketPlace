@@ -254,7 +254,8 @@ Deno.serve(async (req: Request) => {
           p_type: "refund",
           p_description: `Reembolso por reagendamiento rechazado - ${booking.tour.name}`,
           p_reference_id: booking_id,
-          p_reference_type: "reschedule_rejection"
+          p_reference_type: "reschedule_rejection",
+          p_idempotency_key: `${rescheduleResponse.id}_refund_reschedule`
         }
       );
 

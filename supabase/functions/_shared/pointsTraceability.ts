@@ -50,7 +50,21 @@ export async function markPointsAsClawedBack(
 
     if (refEntries.length === 0) return;
 
-    // 2. Fetch all 'earned' points transactions for these reference_ids
+    // 2. Idempotency guard: skip if clawback records already exist for this booking + cancellation
+    const { data: existing, error: existingErr } = await supabase
+      .from("toursred_points_transactions")
+      .select("id")
+      .eq("type", "clawback")
+      .in("reference_id", refEntries.map((e) => e.reference_id))
+      .limit(1);
+    if (existingErr) {
+      console.error("markPointsAsClawedBack idempotency check error:", existingErr);
+    }
+    if (existing && existing.length > 0) {
+      return;
+    }
+
+    // 3. Fetch all 'earned' points transactions for these reference_ids
     const referenceIds = refEntries.map((e) => e.reference_id);
     const { data: earnedTx, error: earnedErr } = await supabase
       .from("toursred_points_transactions")

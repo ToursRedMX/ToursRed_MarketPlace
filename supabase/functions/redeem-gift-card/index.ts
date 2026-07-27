@@ -224,6 +224,7 @@ Deno.serve(async (req: Request) => {
         p_description: `Tarjeta de regalo canjeada: ${giftCard.code}`,
         p_reference_id: giftCard.id,
         p_reference_type: "gift_card",
+        p_idempotency_key: giftCard.id,
       });
 
       if (updateBalanceError) {

@@ -949,6 +949,7 @@ Deno.serve(async (req) => {
                       p_description: `Aplicado a reserva #${bookingId}`,
                       p_reference_id: bookingId,
                       p_reference_type: 'booking',
+                      p_idempotency_key: `${bookingId}_charge_booking`,
                     });
 
                     if (walletError) {

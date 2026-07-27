@@ -276,7 +276,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (pointsDeducted > 0) {
-      await markPointsAsClawedBack(supabase, booking_id, cancellationRecord.id, "agency_cancellation");
+      await markPointsAsClawedBack(supabase, booking_id, cancellationRecord.id, "administrativa");
     }
 
     // Update booking status

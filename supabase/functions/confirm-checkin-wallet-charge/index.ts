@@ -193,14 +193,16 @@ Deno.serve(async (req: Request) => {
       .eq("id", otpRecord.id);
 
     // 2. Descontar del wallet del viajero
+    const checkinChargeId = crypto.randomUUID();
     const { data: walletResult, error: walletError } = await supabase
       .rpc("update_wallet_balance", {
         p_user_id: booking.user_id,
         p_amount: -totalToDeduct,
         p_type: "debit",
-        p_description: `Cobro en check-in por ${(booking.agency as any)?.name || 'agencia'} - $${amountToCharge.toFixed(2)} + cargo servicio $${netServiceCharge.toFixed(2)}`,
+        p_description: `Cobro en check-in por ${(booking.agency as any)?.name || 'agencia'} - ${amountToCharge.toFixed(2)} + cargo servicio ${netServiceCharge.toFixed(2)}`,
         p_reference_id: booking_id,
         p_reference_type: "booking_checkin_charge",
+        p_idempotency_key: checkinChargeId,
       });
 
     if (walletError) {
@@ -289,6 +291,7 @@ Deno.serve(async (req: Request) => {
     const { data: checkinChargeRecord } = await supabase
       .from("wallet_checkin_charges")
       .insert({
+        id: checkinChargeId,
         booking_id,
         amount_charged: amountToCharge,
         service_charge_applied: grossServiceCharge,

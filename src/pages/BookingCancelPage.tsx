@@ -57,7 +57,8 @@ const BookingCancelPage: React.FC = () => {
           p_type: 'credit',
           p_description: `Reembolso de reserva cancelada #${booking.booking_code}`,
           p_reference_id: id,
-          p_reference_type: 'booking_refund'
+          p_reference_type: 'booking_refund',
+          p_idempotency_key: `${id}_refund_cancel`
         });
 
         if (cashError) {
