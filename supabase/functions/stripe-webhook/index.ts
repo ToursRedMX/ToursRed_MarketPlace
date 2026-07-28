@@ -2076,7 +2076,8 @@ Deno.serve(async (req) => {
               p_type: 'credit',
               p_description: `Reembolso de reserva expirada #${booking.booking_code}`,
               p_reference_id: bookingId,
-              p_reference_type: 'booking_refund'
+              p_reference_type: 'booking_refund',
+              p_idempotency_key: `${bookingId}_refund_booking`
             });
             console.log(`Refunded ${toursRedCashUsed} MXN ToursRed Cash for expired booking`);
           }
@@ -2149,7 +2150,8 @@ Deno.serve(async (req) => {
               p_type: 'credit',
               p_description: `Reembolso de reserva fallida #${booking.booking_code}`,
               p_reference_id: bookingId,
-              p_reference_type: 'booking_refund'
+              p_reference_type: 'booking_refund',
+              p_idempotency_key: `${bookingId}_refund_booking`
             });
             console.log(`Refunded ${toursRedCashUsed} MXN ToursRed Cash for failed booking`);
           }
