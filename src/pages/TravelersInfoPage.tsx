@@ -592,160 +592,20 @@ const TravelersInfoPage: React.FC = () => {
       if (amountToCharge <= 0) {
         console.log('💰 Procesando pago con puntos y/o ToursRed Cash...');
 
-        // PRIMERO: Descontar ToursRed Cash usando la función que actualiza el saldo
-        if (toursRedCashUsed > 0) {
-          console.log(`💵 Descontando ${toursRedCashUsed} MXN de ToursRed Cash...`);
-          const { data: walletResult, error: walletError } = await supabase.rpc(
-            'update_wallet_balance',
-            {
-              p_user_id: user?.id,
-              p_amount: -toursRedCashUsed, // Negativo para restar del saldo
-              p_type: 'debit',
-              p_description: `Pago de reserva para ${tour?.name}`,
-              p_reference_id: bookingId,
-              p_reference_type: 'booking',
-              p_idempotency_key: `${bookingId}_charge_booking`
-            }
-          );
-
-          if (walletError) {
-            console.error('❌ Error descontando ToursRed Cash del monedero:', walletError);
-            throw new Error(`Error al procesar el pago con ToursRed Cash: ${walletError.message}`);
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
+          'confirm_booking_paid_with_wallet',
+          {
+            p_booking_id: bookingId,
+            p_points_to_use: pointsUsed,
+            p_cash_to_use: toursRedCashUsed,
+            p_idempotency_key: `${bookingId}_charge_booking`
           }
+        );
 
-          console.log('✅ ToursRed Cash descontado exitosamente:', walletResult);
-        }
-
-        // SEGUNDO: Descontar puntos del monedero manualmente
-        if (pointsUsed > 0) {
-          console.log(`🎯 Descontando ${pointsUsed} puntos del monedero...`);
-
-          try {
-            const { data: wallet, error: walletError } = await supabase
-              .from('toursred_points_wallets')
-              .select('id, balance, total_used')
-              .eq('user_id', user?.id)
-              .single();
-
-            if (walletError || !wallet) {
-              throw new Error('No se encontró la billetera de puntos');
-            }
-
-            const newBalance = wallet.balance - pointsUsed;
-            const newTotalUsed = wallet.total_used + pointsUsed;
-
-            const { error: updateWalletError } = await supabase
-              .from('toursred_points_wallets')
-              .update({
-                balance: newBalance,
-                total_used: newTotalUsed,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', wallet.id);
-
-            if (updateWalletError) {
-              throw new Error(`Error al actualizar wallet: ${updateWalletError.message}`);
-            }
-
-            const { error: txError } = await supabase
-              .from('toursred_points_transactions')
-              .insert({
-                wallet_id: wallet.id,
-                user_id: user?.id,
-                amount: -pointsUsed,
-                balance_after: newBalance,
-                type: 'redeemed',
-                description: 'Puntos canjeados en reserva',
-                reference_id: bookingId,
-                reference_type: 'booking'
-              });
-
-            if (txError) {
-              console.error('Error creando transacción de puntos:', txError);
-            }
-
-            console.log(`✅ Puntos descontados del monedero`);
-          } catch (pointsError) {
-            console.error('Error al canjear puntos:', pointsError);
-            throw new Error(`Error al canjear puntos: ${pointsError instanceof Error ? pointsError.message : String(pointsError)}`);
-          }
-        }
-
-        // TERCERO: Calcular beneficio de membresía si aplica (ANTES de actualizar)
-        let membershipBenefitData: any = {};
-        try {
-          const { data: bookingWithDetails } = await supabase
-            .from('bookings')
-            .select('user_id, total_price, service_charge')
-            .eq('id', bookingId)
-            .single();
-
-          if (bookingWithDetails) {
-            const { data: membership } = await supabase
-              .from('memberships')
-              .select('id, service_fee_exemption_used')
-              .eq('user_id', bookingWithDetails.user_id)
-              .eq('status', 'active')
-              .maybeSingle();
-
-            if (membership) {
-              const { data: settings } = await supabase
-                .from('platform_settings')
-                .select('service_charge_percentage')
-                .maybeSingle();
-
-              const serviceChargeRate = settings?.service_charge_percentage || 5;
-              const fullServiceCharge = (bookingWithDetails.total_price * serviceChargeRate) / 100;
-              const actualServiceCharge = parseFloat(bookingWithDetails.service_charge || 0);
-              const exemptionUsed = fullServiceCharge - actualServiceCharge;
-
-              if (exemptionUsed > 0) {
-                await supabase
-                  .from('memberships')
-                  .update({
-                    service_fee_exemption_used: parseFloat(membership.service_fee_exemption_used) + exemptionUsed
-                  })
-                  .eq('id', membership.id);
-
-                membershipBenefitData = {
-                  used_membership_benefit: true,
-                  membership_service_fee_saved: exemptionUsed
-                };
-
-                console.log(`✅ Beneficio de membresía calculado: ${exemptionUsed} MXN`);
-              }
-            }
-          }
-        } catch (membershipError) {
-          console.error('Error procesando beneficio de membresía:', membershipError);
-        }
-
-        // CUARTO: Determinar el método de pago y actualizar la reserva (UN SOLO UPDATE)
-        let paymentMethod = 'toursred_points';
-        if (pointsUsed > 0 && toursRedCashUsed > 0) {
-          paymentMethod = 'toursred_points_cash';
-        } else if (toursRedCashUsed > 0) {
-          paymentMethod = 'toursred_cash';
-        }
-
-        console.log(`📝 Confirmando reserva con método de pago: ${paymentMethod}`);
-        const { error: updateError } = await supabase
-          .from('bookings')
-          .update({
-            payment_status: 'succeeded',
-            status: 'confirmed',
-            payment_method: paymentMethod,
-            paid_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            points_used: pointsUsed,
-            toursred_cash_used: toursRedCashUsed,
-            ...membershipBenefitData
-          })
-          .eq('id', bookingId);
-
-        if (updateError) {
-          console.error('❌ Error al confirmar la reserva:', updateError);
-          throw new Error(`Error al confirmar la reserva: ${updateError.message}`);
+        if (rpcError || !rpcResult || rpcResult.success !== true) {
+          const errMsg = rpcError?.message || rpcResult?.error || 'Error desconocido';
+          console.error('❌ Error en confirmación atómica de pago:', errMsg);
+          throw new Error(`Error al procesar el pago: ${errMsg}`);
         }
 
         console.log('✅ Reserva confirmada exitosamente');

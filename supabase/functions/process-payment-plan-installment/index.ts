@@ -431,11 +431,12 @@ Deno.serve(async (req: Request) => {
         }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      const installmentTxId = crypto.randomUUID();
       const { error: deductError } = await supabase.rpc("deduct_points", {
         p_user_id: user.id,
         p_amount: pointsNeeded,
         p_description: `Abono a plan de pago: ${tourName} (${bookingCode})`,
-        p_reference_id: plan_id,
+        p_reference_id: installmentTxId,
         p_reference_type: "payment_plan",
       });
 
@@ -446,7 +447,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      await finalizePayment("points", null);
+      await finalizePayment("points", null, installmentTxId);
       return new Response(JSON.stringify({
         success: true,
         points_used: pointsNeeded,

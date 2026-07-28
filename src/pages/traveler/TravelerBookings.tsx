@@ -1362,38 +1362,19 @@ const TravelerBookings: React.FC = () => {
 
       // Si el monto es 0 o menor, confirmar directamente
       if (amountToCharge <= 0) {
-        const { error: confirmError } = await supabase
-          .from('bookings')
-          .update({
-            payment_status: 'succeeded',
-            status: 'confirmed',
-            payment_method: 'toursred_cash',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', booking.id);
-
-        if (confirmError) {
-          throw new Error(`Error al confirmar la reserva: ${confirmError.message}`);
-        }
-
-        // Descontar ToursRed Cash del monedero
-        if (toursRedCashToUse > 0) {
-          const { error: walletError } = await supabase.rpc(
-            'update_wallet_balance',
-            {
-              p_user_id: user?.id,
-              p_amount: -toursRedCashToUse,
-              p_type: 'debit',
-              p_description: `Pago de reserva para ${booking.tours?.name}`,
-              p_reference_id: booking.id,
-              p_reference_type: 'booking',
-              p_idempotency_key: `${booking.id}_charge_booking`
-            }
-          );
-
-          if (walletError) {
-            throw new Error(`Error al procesar el pago con ToursRed Cash: ${walletError.message}`);
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
+          'confirm_booking_paid_with_wallet',
+          {
+            p_booking_id: booking.id,
+            p_points_to_use: 0,
+            p_cash_to_use: toursRedCashToUse,
+            p_idempotency_key: `${booking.id}_charge_booking`
           }
+        );
+
+        if (rpcError || !rpcResult || rpcResult.success !== true) {
+          const errMsg = rpcError?.message || rpcResult?.error || 'Error desconocido';
+          throw new Error(`Error al procesar el pago: ${errMsg}`);
         }
 
         // Enviar notificación por email a la agencia
