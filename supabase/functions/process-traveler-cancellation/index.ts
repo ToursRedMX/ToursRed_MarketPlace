@@ -393,7 +393,11 @@ Deno.serve(async (req: Request) => {
     // Bug 3 fix: deducir puntos — 1 peso = 1 punto, una sola llamada a deduct_points
     let pointsDeducted = 0;
     if (refundAmountToTraveler > 0) {
-      const pointsToDeduct = Math.floor(refundAmountToTraveler);
+      const { data: earnedPoints } = await supabase.rpc("get_earned_points_for_reference", {
+        p_reference_id: booking_id,
+        p_reference_type: "booking",
+      });
+      const pointsToDeduct = earnedPoints || 0;
       if (pointsToDeduct > 0) {
         try {
           const { error: deductErr } = await supabase.rpc("deduct_points", {

@@ -294,7 +294,11 @@ Deno.serve(async (req: Request) => {
     // points, so in non-prepare mode we deduct here.
     let pointsDeducted = 0;
     if (refund_method !== "original_payment_method" && !isPrepare) {
-      const pointsToDeduct = Math.floor(Number(refund_amount));
+      const { data: earnedPoints } = await supabase.rpc("get_earned_points_for_reference", {
+        p_reference_id: booking_id,
+        p_reference_type: "booking",
+      });
+      const pointsToDeduct = earnedPoints || 0;
       if (pointsToDeduct > 0) {
         try {
           const { error: deductErr } = await supabase.rpc("deduct_points", {

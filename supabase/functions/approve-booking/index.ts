@@ -182,6 +182,7 @@ Deno.serve(async (req: Request) => {
               : "toursred_points",
           paid_at: now,
           updated_at: now,
+          service_charge: 0,
         })
         .eq("id", booking_id);
 
@@ -223,7 +224,8 @@ Deno.serve(async (req: Request) => {
       }
 
       // Aplicar exención de membresía via RPC centralizado (atómico, FOR UPDATE)
-      if (!booking.used_membership_benefit) {
+      // Skip for 100% wallet payments — service charge is already $0
+      if (!autoConfirm && !booking.used_membership_benefit) {
         const { data: platformSettings } = await supabase
           .from("platform_settings")
           .select("service_charge_percentage")
@@ -266,17 +268,19 @@ Deno.serve(async (req: Request) => {
 
           for (const opt of unpaidOptionals) {
             if ((opt.total_paid || opt.subtotal) <= 0) continue;
-            const grossSvcCharge = Math.round((opt.subtotal * svcChargeRate / 100) * 100) / 100;
+            const grossSvcCharge = autoConfirm ? 0 : Math.round((opt.subtotal * svcChargeRate / 100) * 100) / 100;
             let optExemptionUsed = 0;
-            try {
-              const { data: optExemptResult } = await supabase
-                .rpc('apply_membership_service_fee_exemption', {
-                  p_user_id: booking.user_id,
-                  p_gross_service_charge: grossSvcCharge,
-                });
-              optExemptionUsed = parseFloat(optExemptResult?.exemption_applied ?? '0');
-            } catch (e) {
-              console.error(`Error applying exemption for optional ${opt.id} (approve-booking):`, e);
+            if (!autoConfirm) {
+              try {
+                const { data: optExemptResult } = await supabase
+                  .rpc('apply_membership_service_fee_exemption', {
+                    p_user_id: booking.user_id,
+                    p_gross_service_charge: grossSvcCharge,
+                  });
+                optExemptionUsed = parseFloat(optExemptResult?.exemption_applied ?? '0');
+              } catch (e) {
+                console.error(`Error applying exemption for optional ${opt.id} (approve-booking):`, e);
+              }
             }
 
             await supabase

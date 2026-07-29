@@ -151,11 +151,17 @@ Deno.serve(async (req: Request) => {
 
       itemName = service.name;
       subtotal = parseFloat((Number(service.price_per_person) * quantity).toFixed(2));
-      grossServiceCharge = parseFloat((subtotal * serviceChargePct / 100).toFixed(2));
-
-      const { data: exemptionResult } = await supabase.rpc("apply_membership_service_fee_exemption", { p_user_id: user.id, p_gross_service_charge: grossServiceCharge });
-      exemptionApplied = parseFloat(exemptionResult?.exemption_applied ?? "0");
-      netServiceCharge = parseFloat(exemptionResult?.net_service_charge ?? grossServiceCharge.toString());
+      const isWallet = payment_method === "toursred_cash" || payment_method === "points";
+      if (isWallet) {
+        grossServiceCharge = 0;
+        netServiceCharge = 0;
+        exemptionApplied = 0;
+      } else {
+        grossServiceCharge = parseFloat((subtotal * serviceChargePct / 100).toFixed(2));
+        const { data: exemptionResult } = await supabase.rpc("apply_membership_service_fee_exemption", { p_user_id: user.id, p_gross_service_charge: grossServiceCharge });
+        exemptionApplied = parseFloat(exemptionResult?.exemption_applied ?? "0");
+        netServiceCharge = parseFloat(exemptionResult?.net_service_charge ?? grossServiceCharge.toString());
+      }
       agencyCommission = parseFloat((subtotal * agencyCommissionPct / 100).toFixed(2));
       totalToPay = parseFloat((subtotal + netServiceCharge).toFixed(2));
 
@@ -218,11 +224,17 @@ Deno.serve(async (req: Request) => {
       const insuranceCost = parseFloat((pricePerDayPerTraveler * tourDays * totalTravelers).toFixed(2));
       itemName = "Seguro de asistencia de viaje";
       subtotal = insuranceCost;
-      grossServiceCharge = parseFloat((insuranceCost * serviceChargePct / 100).toFixed(2));
-
-      const { data: exemptionResult } = await supabase.rpc("apply_membership_service_fee_exemption", { p_user_id: user.id, p_gross_service_charge: grossServiceCharge });
-      exemptionApplied = parseFloat(exemptionResult?.exemption_applied ?? "0");
-      netServiceCharge = parseFloat(exemptionResult?.net_service_charge ?? grossServiceCharge.toString());
+      const isWallet = payment_method === "toursred_cash" || payment_method === "points";
+      if (isWallet) {
+        grossServiceCharge = 0;
+        netServiceCharge = 0;
+        exemptionApplied = 0;
+      } else {
+        grossServiceCharge = parseFloat((insuranceCost * serviceChargePct / 100).toFixed(2));
+        const { data: exemptionResult } = await supabase.rpc("apply_membership_service_fee_exemption", { p_user_id: user.id, p_gross_service_charge: grossServiceCharge });
+        exemptionApplied = parseFloat(exemptionResult?.exemption_applied ?? "0");
+        netServiceCharge = parseFloat(exemptionResult?.net_service_charge ?? grossServiceCharge.toString());
+      }
       totalToPay = parseFloat((insuranceCost + netServiceCharge).toFixed(2));
       // insurance commission is 0 (ToursRed keeps full amount)
       agencyCommission = 0;
@@ -247,7 +259,8 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (activeMembership) {
-        pointsEarned = Math.floor(subtotal);
+        const isWallet = payment_method === "toursred_cash" || payment_method === "points";
+        pointsEarned = isWallet ? Math.floor(subtotal) * 2 : Math.floor(subtotal);
         if (pointsEarned > 0) {
           const { data: walletId } = await supabase.rpc("get_or_create_points_wallet", { p_user_id: user.id });
           if (walletId) {

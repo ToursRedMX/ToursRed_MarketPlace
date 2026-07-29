@@ -254,7 +254,11 @@ Deno.serve(async (req: Request) => {
     // Deduct points — 1 peso = 1 punto
     let pointsDeducted = 0;
     if (refundAmount > 0) {
-      const pointsToDeduct = Math.floor(refundAmount);
+      const { data: earnedPoints } = await supabase.rpc("get_earned_points_for_reference", {
+        p_reference_id: booking_id,
+        p_reference_type: "booking",
+      });
+      const pointsToDeduct = earnedPoints || 0;
       if (pointsToDeduct > 0) {
         try {
           const { error: deductErr } = await supabase.rpc("deduct_points", {

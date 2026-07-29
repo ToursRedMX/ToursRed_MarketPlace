@@ -138,13 +138,23 @@ Deno.serve(async (req: Request) => {
     const serviceChargePct = platformSettings?.service_charge_percentage ?? 5;
     const supplementCommissionPct = platformSettings?.supplement_commission_percentage ?? 10;
     const subtotal = Number(suppReq.unit_price) * suppReq.quantity;
-    const grossServiceCharge = parseFloat((subtotal * serviceChargePct / 100).toFixed(2));
+    const isWalletPayment = payment_method === "toursred_cash" || payment_method === "points";
 
-    // Membership exemption via centralized RPC (atomic, FOR UPDATE locked)
-    const { data: exemptionResult } = await supabase
-      .rpc("apply_membership_service_fee_exemption", { p_user_id: user.id, p_gross_service_charge: grossServiceCharge });
-    const exemptionApplied = parseFloat(exemptionResult?.exemption_applied ?? "0");
-    const netServiceCharge = parseFloat(exemptionResult?.net_service_charge ?? grossServiceCharge.toString());
+    let grossServiceCharge: number;
+    let exemptionApplied = 0;
+    let netServiceCharge: number;
+
+    if (isWalletPayment) {
+      grossServiceCharge = 0;
+      netServiceCharge = 0;
+    } else {
+      grossServiceCharge = parseFloat((subtotal * serviceChargePct / 100).toFixed(2));
+      const { data: exemptionResult } = await supabase
+        .rpc("apply_membership_service_fee_exemption", { p_user_id: user.id, p_gross_service_charge: grossServiceCharge });
+      exemptionApplied = parseFloat(exemptionResult?.exemption_applied ?? "0");
+      netServiceCharge = parseFloat(exemptionResult?.net_service_charge ?? grossServiceCharge.toString());
+    }
+
     const supplementCommission = parseFloat((subtotal * supplementCommissionPct / 100).toFixed(2));
     const totalToPay = parseFloat((subtotal + netServiceCharge).toFixed(2));
 
@@ -164,7 +174,7 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (activeMembership) {
-        pointsEarned = Math.floor(subtotal);
+        pointsEarned = isWalletPayment ? Math.floor(subtotal) * 2 : Math.floor(subtotal);
         if (pointsEarned > 0) {
           const { data: walletId } = await supabase.rpc("get_or_create_points_wallet", { p_user_id: user.id });
           if (walletId) {

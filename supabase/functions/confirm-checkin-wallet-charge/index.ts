@@ -156,15 +156,11 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     const serviceChargePct = platformSettings?.service_charge_percentage ?? 5;
 
-    // Calcular cargos exactamente igual que en request
-    const grossServiceCharge = parseFloat((amountToCharge * serviceChargePct / 100).toFixed(2));
-
-    // Aplicar exención de membresía via RPC centralizado (atómico, FOR UPDATE)
-    const { data: exemptionResult } = await supabase
-      .rpc("apply_membership_service_fee_exemption", { p_user_id: booking.user_id, p_gross_service_charge: grossServiceCharge });
-    const exemptionApplied = parseFloat(exemptionResult?.exemption_applied ?? "0");
-    const netServiceCharge = parseFloat(exemptionResult?.net_service_charge ?? grossServiceCharge.toString());
-    const totalToDeduct = parseFloat((amountToCharge + netServiceCharge).toFixed(2));
+    // 100% wallet payment — service charge is $0 (wallet benefit, independent of membership)
+    const grossServiceCharge = 0;
+    const exemptionApplied = 0;
+    const netServiceCharge = 0;
+    const totalToDeduct = parseFloat(amountToCharge.toFixed(2));
 
     // Verificar saldo suficiente en el wallet
     const { data: wallet } = await supabase
@@ -229,7 +225,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (membership) {
-      pointsEarned = Math.floor(amountToCharge);
+      pointsEarned = Math.floor(amountToCharge) * 2;
 
       if (pointsEarned > 0) {
         // Obtener o crear billetera de puntos

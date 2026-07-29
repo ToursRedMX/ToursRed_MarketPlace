@@ -1031,6 +1031,10 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
 
   const totalToPayNow = amountAfterToursRedCash + membershipCost;
 
+  const isFullWalletPayment = totalToPayNow === 0 && totalTravelers > 0;
+  const effectiveServiceCharge = isFullWalletPayment ? 0 : serviceCharge;
+  const effectiveUserPayment = isFullWalletPayment ? userPayment - serviceCharge : userPayment;
+
   const agencyReceives = depositAmount - agencyCommission;
 
   const handleOptionalServiceChange = (serviceId: string, delta: number, service: TourOptionalService) => {
@@ -1141,8 +1145,8 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
         total_price: totalPrice,
         deposit_amount: effectiveDepositAmount,
         commission_amount: agencyCommission,
-        service_charge: serviceCharge,
-        user_payment: userPayment + extrasTotalWithServiceCharge + effectiveInsuranceCost + membershipCost,
+        service_charge: effectiveServiceCharge,
+        user_payment: effectiveUserPayment + extrasTotalWithServiceCharge + effectiveInsuranceCost + membershipCost,
         platform_revenue: platformRevenue,
         booking_date: isReceptivo && selectedSlot ? selectedSlot.slot_date : (isTransferCustomTime && selectedSlotDate ? selectedSlotDate.toISOString().split('T')[0] : tour.start_date),
         slot_id: isReceptivo && selectedSlot ? selectedSlot.id : null,
@@ -2561,7 +2565,10 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                       Vas a acumular ToursRed Points
                     </h4>
                     <p className="text-xs text-gray-700">
-                      Ganarás <span className="font-bold text-green-700">{Math.floor(userPayment + extrasTotalWithServiceCharge + effectiveInsuranceCost + membershipCost).toLocaleString()} puntos</span> con esta reserva
+                      Ganarás <span className="font-bold text-green-700">{(isFullWalletPayment && hasMembership ? Math.floor(effectiveUserPayment + extrasTotalWithServiceCharge + effectiveInsuranceCost + membershipCost) * 2 : Math.floor(userPayment + extrasTotalWithServiceCharge + effectiveInsuranceCost + membershipCost)).toLocaleString()} puntos</span> con esta reserva
+                      {isFullWalletPayment && hasMembership && (
+                        <span className="block mt-1 text-green-600 font-medium">Puntos dobles por pagar 100% con ToursRed Cash</span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -2958,6 +2965,27 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
               </div>
 
               {(() => {
+                if (isFullWalletPayment) {
+                  return (
+                    <>
+                      <div className="flex justify-between text-sm text-gray-600 mt-1">
+                        <span>Cargo por Servicio ({serviceChargePercentage}%):</span>
+                        <span className="font-medium line-through text-gray-400">{formatCurrencyMXN(fullServiceCharge)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span className="flex items-center">
+                          <Wallet className="h-3 w-3 mr-1" />
+                          Beneficio ToursRed Cash:
+                        </span>
+                        <span className="font-medium">-{formatCurrencyMXN(fullServiceCharge)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Cargo por Servicio (a pagar):</span>
+                        <span className="font-medium">$0</span>
+                      </div>
+                    </>
+                  );
+                }
                 const showCodeDiscount = isServiceFeeDiscount && serviceChargeDiscountAmount > 0;
                 const chargeFullyWaived = shouldWaiveServiceCharge && !hasReachedExemptionLimit && !showCodeDiscount;
                 const chargeFullyFreeByCode = showCodeDiscount && serviceChargeAfterCodeDiscount === 0;

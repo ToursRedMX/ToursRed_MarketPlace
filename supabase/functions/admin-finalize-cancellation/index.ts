@@ -156,7 +156,11 @@ Deno.serve(async (req: Request) => {
       (sum, r) => sum + Number(r.requested_amount || 0),
       0
     );
-    const pointsToDeduct = Math.floor(totalRefundAmount);
+    const { data: earnedPoints } = await serviceClient.rpc("get_earned_points_for_reference", {
+      p_reference_id: booking_id,
+      p_reference_type: "booking",
+    });
+    const pointsToDeduct = earnedPoints || 0;
     let pointsDeducted = 0;
     if (pointsToDeduct > 0) {
       try {
