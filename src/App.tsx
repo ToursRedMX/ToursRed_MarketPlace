@@ -137,6 +137,7 @@ import AdminTicketDetail from './pages/admin/AdminTicketDetail';
 import AdminSupportCategories from './pages/admin/AdminSupportCategories';
 import AdminSupportAgents from './pages/admin/AdminSupportAgents';
 import AdminAuditLog from './pages/admin/AdminAuditLog';
+import AdminOpenPayConciliation from './pages/admin/AdminOpenPayConciliation';
 import { useAuth } from './context/AuthContext';
 import { UserRole, supabase } from './lib/supabase';
 import MaintenanceGate from './components/MaintenanceGate';
@@ -764,6 +765,16 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
                 <AdminAuditLog />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin: OpenPay Conciliation */}
+          <Route
+            path="/admin/openpay-conciliacion"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <AdminOpenPayConciliation />
               </ProtectedRoute>
             }
           />

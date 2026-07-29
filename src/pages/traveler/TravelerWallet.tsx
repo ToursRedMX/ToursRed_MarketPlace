@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Wallet, TrendingUp, TrendingDown, Calendar, DollarSign, Gift, RefreshCw, Award, AlertCircle, ArrowUpCircle, ArrowDownCircle, Check, X, ArrowLeft } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Calendar, DollarSign, Gift, RefreshCw, Award, AlertCircle, ArrowUpCircle, ArrowDownCircle, Check, X, ArrowLeft, Plus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import OpenPayTopupModal from '../../components/OpenPayTopupModal';
+import OpenPayTopupHistory from '../../components/OpenPayTopupHistory';
 
 interface WalletInfo {
   id: string;
@@ -20,7 +22,7 @@ interface Transaction {
   id: string;
   amount: number;
   balance_after: number;
-  type: 'credit' | 'debit' | 'refund' | 'promotion' | 'gift_card' | 'adjustment';
+  type: 'credit' | 'debit' | 'refund' | 'promotion' | 'gift_card' | 'adjustment' | 'topup_spei' | 'topup_codi';
   description: string;
   reference_id: string | null;
   reference_type: string | null;
@@ -39,6 +41,7 @@ const TravelerWallet: React.FC = () => {
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemSuccess, setRedeemSuccess] = useState(false);
+  const [showTopupModal, setShowTopupModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -222,6 +225,10 @@ const TravelerWallet: React.FC = () => {
         return <Award className="h-5 w-5 text-accent-600" />;
       case 'gift_card':
         return <Gift className="h-5 w-5 text-purple-600" />;
+      case 'topup_spei':
+        return <ArrowUpCircle className="h-5 w-5 text-accent-600" />;
+      case 'topup_codi':
+        return <ArrowUpCircle className="h-5 w-5 text-blue-600" />;
       case 'adjustment':
         return <AlertCircle className="h-5 w-5 text-gray-600" />;
       default:
@@ -236,7 +243,9 @@ const TravelerWallet: React.FC = () => {
       refund: 'Reembolso',
       promotion: 'Bonificación',
       gift_card: 'Tarjeta de Regalo',
-      adjustment: 'Ajuste'
+      adjustment: 'Ajuste',
+      topup_spei: 'Recarga SPEI',
+      topup_codi: 'Recarga CoDi',
     };
     return labels[type] || type;
   };
@@ -335,26 +344,55 @@ const TravelerWallet: React.FC = () => {
           </div>
         </div>
 
-        {/* Gift Card Redeem Section */}
-        <div className="mb-8 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-md p-6 border border-purple-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="bg-purple-100 rounded-full p-3">
-                <Gift className="h-6 w-6 text-purple-600" />
+        {/* Add Balance Section */}
+        <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-gradient-to-br from-accent-50 to-orange-50 rounded-xl shadow-md p-6 border border-accent-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="bg-accent-100 rounded-full p-3">
+                  <Plus className="h-6 w-6 text-accent-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Agregar Saldo</h3>
+                  <p className="text-sm text-gray-600">Recarga via SPEI o CoDi (QR)</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">¿Tienes una Tarjeta de Regalo?</h3>
-                <p className="text-sm text-gray-600">Canjea tu código y agrega saldo a tu monedero</p>
-              </div>
+              <button
+                onClick={() => setShowTopupModal(true)}
+                className="px-6 py-3 bg-gradient-to-r from-accent-600 to-orange-600 text-white rounded-lg font-semibold hover:from-accent-700 hover:to-orange-700 transition-all shadow-md hover:shadow-lg"
+              >
+                Recargar
+              </button>
             </div>
-            <button
-              onClick={() => setShowRedeemModal(true)}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg"
-            >
-              Canjear Código
-            </button>
+          </div>
+
+          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-md p-6 border border-purple-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="bg-purple-100 rounded-full p-3">
+                  <Gift className="h-6 w-6 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">¿Tienes una Tarjeta de Regalo?</h3>
+                  <p className="text-sm text-gray-600">Canjea tu código y agrega saldo a tu monedero</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRedeemModal(true)}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg"
+              >
+                Canjear Código
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* OpenPay Topup Modal */}
+        <OpenPayTopupModal
+          isOpen={showTopupModal}
+          onClose={() => setShowTopupModal(false)}
+          onSuccess={loadWalletData}
+        />
 
         {/* Redeem Modal */}
         {showRedeemModal && (
@@ -449,6 +487,11 @@ const TravelerWallet: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Recharge History */}
+        <div className="mb-6">
+          <OpenPayTopupHistory />
+        </div>
 
         {/* Transaction History */}
         <div className="bg-white rounded-lg shadow-md">
@@ -558,7 +601,7 @@ const TravelerWallet: React.FC = () => {
             <div className="text-sm text-blue-800">
               <p className="font-semibold mb-1">Sobre ToursRed Cash</p>
               <p>
-                Tu monedero ToursRed Cash es donde recibes reembolsos por cancelaciones, bonificaciones promocionales y tarjetas de regalo.
+                Tu monedero ToursRed Cash es donde recibes reembolsos por cancelaciones, bonificaciones promocionales, tarjetas de regalo y recargas via SPEI o CoDi.
                 Puedes usar este saldo para pagar tus futuras reservas en ToursRed.
               </p>
             </div>
