@@ -187,13 +187,13 @@ export async function createCodiCharge(
   const auth = getAuthHeader();
 
   const body = {
-    method: "bank_account",
+    method: "codi",
     amount,
     currency: "MXN",
     description,
     order_id: orderId,
-    payment_method: {
-      type: "codi",
+    codi_options: {
+      mode: "QR_CODE",
     },
   };
 

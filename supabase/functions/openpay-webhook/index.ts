@@ -59,10 +59,10 @@ Deno.serve(async (req: Request) => {
   // OpenPay requires 200 to stop retrying
 
   // ── Step 2: Handle by event type ─────────────────────────────
-  const eventType = rawBody?.type;
+  const eventType = (rawBody?.type || "").toUpperCase();
 
   // Verification event — log and return
-  if (eventType === "verification") {
+  if (eventType === "VERIFICATION") {
     const verificationCode = rawBody?.verification_code;
     console.log("OpenPay webhook verification code:", verificationCode);
     if (webhookEventId) {
@@ -76,7 +76,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // Only charge.succeeded triggers credit — all other events are logged and ignored
-  if (eventType !== "charge.succeeded") {
+  if (eventType !== "CHARGE.SUCCEEDED") {
     if (webhookEventId) {
       await supabase.from("openpay_webhook_events").update({
         processing_status: "ignored",
@@ -205,7 +205,7 @@ Deno.serve(async (req: Request) => {
       },
       {
         label: "method",
-        pass: verifiedCharge.method === "bank_account",
+        pass: verifiedCharge.method === "bank_account" || verifiedCharge.method === "codi",
         detail: verifiedCharge.method,
       },
       {

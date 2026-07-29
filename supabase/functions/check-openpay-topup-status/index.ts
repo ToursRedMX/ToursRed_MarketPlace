@@ -107,7 +107,7 @@ Deno.serve(async (req: Request) => {
           const fieldsMatch =
             charge.id === topup.provider_charge_id &&
             charge.order_id === topup.order_id &&
-            charge.method === "bank_account" &&
+            (charge.method === "bank_account" || charge.method === "codi") &&
             Number(charge.amount) === Number(topup.amount);
 
           if (fieldsMatch) {
