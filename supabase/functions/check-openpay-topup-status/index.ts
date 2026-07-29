@@ -135,6 +135,19 @@ Deno.serve(async (req: Request) => {
                 conciliation_status: null,
               }).eq("id", topup.id);
 
+              // Create accounting entry (non-blocking)
+              try {
+                const { error: acctError } = await supabase.rpc(
+                  "create_accounting_entry_for_wallet_topup",
+                  { p_topup_id: topup.id }
+                );
+                if (acctError) {
+                  console.error("Accounting entry failed for topup", topup.id, ":", acctError.message);
+                }
+              } catch (acctErr) {
+                console.error("Accounting entry exception for topup", topup.id, ":", acctErr.message);
+              }
+
               return new Response(
                 JSON.stringify({
                   topup_id: topup.id,

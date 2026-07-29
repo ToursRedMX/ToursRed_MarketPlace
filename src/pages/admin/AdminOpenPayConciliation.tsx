@@ -144,6 +144,12 @@ const AdminOpenPayConciliation: React.FC = () => {
           })
           .eq('id', topupId);
 
+        try {
+          await supabase.rpc('create_accounting_entry_for_wallet_topup', { p_topup_id: topupId });
+        } catch {
+          // non-blocking — credit already succeeded
+        }
+
         setActionResult('Saldo acreditado exitosamente');
         await loadData();
       }
@@ -195,31 +201,162 @@ const AdminOpenPayConciliation: React.FC = () => {
         return;
       }
 
+      // Extract charge ID and amount from the webhook raw_payload
+      const rawBody = selectedEvent.raw_payload;
+      const providerChargeId = rawBody?.transaction?.id || rawBody?.id || null;
+      const payloadAmount = rawBody?.transaction?.amount != null
+        ? Number(rawBody.transaction.amount)
+        : (rawBody?.amount != null ? Number(rawBody.amount) : null);
+      const finalAmount = payloadAmount != null && !isNaN(payloadAmount) && payloadAmount > 0
+        ? payloadAmount
+        : amount;
+      const paymentMethodType = rawBody?.transaction?.method === 'codi' ? 'codi' : 'spei';
+      const orderId = rawBody?.transaction?.order_id || rawBody?.order_id || `manual-${selectedEvent.id}`;
+
+      let topupId: string;
+      let isReplay = false;
+
+      if (providerChargeId) {
+        // Try to create a topup record with the real provider_charge_id
+        const { data: newTopup, error: insertError } = await supabase
+          .from('openpay_wallet_topups')
+          .insert({
+            user_id: assignUserId,
+            amount: finalAmount,
+            payment_method_type: paymentMethodType,
+            provider_charge_id: providerChargeId,
+            order_id: orderId,
+            status: 'completed',
+            credited_at: new Date().toISOString(),
+            conciliation_status: 'resuelto_acreditado',
+          })
+          .select('id')
+          .single();
+
+        if (insertError) {
+          // Check if it's a unique constraint violation (23505) — the charge was already registered
+          if (insertError.code === '23505') {
+            // Fetch the existing topup by provider_charge_id
+            const { data: existingTopup, error: fetchError } = await supabase
+              .from('openpay_wallet_topups')
+              .select('id, status')
+              .eq('provider_charge_id', providerChargeId)
+              .maybeSingle();
+
+            if (fetchError || !existingTopup) {
+              setActionResult('Error: no se pudo recuperar la recarga existente');
+              return;
+            }
+
+            topupId = existingTopup.id;
+            isReplay = true;
+
+            if (existingTopup.status === 'completed') {
+              // Already credited — update webhook event and inform admin
+              await supabase
+                .from('openpay_webhook_events')
+                .update({
+                  processing_status: 'processed',
+                  processing_result: `Recarga ya existente (provider_charge_id: ${providerChargeId}) — no se duplico`,
+                  processed_at: new Date().toISOString(),
+                })
+                .eq('id', selectedEvent.id);
+
+              setActionResult('Esta recarga ya fue registrada y acreditada anteriormente');
+              setSelectedEvent(null);
+              setAssignUserId('');
+              setAssignAmount('');
+              await loadData();
+              return;
+            }
+          } else {
+            setActionResult(`Error al crear recarga: ${insertError.message}`);
+            return;
+          }
+        } else {
+          topupId = newTopup.id;
+        }
+      } else {
+        // Fallback: no provider_charge_id in payload — use synthetic key
+        const { data: newTopup, error: insertError } = await supabase
+          .from('openpay_wallet_topups')
+          .insert({
+            user_id: assignUserId,
+            amount: finalAmount,
+            payment_method_type: paymentMethodType,
+            order_id: orderId,
+            status: 'completed',
+            credited_at: new Date().toISOString(),
+            conciliation_status: 'resuelto_acreditado',
+          })
+          .select('id')
+          .single();
+
+        if (insertError) {
+          setActionResult(`Error al crear recarga: ${insertError.message}`);
+          return;
+        }
+        topupId = newTopup.id;
+      }
+
+      // Credit wallet using provider_charge_id as idempotency key (closes double-credit hole)
+      const transactionType = paymentMethodType === 'codi' ? 'topup_codi' : 'topup_spei';
+      const referenceType = paymentMethodType === 'codi'
+        ? 'openpay_codi_topup'
+        : 'openpay_spei_topup';
+      const idempotencyKey = providerChargeId || `manual_event_${selectedEvent.id}`;
+
       const { error: creditError } = await supabase.rpc('update_wallet_balance', {
         p_user_id: assignUserId,
-        p_amount: amount,
-        p_type: 'topup_spei',
+        p_amount: finalAmount,
+        p_type: transactionType,
         p_description: 'Deposito asignado manualmente por admin (conciliacion)',
-        p_reference_id: null,
-        p_reference_type: 'manual_conciliation',
-        p_idempotency_key: `manual_event_${selectedEvent.id}`,
+        p_reference_id: topupId,
+        p_reference_type: referenceType,
+        p_idempotency_key: idempotencyKey,
       });
 
       if (creditError) {
-        setActionResult(`Error: ${creditError.message}`);
-        return;
+        if (creditError.message?.includes('idempotency')) {
+          // Wallet was already credited for this charge — treat as already resolved
+          await supabase
+            .from('openpay_webhook_events')
+            .update({
+              processing_status: 'processed',
+              processing_result: `Recarga ya acreditada (idempotency key: ${idempotencyKey})`,
+              processed_at: new Date().toISOString(),
+            })
+            .eq('id', selectedEvent.id);
+          setActionResult('Esta recarga ya fue acreditada anteriormente');
+        } else {
+          setActionResult(`Error: ${creditError.message}`);
+        }
+      } else {
+        // Create accounting entry (non-blocking)
+        try {
+          await supabase.rpc('create_accounting_entry_for_wallet_topup', { p_topup_id: topupId });
+        } catch {
+          // non-blocking — credit already succeeded
+        }
+
+        const resultMsg = isReplay
+          ? `Recarga existente completada — ${finalAmount} acreditados`
+          : `Deposito asignado y acreditado exitosamente — ${finalAmount}`;
+
+        await supabase
+          .from('openpay_webhook_events')
+          .update({
+            processing_status: 'processed',
+            processing_result: `${resultMsg} (topup: ${topupId})${
+              !providerChargeId ? ' [ADVERTENCIA: sin provider_charge_id en payload, idempotencia debil]' : ''
+            }`,
+            processed_at: new Date().toISOString(),
+          })
+          .eq('id', selectedEvent.id);
+
+        setActionResult(resultMsg);
       }
 
-      await supabase
-        .from('openpay_webhook_events')
-        .update({
-          processing_status: 'processed',
-          processing_result: `Asignado manualmente a usuario ${assignUserId} - $${amount}`,
-          processed_at: new Date().toISOString(),
-        })
-        .eq('id', selectedEvent.id);
-
-      setActionResult('Deposito asignado y acreditado exitosamente');
       setSelectedEvent(null);
       setAssignUserId('');
       setAssignAmount('');

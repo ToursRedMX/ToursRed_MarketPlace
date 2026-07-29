@@ -302,10 +302,23 @@ Deno.serve(async (req: Request) => {
       conciliation_status: null,
     }).eq("id", topup.id);
 
+    // ── Step 7b: Create accounting entry (non-blocking) ──────
+    try {
+      const { error: acctError } = await supabase.rpc(
+        "create_accounting_entry_for_wallet_topup",
+        { p_topup_id: topup.id }
+      );
+      if (acctError) {
+        console.error("Accounting entry failed for topup", topup.id, ":", acctError.message);
+      }
+    } catch (acctErr) {
+      console.error("Accounting entry exception for topup", topup.id, ":", acctErr.message);
+    }
+
     if (webhookEventId) {
       await supabase.from("openpay_webhook_events").update({
         processing_status: "processed",
-        processing_result: `Acreditado: $${topup.amount} MXN via ${topup.payment_method_type}`,
+        processing_result: `Acreditado: ${topup.amount} MXN via ${topup.payment_method_type}`,
         processed_at: new Date().toISOString(),
       }).eq("id", webhookEventId);
     }
