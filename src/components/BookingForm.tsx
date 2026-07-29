@@ -73,7 +73,8 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
 
   // Travel insurance
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
-  const isInsuranceApplicable = !['experience', 'transport', 'ticket'].includes((tour as any).activity_type as string) && !isForeignTraveler && !(tour as any).includes_insurance;
+  const isInsuranceApplicable = insuranceEnabled && !['experience', 'transport', 'ticket'].includes((tour as any).activity_type as string) && !isForeignTraveler && !(tour as any).includes_insurance;
+  const [insuranceEnabled, setInsuranceEnabled] = useState(true);
   const [insurancePricePerDayPerTraveler, setInsurancePricePerDayPerTraveler] = useState(79);
   const [includeInsurance, setIncludeInsurance] = useState(false);
   const [showInsuranceWarning, setShowInsuranceWarning] = useState(false);
@@ -178,11 +179,12 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
         // Leer settings de plataforma
         const { data: platformData } = await supabase
           .from('platform_settings')
-          .select('service_charge_percentage, agency_commission_percentage, optional_service_commission_percentage, travel_insurance_price_per_day_per_traveler')
+          .select('service_charge_percentage, agency_commission_percentage, optional_service_commission_percentage, travel_insurance_price_per_day_per_traveler, travel_insurance_enabled')
           .maybeSingle();
 
         if (platformData) {
           setServiceChargePercentage(platformData.service_charge_percentage);
+          setInsuranceEnabled(platformData.travel_insurance_enabled !== false);
           if (platformData.travel_insurance_price_per_day_per_traveler != null) {
             setInsurancePricePerDayPerTraveler(platformData.travel_insurance_price_per_day_per_traveler);
           }
@@ -356,7 +358,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
           setIsHighRisk(count > 3);
           const activityType = (tour as any).activity_type as string;
           const tourIncludesInsurance = !!(tour as any).includes_insurance;
-          const insuranceOk = !['experience', 'transport', 'ticket'].includes(activityType) && !isForeign && !tourIncludesInsurance;
+          const insuranceOk = insuranceEnabled && !['experience', 'transport', 'ticket'].includes(activityType) && !isForeign && !tourIncludesInsurance;
           setIncludeInsurance(insuranceOk);
           if (count > 3) {
             console.log('⚠️ VIAJERO DE ALTO RIESGO: Tiene', count, 'no shows. Se cobrará el 100% del tour.');

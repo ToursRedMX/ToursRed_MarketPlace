@@ -49,6 +49,7 @@ interface PlatformSettings {
   odoo_url: string;
   odoo_api_key_encrypted: string;
   odoo_database: string;
+  travel_insurance_enabled: boolean;
   travel_insurance_price_per_day_per_traveler: number;
   travel_insurance_cost_per_day_per_traveler: number;
   travel_insurance_commission_pct: number;
@@ -123,6 +124,7 @@ const AdminSettings: React.FC = () => {
     odoo_url: '',
     odoo_api_key_encrypted: '',
     odoo_database: '',
+    travel_insurance_enabled: true,
     travel_insurance_price_per_day_per_traveler: 79,
     travel_insurance_cost_per_day_per_traveler: 59,
     travel_insurance_commission_pct: 20,
@@ -394,6 +396,7 @@ const AdminSettings: React.FC = () => {
             odoo_url: platformSettings.odoo_url,
             odoo_api_key_encrypted: platformSettings.odoo_api_key_encrypted,
             odoo_database: platformSettings.odoo_database,
+            travel_insurance_enabled: platformSettings.travel_insurance_enabled,
             travel_insurance_price_per_day_per_traveler: platformSettings.travel_insurance_price_per_day_per_traveler,
             travel_insurance_cost_per_day_per_traveler: platformSettings.travel_insurance_cost_per_day_per_traveler ?? 59,
             travel_insurance_commission_pct: platformSettings.travel_insurance_commission_pct ?? 20,
@@ -462,7 +465,7 @@ const AdminSettings: React.FC = () => {
   const handlePlatformChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     const numericFields = ['service_charge_percentage', 'agency_commission_percentage', 'supplement_commission_percentage', 'optional_service_commission_percentage', 'membership_monthly_price', 'membership_annual_price', 'default_max_referrals_per_user', 'referral_bonus_points'];
-    const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled'];
+    const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
     setPlatformSettings(prev => ({
       ...prev,
       [name]: booleanFields.includes(name) ? checked : (numericFields.includes(name) ? (parseFloat(value) || 0) : value),
@@ -668,6 +671,44 @@ const AdminSettings: React.FC = () => {
           <div className="flex items-center space-x-3 mb-4">
             <Shield className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">Seguro de Viaje</h2>
+          </div>
+
+          {/* Master toggle */}
+          <div className={`rounded-lg p-4 mb-6 border-2 transition-colors ${platformSettings.travel_insurance_enabled ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50 border-gray-300'}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex-1 pr-4">
+                <p className="font-semibold text-gray-900 mb-1">
+                  {platformSettings.travel_insurance_enabled ? 'Seguro de viaje activo' : 'Seguro de viaje desactivado'}
+                </p>
+                <p className="text-xs text-gray-600">
+                  Interruptor maestro: controla si el seguro de viaje se ofrece durante el flujo de reserva.
+                  Cuando está apagado, el seguro no aparece en ninguna reserva nueva sin importar las demás reglas.
+                  Las compras post-reserva no se ven afectadas y siguen disponibles para los viajeros.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input
+                  type="checkbox"
+                  name="travel_insurance_enabled"
+                  checked={platformSettings.travel_insurance_enabled}
+                  onChange={handlePlatformChange}
+                  className="sr-only peer"
+                />
+                <div className="w-14 h-7 bg-gray-300 rounded-full peer peer-checked:bg-emerald-600 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:after:translate-x-7" />
+                <span className={`ml-3 text-sm font-medium ${platformSettings.travel_insurance_enabled ? 'text-emerald-700' : 'text-gray-500'}`}>
+                  {platformSettings.travel_insurance_enabled ? 'ON' : 'OFF'}
+                </span>
+              </label>
+            </div>
+            {!platformSettings.travel_insurance_enabled && (
+              <div className="mt-3 flex items-start space-x-2 bg-amber-100 border border-amber-300 rounded-md p-3">
+                <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-800">
+                  El seguro de viaje no se ofrece en nuevas reservas hasta que se vuelva a activar este interruptor.
+                  Los campos siguientes pueden editarse para preparar los valores antes de reactivar.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6 text-sm text-blue-800">
