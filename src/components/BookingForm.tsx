@@ -657,7 +657,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
     }
     return 1;
   })();
-  const insuranceCost = includeInsurance
+  const insuranceCost = includeInsurance && isInsuranceApplicable
     ? Math.round(insurancePricePerDayPerTraveler * tourDays * Math.max(1, totalTravelers) * 100) / 100
     : 0;
 
