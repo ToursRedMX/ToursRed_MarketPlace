@@ -462,7 +462,7 @@ const BookingSuccessPage: React.FC = () => {
                     </div>
                   )}
 
-                  {(booking as any).travel_insurance_included && (
+                  {(booking as any).travel_insurance_included && Number((booking as any).travel_insurance_cost) > 0 && (
                     <div className="flex justify-between items-center bg-blue-50 border border-blue-200 rounded px-2 py-1.5 -mx-1">
                       <span className="text-blue-700 font-medium flex items-center">
                         <ShieldCheck className="h-4 w-4 mr-1" />
