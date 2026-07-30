@@ -72,9 +72,9 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const [isLoadingExemption, setIsLoadingExemption] = useState(true);
 
   // Travel insurance
+  const [insuranceEnabled, setInsuranceEnabled] = useState(true);
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
   const isInsuranceApplicable = insuranceEnabled && !['experience', 'transport', 'ticket'].includes((tour as any).activity_type as string) && !isForeignTraveler && !(tour as any).includes_insurance;
-  const [insuranceEnabled, setInsuranceEnabled] = useState(true);
   const [insurancePricePerDayPerTraveler, setInsurancePricePerDayPerTraveler] = useState(79);
   const [includeInsurance, setIncludeInsurance] = useState(false);
   const [showInsuranceWarning, setShowInsuranceWarning] = useState(false);
