@@ -21,6 +21,7 @@ interface PlatformSettings {
   stripe_annual_price_id: string;
   membership_monthly_price: number;
   membership_annual_price: number;
+  membership_service_fee_exemption_monthly_limit: number;
   default_max_referrals_per_user: number;
   referral_bonus_points: number;
   referral_program_enabled: boolean;
@@ -96,6 +97,7 @@ const AdminSettings: React.FC = () => {
     stripe_annual_price_id: '',
     membership_monthly_price: 49,
     membership_annual_price: 490,
+    membership_service_fee_exemption_monthly_limit: 500,
     default_max_referrals_per_user: 10,
     referral_bonus_points: 5000,
     referral_program_enabled: true,
@@ -368,6 +370,7 @@ const AdminSettings: React.FC = () => {
             stripe_annual_price_id: platformSettings.stripe_annual_price_id,
             membership_monthly_price: platformSettings.membership_monthly_price,
             membership_annual_price: platformSettings.membership_annual_price,
+            membership_service_fee_exemption_monthly_limit: platformSettings.membership_service_fee_exemption_monthly_limit,
             default_max_referrals_per_user: platformSettings.default_max_referrals_per_user,
             referral_bonus_points: platformSettings.referral_bonus_points,
             referral_program_enabled: platformSettings.referral_program_enabled,
@@ -464,7 +467,7 @@ const AdminSettings: React.FC = () => {
 
   const handlePlatformChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    const numericFields = ['service_charge_percentage', 'agency_commission_percentage', 'supplement_commission_percentage', 'optional_service_commission_percentage', 'membership_monthly_price', 'membership_annual_price', 'default_max_referrals_per_user', 'referral_bonus_points'];
+    const numericFields = ['service_charge_percentage', 'agency_commission_percentage', 'supplement_commission_percentage', 'optional_service_commission_percentage', 'membership_monthly_price', 'membership_annual_price', 'membership_service_fee_exemption_monthly_limit', 'default_max_referrals_per_user', 'referral_bonus_points'];
     const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
     setPlatformSettings(prev => ({
       ...prev,
@@ -993,6 +996,29 @@ const AdminSettings: React.FC = () => {
                   value={platformSettings.membership_annual_price}
                   onChange={handlePlatformChange}
                   min="1"
+                  step="0.01"
+                  required
+                  className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="membership_service_fee_exemption_monthly_limit" className="block text-sm font-medium text-gray-700 mb-1">
+                Tope de Exención Mensual (MXN)
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Monto máximo de cargo por servicio que un miembro ToursRed+ puede exentar por mes
+              </p>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                <input
+                  type="number"
+                  id="membership_service_fee_exemption_monthly_limit"
+                  name="membership_service_fee_exemption_monthly_limit"
+                  value={platformSettings.membership_service_fee_exemption_monthly_limit}
+                  onChange={handlePlatformChange}
+                  min="0"
                   step="0.01"
                   required
                   className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"

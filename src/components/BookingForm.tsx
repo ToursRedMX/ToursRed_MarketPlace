@@ -69,6 +69,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const [isLoadingNoShowCount, setIsLoadingNoShowCount] = useState(true);
   const [isHighRisk, setIsHighRisk] = useState(false);
   const [remainingExemption, setRemainingExemption] = useState(500);
+  const [monthlyExemptionLimit, setMonthlyExemptionLimit] = useState(500);
   const [isLoadingExemption, setIsLoadingExemption] = useState(true);
 
   // Travel insurance
@@ -392,9 +393,11 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
         if (error) {
           console.error('Error loading remaining exemption:', error);
           setRemainingExemption(0);
+        } else if (data && typeof data === 'object' && 'remaining' in data) {
+          setRemainingExemption(data.remaining || 0);
+          setMonthlyExemptionLimit(data.monthly_limit || 500);
         } else {
-          setRemainingExemption(data || 0);
-          console.log('✅ Límite de exención restante:', data || 0);
+          setRemainingExemption(0);
         }
       } catch (err) {
         console.error('Error loading remaining exemption:', err);
@@ -848,8 +851,12 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
 
   // Service charge sobre los extras (5% sobre el subtotal de opcionales + pickup + idioma)
   // Se calcula aqui (no en handleSubmit) para que user_payment, cubetas de cash y UI lo reflejen
-  const extrasServiceChargeTotal = Math.round(extrasTotal * (serviceChargePercentage / 100) * 100) / 100;
-  const extrasTotalWithServiceCharge = extrasTotal + extrasServiceChargeTotal;
+  // NOTE: both extrasServiceChargeTotal and serviceCharge below are zeroed out when the
+  // payment qualifies for the full-wallet benefit (100% wallet+points covers the total
+  // WITHOUT any service charge). This pre-computation breaks the circular dependency:
+  // isFullWalletPayment depends on toursRedCashApplied, which depends on serviceCharge,
+  // which should be 0 when isFullWalletPayment is true.
+  const extrasServiceChargeTotalBase = Math.round(extrasTotal * (serviceChargePercentage / 100) * 100) / 100;
 
   // Si el usuario es de alto riesgo (más de 3 no shows), debe pagar el 100%
   const effectiveDepositPercentage = isHighRisk ? 100 : tour.deposit_percentage;
@@ -984,11 +991,44 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
     serviceCharge = serviceChargeAfterCodeDiscount;
   }
 
-  const platformRevenue = agencyCommission + serviceCharge;
-
   const membershipCost = addMembershipToBooking
     ? (selectedMembershipPlan === 'monthly' ? membershipMonthlyPrice : membershipAnnualPrice)
     : 0;
+
+  // Pre-compute: would this be a full-wallet payment if service charges were $0?
+  // This breaks the circular dependency: isFullWalletPayment depends on toursRedCashApplied,
+  // which depends on serviceCharge, which should be 0 when isFullWalletPayment is true.
+  // By simulating the no-SC scenario first, we zero out SC before it inflates the wallet debit.
+  const _tentativeUserPayment = effectiveDepositAmount;
+  const _tentativeMaxPoints = Math.floor(_tentativeUserPayment * 50);
+  const _tentativePointsApplied = useToursRedPoints ? Math.min(pointsToUse, pointsBalance, _tentativeMaxPoints) : 0;
+  const _tentativePointsDiscount = _tentativePointsApplied / 100;
+  const _tentativeAfterPoints = _tentativeUserPayment - _tentativePointsDiscount;
+  const _tentativeCashNeeded = _tentativeAfterPoints + extrasTotal + effectiveInsuranceCost;
+  const _tentativeWalletCovers = Math.min(walletBalance, _tentativeCashNeeded);
+  const _tentativeRemaining = _tentativeCashNeeded - _tentativeWalletCovers;
+  const wouldBeFullWalletPayment = useToursRedCash
+    && (_tentativeRemaining === 0 || (_tentativeRemaining > 0 && _tentativeRemaining < 10))
+    && _tentativeCashNeeded > 0
+    && totalTravelers > 0
+    && !addMembershipToBooking;
+
+  const wouldQualifyForWalletBenefit = !useToursRedCash
+    && (_tentativeRemaining === 0 || (_tentativeRemaining > 0 && _tentativeRemaining < 10))
+    && _tentativeCashNeeded > 0
+    && totalTravelers > 0
+    && !addMembershipToBooking;
+
+  if (wouldBeFullWalletPayment) {
+    serviceCharge = 0;
+    exemptionUsed = 0;
+    hasReachedExemptionLimit = false;
+  }
+
+  const extrasServiceChargeTotal = wouldBeFullWalletPayment ? 0 : extrasServiceChargeTotalBase;
+  const extrasTotalWithServiceCharge = extrasTotal + extrasServiceChargeTotal;
+
+  const platformRevenue = agencyCommission + serviceCharge;
 
   let userPayment = effectiveDepositAmount + serviceCharge;
 
@@ -1033,7 +1073,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
 
   const totalToPayNow = amountAfterToursRedCash + membershipCost;
 
-  const isFullWalletPayment = totalToPayNow === 0 && totalTravelers > 0;
+  const isFullWalletPayment = wouldBeFullWalletPayment || (totalToPayNow === 0 && totalTravelers > 0);
   const effectiveServiceCharge = isFullWalletPayment ? 0 : serviceCharge;
   const effectiveUserPayment = isFullWalletPayment ? userPayment - serviceCharge : userPayment;
 
@@ -2546,7 +2586,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                       Límite Mensual de Descuento Alcanzado
                     </h4>
                     <p className="text-xs text-gray-700 mb-2">
-                      Has usado {formatCurrencyMXN(500 - remainingExemption)} MXN de tus $500 MXN de descuento este mes. Esta reserva aplicará un cargo por servicio de {formatCurrencyMXN(serviceCharge)} MXN.
+                      Has usado {formatCurrencyMXN(monthlyExemptionLimit - remainingExemption)} MXN de tus ${formatCurrencyMXN(monthlyExemptionLimit)} MXN de descuento este mes. {isFullWalletPayment ? 'Esta reserva califica para cargo por servicio de $0 MXN por pagar 100% con ToursRed Cash.' : `Esta reserva aplicará un cargo por servicio de ${formatCurrencyMXN(serviceCharge)} MXN.`}
                     </p>
                     <div className="bg-white rounded-md p-2 border border-orange-200">
                       <p className="text-xs text-gray-600">
@@ -2699,6 +2739,11 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                 <p className="text-xs text-gray-700">
                   Tienes {formatCurrencyMXN(walletBalance)} MXN disponibles. Úsalos para reducir el total a pagar.
                 </p>
+                {wouldQualifyForWalletBenefit && (
+                  <p className="text-xs text-emerald-700 font-medium mt-1">
+                    Actívalo y paga $0 de cargo por servicio{hasMembership ? ' + gana el doble de ToursRed Points' : ''}.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -3178,7 +3223,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                   ✓ Ahorraste {formatCurrencyMXN(exemptionUsed)} con ToursRed+
                   {hasReachedExemptionLimit && (
                     <span className="block text-[10px] text-gray-600 mt-0.5">
-                      (Límite mensual: {formatCurrency(remainingExemption)} restantes de $500.00)
+                      (Límite mensual: {formatCurrency(remainingExemption)} restantes de {formatCurrency(monthlyExemptionLimit)})
                     </span>
                   )}
                 </p>
