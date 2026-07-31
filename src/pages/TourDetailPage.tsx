@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { MapPin, Calendar, Users, Building, Star, Clock, Globe, MessageCircle, ChevronLeft, ChevronRight, CreditCard as Edit, Heart, ExternalLink, Share2, RefreshCw, Lock, Car, AlertTriangle, Sparkles, Tag, Bus } from 'lucide-react';
-import BookingForm from '../components/BookingForm';
+import { Calendar as CalendarIcon, Clock as ClockIcon, Users as UsersIcon, ChevronRight } from 'lucide-react';
 import AgencyReviews from '../components/AgencyReviews';
 import ShareTourModal from '../components/ShareTourModal';
 import { Tour } from '../types';
@@ -1385,8 +1385,52 @@ const TourDetailPage: React.FC = () => {
               </div>
             )}
 
-            {/* Booking Form - Solo mostrar si NO es el propietario Y la agencia está activa */}
-            {!isOwner && tour.agencies?.is_active !== false && <BookingForm tour={tour} />}
+            {/* Booking CTA - Solo mostrar si NO es el propietario Y la agencia está activa */}
+            {!isOwner && tour.agencies?.is_active !== false && (
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h3 className="text-xl font-semibold mb-4">Reservar este tour</h3>
+                <div className="mb-4">
+                  <div className="text-sm text-gray-500 mb-1">Precio desde</div>
+                  <div className="text-3xl font-bold text-primary-600">{formatCurrencyMXN(tour.price)}</div>
+                  <div className="text-sm text-gray-500 mt-1">por persona</div>
+                </div>
+                <div className="space-y-2 mb-4">
+                  {tour.tour_type === 'receptivo' ? (
+                    <>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <CalendarIcon className="w-4 h-4 text-teal-600" />
+                        <span>Selecciona fecha y horario</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <UsersIcon className="w-4 h-4 text-teal-600" />
+                        <span>Elige el numero de viajeros</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <CalendarIcon className="w-4 h-4 text-primary-600" />
+                      <span>Disponible: {formatDate(tour.start_date)} - {formatDate(tour.end_date)}</span>
+                    </div>
+                  )}
+                  {tour.deposit_percentage && tour.deposit_percentage < 100 && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <ClockIcon className="w-4 h-4 text-primary-600" />
+                      <span>Deposito: {tour.deposit_percentage}% al reservar</span>
+                    </div>
+                  )}
+                </div>
+                <Link
+                  to={`/reservar/${tour.slug || tour.id}/paso-1`}
+                  className="block w-full text-center bg-primary-600 hover:bg-primary-700 text-white font-semibold py-3.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  Reservar ahora
+                  <ChevronRight className="w-5 h-5" />
+                </Link>
+                <p className="text-xs text-gray-400 text-center mt-3">
+                  Tus asientos se apartaran por 10 minutos mientras completas tu reserva
+                </p>
+              </div>
+            )}
 
             {/* Mensaje para el propietario */}
             {isOwner && (
