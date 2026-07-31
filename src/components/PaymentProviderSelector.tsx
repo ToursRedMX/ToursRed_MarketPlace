@@ -116,6 +116,7 @@ export default function PaymentProviderSelector({
   const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(null);
   const [sdkLoaded, setSdkLoaded] = useState(false);
   const [tokenizationReady, setTokenizationReady] = useState(false);
+  const [tokenizationAttempted, setTokenizationAttempted] = useState(false);
   const conektaCardContainerRef = useRef<HTMLDivElement | null>(null);
   const tokenizationInstanceRef = useRef<any>(null);
 
@@ -278,6 +279,7 @@ export default function PaymentProviderSelector({
 
     setTokenizingCard(true);
     setTokenizationError(null);
+    setTokenizationAttempted(true);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -360,12 +362,12 @@ export default function PaymentProviderSelector({
     }
   }, [sdkLoaded, splitHasCard, cardChargeAmount, tokenizingCard, tokenizationReady, splitCharges, onSplitChargesChange]);
 
-  // Initialize tokenization when SDK is loaded and card is in split
+  // Initialize tokenization when SDK is loaded and card is in split — only once
   useEffect(() => {
-    if (sdkLoaded && splitHasCard && cardChargeAmount > 0 && !tokenizationReady && !checkoutRequestId) {
+    if (sdkLoaded && splitHasCard && cardChargeAmount > 0 && !tokenizationReady && !checkoutRequestId && !tokenizationAttempted) {
       initTokenization();
     }
-  }, [sdkLoaded, splitHasCard, cardChargeAmount, tokenizationReady, checkoutRequestId, initTokenization]);
+  }, [sdkLoaded, splitHasCard, cardChargeAmount, tokenizationReady, checkoutRequestId, tokenizationAttempted, initTokenization]);
 
   // Re-initialize when card amount changes and tokenization was already done
   useEffect(() => {
@@ -374,6 +376,7 @@ export default function PaymentProviderSelector({
       setTokenizationReady(false);
       setCardToken(null);
       setCheckoutRequestId(null);
+      setTokenizationAttempted(false);
       if (conektaCardContainerRef.current) {
         conektaCardContainerRef.current.innerHTML = '';
       }
@@ -612,13 +615,30 @@ export default function PaymentProviderSelector({
                       </div>
 
                       {tokenizationError && (
-                        <div className="mb-2 flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
-                          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-                          <span>{tokenizationError}</span>
+                        <div className="mb-2">
+                          <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
+                            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                            <span>{tokenizationError}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setTokenizationAttempted(false);
+                              setTokenizationError(null);
+                              if (conektaCardContainerRef.current) {
+                                conektaCardContainerRef.current.innerHTML = '';
+                              }
+                              initTokenization();
+                            }}
+                            disabled={tokenizingCard}
+                            className="mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {tokenizingCard ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                            Reintentar
+                          </button>
                         </div>
                       )}
 
-                      {!tokenizationReady && (
+                      {!tokenizationReady && !tokenizationError && (
                         <div
                           ref={conektaCardContainerRef}
                           className="min-h-[120px] rounded-md bg-white border border-gray-200"

@@ -73,8 +73,8 @@ Deno.serve(async (req: Request) => {
         expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
       },
       metadata: {
-        booking_id: booking_id || null,
         purpose: "card_tokenization",
+        ...(booking_id ? { booking_id } : {}),
       },
     };
 
