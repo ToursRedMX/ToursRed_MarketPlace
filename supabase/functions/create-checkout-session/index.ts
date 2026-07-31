@@ -96,17 +96,10 @@ Deno.serve(async (req) => {
       .select(`
         id,
         user_id,
-        tour_id,
-        travelers_count,
         travel_insurance_included,
         travel_insurance_cost,
         deposit_amount,
-        service_charge,
-        tours (
-          id,
-          max_travelers,
-          available_spots
-        )
+        service_charge
       `)
       .eq("id", bookingId)
       .single();
@@ -124,54 +117,6 @@ Deno.serve(async (req) => {
         }
       );
     }
-
-    const { data: existingBookings, error: existingError } = await supabase
-      .from("bookings")
-      .select("travelers_count, status, approval_status")
-      .eq("tour_id", booking.tour_id)
-      .in("status", ["confirmed", "pending"])
-      .neq("id", bookingId);
-
-    if (existingError) {
-      console.error("Error fetching existing bookings:", existingError);
-    }
-
-    const totalBooked = existingBookings?.reduce((sum, b) => {
-      if (b.status === 'confirmed') return sum + b.travelers_count;
-      if (b.status === 'pending' && b.approval_status === 'approved') return sum + b.travelers_count;
-      return sum;
-    }, 0) || 0;
-
-    const maxCapacity = booking.tours?.available_spots !== null && booking.tours?.available_spots !== undefined
-      ? booking.tours.available_spots
-      : (booking.tours?.max_travelers || 10);
-
-    const availableSpots = maxCapacity - totalBooked;
-
-    console.log(`🔍 Validando disponibilidad - Tour: ${booking.tour_id}, Solicitados: ${booking.travelers_count}, Disponibles: ${availableSpots}, Total permitido: ${maxCapacity}${booking.tours?.available_spots ? ' [Personalizado]' : ''}`);
-
-    if (booking.travelers_count > availableSpots) {
-      console.error(`❌ No hay suficiente disponibilidad - Solicitados: ${booking.travelers_count}, Disponibles: ${availableSpots}`);
-
-      await supabase
-        .from("bookings")
-        .delete()
-        .eq("id", bookingId);
-
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: `Lo sentimos, solo hay ${availableSpots} lugar${availableSpots !== 1 ? 'es' : ''} disponible${availableSpots !== 1 ? 's' : ''} para este tour. Por favor, intenta con menos viajeros.`,
-          available_spots: availableSpots
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 400,
-        }
-      );
-    }
-
-    console.log(`✅ Disponibilidad confirmada para la reserva ${bookingId}`);
 
     let { data: customers, error: customerError } = await supabase
       .from("stripe_customers")
