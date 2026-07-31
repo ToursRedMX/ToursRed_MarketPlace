@@ -42,7 +42,7 @@ const PROVIDER_LABELS: Record<PaymentProvider, string> = {
   stripe: 'Tarjeta / OXXO / Transferencia',
   mercadopago: 'MercadoPago',
   paypal: 'PayPal',
-  conekta: 'Conekta (Tarjeta / Efectivo / SPEI / Meses sin intereses)',
+  conekta: 'Conekta (Tarjeta / Efectivo / SPEI / Compra ahora, paga después)',
   toursred_cash: 'ToursRed Cash (Billetera interna)',
 };
 
@@ -67,7 +67,7 @@ const BNPL_PRODUCT_DESCRIPTIONS: Record<BnplProduct, string> = {
 };
 
 const CONEKTA_METHOD_LABELS: Record<ConektaMethod, string> = {
-  bnpl: 'Meses sin intereses (BNPL)',
+  bnpl: 'Compra ahora, paga después (BNPL)',
   card: 'Tarjeta de crédito/débito',
   cash: 'Efectivo (referencia de pago)',
   spei: 'Transferencia SPEI',

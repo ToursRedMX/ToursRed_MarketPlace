@@ -66,6 +66,8 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const [isLoadingPoints, setIsLoadingPoints] = useState(true);
   const [useToursRedPoints, setUseToursRedPoints] = useState(false);
   const [pointsToUse, setPointsToUse] = useState(0);
+  const [useCustomAmount, setUseCustomAmount] = useState(false);
+  const [customPayAmount, setCustomPayAmount] = useState('');
   const [pointsWalletActive, setPointsWalletActive] = useState(false);
   const [noShowCount, setNoShowCount] = useState(0);
   const [isLoadingNoShowCount, setIsLoadingNoShowCount] = useState(true);
@@ -1079,6 +1081,14 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const effectiveServiceCharge = isFullWalletPayment ? 0 : serviceCharge;
   const effectiveUserPayment = isFullWalletPayment ? userPayment - serviceCharge : userPayment;
 
+  const minPayAmount = hasPaymentPlan && selectedPaymentMode === 'plan'
+    ? Math.max(10, paymentPlanMinimum)
+    : totalToPayNow;
+  const effectivePayAmount = useCustomAmount && customPayAmount
+    ? Math.max(minPayAmount, Math.min(parseFloat(customPayAmount) || totalToPayNow, totalToPayNow))
+    : totalToPayNow;
+  const remainingAfterInitial = Math.max(0, totalToPayNow - effectivePayAmount);
+
   const agencyReceives = depositAmount - agencyCommission;
 
   const handleOptionalServiceChange = (serviceId: string, delta: number, service: TourOptionalService) => {
@@ -1173,6 +1183,18 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
       return;
     }
 
+    if (useCustomAmount && hasPaymentPlan && selectedPaymentMode === 'plan' && !isHighRisk) {
+      const customAmt = parseFloat(customPayAmount);
+      if (!customAmt || customAmt < minPayAmount) {
+        setError(`El monto mínimo a pagar es ${formatCurrencyMXN(minPayAmount)}.`);
+        return;
+      }
+      if (customAmt > totalToPayNow) {
+        setError(`El monto no puede exceder el total a pagar (${formatCurrencyMXN(totalToPayNow)}).`);
+        return;
+      }
+    }
+
     try {
       setIsSubmitting(true);
       setError('');
@@ -1234,6 +1256,11 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
         membership_plan: addMembershipToBooking ? selectedMembershipPlan : null,
         membership_cost: membershipCost,
       };
+
+      if (useCustomAmount && hasPaymentPlan && selectedPaymentMode === 'plan' && !isHighRisk && effectivePayAmount < totalToPayNow) {
+        bookingData.user_payment = effectivePayAmount;
+        bookingData.initial_payment_amount = effectivePayAmount;
+      }
 
       console.log('📝 Creando reserva con datos:', bookingData);
 
@@ -3218,8 +3245,14 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
 
             <div className="border-t pt-2 flex justify-between">
               <span className="font-bold text-gray-900">Total a Pagar Ahora:</span>
-              <span className="font-bold text-primary-600 text-lg">{formatCurrencyMXN(totalToPayNow)}</span>
+              <span className="font-bold text-primary-600 text-lg">{formatCurrencyMXN(effectivePayAmount)}</span>
             </div>
+            {useCustomAmount && remainingAfterInitial > 0 && (
+              <div className="flex justify-between text-sm text-sky-700 mt-1">
+                <span>Saldo restante (pagadero después):</span>
+                <span className="font-medium">{formatCurrencyMXN(remainingAfterInitial)}</span>
+              </div>
+            )}
 
             {shouldWaiveServiceCharge && exemptionUsed > 0 && (
               <div className="bg-green-50 border border-green-200 rounded-md p-2 mt-2">
@@ -3240,13 +3273,63 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
           </div>
         )}
 
-        {totalTravelers > 0 && user && isTraveler && totalToPayNow > 0 && (
+        {hasPaymentPlan && selectedPaymentMode === 'plan' && !isHighRisk && !addMembershipToBooking && totalTravelers > 0 && totalToPayNow > 0 && (
+          <div className="mb-4 bg-sky-50 border border-sky-200 rounded-lg p-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useCustomAmount}
+                onChange={(e) => {
+                  setUseCustomAmount(e.target.checked);
+                  if (e.target.checked) {
+                    setCustomPayAmount(totalToPayNow.toFixed(2));
+                  } else {
+                    setCustomPayAmount('');
+                  }
+                }}
+                className="rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+              />
+              <span className="text-sm font-medium text-gray-800">Especificar cuánto pagar ahora</span>
+            </label>
+            {useCustomAmount && (
+              <div className="mt-3 space-y-2">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1 font-medium">Monto a pagar en este intento</label>
+                  <input
+                    type="number"
+                    min={minPayAmount}
+                    max={totalToPayNow}
+                    step={0.01}
+                    value={customPayAmount}
+                    onChange={(e) => setCustomPayAmount(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-sky-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Mínimo: {formatCurrencyMXN(minPayAmount)}</span>
+                    <span>Máximo: {formatCurrencyMXN(totalToPayNow)}</span>
+                  </div>
+                </div>
+                {remainingAfterInitial > 0 && (
+                  <div className="bg-white rounded-md p-2 border border-sky-200">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-700">Saldo restante después de este pago:</span>
+                      <span className="font-bold text-sky-700">{formatCurrencyMXN(remainingAfterInitial)}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Podrás completar el pago restante después de crear la reserva, con el método que prefieras.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {totalTravelers > 0 && user && isTraveler && effectivePayAmount > 0 && (
           <PaymentProviderSelector
             context={addMembershipToBooking ? 'booking_with_membership' : 'booking'}
             value={paymentProvider}
             onChange={setPaymentProvider}
             disabled={isSubmitting}
-            amount={totalToPayNow}
+            amount={effectivePayAmount}
             conektaMethod={conektaMethod}
             onConektaMethodChange={setConektaMethod}
             bnplProduct={bnplProduct}
