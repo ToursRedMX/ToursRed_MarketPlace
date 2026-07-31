@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { CreditCard, Lock, Info, AlertTriangle, Wallet, Banknote, Landmark, SplitSquareHorizontal, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { CreditCard, Lock, Info, AlertTriangle, Wallet, Banknote, Landmark } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export type PaymentProvider = 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'toursred_cash';
@@ -38,10 +38,6 @@ interface PaymentProviderSelectorProps {
   amount?: number;
   conektaMethod?: ConektaMethod;
   onConektaMethodChange?: (method: ConektaMethod) => void;
-  useSplitPayment?: boolean;
-  onUseSplitPaymentChange?: (useSplit: boolean) => void;
-  splitCharges?: SubCharge[];
-  onSplitChargesChange?: (charges: SubCharge[] | null) => void;
 }
 
 const PROVIDER_LABELS: Record<PaymentProvider, string> = {
@@ -71,16 +67,6 @@ const CONEKTA_METHOD_LABELS: Record<ConektaMethod, string> = {
 export const BNPL_MIN_AMOUNT = 1200;
 export const BNPL_MAX_AMOUNT = 16000;
 
-const SPLIT_METHODS: { value: 'card' | 'cash' | 'spei'; label: string; icon: React.ReactNode }[] = [
-  { value: 'card', label: 'Tarjeta', icon: <CreditCard className="h-4 w-4" /> },
-  { value: 'cash', label: 'Efectivo', icon: <Banknote className="h-4 w-4" /> },
-  { value: 'spei', label: 'SPEI', icon: <Landmark className="h-4 w-4" /> },
-];
-
-function formatMXN(value: number): string {
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 }).format(value || 0);
-}
-
 function isStripeAvailableForContext(context: PaymentContext, config: ProviderConfig): boolean {
   if (context === 'booking' || context === 'booking_with_membership') {
     return config.stripe_bookings_enabled;
@@ -102,23 +88,8 @@ export default function PaymentProviderSelector({
   amount = 0,
   conektaMethod = 'card',
   onConektaMethodChange,
-  useSplitPayment = false,
-  onUseSplitPaymentChange,
-  splitCharges,
-  onSplitChargesChange,
 }: PaymentProviderSelectorProps) {
   const [config, setConfig] = useState<ProviderConfig | null>(null);
-
-  // --- Card tokenization state for split payments ---
-  const [cardToken, setCardToken] = useState<string | null>(null);
-  const [tokenizingCard, setTokenizingCard] = useState(false);
-  const [tokenizationError, setTokenizationError] = useState<string | null>(null);
-  const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(null);
-  const [sdkLoaded, setSdkLoaded] = useState(false);
-  const [tokenizationReady, setTokenizationReady] = useState(false);
-  const [tokenizationAttempted, setTokenizationAttempted] = useState(false);
-  const conektaCardContainerRef = useRef<HTMLDivElement | null>(null);
-  const tokenizationInstanceRef = useRef<any>(null);
 
   useEffect(() => {
     supabase
@@ -174,7 +145,6 @@ export default function PaymentProviderSelector({
   }, [config, isMembershipContext, value]);
 
   const bnplAvailable = amount >= BNPL_MIN_AMOUNT && amount <= BNPL_MAX_AMOUNT;
-  const splitEligible = conektaMethod !== 'bnpl';
 
   // If BNPL is selected but amount is out of range, switch to card
   useEffect(() => {
@@ -182,206 +152,6 @@ export default function PaymentProviderSelector({
       onConektaMethodChange('card');
     }
   }, [value, conektaMethod, bnplAvailable, onConektaMethodChange]);
-
-  // Reset split when switching to BNPL or leaving Conekta
-  useEffect(() => {
-    if (useSplitPayment && (!splitEligible || value !== 'conekta') && onUseSplitPaymentChange) {
-      onUseSplitPaymentChange(false);
-    }
-  }, [value, splitEligible, useSplitPayment, onUseSplitPaymentChange]);
-
-  const splitAmount1 = splitCharges?.[0]?.amount ?? 0;
-  const splitAmount2 = splitCharges?.[1]?.amount ?? 0;
-  const splitMethod1 = splitCharges?.[0]?.payment_method_type ?? 'card';
-  const splitMethod2 = splitCharges?.[1]?.payment_method_type ?? 'cash';
-  const splitSum = Math.round((splitAmount1 + splitAmount2) * 100) / 100;
-  const splitTotalMatch = Math.abs(splitSum - amount) < 0.01;
-
-  const updateSplitCharges = (index: number, field: 'amount' | 'payment_method_type', val: string | number) => {
-    if (!onSplitChargesChange) return;
-    const current = splitCharges ? [...splitCharges] : [
-      { amount: 0, payment_method_type: 'card' as const },
-      { amount: 0, payment_method_type: 'cash' as const },
-    ];
-    if (field === 'amount') {
-      current[index] = { ...current[index], amount: typeof val === 'number' ? val : parseFloat(val as string) || 0 };
-    } else {
-      const oldType = current[index].payment_method_type;
-      const newType = val as 'card' | 'cash' | 'spei';
-      current[index] = { ...current[index], payment_method_type: newType };
-      // Clear token when switching away from card
-      if (oldType === 'card' && newType !== 'card') {
-        delete current[index].token_id;
-        setCardToken(null);
-        setTokenizationReady(false);
-      }
-    }
-    onSplitChargesChange(current as SubCharge[]);
-  };
-
-  const handleSplitToggle = (checked: boolean) => {
-    if (!onUseSplitPaymentChange) return;
-    onUseSplitPaymentChange(checked);
-    if (checked && onSplitChargesChange) {
-      const half = Math.round(amount / 2 * 100) / 100;
-      const otherHalf = Math.round((amount - half) * 100) / 100;
-      onSplitChargesChange([
-        { amount: half, payment_method_type: conektaMethod === 'card' || conektaMethod === 'cash' || conektaMethod === 'spei' ? conektaMethod : 'card' },
-        { amount: otherHalf, payment_method_type: conektaMethod === 'card' ? 'cash' : 'card' },
-      ]);
-    } else if (!checked && onSplitChargesChange) {
-      onSplitChargesChange(null);
-      setCardToken(null);
-      setTokenizationReady(false);
-      setTokenizationError(null);
-      setCheckoutRequestId(null);
-    }
-  };
-
-  // Determine if any split charge uses card
-  const splitHasCard = useSplitPayment && !!(splitCharges?.some(sc => sc.payment_method_type === 'card'));
-  const cardChargeAmount = splitCharges?.find(sc => sc.payment_method_type === 'card')?.amount ?? 0;
-
-  // Load Conekta checkout SDK when split includes card
-  useEffect(() => {
-    if (!splitHasCard || !cardChargeAmount || cardChargeAmount <= 0) {
-      setSdkLoaded(false);
-      setTokenizationReady(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadSdk = () => {
-      if ((window as any).ConektaCheckoutComponents) {
-        setSdkLoaded(true);
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://pay.conekta.com/v1.0/js/conekta-checkout.min.js';
-      script.async = true;
-      script.onload = () => { if (!cancelled) setSdkLoaded(true); };
-      script.onerror = () => {
-        if (!cancelled) setTokenizationError('No se pudo cargar el formulario de tarjeta de Conekta.');
-      };
-      document.head.appendChild(script);
-    };
-
-    loadSdk();
-
-    return () => { cancelled = true; };
-  }, [splitHasCard, cardChargeAmount]);
-
-  // Create tokenization checkout and initialize Card component when SDK is loaded
-  const initTokenization = useCallback(async () => {
-    if (!sdkLoaded || !splitHasCard || !cardChargeAmount || tokenizingCard || tokenizationReady) return;
-    if (!(window as any).ConektaCheckoutComponents) return;
-
-    setTokenizingCard(true);
-    setTokenizationError(null);
-    setTokenizationAttempted(true);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setTokenizationError('No hay sesión activa.');
-        setTokenizingCard(false);
-        return;
-      }
-
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-conekta-tokenization-checkout`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            amount: cardChargeAmount,
-            description: 'Tokenización de tarjeta para pago dividido',
-          }),
-        }
-      );
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error || 'Error al crear checkout de tokenización');
-      }
-
-      const result = await resp.json();
-      if (!result.success || !result.checkout_id) {
-        throw new Error('No se recibió el ID de checkout');
-      }
-
-      setCheckoutRequestId(result.checkout_id);
-
-      const Components = (window as any).ConektaCheckoutComponents;
-      if (!conektaCardContainerRef.current) {
-        setTokenizingCard(false);
-        return;
-      }
-
-      // Clear any previous instance
-      if (conektaCardContainerRef.current.firstChild) {
-        conektaCardContainerRef.current.innerHTML = '';
-      }
-
-      Components.Card({
-        checkoutRequestId: result.checkout_id,
-        targetIFrame: conektaCardContainerRef.current,
-        allowTokenization: true,
-        onCreateTokenSucceeded: (tokenData: any) => {
-          const tokenId = tokenData?.id || tokenData?.token_id || tokenData?.data?.id;
-          if (tokenId) {
-            setCardToken(tokenId);
-            setTokenizationReady(true);
-            setTokenizationError(null);
-            // Attach token to the card sub-charge
-            if (onSplitChargesChange && splitCharges) {
-              const updated = splitCharges.map(sc =>
-                sc.payment_method_type === 'card'
-                  ? { ...sc, token_id: tokenId }
-                  : sc
-              );
-              onSplitChargesChange(updated);
-            }
-          }
-        },
-        onCreateTokenError: (error: any) => {
-          const msg = error?.message || error?.error?.message || 'Error al tokenizar la tarjeta';
-          setTokenizationError(msg);
-          setTokenizationReady(false);
-        },
-      });
-
-      setTokenizingCard(false);
-    } catch (err: any) {
-      setTokenizationError(err.message || 'Error al inicializar el formulario de tarjeta');
-      setTokenizingCard(false);
-    }
-  }, [sdkLoaded, splitHasCard, cardChargeAmount, tokenizingCard, tokenizationReady, splitCharges, onSplitChargesChange]);
-
-  // Initialize tokenization when SDK is loaded and card is in split — only once
-  useEffect(() => {
-    if (sdkLoaded && splitHasCard && cardChargeAmount > 0 && !tokenizationReady && !checkoutRequestId && !tokenizationAttempted) {
-      initTokenization();
-    }
-  }, [sdkLoaded, splitHasCard, cardChargeAmount, tokenizationReady, checkoutRequestId, tokenizationAttempted, initTokenization]);
-
-  // Re-initialize when card amount changes and tokenization was already done
-  useEffect(() => {
-    if (tokenizationReady && splitHasCard && cardChargeAmount > 0 && checkoutRequestId) {
-      // Amount changed — need fresh tokenization
-      setTokenizationReady(false);
-      setCardToken(null);
-      setCheckoutRequestId(null);
-      setTokenizationAttempted(false);
-      if (conektaCardContainerRef.current) {
-        conektaCardContainerRef.current.innerHTML = '';
-      }
-    }
-  }, [cardChargeAmount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // No providers available at all
   if (config && availableProviders.length === 0) {
@@ -517,146 +287,6 @@ export default function PaymentProviderSelector({
               </label>
             );
           })}
-
-          {/* Split payment option (only for non-BNPL methods) */}
-          {conektaMethod !== 'bnpl' && !isMembershipContext && (
-            <div className="mt-2">
-              <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={useSplitPayment}
-                  onChange={(e) => handleSplitToggle(e.target.checked)}
-                  disabled={disabled}
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <span className="text-xs font-medium text-gray-700 flex items-center gap-1.5">
-                  <SplitSquareHorizontal className="h-3.5 w-3.5" />
-                  Dividir mi pago entre dos métodos
-                </span>
-              </label>
-
-              {useSplitPayment && (
-                <div className="mt-2 space-y-3 bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  {[0, 1].map((idx) => {
-                    const methodVal = idx === 0 ? splitMethod1 : splitMethod2;
-                    const amountVal = idx === 0 ? splitAmount1 : splitAmount2;
-                    return (
-                      <div key={idx} className="space-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-medium text-gray-600">Pago {idx + 1}:</span>
-                          <select
-                            value={methodVal}
-                            onChange={(e) => updateSplitCharges(idx, 'payment_method_type', e.target.value)}
-                            disabled={disabled}
-                            className="text-xs border border-gray-300 rounded-md px-2 py-1 bg-white focus:ring-1 focus:ring-primary-400"
-                          >
-                            {SPLIT_METHODS.map((m) => (
-                              <option key={m.value} value={m.value}>{m.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400">$</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={amount}
-                            step={0.01}
-                            value={amountVal || ''}
-                            onChange={(e) => updateSplitCharges(idx, 'amount', e.target.value)}
-                            disabled={disabled}
-                            placeholder="0.00"
-                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-primary-400 focus:border-primary-400"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <div className={`flex items-center justify-between text-xs font-medium rounded-md px-3 py-2 ${
-                    splitTotalMatch
-                      ? 'bg-green-50 text-green-700 border border-green-200'
-                      : 'bg-red-50 text-red-700 border border-red-200'
-                  }`}>
-                    <span className="flex items-center gap-1.5">
-                      {splitTotalMatch
-                        ? <CheckCircle2 className="h-3.5 w-3.5" />
-                        : <XCircle className="h-3.5 w-3.5" />}
-                      Total: {formatMXN(splitSum)}
-                    </span>
-                    <span>Esperado: {formatMXN(amount)}</span>
-                  </div>
-                  {!splitTotalMatch && (
-                    <p className="text-xs text-red-600">
-                      La suma de ambos pagos debe ser exactamente {formatMXN(amount)}.
-                    </p>
-                  )}
-
-                  {/* Card tokenization section for split payments */}
-                  {splitHasCard && splitTotalMatch && (
-                    <div className="mt-2 border border-blue-200 rounded-lg p-3 bg-blue-50/50">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <CreditCard className="h-4 w-4 text-blue-600" />
-                        <span className="text-xs font-semibold text-blue-900">
-                          Datos de tarjeta
-                        </span>
-                        {tokenizationReady && cardToken && (
-                          <span className="ml-auto inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Tarjeta verificada
-                          </span>
-                        )}
-                        {tokenizingCard && (
-                          <span className="ml-auto inline-flex items-center gap-1 text-xs text-blue-600">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Cargando...
-                          </span>
-                        )}
-                      </div>
-
-                      {tokenizationError && (
-                        <div className="mb-2">
-                          <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
-                            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-                            <span>{tokenizationError}</span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setTokenizationAttempted(false);
-                              setTokenizationError(null);
-                              if (conektaCardContainerRef.current) {
-                                conektaCardContainerRef.current.innerHTML = '';
-                              }
-                              initTokenization();
-                            }}
-                            disabled={tokenizingCard}
-                            className="mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
-                          >
-                            {tokenizingCard ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
-                            Reintentar
-                          </button>
-                        </div>
-                      )}
-
-                      {!tokenizationReady && !tokenizationError && (
-                        <div
-                          ref={conektaCardContainerRef}
-                          className="min-h-[120px] rounded-md bg-white border border-gray-200"
-                        />
-                      )}
-
-                      {tokenizationReady && (
-                        <div className="flex items-center gap-2 text-xs text-gray-600 bg-white rounded-md px-3 py-2 border border-green-200">
-                          <Lock className="h-3.5 w-3.5 text-green-600" />
-                          <span>Tu tarjeta ha sido verificada de forma segura. El cargo se procesará al confirmar el pago.</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* BNPL disclosure */}
           {conektaMethod === 'bnpl' && bnplAvailable && (

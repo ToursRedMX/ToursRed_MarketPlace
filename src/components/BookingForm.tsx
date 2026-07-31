@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Calendar, CreditCard, Users, AlertCircle, DollarSign, Settings, Minus, Plus, Crown, Sparkles, Wallet, Award, Ticket, X, Check, CheckCircle, Loader2, ShoppingBag, Info, Tag, RefreshCw, Clock, Car, Globe, AlertTriangle, MapPin, Bus, Shield, ShieldOff, ChevronRight } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 import SeatMapPicker from './seats/SeatMapPicker';
-import PaymentProviderSelector, { PaymentProvider, ConektaMethod, BNPL_MIN_AMOUNT, BNPL_MAX_AMOUNT, SubCharge } from './PaymentProviderSelector';
+import PaymentProviderSelector, { PaymentProvider, ConektaMethod } from './PaymentProviderSelector';
 import SlotCalendarPicker from './receptivo/SlotCalendarPicker';
 import SlotTimePicker from './receptivo/SlotTimePicker';
 import MinTravelersAlert from './receptivo/MinTravelersAlert';
@@ -58,8 +58,6 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const [selectedMembershipPlan, setSelectedMembershipPlan] = useState<'monthly' | 'annual'>('monthly');
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('stripe');
   const [conektaMethod, setConektaMethod] = useState<ConektaMethod>('card');
-  const [useSplitPayment, setUseSplitPayment] = useState(false);
-  const [splitCharges, setSplitCharges] = useState<SubCharge[] | null>(null);
   const [walletBalance, setWalletBalance] = useState(0);
   const [isLoadingWallet, setIsLoadingWallet] = useState(true);
   const [useToursRedCash, setUseToursRedCash] = useState(false);
@@ -1082,15 +1080,9 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const effectiveServiceCharge = isFullWalletPayment ? 0 : serviceCharge;
   const effectiveUserPayment = isFullWalletPayment ? userPayment - serviceCharge : userPayment;
 
-  const isBnplContext = paymentProvider === 'conekta' && conektaMethod === 'bnpl';
-  const bnplMaxPay = Math.min(totalToPayNow, BNPL_MAX_AMOUNT);
-  const minPayAmount = isBnplContext
-    ? BNPL_MIN_AMOUNT
-    : hasPaymentPlan && selectedPaymentMode === 'plan'
-      ? Math.max(10, paymentPlanMinimum)
-      : totalToPayNow;
-  const effectivePayAmount = useCustomAmount && customPayAmount && isBnplContext
-    ? Math.max(minPayAmount, Math.min(parseFloat(customPayAmount) || totalToPayNow, bnplMaxPay))
+  const minPartialAmount = 10;
+  const effectivePayAmount = useCustomAmount && customPayAmount
+    ? Math.max(minPartialAmount, Math.min(parseFloat(customPayAmount) || totalToPayNow, totalToPayNow))
     : totalToPayNow;
   const remainingAfterInitial = Math.max(0, totalToPayNow - effectivePayAmount);
 
@@ -1188,27 +1180,14 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
       return;
     }
 
-    if (useCustomAmount && isBnplContext) {
+    if (useCustomAmount) {
       const customAmt = parseFloat(customPayAmount);
-      if (!customAmt || customAmt < BNPL_MIN_AMOUNT) {
-        setError(`El monto mínimo para BNPL es ${formatCurrencyMXN(BNPL_MIN_AMOUNT)}.`);
+      if (!customAmt || customAmt < minPartialAmount) {
+        setError(`El monto mínimo para pagar ahora es ${formatCurrencyMXN(minPartialAmount)}.`);
         return;
       }
-      if (customAmt > bnplMaxPay) {
-        setError(`El monto no puede exceder ${formatCurrencyMXN(bnplMaxPay)}.`);
-        return;
-      }
-    }
-
-    if (useSplitPayment && splitCharges) {
-      const sum = splitCharges.reduce((acc, c) => acc + (c.amount || 0), 0);
-      if (Math.abs(sum - totalToPayNow) > 0.01) {
-        setError(`La suma de los pagos divididos (${formatCurrencyMXN(sum)}) debe ser exactamente ${formatCurrencyMXN(totalToPayNow)}.`);
-        return;
-      }
-      const cardWithoutToken = splitCharges.find(sc => sc.payment_method_type === 'card' && !sc.token_id);
-      if (cardWithoutToken) {
-        setError('Debes capturar los datos de tu tarjeta en el formulario de pago dividido antes de continuar.');
+      if (customAmt > totalToPayNow) {
+        setError(`El monto no puede exceder ${formatCurrencyMXN(totalToPayNow)}.`);
         return;
       }
     }
@@ -1252,7 +1231,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
         payment_provider: addMembershipToBooking ? 'stripe' : paymentProvider,
         conekta_method: paymentProvider === 'conekta' ? conektaMethod : null,
         bnpl_product_type: null,
-        conekta_sub_charges: paymentProvider === 'conekta' && useSplitPayment && splitCharges ? splitCharges : null,
+        conekta_sub_charges: null,
         promotion_id: promoResult.isActive && activePromotion ? activePromotion.id : null,
         promo_discount_amount: promoResult.isActive ? promoDiscountAmount : 0,
         pickup_type: isReceptivo && tour.pickup_available ? pickupType : null,
@@ -1276,7 +1255,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
         membership_cost: membershipCost,
       };
 
-      if (useCustomAmount && isBnplContext && effectivePayAmount < totalToPayNow) {
+      if (useCustomAmount && effectivePayAmount < totalToPayNow) {
         bookingData.initial_payment_amount = effectivePayAmount;
       }
 
@@ -3291,7 +3270,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
           </div>
         )}
 
-        {isBnplContext && !addMembershipToBooking && totalTravelers > 0 && totalToPayNow > 0 && (
+        {!addMembershipToBooking && totalTravelers > 0 && totalToPayNow >= 200 && (
           <div className="mb-4 bg-sky-50 border border-sky-200 rounded-lg p-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -3300,14 +3279,14 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                 onChange={(e) => {
                   setUseCustomAmount(e.target.checked);
                   if (e.target.checked) {
-                    setCustomPayAmount(bnplMaxPay.toFixed(2));
+                    setCustomPayAmount(totalToPayNow.toFixed(2));
                   } else {
                     setCustomPayAmount('');
                   }
                 }}
                 className="rounded border-gray-300 text-sky-600 focus:ring-sky-500"
               />
-              <span className="text-sm font-medium text-gray-800">Especificar cuánto pagar ahora</span>
+              <span className="text-sm font-medium text-gray-800">Quiero pagar con más de una forma de pago</span>
             </label>
             {useCustomAmount && (
               <div className="mt-3 space-y-2">
@@ -3315,16 +3294,16 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                   <label className="block text-xs text-gray-600 mb-1 font-medium">Monto a pagar en este intento</label>
                   <input
                     type="number"
-                    min={minPayAmount}
-                    max={bnplMaxPay}
+                    min={minPartialAmount}
+                    max={totalToPayNow}
                     step={0.01}
                     value={customPayAmount}
                     onChange={(e) => setCustomPayAmount(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-sky-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
                   />
                   <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>Mínimo: {formatCurrencyMXN(minPayAmount)}</span>
-                    <span>Máximo: {formatCurrencyMXN(bnplMaxPay)}</span>
+                    <span>Mínimo: {formatCurrencyMXN(minPartialAmount)}</span>
+                    <span>Máximo: {formatCurrencyMXN(totalToPayNow)}</span>
                   </div>
                 </div>
                 {remainingAfterInitial > 0 && (
@@ -3349,17 +3328,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
             disabled={isSubmitting}
             amount={effectivePayAmount}
             conektaMethod={conektaMethod}
-            onConektaMethodChange={(m) => {
-              setConektaMethod(m);
-              if (m !== 'bnpl') {
-                setUseCustomAmount(false);
-                setCustomPayAmount('');
-              }
-            }}
-            useSplitPayment={useSplitPayment}
-            onUseSplitPaymentChange={setUseSplitPayment}
-            splitCharges={splitCharges}
-            onSplitChargesChange={setSplitCharges}
+            onConektaMethodChange={setConektaMethod}
           />
         )}
 
