@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Calendar, CreditCard, Users, AlertCircle, DollarSign, Settings, Minus, Plus, Crown, Sparkles, Wallet, Award, Ticket, X, Check, CheckCircle, Loader2, ShoppingBag, Info, Tag, RefreshCw, Clock, Car, Globe, AlertTriangle, MapPin, Bus, Shield, ShieldOff, ChevronRight } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 import SeatMapPicker from './seats/SeatMapPicker';
-import PaymentProviderSelector, { PaymentProvider, ConektaMethod, BnplProduct, BNPL_MIN_AMOUNT, BNPL_MAX_AMOUNT, SubCharge } from './PaymentProviderSelector';
+import PaymentProviderSelector, { PaymentProvider, ConektaMethod, BNPL_MIN_AMOUNT, BNPL_MAX_AMOUNT, SubCharge } from './PaymentProviderSelector';
 import SlotCalendarPicker from './receptivo/SlotCalendarPicker';
 import SlotTimePicker from './receptivo/SlotTimePicker';
 import MinTravelersAlert from './receptivo/MinTravelersAlert';
@@ -58,7 +58,6 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const [selectedMembershipPlan, setSelectedMembershipPlan] = useState<'monthly' | 'annual'>('monthly');
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('stripe');
   const [conektaMethod, setConektaMethod] = useState<ConektaMethod>('card');
-  const [bnplProduct, setBnplProduct] = useState<BnplProduct>('aplazo_bnpl');
   const [useSplitPayment, setUseSplitPayment] = useState(false);
   const [splitCharges, setSplitCharges] = useState<SubCharge[] | null>(null);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -1247,7 +1246,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
         service_charge_discount: serviceChargeDiscountAmount,
         payment_provider: addMembershipToBooking ? 'stripe' : paymentProvider,
         conekta_method: paymentProvider === 'conekta' ? conektaMethod : null,
-        bnpl_product_type: paymentProvider === 'conekta' && conektaMethod === 'bnpl' ? bnplProduct : null,
+        bnpl_product_type: null,
         conekta_sub_charges: paymentProvider === 'conekta' && useSplitPayment && splitCharges ? splitCharges : null,
         promotion_id: promoResult.isActive && activePromotion ? activePromotion.id : null,
         promo_discount_amount: promoResult.isActive ? promoDiscountAmount : 0,
@@ -3353,8 +3352,6 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                 setCustomPayAmount('');
               }
             }}
-            bnplProduct={bnplProduct}
-            onBnplProductChange={setBnplProduct}
             useSplitPayment={useSplitPayment}
             onUseSplitPaymentChange={setUseSplitPayment}
             splitCharges={splitCharges}

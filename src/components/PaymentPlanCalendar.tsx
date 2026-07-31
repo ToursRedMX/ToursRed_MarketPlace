@@ -41,7 +41,6 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
   const [payAmount, setPayAmount] = useState('');
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('stripe');
   const [conektaMethod, setConektaMethod] = useState<ConektaMethod>('card');
-  const [bnplProduct, setBnplProduct] = useState('aplazo_bnpl');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState('');
@@ -120,7 +119,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
           plan_id: plan.id,
           amount,
           payment_method: paymentProvider,
-          ...(paymentProvider === 'conekta' ? { conekta_method: conektaMethod, bnpl_product_type: bnplProduct } : {}),
+          ...(paymentProvider === 'conekta' ? { conekta_method: conektaMethod } : {}),
         }),
       });
 
@@ -189,7 +188,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
           amount: plan.pending_balance,
           payment_method: paymentProvider,
           pay_full_balance: true,
-          ...(paymentProvider === 'conekta' ? { conekta_method: conektaMethod, bnpl_product_type: bnplProduct } : {}),
+          ...(paymentProvider === 'conekta' ? { conekta_method: conektaMethod } : {}),
         }),
       });
 
@@ -398,8 +397,6 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
                         amount={amountOwed}
                         conektaMethod={conektaMethod}
                         onConektaMethodChange={setConektaMethod}
-                        bnplProduct={bnplProduct}
-                        onBnplProductChange={setBnplProduct}
                       />
                       <div className="flex gap-2">
                         <button
@@ -449,8 +446,6 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
                 amount={plan.pending_balance}
                 conektaMethod={conektaMethod}
                 onConektaMethodChange={setConektaMethod}
-                bnplProduct={bnplProduct}
-                onBnplProductChange={setBnplProduct}
               />
             </div>
           )}

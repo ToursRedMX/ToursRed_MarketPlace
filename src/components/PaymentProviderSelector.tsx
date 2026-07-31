@@ -6,8 +6,6 @@ export type PaymentProvider = 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 
 
 export type ConektaMethod = 'bnpl' | 'card' | 'cash' | 'spei';
 
-export type BnplProduct = 'aplazo_bnpl' | 'creditea_bnpl' | 'coppel_bnpl';
-
 export type SubCharge = {
   amount: number;
   payment_method_type: 'card' | 'cash' | 'spei';
@@ -39,8 +37,6 @@ interface PaymentProviderSelectorProps {
   amount?: number;
   conektaMethod?: ConektaMethod;
   onConektaMethodChange?: (method: ConektaMethod) => void;
-  bnplProduct?: BnplProduct;
-  onBnplProductChange?: (product: BnplProduct) => void;
   useSplitPayment?: boolean;
   onUseSplitPaymentChange?: (useSplit: boolean) => void;
   splitCharges?: SubCharge[];
@@ -59,21 +55,10 @@ const PROVIDER_DESCRIPTIONS: Record<PaymentProvider, string> = {
   stripe: 'Visa, Mastercard, OXXO, transferencia bancaria',
   mercadopago: 'Tarjeta, efectivo, transferencia SPEI',
   paypal: 'Cuenta PayPal o tarjeta de crédito/débito',
-  conekta: 'Tarjeta, efectivo, SPEI, o financia con Aplazo/Creditea/Coppel Pay',
+  conekta: 'Tarjeta, efectivo, SPEI, o financia tu compra sin tarjeta',
   toursred_cash: 'Usa tu saldo de ToursRed Cash para abonar al plan',
 };
 
-const BNPL_PRODUCT_LABELS: Record<BnplProduct, string> = {
-  aplazo_bnpl: 'Aplazo',
-  creditea_bnpl: 'Creditea',
-  coppel_bnpl: 'Coppel Pay',
-};
-
-const BNPL_PRODUCT_DESCRIPTIONS: Record<BnplProduct, string> = {
-  aplazo_bnpl: 'Financia tu compra con Aplazo — paga a plazos sin tarjeta',
-  creditea_bnpl: 'Financia tu compra con Creditea — crédito digital al instante',
-  coppel_bnpl: 'Financia tu compra con Coppel Pay — paga desde tu app de Coppel',
-};
 
 const CONEKTA_METHOD_LABELS: Record<ConektaMethod, string> = {
   bnpl: 'Compra ahora, paga después (BNPL)',
@@ -116,8 +101,6 @@ export default function PaymentProviderSelector({
   amount = 0,
   conektaMethod = 'card',
   onConektaMethodChange,
-  bnplProduct = 'aplazo_bnpl',
-  onBnplProductChange,
   useSplitPayment = false,
   onUseSplitPaymentChange,
   splitCharges,
@@ -444,53 +427,15 @@ export default function PaymentProviderSelector({
             </div>
           )}
 
-          {/* BNPL product sub-selector */}
+          {/* BNPL disclosure */}
           {conektaMethod === 'bnpl' && bnplAvailable && (
-            <div className="mt-2 ml-1 pl-4 border-l-2 border-primary-100 space-y-1.5">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-medium text-gray-600">Proveedor de financiamiento:</span>
-              </div>
-              {(['aplazo_bnpl', 'creditea_bnpl', 'coppel_bnpl'] as BnplProduct[]).map((product) => {
-                const isProductSelected = bnplProduct === product;
-                return (
-                  <label
-                    key={product}
-                    className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all hover:border-primary-300 ${
-                      isProductSelected
-                        ? 'border-primary-400 bg-primary-50'
-                        : 'border-gray-200 bg-white'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="bnpl-product"
-                      value={product}
-                      checked={isProductSelected}
-                      disabled={disabled}
-                      onChange={() => onBnplProductChange?.(product)}
-                      className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300"
-                    />
-                    <div>
-                      <span className="text-xs font-medium text-gray-900">
-                        {BNPL_PRODUCT_LABELS[product]}
-                      </span>
-                      <p className="text-xs text-gray-400">
-                        {BNPL_PRODUCT_DESCRIPTIONS[product]}
-                      </p>
-                    </div>
-                  </label>
-                );
-              })}
-
-              {/* Mandatory BNPL disclosure */}
-              <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-start gap-2">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-800 leading-relaxed">
-                  Al cancelar tu reserva pagada con este método, tu compromiso de pago con
-                  la financiera continúa vigente. ToursRed te reembolsará en ToursRed Cash
-                  conforme a nuestra política de cancelación.
-                </p>
-              </div>
+            <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-start gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800 leading-relaxed">
+                Al cancelar tu reserva pagada con este método, tu compromiso de pago con
+                la financiera continúa vigente. ToursRed te reembolsará en ToursRed Cash
+                conforme a nuestra política de cancelación.
+              </p>
             </div>
           )}
         </div>

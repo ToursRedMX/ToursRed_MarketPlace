@@ -55,12 +55,8 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "payment_method_type debe ser bnpl, card, cash o spei" }, 400);
     }
 
-    if (payment_method_type === "bnpl" && !bnpl_product_type) {
-      return jsonResponse({ error: "bnpl_product_type es requerido para pagos BNPL" }, 400);
-    }
-
     if (payment_method_type === "bnpl") {
-      if (!["aplazo_bnpl", "creditea_bnpl", "coppel_bnpl"].includes(bnpl_product_type)) {
+      if (bnpl_product_type && !["aplazo_bnpl", "creditea_bnpl", "coppel_bnpl"].includes(bnpl_product_type)) {
         return jsonResponse({ error: "bnpl_product_type inválido" }, 400);
       }
       if (amount < 1200) {
@@ -154,20 +150,16 @@ Deno.serve(async (req: Request) => {
             tags: ["bnpl"],
           },
         ],
-        charges: [
-          {
-            payment_method: {
-              type: "bnpl",
-              product_type: bnpl_product_type,
-              success_url: successUrl,
-              failure_url: failureUrl,
-              cancel_url: cancelUrl,
-            },
-          },
-        ],
+        checkout: {
+          type: "HostedPayment",
+          allowed_payment_methods: ["bnpl"],
+          success_url: successUrl,
+          failure_url: failureUrl,
+          cancel_url: cancelUrl,
+          expires_at: Math.floor(Date.now() / 1000) + 71 * 3600,
+        },
         metadata: {
           booking_id,
-          bnpl_product_type,
           payment_method_type: "bnpl",
           context,
           charge_reference_id: charge_reference_id || "",
@@ -261,12 +253,7 @@ Deno.serve(async (req: Request) => {
 
     const order = await apiResponse.json();
     const orderId = order.id;
-    // BNPL orders use direct charges — redirect_url is nested in charges.data[0] or charges[0].
-    // Other methods (card/cash/spei/split) still use Hosted Checkout, so read checkout.url.
-    const bnplRedirectUrl =
-      order.charges?.data?.[0]?.payment_method?.redirect_url ||
-      order.charges?.[0]?.payment_method?.redirect_url;
-    const checkoutUrl = bnplRedirectUrl || order.checkout?.url;
+    const checkoutUrl = order.checkout?.url;
 
     if (!orderId) {
       console.error("Conekta response missing order id:", JSON.stringify(order));
@@ -285,14 +272,14 @@ Deno.serve(async (req: Request) => {
       processor_fee: 0,
       net_amount: amount,
       conekta_order_id: orderId,
-      bnpl_product_type: payment_method_type === "bnpl" ? bnpl_product_type : null,
+      bnpl_product_type: null,
       p_idempotency_key: idempotencyKey,
       charge_context: context,
       charge_reference_id: charge_reference_id || null,
       metadata: {
         conekta_order: order,
         checkout_url: checkoutUrl,
-        bnpl_product_type: payment_method_type === "bnpl" ? bnpl_product_type : undefined,
+
         sub_charges: sub_charges || undefined,
       },
     });
@@ -334,7 +321,7 @@ Deno.serve(async (req: Request) => {
       order_id: orderId,
       checkout_url: checkoutUrl,
       payment_method_type: sub_charges ? "split" : payment_method_type,
-      bnpl_product_type: payment_method_type === "bnpl" ? bnpl_product_type : undefined,
+
     });
   } catch (err: any) {
     console.error("Error in create-conekta-order:", err);

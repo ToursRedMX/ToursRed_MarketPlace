@@ -186,6 +186,29 @@ FwIDAQAB
         })
         .eq("id", tx.id);
 
+      // Sync the real BNPL product_type from the paid order (Conekta's Hosted Checkout
+      // lets the user pick the financier there, so we don't know it until the order is paid)
+      if (paymentMethodType === "bnpl" && conektaOrder) {
+        const realProductType =
+          conektaOrder.charges?.data?.[0]?.payment_method?.product_type ||
+          conektaOrder.charges?.[0]?.payment_method?.product_type ||
+          null;
+
+        if (realProductType) {
+          await supabase
+            .from("payment_transactions")
+            .update({ bnpl_product_type: realProductType })
+            .eq("id", tx.id);
+
+          if (bookingId) {
+            await supabase
+              .from("bookings")
+              .update({ bnpl_product_type: realProductType })
+              .eq("id", bookingId);
+          }
+        }
+      }
+
       // Update sub-charge records if this was a split order
       if (conektaOrder?.charges?.data && Array.isArray(conektaOrder.charges.data)) {
         for (const charge of conektaOrder.charges.data) {
