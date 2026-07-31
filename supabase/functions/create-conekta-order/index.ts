@@ -203,10 +203,6 @@ Deno.serve(async (req: Request) => {
             tags: ["split"],
           },
         ],
-        checkout: {
-          type: "HostedPayment",
-          returns_incomplete_on_error: true,
-        },
         charges: chargesPayload,
         metadata: {
           booking_id,
