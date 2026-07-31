@@ -90,6 +90,25 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Fetch user profile for customer_info (Conekta requires name + email on every order)
+    const { data: userProfile } = await supabase
+      .from("users")
+      .select("first_name, last_name, phone_number")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const customerName = `${userProfile?.first_name || ""} ${userProfile?.last_name || ""}`.trim() || "Cliente";
+    const customerEmail = user.email || "no-email@toursred.com";
+    const customerPhone = userProfile?.phone_number || null;
+
+    const customerInfo: Record<string, string> = {
+      name: customerName,
+      email: customerEmail,
+    };
+    if (customerPhone) {
+      customerInfo.phone = customerPhone;
+    }
+
     const conektaPrivateKey = Deno.env.get("CONEKTA_PRIVATE_KEY");
     if (!conektaPrivateKey) {
       return jsonResponse({ error: "Conekta no configurado" }, 500);
@@ -126,6 +145,7 @@ Deno.serve(async (req: Request) => {
       orderPayload = {
         currency: "MXN",
         amount: amountInCents,
+        customer_info: customerInfo,
         line_items: [
           {
             name: description || "Reserva ToursRed",
@@ -155,6 +175,7 @@ Deno.serve(async (req: Request) => {
       orderPayload = {
         currency: "MXN",
         amount: amountInCents,
+        customer_info: customerInfo,
         line_items: [
           {
             name: description || "Reserva ToursRed",
@@ -187,6 +208,7 @@ Deno.serve(async (req: Request) => {
       orderPayload = {
         currency: "MXN",
         amount: amountInCents,
+        customer_info: customerInfo,
         line_items: [
           {
             name: description || "Reserva ToursRed",
@@ -216,7 +238,7 @@ Deno.serve(async (req: Request) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Accept": "application/vnd.conekta-v2.0+json",
+        "Accept": "application/vnd.conekta-v2.2.0+json",
         "Authorization": `Bearer ${conektaPrivateKey}`,
         "X-Conekta-Client-Info": '{"name":"toursred","version":"1.0.0"}',
       },
