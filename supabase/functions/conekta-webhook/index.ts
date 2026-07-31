@@ -141,7 +141,9 @@ FwIDAQAB
       return jsonResponse({ received: true });
     }
 
-    // Idempotency: check if this event was already processed
+    // Fast-path idempotency check: skip if we definitely already processed this event.
+    // The real atomic gate is the conditional status UPDATE below (per event type) —
+    // this SELECT-based check only avoids redundant Conekta API calls for known duplicates.
     const processedEvents = (tx.metadata?.processed_webhook_events as string[]) || [];
     if (eventId && processedEvents.includes(eventId)) {
       console.log(`Event ${eventId} already processed for order ${orderId}, skipping`);
@@ -177,14 +179,23 @@ FwIDAQAB
     // succession, and querying the live order status may already return "paid" by
     // the time earlier events are processed, causing duplicate confirmations.
     if (eventType === "order.paid") {
-      // Mark the transaction as succeeded
-      await supabase
+      // Atomic idempotency gate: only transition to "succeeded" if not already succeeded.
+      // If 0 rows updated, another concurrent execution already claimed this event —
+      // skip all downstream logic (booking confirmation, CFDI, email) to avoid duplication.
+      const { data: claimed, error: claimErr } = await supabase
         .from("payment_transactions")
         .update({
           status: "succeeded",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", tx.id);
+        .eq("id", tx.id)
+        .neq("status", "succeeded")
+        .select("id");
+
+      if (claimErr || !claimed || claimed.length === 0) {
+        console.log(`Transaction ${tx.id} already succeeded (race won by another execution), skipping`);
+        return jsonResponse({ received: true });
+      }
 
       // Sync the real BNPL product_type from the paid order (Conekta's Hosted Checkout
       // lets the user pick the financier there, so we don't know it until the order is paid)
@@ -548,71 +559,87 @@ FwIDAQAB
 
     // ─── order.expired ───────────────────────────────────────────
     if (eventType === "order.expired") {
-      await supabase
+      // Atomic gate: only transition to "failed" if not already in a final state.
+      const { data: expiredClaim } = await supabase
         .from("payment_transactions")
         .update({
           status: "failed",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", tx.id);
+        .eq("id", tx.id)
+        .neq("status", "succeeded")
+        .neq("status", "failed")
+        .select("id");
 
-      // If BNPL, release the payment_pending_bnpl status
-      if (paymentMethodType === "bnpl" && chargeContext === "booking_deposit") {
-        const { data: booking } = await supabase
-          .from("bookings")
-          .select("status, user_payment")
-          .eq("id", bookingId)
-          .maybeSingle();
-
-        if (booking?.status === "payment_pending_bnpl") {
-          // Only revert to pending if no other partial payments exist
-          const { data: otherTx } = await supabase
-            .from("payment_transactions")
-            .select("amount, status")
-            .eq("booking_id", bookingId)
-            .eq("charge_context", "booking_deposit")
-            .eq("status", "succeeded");
-
-          const hasOtherPayments = (otherTx || []).length > 0;
-          await supabase
+      if (!expiredClaim || expiredClaim.length === 0) {
+        console.log(`Transaction ${tx.id} already in final state, skipping expired handler`);
+      } else {
+        // If BNPL, release the payment_pending_bnpl status
+        if (paymentMethodType === "bnpl" && chargeContext === "booking_deposit") {
+          const { data: booking } = await supabase
             .from("bookings")
-            .update({
-              status: hasOtherPayments ? "pending" : "pending",
-            })
-            .eq("id", bookingId);
-        }
-      }
+            .select("status, user_payment")
+            .eq("id", bookingId)
+            .maybeSingle();
 
-      console.log(`Conekta order ${orderId} expired for booking ${bookingId}`);
+          if (booking?.status === "payment_pending_bnpl") {
+            // Only revert to pending if no other partial payments exist
+            const { data: otherTx } = await supabase
+              .from("payment_transactions")
+              .select("amount, status")
+              .eq("booking_id", bookingId)
+              .eq("charge_context", "booking_deposit")
+              .eq("status", "succeeded");
+
+            const hasOtherPayments = (otherTx || []).length > 0;
+            await supabase
+              .from("bookings")
+              .update({
+                status: hasOtherPayments ? "pending" : "pending",
+              })
+              .eq("id", bookingId);
+          }
+        }
+
+        console.log(`Conekta order ${orderId} expired for booking ${bookingId}`);
+      }
     }
 
     // ─── order.declined ──────────────────────────────────────────
     if (eventType === "order.declined") {
-      await supabase
+      // Atomic gate: only transition to "failed" if not already in a final state.
+      const { data: declinedClaim } = await supabase
         .from("payment_transactions")
         .update({
           status: "failed",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", tx.id);
+        .eq("id", tx.id)
+        .neq("status", "succeeded")
+        .neq("status", "failed")
+        .select("id");
 
-      // Same treatment as expired for BNPL
-      if (paymentMethodType === "bnpl" && chargeContext === "booking_deposit") {
-        const { data: booking } = await supabase
-          .from("bookings")
-          .select("status")
-          .eq("id", bookingId)
-          .maybeSingle();
-
-        if (booking?.status === "payment_pending_bnpl") {
-          await supabase
+      if (!declinedClaim || declinedClaim.length === 0) {
+        console.log(`Transaction ${tx.id} already in final state, skipping declined handler`);
+      } else {
+        // Same treatment as expired for BNPL
+        if (paymentMethodType === "bnpl" && chargeContext === "booking_deposit") {
+          const { data: booking } = await supabase
             .from("bookings")
-            .update({ status: "pending" })
-            .eq("id", bookingId);
-        }
-      }
+            .select("status")
+            .eq("id", bookingId)
+            .maybeSingle();
 
-      console.log(`Conekta order ${orderId} declined for booking ${bookingId}`);
+          if (booking?.status === "payment_pending_bnpl") {
+            await supabase
+              .from("bookings")
+              .update({ status: "pending" })
+              .eq("id", bookingId);
+          }
+        }
+
+        console.log(`Conekta order ${orderId} declined for booking ${bookingId}`);
+      }
     }
 
     // Mark event as processed (idempotency)
