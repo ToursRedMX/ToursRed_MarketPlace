@@ -10,6 +10,7 @@ const corsHeaders = {
 interface SubCharge {
   amount: number;
   payment_method_type: "card" | "cash" | "spei";
+  token_id?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -166,7 +167,30 @@ Deno.serve(async (req: Request) => {
         },
       };
     } else if (sub_charges && sub_charges.length >= 2) {
-      // Split native order (card+cash+spei)
+      // Split native order (card+cash+spei) — uses charges array with individual payment methods
+      const chargesPayload = sub_charges.map((sc: SubCharge) => {
+        const chargeAmount = Math.round(sc.amount * 100);
+        if (sc.payment_method_type === "card") {
+          if (!sc.token_id) {
+            throw new Error("Sub-cargo tipo card requiere token_id (token de tarjeta)");
+          }
+          return {
+            amount: chargeAmount,
+            payment_method: {
+              type: "card",
+              token_id: sc.token_id,
+            },
+          };
+        }
+        return {
+          amount: chargeAmount,
+          payment_method: {
+            type: sc.payment_method_type,
+            expires_at: Math.floor(Date.now() / 1000) + 72 * 3600,
+          },
+        };
+      });
+
       orderPayload = {
         currency: "MXN",
         amount: amountInCents,
@@ -181,12 +205,9 @@ Deno.serve(async (req: Request) => {
         ],
         checkout: {
           type: "HostedPayment",
-          allowed_payment_methods: sub_charges.map((sc: SubCharge) => sc.payment_method_type),
-          success_url: successUrl,
-          failure_url: failureUrl,
-          cancel_url: cancelUrl,
-          expires_at: Math.floor(Date.now() / 1000) + 71 * 3600,
+          returns_incomplete_on_error: true,
         },
+        charges: chargesPayload,
         metadata: {
           booking_id,
           payment_method_type: "split",

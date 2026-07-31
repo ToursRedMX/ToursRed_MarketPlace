@@ -1206,6 +1206,11 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
         setError(`La suma de los pagos divididos (${formatCurrencyMXN(sum)}) debe ser exactamente ${formatCurrencyMXN(totalToPayNow)}.`);
         return;
       }
+      const cardWithoutToken = splitCharges.find(sc => sc.payment_method_type === 'card' && !sc.token_id);
+      if (cardWithoutToken) {
+        setError('Debes capturar los datos de tu tarjeta en el formulario de pago dividido antes de continuar.');
+        return;
+      }
     }
 
     try {

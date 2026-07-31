@@ -575,12 +575,35 @@ const TravelersInfoPage: React.FC = () => {
       const pointsUsed = booking?.points_used || 0;
       const pointsDiscountAmount = pointsUsed / 100; // convertir puntos a pesos
       const toursRedCashUsed = booking?.toursred_cash_used || 0;
-      const rawAmountToCharge = Math.max(0, Math.round(((booking?.user_payment || 0) - pointsDiscountAmount - toursRedCashUsed) * 100) / 100);
+
+      // Check if there are prior successful payments for this booking
+      const { data: priorPayments } = await supabase
+        .from('payment_transactions')
+        .select('id, status, charge_context')
+        .eq('booking_id', bookingId)
+        .eq('charge_context', 'booking_deposit')
+        .eq('status', 'succeeded');
+
+      const hasPriorPayment = !!(priorPayments && priorPayments.length > 0);
+
+      // For the first payment, use initial_payment_amount if it's set and less than user_payment
+      // For subsequent payments (completing a partial payment), use user_payment as the full remaining balance
+      const basePaymentAmount = !hasPriorPayment
+        && booking?.initial_payment_amount
+        && booking.initial_payment_amount > 0
+        && booking.initial_payment_amount < (booking?.user_payment || 0)
+        ? booking.initial_payment_amount
+        : booking?.user_payment || 0;
+
+      const rawAmountToCharge = Math.max(0, Math.round((basePaymentAmount - pointsDiscountAmount - toursRedCashUsed) * 100) / 100);
       // Si el residuo es menor a $10 (mínimo de los procesadores de pago), se absorbe como pago completo
       const amountToCharge = rawAmountToCharge < 10 ? 0 : rawAmountToCharge;
 
       console.log('💵 Cálculo de pago:', {
         user_payment: booking?.user_payment,
+        initial_payment_amount: booking?.initial_payment_amount,
+        hasPriorPayment,
+        basePaymentAmount,
         pointsUsed,
         pointsDiscountAmount,
         toursRedCashUsed,

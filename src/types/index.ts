@@ -414,6 +414,7 @@ export interface Booking {
   platform_revenue?: number;
   payment_intent_id?: string;
   payment_status?: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled';
+  initial_payment_amount?: number;
   payment_method?: string;
   paid_at?: string;
   approval_status?: 'pending' | 'approved' | 'rejected';
