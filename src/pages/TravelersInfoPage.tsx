@@ -735,6 +735,42 @@ const TravelersInfoPage: React.FC = () => {
         } else {
           throw new Error('No se recibió la URL de PayPal');
         }
+      } else if (paymentProvider === 'conekta') {
+        const conektaResponse = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-conekta-order`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              booking_id: bookingId,
+              amount: amountToCharge,
+              payment_method_type: (booking as any)?.conekta_method || 'card',
+              bnpl_product_type: (booking as any)?.bnpl_product_type || undefined,
+              context: 'booking_deposit',
+              description: `Depósito para ${tour?.name}`,
+            }),
+          }
+        );
+
+        if (!conektaResponse.ok) {
+          const errorData = await conektaResponse.json();
+          throw new Error(errorData.error || 'Error al crear orden de Conekta');
+        }
+
+        const conektaResult = await conektaResponse.json();
+
+        if (!conektaResult.success) {
+          throw new Error(conektaResult.error || 'Error al crear orden de Conekta');
+        }
+
+        if (conektaResult.checkout_url) {
+          window.location.href = conektaResult.checkout_url;
+        } else {
+          throw new Error('No se recibió la URL de pago de Conekta');
+        }
       } else {
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`,

@@ -76,7 +76,7 @@ Deno.serve(async (req: Request) => {
     // ============================================================
     const { data: tx } = await supabase
       .from("payment_transactions")
-      .select("id, booking_id, payment_processor, stripe_payment_intent_id, paypal_capture_id, mercadopago_payment_id, amount, payment_method_type, processor_fee, charge_context, charge_reference_id")
+      .select("id, booking_id, payment_processor, stripe_payment_intent_id, paypal_capture_id, mercadopago_payment_id, conekta_order_id, amount, payment_method_type, processor_fee, charge_context, charge_reference_id")
       .eq("id", payment_transaction_id)
       .maybeSingle();
 
@@ -109,6 +109,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Conekta: only card transactions are eligible for original-method refund
+    if (processor === "conekta" && tx.payment_method_type !== "card") {
+      return new Response(
+        JSON.stringify({ error: `Los pagos via Conekta (${tx.payment_method_type}) no son reembolsables a metodo original. Usa ToursRed Cash.` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     let processorOriginalReference: string | null = null;
     if (processor === "stripe") {
       processorOriginalReference = tx.stripe_payment_intent_id;
@@ -116,6 +124,8 @@ Deno.serve(async (req: Request) => {
       processorOriginalReference = tx.paypal_capture_id;
     } else if (processor === "mercadopago") {
       processorOriginalReference = tx.mercadopago_payment_id;
+    } else if (processor === "conekta") {
+      processorOriginalReference = tx.conekta_order_id;
     }
 
     if (!processorOriginalReference) {
@@ -313,6 +323,44 @@ Deno.serve(async (req: Request) => {
         const refundData = await refundResponse.json();
         processorRefundId = refundData.id ? String(refundData.id) : null;
         processorFeeLost = 0;
+
+      } else if (processor === "conekta") {
+        // Conekta card-only refund: uses the order ID to refund the charge
+        const conektaPrivateKey = Deno.env.get("CONEKTA_PRIVATE_KEY");
+        if (!conektaPrivateKey) throw new Error("CONEKTA_PRIVATE_KEY no configurado");
+
+        const conektaApiBase = Deno.env.get("CONEKTA_API_BASE") || "https://api.conekta.io";
+        const refundAmountCents = Math.round(amount * 100);
+
+        const refundResponse = await fetch(`${conektaApiBase}/orders/${processorOriginalReference}/refunds`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.conekta-v2.0+json",
+            "Authorization": `Bearer ${conektaPrivateKey}`,
+          },
+          body: JSON.stringify({
+            amount: refundAmountCents,
+            reason: "requested_by_customer",
+            metadata: {
+              booking_id,
+              toursred_refund_id: refundId,
+              toursred_payment_transaction_id: tx.id,
+            },
+          }),
+        });
+
+        if (!refundResponse.ok) {
+          const errorBody = await refundResponse.text();
+          throw new Error(`Conekta refund failed: ${errorBody}`);
+        }
+
+        const refundData = await refundResponse.json();
+        processorRefundId = refundData.id ? String(refundData.id) : null;
+        const originalFee = parseFloat(tx.processor_fee) || 0;
+        processorFeeLost = originalAmount > 0
+          ? Math.round((originalFee * (amount / originalAmount)) * 100) / 100
+          : 0;
       }
 
       // ============================================================

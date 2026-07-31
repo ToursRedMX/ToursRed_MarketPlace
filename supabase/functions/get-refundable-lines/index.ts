@@ -17,7 +17,7 @@ const CHARGE_CONTEXT_TO_REFERENCE_TYPE: Record<string, string> = {
   featured_slot: "featured_slot",
 };
 
-const NON_REFUNDABLE_METHODS = ["OXXO", "Transferencia Bancaria", "Efectivo"];
+const NON_REFUNDABLE_METHODS = ["OXXO", "Transferencia Bancaria", "Efectivo", "bnpl", "cash", "spei"];
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -320,6 +320,11 @@ Deno.serve(async (req: Request) => {
         NON_REFUNDABLE_METHODS.includes(tx.payment_method_type || "") ||
         !tx.payment_processor;
 
+      // For Conekta, only card transactions are eligible for original-method refund
+      const isConektaCardOnly =
+        tx.payment_processor === "conekta" &&
+        tx.payment_method_type === "card";
+
       return {
         payment_transaction_id: tx.id,
         description,
@@ -332,6 +337,7 @@ Deno.serve(async (req: Request) => {
         points_earned: pointsEarned,
         points_earned_is_estimated: pointsEstimated,
         refundable_to_original: !isNonRefundable,
+        original_method_eligible: isConektaCardOnly || (!isNonRefundable && tx.payment_processor !== "conekta"),
         existing_refund: existingRefund
           ? {
               payment_refund_id: existingRefund.id,
