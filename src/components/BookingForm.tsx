@@ -1225,7 +1225,9 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
         deposit_amount: effectiveDepositAmount,
         commission_amount: agencyCommission,
         service_charge: effectiveServiceCharge,
-        user_payment: effectiveUserPayment + extrasTotalWithServiceCharge + effectiveInsuranceCost + membershipCost,
+        user_payment: paymentProvider === 'conekta'
+          ? 0
+          : (effectiveUserPayment + extrasTotalWithServiceCharge + effectiveInsuranceCost + membershipCost),
         platform_revenue: platformRevenue,
         booking_date: isReceptivo && selectedSlot ? selectedSlot.slot_date : (isTransferCustomTime && selectedSlotDate ? selectedSlotDate.toISOString().split('T')[0] : tour.start_date),
         slot_id: isReceptivo && selectedSlot ? selectedSlot.id : null,
@@ -1272,7 +1274,6 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
       };
 
       if (useCustomAmount && isBnplContext && effectivePayAmount < totalToPayNow) {
-        bookingData.user_payment = effectivePayAmount;
         bookingData.initial_payment_amount = effectivePayAmount;
       }
 
