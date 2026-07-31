@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { Users, ArrowLeft, Save, UserPlus, Check, AlertCircle, AlertTriangle, Lock, Shield, Copy } from 'lucide-react';
+import { Users, ArrowLeft, Save, UserPlus, Check, AlertCircle, AlertTriangle, Lock, Shield, Copy, Landmark, Banknote, CheckCircle2, Clock, CreditCard } from 'lucide-react';
 import { formatCurrencyMXN, formatCurrency } from '../utils/formatCurrency';
 import { supabase } from '../lib/supabase';
 import { Booking, BookingTraveler, Tour, FrequentCompanion } from '../types';
@@ -41,6 +41,19 @@ const TravelersInfoPage: React.FC = () => {
   const [mpBrick, setMpBrick] = useState<{ preferenceId: string; publicKey: string; amount: number } | null>(null);
   const [copyEmergencyToAll, setCopyEmergencyToAll] = useState(false);
   const [showSaveEmergencyContactModal, setShowSaveEmergencyContactModal] = useState(false);
+  const [splitInstructions, setSplitInstructions] = useState<{
+    order_id: string;
+    charges: Array<{
+      payment_method_type: string;
+      amount: number;
+      status: string;
+      clabe?: string;
+      bank?: string;
+      reference?: string;
+      barcode_url?: string;
+      expires_at?: number;
+    }>;
+  } | null>(null);
   const [userProfile, setUserProfile] = useState<{
     curp?: string;
     passport_number?: string;
@@ -790,6 +803,15 @@ const TravelersInfoPage: React.FC = () => {
           throw new Error(conektaResult.error || 'Error al crear orden de Conekta');
         }
 
+        // Split orders: no checkout URL — show per-charge instructions on screen
+        if (conektaResult.is_split && conektaResult.split_charges) {
+          setSplitInstructions({
+            order_id: conektaResult.order_id,
+            charges: conektaResult.split_charges,
+          });
+          return;
+        }
+
         if (conektaResult.checkout_url) {
           window.location.href = conektaResult.checkout_url;
         } else {
@@ -885,6 +907,173 @@ const TravelersInfoPage: React.FC = () => {
     booking?.status === 'confirmed' ||
     booking?.status === 'completed';
   const nameChangesBlocked = !!(tour as any)?.name_changes_not_allowed && isEditingExistingBooking;
+
+  if (splitInstructions) {
+    const cardCharges = splitInstructions.charges.filter(c => c.payment_method_type === 'card');
+    const speiCharges = splitInstructions.charges.filter(c => c.payment_method_type === 'spei' || c.payment_method_type === 'bank_transfer');
+    const cashCharges = splitInstructions.charges.filter(c => c.payment_method_type === 'cash' || c.payment_method_type === 'oxxo_cash');
+
+    const formatDate = (timestamp?: number) => {
+      if (!timestamp) return '';
+      return new Date(timestamp * 1000).toLocaleString('es-MX', {
+        day: '2-digit', month: 'long', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    };
+
+    const copyToClipboard = (text: string) => {
+      navigator.clipboard.writeText(text).catch(() => {});
+    };
+
+    const allPaid = splitInstructions.charges.every(c => c.status === 'paid');
+
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-2xl mx-auto px-4">
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="flex items-center mb-4">
+              <CheckCircle2 className="w-7 h-7 text-green-600 mr-3" />
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Orden de pago dividido creada</h1>
+                <p className="text-sm text-gray-500">Orden: {splitInstructions.order_id}</p>
+              </div>
+            </div>
+
+            {/* Card charges — already processed */}
+            {cardCharges.length > 0 && (
+              <div className="border border-green-200 rounded-lg p-4 mb-4 bg-green-50/50">
+                <div className="flex items-center gap-2 mb-1">
+                  <CreditCard className="w-5 h-5 text-green-600" />
+                  <h2 className="font-semibold text-gray-900">Pago con tarjeta</h2>
+                  {cardCharges[0].status === 'paid' && (
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Pagado</span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600">
+                  Se ha cargado <strong>{formatCurrencyMXN(cardCharges[0].amount)}</strong> a tu tarjeta correctamente.
+                </p>
+              </div>
+            )}
+
+            {/* SPEI instructions */}
+            {speiCharges.map((sc, i) => (
+              <div key={`spei-${i}`} className="border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Landmark className="w-5 h-5 text-blue-600" />
+                  <h2 className="font-semibold text-gray-900">Pago por transferencia bancaria (SPEI)</h2>
+                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Pendiente</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-3">
+                  Transfiere <strong>{formatCurrencyMXN(sc.amount)}</strong> usando los siguientes datos:
+                </p>
+                <div className="space-y-3">
+                  {sc.clabe && (
+                    <div className="flex items-center justify-between bg-gray-50 rounded-md px-3 py-2">
+                      <div>
+                        <p className="text-xs text-gray-500">CLABE interbancaria</p>
+                        <p className="font-mono text-sm font-semibold text-gray-900 select-all">{sc.clabe}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(sc.clabe!)}
+                        className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-xs"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        Copiar
+                      </button>
+                    </div>
+                  )}
+                  {sc.bank && (
+                    <div>
+                      <p className="text-xs text-gray-500">Banco receptor</p>
+                      <p className="text-sm font-medium text-gray-900">{sc.bank}</p>
+                    </div>
+                  )}
+                  {sc.expires_at && (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-700">
+                      <Clock className="w-3.5 h-3.5" />
+                      Vence el {formatDate(sc.expires_at)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Cash instructions */}
+            {cashCharges.map((sc, i) => (
+              <div key={`cash-${i}`} className="border border-orange-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Banknote className="w-5 h-5 text-orange-600" />
+                  <h2 className="font-semibold text-gray-900">Pago en efectivo</h2>
+                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Pendiente</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-3">
+                  Paga <strong>{formatCurrencyMXN(sc.amount)}</strong> en cualquier tienda participante:
+                </p>
+                <div className="space-y-3">
+                  {sc.reference && (
+                    <div className="flex items-center justify-between bg-gray-50 rounded-md px-3 py-2">
+                      <div>
+                        <p className="text-xs text-gray-500">Referencia</p>
+                        <p className="font-mono text-sm font-semibold text-gray-900 select-all">{sc.reference}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(sc.reference!)}
+                        className="text-orange-600 hover:text-orange-700 flex items-center gap-1 text-xs"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        Copiar
+                      </button>
+                    </div>
+                  )}
+                  {sc.barcode_url && (
+                    <div className="text-center">
+                      <img src={sc.barcode_url} alt="Código de barras" className="mx-auto max-h-24" />
+                    </div>
+                  )}
+                  {sc.expires_at && (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-700">
+                      <Clock className="w-3.5 h-3.5" />
+                      Vence el {formatDate(sc.expires_at)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {allPaid && (
+              <div className="border border-green-300 rounded-lg p-4 bg-green-50">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  <p className="text-sm font-medium text-green-800">
+                    Todos los pagos se han completado. Tu reserva está confirmada.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => navigate(`/booking-pending?booking_id=${bookingId}&order_id=${splitInstructions.order_id}`)}
+                className="px-6 py-3 rounded-md font-semibold bg-primary-600 text-white hover:bg-primary-700"
+              >
+                Ver estado de mi reserva
+              </button>
+              <button
+                onClick={() => navigate('/traveler/dashboard')}
+                className="px-6 py-3 rounded-md font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200"
+              >
+                Ir a mi panel
+              </button>
+            </div>
+
+            <p className="mt-4 text-xs text-gray-400">
+              Guarda esta información. Recibirás una confirmación por correo cuando cada pago se refleje.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (mpBrick) {
     return (

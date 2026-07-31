@@ -277,6 +277,46 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Respuesta inválida de Conekta" }, 500);
     }
 
+    // For split orders, extract per-charge payment instructions from the response
+    let splitChargeDetails: Array<{
+      payment_method_type: string;
+      amount: number;
+      status: string;
+      clabe?: string;
+      bank?: string;
+      reference?: string;
+      barcode_url?: string;
+      expires_at?: number;
+      token_id?: string;
+    }> = [];
+
+    const isSplitOrder = !!(sub_charges && sub_charges.length >= 2);
+
+    if (isSplitOrder && order.charges && Array.isArray(order.charges.data)) {
+      splitChargeDetails = order.charges.data.map((charge: any) => {
+        const pm = charge.payment_method || {};
+        const detail: any = {
+          payment_method_type: pm.type || charge.payment_method_type || "unknown",
+          amount: charge.amount / 100,
+          status: charge.status || "pending",
+        };
+        if (pm.type === "spei" || pm.type === "bank_transfer") {
+          detail.clabe = pm.clabe || pm.bank_account_number;
+          detail.bank = pm.bank;
+          detail.expires_at = pm.expires_at;
+        }
+        if (pm.type === "cash" || pm.type === "oxxo_cash" || pm.type === "cash_on_delivery") {
+          detail.reference = pm.reference || pm.cash_on_delivery_reference;
+          detail.barcode_url = pm.barcode_url || pm.reference_url;
+          detail.expires_at = pm.expires_at;
+        }
+        if (pm.type === "card" && pm.token_id) {
+          detail.token_id = pm.token_id;
+        }
+        return detail;
+      });
+    }
+
     // Insert payment_transactions record
     const { error: txInsertErr } = await supabase.from("payment_transactions").insert({
       booking_id,
@@ -338,7 +378,8 @@ Deno.serve(async (req: Request) => {
       order_id: orderId,
       checkout_url: checkoutUrl,
       payment_method_type: sub_charges ? "split" : payment_method_type,
-
+      is_split: !!(sub_charges && sub_charges.length >= 2),
+      split_charges: splitChargeDetails.length > 0 ? splitChargeDetails : undefined,
     });
   } catch (err: any) {
     console.error("Error in create-conekta-order:", err);
