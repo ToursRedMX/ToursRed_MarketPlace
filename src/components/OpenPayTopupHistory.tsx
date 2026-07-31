@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Building2, QrCode, Clock, CheckCircle2, XCircle, RefreshCw, AlertCircle,
 } from 'lucide-react';
@@ -58,8 +58,8 @@ const OpenPayTopupHistory: React.FC = () => {
     loadTopups();
   }, [loadTopups]);
 
-  const handleCheckStatus = async (topupId: string) => {
-    setCheckingId(topupId);
+  const checkStatus = async (topupId: string, silent: boolean) => {
+    if (!silent) setCheckingId(topupId);
     try {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
@@ -83,9 +83,44 @@ const OpenPayTopupHistory: React.FC = () => {
     } catch {
       // silent
     } finally {
-      setCheckingId(null);
+      if (!silent) setCheckingId(null);
     }
   };
+
+  const handleCheckStatus = (topupId: string) => checkStatus(topupId, false);
+
+  const POLL_INTERVAL = 25000;
+  const POLL_TIMEOUT = 30 * 60 * 1000;
+  const pollStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const pendingTopups = topups.filter(
+      (t) => t.status === 'pending' || t.status === 'awaiting_transfer'
+    );
+
+    if (pendingTopups.length === 0) {
+      pollStartRef.current = null;
+      return;
+    }
+
+    if (pollStartRef.current === null) {
+      pollStartRef.current = Date.now();
+    }
+
+    if (Date.now() - pollStartRef.current >= POLL_TIMEOUT) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      if (Date.now() - (pollStartRef.current ?? Date.now()) >= POLL_TIMEOUT) {
+        clearInterval(interval);
+        return;
+      }
+      pendingTopups.forEach((t) => checkStatus(t.id, true));
+    }, POLL_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [topups]);
 
   if (isLoading) {
     return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X, Plus, Building2, QrCode, Copy, Check, AlertCircle, Loader2,
   Clock, ArrowLeft, RefreshCw, CheckCircle2, XCircle,
@@ -141,7 +141,7 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
     }
   };
 
-  const handleCheckStatus = async () => {
+  const checkStatus = async (silent: boolean) => {
     if (!topupData?.topup_id) return;
 
     try {
@@ -168,16 +168,33 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
           onSuccess();
           handleClose();
         }, 3000);
-      } else {
-        // Still pending — show a brief message but stay on instructions
+      } else if (!silent) {
         setError('Tu pago aun no ha sido confirmado. Intenta nuevamente en unos momentos.');
         setTimeout(() => setError(null), 3000);
       }
     } catch {
-      setError('No se pudo verificar el estado. Intenta nuevamente.');
-      setTimeout(() => setError(null), 3000);
+      if (!silent) {
+        setError('No se pudo verificar el estado. Intenta nuevamente.');
+        setTimeout(() => setError(null), 3000);
+      }
     }
   };
+
+  const handleCheckStatus = () => checkStatus(false);
+
+  const isWaitingForPayment = step === 'spei-instructions' || step === 'codi-qr';
+  const topupIdRef = useRef(topupData?.topup_id);
+  topupIdRef.current = topupData?.topup_id;
+
+  useEffect(() => {
+    if (!isOpen || !isWaitingForPayment || !topupData?.topup_id) return;
+
+    const interval = setInterval(() => {
+      if (topupIdRef.current) checkStatus(true);
+    }, 6000);
+
+    return () => clearInterval(interval);
+  }, [isOpen, isWaitingForPayment, topupData?.topup_id]);
 
   const effectiveAmount = getEffectiveAmount();
   const validationError = effectiveAmount ? validateAmount(effectiveAmount) : null;
