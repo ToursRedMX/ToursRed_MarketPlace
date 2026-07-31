@@ -7,32 +7,63 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+function pemToArrayBuffer(pem: string): ArrayBuffer {
+  // Strip PEM headers/footers and whitespace, decode base64 to ArrayBuffer
+  const b64 = pem
+    .replace(/-----BEGIN PUBLIC KEY-----/g, "")
+    .replace(/-----END PUBLIC KEY-----/g, "")
+    .replace(/-----BEGIN RSA PUBLIC KEY-----/g, "")
+    .replace(/-----END RSA PUBLIC KEY-----/g, "")
+    .replace(/\s/g, "");
+  const binaryString = atob(b64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 async function verifyConektaSignature(
   rawBody: string,
-  signatureHeader: string | null,
-  signingKey: string
+  digestHeader: string | null,
+  signingKeyPem: string
 ): Promise<boolean> {
-  if (!signingKey) return false;
-  if (!signatureHeader) return false;
+  if (!signingKeyPem) return false;
+  if (!digestHeader) return false;
 
-  // Conekta sends a hex HMAC-SHA256 signature in the conekta-signature header
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(signingKey);
-  const messageData = encoder.encode(rawBody);
+  try {
+    // Decode the base64 signature from the digest header
+    const signatureB64 = digestHeader.replace(/\s/g, "");
+    const sigBinary = atob(signatureB64);
+    const signatureBytes = new Uint8Array(sigBinary.length);
+    for (let i = 0; i < sigBinary.length; i++) {
+      signatureBytes[i] = sigBinary.charCodeAt(i);
+    }
 
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
+    // Import the RSA public key (PEM format → SPKI ArrayBuffer)
+    const keyBuffer = pemToArrayBuffer(signingKeyPem);
+    const publicKey = await crypto.subtle.importKey(
+      "spki",
+      keyBuffer,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
 
-  const signature = await crypto.subtle.sign("HMAC", cryptoKey, messageData);
-  const hashArray = Array.from(new Uint8Array(signature));
-  const computed = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    // Verify the signature against the raw request body (UTF-8)
+    const rawBodyBytes = new TextEncoder().encode(rawBody);
+    const isValid = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      publicKey,
+      signatureBytes,
+      rawBodyBytes
+    );
 
-  return computed === signatureHeader;
+    return isValid;
+  } catch (err) {
+    console.error("Error verifying Conekta RSA signature:", err);
+    return false;
+  }
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -56,17 +87,27 @@ Deno.serve(async (req: Request) => {
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
 
-    const signingKey = Deno.env.get("CONEKTA_WEBHOOK_SIGNING_KEY");
-    const signatureHeader = req.headers.get("conekta-signature") || req.headers.get("x-conekta-signature");
+    // Conekta uses RSA-SHA256 signing (not HMAC). The public key is not secret — it's
+    // designed to be shared. We embed it directly so verification works even if the
+    // CONEKTA_WEBHOOK_SIGNING_KEY env var is missing or holds a stale HMAC value.
+    const CONEKTA_WEBHOOK_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlcnbdNdXlwl8CE5peF4Y
++MX1JgwQx8q1GLkXB5FyAGzhMC+BKpx39WC+5u4eg11XeBKHo/gP/VxPZLFYGYjK
+H53USd5UYP178z2gHTZVMjIUHGvwf8sCAqICOCOWfivMuReqhnHHaae7whW2vDm0
+ZSj55evrN3zzdlh0Usx/1xgdbLZlgyaHTe63wCPDKuLb9L90tv0lcpyWkgI/TAq7
+Cry7hm9NuMeo95Vm5fqBtsQum9AwT9I8Qk0uVUvA9cgeNrdaUXAgHHhk0YwkbOQk
+zYCOsxIEAZSRKUhId1xG67KNn0m1ZvOCC7ftNEC6xy7CItO3FWF3ZbAZx0PfUZAd
+FwIDAQAB
+-----END PUBLIC KEY-----`;
 
-    if (signingKey) {
-      const isValid = await verifyConektaSignature(rawBody, signatureHeader, signingKey);
-      if (!isValid) {
-        console.error("Invalid Conekta webhook signature");
-        return jsonResponse({ error: "Invalid signature" }, 401);
-      }
-    } else {
-      console.warn("CONEKTA_WEBHOOK_SIGNING_KEY not configured, skipping signature validation");
+    const signingKey = Deno.env.get("CONEKTA_WEBHOOK_SIGNING_KEY") || CONEKTA_WEBHOOK_PUBLIC_KEY;
+    // Conekta sends the RSA-SHA256 signature (base64) in the digest header
+    const digestHeader = req.headers.get("digest");
+
+    const isValid = await verifyConektaSignature(rawBody, digestHeader, signingKey);
+    if (!isValid) {
+      console.error("Invalid Conekta webhook signature");
+      return jsonResponse({ error: "Invalid signature" }, 401);
     }
 
     let body: any;
@@ -115,7 +156,7 @@ Deno.serve(async (req: Request) => {
     if (conektaPrivateKey) {
       const orderResp = await fetch(`${conektaApiBase}/orders/${orderId}`, {
         headers: {
-          "Accept": "application/vnd.conekta-v2.0+json",
+          "Accept": "application/vnd.conekta-v2.2.0+json",
           "Authorization": `Bearer ${conektaPrivateKey}`,
         },
       });
