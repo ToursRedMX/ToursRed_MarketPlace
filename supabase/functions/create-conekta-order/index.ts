@@ -154,14 +154,17 @@ Deno.serve(async (req: Request) => {
             tags: ["bnpl"],
           },
         ],
-        checkout: {
-          type: "HostedPayment",
-          allowed_payment_methods: ["bnpl"],
-          success_url: successUrl,
-          failure_url: failureUrl,
-          cancel_url: cancelUrl,
-          expires_at: Math.floor(Date.now() / 1000) + 71 * 3600,
-        },
+        charges: [
+          {
+            payment_method: {
+              type: "bnpl",
+              product_type: bnpl_product_type,
+              success_url: successUrl,
+              failure_url: failureUrl,
+              cancel_url: cancelUrl,
+            },
+          },
+        ],
         metadata: {
           booking_id,
           bnpl_product_type,
@@ -258,7 +261,12 @@ Deno.serve(async (req: Request) => {
 
     const order = await apiResponse.json();
     const orderId = order.id;
-    const checkoutUrl = order.checkout?.url;
+    // BNPL orders use direct charges — redirect_url is nested in charges.data[0] or charges[0].
+    // Other methods (card/cash/spei/split) still use Hosted Checkout, so read checkout.url.
+    const bnplRedirectUrl =
+      order.charges?.data?.[0]?.payment_method?.redirect_url ||
+      order.charges?.[0]?.payment_method?.redirect_url;
+    const checkoutUrl = bnplRedirectUrl || order.checkout?.url;
 
     if (!orderId) {
       console.error("Conekta response missing order id:", JSON.stringify(order));

@@ -172,7 +172,11 @@ FwIDAQAB
     const chargeReferenceId: string | null = tx.charge_reference_id;
 
     // ─── order.paid ──────────────────────────────────────────────
-    if (eventType === "order.paid" || orderStatus === "paid") {
+    // Only confirm on the actual order.paid event, not on orderStatus fallback —
+    // Conekta sends order.created, order.pending_payment, and order.paid in rapid
+    // succession, and querying the live order status may already return "paid" by
+    // the time earlier events are processed, causing duplicate confirmations.
+    if (eventType === "order.paid") {
       // Mark the transaction as succeeded
       await supabase
         .from("payment_transactions")
@@ -520,7 +524,7 @@ FwIDAQAB
     }
 
     // ─── order.expired ───────────────────────────────────────────
-    if (eventType === "order.expired" || orderStatus === "expired") {
+    if (eventType === "order.expired") {
       await supabase
         .from("payment_transactions")
         .update({
@@ -560,7 +564,7 @@ FwIDAQAB
     }
 
     // ─── order.declined ──────────────────────────────────────────
-    if (eventType === "order.declined" || orderStatus === "declined") {
+    if (eventType === "order.declined") {
       await supabase
         .from("payment_transactions")
         .update({
