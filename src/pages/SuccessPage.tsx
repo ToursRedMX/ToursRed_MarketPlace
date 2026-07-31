@@ -7,6 +7,7 @@ import { formatCurrencyMXN } from '../utils/formatCurrency';
 const SuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
+  const [realTotalPaid, setRealTotalPaid] = useState(0);
   const [isUpdating, setIsUpdating] = useState(true);
 
   useEffect(() => {
@@ -23,6 +24,10 @@ const SuccessPage: React.FC = () => {
 
           if (!fetchError && booking) {
             setBookingDetails(booking);
+
+            const { data: totalPaidResult } = await supabase
+              .rpc('get_booking_total_paid', { p_booking_id: bookingId });
+            setRealTotalPaid(Number(totalPaidResult) || 0);
 
             const { error } = await supabase
               .from('bookings')
@@ -81,7 +86,7 @@ const SuccessPage: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total Pagado:</span>
-                  <span className="font-medium">{formatCurrencyMXN(bookingDetails.user_payment ?? 0)} MXN</span>
+                  <span className="font-medium">{formatCurrencyMXN(realTotalPaid)} MXN</span>
                 </div>
               </div>
             </div>

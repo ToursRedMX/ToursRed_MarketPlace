@@ -244,10 +244,10 @@ const TravelerProfile: React.FC = () => {
           .eq('user_id', user.id)
           .neq('status', 'draft'),
 
-        // Calcular total gastado (suma de user_payment de reservas exitosas)
+        // Calcular total gastado (IDs de reservas exitosas para batch RPC)
         supabase
           .from('bookings')
-          .select('user_payment')
+          .select('id')
           .eq('user_id', user.id)
           .eq('payment_status', 'succeeded'),
 
@@ -259,8 +259,14 @@ const TravelerProfile: React.FC = () => {
           .maybeSingle()
       ]);
 
-      const totalSpent = spentResult.data?.reduce((sum, booking) =>
-        sum + (booking.user_payment || 0), 0) || 0;
+      let totalSpent = 0;
+      if (spentResult.data && spentResult.data.length > 0) {
+        const paidIds = spentResult.data.map((b: any) => b.id);
+        const { data: batchResult } = await supabase.rpc('get_booking_total_paid_batch', { p_booking_ids: paidIds });
+        if (batchResult) {
+          totalSpent = (batchResult as any[]).reduce((sum, row) => sum + (Number(row.total_paid) || 0), 0);
+        }
+      }
 
       const profileWithStats = {
         ...profileData,

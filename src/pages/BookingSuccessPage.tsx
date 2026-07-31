@@ -16,6 +16,7 @@ const BookingSuccessPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
+  const [realTotalPaid, setRealTotalPaid] = useState(0);
   const { user, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
@@ -82,6 +83,11 @@ const BookingSuccessPage: React.FC = () => {
 
       setBooking(bookingData);
       setTour(bookingData.tours);
+
+      // Fetch the real total paid from payment_transactions + wallet + points
+      const { data: totalPaidResult } = await supabase
+        .rpc('get_booking_total_paid', { p_booking_id: bookingId });
+      setRealTotalPaid(Number(totalPaidResult) || 0);
 
       // Fetch optional services (pickup, language, traditional) for this booking
       const { data: optServices } = await supabase
@@ -507,21 +513,21 @@ const BookingSuccessPage: React.FC = () => {
                   <div className="border-t border-gray-200 pt-2 mt-2">
                     <div className="flex justify-between text-lg font-bold">
                       <span className="text-green-600">Total Pagado:</span>
-                      <span className="text-green-600">{formatCurrencyMXN(booking.user_payment ?? 0)}</span>
+                      <span className="text-green-600">{formatCurrencyMXN(realTotalPaid)}</span>
                     </div>
                     {((Number(booking.points_used) > 0) || (Number(booking.toursred_cash_used) > 0)) && (
                       <div className="text-xs text-gray-500 mt-1 text-right">
                         {Number(booking.points_used) > 0 && Number(booking.toursred_cash_used) > 0 ? (
                           <>
-                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Number(booking.toursred_cash_used))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, (booking.user_payment || 0) - ((booking.points_used || 0) / 100) - Number(booking.toursred_cash_used || 0)))} Stripe)
+                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Number(booking.toursred_cash_used))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, realTotalPaid - ((booking.points_used || 0) / 100) - Number(booking.toursred_cash_used || 0)))} Stripe)
                           </>
                         ) : Number(booking.points_used) > 0 ? (
                           <>
-                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Math.max(0, (booking.user_payment || 0) - (booking.points_used / 100)))} Stripe)
+                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Math.max(0, realTotalPaid - (booking.points_used / 100)))} Stripe)
                           </>
                         ) : (
                           <>
-                            ({formatCurrencyMXN(Number(booking.toursred_cash_used || 0))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, (booking.user_payment || 0) - Number(booking.toursred_cash_used || 0)))} Stripe)
+                            ({formatCurrencyMXN(Number(booking.toursred_cash_used || 0))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, realTotalPaid - Number(booking.toursred_cash_used || 0)))} Stripe)
                           </>
                         )}
                       </div>

@@ -274,6 +274,7 @@ function AdminBookings() {
 
   // Detail modal
   const [selected, setSelected] = useState<BookingRow | null>(null);
+  const [selectedRealTotalPaid, setSelectedRealTotalPaid] = useState(0);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const { permissions, isSuperAdmin } = useAuth();
   const canCancel = isSuperAdmin || permissions?.canCancelBookings;
@@ -946,7 +947,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
                     if (b.payment_plan?.installments?.length) {
                       return b.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0);
                     }
-                    return Number(b.user_payment ?? 0);
+                    return Number(selectedRealTotalPaid ?? 0);
                   })(), highlight: b.has_payment_plan },
                   { label: 'Cargo por servicio', val: Number(b.service_charge) },
                   { label: 'Ingreso plataforma', val: Number(b.platform_revenue ?? 0) },
@@ -1382,6 +1383,8 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
   const [confirmStep, setConfirmStep] = useState(false);
   const [refundServiceCharge, setRefundServiceCharge] = useState(false);
 
+  const [realTotalPaid, setRealTotalPaid] = useState(0);
+
   // Two-phase flow for original_payment_method
   const [bookingCancelled, setBookingCancelled] = useState(false);
   const [cancellationId, setCancellationId] = useState<string | null>(null);
@@ -1402,10 +1405,19 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
     if (booking.payment_plan?.installments?.length) {
       totalPaid = booking.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0);
     } else {
-      totalPaid = Number(booking.user_payment ?? booking.deposit_amount ?? 0);
+      totalPaid = realTotalPaid;
     }
     setRefundAmount(totalPaid + insurance);
-  }, [booking]);
+  }, [booking, realTotalPaid]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.rpc('get_booking_total_paid', { p_booking_id: booking.id });
+      if (!cancelled) setRealTotalPaid(Number(data) || 0);
+    })();
+    return () => { cancelled = true; };
+  }, [booking.id]);
 
   // Detect in-progress cancellation when modal opens so we can resume the refund-lines flow
   const [resumingCancellation, setResumingCancellation] = useState(false);
@@ -1729,7 +1741,7 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
   const insuranceCost = booking.travel_insurance_included ? Number(booking.travel_insurance_cost || 0) : 0;
   const totalPaidByTraveler = booking.payment_plan?.installments?.length
     ? booking.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0)
-    : Number(booking.user_payment ?? booking.deposit_amount ?? 0);
+    : realTotalPaid;
   const optionalServicesRefundable = booking.optional_services
     ? booking.optional_services
         .filter(os => !os.is_cancelled && Number(os.total_paid || 0) > 0)

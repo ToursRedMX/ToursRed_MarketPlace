@@ -288,6 +288,7 @@ const TravelerBookings: React.FC = () => {
   const [pastSupplements, setPastSupplements] = useState<Record<string, any[]>>({});
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
   const [partialCancellationsByBooking, setPartialCancellationsByBooking] = useState<Record<string, any[]>>({});
+  const [totalPaidByBooking, setTotalPaidByBooking] = useState<Record<string, number>>({});
 
   const cancellationFormPersistence = useFormPersistence(
     { cancellationReason: cancellationModal.cancellationReason },
@@ -380,7 +381,7 @@ const TravelerBookings: React.FC = () => {
         const bookingsWithReschedule = activeList.filter((b: any) => b.has_pending_reschedule);
         const bookingsWithSlotReschedule = activeList.filter((b: any) => b.has_pending_slot_reschedule);
 
-        const [optSvcsResult, , slotReschedulesResult, partialCancResult] = await Promise.all([
+        const [optSvcsResult, , slotReschedulesResult, partialCancResult, totalPaidResult] = await Promise.all([
           supabase
             .from('booking_optional_services')
             .select('*, tour_optional_services(name, is_refundable)')
@@ -404,7 +405,16 @@ const TravelerBookings: React.FC = () => {
             .from('booking_partial_cancellations')
             .select('id, booking_id, travelers_cancelled, original_partial_amount, insurance_refund_amount, refund_amount_to_traveler, cancelled_at')
             .in('booking_id', ids),
+          supabase.rpc('get_booking_total_paid_batch', { p_booking_ids: ids }),
         ]);
+
+        if (totalPaidResult.data) {
+          const paidMap: Record<string, number> = {};
+          for (const row of totalPaidResult.data as any[]) {
+            paidMap[row.booking_id] = Number(row.total_paid) || 0;
+          }
+          setTotalPaidByBooking(paidMap);
+        }
 
         if (optSvcsResult.data) {
           const grouped: Record<string, any[]> = {};
@@ -500,10 +510,21 @@ const TravelerBookings: React.FC = () => {
       // (expired-active ones were already handled in the initial fetchBookings)
       if (completedList.length > 0) {
         const ids = completedList.map((b: any) => b.id);
-        const [optRes, suppRes] = await Promise.all([
+        const [optRes, suppRes, pastPaidRes] = await Promise.all([
           supabase.from('booking_optional_services').select('*, tour_optional_services(name, is_refundable)').in('booking_id', ids),
           supabase.from('booking_supplements').select('*, tour_supplements(name, description, price, is_cancellable, requires_approval)').in('booking_id', ids).order('requested_at', { ascending: false }),
+          supabase.rpc('get_booking_total_paid_batch', { p_booking_ids: ids }),
         ]);
+
+        if (pastPaidRes.data) {
+          setTotalPaidByBooking(prev => {
+            const updated = { ...prev };
+            for (const row of pastPaidRes.data as any[]) {
+              updated[row.booking_id] = Number(row.total_paid) || 0;
+            }
+            return updated;
+          });
+        }
         if (optRes.data) {
           const grouped: Record<string, any[]> = {};
           for (const bos of optRes.data) {
@@ -536,6 +557,19 @@ const TravelerBookings: React.FC = () => {
       const { data, error } = await getUserCancelledBookings(user.id);
       if (error) throw new Error(error.message);
       setCancelledBookings(data || []);
+      if (data && data.length > 0) {
+        const cancelledIds = data.map((b: any) => b.id);
+        const { data: cancelledPaidRes } = await supabase.rpc('get_booking_total_paid_batch', { p_booking_ids: cancelledIds });
+        if (cancelledPaidRes) {
+          setTotalPaidByBooking(prev => {
+            const updated = { ...prev };
+            for (const row of cancelledPaidRes as any[]) {
+              updated[row.booking_id] = Number(row.total_paid) || 0;
+            }
+            return updated;
+          });
+        }
+      }
       setCancelledLoaded(true);
     } catch (err: any) {
       console.error('Error cargando reservas canceladas:', err);
@@ -980,7 +1014,7 @@ const TravelerBookings: React.FC = () => {
 
     const totalPaidHistorical = booking.has_payment_plan
       ? (booking.payment_plan_paid ?? 0)
-      : (booking.user_payment ?? booking.deposit_amount ?? 0);
+      : (totalPaidByBooking[booking.id] ?? 0);
     const adjustedBalance = Math.max(0, adjustedTotal - (totalPaidHistorical - totalPrincipalRefunded));
 
     const cancelledTravelerNames: string[] = [];
@@ -2306,7 +2340,7 @@ const TravelerBookings: React.FC = () => {
                       <DollarSign className="h-4 w-4 text-gray-400 mr-2" />
                       <div>
                         <div className="text-sm text-gray-500">Total Pagado</div>
-                        <div className="font-medium">{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (booking.user_payment ?? booking.deposit_amount ?? 0))}</div>
+                        <div className="font-medium">{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (totalPaidByBooking[booking.id] ?? 0))}</div>
                       </div>
                     </div>
 
@@ -2957,7 +2991,7 @@ const TravelerBookings: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-6 text-sm text-gray-600 mb-4">
                       <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5 text-gray-400" />{booking.travelers_count} viajero{booking.travelers_count !== 1 ? 's' : ''}</span>
-                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5 text-gray-400" />{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (booking.user_payment ?? booking.deposit_amount ?? 0))}</span>
+                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5 text-gray-400" />{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (totalPaidByBooking[booking.id] ?? 0))}</span>
                       {booking.agencies?.name && <span className="text-gray-500">Operado por: <strong>{booking.agencies.name}</strong></span>}
                     </div>
                     {(pastOptionalServices[booking.id] || []).length > 0 && (
@@ -3039,7 +3073,7 @@ const TravelerBookings: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-6 text-sm text-gray-400 mb-3">
                       <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{booking.travelers_count} viajero{booking.travelers_count !== 1 ? 's' : ''}</span>
-                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" />{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (booking.user_payment ?? booking.deposit_amount ?? 0))}</span>
+                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" />{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (totalPaidByBooking[booking.id] ?? 0))}</span>
                     </div>
                     <div className="p-3 bg-red-50 border border-red-100 rounded-md text-sm text-red-600">
                       <strong>Reserva cancelada.</strong> Si tienes preguntas, contacta a nuestro equipo de soporte.

@@ -283,7 +283,7 @@ FwIDAQAB
 
         if (booking) {
           const requiredAmount = Number(booking.deposit_amount) || Number(booking.total_price) || 0;
-          const newUserPayment = Number(booking.user_payment || 0) + Number(tx.amount);
+          const newUserPayment = Math.max(0, Number(booking.user_payment || 0) - Number(tx.amount));
 
           if (totalPaid >= requiredAmount) {
             // Full deposit paid — confirm the booking
