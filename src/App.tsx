@@ -100,6 +100,7 @@ import BookingSuccessPage from './pages/BookingSuccessPage';
 import BookingCancelPage from './pages/BookingCancelPage';
 import BookingPendingPage from './pages/BookingPendingPage';
 import TravelersInfoPage from './pages/TravelersInfoPage';
+import BookingFlowLayout from './pages/booking-flow/BookingFlowLayout';
 import NotificationsPage from './pages/NotificationsPage';
 import AgencyPublicProfile from './pages/AgencyPublicProfile';
 import NotFoundPage from './pages/NotFoundPage';
@@ -154,6 +155,7 @@ const PROTECTED_PREFIXES = [
   '/supplement-success', '/payment-plan-success', '/extras-success', '/notifications',
   '/gift-card/redeem', '/gift-card/success', '/payment-return', '/booking-checkin',
   '/soporte/viajero', '/soporte/agencia', '/unsubscribe',
+  '/reservar',
 ];
 
 const ProtectedRouteSeo: React.FC = () => {
@@ -248,6 +250,10 @@ const App: React.FC = () => {
           <Route path="/booking-cancel" element={<BookingCancelPage />} />
           <Route path="/booking-pending/:bookingId" element={<BookingPendingPage />} />
           <Route path="/booking-travelers/:bookingId" element={<TravelersInfoPage />} />
+          <Route path="/reservar/:slug/paso-1" element={<BookingFlowLayout />} />
+          <Route path="/reservar/:slug/paso-2" element={<BookingFlowLayout />} />
+          <Route path="/reservar/:slug/paso-3" element={<BookingFlowLayout />} />
+          <Route path="/reservar/:slug/paso-4" element={<BookingFlowLayout />} />
           <Route path="/supplement-success" element={<SupplementSuccessPage />} />
           <Route path="/payment-plan-success" element={<PaymentPlanSuccessPage />} />
           <Route path="/extras-success" element={<ExtrasSuccessPage />} />
