@@ -217,6 +217,10 @@ Deno.serve(async (req: Request) => {
       };
     } else {
       // Single method: card, cash, or spei
+      // Conekta Hosted Checkout expects "bank_transfer" (not "spei") in
+      // allowed_payment_methods. "spei" is only valid inside charges. We map
+      // it here for the checkout payload only; the DB and frontend keep "spei".
+      const conektaCheckoutMethod = payment_method_type === "spei" ? "bank_transfer" : payment_method_type;
       orderPayload = {
         currency: "MXN",
         amount: amountInCents,
@@ -230,7 +234,7 @@ Deno.serve(async (req: Request) => {
         ],
         checkout: {
           type: "HostedPayment",
-          allowed_payment_methods: [payment_method_type],
+          allowed_payment_methods: [conektaCheckoutMethod],
           success_url: successUrl,
           failure_url: failureUrl,
           cancel_url: cancelUrl,
