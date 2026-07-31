@@ -46,6 +46,8 @@ Deno.serve(async (req: Request) => {
       stripe_payment_intent_id,
       paypal_order_id,
       mp_form_data,
+      conekta_method,
+      bnpl_product_type,
       pay_full_balance = false,
     } = await req.json();
 
@@ -162,61 +164,28 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Allocate payment chronologically (oldest first)
-    const allocations: Array<{ installment_id: string; amount_allocated: number }> = [];
-    let remaining = effectiveAmount;
-
-    for (const inst of installments) {
-      if (remaining <= 0) break;
-      const amountOwed = Number(inst.amount_due) + Number(inst.penalty_applied) - Number(inst.amount_paid);
-      if (amountOwed <= 0) continue;
-      const allocated = Math.min(remaining, amountOwed);
-      allocations.push({ installment_id: inst.id, amount_allocated: parseFloat(allocated.toFixed(2)) });
-      remaining = parseFloat((remaining - allocated).toFixed(2));
-    }
-
     const tourName = tour?.name ?? "Tour";
     const bookingCode = booking.booking_code ?? booking.id;
 
-    // Helper: consume exemption, award points, create transaction + allocations
-    const finalizePayment = async (provider: string, providerTransactionId: string | null, presetTxId?: string) => {
-      // Exemption already consumed atomically by apply_membership_service_fee_exemption RPC above
+    // Helper: allocate payment via shared SQL function (idempotent, handles allocations + points)
+    const finalizePayment = async (provider: string, providerTransactionId: string | null, presetTxId?: string): Promise<{ pointsEarned: number; transactionId: string }> => {
+      const { data: result, error: allocError } = await supabase.rpc("allocate_payment_plan_installment", {
+        p_plan_id: plan_id,
+        p_amount: effectiveAmount,
+        p_provider: provider,
+        p_service_charge: netServiceCharge,
+        p_gross_service_charge: grossServiceCharge,
+        p_provider_transaction_id: providerTransactionId || presetTxId || null,
+        p_user_id: user.id,
+        p_membership_exemption_used: exemptionApplied > 0,
+        p_is_wallet_payment: isWalletPayment,
+      });
 
-      // Calculate points earned (actual award happens after txRecord creation)
-      let pointsEarned = 0;
-      const { data: activeMembership } = await supabase
-        .from("memberships")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .gt("current_period_end", new Date().toISOString())
-        .maybeSingle();
+      if (allocError || !result) throw new Error(`allocate_payment_plan_installment failed: ${allocError?.message}`);
 
-      if (activeMembership) {
-        pointsEarned = isWalletPayment ? Math.floor(effectiveAmount) * 2 : Math.floor(effectiveAmount + netServiceCharge);
-      }
-
-      // Create transaction record
-      const { data: txRecord, error: txError } = await supabase
-        .from("booking_payment_plan_transactions")
-        .insert({
-          ...(presetTxId ? { id: presetTxId } : {}),
-          plan_id,
-          booking_id: booking.id,
-          user_id: user.id,
-          amount: effectiveAmount,
-          service_charge: netServiceCharge,
-          gross_service_charge: grossServiceCharge,
-          payment_provider: provider,
-          provider_transaction_id: providerTransactionId,
-          membership_exemption_used: exemptionApplied > 0,
-          points_earned: pointsEarned,
-          status: "completed",
-        })
-        .select()
-        .single();
-
-      if (txError || !txRecord) throw new Error(`Failed to create transaction: ${txError?.message}`);
+      const txId = result.transaction_id as string;
+      const pointsEarned = result.points_earned as number;
+      const returnedAllocations = (result.allocations as any[]) || [];
 
       // Record in payment_transactions for refund tracking (processor payments only)
       if (provider === "stripe" && providerTransactionId) {
@@ -236,7 +205,7 @@ Deno.serve(async (req: Request) => {
             processor_fee: 0,
             net_amount: totalToPay,
             charge_context: "payment_plan_installment",
-            charge_reference_id: txRecord.id,
+            charge_reference_id: txId,
           });
         }
       } else if (provider === "mercadopago" && providerTransactionId) {
@@ -256,7 +225,7 @@ Deno.serve(async (req: Request) => {
             processor_fee: 0,
             net_amount: totalToPay,
             charge_context: "payment_plan_installment",
-            charge_reference_id: txRecord.id,
+            charge_reference_id: txId,
           });
         }
       } else if (provider === "paypal" && providerTransactionId) {
@@ -276,90 +245,16 @@ Deno.serve(async (req: Request) => {
             processor_fee: 0,
             net_amount: totalToPay,
             charge_context: "payment_plan_installment",
-            charge_reference_id: txRecord.id,
+            charge_reference_id: txId,
           });
         }
       }
 
-      // Award points after txRecord exists, using txRecord.id as reference_id (1:1 match for clawback)
-      if (pointsEarned > 0) {
-        const { data: walletId } = await supabase.rpc("get_or_create_points_wallet", { p_user_id: user.id });
-        if (walletId) {
-          const { data: pWallet } = await supabase
-            .from("toursred_points_wallets")
-            .select("id, balance, total_earned")
-            .eq("id", walletId)
-            .maybeSingle();
-          if (pWallet) {
-            const newBalance = pWallet.balance + pointsEarned;
-            const { error: ptsTxError } = await supabase.from("toursred_points_transactions").insert({
-              wallet_id: walletId,
-              user_id: user.id,
-              amount: pointsEarned,
-              balance_after: newBalance,
-              type: "earned",
-              description: `Puntos por abono: ${tourName} (${bookingCode})`,
-              reference_id: txRecord.id,
-              reference_type: "payment_plan",
-              expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-            });
-            if (ptsTxError) {
-              console.error(`Error inserting points transaction for plan ${plan_id}: ${ptsTxError.message}`);
-            } else {
-              await supabase.from("toursred_points_wallets").update({
-                balance: newBalance,
-                total_earned: pWallet.total_earned + pointsEarned,
-              }).eq("id", walletId);
-            }
-          }
-        }
-      }
-
-      // Create allocations
-      if (allocations.length > 0) {
-        await supabase.from("booking_payment_plan_transaction_allocations").insert(
-          allocations.map((a) => ({
-            transaction_id: txRecord.id,
-            installment_id: a.installment_id,
-            amount_allocated: a.amount_allocated,
-          }))
-        );
-      }
-
-      // Update each installment based on allocation
-      for (const alloc of allocations) {
-        const inst = installments!.find((i) => i.id === alloc.installment_id)!;
-        const totalPaid = parseFloat((Number(inst.amount_paid) + alloc.amount_allocated).toFixed(2));
-        const totalDue = parseFloat((Number(inst.amount_due) + Number(inst.penalty_applied)).toFixed(2));
-        const newStatus = totalPaid >= totalDue ? "paid" : "partially_paid";
-        await supabase.from("booking_payment_plan_installments").update({
-          amount_paid: totalPaid,
-          status: newStatus,
-          ...(newStatus === "paid" ? { paid_at: new Date().toISOString() } : {}),
-          updated_at: new Date().toISOString(),
-        }).eq("id", alloc.installment_id);
-      }
-
-      // Update plan totals
-      const newTotalPaid = parseFloat((Number(plan.total_amount_paid) + effectiveAmount).toFixed(2));
-      const planComplete = newTotalPaid >= Number(plan.total_plan_amount);
-      await supabase.from("booking_payment_plans").update({
-        total_amount_paid: newTotalPaid,
-        status: planComplete ? "completed" : "active",
-        updated_at: new Date().toISOString(),
-      }).eq("id", plan_id);
-
-      // Update bookings.payment_plan_paid
-      await supabase.from("bookings").update({
-        payment_plan_paid: newTotalPaid,
-        payment_plan_status: planComplete ? "completed" : "active",
-        updated_at: new Date().toISOString(),
-      }).eq("id", booking.id);
-
       // Trigger CFDI generation for each newly-paid installment
       if (platformSettings?.pac_provider && platformSettings.pac_provider !== "none" && platformSettings.pac_api_key_encrypted) {
-        for (const alloc of allocations) {
-          const inst = installments!.find((i) => i.id === alloc.installment_id)!;
+        for (const alloc of returnedAllocations) {
+          const inst = installments!.find((i) => i.id === alloc.installment_id);
+          if (!inst) continue;
           const instAfterPaid = parseFloat((Number(inst.amount_paid) + alloc.amount_allocated).toFixed(2));
           const instTotalDue = parseFloat((Number(inst.amount_due) + Number(inst.penalty_applied)).toFixed(2));
           if (instAfterPaid >= instTotalDue) {
@@ -369,7 +264,7 @@ Deno.serve(async (req: Request) => {
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
                 body: JSON.stringify({
                   installment_id: alloc.installment_id,
-                  transaction_id: txRecord.id,
+                  transaction_id: txId,
                 }),
               }).catch((err) => console.error('Error generating installment CFDI:', err.message, err.stack))
             );
@@ -377,7 +272,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      return { pointsEarned, transactionId: txRecord.id };
+      return { pointsEarned, transactionId: txId };
     };
 
     // ===================== PAYMENT ROUTING =====================
@@ -629,7 +524,153 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 6. Bank transfer / Cash (registered by admin)
+    // 6. Conekta (async — creates order, redirects to checkout, webhook confirms)
+    if (payment_method === "conekta") {
+      if (!conekta_method) {
+        return new Response(JSON.stringify({ error: "conekta_method es requerido para Conekta" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!["bnpl", "card", "cash", "spei"].includes(conekta_method)) {
+        return new Response(JSON.stringify({ error: "conekta_method debe ser bnpl, card, cash o spei" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (conekta_method === "bnpl") {
+        if (!bnpl_product_type || !["aplazo_bnpl", "creditea_bnpl", "coppel_bnpl"].includes(bnpl_product_type)) {
+          return new Response(JSON.stringify({ error: "bnpl_product_type es requerido y debe ser aplazo_bnpl, creditea_bnpl o coppel_bnpl" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (totalToPay < 1200) {
+          return new Response(JSON.stringify({ error: "El monto mínimo para BNPL es $1,200 MXN" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (totalToPay > 16000) {
+          return new Response(JSON.stringify({ error: "El monto máximo para BNPL es $16,000 MXN por transacción" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      const conektaPrivateKey = Deno.env.get("CONEKTA_PRIVATE_KEY");
+      if (!conektaPrivateKey) {
+        return new Response(JSON.stringify({ error: "Conekta no configurado" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const origin = req.headers.get("origin") || "https://toursred.com";
+      const successUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking.id}&status=success&context=payment_plan_installment`;
+      const failureUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking.id}&status=failure&context=payment_plan_installment`;
+      const cancelUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking.id}&status=cancel&context=payment_plan_installment`;
+
+      const amountInCents = Math.round(totalToPay * 100);
+      const orderPayload: any = {
+        currency: "MXN",
+        amount: amountInCents,
+        line_items: [{
+          name: `Abono plan de pagos - ${tourName} (${bookingCode})`,
+          unit_price: amountInCents,
+          quantity: 1,
+          ...(conekta_method === "bnpl" ? { tags: ["bnpl"] } : {}),
+        }],
+        checkout: {
+          type: "HostedPayment",
+          allowed_payment_methods: [conekta_method],
+          success_url: successUrl,
+          failure_url: failureUrl,
+          cancel_url: cancelUrl,
+          expires_at: Math.floor(Date.now() / 1000) + 71 * 3600,
+        },
+        metadata: {
+          booking_id: booking.id,
+          payment_method_type: conekta_method,
+          context: "payment_plan_installment",
+          charge_reference_id: plan_id,
+          ...(conekta_method === "bnpl" ? { bnpl_product_type } : {}),
+        },
+      };
+
+      const conektaApiBase = Deno.env.get("CONEKTA_API_BASE") || "https://api.conekta.io";
+      const apiResponse = await fetch(`${conektaApiBase}/orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/vnd.conekta-v2.0+json",
+          "Authorization": `Bearer ${conektaPrivateKey}`,
+          "X-Conekta-Client-Info": '{"name":"toursred","version":"1.0.0"}',
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!apiResponse.ok) {
+        const errorBody = await apiResponse.text();
+        console.error("Conekta API error:", errorBody);
+        let errorMsg = "Error al crear orden de Conekta";
+        try {
+          const parsed = JSON.parse(errorBody);
+          errorMsg = parsed?.details?.[0]?.message || parsed?.message || errorMsg;
+        } catch {}
+        return new Response(JSON.stringify({ error: errorMsg }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const order = await apiResponse.json();
+      const orderId = order.id;
+      const checkoutUrl = order.checkout?.url;
+
+      if (!orderId) {
+        return new Response(JSON.stringify({ error: "Respuesta inválida de Conekta" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Insert payment_transactions record (pending — webhook will confirm)
+      const idempotencyKey = `${booking.id}_payment_plan_installment_${plan_id}_${Date.now()}`;
+      await supabase.from("payment_transactions").insert({
+        booking_id: booking.id,
+        amount: totalToPay,
+        currency: "mxn",
+        status: "pending",
+        payment_method_type: conekta_method,
+        payment_processor: "conekta",
+        processor_fee: 0,
+        net_amount: totalToPay,
+        conekta_order_id: orderId,
+        bnpl_product_type: conekta_method === "bnpl" ? bnpl_product_type : null,
+        p_idempotency_key: idempotencyKey,
+        charge_context: "payment_plan_installment",
+        charge_reference_id: plan_id,
+        metadata: {
+          conekta_order: order,
+          checkout_url: checkoutUrl,
+          ...(conekta_method === "bnpl" ? { bnpl_product_type } : {}),
+        },
+      });
+
+      return new Response(JSON.stringify({
+        success: true,
+        order_id: orderId,
+        checkout_url: checkoutUrl,
+        amount: totalToPay,
+        payment_method_type: conekta_method,
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // 7. Bank transfer / Cash (registered by admin)
     if (payment_method === "bank_transfer" || payment_method === "cash") {
       const { pointsEarned, transactionId } = await finalizePayment(payment_method, null);
       return new Response(JSON.stringify({

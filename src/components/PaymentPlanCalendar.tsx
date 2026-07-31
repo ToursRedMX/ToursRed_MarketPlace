@@ -6,6 +6,7 @@ import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { BookingPaymentPlan, BookingPaymentPlanInstallment, InstallmentStatus } from '../types';
+import PaymentProviderSelector, { type PaymentProvider, type ConektaMethod } from './PaymentProviderSelector';
 
 interface PaymentPlanCalendarProps {
   bookingId: string;
@@ -38,7 +39,9 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
   const [isExpanded, setIsExpanded] = useState(false);
   const [payingInstallmentId, setPayingInstallmentId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState('');
-  const [paymentProvider, setPaymentProvider] = useState<'stripe' | 'toursred_cash' | 'mercadopago' | 'paypal'>('stripe');
+  const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('stripe');
+  const [conektaMethod, setConektaMethod] = useState<ConektaMethod>('card');
+  const [bnplProduct, setBnplProduct] = useState('aplazo_bnpl');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState('');
@@ -117,6 +120,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
           plan_id: plan.id,
           amount,
           payment_method: paymentProvider,
+          ...(paymentProvider === 'conekta' ? { conekta_method: conektaMethod, bnpl_product_type: bnplProduct } : {}),
         }),
       });
 
@@ -124,6 +128,8 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
 
       if (!res.ok) {
         setPaymentError(result.error || 'Error al procesar el pago');
+      } else if (result.checkout_url) {
+        window.location.href = result.checkout_url;
       } else if (result.url) {
         window.location.href = result.url;
       } else {
@@ -183,12 +189,15 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
           amount: plan.pending_balance,
           payment_method: paymentProvider,
           pay_full_balance: true,
+          ...(paymentProvider === 'conekta' ? { conekta_method: conektaMethod, bnpl_product_type: bnplProduct } : {}),
         }),
       });
 
       const result = await res.json();
       if (!res.ok) {
         setPaymentError(result.error || 'Error al procesar el pago');
+      } else if (result.checkout_url) {
+        window.location.href = result.checkout_url;
       } else if (result.url) {
         window.location.href = result.url;
       } else {
@@ -369,34 +378,29 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
                   {/* Inline payment form */}
                   {isPaying && (
                     <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1 font-medium">Monto a pagar</label>
-                          <input
-                            type="number"
-                            min={0.01}
-                            step={0.01}
-                            max={amountOwed}
-                            value={payAmount}
-                            onChange={(e) => setPayAmount(e.target.value)}
-                            className="input input-sm w-full text-sm"
-                          />
-                          <p className="text-xs text-gray-400 mt-0.5">Adeudo: {formatCurrencyMXN(amountOwed)}</p>
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1 font-medium">Método de pago</label>
-                          <select
-                            value={paymentProvider}
-                            onChange={(e) => setPaymentProvider(e.target.value as any)}
-                            className="input input-sm w-full text-sm"
-                          >
-                            <option value="stripe">Tarjeta (Stripe)</option>
-                            <option value="toursred_cash">ToursRed Cash</option>
-                            <option value="mercadopago">MercadoPago</option>
-                            <option value="paypal">PayPal</option>
-                          </select>
-                        </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1 font-medium">Monto a pagar</label>
+                        <input
+                          type="number"
+                          min={0.01}
+                          step={0.01}
+                          max={amountOwed}
+                          value={payAmount}
+                          onChange={(e) => setPayAmount(e.target.value)}
+                          className="input input-sm w-full text-sm"
+                        />
+                        <p className="text-xs text-gray-400 mt-0.5">Adeudo: {formatCurrencyMXN(amountOwed)}</p>
                       </div>
+                      <PaymentProviderSelector
+                        context="payment_plan"
+                        value={paymentProvider}
+                        onChange={(v) => setPaymentProvider(v)}
+                        amount={amountOwed}
+                        conektaMethod={conektaMethod}
+                        onConektaMethodChange={setConektaMethod}
+                        bnplProduct={bnplProduct}
+                        onBnplProductChange={setBnplProduct}
+                      />
                       <div className="flex gap-2">
                         <button
                           type="button"
@@ -423,33 +427,31 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
 
           {/* Pay full balance button */}
           {!agencyView && plan.status === 'active' && plan.pending_balance > 0 && (
-            <div className="pt-2 border-t border-gray-100">
+            <div className="pt-2 border-t border-gray-100 space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <p className="text-sm font-semibold text-gray-700">Liquidar saldo total</p>
                   <p className="text-xs text-gray-500">Pagar {formatCurrencyMXN(plan.pending_balance)} restantes de una vez</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={paymentProvider}
-                    onChange={(e) => setPaymentProvider(e.target.value as any)}
-                    className="input input-sm text-xs"
-                  >
-                    <option value="stripe">Tarjeta</option>
-                    <option value="toursred_cash">ToursRed Cash</option>
-                    <option value="mercadopago">MercadoPago</option>
-                    <option value="paypal">PayPal</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={handlePayFull}
-                    disabled={isProcessingPayment}
-                    className="btn btn-primary btn-sm text-xs whitespace-nowrap"
-                  >
-                    {isProcessingPayment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : `Pagar ${formatCurrencyMXN(plan.pending_balance)}`}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handlePayFull}
+                  disabled={isProcessingPayment}
+                  className="btn btn-primary btn-sm text-xs whitespace-nowrap"
+                >
+                  {isProcessingPayment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : `Pagar ${formatCurrencyMXN(plan.pending_balance)}`}
+                </button>
               </div>
+              <PaymentProviderSelector
+                context="payment_plan"
+                value={paymentProvider}
+                onChange={(v) => setPaymentProvider(v)}
+                amount={plan.pending_balance}
+                conektaMethod={conektaMethod}
+                onConektaMethodChange={setConektaMethod}
+                bnplProduct={bnplProduct}
+                onBnplProductChange={setBnplProduct}
+              />
             </div>
           )}
         </div>

@@ -389,38 +389,91 @@ Deno.serve(async (req: Request) => {
           console.error("Error triggering optional service CFDI:", cfdiErr);
         }
       } else if (chargeContext === "payment_plan_installment" && chargeReferenceId) {
-        await supabase
-          .from("booking_payment_plan_installments")
-          .update({
-            status: "completed",
-            paid_at: new Date().toISOString(),
-          })
-          .eq("id", chargeReferenceId);
+        // chargeReferenceId is the plan_id (set by process-payment-plan-installment)
+        const planId = chargeReferenceId;
 
-        try {
-          const { data: cfdiSettings } = await supabase
-            .from("platform_settings")
-            .select("pac_provider, pac_api_key_encrypted")
+        // Look up the plan to get the booking's user_id
+        const { data: planRow } = await supabase
+          .from("booking_payment_plans")
+          .select("booking_id")
+          .eq("id", planId)
+          .maybeSingle();
+
+        let planUserId: string | null = null;
+        if (planRow) {
+          const { data: bookingRow } = await supabase
+            .from("bookings")
+            .select("user_id")
+            .eq("id", planRow.booking_id)
             .maybeSingle();
+          planUserId = bookingRow?.user_id || null;
+        }
 
-          if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
-            const paymentForm = getPaymentFormForConekta(paymentMethodType, conektaOrder);
-            EdgeRuntime.waitUntil(
-              fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-booking-installment-cfdi`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                },
-                body: JSON.stringify({
-                  installment_id: chargeReferenceId,
-                  payment_form: paymentForm,
-                }),
-              }).catch((e) => console.error("Error triggering installment CFDI:", e))
-            );
+        // Look up the original payment to get effectiveAmount and service charge
+        // The payment_transactions.amount is the total charged (effective + service charge)
+        const txAmount = Number(tx.amount) || 0;
+        // For payment plans, service_charge is stored in the transaction metadata or is 0
+        // The SQL function handles the allocation — we pass the full amount as the payment
+        const effectiveAmount = txAmount;
+        const serviceCharge = 0;
+        const grossServiceCharge = 0;
+
+        // Call the shared SQL function — it handles idempotency, allocations, points, plan totals
+        const { data: allocResult, error: allocError } = await supabase.rpc("allocate_payment_plan_installment", {
+          p_plan_id: planId,
+          p_amount: effectiveAmount,
+          p_provider: "conekta",
+          p_service_charge: serviceCharge,
+          p_gross_service_charge: grossServiceCharge,
+          p_provider_transaction_id: orderId,
+          p_user_id: planUserId,
+          p_membership_exemption_used: false,
+          p_is_wallet_payment: false,
+        });
+
+        if (allocError) {
+          console.error(`Error allocating payment plan installment for plan ${planId}:`, allocError.message);
+        } else if (allocResult && !allocResult.idempotent_skip) {
+          // Trigger CFDI generation for each newly-paid installment
+          try {
+            const { data: cfdiSettings } = await supabase
+              .from("platform_settings")
+              .select("pac_provider, pac_api_key_encrypted")
+              .maybeSingle();
+
+            if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
+              const paymentForm = getPaymentFormForConekta(paymentMethodType, conektaOrder);
+              const returnedAllocations = (allocResult.allocations as any[]) || [];
+
+              for (const alloc of returnedAllocations) {
+                // Check if this installment is now fully paid
+                const { data: paidInst } = await supabase
+                  .from("booking_payment_plan_installments")
+                  .select("status")
+                  .eq("id", alloc.installment_id)
+                  .maybeSingle();
+
+                if (paidInst?.status === "paid") {
+                  EdgeRuntime.waitUntil(
+                    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-booking-installment-cfdi`, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                      },
+                      body: JSON.stringify({
+                        installment_id: alloc.installment_id,
+                        transaction_id: allocResult.transaction_id,
+                        payment_form: paymentForm,
+                      }),
+                    }).catch((e) => console.error("Error triggering installment CFDI:", e))
+                  );
+                }
+              }
+            }
+          } catch (cfdiErr) {
+            console.error("Error triggering installment CFDI:", cfdiErr);
           }
-        } catch (cfdiErr) {
-          console.error("Error triggering installment CFDI:", cfdiErr);
         }
       }
     }

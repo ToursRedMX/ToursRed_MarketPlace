@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CreditCard, Lock, Info, AlertTriangle, Wallet, Banknote, Landmark } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-export type PaymentProvider = 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+export type PaymentProvider = 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'toursred_cash';
 
 export type ConektaMethod = 'bnpl' | 'card' | 'cash' | 'spei';
 
@@ -12,7 +12,8 @@ export type PaymentContext =
   | 'booking'
   | 'booking_with_membership'
   | 'gift_card'
-  | 'membership';
+  | 'membership'
+  | 'payment_plan';
 
 interface ProviderConfig {
   mercadopago_enabled: boolean;
@@ -42,6 +43,7 @@ const PROVIDER_LABELS: Record<PaymentProvider, string> = {
   mercadopago: 'MercadoPago',
   paypal: 'PayPal',
   conekta: 'Conekta (Tarjeta / Efectivo / SPEI / Meses sin intereses)',
+  toursred_cash: 'ToursRed Cash (Billetera interna)',
 };
 
 const PROVIDER_DESCRIPTIONS: Record<PaymentProvider, string> = {
@@ -49,6 +51,7 @@ const PROVIDER_DESCRIPTIONS: Record<PaymentProvider, string> = {
   mercadopago: 'Tarjeta, efectivo, transferencia SPEI',
   paypal: 'Cuenta PayPal o tarjeta de crédito/débito',
   conekta: 'Tarjeta, efectivo, SPEI, o financia con Aplazo/Creditea/Coppel Pay',
+  toursred_cash: 'Usa tu saldo de ToursRed Cash para abonar al plan',
 };
 
 const BNPL_PRODUCT_LABELS: Record<BnplProduct, string> = {
@@ -113,6 +116,7 @@ export default function PaymentProviderSelector({
 
   const isMembershipContext =
     context === 'booking_with_membership' || context === 'membership';
+  const isPaymentPlanContext = context === 'payment_plan';
 
   const stripeAvailable = config ? isStripeAvailableForContext(context, config) : true;
 
@@ -120,6 +124,11 @@ export default function PaymentProviderSelector({
 
   if (stripeAvailable) {
     availableProviders.push('stripe');
+  }
+
+  // ToursRed Cash is only available in payment plan context (internal wallet)
+  if (isPaymentPlanContext) {
+    availableProviders.push('toursred_cash' as PaymentProvider);
   }
 
   if (!isMembershipContext) {
@@ -167,8 +176,8 @@ export default function PaymentProviderSelector({
     );
   }
 
-  // Only one provider and it's not membership context — hide selector (no choice to make)
-  if (availableProviders.length === 1 && !isMembershipContext) {
+  // Only one provider and it's not membership/payment_plan context — hide selector (no choice to make)
+  if (availableProviders.length === 1 && !isMembershipContext && !isPaymentPlanContext) {
     return null;
   }
 

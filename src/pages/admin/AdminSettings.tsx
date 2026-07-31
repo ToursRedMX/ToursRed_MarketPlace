@@ -27,6 +27,7 @@ interface PlatformSettings {
   referral_program_enabled: boolean;
   mercadopago_enabled: boolean;
   paypal_enabled: boolean;
+  conekta_enabled: boolean;
   mercadopago_public_key: string;
   mercadopago_access_token: string;
   paypal_client_id: string;
@@ -103,6 +104,7 @@ const AdminSettings: React.FC = () => {
     referral_program_enabled: true,
     mercadopago_enabled: false,
     paypal_enabled: false,
+    conekta_enabled: false,
     mercadopago_public_key: '',
     mercadopago_access_token: '',
     paypal_client_id: '',
@@ -376,6 +378,7 @@ const AdminSettings: React.FC = () => {
             referral_program_enabled: platformSettings.referral_program_enabled,
             mercadopago_enabled: platformSettings.mercadopago_enabled,
             paypal_enabled: platformSettings.paypal_enabled,
+            conekta_enabled: platformSettings.conekta_enabled,
             mercadopago_public_key: platformSettings.mercadopago_public_key,
             mercadopago_access_token: platformSettings.mercadopago_access_token,
             paypal_client_id: platformSettings.paypal_client_id,
@@ -468,7 +471,7 @@ const AdminSettings: React.FC = () => {
   const handlePlatformChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     const numericFields = ['service_charge_percentage', 'agency_commission_percentage', 'supplement_commission_percentage', 'optional_service_commission_percentage', 'membership_monthly_price', 'membership_annual_price', 'membership_service_fee_exemption_monthly_limit', 'default_max_referrals_per_user', 'referral_bonus_points'];
-    const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
+    const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'conekta_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
     setPlatformSettings(prev => ({
       ...prev,
       [name]: booleanFields.includes(name) ? checked : (numericFields.includes(name) ? (parseFloat(value) || 0) : value),
@@ -1151,7 +1154,9 @@ const AdminSettings: React.FC = () => {
                 <ul className="space-y-1 text-xs">
                   <li>• Stripe es el proveedor principal y el unico disponible para membresias (requiere cobro recurrente)</li>
                   <li>• Puedes desactivar Stripe por contexto: reservas, tarjetas de regalo o membresias de forma independiente</li>
-                  <li>• MercadoPago y PayPal aplican solo para reservas sin membresia y tarjetas de regalo</li>
+                  <li>• MercadoPago, PayPal y Conekta aplican solo para reservas, tarjetas de regalo y mensualidades de plan de pago</li>
+                  <li>• Conekta usa Hosted Checkout (no requiere clave publica); las llaves se configuran como secrets de Supabase Edge Functions</li>
+                  <li>• El webhook de Conekta debe configurarse en el panel de Conekta apuntando a: <code className="bg-blue-100 px-1 rounded text-xs">/functions/v1/conekta-webhook</code></li>
                   <li>• Las claves secretas se configuran como secrets de Supabase Edge Functions</li>
                   <li>• Aqui solo se guardan las claves publicas (no sensibles) necesarias para el frontend</li>
                 </ul>
@@ -1286,6 +1291,49 @@ const AdminSettings: React.FC = () => {
                       <button type="button" onClick={() => toggleSecret('paypal_client_secret')} className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600">
                         {showSecrets['paypal_client_secret'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                    <CreditCard className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Conekta</h3>
+                    <p className="text-xs text-gray-500">Para reservas de tours y mensualidades de plan de pago</p>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="conekta_enabled"
+                    checked={platformSettings.conekta_enabled}
+                    onChange={handlePlatformChange}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Habilitado</span>
+                </label>
+              </div>
+
+              {platformSettings.conekta_enabled && (
+                <div className="space-y-3">
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <div className="flex items-start">
+                      <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+                      <div className="text-xs text-blue-800">
+                        <p className="font-medium mb-1">Configuracion de Conekta:</p>
+                        <ul className="space-y-1">
+                          <li>• Conekta usa Hosted Checkout: las llaves se configuran como secrets de Supabase Edge Functions (CONEKTA_PRIVATE_KEY y CONEKTA_WEBHOOK_SIGNING_KEY)</li>
+                          <li>• No se requiere clave publica en el frontend</li>
+                          <li>• Metodos disponibles: tarjeta, efectivo (OXXO), SPEI, y BNPL (Aplazo, Creditea, Coppel Pay)</li>
+                          <li>• BNPL requiere monto entre $1,200 y $16,000 MXN por transaccion</li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
