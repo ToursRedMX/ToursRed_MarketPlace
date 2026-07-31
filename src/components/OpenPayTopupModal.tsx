@@ -24,7 +24,7 @@ const MAX_AMOUNT = 50000;
 
 const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { user } = useAuth();
-  const [step, setStep] = useState<TopupStep>('select-method');
+  const [step, setStep] = useState<TopupStep>('select-amount');
   const [method, setMethod] = useState<PaymentMethod>('spei');
   const [amount, setAmount] = useState<number>(1000);
   const [customAmount, setCustomAmount] = useState<string>('');
@@ -35,7 +35,7 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
   if (!isOpen) return null;
 
   const resetState = () => {
-    setStep('select-method');
+    setStep('select-amount');
     setMethod('spei');
     setAmount(1000);
     setCustomAmount('');
@@ -197,64 +197,12 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
         </div>
 
         <div className="p-6">
-          {/* Step: Select Method */}
-          {step === 'select-method' && (
-            <div>
-              <p className="text-gray-600 mb-6">Selecciona como quieres recargar tu monedero:</p>
-              <div className="space-y-3">
-                <button
-                  onClick={() => handleMethodSelect('spei')}
-                  className="w-full flex items-center gap-4 p-5 border-2 border-gray-200 rounded-xl hover:border-accent-500 hover:bg-accent-50 transition-all text-left group"
-                >
-                  <div className="bg-accent-100 rounded-xl p-3 group-hover:bg-accent-200 transition-colors">
-                    <Building2 className="h-7 w-7 text-accent-700" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-bold text-gray-900 text-lg">Transferencia SPEI</h4>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Transfiere desde tu banco a la CLABE que te proporcionamos. Se acredita al recibir el pago.
-                    </p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => handleMethodSelect('codi')}
-                  className="w-full flex items-center gap-4 p-5 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all text-left group"
-                >
-                  <div className="bg-blue-100 rounded-xl p-3 group-hover:bg-blue-200 transition-colors">
-                    <QrCode className="h-7 w-7 text-blue-700" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-bold text-gray-900 text-lg">CoDi (Codigo QR)</h4>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Escanea un codigo QR desde tu app bancaria. Pago instantaneo 24/7.
-                    </p>
-                  </div>
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Step: Select Amount */}
           {step === 'select-amount' && (
             <div>
               <div className="flex items-center gap-2 mb-6">
-                <button
-                  onClick={() => setStep('select-method')}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </button>
-                <div className="flex items-center gap-2">
-                  {method === 'spei' ? (
-                    <Building2 className="h-5 w-5 text-accent-600" />
-                  ) : (
-                    <QrCode className="h-5 w-5 text-blue-600" />
-                  )}
-                  <span className="font-semibold text-gray-900">
-                    {method === 'spei' ? 'Transferencia SPEI' : 'CoDi (QR)'}
-                  </span>
-                </div>
+                <Building2 className="h-5 w-5 text-accent-600" />
+                <span className="font-semibold text-gray-900">Transferencia SPEI</span>
               </div>
 
               <p className="text-gray-600 mb-4">Elige o captura el monto a recargar:</p>
