@@ -749,6 +749,7 @@ const TravelersInfoPage: React.FC = () => {
               amount: amountToCharge,
               payment_method_type: (booking as any)?.conekta_method || 'card',
               bnpl_product_type: (booking as any)?.bnpl_product_type || undefined,
+              sub_charges: (booking as any)?.conekta_sub_charges || undefined,
               context: 'booking_deposit',
               description: `Depósito para ${tour?.name}`,
             }),
