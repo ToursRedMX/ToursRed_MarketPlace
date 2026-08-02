@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { MapPin, Calendar, Users, Building, Star, Clock, Globe, MessageCircle, ChevronLeft, ChevronRight, CreditCard as Edit, Heart, ExternalLink, Share2, RefreshCw, Lock, Car, AlertTriangle, Sparkles, Tag, Bus } from 'lucide-react';
-import { Calendar as CalendarIcon, Clock as ClockIcon, Users as UsersIcon, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock as ClockIcon, Users as UsersIcon } from 'lucide-react';
 import AgencyReviews from '../components/AgencyReviews';
 import ShareTourModal from '../components/ShareTourModal';
 import { Tour } from '../types';
