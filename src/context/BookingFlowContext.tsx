@@ -72,14 +72,24 @@ function clearStorage(tourSlug: string) {
   }
 }
 
-export const BookingFlowProvider: React.FC<{ tourSlug: string; children: React.ReactNode }> = ({
+export const BookingFlowProvider: React.FC<{
+  tourSlug: string;
+  initialTour?: Tour | null;
+  children: React.ReactNode;
+}> = ({
   tourSlug,
+  initialTour,
   children,
 }) => {
   const [flow, setFlow] = useState<BookingFlowState>(() => {
     const stored = loadFromStorage(tourSlug);
     if (stored) return stored;
-    return { ...INITIAL_FLOW_STATE, tourSlug };
+    return {
+      ...INITIAL_FLOW_STATE,
+      tourSlug,
+      tourId: initialTour?.id ?? '',
+      tour: initialTour ?? null,
+    };
   });
 
   const sessionIdRef = useRef<string>(getSessionId());
@@ -211,3 +221,6 @@ export const BookingFlowProvider: React.FC<{ tourSlug: string; children: React.R
     </BookingFlowContext.Provider>
   );
 };
+
+
+export { useBookingFlow }

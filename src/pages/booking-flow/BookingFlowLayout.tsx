@@ -162,7 +162,7 @@ const BookingFlowLayout: React.FC = () => {
   }
 
   return (
-    <BookingFlowProvider tourSlug={resolvedSlug} key={resolvedSlug}>
+    <BookingFlowProvider tourSlug={resolvedSlug} initialTour={tour} key={resolvedSlug}>
       <FlowContent />
     </BookingFlowProvider>
   );

@@ -48,7 +48,7 @@ const BookingFlowStep1: React.FC = () => {
   const isReceptivo = tour?.tour_type === 'receptivo';
   const isPrivateTransfer = isReceptivo && (tour as any).activity_type === 'transport' && (tour as any).receptivo_modality === 'privado';
   const isTransferCustomTime = isReceptivo && (tour as any).transfer_custom_time === true;
-  const hasRestrictions = isReceptivo && (tour.restriction_pregnant || tour.restriction_disability || tour.restriction_physical);
+  const hasRestrictions = isReceptivo && (tour?.restriction_pregnant || tour?.restriction_disability || tour?.restriction_physical);
 
   const [selectedDate, setSelectedDate] = useState<Date | null>(
     flow.selectedDate ? new Date(flow.selectedDate + 'T12:00:00') : null
