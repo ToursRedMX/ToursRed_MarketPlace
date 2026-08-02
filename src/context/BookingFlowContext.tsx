@@ -221,5 +221,3 @@ export const BookingFlowProvider: React.FC<{
     </BookingFlowContext.Provider>
   );
 };
-
-export { useBookingFlow }
