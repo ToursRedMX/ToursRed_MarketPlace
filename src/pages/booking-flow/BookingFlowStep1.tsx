@@ -58,30 +58,45 @@ const BookingFlowStep1: React.FC = () => {
   const [showTravelerSelector, setShowTravelerSelector] = useState(false);
   const [availableSpots, setAvailableSpots] = useState<number | null>(null);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
+  const [isValidatingAdvance, setIsValidatingAdvance] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (tour) setTour(tour);
   }, [tour, setTour]);
 
+  const fetchAvailability = async (slotId: string | null) => {
+    if (!tour) return;
+    setIsLoadingAvailability(true);
+    try {
+      const { data, error: rpcError } = await supabase
+        .rpc('get_tour_availability_v2', { p_tour_id: tour.id, p_slot_id: slotId });
+      if (!rpcError && data && data.length > 0) {
+        setAvailableSpots(data[0].available_spots);
+      } else if (rpcError) {
+        setAvailableSpots(null);
+      }
+    } catch {
+      setAvailableSpots(null);
+    } finally {
+      setIsLoadingAvailability(false);
+    }
+  };
+
   useEffect(() => {
     if (!tour) return;
-    const loadAvailability = async () => {
-      setIsLoadingAvailability(true);
-      try {
-        const { data, error: rpcError } = await supabase
-          .rpc('get_tour_availability', { p_tour_id: tour.id });
-        if (!rpcError && data && data.length > 0) {
-          setAvailableSpots(data[0].available_spots);
-        }
-      } catch {
-        // non-critical
-      } finally {
-        setIsLoadingAvailability(false);
+    if (isReceptivo) {
+      if (selectedSlot) {
+        fetchAvailability(selectedSlot.id);
+      } else if (isTransferCustomTime && selectedDate) {
+        fetchAvailability(null);
+      } else {
+        setAvailableSpots(null);
       }
-    };
-    loadAvailability();
-  }, [tour]);
+    } else {
+      fetchAvailability(null);
+    }
+  }, [tour, selectedSlot, selectedDate, isReceptivo, isTransferCustomTime]);
 
   if (!tour) {
     return null;
@@ -117,10 +132,11 @@ const BookingFlowStep1: React.FC = () => {
     if (isTransferCustomTime && !customTime) return false;
     if (availableSpots !== null && totalTravelers > availableSpots) return false;
     if (isPrivateTransfer && (tour as any).private_vehicle_capacity && totalTravelers > (tour as any).private_vehicle_capacity) return false;
+    if (isValidatingAdvance) return false;
     return true;
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     setError('');
 
     if (!user) {
@@ -148,13 +164,31 @@ const BookingFlowStep1: React.FC = () => {
       return;
     }
 
-    if (availableSpots !== null && totalTravelers > availableSpots) {
-      setError(`Solo hay ${availableSpots} lugar${availableSpots !== 1 ? 'es' : ''} disponible${availableSpots !== 1 ? 's' : ''} para este tour.`);
+    if (isPrivateTransfer && (tour as any).private_vehicle_capacity && totalTravelers > (tour as any).private_vehicle_capacity) {
+      setError(`Este vehiculo tiene capacidad maxima de ${(tour as any).private_vehicle_capacity} pasajeros.`);
       return;
     }
 
-    if (isPrivateTransfer && (tour as any).private_vehicle_capacity && totalTravelers > (tour as any).private_vehicle_capacity) {
-      setError(`Este vehiculo tiene capacidad maxima de ${(tour as any).private_vehicle_capacity} pasajeros.`);
+    const slotIdForValidation = selectedSlot?.id || null;
+    setIsValidatingAdvance(true);
+    try {
+      const { data: freshData, error: rpcError } = await supabase
+        .rpc('get_tour_availability_v2', { p_tour_id: tour.id, p_slot_id: slotIdForValidation });
+      if (rpcError || !freshData || freshData.length === 0) {
+        setError('No pudimos verificar la disponibilidad. Intenta de nuevo.');
+        setIsValidatingAdvance(false);
+        return;
+      }
+      const freshAvailable = freshData[0].available_spots;
+      setAvailableSpots(freshAvailable);
+      if (totalTravelers > freshAvailable) {
+        setError(`Solo hay ${freshAvailable} lugar${freshAvailable !== 1 ? 'es' : ''} disponible${freshAvailable !== 1 ? 's' : ''} en este momento.`);
+        setIsValidatingAdvance(false);
+        return;
+      }
+    } catch {
+      setError('No pudimos verificar la disponibilidad. Intenta de nuevo.');
+      setIsValidatingAdvance(false);
       return;
     }
 
@@ -451,8 +485,8 @@ const BookingFlowStep1: React.FC = () => {
           disabled={!canProceed()}
           className="w-full py-3.5 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
-          Continuar al Paso 2
-          <ChevronRight className="w-5 h-5" />
+          {isValidatingAdvance ? 'Verificando disponibilidad...' : 'Continuar al Paso 2'}
+          {!isValidatingAdvance && <ChevronRight className="w-5 h-5" />}
         </button>
       </div>
     </div>

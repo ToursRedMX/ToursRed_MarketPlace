@@ -41,7 +41,7 @@ const SlotCalendarPicker: React.FC<SlotCalendarPickerProps> = ({ tour, selectedD
       (data as TourSlot[] || []).forEach((slot) => {
         const dateKey = slot.slot_date;
         const existing = map.get(dateKey);
-        const available = Math.max(0, slot.capacity - slot.booked_count);
+        const available = slot.available_count != null ? slot.available_count : Math.max(0, slot.capacity - slot.booked_count);
         if (!existing) {
           map.set(dateKey, {
             date: dateKey,
@@ -123,7 +123,7 @@ const SlotCalendarPicker: React.FC<SlotCalendarPickerProps> = ({ tour, selectedD
   const weekDays = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden max-w-sm mx-auto sm:mx-0">
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
         <button
           onClick={() => setCurrentMonth(prev => subMonths(prev, 1))}
@@ -145,7 +145,7 @@ const SlotCalendarPicker: React.FC<SlotCalendarPickerProps> = ({ tour, selectedD
         </button>
       </div>
 
-      <div className="p-3">
+      <div className="p-2.5">
         <div className="grid grid-cols-7 mb-1">
           {weekDays.map(d => (
             <div key={d} className="text-center text-xs font-medium text-gray-400 py-1.5">
@@ -154,7 +154,7 @@ const SlotCalendarPicker: React.FC<SlotCalendarPickerProps> = ({ tour, selectedD
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-0.5">
+        <div className="grid grid-cols-7 gap-0.5 text-xs">
           {blanks.map((_, i) => (
             <div key={`blank-${i}`} />
           ))}

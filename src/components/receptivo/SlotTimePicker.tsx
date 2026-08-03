@@ -79,7 +79,7 @@ const SlotTimePicker: React.FC<SlotTimePickerProps> = ({ tourId, selectedDate, s
         Horarios disponibles — {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
       </p>
       {slots.map((slot) => {
-        const available = Math.max(0, slot.capacity - slot.booked_count);
+        const available = slot.available_count != null ? slot.available_count : Math.max(0, slot.capacity - slot.booked_count);
         const isFull = available === 0;
         const isSelected = selectedSlotId === slot.id;
         const isLowAvailability = available <= 3 && available > 0;
