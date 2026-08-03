@@ -41,18 +41,18 @@ interface PaymentProviderSelectorProps {
 }
 
 const PROVIDER_LABELS: Record<PaymentProvider, string> = {
-  stripe: 'Tarjeta / OXXO / Transferencia',
-  mercadopago: 'MercadoPago',
+  stripe: 'Stripe',
+  mercadopago: 'Mercado Pago',
   paypal: 'PayPal',
-  conekta: 'Conekta (Tarjeta / Efectivo / SPEI / Compra ahora, paga después)',
-  toursred_cash: 'ToursRed Cash (Billetera interna)',
+  conekta: 'Conekta',
+  toursred_cash: 'ToursRed Cash',
 };
 
 const PROVIDER_DESCRIPTIONS: Record<PaymentProvider, string> = {
-  stripe: 'Visa, Mastercard, OXXO, transferencia bancaria',
-  mercadopago: 'Tarjeta, efectivo, transferencia SPEI',
-  paypal: 'Cuenta PayPal o tarjeta de crédito/débito',
-  conekta: 'Tarjeta, efectivo, SPEI, o financia tu compra sin tarjeta',
+  stripe: 'Tarjetas / OXXO / Transferencia',
+  mercadopago: 'Tarjeta, Transferencia SPEI, Crédito Mercado Pago',
+  paypal: 'Visa / Master Card / American Express',
+  conekta: 'Tarjeta, Efectivo, SPEI, Aplazo, Creditea, Coppel Pay',
   toursred_cash: 'Usa tu saldo de ToursRed Cash para abonar al plan',
 };
 
@@ -225,7 +225,7 @@ export default function PaymentProviderSelector({
                 <img
                   src={PROVIDER_LOGOS[provider]!}
                   alt={`${PROVIDER_LABELS[provider]} logo`}
-                  className="h-7 w-auto object-contain flex-shrink-0"
+                  className="w-16 h-8 object-contain flex-shrink-0"
                 />
               )}
               <div className="flex-1 min-w-0">
