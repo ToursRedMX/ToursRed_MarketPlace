@@ -32,8 +32,6 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
   const [topupData, setTopupData] = useState<any>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
   const resetState = () => {
     setStep('select-amount');
     setMethod('spei');
@@ -198,6 +196,8 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
 
   const effectiveAmount = getEffectiveAmount();
   const validationError = effectiveAmount ? validateAmount(effectiveAmount) : null;
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
