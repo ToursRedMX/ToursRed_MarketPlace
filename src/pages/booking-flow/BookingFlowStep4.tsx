@@ -37,6 +37,8 @@ const BookingFlowStep4: React.FC = () => {
   const [discountApplied, setDiscountApplied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [remainingExemption, setRemainingExemption] = useState(0);
+  const [monthlyExemptionLimit, setMonthlyExemptionLimit] = useState(500);
 
   useEffect(() => {
     if (!tour || !user) return;
@@ -64,6 +66,20 @@ const BookingFlowStep4: React.FC = () => {
           (memData.status === 'cancelled' && memData.current_period_end && new Date(memData.current_period_end) > new Date())
         );
         setHasMembership(isActive);
+
+        if (isActive) {
+          try {
+            const { data: exemptData } = await supabase.rpc('get_remaining_service_fee_exemption', {
+              p_user_id: user.id,
+            });
+            if (exemptData && typeof exemptData === 'object' && 'remaining' in exemptData) {
+              setRemainingExemption(exemptData.remaining || 0);
+              setMonthlyExemptionLimit(exemptData.monthly_limit || 500);
+            }
+          } catch {
+            // non-critical
+          }
+        }
 
         const { data: walletData } = await supabase
           .from('toursred_cash_wallets')
@@ -119,17 +135,36 @@ const BookingFlowStep4: React.FC = () => {
     return insurancePricePerDay * insuranceDays * totalTravelers;
   }, [flow.includeInsurance, insurancePricePerDay, insuranceDays, totalTravelers]);
 
-  const fullServiceCharge = useMemo(() => {
-    if (hasMembership || flow.addMembership) return 0;
+  const baseServiceCharge = useMemo(() => {
     return Math.round(baseTourPrice * (serviceChargePct / 100) * 100) / 100;
-  }, [baseTourPrice, serviceChargePct, hasMembership, flow.addMembership]);
+  }, [baseTourPrice, serviceChargePct]);
+
+  const shouldWaiveServiceCharge = hasMembership || flow.addMembership;
+
+  const exemptionUsed = useMemo(() => {
+    if (shouldWaiveServiceCharge && hasMembership) {
+      return Math.min(baseServiceCharge, remainingExemption);
+    }
+    if (flow.addMembership) return baseServiceCharge;
+    return 0;
+  }, [baseServiceCharge, shouldWaiveServiceCharge, hasMembership, flow.addMembership, remainingExemption]);
+
+  const depositServiceCharge = useMemo(() => {
+    if (shouldWaiveServiceCharge && hasMembership) {
+      return Math.round((baseServiceCharge - exemptionUsed) * 100) / 100;
+    }
+    if (flow.addMembership) return 0;
+    return baseServiceCharge;
+  }, [baseServiceCharge, shouldWaiveServiceCharge, hasMembership, flow.addMembership, exemptionUsed]);
+
+  const hasReachedExemptionLimit = hasMembership && remainingExemption < baseServiceCharge;
 
   const membershipCost = useMemo(() => {
     if (!flow.addMembership || hasMembership || !membershipPrices) return 0;
     return flow.membershipPlan === 'anual' ? membershipPrices.annualPrice : membershipPrices.monthlyPrice;
   }, [flow.addMembership, flow.membershipPlan, hasMembership, membershipPrices]);
 
-  const subtotalBeforeDiscount = baseTourPrice + extrasSubtotal + extrasServiceCharge + insuranceCost + fullServiceCharge + membershipCost;
+  const subtotalBeforeDiscount = baseTourPrice + extrasSubtotal + extrasServiceCharge + insuranceCost + depositServiceCharge + membershipCost;
 
   const discountAmount = flow.discountAmount || 0;
   const pointsDiscount = usePoints ? Math.min(flow.pointsUsed, pointsBalance, subtotalBeforeDiscount - discountAmount) : 0;
@@ -144,6 +179,12 @@ const BookingFlowStep4: React.FC = () => {
   }, [tour, grandTotal]);
 
   const amountToPay = depositAmount;
+
+  const wouldQualifyForWalletBenefit = !useWallet
+    && walletBalance > 0
+    && totalTravelers > 0
+    && !flow.addMembership
+    && walletBalance >= grandTotal;
 
   if (!tour) return null;
 
@@ -205,9 +246,9 @@ const BookingFlowStep4: React.FC = () => {
         total_price: grandTotal,
         deposit_amount: depositAmount,
         commission_amount: Math.round(baseTourPrice * ((tour.commission_rate || tour.agencies?.commission_rate || 10) / 100) * 100) / 100,
-        service_charge: fullServiceCharge,
+        service_charge: depositServiceCharge,
         user_payment: amountToPay,
-        platform_revenue: fullServiceCharge + extrasServiceCharge,
+        platform_revenue: depositServiceCharge + extrasServiceCharge,
         booking_date: bookingDate,
         slot_id: flow.selectedSlot?.id || null,
         selected_date: flow.selectedDate || null,
@@ -505,10 +546,23 @@ const BookingFlowStep4: React.FC = () => {
             </div>
           )}
 
-          {fullServiceCharge > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Cargo por servicio</span>
-              <span className="font-medium text-gray-800">{formatCurrencyMXN(fullServiceCharge)}</span>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Cargo por servicio</span>
+            <span className="font-medium text-gray-800">{formatCurrencyMXN(depositServiceCharge)}</span>
+          </div>
+          {shouldWaiveServiceCharge && exemptionUsed > 0 && (
+            <div className="flex justify-between text-sm text-green-600">
+              <span className="flex items-center gap-1">
+                <Check className="w-3 h-3" /> {flow.addMembership ? 'Exento por nueva membresia' : 'Descuento por membresia'}
+              </span>
+              <span className="font-medium">-{formatCurrencyMXN(exemptionUsed)}</span>
+            </div>
+          )}
+          {hasReachedExemptionLimit && depositServiceCharge > 0 && (
+            <div className="mt-1 p-2 bg-orange-50 border border-orange-200 rounded-md">
+              <p className="text-xs text-gray-700">
+                Has usado {formatCurrencyMXN(monthlyExemptionLimit - remainingExemption)} MXN de tus {formatCurrencyMXN(monthlyExemptionLimit)} MXN de descuento este mes. Esta reserva aplicara un cargo por servicio de {formatCurrencyMXN(depositServiceCharge)} MXN.
+              </p>
             </div>
           )}
 
@@ -643,6 +697,11 @@ const BookingFlowStep4: React.FC = () => {
               <div className="flex-1">
                 <span className="text-sm font-medium text-gray-800">Usar ToursRed Cash (Saldo: {formatCurrencyMXN(walletBalance)})</span>
                 <p className="text-xs text-gray-500">Saldo disponible en tu billetera</p>
+                {wouldQualifyForWalletBenefit && (
+                  <p className="text-xs text-emerald-700 font-medium mt-1">
+                    Activalo y paga $0 de cargo por servicio{hasMembership ? ' + gana el doble de ToursRed Points' : ''}.
+                  </p>
+                )}
               </div>
             </label>
           </div>
@@ -694,3 +753,6 @@ const BookingFlowStep4: React.FC = () => {
 };
 
 export default BookingFlowStep4;
+
+
+export default BookingFlowStep4
