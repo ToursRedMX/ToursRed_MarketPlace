@@ -274,10 +274,17 @@ const BookingFlowStep3: React.FC = () => {
 
   const handleSeatSelect = (seats: number[]) => {
     updateFlow({ selectedSeats: seats });
-    if (seats.length === totalTravelers) {
-      performSeatHold(seats);
-    }
   };
+
+  // Trigger seat hold when the selection in context is complete — doing this
+  // in a useEffect (rather than inside handleSeatSelect) ensures the context
+  // state is already committed before we attempt the hold, avoiding stale
+  // values and the "setState during render" React warning.
+  useEffect(() => {
+    if (hasSeatMap && flow.selectedSeats.length > 0 && flow.selectedSeats.length === totalTravelers) {
+      performSeatHold(flow.selectedSeats);
+    }
+  }, [hasSeatMap, flow.selectedSeats, totalTravelers, performSeatHold]);
 
   const handleContinue = () => {
     if (hasSeatMap && flow.selectedSeats.length < totalTravelers) {

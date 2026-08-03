@@ -297,18 +297,25 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
     if (disabled || seat.status !== 'disponible') return;
 
     setSelected(prev => {
-      let next: number[];
       if (prev.includes(seat.number)) {
-        next = prev.filter(n => n !== seat.number);
+        return prev.filter(n => n !== seat.number);
       } else if (prev.length < requiredSeats) {
-        next = [...prev, seat.number];
+        return [...prev, seat.number];
       } else {
-        next = [...prev.slice(1), seat.number];
+        return [...prev.slice(1), seat.number];
       }
-      onSeatsSelected(next);
-      return next;
     });
   };
+
+  // Report selection changes to parent outside of the setState callback to
+  // avoid the "setState during render" React warning.
+  const prevSelectedRef = React.useRef(selected);
+  React.useEffect(() => {
+    if (prevSelectedRef.current !== selected) {
+      prevSelectedRef.current = selected;
+      onSeatsSelected(selected);
+    }
+  });
 
   if (isLoading) {
     return (
