@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Minus, Plus, Calendar, Clock, AlertCircle, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
@@ -60,6 +60,35 @@ const BookingFlowStep1: React.FC = () => {
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   const [isValidatingAdvance, setIsValidatingAdvance] = useState(false);
   const [error, setError] = useState('');
+  const travelerButtonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<React.CSSProperties>({});
+
+  const updateDropdownPosition = () => {
+    if (!travelerButtonRef.current) return;
+    const rect = travelerButtonRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const maxH = Math.min(320, Math.max(180, spaceBelow));
+    setDropdownPos({
+      position: 'fixed',
+      top: rect.bottom + 8,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 50,
+      maxHeight: maxH,
+    });
+  };
+
+  useEffect(() => {
+    if (showTravelerSelector) {
+      updateDropdownPosition();
+      window.addEventListener('scroll', updateDropdownPosition, true);
+      window.addEventListener('resize', updateDropdownPosition);
+    }
+    return () => {
+      window.removeEventListener('scroll', updateDropdownPosition, true);
+      window.removeEventListener('resize', updateDropdownPosition);
+    };
+  }, [showTravelerSelector]);
 
   useEffect(() => {
     if (tour) setTour(tour);
@@ -343,6 +372,7 @@ const BookingFlowStep1: React.FC = () => {
               )}
               <div className="relative">
                 <button
+                  ref={travelerButtonRef}
                   type="button"
                   onClick={() => setShowTravelerSelector(!showTravelerSelector)}
                   className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -357,7 +387,10 @@ const BookingFlowStep1: React.FC = () => {
                 </button>
 
                 {showTravelerSelector && (
-                  <div className="absolute z-10 mt-2 w-full bg-white border border-gray-300 rounded-lg shadow-lg p-4 space-y-4">
+                  <div
+                    style={dropdownPos}
+                    className="bg-white border border-gray-300 rounded-lg shadow-lg p-4 space-y-4 overflow-y-auto"
+                  >
                     {tour.admite_adultos !== false && (
                       <div className="flex items-center justify-between">
                         <div>
@@ -494,3 +527,6 @@ const BookingFlowStep1: React.FC = () => {
 };
 
 export default BookingFlowStep1;
+
+
+export default BookingFlowStep1
