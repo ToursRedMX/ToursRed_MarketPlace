@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Minus, Plus, Calendar, Clock, AlertCircle, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
@@ -55,41 +55,10 @@ const BookingFlowStep1: React.FC = () => {
   );
   const [selectedSlot, setSelectedSlot] = useState<TourSlot | null>(flow.selectedSlot);
   const [customTime, setCustomTime] = useState<string>(flow.selectedTime || '');
-  const [showTravelerSelector, setShowTravelerSelector] = useState(false);
   const [availableSpots, setAvailableSpots] = useState<number | null>(null);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   const [isValidatingAdvance, setIsValidatingAdvance] = useState(false);
   const [error, setError] = useState('');
-  const travelerButtonRef = useRef<HTMLButtonElement>(null);
-  const [dropdownPos, setDropdownPos] = useState<React.CSSProperties>({});
-
-  const updateDropdownPosition = () => {
-    if (!travelerButtonRef.current) return;
-    const rect = travelerButtonRef.current.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom - 8;
-    const maxH = Math.min(320, Math.max(180, spaceBelow));
-    setDropdownPos({
-      position: 'fixed',
-      top: rect.bottom + 8,
-      left: rect.left,
-      width: rect.width,
-      zIndex: 50,
-      maxHeight: maxH,
-    });
-  };
-
-  useEffect(() => {
-    if (showTravelerSelector) {
-      updateDropdownPosition();
-      window.addEventListener('scroll', updateDropdownPosition, true);
-      window.addEventListener('resize', updateDropdownPosition);
-    }
-    return () => {
-      window.removeEventListener('scroll', updateDropdownPosition, true);
-      window.removeEventListener('resize', updateDropdownPosition);
-    };
-  }, [showTravelerSelector]);
-
   useEffect(() => {
     if (tour) setTour(tour);
   }, [tour, setTour]);
@@ -370,27 +339,16 @@ const BookingFlowStep1: React.FC = () => {
                   {availableSpots} lugar{availableSpots !== 1 ? 'es' : ''} disponible{availableSpots !== 1 ? 's' : ''}
                 </div>
               )}
-              <div className="relative">
-                <button
-                  ref={travelerButtonRef}
-                  type="button"
-                  onClick={() => setShowTravelerSelector(!showTravelerSelector)}
-                  className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <div className="flex items-center">
-                    <Users className="h-5 w-5 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-700">{getSelectorLabel()}</span>
-                  </div>
-                  <svg className={`h-5 w-5 text-gray-400 transition-transform ${showTravelerSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {showTravelerSelector && (
-                  <div
-                    style={dropdownPos}
-                    className="bg-white border border-gray-300 rounded-lg shadow-lg p-4 space-y-4 overflow-y-auto"
-                  >
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50">
+                  <Users className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700">
+                    {totalTravelers === 0 && travelerCounts.mascotas === 0
+                      ? 'Selecciona los viajeros'
+                      : getSelectorLabel()}
+                  </span>
+                </div>
+                <div className="p-4 space-y-4">
                     {tour.admite_adultos !== false && (
                       <div className="flex items-center justify-between">
                         <div>
@@ -476,8 +434,7 @@ const BookingFlowStep1: React.FC = () => {
                         </div>
                       </div>
                     )}
-                  </div>
-                )}
+                </div>
               </div>
             </>
           )}
