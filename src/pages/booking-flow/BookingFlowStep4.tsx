@@ -782,6 +782,3 @@ const BookingFlowStep4: React.FC = () => {
 };
 
 export default BookingFlowStep4;
-
-
-export default BookingFlowStep4
