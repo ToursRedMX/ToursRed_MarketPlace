@@ -107,6 +107,10 @@ const BookingFlowStep4: React.FC = () => {
   // Price calculations
   const totalTravelers = totalTravelerCount(flow.travelerCounts);
 
+  useEffect(() => {
+    console.log('[Step4] flow.travelers:', flow.travelers.length, flow.travelers.map(t => ({ cat: t.categoria_viajero, precio: t.precio_aplicado, nombre: t.nombre })));
+  }, [flow.travelers]);
+
   const baseTourPrice = useMemo(() => {
     if (!tour) return 0;
     return flow.travelers.reduce((sum, t) => sum + (t.precio_aplicado || 0), 0);
@@ -116,7 +120,7 @@ const BookingFlowStep4: React.FC = () => {
     return flow.optionalServices.reduce((sum, s) => sum + (s.subtotal || 0), 0);
   }, [flow.optionalServices]);
 
-  const extrasServiceCharge = useMemo(() => {
+  const extrasServiceChargeBase = useMemo(() => {
     return flow.optionalServices.reduce((sum, s) => sum + (s.service_charge || 0), 0);
   }, [flow.optionalServices]);
 
@@ -157,7 +161,24 @@ const BookingFlowStep4: React.FC = () => {
     return baseServiceCharge;
   }, [baseServiceCharge, shouldWaiveServiceCharge, hasMembership, flow.addMembership, exemptionUsed]);
 
-  const hasReachedExemptionLimit = hasMembership && remainingExemption < baseServiceCharge;
+  const extrasExemptionUsed = useMemo(() => {
+    const remainingAfterDeposit = Math.max(0, remainingExemption - exemptionUsed);
+    if (shouldWaiveServiceCharge && hasMembership) {
+      return Math.min(extrasServiceChargeBase, remainingAfterDeposit);
+    }
+    if (flow.addMembership) return extrasServiceChargeBase;
+    return 0;
+  }, [extrasServiceChargeBase, shouldWaiveServiceCharge, hasMembership, flow.addMembership, remainingExemption, exemptionUsed]);
+
+  const extrasServiceCharge = useMemo(() => {
+    if (shouldWaiveServiceCharge && hasMembership) {
+      return Math.round((extrasServiceChargeBase - extrasExemptionUsed) * 100) / 100;
+    }
+    if (flow.addMembership) return 0;
+    return extrasServiceChargeBase;
+  }, [extrasServiceChargeBase, shouldWaiveServiceCharge, hasMembership, flow.addMembership, extrasExemptionUsed]);
+
+  const hasReachedExemptionLimit = hasMembership && remainingExemption < (baseServiceCharge + extrasServiceChargeBase);
 
   const membershipCost = useMemo(() => {
     if (!flow.addMembership || hasMembership || !membershipPrices) return 0;
@@ -530,10 +551,18 @@ const BookingFlowStep4: React.FC = () => {
             </div>
           )}
 
-          {extrasServiceCharge > 0 && (
+          {extrasServiceChargeBase > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Cargo por servicio (extras)</span>
               <span className="font-medium text-gray-800">{formatCurrencyMXN(extrasServiceCharge)}</span>
+            </div>
+          )}
+          {shouldWaiveServiceCharge && extrasExemptionUsed > 0 && extrasServiceChargeBase > 0 && (
+            <div className="flex justify-between text-sm text-green-600">
+              <span className="flex items-center gap-1">
+                <Check className="w-3 h-3" /> Descuento por membresia (extras)
+              </span>
+              <span className="font-medium">-{formatCurrencyMXN(extrasExemptionUsed)}</span>
             </div>
           )}
 
@@ -753,6 +782,5 @@ const BookingFlowStep4: React.FC = () => {
 };
 
 export default BookingFlowStep4;
-
 
 export default BookingFlowStep4
