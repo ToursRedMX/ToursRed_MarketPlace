@@ -10,7 +10,8 @@ import Seo from '../components/Seo';
 import PaymentProviderSelector, { PaymentProvider } from '../components/PaymentProviderSelector';
 import MercadoPagoBrick from '../components/MercadoPagoBrick';
 
-const GIFT_CARD_AMOUNTS = [100, 200, 500, 1000];
+const DEFAULT_GIFT_CARD_AMOUNTS = [100, 200, 500, 1000];
+const DEFAULT_MAX_AMOUNT = 10000;
 
 export default function GiftCardsPage() {
   const { user } = useAuth();
@@ -36,6 +37,10 @@ export default function GiftCardsPage() {
   } | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [mpBrick, setMpBrick] = useState<{ preferenceId: string; publicKey: string; giftCardId: string; amount: number } | null>(null);
+  const [giftCardAmounts, setGiftCardAmounts] = useState<number[]>(DEFAULT_GIFT_CARD_AMOUNTS);
+  const [maxAmount, setMaxAmount] = useState<number>(DEFAULT_MAX_AMOUNT);
+  const [isCustomAmount, setIsCustomAmount] = useState(false);
+  const [customAmount, setCustomAmount] = useState<string>('');
 
   const giftCardFormPersistence = useFormPersistence(
     { purchaserName, purchaserEmail, recipientName, recipientEmail, personalMessage, selectedAmount },
@@ -81,6 +86,23 @@ export default function GiftCardsPage() {
 
     loadInitialData();
   }, [user]);
+
+  useEffect(() => {
+    supabase
+      .from('platform_settings')
+      .select('gift_card_amounts, gift_card_max_amount')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          if (data.gift_card_amounts && Array.isArray(data.gift_card_amounts) && data.gift_card_amounts.length > 0) {
+            setGiftCardAmounts(data.gift_card_amounts);
+          }
+          if (data.gift_card_max_amount && data.gift_card_max_amount >= 100) {
+            setMaxAmount(data.gift_card_max_amount);
+          }
+        }
+      });
+  }, []);
 
   const validateDiscountCode = async () => {
     if (!user) {
@@ -163,6 +185,16 @@ export default function GiftCardsPage() {
   const handlePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (selectedAmount < 100) {
+      setError('El monto mínimo es $100 MXN');
+      return;
+    }
+    if (selectedAmount > maxAmount) {
+      setError(`El monto no puede superar ${maxAmount.toLocaleString('es-MX')} MXN`);
+      return;
+    }
+
     setIsProcessing(true);
 
     const timeoutId = setTimeout(() => {
@@ -395,18 +427,18 @@ export default function GiftCardsPage() {
                 Selecciona el Monto
               </label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {GIFT_CARD_AMOUNTS.map((amount) => (
+                {giftCardAmounts.map((amount) => (
                   <button
                     key={amount}
                     type="button"
-                    onClick={() => setSelectedAmount(amount)}
+                    onClick={() => { setSelectedAmount(amount); setIsCustomAmount(false); }}
                     className={`relative p-6 rounded-xl border-2 transition-all ${
-                      selectedAmount === amount
+                      !isCustomAmount && selectedAmount === amount
                         ? 'border-amber-500 bg-amber-50 shadow-lg scale-105'
                         : 'border-gray-200 hover:border-amber-300 hover:shadow-md'
                     }`}
                   >
-                    {selectedAmount === amount && (
+                    {!isCustomAmount && selectedAmount === amount && (
                       <div className="absolute top-2 right-2 w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center">
                         <Check className="w-4 h-4 text-white" />
                       </div>
@@ -415,7 +447,59 @@ export default function GiftCardsPage() {
                     <div className="text-sm text-gray-500">MXN</div>
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => { setIsCustomAmount(true); setSelectedAmount(Number(customAmount) || 0); }}
+                  className={`relative p-6 rounded-xl border-2 transition-all ${
+                    isCustomAmount
+                      ? 'border-amber-500 bg-amber-50 shadow-lg scale-105'
+                      : 'border-gray-200 hover:border-amber-300 hover:shadow-md'
+                  }`}
+                >
+                  {isCustomAmount && (
+                    <div className="absolute top-2 right-2 w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center">
+                      <Check className="w-4 h-4 text-white" />
+                    </div>
+                  )}
+                  <div className="text-2xl font-bold text-gray-900">Personalizado</div>
+                  <div className="text-sm text-gray-500">MXN</div>
+                </button>
               </div>
+
+              {isCustomAmount && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Ingresa el monto (mínimo $100, máximo ${maxAmount.toLocaleString('es-MX')})
+                  </label>
+                  <div className="relative w-64">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
+                    <input
+                      type="number"
+                      min={100}
+                      max={maxAmount}
+                      step={100}
+                      value={customAmount}
+                      onChange={(e) => {
+                        const val = Math.round(Number(e.target.value) / 100) * 100;
+                        setCustomAmount(String(val));
+                        setSelectedAmount(val);
+                      }}
+                      placeholder="Ej. 1500"
+                      className="w-full pl-8 pr-4 py-3 border-2 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    />
+                  </div>
+                  {selectedAmount > maxAmount && (
+                    <p className="text-sm text-red-600 mt-2">
+                      El monto no puede superar ${maxAmount.toLocaleString('es-MX')} MXN
+                    </p>
+                  )}
+                  {selectedAmount < 100 && customAmount !== '' && (
+                    <p className="text-sm text-red-600 mt-2">
+                      El monto mínimo es $100 MXN
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mb-6">
@@ -624,7 +708,7 @@ export default function GiftCardsPage() {
 
             <button
               type="submit"
-              disabled={isProcessing}
+              disabled={isProcessing || selectedAmount < 100 || selectedAmount > maxAmount}
               className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white py-4 rounded-xl font-bold text-lg hover:from-amber-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
               {isProcessing ? (

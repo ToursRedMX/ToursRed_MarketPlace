@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, Server, Save, Loader, CheckCircle, AlertCircle, DollarSign, Percent, CreditCard, Crown, Gift, Award, Users, Globe, FileText, Shield, BookOpen, Link, Unlink, RefreshCw, ExternalLink, Tag, Image, Upload, RotateCcw, X, Wrench, Megaphone, Power, PowerOff, Eye, EyeOff } from 'lucide-react';
+import { Mail, Server, Save, Loader, CheckCircle, AlertCircle, DollarSign, Percent, CreditCard, Crown, Gift, Award, Users, Globe, FileText, Shield, BookOpen, Link, Unlink, RefreshCw, ExternalLink, Tag, Image, Upload, RotateCcw, X, Wrench, Megaphone, Power, PowerOff, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
 
@@ -78,6 +78,8 @@ interface PlatformSettings {
   stripe_bookings_enabled: boolean;
   stripe_gift_cards_enabled: boolean;
   stripe_memberships_enabled: boolean;
+  gift_card_amounts: number[];
+  gift_card_max_amount: number;
 }
 
 const AdminSettings: React.FC = () => {
@@ -155,6 +157,8 @@ const AdminSettings: React.FC = () => {
     stripe_bookings_enabled: true,
     stripe_gift_cards_enabled: true,
     stripe_memberships_enabled: true,
+    gift_card_amounts: [100, 200, 500, 1000],
+    gift_card_max_amount: 10000,
   });
   const [zohoStatus, setZohoStatus] = useState<{
     connected: boolean;
@@ -432,6 +436,8 @@ const AdminSettings: React.FC = () => {
             stripe_bookings_enabled: platformSettings.stripe_bookings_enabled,
             stripe_gift_cards_enabled: platformSettings.stripe_gift_cards_enabled,
             stripe_memberships_enabled: platformSettings.stripe_memberships_enabled,
+            gift_card_amounts: platformSettings.gift_card_amounts,
+            gift_card_max_amount: platformSettings.gift_card_max_amount,
             updated_at: new Date().toISOString(),
             updated_by: user?.id
           })
@@ -1427,6 +1433,110 @@ const AdminSettings: React.FC = () => {
                   </label>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Gift Card Amounts Configuration */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <Gift className="w-6 h-6 text-primary-600" />
+            <h2 className="text-xl font-semibold text-gray-900">
+              Montos de Tarjetas de Regalo
+            </h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-6">
+            Configura los montos predefinidos que aparecen en la página de tarjetas de regalo y el monto máximo permitido.
+          </p>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Montos predefinidos (MXN)
+              </label>
+              <p className="text-xs text-gray-500 mb-3">
+                Los usuarios verán estos montos como botones de selección rápida. Deben ser múltiplos de 100.
+              </p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {platformSettings.gift_card_amounts.map((amount, idx) => (
+                  <div key={idx} className="flex items-center gap-1 bg-gray-100 rounded-lg px-3 py-2">
+                    <span className="text-sm font-medium text-gray-900">${amount}</span>
+                    <button
+                      type="button"
+                      onClick={() => setPlatformSettings(prev => ({
+                        ...prev,
+                        gift_card_amounts: prev.gift_card_amounts.filter((_, i) => i !== idx)
+                      }))}
+                      className="text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                {platformSettings.gift_card_amounts.length === 0 && (
+                  <p className="text-sm text-gray-400 italic">No hay montos configurados</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={100}
+                  step={100}
+                  placeholder="Nuevo monto (ej. 2000)"
+                  className="w-48 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const val = Math.round(Number((e.target as HTMLInputElement).value) / 100) * 100;
+                      if (val >= 100 && !platformSettings.gift_card_amounts.includes(val)) {
+                        setPlatformSettings(prev => ({
+                          ...prev,
+                          gift_card_amounts: [...prev.gift_card_amounts, val].sort((a, b) => a - b)
+                        }));
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                    const val = Math.round(Number(input.value) / 100) * 100;
+                    if (val >= 100 && !platformSettings.gift_card_amounts.includes(val)) {
+                      setPlatformSettings(prev => ({
+                        ...prev,
+                        gift_card_amounts: [...prev.gift_card_amounts, val].sort((a, b) => a - b)
+                      }));
+                      input.value = '';
+                    }
+                  }}
+                  className="flex items-center gap-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Agregar
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Monto máximo permitido (MXN)
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                El monto máximo que un usuario puede ingresar al elegir un monto personalizado.
+              </p>
+              <input
+                type="number"
+                min={100}
+                step={100}
+                value={platformSettings.gift_card_max_amount}
+                onChange={(e) => {
+                  const val = Math.round(Number(e.target.value) / 100) * 100;
+                  setPlatformSettings(prev => ({ ...prev, gift_card_max_amount: val >= 100 ? val : 100 }));
+                }}
+                className="w-48 px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+              />
             </div>
           </div>
         </div>
