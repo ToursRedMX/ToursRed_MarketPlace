@@ -56,6 +56,13 @@ const PROVIDER_DESCRIPTIONS: Record<PaymentProvider, string> = {
   toursred_cash: 'Usa tu saldo de ToursRed Cash para abonar al plan',
 };
 
+const PROVIDER_LOGOS: Partial<Record<PaymentProvider, string>> = {
+  stripe: '/payment-logos/Stripe.png',
+  mercadopago: '/payment-logos/mercadopago.png',
+  paypal: '/payment-logos/paypal.jpg',
+  conekta: '/payment-logos/conekta.png',
+};
+
 
 const CONEKTA_METHOD_LABELS: Record<ConektaMethod, string> = {
   bnpl: 'Compra ahora, paga después (BNPL)',
@@ -214,6 +221,13 @@ export default function PaymentProviderSelector({
                 onChange={() => onChange(provider)}
                 className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
               />
+              {PROVIDER_LOGOS[provider] && (
+                <img
+                  src={PROVIDER_LOGOS[provider]!}
+                  alt={`${PROVIDER_LABELS[provider]} logo`}
+                  className="h-7 w-auto object-contain flex-shrink-0"
+                />
+              )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-gray-900">

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, AlertCircle, Tag, Award, Wallet, Crown, Shield,
-  Loader2, CreditCard, Check, X,
+  Loader2, CreditCard, Check, X, Sparkles, ExternalLink,
 } from 'lucide-react';
 import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
@@ -15,6 +15,16 @@ import PaymentProviderSelector, {
   PaymentProvider as Provider,
   ConektaMethod,
 } from '../../components/PaymentProviderSelector';
+
+const CATEGORIA_LABELS: Record<string, string> = {
+  adulto: 'Adulto',
+  nino: 'Niño',
+  infante: 'Infante',
+  adulto_mayor: 'Adulto Mayor',
+  mascota: 'Mascota',
+};
+
+const CATEGORIA_ORDER = ['adulto', 'nino', 'infante', 'adulto_mayor', 'mascota'];
 
 const BookingFlowStep4: React.FC = () => {
   const { flow, updateFlow, goToStep, sessionId, resetFlow } = useBookingFlow();
@@ -107,14 +117,27 @@ const BookingFlowStep4: React.FC = () => {
   // Price calculations
   const totalTravelers = totalTravelerCount(flow.travelerCounts);
 
-  useEffect(() => {
-    console.log('[Step4] flow.travelers:', flow.travelers.length, flow.travelers.map(t => ({ cat: t.categoria_viajero, precio: t.precio_aplicado, nombre: t.nombre })));
-  }, [flow.travelers]);
-
   const baseTourPrice = useMemo(() => {
     if (!tour) return 0;
     return flow.travelers.reduce((sum, t) => sum + (t.precio_aplicado || 0), 0);
   }, [tour, flow.travelers]);
+
+  // Traveler category breakdown
+  const travelerCategoryBreakdown = useMemo(() => {
+    const groups: Record<string, { count: number; unitPrice: number; subtotal: number }> = {};
+    for (const t of flow.travelers) {
+      const cat = t.categoria_viajero || 'adulto';
+      if (!groups[cat]) {
+        groups[cat] = { count: 0, unitPrice: t.precio_aplicado || 0, subtotal: 0 };
+      }
+      groups[cat].count += 1;
+      groups[cat].subtotal += t.precio_aplicado || 0;
+      // keep unitPrice as the first traveler's price for the label (all same category same price)
+    }
+    return CATEGORIA_ORDER
+      .filter((cat) => groups[cat] && groups[cat].count > 0)
+      .map((cat) => ({ cat, ...groups[cat] }));
+  }, [flow.travelers]);
 
   const extrasSubtotal = useMemo(() => {
     return flow.optionalServices.reduce((sum, s) => sum + (s.subtotal || 0), 0);
@@ -201,11 +224,18 @@ const BookingFlowStep4: React.FC = () => {
 
   const amountToPay = depositAmount;
 
+  // ToursRed Cash benefit: wallet covers 100% of the total
   const wouldQualifyForWalletBenefit = !useWallet
     && walletBalance > 0
     && totalTravelers > 0
     && !flow.addMembership
     && walletBalance >= grandTotal;
+
+  // Points to earn on this payment
+  const isDoublePoints = useWallet && hasMembership;
+  const pointsToEarn = isDoublePoints
+    ? Math.floor(amountToPay) * 2
+    : Math.floor(amountToPay);
 
   if (!tour) return null;
 
@@ -258,7 +288,6 @@ const BookingFlowStep4: React.FC = () => {
     try {
       const bookingDate = flow.selectedSlot?.slot_date || flow.selectedDate || new Date().toISOString().split('T')[0];
 
-      // Build booking data jsonb for create_booking_atomic
       const bookingData: Record<string, any> = {
         user_id: user.id,
         tour_id: tour.id,
@@ -306,7 +335,6 @@ const BookingFlowStep4: React.FC = () => {
         initial_payment_amount: amountToPay,
       };
 
-      // Build travelers jsonb array
       const travelersJson = flow.travelers.map((t) => ({
         nombre: t.nombre,
         apellido: t.apellido,
@@ -323,7 +351,6 @@ const BookingFlowStep4: React.FC = () => {
         sexo: t.sexo || null,
       }));
 
-      // Build optional services jsonb array
       const optionalServicesJson = flow.optionalServices.map((s) => ({
         tour_optional_service_id: s.tour_optional_service_id,
         service_kind: s.service_kind,
@@ -336,7 +363,6 @@ const BookingFlowStep4: React.FC = () => {
         total_paid: s.total_paid,
       }));
 
-      // Call create_booking_atomic
       const { data: bookingResult, error: bookingError } = await supabase.rpc('create_booking_atomic', {
         p_booking_data: bookingData,
         p_travelers: travelersJson,
@@ -352,7 +378,6 @@ const BookingFlowStep4: React.FC = () => {
 
       const bookingId = bookingResult.booking_id;
 
-      // Send agency notification email (client-side, after commit)
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
@@ -369,15 +394,12 @@ const BookingFlowStep4: React.FC = () => {
           );
         }
       } catch {
-        // non-critical — in-app notification already exists
+        // non-critical
       }
 
-      // Redirect to payment provider
-      const paymentContext = flow.addMembership ? 'booking_with_membership' : 'booking';
       const isWalletOnly = flow.paymentProvider === 'toursred_cash' && amountToPay <= walletDiscount;
 
       if (isWalletOnly) {
-        // Pay with wallet directly via the RPC function (not an edge function)
         const idempotencyKey = `${bookingId}-${Date.now()}`;
         const { error: walletError } = await supabase.rpc('confirm_booking_paid_with_wallet', {
           p_booking_id: bookingId,
@@ -393,57 +415,32 @@ const BookingFlowStep4: React.FC = () => {
         return;
       }
 
-      // Stripe checkout
       if (flow.paymentProvider === 'stripe') {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No hay sesion activa');
-
         const resp = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              bookingId,
-              customerEmail: user.email,
-              amount: amountToPay,
-              description: `Deposito para ${tour.name}`,
-              addMembership: flow.addMembership,
-              membershipPlan: flow.membershipPlan,
-              toursRedCashUsed: walletDiscount,
-            }),
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ bookingId, customerEmail: user.email, amount: amountToPay, description: `Deposito para ${tour.name}`, addMembership: flow.addMembership, membershipPlan: flow.membershipPlan, toursRedCashUsed: walletDiscount }),
           }
         );
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
-          throw new Error(err.error || 'Error al crear la sesion de pago');
-        }
+        if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.error || 'Error al crear la sesion de pago'); }
         const { url } = await resp.json();
         window.location.href = url;
         return;
       }
 
-      // MercadoPago
       if (flow.paymentProvider === 'mercadopago') {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No hay sesion activa');
-
         const resp = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-mercadopago-preference`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              bookingId,
-              amount: amountToPay,
-              description: `Deposito para ${tour.name}`,
-            }),
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}` }),
           }
         );
         if (!resp.ok) throw new Error('Error al crear la preferencia de pago');
@@ -452,24 +449,15 @@ const BookingFlowStep4: React.FC = () => {
         return;
       }
 
-      // PayPal
       if (flow.paymentProvider === 'paypal') {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No hay sesion activa');
-
         const resp = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-paypal-order`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              bookingId,
-              amount: amountToPay,
-              description: `Deposito para ${tour.name}`,
-            }),
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}` }),
           }
         );
         if (!resp.ok) throw new Error('Error al crear la orden de PayPal');
@@ -478,36 +466,23 @@ const BookingFlowStep4: React.FC = () => {
         return;
       }
 
-      // Conekta
       if (flow.paymentProvider === 'conekta') {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No hay sesion activa');
-
         const resp = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-conekta-order`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              bookingId,
-              amount: amountToPay,
-              description: `Deposito para ${tour.name}`,
-              method: flow.conektaMethod,
-            }),
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}`, method: flow.conektaMethod }),
           }
         );
         if (!resp.ok) throw new Error('Error al crear la orden de Conekta');
         const data = await resp.json();
-        if (data.checkoutUrl) {
-          window.location.href = data.checkoutUrl;
-        }
+        if (data.checkoutUrl) window.location.href = data.checkoutUrl;
         return;
       }
 
-      // Fallback: redirect to booking pending
       resetFlow();
       navigate(`/booking-pending?booking_id=${bookingId}`);
     } catch (err: any) {
@@ -539,11 +514,28 @@ const BookingFlowStep4: React.FC = () => {
 
         {/* Cost breakdown */}
         <div className="mb-6 p-4 bg-gray-50 rounded-xl space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Tour ({totalTravelers} viajero{totalTravelers !== 1 ? 's' : ''})</span>
-            <span className="font-medium text-gray-800">{formatCurrencyMXN(baseTourPrice)}</span>
+
+          {/* Traveler category breakdown */}
+          {travelerCategoryBreakdown.length > 0 && (
+            <div className="space-y-1 pb-1">
+              {travelerCategoryBreakdown.map(({ cat, count, unitPrice, subtotal }) => (
+                <div key={cat} className="flex justify-between text-sm text-gray-500">
+                  <span>
+                    {count} {CATEGORIA_LABELS[cat] || cat}{count !== 1 ? (cat === 'adulto_mayor' ? 'es' : cat === 'infante' ? 's' : 's') : ''} × {formatCurrencyMXN(unitPrice)}
+                  </span>
+                  <span>{formatCurrencyMXN(subtotal)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Tour total */}
+          <div className="flex justify-between text-sm border-t border-gray-200 pt-2">
+            <span className="font-medium text-gray-700">Tour ({totalTravelers} viajero{totalTravelers !== 1 ? 's' : ''})</span>
+            <span className="font-semibold text-gray-800">{formatCurrencyMXN(baseTourPrice)}</span>
           </div>
 
+          {/* Optional services */}
           {extrasSubtotal > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Servicios opcionales</span>
@@ -551,59 +543,78 @@ const BookingFlowStep4: React.FC = () => {
             </div>
           )}
 
+          {/* Extras service charge: bruto → descuento → neto */}
           {extrasServiceChargeBase > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Cargo por servicio (extras)</span>
-              <span className="font-medium text-gray-800">{formatCurrencyMXN(extrasServiceCharge)}</span>
-            </div>
-          )}
-          {shouldWaiveServiceCharge && extrasExemptionUsed > 0 && extrasServiceChargeBase > 0 && (
-            <div className="flex justify-between text-sm text-green-600">
-              <span className="flex items-center gap-1">
-                <Check className="w-3 h-3" /> Descuento por membresia (extras)
-              </span>
-              <span className="font-medium">-{formatCurrencyMXN(extrasExemptionUsed)}</span>
-            </div>
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Cargo por servicio (extras)</span>
+                <span className="font-medium text-gray-800">{formatCurrencyMXN(extrasServiceChargeBase)}</span>
+              </div>
+              {shouldWaiveServiceCharge && extrasExemptionUsed > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span className="flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Descuento por membresía (extras)
+                  </span>
+                  <span className="font-medium">-{formatCurrencyMXN(extrasExemptionUsed)}</span>
+                </div>
+              )}
+              {shouldWaiveServiceCharge && extrasExemptionUsed > 0 && (
+                <div className="flex justify-between text-sm text-gray-500">
+                  <span className="pl-4">Cargo por servicio (extras, con descuento)</span>
+                  <span className="font-medium text-gray-700">{formatCurrencyMXN(extrasServiceCharge)}</span>
+                </div>
+              )}
+            </>
           )}
 
+          {/* Insurance */}
           {insuranceCost > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-600 flex items-center gap-1">
-                <Shield className="w-3 h-3" /> Seguro de viaje ({insuranceDays} dias)
+                <Shield className="w-3 h-3" /> Seguro de viaje ({insuranceDays} días)
               </span>
               <span className="font-medium text-gray-800">{formatCurrencyMXN(insuranceCost)}</span>
             </div>
           )}
 
+          {/* Deposit service charge: bruto → descuento → neto */}
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Cargo por servicio</span>
-            <span className="font-medium text-gray-800">{formatCurrencyMXN(depositServiceCharge)}</span>
+            <span className="font-medium text-gray-800">{formatCurrencyMXN(baseServiceCharge)}</span>
           </div>
           {shouldWaiveServiceCharge && exemptionUsed > 0 && (
             <div className="flex justify-between text-sm text-green-600">
               <span className="flex items-center gap-1">
-                <Check className="w-3 h-3" /> {flow.addMembership ? 'Exento por nueva membresia' : 'Descuento por membresia'}
+                <Check className="w-3 h-3" /> {flow.addMembership ? 'Exento por nueva membresía' : 'Descuento por membresía'}
               </span>
               <span className="font-medium">-{formatCurrencyMXN(exemptionUsed)}</span>
+            </div>
+          )}
+          {shouldWaiveServiceCharge && exemptionUsed > 0 && (
+            <div className="flex justify-between text-sm text-gray-500">
+              <span className="pl-4">Cargo por servicio (con descuento)</span>
+              <span className="font-medium text-gray-700">{formatCurrencyMXN(depositServiceCharge)}</span>
             </div>
           )}
           {hasReachedExemptionLimit && depositServiceCharge > 0 && (
             <div className="mt-1 p-2 bg-orange-50 border border-orange-200 rounded-md">
               <p className="text-xs text-gray-700">
-                Has usado {formatCurrencyMXN(monthlyExemptionLimit - remainingExemption)} MXN de tus {formatCurrencyMXN(monthlyExemptionLimit)} MXN de descuento este mes. Esta reserva aplicara un cargo por servicio de {formatCurrencyMXN(depositServiceCharge)} MXN.
+                Has usado {formatCurrencyMXN(monthlyExemptionLimit - remainingExemption)} MXN de tus {formatCurrencyMXN(monthlyExemptionLimit)} MXN de descuento este mes. Esta reserva aplicará un cargo por servicio de {formatCurrencyMXN(depositServiceCharge)} MXN.
               </p>
             </div>
           )}
 
+          {/* Membership add-on */}
           {membershipCost > 0 && (
             <div className="flex justify-between text-sm text-amber-600">
               <span className="flex items-center gap-1">
-                <Crown className="w-3 h-3" /> Membresia ToursRed+ ({flow.membershipPlan === 'anual' ? 'Anual' : 'Mensual'})
+                <Crown className="w-3 h-3" /> Membresía ToursRed+ ({flow.membershipPlan === 'anual' ? 'Anual' : 'Mensual'})
               </span>
               <span className="font-medium">+{formatCurrencyMXN(membershipCost)}</span>
             </div>
           )}
 
+          {/* Discount code */}
           {discountAmount > 0 && (
             <div className="flex justify-between text-sm text-green-600">
               <span className="flex items-center gap-1">
@@ -613,6 +624,7 @@ const BookingFlowStep4: React.FC = () => {
             </div>
           )}
 
+          {/* Points discount */}
           {pointsDiscount > 0 && (
             <div className="flex justify-between text-sm text-amber-600">
               <span className="flex items-center gap-1">
@@ -622,6 +634,7 @@ const BookingFlowStep4: React.FC = () => {
             </div>
           )}
 
+          {/* Wallet discount */}
           {walletDiscount > 0 && (
             <div className="flex justify-between text-sm text-teal-600">
               <span className="flex items-center gap-1">
@@ -631,6 +644,7 @@ const BookingFlowStep4: React.FC = () => {
             </div>
           )}
 
+          {/* Grand total */}
           <div className="border-t pt-2 flex justify-between">
             <span className="font-bold text-gray-900">Total</span>
             <span className="font-bold text-primary-600 text-lg">{formatCurrencyMXN(grandTotal)}</span>
@@ -638,15 +652,82 @@ const BookingFlowStep4: React.FC = () => {
 
           {depositAmount < grandTotal && (
             <div className="flex justify-between text-sm bg-primary-50 -mx-4 -mb-4 px-4 py-2 rounded-b-xl">
-              <span className="font-medium text-primary-700">Deposito a pagar ahora ({tour.deposit_percentage}%)</span>
+              <span className="font-medium text-primary-700">Depósito a pagar ahora ({tour.deposit_percentage}%)</span>
               <span className="font-bold text-primary-700">{formatCurrencyMXN(depositAmount)}</span>
             </div>
           )}
         </div>
 
+        {/* ToursRed Points earned banner */}
+        {amountToPay > 0 && (
+          <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl flex items-start gap-3">
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-4 h-4 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-green-800">
+                Vas a acumular ToursRed Points
+              </p>
+              <p className="text-sm text-green-700 mt-0.5">
+                Ganarás{' '}
+                <span className="font-bold text-green-800">{pointsToEarn.toLocaleString()} puntos</span>
+                {' '}con este pago
+                {isDoublePoints && (
+                  <span className="ml-1 inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+                    ×2 puntos
+                  </span>
+                )}
+                .
+              </p>
+              {isDoublePoints && (
+                <p className="text-xs text-green-600 mt-1">
+                  ¡Estás ganando el doble por pagar con ToursRed Cash y tener membresía activa!
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ToursRed Cash benefit banner (shown when wallet could cover 100%) */}
+        {wouldQualifyForWalletBenefit && (
+          <div className="mb-4 p-4 bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-300 rounded-xl">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <Wallet className="w-4 h-4 text-teal-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-base font-semibold text-teal-900">
+                  Beneficio exclusivo con ToursRed Cash
+                </p>
+                <p className="text-sm text-teal-800 mt-1 leading-relaxed">
+                  Paga el 100% de tu reserva con ToursRed Cash y no pagues el cargo por servicio.
+                  Adicionalmente, gana el doble de puntos.
+                </p>
+                {hasMembership && (
+                  <p className="text-sm font-medium text-teal-700 mt-2">
+                    Ganarías{' '}
+                    <span className="font-bold">{(Math.floor(amountToPay) * 2).toLocaleString()} ToursRed Points</span>
+                    {' '}con este pago.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => window.open('/traveler/wallet', '_blank')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-teal-700 bg-white border border-teal-300 rounded-lg hover:bg-teal-50 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Recargar mi monedero
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Discount code */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Codigo de descuento</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Código de descuento</label>
           {discountApplied ? (
             <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
               <Check className="w-4 h-4 text-green-600" />
@@ -661,7 +742,7 @@ const BookingFlowStep4: React.FC = () => {
                 type="text"
                 value={discountInput}
                 onChange={(e) => setDiscountInput(e.target.value)}
-                placeholder="Ingresa tu codigo"
+                placeholder="Ingresa tu código"
                 className="input text-sm flex-1"
               />
               <button
@@ -678,7 +759,7 @@ const BookingFlowStep4: React.FC = () => {
           )}
         </div>
 
-        {/* Points and Wallet */}
+        {/* Points toggle */}
         {pointsBalance > 0 && (
           <div className="mb-4">
             <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${usePoints ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`}>
@@ -705,6 +786,7 @@ const BookingFlowStep4: React.FC = () => {
           </div>
         )}
 
+        {/* Wallet toggle */}
         {walletBalance > 0 && (
           <div className="mb-4">
             <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${useWallet ? 'border-teal-400 bg-teal-50' : 'border-gray-200'}`}>
@@ -726,13 +808,19 @@ const BookingFlowStep4: React.FC = () => {
               <div className="flex-1">
                 <span className="text-sm font-medium text-gray-800">Usar ToursRed Cash (Saldo: {formatCurrencyMXN(walletBalance)})</span>
                 <p className="text-xs text-gray-500">Saldo disponible en tu billetera</p>
-                {wouldQualifyForWalletBenefit && (
-                  <p className="text-xs text-emerald-700 font-medium mt-1">
-                    Activalo y paga $0 de cargo por servicio{hasMembership ? ' + gana el doble de ToursRed Points' : ''}.
-                  </p>
-                )}
               </div>
             </label>
+            {/* Recargar button: always visible when wallet exists, as a secondary option */}
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => window.open('/traveler/wallet', '_blank')}
+                className="inline-flex items-center gap-1.5 text-xs text-teal-600 hover:text-teal-800 hover:underline transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Recargar mi monedero
+              </button>
+            </div>
           </div>
         )}
 
@@ -756,7 +844,7 @@ const BookingFlowStep4: React.FC = () => {
             className="flex items-center gap-1.5 px-5 py-3 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
-            Atras
+            Atrás
           </button>
           <button
             onClick={handlePayment}
