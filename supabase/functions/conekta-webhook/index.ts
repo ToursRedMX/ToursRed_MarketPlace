@@ -197,6 +197,23 @@ FwIDAQAB
         return jsonResponse({ received: true });
       }
 
+      // Capture the real Conekta fee from the paid charge (fee is in centavos)
+      if (conektaOrder) {
+        const charge = conektaOrder.charges?.data?.[0] || conektaOrder.charges?.[0];
+        const feeCentavos = charge?.fee;
+        if (feeCentavos != null) {
+          const conektaFee = Number(feeCentavos) / 100;
+          const txAmount = Number(tx.amount) || 0;
+          await supabase
+            .from("payment_transactions")
+            .update({
+              processor_fee: conektaFee,
+              net_amount: txAmount - conektaFee,
+            })
+            .eq("id", tx.id);
+        }
+      }
+
       // Sync the real BNPL product_type from the paid order (Conekta's Hosted Checkout
       // lets the user pick the financier there, so we don't know it until the order is paid)
       if (paymentMethodType === "bnpl" && conektaOrder) {
