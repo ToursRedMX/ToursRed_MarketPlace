@@ -247,6 +247,36 @@ export async function getCharge(
   return charge as OpenPayCharge;
 }
 
+// ── Get charge status from OpenPay (merchant-level, no customer) ──
+
+export async function getChargeMerchant(
+  chargeId: string
+): Promise<OpenPayCharge> {
+  const baseUrl = getBaseUrl();
+  const merchantId = getMerchantId();
+  const auth = getAuthHeader();
+
+  const response = await fetch(
+    `${baseUrl}/${merchantId}/charges/${chargeId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: auth,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  const charge = await response.json();
+
+  if (!response.ok) {
+    console.error("OpenPay getChargeMerchant error:", charge);
+    throw new Error(charge.description || "No fue posible consultar el cargo en OpenPay");
+  }
+
+  return charge as OpenPayCharge;
+}
+
 // ── Create card checkout charge (3DS redirect) ────────────────
 
 export async function createCardCheckoutCharge(

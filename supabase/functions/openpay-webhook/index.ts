@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
-import { isConfigured, getCharge } from "../_shared/openpay.ts";
+import { isConfigured, getCharge, getChargeMerchant } from "../_shared/openpay.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -139,8 +139,56 @@ Deno.serve(async (req: Request) => {
       const chargeReferenceId = transaction.metadata?.charge_reference_id || transaction.metadata?.booking_id;
 
       if (chargeContext && chargeReferenceId) {
-        // Handle booking/supplement/gift_card charge.succeeded
-        const feeDetails = transaction.fee_details || verifiedCharge?.fee_details || [];
+        // ── Corrección 3: Verify charge against OpenPay API before acting ──
+        // 1) Fetch the charge fresh from the OpenPay API (no trusted webhook payload fields)
+        // 2) Call getCharge() / getChargeMerchant() to verify the cargo
+        // 3) Check payment_transactions.status for idempotency before CFDI/confirmation/accounting
+
+        let verifiedApiCharge;
+        try {
+          // Look up the payment_transaction to get the openpay_customer_id if available
+          const { data: ptRecord } = await supabase
+            .from("payment_transactions")
+            .select("openpay_customer_id, openpay_charge_id, status")
+            .eq("charge_context", chargeContext)
+            .eq("charge_reference_id", chargeReferenceId)
+            .eq("payment_processor", "openpay")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (ptRecord?.openpay_customer_id) {
+            verifiedApiCharge = await getCharge(ptRecord.openpay_customer_id, transaction.id);
+          } else {
+            // Merchant-level charge (no customer, e.g. gift card)
+            verifiedApiCharge = await getChargeMerchant(transaction.id);
+          }
+        } catch (verifyErr) {
+          console.error("Failed to verify charge with OpenPay API:", verifyErr);
+          if (webhookEventId) {
+            await supabase.from("openpay_webhook_events").update({
+              processing_status: "requiere_conciliacion_manual",
+              processing_error: `API verification failed: ${verifyErr.message}`,
+              processed_at: new Date().toISOString(),
+            }).eq("id", webhookEventId);
+          }
+          return new Response("OK", { status: 200, headers: corsHeaders });
+        }
+
+        // Validate the API-verified charge
+        if (verifiedApiCharge.status !== "completed" && verifiedApiCharge.status !== "success") {
+          console.warn(`OpenPay charge ${transaction.id} status is "${verifiedApiCharge.status}", not completed. Skipping.`);
+          if (webhookEventId) {
+            await supabase.from("openpay_webhook_events").update({
+              processing_status: "requiere_conciliacion_manual",
+              processing_error: `Charge status from API: ${verifiedApiCharge.status} (not completed)`,
+              processed_at: new Date().toISOString(),
+            }).eq("id", webhookEventId);
+          }
+          return new Response("OK", { status: 200, headers: corsHeaders });
+        }
+
+        const feeDetails = verifiedApiCharge.fee_details || [];
         const processorFee = Array.isArray(feeDetails)
           ? feeDetails.reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
           : 0;
@@ -150,8 +198,8 @@ Deno.serve(async (req: Request) => {
         const feeIva = Array.isArray(feeDetails)
           ? feeDetails.filter((fd: any) => fd.type === "tax").reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
           : 0;
-        const chargeAmount = parseFloat(transaction.amount || verifiedCharge?.amount || "0");
-        const paymentMethodType = transaction.method || verifiedCharge?.method || "card";
+        const chargeAmount = parseFloat(verifiedApiCharge.amount || "0");
+        const paymentMethodType = verifiedApiCharge.method || "card";
 
         // Determine payment_form for CFDI
         const paymentForm = paymentMethodType === "card" ? "04" : paymentMethodType === "bank_account" ? "03" : "01";
@@ -159,7 +207,30 @@ Deno.serve(async (req: Request) => {
         if (chargeContext === "booking_deposit" || chargeContext === "booking") {
           const bookingId = chargeReferenceId;
 
-          // Find and update the pending payment_transaction
+          // ── Idempotency check: skip if payment_transaction already succeeded ──
+          const { data: existingPt } = await supabase
+            .from("payment_transactions")
+            .select("id, status")
+            .eq("booking_id", bookingId)
+            .eq("payment_processor", "openpay")
+            .eq("charge_context", "booking_deposit")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (existingPt?.status === "succeeded") {
+            console.log(`Booking ${bookingId} payment_transaction already succeeded — idempotent skip`);
+            if (webhookEventId) {
+              await supabase.from("openpay_webhook_events").update({
+                processing_status: "processed",
+                processing_result: "Booking payment already succeeded — idempotent skip",
+                processed_at: new Date().toISOString(),
+              }).eq("id", webhookEventId);
+            }
+            return new Response("OK", { status: 200, headers: corsHeaders });
+          }
+
+          // Update the pending payment_transaction
           await supabase
             .from("payment_transactions")
             .update({
@@ -216,6 +287,29 @@ Deno.serve(async (req: Request) => {
           );
 
         } else if (chargeContext === "supplement" && chargeReferenceId) {
+          // ── Idempotency check: skip if payment_transaction already succeeded ──
+          const { data: existingPt } = await supabase
+            .from("payment_transactions")
+            .select("id, status")
+            .eq("charge_context", "supplement")
+            .eq("charge_reference_id", chargeReferenceId)
+            .eq("payment_processor", "openpay")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (existingPt?.status === "succeeded") {
+            console.log(`Supplement ${chargeReferenceId} payment_transaction already succeeded — idempotent skip`);
+            if (webhookEventId) {
+              await supabase.from("openpay_webhook_events").update({
+                processing_status: "processed",
+                processing_result: "Supplement payment already succeeded — idempotent skip",
+                processed_at: new Date().toISOString(),
+              }).eq("id", webhookEventId);
+            }
+            return new Response("OK", { status: 200, headers: corsHeaders });
+          }
+
           await supabase
             .from("booking_supplements")
             .update({ status: "paid", paid_at: new Date().toISOString() })
@@ -251,6 +345,29 @@ Deno.serve(async (req: Request) => {
           }
 
         } else if (chargeContext === "gift_card" && chargeReferenceId) {
+          // ── Idempotency check: skip if payment_transaction already succeeded ──
+          const { data: existingPt } = await supabase
+            .from("payment_transactions")
+            .select("id, status")
+            .eq("charge_context", "gift_card")
+            .eq("charge_reference_id", chargeReferenceId)
+            .eq("payment_processor", "openpay")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (existingPt?.status === "succeeded") {
+            console.log(`Gift card ${chargeReferenceId} payment_transaction already succeeded — idempotent skip`);
+            if (webhookEventId) {
+              await supabase.from("openpay_webhook_events").update({
+                processing_status: "processed",
+                processing_result: "Gift card payment already succeeded — idempotent skip",
+                processed_at: new Date().toISOString(),
+              }).eq("id", webhookEventId);
+            }
+            return new Response("OK", { status: 200, headers: corsHeaders });
+          }
+
           await supabase
             .from("gift_cards")
             .update({
@@ -260,6 +377,21 @@ Deno.serve(async (req: Request) => {
               purchased_at: new Date().toISOString(),
             })
             .eq("id", chargeReferenceId);
+
+          // Mark payment_transaction as succeeded
+          await supabase
+            .from("payment_transactions")
+            .update({
+              status: "succeeded",
+              processor_fee: processorFee,
+              processor_fee_base: feeBase,
+              processor_fee_iva: feeIva,
+              net_amount: chargeAmount - processorFee,
+              openpay_charge_id: transaction.id,
+            })
+            .eq("charge_context", "gift_card")
+            .eq("charge_reference_id", chargeReferenceId)
+            .eq("payment_processor", "openpay");
 
           EdgeRuntime.waitUntil(
             fetch(`${supabaseUrl}/functions/v1/send-gift-card-email`, {
