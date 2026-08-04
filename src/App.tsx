@@ -99,6 +99,7 @@ import CancelPage from './pages/CancelPage';
 import BookingSuccessPage from './pages/BookingSuccessPage';
 import BookingCancelPage from './pages/BookingCancelPage';
 import BookingPendingPage from './pages/BookingPendingPage';
+import OpenPayPaymentPendingPage from './pages/OpenPayPaymentPendingPage';
 import TravelersInfoPage from './pages/TravelersInfoPage';
 import BookingFlowLayout from './pages/booking-flow/BookingFlowLayout';
 import NotificationsPage from './pages/NotificationsPage';
@@ -151,7 +152,7 @@ import { useSEO } from './hooks/useSEO';
 const PROTECTED_PREFIXES = [
   '/admin', '/traveler', '/agency', '/executive', '/accounting', '/auth', '/messages', '/mantenimiento-admin',
   '/login', '/signup', '/agency-signup', '/verify-email', '/forgot-password', '/reset-password',
-  '/success', '/cancel', '/booking-success', '/booking-cancel', '/booking-pending', '/booking-travelers',
+  '/success', '/cancel', '/booking-success', '/booking-cancel', '/booking-pending', '/payment-pending', '/booking-travelers',
   '/supplement-success', '/payment-plan-success', '/extras-success', '/notifications',
   '/gift-card/redeem', '/gift-card/success', '/payment-return', '/booking-checkin',
   '/soporte/viajero', '/soporte/agencia', '/unsubscribe',
@@ -249,6 +250,7 @@ const App: React.FC = () => {
           <Route path="/booking-success" element={<BookingSuccessPage />} />
           <Route path="/booking-cancel" element={<BookingCancelPage />} />
           <Route path="/booking-pending/:bookingId" element={<BookingPendingPage />} />
+          <Route path="/payment-pending/:bookingId" element={<OpenPayPaymentPendingPage />} />
           <Route path="/booking-travelers/:bookingId" element={<TravelersInfoPage />} />
           <Route path="/reservar/:slug/paso-1" element={<BookingFlowLayout />} />
           <Route path="/reservar/:slug/paso-2" element={<BookingFlowLayout />} />
