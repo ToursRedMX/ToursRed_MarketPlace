@@ -337,6 +337,54 @@ export default function PaymentReturnPage() {
       }
     }
 
+    // ─── OpenPay return handling ────────────────────────────────
+    // OpenPay confirms payment asynchronously via webhook (openpay-webhook).
+    // The return URL just tells us which outcome the hosted checkout reported.
+    if (provider === 'openpay') {
+      if (returnStatus === 'success') {
+        setStatus('pending');
+        setMessage('Estamos confirmando tu pago con OpenPay. Esto puede tomar unos momentos.');
+
+        // Poll booking status up to 10 times (5 seconds each = ~50s total)
+        for (let i = 0; i < 10; i++) {
+          await new Promise(r => setTimeout(r, 5000));
+          try {
+            const { data: booking } = await supabase
+              .from("bookings")
+              .select("payment_status, status")
+              .eq("id", bookingId)
+              .maybeSingle();
+
+            if (booking?.payment_status === 'succeeded') {
+              setStatus('success');
+              setMessage('Pago exitoso. Tu reserva ha sido confirmada.');
+              setTimeout(() => navigate(`/booking-success?booking_id=${bookingId}`), 2000);
+              return;
+            }
+            if (booking?.status === 'cancelled' || booking?.payment_status === 'cancelled') {
+              setStatus('error');
+              setMessage('El pago no pudo ser completado. Por favor intenta nuevamente.');
+              return;
+            }
+          } catch (_) { /* keep polling */ }
+        }
+        // Timeout — show pending, the webhook will update eventually
+        setStatus('pending');
+        setMessage('Tu pago está siendo procesado. Te notificaremos por correo cuando sea confirmado.');
+        return;
+      }
+      if (returnStatus === 'failure') {
+        setStatus('error');
+        setMessage('El pago fue rechazado. Puedes intentar nuevamente con otro método de pago.');
+        return;
+      }
+      if (returnStatus === 'cancel') {
+        setStatus('cancel');
+        setMessage('Cancelaste el proceso de pago. Tu reserva fue guardada pero no ha sido pagada.');
+        return;
+      }
+    }
+
     setStatus('error');
     setMessage('Parametros de retorno invalidos.');
   };

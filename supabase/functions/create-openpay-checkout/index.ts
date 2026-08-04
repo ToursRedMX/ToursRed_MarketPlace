@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
         ? `${siteUrl}/gift-card-success`
         : context === "supplement"
         ? `${siteUrl}/supplement-success`
-        : `${siteUrl}/success`
+        : `${siteUrl}/payment-return?provider=openpay&booking_id=${bookingId}&tr_status=success`
     );
 
     // Resolve or create an OpenPay customer for card checkout
