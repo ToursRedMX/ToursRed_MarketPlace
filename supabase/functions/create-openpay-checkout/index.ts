@@ -7,6 +7,8 @@ import {
   getAuthHeader,
   createOrReuseCustomer,
   createCardCheckoutCharge,
+  createSpeiCharge,
+  createCashCharge,
 } from "../_shared/openpay.ts";
 
 const corsHeaders = {
@@ -23,6 +25,7 @@ interface CheckoutRequest {
   customerEmail?: string;
   customerName?: string;
   redirectUrl?: string;
+  method?: "card" | "spei" | "cash";
 }
 
 Deno.serve(async (req: Request) => {
@@ -43,7 +46,8 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: CheckoutRequest = await req.json();
-    const { bookingId, amount, description, context, customerEmail, customerName, redirectUrl } = body;
+    const { bookingId, amount, description, context, customerEmail, customerName, redirectUrl, method } = body;
+    const paymentMethod = method || "card";
 
     if (!bookingId || !amount || amount <= 0) {
       return new Response(
@@ -101,7 +105,21 @@ Deno.serve(async (req: Request) => {
     };
 
     let charge;
-    if (customerId) {
+    if (paymentMethod === "spei" && customerId) {
+      charge = await createSpeiCharge(
+        customerId,
+        Math.round(amount * 100) / 100,
+        orderId,
+        description,
+      );
+    } else if (paymentMethod === "cash" && customerId) {
+      charge = await createCashCharge(
+        customerId,
+        Math.round(amount * 100) / 100,
+        orderId,
+        description,
+      );
+    } else if (customerId) {
       charge = await createCardCheckoutCharge(
         customerId,
         Math.round(amount * 100) / 100,
@@ -185,13 +203,30 @@ Deno.serve(async (req: Request) => {
 
     const checkoutUrl = charge.payment_method?.url || charge.checkout_url;
 
+    const responseData: Record<string, any> = {
+      success: true,
+      chargeId: charge.id,
+      openpayChargeId: charge.id,
+      method: paymentMethod,
+    };
+
+    if (paymentMethod === "card" && checkoutUrl) {
+      responseData.url = checkoutUrl;
+    } else if (paymentMethod === "spei" || paymentMethod === "cash") {
+      responseData.payment_method = charge.payment_method;
+      responseData.status = charge.status;
+      if (paymentMethod === "spei") {
+        const env = Deno.env.get("OPENPAY_ENV") || "sandbox";
+        const dashboardBase = env === "production"
+          ? "https://dashboard.openpay.mx"
+          : "https://sandbox-dashboard.openpay.mx";
+        const merchantId = getMerchantId();
+        responseData.spei_pdf_url = `${dashboardBase}/spei-pdf/${merchantId}/${charge.id}`;
+      }
+    }
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        url: checkoutUrl,
-        chargeId: charge.id,
-        openpayChargeId: charge.id,
-      }),
+      JSON.stringify(responseData),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {

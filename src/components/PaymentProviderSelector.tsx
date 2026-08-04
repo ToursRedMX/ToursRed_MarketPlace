@@ -6,6 +6,8 @@ export type PaymentProvider = 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 
 
 export type ConektaMethod = 'bnpl' | 'card' | 'cash' | 'spei';
 
+export type OpenpayMethod = 'card' | 'spei' | 'cash';
+
 export type SubCharge = {
   amount: number;
   payment_method_type: 'card' | 'cash' | 'spei';
@@ -39,6 +41,8 @@ interface PaymentProviderSelectorProps {
   amount?: number;
   conektaMethod?: ConektaMethod;
   onConektaMethodChange?: (method: ConektaMethod) => void;
+  openpayMethod?: OpenpayMethod;
+  onOpenpayMethodChange?: (method: OpenpayMethod) => void;
 }
 
 const PROVIDER_LABELS: Record<PaymentProvider, string> = {
@@ -75,6 +79,12 @@ const CONEKTA_METHOD_LABELS: Record<ConektaMethod, string> = {
   spei: 'Transferencia SPEI',
 };
 
+const OPENPAY_METHOD_LABELS: Record<OpenpayMethod, string> = {
+  card: 'Tarjeta de crédito/débito',
+  spei: 'Transferencia SPEI',
+  cash: 'Efectivo (referencia de pago)',
+};
+
 export const BNPL_MIN_AMOUNT = 1200;
 export const BNPL_MAX_AMOUNT = 16000;
 
@@ -99,6 +109,8 @@ export default function PaymentProviderSelector({
   amount = 0,
   conektaMethod = 'card',
   onConektaMethodChange,
+  openpayMethod = 'card',
+  onOpenpayMethodChange,
 }: PaymentProviderSelectorProps) {
   const [config, setConfig] = useState<ProviderConfig | null>(null);
 
@@ -255,6 +267,50 @@ export default function PaymentProviderSelector({
           );
         })}
       </div>
+
+      {/* Openpay method sub-selector */}
+      {value === 'openpay' && !isMembershipContext && (
+        <div className="mt-3 ml-1 pl-4 border-l-2 border-primary-200 space-y-2">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-medium text-gray-700">Elige tu método de pago con Openpay:</span>
+          </div>
+
+          {(['card', 'spei', 'cash'] as OpenpayMethod[]).map((method) => {
+            const isMethodSelected = openpayMethod === method;
+
+            const methodIcon = method === 'card' ? <CreditCard className="h-4 w-4" />
+              : method === 'cash' ? <Banknote className="h-4 w-4" />
+              : <Landmark className="h-4 w-4" />;
+
+            return (
+              <label
+                key={method}
+                className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all hover:border-primary-300 ${
+                  isMethodSelected
+                    ? 'border-primary-400 bg-primary-50'
+                    : 'border-gray-200 bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="openpay-method"
+                  value={method}
+                  checked={isMethodSelected}
+                  disabled={disabled}
+                  onChange={() => onOpenpayMethodChange?.(method)}
+                  className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300"
+                />
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-gray-500">{methodIcon}</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {OPENPAY_METHOD_LABELS[method]}
+                  </span>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      )}
 
       {/* Conekta method sub-selector */}
       {value === 'conekta' && !isMembershipContext && (

@@ -216,6 +216,45 @@ export async function createCodiCharge(
   return charge as OpenPayCharge;
 }
 
+// ── Create cash charge (store reference) ────────────────────────
+
+export async function createCashCharge(
+  customerId: string,
+  amount: number,
+  orderId: string,
+  description: string
+): Promise<OpenPayCharge> {
+  const baseUrl = getBaseUrl();
+  const merchantId = getMerchantId();
+  const auth = getAuthHeader();
+
+  const body = {
+    method: "store",
+    amount,
+    currency: "MXN",
+    description,
+    order_id: orderId,
+  };
+
+  const response = await fetch(`${baseUrl}/${merchantId}/customers/${customerId}/charges`, {
+    method: "POST",
+    headers: {
+      Authorization: auth,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const charge = await response.json();
+
+  if (!response.ok) {
+    console.error("OpenPay cash charge error:", charge);
+    throw new Error(charge.description || "No fue posible generar la referencia de pago en efectivo");
+  }
+
+  return charge as OpenPayCharge;
+}
+
 // ── Get charge status from OpenPay ─────────────────────────────
 
 export async function getCharge(

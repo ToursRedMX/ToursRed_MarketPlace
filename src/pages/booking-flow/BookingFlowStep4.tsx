@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, AlertCircle, Tag, Award, Wallet, Crown, Shield,
-  Loader2, CreditCard, Check, X, Sparkles, ExternalLink,
+  Loader2, CreditCard, Check, X, Sparkles, ExternalLink, Landmark, Banknote,
 } from 'lucide-react';
 import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
@@ -14,6 +14,7 @@ import type { Tour } from '../../types';
 import PaymentProviderSelector, {
   PaymentProvider as Provider,
   ConektaMethod,
+  OpenpayMethod,
 } from '../../components/PaymentProviderSelector';
 
 const CATEGORIA_LABELS: Record<string, string> = {
@@ -47,6 +48,7 @@ const BookingFlowStep4: React.FC = () => {
   const [discountApplied, setDiscountApplied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [openpayInstructions, setOpenpayInstructions] = useState<any>(null);
   const [remainingExemption, setRemainingExemption] = useState(0);
   const [monthlyExemptionLimit, setMonthlyExemptionLimit] = useState(500);
 
@@ -318,6 +320,7 @@ const BookingFlowStep4: React.FC = () => {
         service_charge_discount: 0,
         payment_provider: flow.paymentProvider,
         conekta_method: flow.paymentProvider === 'conekta' ? flow.conektaMethod : null,
+        openpay_method: flow.paymentProvider === 'openpay' ? flow.openpayMethod : null,
         pickup_type: flow.pickupType,
         pickup_zone_name: flow.pickupZoneName,
         pickup_zone_extra_cost: flow.optionalServices.filter(e => e.service_kind === 'pickup').reduce((s, e) => s + e.subtotal, 0),
@@ -491,13 +494,21 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}`, context: 'booking' }),
+            body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}`, context: 'booking', method: flow.openpayMethod }),
           }
         );
         if (!resp.ok) throw new Error('Error al crear el cargo de Openpay');
         const data = await resp.json();
-        if (data.url) window.location.href = data.url;
-        return;
+        if (data.url) {
+          window.location.href = data.url;
+          return;
+        }
+        if (data.payment_method) {
+          setOpenpayInstructions(data);
+          setIsCreating(false);
+          return;
+        }
+        throw new Error('Respuesta inesperada de Openpay');
       }
 
       resetFlow();
@@ -850,8 +861,90 @@ const BookingFlowStep4: React.FC = () => {
             amount={amountToPay}
             conektaMethod={flow.conektaMethod as ConektaMethod}
             onConektaMethodChange={(m) => updateFlow({ conektaMethod: m })}
+            openpayMethod={flow.openpayMethod as OpenpayMethod}
+            onOpenpayMethodChange={(m) => updateFlow({ openpayMethod: m })}
           />
         </div>
+
+        {openpayInstructions && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
+            <div className="flex items-center gap-2">
+              {openpayInstructions.method === 'spei' ? (
+                <Landmark className="w-5 h-5 text-blue-600" />
+              ) : (
+                <Banknote className="w-5 h-5 text-blue-600" />
+              )}
+              <h4 className="font-bold text-gray-900">
+                {openpayInstructions.method === 'spei' ? 'Instrucciones de Transferencia SPEI' : 'Instrucciones de Pago en Efectivo'}
+              </h4>
+            </div>
+            <p className="text-sm text-gray-700">
+              Tu reserva fue creada con exito. Completa el pago para confirmarla.
+            </p>
+            {openpayInstructions.method === 'spei' && openpayInstructions.payment_method?.clabe && (
+              <div className="space-y-2">
+                <div className="flex justify-between items-center p-2 bg-white rounded-lg border border-gray-200">
+                  <span className="text-sm text-gray-600">CLABE interbancaria</span>
+                  <span className="font-mono font-semibold text-gray-900">{openpayInstructions.payment_method.clabe}</span>
+                </div>
+                {openpayInstructions.payment_method?.bank && (
+                  <div className="flex justify-between items-center p-2 bg-white rounded-lg border border-gray-200">
+                    <span className="text-sm text-gray-600">Banco</span>
+                    <span className="font-semibold text-gray-900">{openpayInstructions.payment_method.bank}</span>
+                  </div>
+                )}
+                {openpayInstructions.payment_method?.name && (
+                  <div className="flex justify-between items-center p-2 bg-white rounded-lg border border-gray-200">
+                    <span className="text-sm text-gray-600">Referencia</span>
+                    <span className="font-mono font-semibold text-gray-900">{openpayInstructions.payment_method.name}</span>
+                  </div>
+                )}
+                {openpayInstructions.spei_pdf_url && (
+                  <a href={openpayInstructions.spei_pdf_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline">
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Descargar instrucciones PDF
+                  </a>
+                )}
+              </div>
+            )}
+            {openpayInstructions.method === 'cash' && openpayInstructions.payment_method && (
+              <div className="space-y-2">
+                {openpayInstructions.payment_method?.reference && (
+                  <div className="flex justify-between items-center p-2 bg-white rounded-lg border border-gray-200">
+                    <span className="text-sm text-gray-600">Referencia de pago</span>
+                    <span className="font-mono font-semibold text-gray-900">{openpayInstructions.payment_method.reference}</span>
+                  </div>
+                )}
+                {openpayInstructions.payment_method?.store && (
+                  <div className="flex justify-between items-center p-2 bg-white rounded-lg border border-gray-200">
+                    <span className="text-sm text-gray-600">Establecimiento</span>
+                    <span className="font-semibold text-gray-900">{openpayInstructions.payment_method.store}</span>
+                  </div>
+                )}
+                {openpayInstructions.payment_method?.expiry_date && (
+                  <div className="flex justify-between items-center p-2 bg-white rounded-lg border border-gray-200">
+                    <span className="text-sm text-gray-600">Vence el</span>
+                    <span className="font-semibold text-gray-900">{openpayInstructions.payment_method.expiry_date}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => navigate('/traveler/reservas')}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Ver mis reservas
+              </button>
+              <button
+                onClick={() => setOpenpayInstructions(null)}
+                className="px-4 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Navigation */}
         <div className="flex gap-3 pt-4">

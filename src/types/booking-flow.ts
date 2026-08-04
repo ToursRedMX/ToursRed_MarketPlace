@@ -2,9 +2,11 @@ import type { Tour } from './index';
 
 export type TravelerCategory = 'adulto' | 'nino' | 'infante' | 'adulto_mayor' | 'mascota';
 
-export type PaymentProvider = 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'toursred_cash';
+export type PaymentProvider = 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay' | 'toursred_cash';
 
 export type ConektaMethod = 'bnpl' | 'card' | 'cash' | 'spei';
+
+export type OpenpayMethod = 'card' | 'spei' | 'cash';
 
 export type PaymentMode = 'standard' | 'full_upfront' | 'payment_plan';
 
@@ -100,6 +102,7 @@ export interface BookingFlowState {
 
   paymentProvider: PaymentProvider;
   conektaMethod: ConektaMethod;
+  openpayMethod: OpenpayMethod;
   paymentMode: PaymentMode;
   customPaymentAmount: number | null;
 
@@ -143,6 +146,7 @@ export const INITIAL_FLOW_STATE: BookingFlowState = {
   toursredCashUsed: 0,
   paymentProvider: 'stripe',
   conektaMethod: 'card',
+  openpayMethod: 'card',
   paymentMode: 'standard',
   customPaymentAmount: null,
   restrictionsAccepted: false,
