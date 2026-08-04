@@ -19,6 +19,7 @@ const corsHeaders = {
 
 interface CheckoutRequest {
   bookingId: string;
+  chargeReferenceId?: string;
   amount: number;
   description: string;
   context: "booking" | "supplement" | "gift_card";
@@ -46,7 +47,8 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: CheckoutRequest = await req.json();
-    const { bookingId, amount, description, context, customerEmail, customerName, redirectUrl, method } = body;
+    const { bookingId, chargeReferenceId, amount, description, context, customerEmail, customerName, redirectUrl, method } = body;
+    const referenceId = chargeReferenceId || bookingId;
     const paymentMethod = method || "card";
 
     if (!bookingId || !amount || amount <= 0) {
@@ -101,7 +103,7 @@ Deno.serve(async (req: Request) => {
     const orderId = `${context}_${bookingId}_${Date.now()}`;
     const metadata: Record<string, string> = {
       charge_context: context === "booking" ? "booking_deposit" : context,
-      charge_reference_id: bookingId,
+      charge_reference_id: referenceId,
     };
 
     let charge;
@@ -200,7 +202,7 @@ Deno.serve(async (req: Request) => {
         status: "pending",
         net_amount: amount,
         charge_context: context === "booking" ? "booking_deposit" : context,
-        charge_reference_id: bookingId,
+        charge_reference_id: referenceId,
         openpay_charge_id: charge.id,
         metadata: paymentMethodMetadata,
       });
@@ -214,7 +216,7 @@ Deno.serve(async (req: Request) => {
         status: "pending",
         net_amount: amount,
         charge_context: "gift_card",
-        charge_reference_id: bookingId,
+        charge_reference_id: referenceId,
         openpay_charge_id: charge.id,
         metadata: paymentMethodMetadata,
       });

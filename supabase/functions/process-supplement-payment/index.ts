@@ -548,6 +548,7 @@ Deno.serve(async (req: Request) => {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
         body: JSON.stringify({
           bookingId: suppReq.booking_id,
+          chargeReferenceId: booking_supplement_id,
           amount: totalToPay,
           description: `Suplemento: ${supplementName} (${suppReq.quantity}x)`,
           context: "supplement",
