@@ -14,11 +14,13 @@ function resolvePlanType(metadata: any, periodStart: number, periodEnd: number, 
   return daysDiff >= 360 ? 'annual' : fallback;
 }
 
-function getStripePaymentForm(paymentMethodType: string): string {
+function getStripePaymentForm(paymentMethodType: string, cardFunding?: string | null): string {
   if (paymentMethodType === 'OXXO') return '01';
   if (paymentMethodType === 'Transferencia Bancaria' || paymentMethodType === 'customer_balance') return '03';
-  // For card payments, Stripe doesn't directly tell us debit vs credit from the webhook
-  // We default to '04' ( tarjeta de crédito) — the most common case
+  if (paymentMethodType === 'Tarjeta' || paymentMethodType === 'card') {
+    if (cardFunding === 'debit') return '28';
+    return '04';
+  }
   return '04';
 }
 
@@ -121,7 +123,7 @@ Deno.serve(async (req) => {
       payload: event
     });
 
-    const getPaymentMethodType = async (session: any): Promise<string> => {
+    const getPaymentMethodType = async (session: any): Promise<{ type: string; cardFunding: string | null }> => {
       try {
         if (session.payment_intent) {
           const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent as string);
@@ -129,28 +131,29 @@ Deno.serve(async (req) => {
           if (paymentIntent.payment_method) {
             const paymentMethod = await stripe.paymentMethods.retrieve(paymentIntent.payment_method as string);
             const actualType = paymentMethod.type;
+            const funding = paymentMethod.card?.funding ?? null;
 
-            console.log(`Actual payment method used: ${actualType}`);
+            console.log(`Actual payment method used: ${actualType}, funding: ${funding}`);
 
-            if (actualType === 'oxxo') return 'OXXO';
-            if (actualType === 'customer_balance') return 'Transferencia Bancaria';
-            if (actualType === 'card') return 'Tarjeta';
+            if (actualType === 'oxxo') return { type: 'OXXO', cardFunding: null };
+            if (actualType === 'customer_balance') return { type: 'Transferencia Bancaria', cardFunding: null };
+            if (actualType === 'card') return { type: 'Tarjeta', cardFunding: funding };
 
-            return actualType;
+            return { type: actualType, cardFunding: null };
           }
         }
 
         const paymentMethodType = session.payment_method_types?.[0] || 'unknown';
         console.log(`Fallback to session payment method types: ${paymentMethodType}`);
 
-        if (paymentMethodType === 'oxxo') return 'OXXO';
-        if (paymentMethodType === 'customer_balance') return 'Transferencia Bancaria';
-        if (paymentMethodType === 'card') return 'Tarjeta';
+        if (paymentMethodType === 'oxxo') return { type: 'OXXO', cardFunding: null };
+        if (paymentMethodType === 'customer_balance') return { type: 'Transferencia Bancaria', cardFunding: null };
+        if (paymentMethodType === 'card') return { type: 'Tarjeta', cardFunding: null };
 
-        return paymentMethodType;
+        return { type: paymentMethodType, cardFunding: null };
       } catch (error) {
         console.error(`Error retrieving payment method: ${error.message}`);
-        return 'unknown';
+        return { type: 'unknown', cardFunding: null };
       }
     };
 
@@ -283,6 +286,17 @@ Deno.serve(async (req) => {
                 charge_context: 'supplement',
                 charge_reference_id: bookingSupplementId,
               });
+            }
+
+            // Fetch real processor fee from Stripe and update transaction
+            if (suppPaymentIntentId) {
+              const suppFee = await getStripeProcessorFee(stripe, suppPaymentIntentId);
+              if (suppFee) {
+                await supabase
+                  .from('payment_transactions')
+                  .update({ processor_fee: suppFee.fee, net_amount: suppFee.net })
+                  .eq('stripe_payment_intent_id', suppPaymentIntentId);
+              }
             }
 
             // Trigger CFDI async
@@ -456,6 +470,17 @@ Deno.serve(async (req) => {
                 charge_context: extraType === 'insurance' ? 'insurance' : 'optional_service',
                 charge_reference_id: extraBosId || extraBookingId,
               });
+            }
+
+            // Fetch real processor fee from Stripe and update transaction
+            if (extraPaymentIntentId) {
+              const extraFee = await getStripeProcessorFee(stripe, extraPaymentIntentId);
+              if (extraFee) {
+                await supabase
+                  .from('payment_transactions')
+                  .update({ processor_fee: extraFee.fee, net_amount: extraFee.net })
+                  .eq('stripe_payment_intent_id', extraPaymentIntentId);
+              }
             }
 
             // Trigger CFDI async
@@ -634,6 +659,17 @@ Deno.serve(async (req) => {
               });
             }
 
+            // Fetch real processor fee from Stripe and update transaction
+            if (planPaymentIntentId) {
+              const planFee = await getStripeProcessorFee(stripe, planPaymentIntentId);
+              if (planFee) {
+                await supabase
+                  .from('payment_transactions')
+                  .update({ processor_fee: planFee.fee, net_amount: planFee.net })
+                  .eq('stripe_payment_intent_id', planPaymentIntentId);
+              }
+            }
+
             // Award points after txRecord exists, using txRecord.id as reference_id (1:1 match for clawback)
             if (pointsEarned > 0) {
               const { data: walletId } = await supabase.rpc('get_or_create_points_wallet', { p_user_id: planUserId });
@@ -746,7 +782,9 @@ Deno.serve(async (req) => {
         }
 
         const paymentStatus = session.payment_status;
-        const paymentMethod = await getPaymentMethodType(session);
+        const paymentMethodResult = await getPaymentMethodType(session);
+        const paymentMethod = paymentMethodResult.type;
+        const paymentMethodFunding = paymentMethodResult.cardFunding;
         console.log(`Checkout session completed for booking ${bookingId}, payment status: ${paymentStatus}, method: ${paymentMethod}`);
 
         // In subscription mode session.payment_intent is null; retrieve it from the invoice
@@ -1220,7 +1258,7 @@ Deno.serve(async (req) => {
                     .select('pac_provider')
                     .maybeSingle();
                   if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== 'none') {
-                    const paymentForm = getStripePaymentForm(paymentMethod);
+                    const paymentForm = getStripePaymentForm(paymentMethod, paymentMethodFunding);
                     await fetch(`${supabaseUrl}/functions/v1/generate-booking-cfdi`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
@@ -1423,12 +1461,14 @@ Deno.serve(async (req) => {
         console.log(`Payment intent succeeded: ${paymentIntent.id}`);
 
         let paymentMethodType = 'unknown';
+        let paymentIntentCardFunding: string | null = null;
         try {
           if (paymentIntent.payment_method) {
             const paymentMethod = await stripe.paymentMethods.retrieve(paymentIntent.payment_method as string);
             const actualType = paymentMethod.type;
+            paymentIntentCardFunding = paymentMethod.card?.funding ?? null;
 
-            console.log(`Actual payment method used in payment_intent: ${actualType}`);
+            console.log(`Actual payment method used in payment_intent: ${actualType}, funding: ${paymentIntentCardFunding}`);
 
             if (actualType === 'oxxo') paymentMethodType = 'OXXO';
             else if (actualType === 'customer_balance') paymentMethodType = 'Transferencia Bancaria';
@@ -1443,7 +1483,7 @@ Deno.serve(async (req) => {
           }
         } catch (error) {
           console.error(`Error retrieving payment method: ${error.message}`);
-        }
+       }
 
         if (transactionType === 'gift_card' && giftCardId) {
           console.log(`payment_intent.succeeded: Processing gift card payment: ${giftCardId}`);
@@ -1689,7 +1729,7 @@ Deno.serve(async (req) => {
                     .select('pac_provider')
                     .maybeSingle();
                   if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== 'none') {
-                    const paymentForm = getStripePaymentForm(paymentMethodType);
+                    const paymentForm = getStripePaymentForm(paymentMethodType, paymentIntentCardFunding);
                     await fetch(`${supabaseUrl}/functions/v1/generate-booking-cfdi`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
