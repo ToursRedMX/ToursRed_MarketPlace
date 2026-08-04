@@ -246,3 +246,44 @@ export async function getCharge(
 
   return charge as OpenPayCharge;
 }
+
+// ── Create card checkout charge (3DS redirect) ────────────────
+
+export async function createCardCheckoutCharge(
+  customerId: string,
+  amount: number,
+  orderId: string,
+  description: string,
+  redirectUrl: string,
+  metadata: Record<string, string>
+): Promise<OpenPayCharge> {
+  const baseUrl = getBaseUrl();
+  const merchantId = getMerchantId();
+  const auth = getAuthHeader();
+
+  const body = {
+    method: "card",
+    amount,
+    currency: "MXN",
+    description,
+    order_id: orderId,
+    confirm: false,
+    redirect_url: redirectUrl,
+    metadata,
+  };
+
+  const response = await fetch(`${baseUrl}/${merchantId}/customers/${customerId}/charges`, {
+    method: "POST",
+    headers: { Authorization: auth, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const charge = await response.json();
+
+  if (!response.ok) {
+    console.error("OpenPay card checkout charge error:", charge);
+    throw new Error(charge.description || "No fue posible crear el cargo con tarjeta");
+  }
+
+  return charge as OpenPayCharge;
+}
