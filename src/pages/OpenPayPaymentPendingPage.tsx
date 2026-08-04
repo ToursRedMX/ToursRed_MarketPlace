@@ -383,6 +383,3 @@ const OpenPayPaymentPendingPage: React.FC = () => {
 };
 
 export default OpenPayPaymentPendingPage;
-
-
-export default OpenPayPaymentPendingPage
