@@ -101,7 +101,7 @@ Deno.serve(async (req: Request) => {
               await fetch(`${supabaseUrl}/functions/v1/generate-supplement-cfdi`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
-                body: JSON.stringify({ booking_supplement_id }),
+                body: JSON.stringify({ booking_supplement_id, payment_form: '04' }),
               });
             } catch (_) { /* non-fatal */ }
           }
@@ -273,6 +273,26 @@ Deno.serve(async (req: Request) => {
             currency: "mxn",
             status: "succeeded",
             payment_processor: "paypal",
+            processor_fee: 0,
+            net_amount: totalToPay,
+            charge_context: "supplement",
+            charge_reference_id: booking_supplement_id,
+          });
+        }
+      } else if (method === "openpay" && intentId) {
+        const { data: existingSuppTx } = await supabase
+          .from("payment_transactions")
+          .select("id")
+          .eq("openpay_charge_id", intentId)
+          .maybeSingle();
+        if (!existingSuppTx) {
+          await supabase.from("payment_transactions").insert({
+            booking_id: suppReq.booking_id,
+            openpay_charge_id: intentId,
+            amount: totalToPay,
+            currency: "mxn",
+            status: "succeeded",
+            payment_processor: "openpay",
             processor_fee: 0,
             net_amount: totalToPay,
             charge_context: "supplement",
@@ -517,6 +537,32 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         success: true, total_charged: totalToPay, points_earned: pointsEarned,
         message: "Pago con PayPal completado.",
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // 6. Openpay — redirect to Openpay checkout
+    if (payment_method === "openpay") {
+      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const opResponse = await fetch(`${supabaseUrl}/functions/v1/create-openpay-checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+        body: JSON.stringify({
+          bookingId: suppReq.booking_id,
+          amount: totalToPay,
+          description: `Suplemento: ${supplementName} (${suppReq.quantity}x)`,
+          context: "supplement",
+          redirectUrl: `${origin}/supplement-success?supplement_id=${booking_supplement_id}`,
+        }),
+      });
+      const opResult = await opResponse.json();
+      if (!opResult.success) {
+        return new Response(JSON.stringify({ error: opResult.error || "Error al crear cargo de Openpay" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({
+        success: true,
+        url: opResult.url,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

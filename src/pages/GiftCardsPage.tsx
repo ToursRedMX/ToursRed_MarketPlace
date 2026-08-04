@@ -308,6 +308,104 @@ export default function GiftCardsPage() {
         return;
       }
 
+      if (paymentProvider === 'conekta' && finalAmount > 0) {
+        const { data: gcData, error: gcError } = await supabase.functions.invoke('purchase-gift-card', {
+          body: {
+            amount: selectedAmount,
+            purchaserEmail,
+            purchaserName,
+            recipientEmail: isGift ? recipientEmail : undefined,
+            recipientName: isGift ? recipientName : undefined,
+            personalMessage: isGift && personalMessage ? personalMessage : undefined,
+            discountCode: appliedDiscount?.code,
+            provider: 'conekta',
+            createOnly: true,
+          },
+        });
+
+        clearTimeout(timeoutId);
+        if (gcError || !gcData) throw new Error(gcError?.message || 'Error al crear tarjeta de regalo');
+        if (gcData.error) throw new Error(gcData.error);
+
+        const giftCardId = gcData.giftCardId;
+        if (!giftCardId) throw new Error('No se recibio ID de tarjeta de regalo');
+
+        const session = (await supabase.auth.getSession()).data.session;
+        const ckResponse = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-conekta-order`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              booking_id: giftCardId,
+              amount: finalAmount,
+              payment_method_type: 'card',
+              context: 'gift_card',
+              charge_reference_id: giftCardId,
+              description: `Tarjeta de Regalo ToursRed ${finalAmount} MXN`,
+            }),
+          }
+        );
+
+        const ckResult = await ckResponse.json();
+        if (!ckResult.success) throw new Error(ckResult.error || 'Error al crear orden de Conekta');
+        giftCardFormPersistence.clearStorage();
+        window.location.href = ckResult.url;
+        return;
+      }
+
+      if (paymentProvider === 'openpay' && finalAmount > 0) {
+        const { data: gcData, error: gcError } = await supabase.functions.invoke('purchase-gift-card', {
+          body: {
+            amount: selectedAmount,
+            purchaserEmail,
+            purchaserName,
+            recipientEmail: isGift ? recipientEmail : undefined,
+            recipientName: isGift ? recipientName : undefined,
+            personalMessage: isGift && personalMessage ? personalMessage : undefined,
+            discountCode: appliedDiscount?.code,
+            provider: 'openpay',
+            createOnly: true,
+          },
+        });
+
+        clearTimeout(timeoutId);
+        if (gcError || !gcData) throw new Error(gcError?.message || 'Error al crear tarjeta de regalo');
+        if (gcData.error) throw new Error(gcData.error);
+
+        const giftCardId = gcData.giftCardId;
+        if (!giftCardId) throw new Error('No se recibio ID de tarjeta de regalo');
+
+        const session = (await supabase.auth.getSession()).data.session;
+        const opResponse = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-openpay-checkout`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              bookingId: giftCardId,
+              amount: finalAmount,
+              description: `Tarjeta de Regalo ToursRed ${finalAmount} MXN`,
+              context: 'gift_card',
+              customerEmail: purchaserEmail,
+              customerName: purchaserName,
+            }),
+          }
+        );
+
+        const opResult = await opResponse.json();
+        if (!opResult.success) throw new Error(opResult.error || 'Error al crear cargo de Openpay');
+        giftCardFormPersistence.clearStorage();
+        window.location.href = opResult.url;
+        return;
+      }
+
       console.log('Sending purchase request...');
       const { data, error: functionError } = await supabase.functions.invoke('purchase-gift-card', {
         body: {

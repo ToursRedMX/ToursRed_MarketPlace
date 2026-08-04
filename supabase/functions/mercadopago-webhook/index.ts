@@ -7,6 +7,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+async function getMercadoPagoPaymentForm(payment: any): string {
+  const paymentType = payment?.payment_type_id || payment?.payment_type || "";
+  const cardTags = Array.isArray(payment?.card?.tags) ? payment.card.tags : [];
+  if (paymentType === "ticket" || paymentType === "atm") return "01";
+  if (paymentType === "bank_transfer" || paymentType === "pix") return "03";
+  if (paymentType === "credit_card") {
+    if (cardTags.includes("debit")) return "28";
+    return "04";
+  }
+  if (paymentType === "debit_card") return "28";
+  if (paymentType === "account_money" || paymentType === "digital_currency") return "03";
+  return "04";
+}
+
 async function verifyMercadoPagoSignature(
   req: Request,
   rawBody: string,
@@ -317,8 +331,8 @@ Deno.serve(async (req: Request) => {
                 currency: "mxn",
                 status: "succeeded",
                 payment_processor: "mercadopago",
-                processor_fee: 0,
-                net_amount: Number(suppDetails.total_paid) || 0,
+                processor_fee: mpFee,
+                net_amount: (Number(suppDetails.total_paid) || 0) - mpFee,
                 charge_context: "supplement",
                 charge_reference_id: externalReference,
               });
@@ -333,7 +347,7 @@ Deno.serve(async (req: Request) => {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
               },
-              body: JSON.stringify({ supplement_id: externalReference }),
+              body: JSON.stringify({ supplement_id: externalReference, payment_form: getMercadoPagoPaymentForm(payment) }),
             }
           ).catch((err) => console.error("Error triggering supplement CFDI (MP webhook):", err));
         }
@@ -449,7 +463,7 @@ Deno.serve(async (req: Request) => {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                 },
-                body: JSON.stringify({ booking_id: externalReference }),
+                body: JSON.stringify({ booking_id: externalReference, payment_form: getMercadoPagoPaymentForm(payment) }),
               }
             );
           }

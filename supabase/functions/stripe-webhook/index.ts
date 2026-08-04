@@ -14,6 +14,37 @@ function resolvePlanType(metadata: any, periodStart: number, periodEnd: number, 
   return daysDiff >= 360 ? 'annual' : fallback;
 }
 
+function getStripePaymentForm(paymentMethodType: string): string {
+  if (paymentMethodType === 'OXXO') return '01';
+  if (paymentMethodType === 'Transferencia Bancaria' || paymentMethodType === 'customer_balance') return '03';
+  // For card payments, Stripe doesn't directly tell us debit vs credit from the webhook
+  // We default to '04' ( tarjeta de crédito) — the most common case
+  return '04';
+}
+
+async function getStripeProcessorFee(stripe: any, paymentIntentId: string): Promise<{ fee: number; net: number } | null> {
+  try {
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ['latest_charge.balance_transaction'],
+    });
+    const balanceTxn = pi.latest_charge?.balance_transaction;
+    if (balanceTxn && balanceTxn.fee) {
+      const fee = balanceTxn.fee / 100;
+      const net = (balanceTxn.net) / 100;
+      return { fee, net };
+    }
+    // Fallback: try charges
+    if (pi.latest_charge?.balance_transaction) {
+      const fee = pi.latest_charge.balance_transaction.fee / 100;
+      const net = pi.latest_charge.balance_transaction.net / 100;
+      return { fee, net };
+    }
+  } catch (e) {
+    console.error('Error fetching Stripe processor fee:', e.message);
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -1189,10 +1220,11 @@ Deno.serve(async (req) => {
                     .select('pac_provider')
                     .maybeSingle();
                   if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== 'none') {
+                    const paymentForm = getStripePaymentForm(paymentMethod);
                     await fetch(`${supabaseUrl}/functions/v1/generate-booking-cfdi`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
-                      body: JSON.stringify({ booking_id: bookingId }),
+                      body: JSON.stringify({ booking_id: bookingId, payment_form: paymentForm }),
                     });
                   }
                 } catch (cfdiErr) {
@@ -1340,10 +1372,20 @@ Deno.serve(async (req) => {
             status: 'succeeded',
             payment_method_type: paymentMethod,
             net_amount: session.amount_total / 100,
+            processor_fee: 0,
             charge_context: 'booking_deposit',
             charge_reference_id: bookingId,
             metadata: session
           });
+
+        // Fetch real processor fee from Stripe and update transaction
+        const stripeFee = await getStripeProcessorFee(stripe, paymentIntentId);
+        if (stripeFee) {
+          await supabase
+            .from('payment_transactions')
+            .update({ processor_fee: stripeFee.fee, net_amount: stripeFee.net })
+            .eq('stripe_payment_intent_id', paymentIntentId);
+        }
 
         if (transactionError) {
           console.error(`Error creating transaction record: ${transactionError.message}`);
@@ -1411,6 +1453,8 @@ Deno.serve(async (req) => {
             .update({
               stripe_payment_intent_id: paymentIntent.id,
               purchased_at: new Date().toISOString(),
+              status: 'active',
+              payment_status: 'paid',
             })
             .eq('id', giftCardId);
 
@@ -1645,10 +1689,11 @@ Deno.serve(async (req) => {
                     .select('pac_provider')
                     .maybeSingle();
                   if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== 'none') {
+                    const paymentForm = getStripePaymentForm(paymentMethodType);
                     await fetch(`${supabaseUrl}/functions/v1/generate-booking-cfdi`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
-                      body: JSON.stringify({ booking_id: bookingId }),
+                      body: JSON.stringify({ booking_id: bookingId, payment_form: paymentForm }),
                     });
                   }
                 } catch (cfdiErr) {
@@ -1676,8 +1721,18 @@ Deno.serve(async (req) => {
                 status: 'succeeded',
                 payment_method_type: paymentMethodType,
                 net_amount: paymentIntent.amount / 100,
+                processor_fee: 0,
                 metadata: paymentIntent
               });
+
+            // Fetch real processor fee from Stripe and update transaction
+            const piFee = await getStripeProcessorFee(stripe, paymentIntent.id);
+            if (piFee) {
+              await supabase
+                .from('payment_transactions')
+                .update({ processor_fee: piFee.fee, net_amount: piFee.net })
+                .eq('stripe_payment_intent_id', paymentIntent.id);
+            }
 
             if (transactionError) {
               console.error(`Error creating transaction record: ${transactionError.message}`);

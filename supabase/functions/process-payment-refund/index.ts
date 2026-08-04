@@ -76,7 +76,7 @@ Deno.serve(async (req: Request) => {
     // ============================================================
     const { data: tx } = await supabase
       .from("payment_transactions")
-      .select("id, booking_id, payment_processor, stripe_payment_intent_id, paypal_capture_id, mercadopago_payment_id, conekta_order_id, amount, payment_method_type, processor_fee, charge_context, charge_reference_id")
+      .select("id, booking_id, payment_processor, stripe_payment_intent_id, paypal_capture_id, mercadopago_payment_id, conekta_order_id, openpay_charge_id, amount, payment_method_type, processor_fee, charge_context, charge_reference_id")
       .eq("id", payment_transaction_id)
       .maybeSingle();
 
@@ -126,6 +126,8 @@ Deno.serve(async (req: Request) => {
       processorOriginalReference = tx.mercadopago_payment_id;
     } else if (processor === "conekta") {
       processorOriginalReference = tx.conekta_order_id;
+    } else if (processor === "openpay") {
+      processorOriginalReference = tx.openpay_charge_id;
     }
 
     if (!processorOriginalReference) {
@@ -322,7 +324,10 @@ Deno.serve(async (req: Request) => {
 
         const refundData = await refundResponse.json();
         processorRefundId = refundData.id ? String(refundData.id) : null;
-        processorFeeLost = 0;
+        const originalFee = parseFloat(tx.processor_fee) || 0;
+        processorFeeLost = originalAmount > 0
+          ? Math.round((originalFee * (amount / originalAmount)) * 100) / 100
+          : 0;
 
       } else if (processor === "conekta") {
         // Conekta card-only refund: uses the order ID to refund the charge
@@ -353,6 +358,39 @@ Deno.serve(async (req: Request) => {
         if (!refundResponse.ok) {
           const errorBody = await refundResponse.text();
           throw new Error(`Conekta refund failed: ${errorBody}`);
+        }
+
+        const refundData = await refundResponse.json();
+        processorRefundId = refundData.id ? String(refundData.id) : null;
+        const originalFee = parseFloat(tx.processor_fee) || 0;
+        processorFeeLost = originalAmount > 0
+          ? Math.round((originalFee * (amount / originalAmount)) * 100) / 100
+          : 0;
+
+      } else if (processor === "openpay") {
+        const openpayMerchantId = Deno.env.get("OPENPAY_MERCHANT_ID");
+        const openpayPrivateKey = Deno.env.get("OPENPAY_PRIVATE_KEY");
+        const openpayEnv = Deno.env.get("OPENPAY_ENV") || "sandbox";
+        if (!openpayMerchantId || !openpayPrivateKey) throw new Error("Openpay no configurado");
+
+        const openpayBase = openpayEnv === "production" ? "https://api.openpay.mx" : "https://sandbox-api.openpay.mx";
+        const auth = btoa(`${openpayPrivateKey}:`);
+
+        const refundResponse = await fetch(
+          `${openpayBase}/v1/${openpayMerchantId}/charges/${processorOriginalReference}/refund`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Basic ${auth}` },
+            body: JSON.stringify({
+              amount,
+              description: `Reembolso ToursRed - Reserva ${booking_id}`,
+            }),
+          }
+        );
+
+        if (!refundResponse.ok) {
+          const errorBody = await refundResponse.text();
+          throw new Error(`Openpay refund failed: ${errorBody}`);
         }
 
         const refundData = await refundResponse.json();

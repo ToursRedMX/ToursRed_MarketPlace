@@ -467,6 +467,27 @@ FwIDAQAB
         } catch (cfdiErr) {
           console.error("Error triggering optional service CFDI:", cfdiErr);
         }
+      } else if (chargeContext === "gift_card" && chargeReferenceId) {
+        await supabase
+          .from("gift_cards")
+          .update({
+            status: "active",
+            payment_status: "paid",
+            payment_provider: "conekta",
+            purchased_at: new Date().toISOString(),
+          })
+          .eq("id", chargeReferenceId);
+
+        EdgeRuntime.waitUntil(
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-gift-card-email`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({ giftCardId: chargeReferenceId }),
+          }).catch((e) => console.error("Error sending gift card email:", e))
+        );
       } else if (chargeContext === "payment_plan_installment" && chargeReferenceId) {
         // chargeReferenceId is the plan_id (set by process-payment-plan-installment)
         const planId = chargeReferenceId;

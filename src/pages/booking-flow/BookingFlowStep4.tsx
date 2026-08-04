@@ -483,6 +483,23 @@ const BookingFlowStep4: React.FC = () => {
         return;
       }
 
+      if (flow.paymentProvider === 'openpay') {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('No hay sesion activa');
+        const resp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-openpay-checkout`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}`, context: 'booking' }),
+          }
+        );
+        if (!resp.ok) throw new Error('Error al crear el cargo de Openpay');
+        const data = await resp.json();
+        if (data.url) window.location.href = data.url;
+        return;
+      }
+
       resetFlow();
       navigate(`/booking-pending?booking_id=${bookingId}`);
     } catch (err: any) {

@@ -134,6 +134,152 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!topup) {
+      // Check if this is a booking/supplement/gift_card charge (not a wallet topup)
+      const chargeContext = transaction.metadata?.charge_context || transaction.metadata?.context;
+      const chargeReferenceId = transaction.metadata?.charge_reference_id || transaction.metadata?.booking_id;
+
+      if (chargeContext && chargeReferenceId) {
+        // Handle booking/supplement/gift_card charge.succeeded
+        const feeDetails = transaction.fee_details || verifiedCharge?.fee_details || [];
+        const processorFee = Array.isArray(feeDetails)
+          ? feeDetails.reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
+          : 0;
+        const feeBase = Array.isArray(feeDetails)
+          ? feeDetails.filter((fd: any) => fd.type !== "tax").reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
+          : 0;
+        const feeIva = Array.isArray(feeDetails)
+          ? feeDetails.filter((fd: any) => fd.type === "tax").reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
+          : 0;
+        const chargeAmount = parseFloat(transaction.amount || verifiedCharge?.amount || "0");
+        const paymentMethodType = transaction.method || verifiedCharge?.method || "card";
+
+        // Determine payment_form for CFDI
+        const paymentForm = paymentMethodType === "card" ? "04" : paymentMethodType === "bank_account" ? "03" : "01";
+
+        if (chargeContext === "booking_deposit" || chargeContext === "booking") {
+          const bookingId = chargeReferenceId;
+
+          // Find and update the pending payment_transaction
+          await supabase
+            .from("payment_transactions")
+            .update({
+              status: "succeeded",
+              processor_fee: processorFee,
+              processor_fee_base: feeBase,
+              processor_fee_iva: feeIva,
+              net_amount: chargeAmount - processorFee,
+              openpay_charge_id: transaction.id,
+            })
+            .eq("booking_id", bookingId)
+            .eq("payment_processor", "openpay")
+            .eq("charge_context", "booking_deposit");
+
+          // Mark booking as paid
+          await supabase
+            .from("bookings")
+            .update({
+              payment_status: "succeeded",
+              paid_at: new Date().toISOString(),
+            })
+            .eq("id", bookingId);
+
+          // Trigger CFDI + confirmation + accounting (non-blocking)
+          const cfdiSettings = await supabase
+            .from("platform_settings")
+            .select("pac_provider, pac_api_key_encrypted")
+            .maybeSingle();
+
+          if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
+            EdgeRuntime.waitUntil(
+              fetch(`${supabaseUrl}/functions/v1/generate-booking-cfdi`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+                body: JSON.stringify({ booking_id: bookingId, payment_form: paymentForm }),
+              }).catch((e) => console.error("Error triggering booking CFDI (Openpay):", e))
+            );
+          }
+
+          EdgeRuntime.waitUntil(
+            fetch(`${supabaseUrl}/functions/v1/send-booking-confirmation`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({ booking_id: bookingId }),
+            }).catch((e) => console.error("Error sending booking confirmation (Openpay):", e))
+          );
+
+          EdgeRuntime.waitUntil(
+            fetch(`${supabaseUrl}/functions/v1/sync-booking-to-accounting`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({ booking_id: bookingId }),
+            }).catch((e) => console.error("Error syncing booking to accounting (Openpay):", e))
+          );
+
+        } else if (chargeContext === "supplement" && chargeReferenceId) {
+          await supabase
+            .from("booking_supplements")
+            .update({ status: "paid", paid_at: new Date().toISOString() })
+            .eq("id", chargeReferenceId);
+
+          await supabase
+            .from("payment_transactions")
+            .update({
+              status: "succeeded",
+              processor_fee: processorFee,
+              processor_fee_base: feeBase,
+              processor_fee_iva: feeIva,
+              net_amount: chargeAmount - processorFee,
+              openpay_charge_id: transaction.id,
+            })
+            .eq("charge_context", "supplement")
+            .eq("charge_reference_id", chargeReferenceId)
+            .eq("payment_processor", "openpay");
+
+          const cfdiSettings = await supabase
+            .from("platform_settings")
+            .select("pac_provider, pac_api_key_encrypted")
+            .maybeSingle();
+
+          if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
+            EdgeRuntime.waitUntil(
+              fetch(`${supabaseUrl}/functions/v1/generate-supplement-cfdi`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+                body: JSON.stringify({ booking_supplement_id: chargeReferenceId, payment_form: paymentForm }),
+              }).catch((e) => console.error("Error triggering supplement CFDI (Openpay):", e))
+            );
+          }
+
+        } else if (chargeContext === "gift_card" && chargeReferenceId) {
+          await supabase
+            .from("gift_cards")
+            .update({
+              status: "active",
+              payment_status: "paid",
+              payment_provider: "openpay",
+              purchased_at: new Date().toISOString(),
+            })
+            .eq("id", chargeReferenceId);
+
+          EdgeRuntime.waitUntil(
+            fetch(`${supabaseUrl}/functions/v1/send-gift-card-email`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({ giftCardId: chargeReferenceId }),
+            }).catch((e) => console.error("Error sending gift card email (Openpay):", e))
+          );
+        }
+
+        if (webhookEventId) {
+          await supabase.from("openpay_webhook_events").update({
+            processing_status: "processed",
+            processing_result: `Charge ${chargeContext} ${chargeReferenceId} confirmed: ${chargeAmount} MXN`,
+            processed_at: new Date().toISOString(),
+          }).eq("id", webhookEventId);
+        }
+        return new Response("OK", { status: 200, headers: corsHeaders });
+      }
+
       // No matching topup — mark for conciliation
       if (webhookEventId) {
         await supabase.from("openpay_webhook_events").update({

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CreditCard, Lock, Info, AlertTriangle, Wallet, Banknote, Landmark } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-export type PaymentProvider = 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'toursred_cash';
+export type PaymentProvider = 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay' | 'toursred_cash';
 
 export type ConektaMethod = 'bnpl' | 'card' | 'cash' | 'spei';
 
@@ -23,6 +23,7 @@ interface ProviderConfig {
   mercadopago_enabled: boolean;
   paypal_enabled: boolean;
   conekta_enabled: boolean;
+  openpay_enabled: boolean;
   mercadopago_public_key: string;
   paypal_client_id: string;
   stripe_bookings_enabled: boolean;
@@ -45,6 +46,7 @@ const PROVIDER_LABELS: Record<PaymentProvider, string> = {
   mercadopago: 'Mercado Pago',
   paypal: 'PayPal',
   conekta: 'Conekta',
+  openpay: 'Openpay',
   toursred_cash: 'ToursRed Cash',
 };
 
@@ -53,6 +55,7 @@ const PROVIDER_DESCRIPTIONS: Record<PaymentProvider, string> = {
   mercadopago: 'Tarjeta, Transferencia SPEI, Crédito Mercado Pago',
   paypal: 'Visa / Master Card / American Express',
   conekta: 'Tarjeta, Efectivo, SPEI, Aplazo, Creditea, Coppel Pay',
+  openpay: 'Tarjeta de crédito/débito, SPEI, Efectivo',
   toursred_cash: 'Usa tu saldo de ToursRed Cash para abonar al plan',
 };
 
@@ -61,6 +64,7 @@ const PROVIDER_LOGOS: Partial<Record<PaymentProvider, string>> = {
   mercadopago: '/payment-logos/mercadopago.png',
   paypal: '/payment-logos/paypal.jpg',
   conekta: '/payment-logos/conekta.png',
+  openpay: '/payment-logos/openpay.png',
 };
 
 
@@ -102,7 +106,7 @@ export default function PaymentProviderSelector({
     supabase
       .from('platform_settings')
       .select(
-        'mercadopago_enabled, paypal_enabled, conekta_enabled, mercadopago_public_key, paypal_client_id, stripe_bookings_enabled, stripe_gift_cards_enabled, stripe_memberships_enabled'
+        'mercadopago_enabled, paypal_enabled, conekta_enabled, openpay_enabled, mercadopago_public_key, paypal_client_id, stripe_bookings_enabled, stripe_gift_cards_enabled, stripe_memberships_enabled'
       )
       .maybeSingle()
       .then(({ data }) => {
@@ -136,6 +140,9 @@ export default function PaymentProviderSelector({
     }
     if (config?.conekta_enabled) {
       availableProviders.push('conekta');
+    }
+    if (config?.openpay_enabled) {
+      availableProviders.push('openpay');
     }
   }
 

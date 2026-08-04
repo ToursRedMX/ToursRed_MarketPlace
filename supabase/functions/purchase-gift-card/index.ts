@@ -68,9 +68,9 @@ Deno.serve(async (req: Request) => {
       createOnly,
     } = requestData;
 
-    if (!amount || ![100, 200, 500, 1000].includes(amount)) {
+    if (!amount || amount < 100 || amount % 100 !== 0) {
       return new Response(
-        JSON.stringify({ error: "Invalid amount. Must be 100, 200, 500, or 1000" }),
+        JSON.stringify({ error: "Invalid amount. Must be a multiple of 100 starting at 100" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -134,7 +134,7 @@ Deno.serve(async (req: Request) => {
     const expiresAt = new Date();
     expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
-    const isPendingPayment = createOnly && (provider === "paypal" || provider === "mercadopago");
+    const isPendingPayment = finalAmount > 0;
 
     const { data: giftCard, error: insertError } = await supabase
       .from("gift_cards")
@@ -200,7 +200,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (createOnly) {
+    if (createOnly || (provider && provider !== "stripe")) {
       return new Response(
         JSON.stringify({
           giftCardId: giftCard.id,

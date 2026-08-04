@@ -28,6 +28,17 @@ interface PlatformSettings {
   mercadopago_enabled: boolean;
   paypal_enabled: boolean;
   conekta_enabled: boolean;
+  openpay_enabled: boolean;
+  openpay_commission_pct: number;
+  openpay_commission_fixed: number;
+  stripe_commission_pct: number;
+  stripe_commission_fixed: number;
+  paypal_commission_pct: number;
+  paypal_commission_fixed: number;
+  mercadopago_commission_pct: number;
+  mercadopago_commission_fixed: number;
+  conekta_commission_pct: number;
+  conekta_commission_fixed: number;
   mercadopago_public_key: string;
   mercadopago_access_token: string;
   paypal_client_id: string;
@@ -107,6 +118,17 @@ const AdminSettings: React.FC = () => {
     mercadopago_enabled: false,
     paypal_enabled: false,
     conekta_enabled: false,
+    openpay_enabled: false,
+    openpay_commission_pct: 2.9,
+    openpay_commission_fixed: 0,
+    stripe_commission_pct: 3.1034,
+    stripe_commission_fixed: 2.5862,
+    paypal_commission_pct: 3.95,
+    paypal_commission_fixed: 4.0,
+    mercadopago_commission_pct: 3.49,
+    mercadopago_commission_fixed: 4.0,
+    conekta_commission_pct: 3.29,
+    conekta_commission_fixed: 2.5,
     mercadopago_public_key: '',
     mercadopago_access_token: '',
     paypal_client_id: '',
@@ -383,6 +405,17 @@ const AdminSettings: React.FC = () => {
             mercadopago_enabled: platformSettings.mercadopago_enabled,
             paypal_enabled: platformSettings.paypal_enabled,
             conekta_enabled: platformSettings.conekta_enabled,
+            openpay_enabled: platformSettings.openpay_enabled,
+            openpay_commission_pct: platformSettings.openpay_commission_pct,
+            openpay_commission_fixed: platformSettings.openpay_commission_fixed,
+            stripe_commission_pct: platformSettings.stripe_commission_pct,
+            stripe_commission_fixed: platformSettings.stripe_commission_fixed,
+            paypal_commission_pct: platformSettings.paypal_commission_pct,
+            paypal_commission_fixed: platformSettings.paypal_commission_fixed,
+            mercadopago_commission_pct: platformSettings.mercadopago_commission_pct,
+            mercadopago_commission_fixed: platformSettings.mercadopago_commission_fixed,
+            conekta_commission_pct: platformSettings.conekta_commission_pct,
+            conekta_commission_fixed: platformSettings.conekta_commission_fixed,
             mercadopago_public_key: platformSettings.mercadopago_public_key,
             mercadopago_access_token: platformSettings.mercadopago_access_token,
             paypal_client_id: platformSettings.paypal_client_id,
@@ -476,8 +509,8 @@ const AdminSettings: React.FC = () => {
 
   const handlePlatformChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    const numericFields = ['service_charge_percentage', 'agency_commission_percentage', 'supplement_commission_percentage', 'optional_service_commission_percentage', 'membership_monthly_price', 'membership_annual_price', 'membership_service_fee_exemption_monthly_limit', 'default_max_referrals_per_user', 'referral_bonus_points'];
-    const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'conekta_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
+    const numericFields = ['service_charge_percentage', 'agency_commission_percentage', 'supplement_commission_percentage', 'optional_service_commission_percentage', 'membership_monthly_price', 'membership_annual_price', 'membership_service_fee_exemption_monthly_limit', 'default_max_referrals_per_user', 'referral_bonus_points', 'openpay_commission_pct', 'openpay_commission_fixed', 'stripe_commission_pct', 'stripe_commission_fixed', 'paypal_commission_pct', 'paypal_commission_fixed', 'mercadopago_commission_pct', 'mercadopago_commission_fixed', 'conekta_commission_pct', 'conekta_commission_fixed'];
+    const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'conekta_enabled', 'openpay_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
     setPlatformSettings(prev => ({
       ...prev,
       [name]: booleanFields.includes(name) ? checked : (numericFields.includes(name) ? (parseFloat(value) || 0) : value),
@@ -1344,6 +1377,99 @@ const AdminSettings: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* ---- Openpay ---- */}
+            <div className="border border-cyan-200 rounded-lg p-4 bg-cyan-50/30">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center">
+                    <CreditCard className="w-4 h-4 text-cyan-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Openpay</h3>
+                    <p className="text-xs text-gray-500">Tarjeta de credito/debito, SPEI, efectivo</p>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="openpay_enabled"
+                    checked={platformSettings.openpay_enabled}
+                    onChange={handlePlatformChange}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Habilitado</span>
+                </label>
+              </div>
+
+              {platformSettings.openpay_enabled && (
+                <div className="space-y-3">
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <div className="flex items-start">
+                      <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+                      <div className="text-xs text-blue-800">
+                        <p className="font-medium mb-1">Configuracion de Openpay:</p>
+                        <ul className="space-y-1">
+                          <li>• Las llaves se configuran como secrets de Supabase Edge Functions (OPENPAY_MERCHANT_ID y OPENPAY_PRIVATE_KEY)</li>
+                          <li>• Metodos disponibles: tarjeta de credito/debito, SPEI, efectivo</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ---- Comisiones de Procesadores ---- */}
+            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50/30">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Percent className="w-4 h-4 text-gray-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Comisiones de Procesadores de Pago</h3>
+                  <p className="text-xs text-gray-500">Configura las comisiones que cobra cada pasarela (usado para contabilidad cuando el fee real no esta disponible)</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { provider: 'stripe', label: 'Stripe', note: 'IVA incluido' },
+                  { provider: 'paypal', label: 'PayPal' },
+                  { provider: 'mercadopago', label: 'Mercado Pago' },
+                  { provider: 'conekta', label: 'Conekta' },
+                  { provider: 'openpay', label: 'Openpay' },
+                ].map(({ provider, label, note }) => (
+                  <div key={provider} className="bg-white border border-gray-200 rounded-lg p-3">
+                    <p className="text-sm font-medium text-gray-900 mb-2">{label}</p>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-xs text-gray-500">Porcentaje (%)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name={`${provider}_commission_pct`}
+                          value={platformSettings[`${provider}_commission_pct` as keyof typeof platformSettings] as number}
+                          onChange={handlePlatformChange}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-primary-500 focus:border-primary-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Comision fija (MXN) {note && `(${note})`}</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name={`${provider}_commission_fixed`}
+                          value={platformSettings[`${provider}_commission_fixed` as keyof typeof platformSettings] as number}
+                          onChange={handlePlatformChange}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-primary-500 focus:border-primary-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* ---- Stripe — Control por contexto ---- */}
