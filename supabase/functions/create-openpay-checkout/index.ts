@@ -174,12 +174,6 @@ Deno.serve(async (req: Request) => {
       charge = result;
     }
 
-    const env = Deno.env.get("OPENPAY_ENV") || "sandbox";
-    const dashboardBase = env === "production"
-      ? "https://dashboard.openpay.mx"
-      : "https://sandbox-dashboard.openpay.mx";
-    const merchantId = getMerchantId();
-
     const paymentMethodMetadata: Record<string, any> = {
       openpay_method: paymentMethod,
       openpay_charge_id: charge.id,
@@ -187,12 +181,10 @@ Deno.serve(async (req: Request) => {
     };
 
     if (paymentMethod === "spei") {
-      paymentMethodMetadata.spei_pdf_url = `${dashboardBase}/spei-pdf/${merchantId}/${charge.id}`;
       if (charge.payment_method?.clabe) paymentMethodMetadata.clabe = charge.payment_method.clabe;
       if (charge.payment_method?.bank) paymentMethodMetadata.bank = charge.payment_method.bank;
       if (charge.payment_method?.name) paymentMethodMetadata.reference = charge.payment_method.name;
     } else if (paymentMethod === "cash") {
-      paymentMethodMetadata.cash_pdf_url = `${dashboardBase}/paynet-pdf/${merchantId}/${charge.id}`;
       if (charge.payment_method?.reference) paymentMethodMetadata.reference = charge.payment_method.reference;
       if (charge.payment_method?.store) paymentMethodMetadata.store = charge.payment_method.store;
       if (charge.payment_method?.expiry_date) paymentMethodMetadata.expiry_date = charge.payment_method.expiry_date;
@@ -242,13 +234,8 @@ Deno.serve(async (req: Request) => {
     } else if (paymentMethod === "spei" || paymentMethod === "cash") {
       responseData.payment_method = charge.payment_method;
       responseData.status = charge.status;
-      if (paymentMethod === "spei") {
-        responseData.spei_pdf_url = paymentMethodMetadata.spei_pdf_url;
-      } else if (paymentMethod === "cash") {
-        responseData.cash_pdf_url = paymentMethodMetadata.cash_pdf_url;
-        if (paymentMethodMetadata.barcode_url) {
-          responseData.barcode_url = paymentMethodMetadata.barcode_url;
-        }
+      if (paymentMethodMetadata.barcode_url) {
+        responseData.barcode_url = paymentMethodMetadata.barcode_url;
       }
     }
 
