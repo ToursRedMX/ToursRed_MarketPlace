@@ -324,15 +324,21 @@ Deno.serve(async (req: Request) => {
               .eq("id", externalReference)
               .maybeSingle();
             if (suppDetails) {
+              const suppFee = Array.isArray(payment.fee_details)
+                ? payment.fee_details
+                    .filter((fd: any) => fd.type === "mercadopago_fee")
+                    .reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
+                : 0;
+              const suppAmount = Number(suppDetails.total_paid) || 0;
               await supabase.from("payment_transactions").insert({
                 booking_id: suppDetails.booking_id,
                 mercadopago_payment_id: String(notificationId),
-                amount: Number(suppDetails.total_paid) || 0,
+                amount: suppAmount,
                 currency: "mxn",
                 status: "succeeded",
                 payment_processor: "mercadopago",
-                processor_fee: mpFee,
-                net_amount: (Number(suppDetails.total_paid) || 0) - mpFee,
+                processor_fee: suppFee,
+                net_amount: suppAmount - suppFee,
                 charge_context: "supplement",
                 charge_reference_id: externalReference,
               });
