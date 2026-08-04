@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import {
   isConfigured,
   getBaseUrl,
+  getDashboardUrl,
   getMerchantId,
   getAuthHeader,
   createOrReuseCustomer,
@@ -191,6 +192,9 @@ Deno.serve(async (req: Request) => {
       if (charge.payment_method?.store) paymentMethodMetadata.store = charge.payment_method.store;
       if (charge.payment_method?.expiry_date) paymentMethodMetadata.expiry_date = charge.payment_method.expiry_date;
       if (charge.payment_method?.barcode_url) paymentMethodMetadata.barcode_url = charge.payment_method.barcode_url;
+      if (charge.payment_method?.reference) {
+        paymentMethodMetadata.cash_pdf_url = `${getDashboardUrl()}/paynet-pdf/${getMerchantId()}/${charge.payment_method.reference}`;
+      }
     }
 
     if (context === "booking" || context === "supplement") {
@@ -238,6 +242,9 @@ Deno.serve(async (req: Request) => {
       responseData.status = charge.status;
       if (paymentMethodMetadata.barcode_url) {
         responseData.barcode_url = paymentMethodMetadata.barcode_url;
+      }
+      if (paymentMethodMetadata.cash_pdf_url) {
+        responseData.cash_pdf_url = paymentMethodMetadata.cash_pdf_url;
       }
     }
 

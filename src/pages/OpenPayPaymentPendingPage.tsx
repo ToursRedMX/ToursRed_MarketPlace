@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
-import { jsPDF } from 'jspdf';
 
 interface PaymentTransactionMeta {
   openpay_method?: string;
@@ -42,7 +41,7 @@ const OpenPayPaymentPendingPage: React.FC = () => {
   const [booking, setBooking] = useState<BookingInfo | null>(null);
   const [transaction, setTransaction] = useState<PaymentTransactionMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [isOpeningPdf, setIsOpeningPdf] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -91,71 +90,11 @@ const OpenPayPaymentPendingPage: React.FC = () => {
     }
   };
 
-  const downloadInstructionsPdf = async () => {
-    if (!booking || !transaction) return;
-
-    setIsDownloading(true);
-    try {
-      const pdf = new jsPDF();
-      const title = isCash ? 'Instrucciones de pago en efectivo' : 'Instrucciones de transferencia SPEI';
-      const lines = [
-        'ToursRed',
-        title,
-        `Reserva: ${booking.booking_code}`,
-        `Tour: ${booking.tours?.name || 'Reserva de viaje'}`,
-        `Monto a pagar: ${formatCurrencyMXN(booking.user_payment ?? booking.deposit_amount ?? 0)}`,
-        '',
-        ...(isCash
-          ? [
-              'Presenta esta referencia en una tienda afiliada:',
-              `Referencia: ${transaction.reference || 'No disponible'}`,
-              `Establecimiento: ${transaction.store || 'Consulta los establecimientos participantes'}`,
-              transaction.expiry_date ? `Vigencia: ${transaction.expiry_date}` : '',
-            ]
-          : [
-              'Realiza una transferencia usando estos datos:',
-              `CLABE: ${transaction.clabe || 'No disponible'}`,
-              `Banco: ${transaction.bank || 'No disponible'}`,
-              `Referencia: ${transaction.reference || 'No disponible'}`,
-            ]),
-        '',
-        'Completa tu pago dentro de un máximo de 3 días.',
-        'Una vez validado el pago recibirás un correo con la confirmación de tu reserva.',
-      ].filter(Boolean);
-
-      pdf.setFontSize(18);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(lines[0], 20, 24);
-      pdf.setFontSize(14);
-      pdf.text(lines[1], 20, 36);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(11);
-      pdf.text(lines.slice(2), 20, 52, { maxWidth: 170, lineHeightFactor: 1.6 });
-
-      if (isCash && transaction.barcode_url) {
-        try {
-          const barcodeResponse = await fetch(transaction.barcode_url);
-          if (barcodeResponse.ok) {
-            const barcodeBlob = await barcodeResponse.blob();
-            const barcodeDataUrl = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(String(reader.result));
-              reader.onerror = reject;
-              reader.readAsDataURL(barcodeBlob);
-            });
-            pdf.addImage(barcodeDataUrl, 'PNG', 35, 142, 140, 40);
-            pdf.setFontSize(9);
-            pdf.text('Muestra este código de barras en la tienda.', 105, 188, { align: 'center' });
-          }
-        } catch {
-          // El PDF conserva la referencia aunque el proveedor bloquee la descarga de la imagen.
-        }
-      }
-
-      pdf.save(`instrucciones-pago-${booking.booking_code}.pdf`);
-    } finally {
-      setIsDownloading(false);
-    }
+  const openCashPdf = () => {
+    if (!transaction?.cash_pdf_url) return;
+    setIsOpeningPdf(true);
+    window.open(transaction.cash_pdf_url, '_blank', 'noopener,noreferrer');
+    setTimeout(() => setIsOpeningPdf(false), 1500);
   };
 
   if (isLoading) {
@@ -314,16 +253,18 @@ const OpenPayPaymentPendingPage: React.FC = () => {
               </div>
             )}
 
-            {/* PDF download */}
-            <button
-              type="button"
-              onClick={downloadInstructionsPdf}
-              disabled={isDownloading}
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors w-full justify-center"
-            >
-              <Download className="w-4 h-4" />
-              {isDownloading ? 'Preparando PDF...' : 'Descargar instrucciones (PDF)'}
-            </button>
+            {/* PDF download — cash uses Openpay's official PDF, SPEI is not available */}
+            {isCash && transaction.cash_pdf_url ? (
+              <button
+                type="button"
+                onClick={openCashPdf}
+                disabled={isOpeningPdf}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors w-full justify-center"
+              >
+                <Download className="w-4 h-4" />
+                {isOpeningPdf ? 'Abriendo PDF...' : 'Descargar instrucciones (PDF)'}
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">

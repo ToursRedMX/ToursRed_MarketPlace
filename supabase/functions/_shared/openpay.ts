@@ -4,10 +4,17 @@ import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 
 const SANDBOX_URL = "https://sandbox-api.openpay.mx/v1";
 const PRODUCTION_URL = "https://api.openpay.mx/v1";
+const SANDBOX_DASHBOARD = "https://sandbox-dashboard.openpay.mx";
+const PRODUCTION_DASHBOARD = "https://dashboard.openpay.mx";
 
 export function getBaseUrl(): string {
   const env = Deno.env.get("OPENPAY_ENV") || "sandbox";
   return env === "production" ? PRODUCTION_URL : SANDBOX_URL;
+}
+
+export function getDashboardUrl(): string {
+  const env = Deno.env.get("OPENPAY_ENV") || "sandbox";
+  return env === "production" ? PRODUCTION_DASHBOARD : SANDBOX_DASHBOARD;
 }
 
 export function getMerchantId(): string {
