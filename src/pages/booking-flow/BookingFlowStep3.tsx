@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ChevronRight, ChevronLeft, Bus, Car, Globe, AlertTriangle, AlertCircle,
+  ChevronRight, ChevronLeft, Bus, Car, Globe, Users, AlertTriangle, AlertCircle,
   Clock, Shield, Crown, Minus, Plus, Info, Timer,
 } from 'lucide-react';
 import { useBookingFlow } from '../../context/BookingFlowContext';
