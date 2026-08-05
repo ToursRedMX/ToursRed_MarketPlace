@@ -39,7 +39,7 @@ Deno.serve(async (req: Request) => {
 
     const {
       booking_id,
-      amount,
+      amount: bodyAmount,
       payment_method_type,
       bnpl_product_type,
       sub_charges,
@@ -48,14 +48,88 @@ Deno.serve(async (req: Request) => {
       description,
     } = await req.json();
 
-    if (!booking_id || !amount || !payment_method_type) {
-      return jsonResponse({ error: "Datos incompletos: booking_id, amount y payment_method_type son requeridos" }, 400);
+    if (!booking_id || !payment_method_type) {
+      return jsonResponse({ error: "Datos incompletos: booking_id y payment_method_type son requeridos" }, 400);
     }
 
     if (!["bnpl", "card", "cash", "spei"].includes(payment_method_type)) {
       return jsonResponse({ error: "payment_method_type debe ser bnpl, card, cash o spei" }, 400);
     }
 
+    // --- Server-side amount validation based on context ---
+    // The amount from the body is NEVER trusted for booking/supplement contexts.
+    // The real amount is always queried from the database.
+    let amount: number;
+
+    if (context === "booking_deposit" || context === "booking") {
+      const { data: booking, error: bookingErr } = await supabase
+        .from("bookings")
+        .select("deposit_amount, user_id")
+        .eq("id", booking_id)
+        .maybeSingle();
+
+      if (bookingErr || !booking) {
+        return jsonResponse({ error: "Reserva no encontrada" }, 404);
+      }
+
+      if (booking.user_id !== user.id) {
+        return jsonResponse({ error: "No tienes permiso sobre esta reserva" }, 403);
+      }
+
+      amount = Number(booking.deposit_amount);
+      if (amount <= 0) {
+        return jsonResponse({ error: "El monto del depósito no es válido" }, 400);
+      }
+    } else if (context === "supplement") {
+      const supplementId = charge_reference_id || booking_id;
+      const { data: supplement, error: suppErr } = await supabase
+        .from("booking_supplements")
+        .select("total_paid, booking_id")
+        .eq("id", supplementId)
+        .maybeSingle();
+
+      if (suppErr || !supplement) {
+        return jsonResponse({ error: "Suplemento no encontrado" }, 404);
+      }
+
+      // Verify ownership via the parent booking
+      const { data: suppBooking } = await supabase
+        .from("bookings")
+        .select("user_id")
+        .eq("id", supplement.booking_id)
+        .maybeSingle();
+
+      if (!suppBooking || suppBooking.user_id !== user.id) {
+        return jsonResponse({ error: "No tienes permiso sobre este suplemento" }, 403);
+      }
+
+      amount = Number(supplement.total_paid);
+      if (amount <= 0) {
+        return jsonResponse({ error: "El monto del suplemento no es válido" }, 400);
+      }
+    } else {
+      // context === "gift_card" — validate against configured denominations
+      const { data: settings } = await supabase
+        .from("platform_settings")
+        .select("gift_card_amounts, gift_card_max_amount")
+        .maybeSingle();
+
+      const validAmounts: number[] = (settings?.gift_card_amounts || [100, 200, 500, 1000]).map(Number);
+      const maxAmount: number = settings?.gift_card_max_amount || 10000;
+      const requestedAmount = Number(bodyAmount);
+
+      if (requestedAmount <= 0) {
+        return jsonResponse({ error: "Monto de gift card inválido" }, 400);
+      }
+
+      if (validAmounts.includes(requestedAmount) || requestedAmount <= maxAmount) {
+        amount = requestedAmount;
+      } else {
+        return jsonResponse({ error: `El monto excede el máximo permitido (${maxAmount})` }, 400);
+      }
+    }
+
+    // BNPL range validation against the server-verified amount
     if (payment_method_type === "bnpl") {
       if (bnpl_product_type && !["aplazo_bnpl", "creditea_bnpl", "coppel_bnpl"].includes(bnpl_product_type)) {
         return jsonResponse({ error: "bnpl_product_type inválido" }, 400);
@@ -68,7 +142,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Validate sub_charges for split native orders
+    // Validate sub_charges for split native orders — must sum to the verified amount
     if (sub_charges && Array.isArray(sub_charges)) {
       if (payment_method_type === "bnpl") {
         return jsonResponse({ error: "No se puede combinar BNPL con split nativo" }, 400);
@@ -217,9 +291,6 @@ Deno.serve(async (req: Request) => {
       };
     } else {
       // Single method: card, cash, or spei
-      // Conekta Hosted Checkout expects "bank_transfer" (not "spei") in
-      // allowed_payment_methods. "spei" is only valid inside charges. We map
-      // it here for the checkout payload only; the DB and frontend keep "spei".
       const conektaCheckoutMethod = payment_method_type === "spei" ? "bank_transfer" : payment_method_type;
       orderPayload = {
         currency: "MXN",
@@ -340,7 +411,6 @@ Deno.serve(async (req: Request) => {
       metadata: {
         conekta_order: order,
         checkout_url: checkoutUrl,
-
         sub_charges: sub_charges || undefined,
       },
     });
@@ -351,7 +421,6 @@ Deno.serve(async (req: Request) => {
 
     // Insert sub-charge records for split native orders
     if (sub_charges && sub_charges.length >= 2) {
-      // Fetch the transaction we just created
       const { data: newTx } = await supabase
         .from("payment_transactions")
         .select("id")

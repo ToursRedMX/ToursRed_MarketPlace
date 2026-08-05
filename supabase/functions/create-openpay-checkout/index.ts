@@ -47,16 +47,142 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // --- Auth verification ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "No autorizado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const { data: { user }, error: userErr } = await supabase.auth.getUser(
+      authHeader.replace("Bearer ", "")
+    );
+    if (userErr || !user) {
+      return new Response(
+        JSON.stringify({ error: "No autorizado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const body: CheckoutRequest = await req.json();
-    const { bookingId, chargeReferenceId, amount, description, context, customerEmail, customerName, redirectUrl, method } = body;
+    const {
+      bookingId,
+      chargeReferenceId,
+      amount: bodyAmount,
+      description,
+      context,
+      customerEmail,
+      customerName,
+      redirectUrl,
+      method,
+    } = body;
     const referenceId = chargeReferenceId || bookingId;
     const paymentMethod = method || "card";
 
-    if (!bookingId || !amount || amount <= 0) {
+    if (!bookingId) {
       return new Response(
         JSON.stringify({ error: "Faltan parámetros requeridos" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    // --- Server-side amount validation based on context ---
+    // The amount from the body is NEVER trusted for booking/supplement contexts.
+    // The real amount is always queried from the database.
+    let amount: number;
+
+    if (context === "booking") {
+      const { data: booking, error: bookingErr } = await supabase
+        .from("bookings")
+        .select("deposit_amount, user_id")
+        .eq("id", bookingId)
+        .maybeSingle();
+
+      if (bookingErr || !booking) {
+        return new Response(
+          JSON.stringify({ error: "Reserva no encontrada" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      if (booking.user_id !== user.id) {
+        return new Response(
+          JSON.stringify({ error: "No tienes permiso sobre esta reserva" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      amount = Number(booking.deposit_amount);
+      if (amount <= 0) {
+        return new Response(
+          JSON.stringify({ error: "El monto del depósito no es válido" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    } else if (context === "supplement") {
+      const supplementId = chargeReferenceId || bookingId;
+      const { data: supplement, error: suppErr } = await supabase
+        .from("booking_supplements")
+        .select("total_paid, booking_id")
+        .eq("id", supplementId)
+        .maybeSingle();
+
+      if (suppErr || !supplement) {
+        return new Response(
+          JSON.stringify({ error: "Suplemento no encontrado" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // Verify ownership via the parent booking
+      const { data: suppBooking } = await supabase
+        .from("bookings")
+        .select("user_id")
+        .eq("id", supplement.booking_id)
+        .maybeSingle();
+
+      if (!suppBooking || suppBooking.user_id !== user.id) {
+        return new Response(
+          JSON.stringify({ error: "No tienes permiso sobre este suplemento" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      amount = Number(supplement.total_paid);
+      if (amount <= 0) {
+        return new Response(
+          JSON.stringify({ error: "El monto del suplemento no es válido" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    } else {
+      // context === "gift_card" — validate against configured denominations
+      const { data: settings } = await supabase
+        .from("platform_settings")
+        .select("gift_card_amounts, gift_card_max_amount")
+        .maybeSingle();
+
+      const validAmounts: number[] = (settings?.gift_card_amounts || [100, 200, 500, 1000]).map(Number);
+      const maxAmount: number = settings?.gift_card_max_amount || 10000;
+      const requestedAmount = Number(bodyAmount);
+
+      if (requestedAmount <= 0) {
+        return new Response(
+          JSON.stringify({ error: "Monto de gift card inválido" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      if (validAmounts.includes(requestedAmount) || requestedAmount <= maxAmount) {
+        amount = requestedAmount;
+      } else {
+        return new Response(
+          JSON.stringify({ error: `El monto excede el máximo permitido (${maxAmount})` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     const siteUrl = Deno.env.get("SITE_URL") || "https://toursred.com";
@@ -72,31 +198,22 @@ Deno.serve(async (req: Request) => {
     let customerId: string | null = null;
 
     if (context === "booking" || context === "supplement") {
-      // For booking/supplement: look up the booking's user to create/reuse customer
-      const { data: booking } = await supabase
-        .from("bookings")
-        .select("user_id")
-        .eq("id", bookingId)
+      const { data: userRecord } = await supabase
+        .from("users")
+        .select("id, first_name, last_name, email, phone_number")
+        .eq("id", user.id)
         .maybeSingle();
 
-      if (booking?.user_id) {
-        const { data: userRecord } = await supabase
-          .from("users")
-          .select("id, first_name, last_name, email, phone_number")
-          .eq("id", booking.user_id)
-          .maybeSingle();
-
-        if (userRecord) {
-          try {
-            customerId = await createOrReuseCustomer(supabase, userRecord.id, {
-              first_name: userRecord.first_name,
-              last_name: userRecord.last_name,
-              email: userRecord.email,
-              phone_number: userRecord.phone_number,
-            });
-          } catch (e) {
-            console.error("createOrReuseCustomer error:", e);
-          }
+      if (userRecord) {
+        try {
+          customerId = await createOrReuseCustomer(supabase, userRecord.id, {
+            first_name: userRecord.first_name,
+            last_name: userRecord.last_name,
+            email: userRecord.email,
+            phone_number: userRecord.phone_number,
+          });
+        } catch (e) {
+          console.error("createOrReuseCustomer error:", e);
         }
       }
     }
@@ -132,7 +249,7 @@ Deno.serve(async (req: Request) => {
         metadata,
       );
     } else {
-      // Fallback: merchant-level charge with inline customer (for gift cards or unknown user)
+      // Fallback: merchant-level charge with inline customer (for gift cards)
       const baseUrl = getBaseUrl();
       const merchantId = getMerchantId();
       const auth = getAuthHeader();
