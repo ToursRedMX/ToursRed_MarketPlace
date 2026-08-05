@@ -40,6 +40,7 @@ const OpenPayPaymentPendingPage: React.FC = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
   const [booking, setBooking] = useState<BookingInfo | null>(null);
   const [transaction, setTransaction] = useState<PaymentTransactionMeta | null>(null);
+  const [txStatus, setTxStatus] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
   const [error, setError] = useState('');
@@ -83,6 +84,9 @@ const OpenPayPaymentPendingPage: React.FC = () => {
       if (txData?.metadata) {
         setTransaction(txData.metadata as PaymentTransactionMeta);
       }
+      if (txData?.status) {
+        setTxStatus(txData.status);
+      }
     } catch (err: any) {
       setError(err.message || 'Error al cargar la información');
     } finally {
@@ -124,6 +128,9 @@ const OpenPayPaymentPendingPage: React.FC = () => {
   const isSpei = transaction?.openpay_method === 'spei';
   const isCash = transaction?.openpay_method === 'cash';
   const amount = booking.user_payment ?? booking.deposit_amount ?? 0;
+  const isTxPending = txStatus === 'pending' || !txStatus;
+  const pdfUrl = isSpei ? transaction?.spei_pdf_url : transaction?.cash_pdf_url;
+  const canDownloadPdf = isTxPending && !!pdfUrl;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -254,8 +261,8 @@ const OpenPayPaymentPendingPage: React.FC = () => {
               </div>
             )}
 
-            {/* PDF download — Openpay provides official PDFs for both SPEI and cash */}
-            {(isCash && transaction.cash_pdf_url) || (isSpei && transaction.spei_pdf_url) ? (
+            {/* PDF download — Openpay only serves the PDF while the transaction is pending */}
+            {canDownloadPdf ? (
               <button
                 type="button"
                 onClick={openPdf}
@@ -265,6 +272,10 @@ const OpenPayPaymentPendingPage: React.FC = () => {
                 <Download className="w-4 h-4" />
                 {isOpeningPdf ? 'Abriendo PDF...' : 'Descargar instrucciones (PDF)'}
               </button>
+            ) : pdfUrl && !isTxPending ? (
+              <p className="mt-4 text-sm text-gray-500 text-center">
+                El recibo de pago ya no está disponible porque la transacción ya no está pendiente.
+              </p>
             ) : null}
           </div>
         ) : (

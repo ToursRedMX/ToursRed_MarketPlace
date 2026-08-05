@@ -188,8 +188,8 @@ Deno.serve(async (req: Request) => {
       if (charge.payment_method?.bank) paymentMethodMetadata.bank = charge.payment_method.bank;
       if (charge.payment_method?.name) {
         paymentMethodMetadata.reference = charge.payment_method.name;
-        paymentMethodMetadata.spei_pdf_url = `${getDashboardUrl()}/spei-pdf/${getMerchantId()}/${charge.payment_method.name}`;
       }
+      paymentMethodMetadata.spei_pdf_url = `${getDashboardUrl()}/spei-pdf/${getMerchantId()}/${charge.id}`;
     } else if (paymentMethod === "cash") {
       if (charge.payment_method?.reference) paymentMethodMetadata.reference = charge.payment_method.reference;
       if (charge.payment_method?.store) paymentMethodMetadata.store = charge.payment_method.store;
