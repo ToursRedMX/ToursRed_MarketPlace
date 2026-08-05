@@ -90,10 +90,11 @@ const OpenPayPaymentPendingPage: React.FC = () => {
     }
   };
 
-  const openCashPdf = () => {
-    if (!transaction?.cash_pdf_url) return;
+  const openPdf = () => {
+    const pdfUrl = isSpei ? transaction?.spei_pdf_url : transaction?.cash_pdf_url;
+    if (!pdfUrl) return;
     setIsOpeningPdf(true);
-    window.open(transaction.cash_pdf_url, '_blank', 'noopener,noreferrer');
+    window.open(pdfUrl, '_blank', 'noopener,noreferrer');
     setTimeout(() => setIsOpeningPdf(false), 1500);
   };
 
@@ -253,11 +254,11 @@ const OpenPayPaymentPendingPage: React.FC = () => {
               </div>
             )}
 
-            {/* PDF download — cash uses Openpay's official PDF, SPEI is not available */}
-            {isCash && transaction.cash_pdf_url ? (
+            {/* PDF download — Openpay provides official PDFs for both SPEI and cash */}
+            {(isCash && transaction.cash_pdf_url) || (isSpei && transaction.spei_pdf_url) ? (
               <button
                 type="button"
-                onClick={openCashPdf}
+                onClick={openPdf}
                 disabled={isOpeningPdf}
                 className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors w-full justify-center"
               >
