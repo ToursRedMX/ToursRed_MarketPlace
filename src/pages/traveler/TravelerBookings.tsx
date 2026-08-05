@@ -37,7 +37,8 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
-    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal';
+    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+    conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
     cashToUse: number;
   }>({
     open: false,
@@ -51,6 +52,7 @@ const TravelerBookings: React.FC = () => {
     pointsBalance: 0,
     pointsValueMxn: 0,
     selectedMethod: 'stripe',
+    conektaMethod: 'card',
     cashToUse: 0,
   });
   const [supplementsModal, setSupplementsModal] = useState<{
@@ -68,7 +70,8 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
-    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal';
+    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+    conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
   }>({
     open: false,
     bookingSupplement: null,
@@ -79,6 +82,7 @@ const TravelerBookings: React.FC = () => {
     pointsBalance: 0,
     pointsValueMxn: 0,
     selectedMethod: 'stripe',
+    conektaMethod: 'card',
   });
   const [extrasModal, setExtrasModal] = useState<{
     open: boolean;
@@ -1820,6 +1824,7 @@ const TravelerBookings: React.FC = () => {
         body: JSON.stringify({
           booking_supplement_id: bookingSupplement.id,
           payment_method: selectedMethod,
+          ...(selectedMethod === 'conekta' ? { conekta_method: supplementDirectPayModal.conektaMethod, ...(supplementDirectPayModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) } : {}),
         }),
       });
       const payData = await payRes.json();
@@ -2147,6 +2152,7 @@ const TravelerBookings: React.FC = () => {
             booking_supplement_id: data.booking_supplement_id,
             payment_method: selectedMethod,
             toursred_cash_amount: selectedMethod === 'toursred_cash' ? cashToUse : 0,
+            ...(selectedMethod === 'conekta' ? { conekta_method: supplementPaymentModal.conektaMethod, ...(supplementPaymentModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) } : {}),
           }),
         });
         const payData = await payRes.json();
@@ -4541,6 +4547,7 @@ const TravelerBookings: React.FC = () => {
                       { id: 'points', label: `Puntos ToursRed (${supplementPaymentModal.pointsBalance} pts = ${formatCurrencyMXN(supplementPaymentModal.pointsValueMxn)})` },
                       { id: 'mercadopago', label: 'MercadoPago' },
                       { id: 'paypal', label: 'PayPal' },
+                      { id: 'conekta', label: 'Conekta (Tarjeta, Efectivo, SPEI, BNPL)' },
                     ].map(method => (
                       <label key={method.id} className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -4555,6 +4562,25 @@ const TravelerBookings: React.FC = () => {
                       </label>
                     ))}
                   </div>
+
+                  {supplementPaymentModal.selectedMethod === 'conekta' && (
+                    <div className="mt-3 pl-6 space-y-2 border-l-2 border-gray-200">
+                      {([
+                        { id: 'card', label: 'Tarjeta de credito/debito' },
+                        { id: 'cash', label: 'Efectivo (referencia de pago)' },
+                        { id: 'spei', label: 'Transferencia SPEI' },
+                        { id: 'bnpl', label: 'Compra ahora, paga despues (BNPL)' },
+                      ] as const).map(m => (
+                        <label key={m.id} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="supplement_conekta_method" value={m.id}
+                            checked={supplementPaymentModal.conektaMethod === m.id}
+                            onChange={() => setSupplementPaymentModal(prev => ({ ...prev, conektaMethod: m.id }))}
+                            className="w-4 h-4 text-teal-600" />
+                          <span className="text-sm text-gray-700">{m.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -4841,6 +4867,7 @@ const TravelerBookings: React.FC = () => {
                       { id: 'points', label: `Puntos ToursRed (${supplementDirectPayModal.pointsBalance} pts = ${formatCurrencyMXN(supplementDirectPayModal.pointsValueMxn)})` },
                       { id: 'mercadopago', label: 'MercadoPago' },
                       { id: 'paypal', label: 'PayPal' },
+                      { id: 'conekta', label: 'Conekta (Tarjeta, Efectivo, SPEI, BNPL)' },
                     ].map(method => (
                       <label key={method.id} className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -4855,6 +4882,25 @@ const TravelerBookings: React.FC = () => {
                       </label>
                     ))}
                   </div>
+
+                  {supplementDirectPayModal.selectedMethod === 'conekta' && (
+                    <div className="mt-3 pl-6 space-y-2 border-l-2 border-gray-200">
+                      {([
+                        { id: 'card', label: 'Tarjeta de credito/debito' },
+                        { id: 'cash', label: 'Efectivo (referencia de pago)' },
+                        { id: 'spei', label: 'Transferencia SPEI' },
+                        { id: 'bnpl', label: 'Compra ahora, paga despues (BNPL)' },
+                      ] as const).map(m => (
+                        <label key={m.id} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="direct_supplement_conekta_method" value={m.id}
+                            checked={supplementDirectPayModal.conektaMethod === m.id}
+                            onChange={() => setSupplementDirectPayModal(prev => ({ ...prev, conektaMethod: m.id }))}
+                            className="w-4 h-4 text-teal-600" />
+                          <span className="text-sm text-gray-700">{m.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {supplementDirectPayModal.error && (

@@ -170,7 +170,8 @@ const AgencyTours: React.FC = () => {
     step: 'plan' | 'payment' | 'done';
     couponExpanded: boolean;
     pendingSlotId: string;
-    selectedProvider: 'stripe' | 'mercadopago' | 'paypal';
+    selectedProvider: 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+    conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
     couponCode: string;
     couponError: string;
     couponDiscount: number;
@@ -191,6 +192,7 @@ const AgencyTours: React.FC = () => {
     couponExpanded: false,
     pendingSlotId: '',
     selectedProvider: 'stripe',
+    conektaMethod: 'card',
     couponCode: '',
     couponError: '',
     couponDiscount: 0,
@@ -1026,7 +1028,7 @@ const AgencyTours: React.FC = () => {
 
   const handleOpenFeatured = async (tour: Tour) => {
     if (!resolvedAgencyId) return;
-    setFeaturedModal({ open: true, tour, plans: [], activeSlot: null, isLoading: true, isSubmitting: false, selectedPlanId: '', error: '', success: '', step: 'plan', couponExpanded: false, pendingSlotId: '', selectedProvider: 'stripe', couponCode: '', couponError: '', couponDiscount: 0, couponType: '', couponApplied: false, couponIsValidating: false });
+    setFeaturedModal({ open: true, tour, plans: [], activeSlot: null, isLoading: true, isSubmitting: false, selectedPlanId: '', error: '', success: '', step: 'plan', couponExpanded: false, pendingSlotId: '', selectedProvider: 'stripe', conektaMethod: 'card', couponCode: '', couponError: '', couponDiscount: 0, couponType: '', couponApplied: false, couponIsValidating: false });
     const [plansRes, slotsRes] = await Promise.all([
       getFeaturedPlans(),
       getAgencyFeaturedSlots(resolvedAgencyId),
@@ -1074,6 +1076,7 @@ const AgencyTours: React.FC = () => {
           success_url: `${origin}/agency/featured-slot-success?slot_id=${featuredModal.pendingSlotId}`,
           cancel_url: `${origin}/agency/tours`,
           ...(featuredModal.couponApplied && featuredModal.couponCode ? { discount_code: featuredModal.couponCode } : {}),
+          ...(featuredModal.selectedProvider === 'conekta' ? { conekta_method: featuredModal.conektaMethod, ...(featuredModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) } : {}),
         },
       });
       if (res.error) throw new Error(res.error.message);
@@ -7029,7 +7032,8 @@ const AgencyTours: React.FC = () => {
                       { id: 'stripe', label: 'Tarjeta / OXXO / Transferencia', sub: 'Visa, Mastercard, OXXO, transferencia bancaria' },
                       { id: 'mercadopago', label: 'MercadoPago', sub: 'Tarjeta, efectivo, transferencia SPEI' },
                       { id: 'paypal', label: 'PayPal', sub: 'Cuenta PayPal o tarjeta de credito/debito' },
-                    ] as { id: 'stripe' | 'mercadopago' | 'paypal'; label: string; sub: string }[]).map(p => (
+                      { id: 'conekta', label: 'Conekta', sub: 'Tarjeta, Efectivo, SPEI, BNPL' },
+                    ] as { id: 'stripe' | 'mercadopago' | 'paypal' | 'conekta'; label: string; sub: string }[]).map(p => (
                       <label
                         key={p.id}
                         className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${featuredModal.selectedProvider === p.id ? 'border-primary-400 bg-primary-50' : 'border-gray-100 hover:border-primary-200'}`}
@@ -7049,6 +7053,25 @@ const AgencyTours: React.FC = () => {
                       </label>
                     ))}
                   </div>
+
+                  {featuredModal.selectedProvider === 'conekta' && (
+                    <div className="space-y-2 mb-5 pl-4 border-l-2 border-gray-200">
+                      {([
+                        { id: 'card', label: 'Tarjeta de credito/debito' },
+                        { id: 'cash', label: 'Efectivo (referencia de pago)' },
+                        { id: 'spei', label: 'Transferencia SPEI' },
+                        { id: 'bnpl', label: 'Compra ahora, paga despues (BNPL)' },
+                      ] as const).map(m => (
+                        <label key={m.id} className="flex items-center gap-3 p-2 rounded-lg border cursor-pointer">
+                          <input type="radio" name="conekta_method" value={m.id}
+                            checked={featuredModal.conektaMethod === m.id}
+                            onChange={() => setFeaturedModal(prev => ({ ...prev, conektaMethod: m.id }))}
+                            className="accent-primary-600" />
+                          <span className="text-sm text-gray-900">{m.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-4">
                     <Lock className="w-3.5 h-3.5" /> Pago seguro — no se guardan datos de tarjeta en nuestros servidores

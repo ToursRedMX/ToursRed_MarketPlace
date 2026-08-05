@@ -43,6 +43,8 @@ Deno.serve(async (req: Request) => {
       stripe_payment_intent_id,
       mp_form_data,
       paypal_order_id,
+      conekta_method,
+      bnpl_product_type,
     } = await req.json();
 
     if (!booking_supplement_id || !payment_method) {
@@ -565,6 +567,112 @@ Deno.serve(async (req: Request) => {
         success: true,
         url: opResult.url,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // 7. Conekta
+    if (payment_method === "conekta") {
+      if (!conekta_method || !["card", "cash", "spei", "bnpl"].includes(conekta_method)) {
+        return new Response(JSON.stringify({ error: "conekta_method es requerido y debe ser card, cash, spei o bnpl" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (conekta_method === "bnpl") {
+        if (!bnpl_product_type || !["aplazo_bnpl", "creditea_bnpl", "coppel_bnpl"].includes(bnpl_product_type)) {
+          return new Response(JSON.stringify({ error: "bnpl_product_type es requerido y debe ser aplazo_bnpl, creditea_bnpl o coppel_bnpl" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (totalToPay < 1200 || totalToPay > 16000) {
+          return new Response(JSON.stringify({ error: "El monto para BNPL debe estar entre $1,200 y $16,000 MXN" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      const conektaPrivateKey = Deno.env.get("CONEKTA_PRIVATE_KEY");
+      if (!conektaPrivateKey) {
+        return new Response(JSON.stringify({ error: "Conekta no configurado" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: userProfileConekta } = await supabase.from("users").select("first_name, last_name").eq("id", user.id).maybeSingle();
+      const conektaCustomerName = `${userProfileConekta?.first_name || ""} ${userProfileConekta?.last_name || ""}`.trim() || "Cliente";
+
+      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const successUrl = `${origin}/supplement-success?supplement_id=${booking_supplement_id}`;
+      const failureUrl = `${origin}/traveler/bookings`;
+      const cancelUrl = `${origin}/traveler/bookings`;
+      const amountInCents = Math.round(totalToPay * 100);
+
+      const orderPayload: any = {
+        currency: "MXN",
+        amount: amountInCents,
+        customer_info: { name: conektaCustomerName, email: user.email || "no-email@toursred.com" },
+        line_items: [{
+          name: supplementName, unit_price: amountInCents, quantity: 1,
+          ...(conekta_method === "bnpl" ? { tags: ["bnpl"] } : {}),
+        }],
+        checkout: {
+          type: "HostedPayment",
+          allowed_payment_methods: [conekta_method === "spei" ? "bank_transfer" : conekta_method],
+          success_url: successUrl, failure_url: failureUrl, cancel_url: cancelUrl,
+          expires_at: Math.floor(Date.now() / 1000) + 71 * 3600,
+        },
+        metadata: {
+          booking_id: suppReq.booking_id, payment_method_type: conekta_method, context: "supplement",
+          charge_reference_id: booking_supplement_id,
+          extra_subtotal: subtotal.toString(),
+          ...(conekta_method === "bnpl" ? { bnpl_product_type } : {}),
+        },
+      };
+
+      const conektaApiBase = Deno.env.get("CONEKTA_API_BASE") || "https://api.conekta.io";
+      const apiResponse = await fetch(`${conektaApiBase}/orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/vnd.conekta-v2.2.0+json",
+          "Authorization": `Bearer ${conektaPrivateKey}`,
+          "X-Conekta-Client-Info": '{"name":"toursred","version":"1.0.0"}',
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!apiResponse.ok) {
+        const errorBody = await apiResponse.text();
+        console.error("Conekta API error (supplement):", errorBody);
+        let errorMsg = "Error al crear orden de Conekta";
+        try { const parsed = JSON.parse(errorBody); errorMsg = parsed?.details?.[0]?.message || parsed?.message || errorMsg; } catch {}
+        return new Response(JSON.stringify({ error: errorMsg }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const order = await apiResponse.json();
+      const orderId = order.id;
+      const checkoutUrl = order.checkout?.url;
+
+      if (!orderId) {
+        return new Response(JSON.stringify({ error: "Respuesta inválida de Conekta" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const idempotencyKey = `${booking_supplement_id}_supplement_${Date.now()}`;
+      await supabase.from("payment_transactions").insert({
+        booking_id: suppReq.booking_id, amount: totalToPay, currency: "mxn", status: "pending",
+        payment_method_type: conekta_method, payment_processor: "conekta", processor_fee: 0,
+        net_amount: totalToPay, conekta_order_id: orderId,
+        bnpl_product_type: conekta_method === "bnpl" ? bnpl_product_type : null,
+        p_idempotency_key: idempotencyKey, charge_context: "supplement",
+        charge_reference_id: booking_supplement_id,
+        metadata: { conekta_order: order, checkout_url: checkoutUrl, subtotal },
+      });
+
+      return new Response(JSON.stringify({ success: true, url: checkoutUrl, order_id: orderId }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ error: `Método de pago no soportado: ${payment_method}` }), {

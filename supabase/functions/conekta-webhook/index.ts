@@ -137,6 +137,48 @@ FwIDAQAB
       .maybeSingle();
 
     if (txErr || !tx) {
+      // Fallback: los tours destacados no tienen payment_transactions (booking_id es NOT NULL
+      // y featured slots no están ligados a una reserva). Se rastrean vía featured_tour_slots.payment_id.
+      const { data: slot } = await supabase
+        .from("featured_tour_slots")
+        .select("id, status")
+        .eq("payment_id", orderId)
+        .eq("payment_provider", "conekta")
+        .maybeSingle();
+
+      if (slot && eventType === "order.paid") {
+        const conektaApiBaseFs = Deno.env.get("CONEKTA_API_BASE") || "https://api.conekta.io";
+        const conektaPrivateKeyFs = Deno.env.get("CONEKTA_PRIVATE_KEY");
+        let conektaOrderFs: any = null;
+        if (conektaPrivateKeyFs) {
+          const orderRespFs = await fetch(`${conektaApiBaseFs}/orders/${orderId}`, {
+            headers: { "Accept": "application/vnd.conekta-v2.2.0+json", "Authorization": `Bearer ${conektaPrivateKeyFs}` },
+          });
+          if (orderRespFs.ok) conektaOrderFs = await orderRespFs.json();
+        }
+        const totalPaidFs = (conektaOrderFs?.amount ?? 0) / 100;
+
+        const { error: confirmErr } = await supabase.rpc("confirm_featured_slot_payment", {
+          p_slot_id: slot.id,
+          p_payment_id: orderId,
+          p_payment_provider: "conekta",
+          p_total: totalPaidFs,
+        });
+
+        if (confirmErr) {
+          console.error(`Error confirming featured slot ${slot.id}:`, confirmErr.message);
+        } else {
+          EdgeRuntime.waitUntil(
+            fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-featured-slot-cfdi`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+              body: JSON.stringify({ slot_id: slot.id }),
+            }).catch((e) => console.error("Error triggering featured slot CFDI:", e))
+          );
+        }
+        return jsonResponse({ received: true });
+      }
+
       console.error(`No payment_transaction found for Conekta order ${orderId}`);
       return jsonResponse({ received: true });
     }
@@ -392,6 +434,14 @@ FwIDAQAB
             updated_at: new Date().toISOString(),
           })
           .eq("id", chargeReferenceId);
+
+        const { data: suppRow } = await supabase
+          .from("booking_supplements")
+          .select("unit_price, quantity")
+          .eq("id", chargeReferenceId)
+          .maybeSingle();
+        const suppSubtotal = suppRow ? Number(suppRow.unit_price) * Number(suppRow.quantity) : 0;
+        await awardExtraPoints(supabase, bookingId, suppSubtotal, chargeReferenceId, "supplement", `Puntos por suplemento (Conekta)`);
 
         // Trigger supplement CFDI
         try {
