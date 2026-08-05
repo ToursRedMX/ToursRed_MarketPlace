@@ -94,7 +94,6 @@ import ContactPage from './pages/ContactPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
 import CookiePolicyPage from './pages/CookiePolicyPage';
-import SuccessPage from './pages/SuccessPage';
 import CancelPage from './pages/CancelPage';
 import BookingSuccessPage from './pages/BookingSuccessPage';
 import BookingCancelPage from './pages/BookingCancelPage';
@@ -152,7 +151,7 @@ import { useSEO } from './hooks/useSEO';
 const PROTECTED_PREFIXES = [
   '/admin', '/traveler', '/agency', '/executive', '/accounting', '/auth', '/messages', '/mantenimiento-admin',
   '/login', '/signup', '/agency-signup', '/verify-email', '/forgot-password', '/reset-password',
-  '/success', '/cancel', '/booking-success', '/booking-cancel', '/booking-pending', '/payment-pending', '/booking-travelers',
+  '/cancel', '/booking-success', '/booking-cancel', '/booking-pending', '/payment-pending', '/booking-travelers',
   '/supplement-success', '/payment-plan-success', '/extras-success', '/notifications',
   '/gift-card/redeem', '/gift-card/success', '/payment-return', '/booking-checkin',
   '/soporte/viajero', '/soporte/agencia', '/unsubscribe',
@@ -245,7 +244,7 @@ const App: React.FC = () => {
           <Route path="/auth/azure-onboarding" element={<AzureOnboardingPage />} />
           <Route path="/auth/azure-signup/traveler" element={<AzureTravelerSignupPage />} />
           <Route path="/auth/azure-signup/agency" element={<AzureAgencySignupPage />} />
-          <Route path="/success" element={<SuccessPage />} />
+          <Route path="/success" element={<Navigate to="/booking-success" replace />} />
           <Route path="/cancel" element={<CancelPage />} />
           <Route path="/booking-success" element={<BookingSuccessPage />} />
           <Route path="/booking-cancel" element={<BookingCancelPage />} />
