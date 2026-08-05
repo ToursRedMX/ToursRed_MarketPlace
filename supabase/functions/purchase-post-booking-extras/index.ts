@@ -46,6 +46,8 @@ Deno.serve(async (req: Request) => {
       stripe_payment_intent_id,
       mp_form_data,
       paypal_order_id,
+      conekta_method,        // "card" | "cash" | "spei" | "bnpl"
+      bnpl_product_type,     // "aplazo_bnpl" | "creditea_bnpl" | "coppel_bnpl"
       insurance_days, // optional: for standalone activities (transport/experience/ticket)
     } = await req.json();
 
@@ -652,6 +654,124 @@ Deno.serve(async (req: Request) => {
         success: true, total_charged: totalToPay, points_earned: pointsEarned,
         booking_optional_service_id: bookingOptionalServiceId,
         message: "Pago con PayPal completado.",
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // 6. Conekta
+    if (payment_method === "conekta") {
+      if (!conekta_method || !["card", "cash", "spei", "bnpl"].includes(conekta_method)) {
+        if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+        return new Response(JSON.stringify({ error: "conekta_method es requerido y debe ser card, cash, spei o bnpl" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (conekta_method === "bnpl") {
+        if (!bnpl_product_type || !["aplazo_bnpl", "creditea_bnpl", "coppel_bnpl"].includes(bnpl_product_type)) {
+          if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+          return new Response(JSON.stringify({ error: "bnpl_product_type es requerido y debe ser aplazo_bnpl, creditea_bnpl o coppel_bnpl" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (totalToPay < 1200 || totalToPay > 16000) {
+          if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+          return new Response(JSON.stringify({ error: "El monto para BNPL debe estar entre $1,200 y $16,000 MXN" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      const conektaPrivateKey = Deno.env.get("CONEKTA_PRIVATE_KEY");
+      if (!conektaPrivateKey) {
+        if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+        return new Response(JSON.stringify({ error: "Conekta no configurado" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: userProfileConekta } = await supabase
+        .from("users").select("first_name, last_name").eq("id", user.id).maybeSingle();
+      const conektaCustomerName = `${userProfileConekta?.first_name || ""} ${userProfileConekta?.last_name || ""}`.trim() || "Cliente";
+
+      const origin = req.headers.get("origin") || "https://toursred.com";
+      const extraChargeContext = type === "insurance" ? "insurance" : "optional_service";
+      const extraRefId = bookingOptionalServiceId || booking_id;
+      const successUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking_id}&status=success&context=${extraChargeContext}`;
+      const failureUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking_id}&status=failure&context=${extraChargeContext}`;
+      const cancelUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking_id}&status=cancel&context=${extraChargeContext}`;
+      const amountInCents = Math.round(totalToPay * 100);
+
+      const orderPayload: any = {
+        currency: "MXN",
+        amount: amountInCents,
+        customer_info: { name: conektaCustomerName, email: user.email || "no-email@toursred.com" },
+        line_items: [{
+          name: itemName, unit_price: amountInCents, quantity: 1,
+          ...(conekta_method === "bnpl" ? { tags: ["bnpl"] } : {}),
+        }],
+        checkout: {
+          type: "HostedPayment",
+          allowed_payment_methods: [conekta_method === "spei" ? "bank_transfer" : conekta_method],
+          success_url: successUrl, failure_url: failureUrl, cancel_url: cancelUrl,
+          expires_at: Math.floor(Date.now() / 1000) + 71 * 3600,
+        },
+        metadata: {
+          booking_id, payment_method_type: conekta_method, context: extraChargeContext,
+          charge_reference_id: extraRefId,
+          extra_subtotal: subtotal.toString(),
+          ...(type === "insurance" && insurance_days ? { insurance_days: String(Math.min(30, Number(insurance_days))) } : {}),
+          ...(conekta_method === "bnpl" ? { bnpl_product_type } : {}),
+        },
+      };
+
+      const conektaApiBase = Deno.env.get("CONEKTA_API_BASE") || "https://api.conekta.io";
+      const apiResponse = await fetch(`${conektaApiBase}/orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/vnd.conekta-v2.2.0+json",
+          "Authorization": `Bearer ${conektaPrivateKey}`,
+          "X-Conekta-Client-Info": '{"name":"toursred","version":"1.0.0"}',
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!apiResponse.ok) {
+        if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+        const errorBody = await apiResponse.text();
+        console.error("Conekta API error (post-booking extra):", errorBody);
+        let errorMsg = "Error al crear orden de Conekta";
+        try { const parsed = JSON.parse(errorBody); errorMsg = parsed?.details?.[0]?.message || parsed?.message || errorMsg; } catch {}
+        return new Response(JSON.stringify({ error: errorMsg }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const order = await apiResponse.json();
+      const orderId = order.id;
+      const checkoutUrl = order.checkout?.url;
+
+      if (!orderId) {
+        if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+        return new Response(JSON.stringify({ error: "Respuesta inválida de Conekta" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const idempotencyKey = `${extraRefId}_${extraChargeContext}_${Date.now()}`;
+      await supabase.from("payment_transactions").insert({
+        booking_id, amount: totalToPay, currency: "mxn", status: "pending",
+        payment_method_type: conekta_method, payment_processor: "conekta", processor_fee: 0,
+        net_amount: totalToPay, conekta_order_id: orderId,
+        bnpl_product_type: conekta_method === "bnpl" ? bnpl_product_type : null,
+        p_idempotency_key: idempotencyKey, charge_context: extraChargeContext,
+        charge_reference_id: extraRefId,
+        metadata: { conekta_order: order, checkout_url: checkoutUrl, subtotal },
+      });
+
+      return new Response(JSON.stringify({
+        success: true, url: checkoutUrl, order_id: orderId,
+        booking_optional_service_id: bookingOptionalServiceId,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

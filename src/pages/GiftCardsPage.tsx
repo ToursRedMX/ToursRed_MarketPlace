@@ -7,7 +7,7 @@ import { usePreventUnload } from '../hooks/usePreventUnload';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import Seo from '../components/Seo';
-import PaymentProviderSelector, { PaymentProvider } from '../components/PaymentProviderSelector';
+import PaymentProviderSelector, { PaymentProvider, ConektaMethod } from '../components/PaymentProviderSelector';
 import MercadoPagoBrick from '../components/MercadoPagoBrick';
 
 const DEFAULT_GIFT_CARD_AMOUNTS = [100, 200, 500, 1000];
@@ -26,6 +26,7 @@ export default function GiftCardsPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('stripe');
+  const [conektaMethod, setConektaMethod] = useState<ConektaMethod>('card');
 
   const [discountCode, setDiscountCode] = useState('');
   const [isValidatingCode, setIsValidatingCode] = useState(false);
@@ -342,10 +343,11 @@ export default function GiftCardsPage() {
             body: JSON.stringify({
               booking_id: giftCardId,
               amount: finalAmount,
-              payment_method_type: 'card',
+              payment_method_type: conektaMethod,
               context: 'gift_card',
               charge_reference_id: giftCardId,
               description: `Tarjeta de Regalo ToursRed ${finalAmount} MXN`,
+              ...(conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}),
             }),
           }
         );
@@ -802,6 +804,9 @@ export default function GiftCardsPage() {
               value={paymentProvider}
               onChange={setPaymentProvider}
               disabled={isProcessing}
+              amount={calculateFinalAmount()}
+              conektaMethod={conektaMethod}
+              onConektaMethodChange={setConektaMethod}
             />
 
             <button

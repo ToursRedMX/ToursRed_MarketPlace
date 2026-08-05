@@ -420,10 +420,20 @@ FwIDAQAB
           console.error("Error triggering supplement CFDI:", cfdiErr);
         }
       } else if (chargeContext === "insurance" && chargeReferenceId) {
-        await supabase
-          .from("bookings")
-          .update({ travel_insurance_status: "paid" })
-          .eq("id", bookingId);
+        const extraSubtotal = parseFloat(conektaOrder?.metadata?.extra_subtotal || String(tx.amount));
+        const insuranceDaysMeta = conektaOrder?.metadata?.insurance_days ? Number(conektaOrder.metadata.insurance_days) : null;
+
+        const insuranceUpdate: Record<string, unknown> = {
+          travel_insurance_included: true,
+          travel_insurance_cost: extraSubtotal,
+          updated_at: new Date().toISOString(),
+        };
+        if (insuranceDaysMeta) insuranceUpdate.insurance_days = insuranceDaysMeta;
+
+        const { error: insuranceUpdateErr } = await supabase.from("bookings").update(insuranceUpdate).eq("id", bookingId);
+        if (insuranceUpdateErr) console.error(`Error activando seguro para booking ${bookingId}:`, insuranceUpdateErr.message);
+
+        await awardExtraPoints(supabase, bookingId, extraSubtotal, chargeReferenceId, "insurance_payment", `Puntos por seguro (Conekta)`);
 
         try {
           const { data: cfdiSettings } = await supabase
@@ -451,13 +461,15 @@ FwIDAQAB
           console.error("Error triggering insurance CFDI:", cfdiErr);
         }
       } else if (chargeContext === "optional_service" && chargeReferenceId) {
-        await supabase
-          .from("booking_optional_services")
-          .update({
-            payment_status: "paid",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", chargeReferenceId);
+        const { data: bosRow } = await supabase.from("booking_optional_services").select("subtotal").eq("id", chargeReferenceId).maybeSingle();
+        const extraSubtotal = Number(bosRow?.subtotal) || parseFloat(conektaOrder?.metadata?.extra_subtotal || String(tx.amount));
+
+        const { error: optServiceUpdateErr } = await supabase.from("booking_optional_services").update({
+          paid_at: new Date().toISOString(), payment_method: "conekta", updated_at: new Date().toISOString(),
+        }).eq("id", chargeReferenceId);
+        if (optServiceUpdateErr) console.error(`Error marcando optional_service ${chargeReferenceId} como pagado:`, optServiceUpdateErr.message);
+
+        await awardExtraPoints(supabase, bookingId, extraSubtotal, chargeReferenceId, "optional_service_payment", `Puntos por extra: servicio opcional (Conekta)`);
 
         try {
           const { data: cfdiSettings } = await supabase
@@ -736,4 +748,27 @@ function getPaymentFormForConekta(paymentMethodType: string, conektaOrder: any):
     return "03"; // Fallback
   }
   return "03"; // Default fallback
+}
+
+async function awardExtraPoints(supabase: any, bookingId: string, subtotal: number, referenceId: string, referenceType: string, description: string) {
+  try {
+    const { data: booking } = await supabase.from("bookings").select("user_id").eq("id", bookingId).maybeSingle();
+    if (!booking?.user_id || subtotal <= 0) return;
+    const { data: activeMembership } = await supabase.from("memberships").select("id")
+      .eq("user_id", booking.user_id).eq("status", "active").gt("current_period_end", new Date().toISOString()).maybeSingle();
+    if (!activeMembership) return;
+    const pointsEarned = Math.floor(subtotal);
+    if (pointsEarned <= 0) return;
+    const { data: walletId } = await supabase.rpc("get_or_create_points_wallet", { p_user_id: booking.user_id });
+    if (!walletId) return;
+    const { data: pWallet } = await supabase.from("toursred_points_wallets").select("id, balance, total_earned").eq("id", walletId).maybeSingle();
+    if (!pWallet) return;
+    const newBalance = pWallet.balance + pointsEarned;
+    await supabase.from("toursred_points_transactions").insert({
+      wallet_id: walletId, user_id: booking.user_id, amount: pointsEarned, balance_after: newBalance,
+      type: "earned", description, reference_id: referenceId, reference_type: referenceType,
+      expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    await supabase.from("toursred_points_wallets").update({ balance: newBalance, total_earned: pWallet.total_earned + pointsEarned }).eq("id", walletId);
+  } catch (e) { console.error("Error awarding extra points (Conekta):", e); }
 }

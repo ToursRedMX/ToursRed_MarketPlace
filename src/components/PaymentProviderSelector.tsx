@@ -219,165 +219,164 @@ export default function PaymentProviderSelector({
           const isLocked = isMembershipContext && provider === 'stripe';
 
           return (
-            <label
-              key={provider}
-              className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                disabled || (isMembershipContext && provider !== 'stripe')
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'hover:border-primary-400'
-              } ${
-                isSelected
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-gray-200 bg-white'
-              }`}
-            >
-              <input
-                type="radio"
-                name="payment-provider"
-                value={provider}
-                checked={isSelected}
-                disabled={disabled || (isMembershipContext && provider !== 'stripe')}
-                onChange={() => onChange(provider)}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
-              />
-              {PROVIDER_LOGOS[provider] && (
-                <img
-                  src={PROVIDER_LOGOS[provider]!}
-                  alt={`${PROVIDER_LABELS[provider]} logo`}
-                  className="w-16 h-8 object-contain flex-shrink-0"
-                />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-gray-900">
-                    {PROVIDER_LABELS[provider]}
-                  </span>
-                  {isLocked && (
-                    <span className="inline-flex items-center gap-1 text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
-                      <Lock className="h-3 w-3" />
-                      Requerido para membresía
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {PROVIDER_DESCRIPTIONS[provider]}
-                </p>
-              </div>
-            </label>
-          );
-        })}
-      </div>
-
-      {/* Openpay method sub-selector */}
-      {value === 'openpay' && !isMembershipContext && (
-        <div className="mt-3 ml-1 pl-4 border-l-2 border-primary-200 space-y-2">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-medium text-gray-700">Elige tu método de pago con Openpay:</span>
-          </div>
-
-          {(['card', 'spei', 'cash'] as OpenpayMethod[]).map((method) => {
-            const isMethodSelected = openpayMethod === method;
-
-            const methodIcon = method === 'card' ? <CreditCard className="h-4 w-4" />
-              : method === 'cash' ? <Banknote className="h-4 w-4" />
-              : <Landmark className="h-4 w-4" />;
-
-            return (
+            <React.Fragment key={provider}>
               <label
-                key={method}
-                className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all hover:border-primary-300 ${
-                  isMethodSelected
-                    ? 'border-primary-400 bg-primary-50'
-                    : 'border-gray-200 bg-white'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="openpay-method"
-                  value={method}
-                  checked={isMethodSelected}
-                  disabled={disabled}
-                  onChange={() => onOpenpayMethodChange?.(method)}
-                  className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300"
-                />
-                <div className="flex items-center gap-2 flex-1">
-                  <span className="text-gray-500">{methodIcon}</span>
-                  <span className="text-sm font-medium text-gray-900">
-                    {OPENPAY_METHOD_LABELS[method]}
-                  </span>
-                </div>
-              </label>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Conekta method sub-selector */}
-      {value === 'conekta' && !isMembershipContext && (
-        <div className="mt-3 ml-1 pl-4 border-l-2 border-primary-200 space-y-2">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-medium text-gray-700">Elige tu método de pago con Conekta:</span>
-          </div>
-
-          {(['card', 'cash', 'spei', 'bnpl'] as ConektaMethod[]).map((method) => {
-            const isMethodSelected = conektaMethod === method;
-            const isBnplDisabled = method === 'bnpl' && !bnplAvailable;
-
-            const methodIcon = method === 'card' ? <CreditCard className="h-4 w-4" />
-              : method === 'cash' ? <Banknote className="h-4 w-4" />
-              : method === 'spei' ? <Landmark className="h-4 w-4" />
-              : <Wallet className="h-4 w-4" />;
-
-            return (
-              <label
-                key={method}
-                className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${
-                  isBnplDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary-300'
+                className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                  disabled || (isMembershipContext && provider !== 'stripe')
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:border-primary-400'
                 } ${
-                  isMethodSelected
-                    ? 'border-primary-400 bg-primary-50'
+                  isSelected
+                    ? 'border-primary-500 bg-primary-50'
                     : 'border-gray-200 bg-white'
                 }`}
               >
                 <input
                   type="radio"
-                  name="conekta-method"
-                  value={method}
-                  checked={isMethodSelected}
-                  disabled={isBnplDisabled || disabled}
-                  onChange={() => onConektaMethodChange?.(method)}
-                  className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300"
+                  name="payment-provider"
+                  value={provider}
+                  checked={isSelected}
+                  disabled={disabled || (isMembershipContext && provider !== 'stripe')}
+                  onChange={() => onChange(provider)}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                 />
-                <div className="flex items-center gap-2 flex-1">
-                  <span className="text-gray-500">{methodIcon}</span>
-                  <div>
-                    <span className="text-sm font-medium text-gray-900">
-                      {CONEKTA_METHOD_LABELS[method]}
+                {PROVIDER_LOGOS[provider] && (
+                  <img
+                    src={PROVIDER_LOGOS[provider]!}
+                    alt={`${PROVIDER_LABELS[provider]} logo`}
+                    className="w-16 h-8 object-contain flex-shrink-0"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">
+                      {PROVIDER_LABELS[provider]}
                     </span>
-                    {isBnplDisabled && (
-                      <span className="block text-xs text-gray-400">
-                        Disponible para montos entre $1,200 y $16,000 MXN
+                    {isLocked && (
+                      <span className="inline-flex items-center gap-1 text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                        <Lock className="h-3 w-3" />
+                        Requerido para membresía
                       </span>
                     )}
                   </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {PROVIDER_DESCRIPTIONS[provider]}
+                  </p>
                 </div>
               </label>
-            );
-          })}
 
-          {/* BNPL disclosure */}
-          {conektaMethod === 'bnpl' && bnplAvailable && (
-            <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-start gap-2">
-              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-800 leading-relaxed">
-                Al cancelar tu reserva pagada con este método, tu compromiso de pago con
-                la financiera continúa vigente. ToursRed te reembolsará en ToursRed Cash
-                conforme a nuestra política de cancelación.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+              {provider === 'openpay' && isSelected && !isMembershipContext && (
+                <div className="mt-3 ml-1 pl-4 border-l-2 border-primary-200 space-y-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-medium text-gray-700">Elige tu método de pago con Openpay:</span>
+                  </div>
+
+                  {(['card', 'spei', 'cash'] as OpenpayMethod[]).map((method) => {
+                    const isMethodSelected = openpayMethod === method;
+
+                    const methodIcon = method === 'card' ? <CreditCard className="h-4 w-4" />
+                      : method === 'cash' ? <Banknote className="h-4 w-4" />
+                      : <Landmark className="h-4 w-4" />;
+
+                    return (
+                      <label
+                        key={method}
+                        className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all hover:border-primary-300 ${
+                          isMethodSelected
+                            ? 'border-primary-400 bg-primary-50'
+                            : 'border-gray-200 bg-white'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="openpay-method"
+                          value={method}
+                          checked={isMethodSelected}
+                          disabled={disabled}
+                          onChange={() => onOpenpayMethodChange?.(method)}
+                          className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300"
+                        />
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="text-gray-500">{methodIcon}</span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {OPENPAY_METHOD_LABELS[method]}
+                          </span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              {provider === 'conekta' && isSelected && !isMembershipContext && (
+                <div className="mt-3 ml-1 pl-4 border-l-2 border-primary-200 space-y-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-medium text-gray-700">Elige tu método de pago con Conekta:</span>
+                  </div>
+
+                  {(['card', 'cash', 'spei', 'bnpl'] as ConektaMethod[]).map((method) => {
+                    const isMethodSelected = conektaMethod === method;
+                    const isBnplDisabled = method === 'bnpl' && !bnplAvailable;
+
+                    const methodIcon = method === 'card' ? <CreditCard className="h-4 w-4" />
+                      : method === 'cash' ? <Banknote className="h-4 w-4" />
+                      : method === 'spei' ? <Landmark className="h-4 w-4" />
+                      : <Wallet className="h-4 w-4" />;
+
+                    return (
+                      <label
+                        key={method}
+                        className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                          isBnplDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary-300'
+                        } ${
+                          isMethodSelected
+                            ? 'border-primary-400 bg-primary-50'
+                            : 'border-gray-200 bg-white'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="conekta-method"
+                          value={method}
+                          checked={isMethodSelected}
+                          disabled={isBnplDisabled || disabled}
+                          onChange={() => onConektaMethodChange?.(method)}
+                          className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300"
+                        />
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="text-gray-500">{methodIcon}</span>
+                          <div>
+                            <span className="text-sm font-medium text-gray-900">
+                              {CONEKTA_METHOD_LABELS[method]}
+                            </span>
+                            {isBnplDisabled && (
+                              <span className="block text-xs text-gray-400">
+                                Disponible para montos entre $1,200 y $16,000 MXN
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
+
+                  {/* BNPL disclosure */}
+                  {conektaMethod === 'bnpl' && bnplAvailable && (
+                    <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-start gap-2">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-800 leading-relaxed">
+                        Al cancelar tu reserva pagada con este método, tu compromiso de pago con
+                        la financiera continúa vigente. ToursRed te reembolsará en ToursRed Cash
+                        conforme a nuestra política de cancelación.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 }

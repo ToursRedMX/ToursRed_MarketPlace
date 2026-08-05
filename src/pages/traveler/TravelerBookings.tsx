@@ -118,7 +118,8 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
-    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal';
+    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+    conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
   }>({
     open: false,
     type: null,
@@ -131,6 +132,7 @@ const TravelerBookings: React.FC = () => {
     pointsBalance: 0,
     pointsValueMxn: 0,
     selectedMethod: 'stripe',
+    conektaMethod: 'card',
   });
   const [reviewModal, setReviewModal] = useState<{
     open: boolean;
@@ -1984,13 +1986,17 @@ const TravelerBookings: React.FC = () => {
 
       const isStandaloneInsurance = type === 'insurance' &&
         ['transport', 'experience', 'ticket'].includes((booking.tours as any)?.activity_type);
+      const conektaExtra = selectedMethod === 'conekta'
+        ? { conekta_method: extrasPaymentModal.conektaMethod, ...(extrasPaymentModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) }
+        : {};
       const body = type === 'optional_service'
-        ? { booking_id: booking.id, type: 'optional_service', tour_optional_service_id: item.id, quantity, payment_method: selectedMethod }
+        ? { booking_id: booking.id, type: 'optional_service', tour_optional_service_id: item.id, quantity, payment_method: selectedMethod, ...conektaExtra }
         : {
             booking_id: booking.id,
             type: 'insurance',
             payment_method: selectedMethod,
             ...(isStandaloneInsurance ? { insurance_days: extrasModal.insuranceDays } : {}),
+            ...conektaExtra,
           };
 
       if (selectedMethod === 'mercadopago') {
@@ -5183,6 +5189,7 @@ const TravelerBookings: React.FC = () => {
                       { id: 'points', label: `Puntos ToursRed (${extrasPaymentModal.pointsBalance} pts = ${formatCurrencyMXN(extrasPaymentModal.pointsValueMxn)})` },
                       { id: 'mercadopago', label: 'MercadoPago' },
                       { id: 'paypal', label: 'PayPal' },
+                      { id: 'conekta', label: 'Conekta (Tarjeta, Efectivo, SPEI, BNPL)' },
                     ].map(method => (
                       <label key={method.id} className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -5197,6 +5204,28 @@ const TravelerBookings: React.FC = () => {
                       </label>
                     ))}
                   </div>
+
+                  {extrasPaymentModal.selectedMethod === 'conekta' && (
+                    <div className="mt-3 pl-6 space-y-2 border-l-2 border-gray-200">
+                      {([
+                        { id: 'card', label: 'Tarjeta de credito/debito' },
+                        { id: 'cash', label: 'Efectivo (referencia de pago)' },
+                        { id: 'spei', label: 'Transferencia SPEI' },
+                        { id: 'bnpl', label: 'Compra ahora, paga despues (BNPL)', disabled: totalAmount < 1200 || totalAmount > 16000 },
+                      ] as const).map(m => (
+                        <label key={m.id} className={`flex items-center gap-2 ${m.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                          <input type="radio" name="extras_conekta_method" value={m.id} disabled={m.disabled}
+                            checked={extrasPaymentModal.conektaMethod === m.id}
+                            onChange={() => setExtrasPaymentModal(prev => ({ ...prev, conektaMethod: m.id }))}
+                            className="w-4 h-4 text-teal-600" />
+                          <span className="text-sm text-gray-700">{m.label}</span>
+                        </label>
+                      ))}
+                      {(totalAmount < 1200 || totalAmount > 16000) && (
+                        <p className="text-xs text-gray-500">BNPL disponible solo entre $1,200 y $16,000 MXN.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {extrasPaymentModal.error && (
