@@ -306,57 +306,30 @@ Deno.serve(async (req: Request) => {
       p_refund_service_charge: false,
     });
 
-    // Process refund to ToursRed Cash wallet if there's a refund
+    // Build description with all refund components
+    const descParts: string[] = [];
+    if (optionalServicesRefundable > 0) descParts.push(`servicios opcionales ${optionalServicesRefundable.toFixed(2)}`);
+    if (insuranceRefund > 0) descParts.push(`seguro de viaje ${insuranceRefund.toFixed(2)}`);
+    const descSuffix = descParts.length > 0 ? ` (incluye ${descParts.join(", ")})` : "";
+    const refundDescription = `Reembolso por cancelación - ${tour.name}${descSuffix}`;
+
+    // Atomic cancellation: lock row, verify not cancelled, refund wallet, update status — all in one transaction
     let transactionId: string | null = null;
-    if (refundAmountToTraveler > 0) {
-      let { data: wallet } = await supabase
-        .from("toursred_cash_wallets")
-        .select("*")
-        .eq("user_id", booking.user_id)
-        .maybeSingle();
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("process_cancellation_refund", {
+      p_booking_id: booking_id,
+      p_refund_amount: refundAmountToTraveler,
+      p_reference_type: "traveler_cancellation",
+      p_description: refundDescription,
+      p_new_status: "cancelled",
+      p_set_cancelled_at: true,
+      p_cancellation_type: policyType,
+      p_cancellation_refund_amount: refundAmountToTraveler,
+    });
 
-      if (!wallet) {
-        const { data: newWallet, error: walletCreateError } = await supabase
-          .from("toursred_cash_wallets")
-          .insert({ user_id: booking.user_id, balance: 0, currency: "MXN" })
-          .select()
-          .single();
-        if (walletCreateError || !newWallet) throw new Error("Error creando wallet del viajero");
-        wallet = newWallet;
-      }
-
-      const newBalance = Number(wallet.balance) + refundAmountToTraveler;
-
-      // Build description with all refund components
-      const descParts: string[] = [];
-      if (optionalServicesRefundable > 0) descParts.push(`servicios opcionales $${optionalServicesRefundable.toFixed(2)}`);
-      if (insuranceRefund > 0) descParts.push(`seguro de viaje $${insuranceRefund.toFixed(2)}`);
-      const descSuffix = descParts.length > 0 ? ` (incluye ${descParts.join(", ")})` : "";
-
-      const { data: transaction, error: txError } = await supabase
-        .from("toursred_cash_transactions")
-        .insert({
-          wallet_id: wallet.id,
-          user_id: booking.user_id,
-          amount: refundAmountToTraveler,
-          balance_after: newBalance,
-          type: "refund",
-          description: `Reembolso por cancelación - ${tour.name}${descSuffix}`,
-          reference_id: booking_id,
-          reference_type: "booking_cancellation",
-        })
-        .select()
-        .single();
-
-      if (txError || !transaction) throw new Error("Error creando transacción de reembolso");
-      transactionId = transaction.id;
-
-      const { error: walletUpdateError } = await supabase
-        .from("toursred_cash_wallets")
-        .update({ balance: newBalance })
-        .eq("id", wallet.id);
-      if (walletUpdateError) throw new Error("Error actualizando balance del wallet");
+    if (rpcError || !rpcResult?.success) {
+      throw new Error(rpcError?.message || rpcResult?.error || "Error procesando cancelación atómica");
     }
+    transactionId = rpcResult.transaction_id || null;
 
     // BUG FIX 2: tour_start_date is NOT NULL — always provide a valid date
     // tourStartDateForRecord is guaranteed non-null from the logic above
@@ -421,22 +394,6 @@ Deno.serve(async (req: Request) => {
     // Cierre de trazabilidad: registros clawback amount=0 por fuente
     if (pointsDeducted > 0) {
       await markPointsAsClawedBack(supabase, booking_id, cancellationRecord.id, "self-service");
-    }
-
-    // BUG FIX 2: update booking status — log error explicitly if it fails
-    const { error: updateBookingError } = await supabase
-      .from("bookings")
-      .update({
-        status: "cancelled",
-        cancelled_at: now.toISOString(),
-        cancellation_type: policyType,
-        cancellation_refund_amount: refundAmountToTraveler,
-      })
-      .eq("id", booking_id);
-
-    if (updateBookingError) {
-      console.error("Error actualizando bookings a cancelled:", JSON.stringify(updateBookingError));
-      throw new Error(`Error actualizando reserva: ${updateBookingError.message}`);
     }
 
     // Explicit audit log — DB trigger uses auth.uid() which is null under service role

@@ -222,52 +222,40 @@ Deno.serve(async (req: Request) => {
     const now = new Date().toISOString();
     let receiptFilePath: string | null = null;
 
-    // Handle refund based on method
+    // Atomic cancellation: lock row, verify not cancelled, refund wallet (if toursred_cash), update status
     let transactionId: string | null = null;
-
     if (refund_method === "toursred_cash" && Number(refund_amount) > 0) {
-      // Get or create wallet
-      let { data: wallet } = await supabase
-        .from("toursred_cash_wallets")
-        .select("*")
-        .eq("user_id", booking.user_id)
-        .maybeSingle();
+      const { data: rpcResult, error: rpcError } = await supabase.rpc("process_cancellation_refund", {
+        p_booking_id: booking_id,
+        p_refund_amount: Number(refund_amount),
+        p_reference_type: "admin_cancellation",
+        p_description: `Reembolso por cancelación administrativa - ${tour?.name || ""}`,
+        p_new_status: isPrepare ? "cancellation_processing" : "cancelled",
+        p_set_cancelled_at: !isPrepare,
+        p_cancellation_type: "admin_cancelled",
+        p_cancellation_refund_amount: Number(refund_amount) || 0,
+      });
 
-      if (!wallet) {
-        const { data: newWallet, error: wErr } = await supabase
-          .from("toursred_cash_wallets")
-          .insert({ user_id: booking.user_id, balance: 0, currency: "MXN" })
-          .select()
-          .single();
-        if (wErr || !newWallet) return err("Error creando wallet del viajero");
-        wallet = newWallet;
+      if (rpcError || !rpcResult?.success) {
+        return err(rpcError?.message || "Error procesando cancelación atómica");
       }
+      transactionId = rpcResult.transaction_id || null;
+    } else {
+      // No wallet refund — still need atomic status update via RPC
+      const { data: rpcResult, error: rpcError } = await supabase.rpc("process_cancellation_refund", {
+        p_booking_id: booking_id,
+        p_refund_amount: 0,
+        p_reference_type: "admin_cancellation",
+        p_description: null,
+        p_new_status: isPrepare ? "cancellation_processing" : "cancelled",
+        p_set_cancelled_at: !isPrepare,
+        p_cancellation_type: "admin_cancelled",
+        p_cancellation_refund_amount: refund_method === "original_payment_method" ? 0 : (Number(refund_amount) || 0),
+      });
 
-      const newBalance = Number(wallet.balance) + Number(refund_amount);
-
-      const { data: tx, error: txErr } = await supabase
-        .from("toursred_cash_transactions")
-        .insert({
-          wallet_id: wallet.id,
-          user_id: booking.user_id,
-          amount: Number(refund_amount),
-          balance_after: newBalance,
-          type: "refund",
-          description: `Reembolso por cancelación administrativa - ${tour?.name || ""}`,
-          reference_id: booking_id,
-          reference_type: "admin_cancellation",
-        })
-        .select()
-        .single();
-
-      if (txErr || !tx) return err("Error creando transacción de reembolso");
-      transactionId = tx.id;
-
-      const { error: walletErr } = await supabase
-        .from("toursred_cash_wallets")
-        .update({ balance: newBalance })
-        .eq("id", wallet.id);
-      if (walletErr) return err("Error actualizando balance del wallet");
+      if (rpcError || !rpcResult?.success) {
+        return err(rpcError?.message || "Error procesando cancelación atómica");
+      }
     }
 
     if (refund_method === "bank_transfer" && receipt_base64 && receipt_filename) {
@@ -462,23 +450,17 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Status update: in prepare mode, use 'cancellation_processing' instead
-    // of 'cancelled'. The booking stays in this intermediate state until
-    // admin-finalize-cancellation confirms all refund lines are initiated.
-    const newStatus = isPrepare ? "cancellation_processing" : "cancelled";
+    // The RPC already set status, cancelled_at, cancellation_type, and cancellation_refund_amount.
+    // This separate update only sets admin_cancellation_id (which didn't exist at RPC call time).
     const { error: updateErr } = await supabase
       .from("bookings")
       .update({
-        status: newStatus,
-        cancelled_at: isPrepare ? null : now,
-        cancellation_type: "admin_cancelled",
-        cancellation_refund_amount: refund_method === "original_payment_method" ? 0 : (Number(refund_amount) || 0),
         admin_cancellation_id: adminCancellation.id,
       })
       .eq("id", booking_id);
 
     if (updateErr) {
-      console.error("Error updating booking:", updateErr);
+      console.error("Error updating booking admin_cancellation_id:", updateErr);
     }
 
     // Audit log
@@ -493,7 +475,7 @@ Deno.serve(async (req: Request) => {
         p_action: isPrepare ? "admin_cancel_prepare" : "admin_cancel",
         p_severity: "high",
         p_old_values: { status: booking.status },
-        p_new_values: { status: newStatus, cancellation_type: "admin_cancelled", refund_method, refund_amount },
+        p_new_values: { status: isPrepare ? "cancellation_processing" : "cancelled", cancellation_type: "admin_cancelled", refund_method, refund_amount },
         p_metadata: { admin_cancellation_id: adminCancellation.id, points_deducted: pointsDeducted },
       });
     } catch (e) {
@@ -619,7 +601,7 @@ Deno.serve(async (req: Request) => {
       optionals_refund_bucket: optionalsRefundBucket,
       supplements_refundable: supplementsRefundable,
       cancellation_id: cancellationRecord?.id || null,
-      booking_status: newStatus,
+      booking_status: isPrepare ? "cancellation_processing" : "cancelled",
     });
   } catch (e: any) {
     console.error("admin-cancel-booking error:", e);
