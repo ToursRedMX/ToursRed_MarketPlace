@@ -205,7 +205,8 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     toursRedCashToUse: number;
     isProcessing: boolean;
-    selectedProvider: 'stripe' | 'mercadopago' | 'paypal';
+    selectedProvider: 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+    conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
   }>({
     open: false,
     booking: null,
@@ -213,6 +214,7 @@ const TravelerBookings: React.FC = () => {
     toursRedCashToUse: 0,
     isProcessing: false,
     selectedProvider: 'stripe',
+    conektaMethod: 'card',
   });
   const [mpBrickModal, setMpBrickModal] = useState<{
     open: boolean;
@@ -1514,6 +1516,38 @@ const TravelerBookings: React.FC = () => {
           window.location.href = ppResult.url;
         } else {
           throw new Error('No se recibió la URL de PayPal');
+        }
+      } else if (selectedProvider === 'conekta') {
+        const conektaResp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-conekta-order`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              booking_id: booking.id,
+              amount: amountToCharge,
+              description: `Depósito para ${booking.tours?.name || 'Tour'}`,
+              payment_method_type: paymentModal.conektaMethod,
+              context: 'booking_deposit',
+              ...(paymentModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}),
+            }),
+          }
+        );
+
+        if (!conektaResp.ok) {
+          const errorData = await conektaResp.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Error al crear la orden de Conekta');
+        }
+
+        const conektaResult = await conektaResp.json();
+        if (!conektaResult.success) throw new Error(conektaResult.error || 'Error al crear la orden de Conekta');
+        if (conektaResult.checkout_url) {
+          window.location.href = conektaResult.checkout_url;
+        } else {
+          throw new Error('No se recibió la URL de pago de Conekta');
         }
       } else {
         // Stripe
@@ -3856,6 +3890,9 @@ const TravelerBookings: React.FC = () => {
                         value={paymentModal.selectedProvider}
                         onChange={(provider) => setPaymentModal(prev => ({ ...prev, selectedProvider: provider }))}
                         disabled={paymentModal.isProcessing}
+                        amount={finalAmount}
+                        conektaMethod={paymentModal.conektaMethod}
+                        onConektaMethodChange={(m) => setPaymentModal(prev => ({ ...prev, conektaMethod: m }))}
                       />
                     );
                   }
@@ -3979,7 +4016,7 @@ const TravelerBookings: React.FC = () => {
 
                   <div className="border-t pt-3">
                     <div className="flex justify-between text-lg font-bold">
-                      <span>Total a Pagar{paymentModal.toursRedCashToUse > 0 ? ` con ${paymentModal.selectedProvider === 'mercadopago' ? 'MercadoPago' : paymentModal.selectedProvider === 'paypal' ? 'PayPal' : 'Stripe'}` : ''}:</span>
+                      <span>Total a Pagar{paymentModal.toursRedCashToUse > 0 ? ` con ${paymentModal.selectedProvider === 'mercadopago' ? 'MercadoPago' : paymentModal.selectedProvider === 'paypal' ? 'PayPal' : paymentModal.selectedProvider === 'conekta' ? 'Conekta' : 'Stripe'}` : ''}:</span>
                       <span className="text-primary-600">
                         {formatCurrencyMXN((() => {
                           const originalAmount = paymentModal.booking?.user_payment || paymentModal.booking?.deposit_amount || 0;
@@ -4021,6 +4058,8 @@ const TravelerBookings: React.FC = () => {
                           if (finalAmount <= 0) return 'Confirmar Pago';
                           if (paymentModal.selectedProvider === 'mercadopago') return 'Pagar con MercadoPago';
                           if (paymentModal.selectedProvider === 'paypal') return 'Proceder a PayPal';
+                          if (paymentModal.selectedProvider === 'conekta') return 'Proceder a Conekta';
+                          if (paymentModal.selectedProvider === 'mercadopago') return 'Proceder a MercadoPago';
                           return 'Proceder a Stripe';
                         })()}
                       </>

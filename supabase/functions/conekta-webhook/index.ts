@@ -591,11 +591,15 @@ FwIDAQAB
         // Look up the original payment to get effectiveAmount and service charge
         // The payment_transactions.amount is the total charged (effective + service charge)
         const txAmount = Number(tx.amount) || 0;
-        // For payment plans, service_charge is stored in the transaction metadata or is 0
-        // The SQL function handles the allocation — we pass the full amount as the payment
-        const effectiveAmount = txAmount;
-        const serviceCharge = 0;
-        const grossServiceCharge = 0;
+        const metaEffectiveAmount = conektaOrder?.metadata?.effective_amount;
+        const metaNetServiceCharge = conektaOrder?.metadata?.net_service_charge;
+        const metaGrossServiceCharge = conektaOrder?.metadata?.gross_service_charge;
+        const metaExemptionApplied = conektaOrder?.metadata?.membership_exemption_applied === "true";
+
+        const effectiveAmount = metaEffectiveAmount != null ? parseFloat(metaEffectiveAmount) : txAmount;
+        const serviceCharge = metaNetServiceCharge != null ? parseFloat(metaNetServiceCharge) : 0;
+        const grossServiceCharge = metaGrossServiceCharge != null ? parseFloat(metaGrossServiceCharge) : 0;
+        const membershipExemptionUsed = metaEffectiveAmount != null ? metaExemptionApplied : false;
 
         // Call the shared SQL function — it handles idempotency, allocations, points, plan totals
         const { data: allocResult, error: allocError } = await supabase.rpc("allocate_payment_plan_installment", {
@@ -606,7 +610,7 @@ FwIDAQAB
           p_gross_service_charge: grossServiceCharge,
           p_provider_transaction_id: orderId,
           p_user_id: planUserId,
-          p_membership_exemption_used: false,
+          p_membership_exemption_used: membershipExemptionUsed,
           p_is_wallet_payment: false,
         });
 

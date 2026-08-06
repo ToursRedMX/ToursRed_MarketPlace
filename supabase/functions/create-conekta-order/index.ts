@@ -76,9 +76,28 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "No tienes permiso sobre esta reserva" }, 403);
       }
 
-      amount = Number(booking.deposit_amount);
-      if (amount <= 0) {
-        return jsonResponse({ error: "El monto del depósito no es válido" }, 400);
+      const { data: alreadySucceeded } = await supabase
+        .from("payment_transactions")
+        .select("amount")
+        .eq("booking_id", booking_id)
+        .eq("charge_context", "booking_deposit")
+        .eq("status", "succeeded");
+
+      const alreadyPaid = (alreadySucceeded || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+      const remainingBalance = Number(booking.deposit_amount) - alreadyPaid;
+
+      if (remainingBalance <= 0) {
+        return jsonResponse({ error: "Esta reserva ya está pagada en su totalidad" }, 400);
+      }
+
+      const requestedAmount = bodyAmount != null ? Number(bodyAmount) : null;
+      if (requestedAmount != null && requestedAmount > 0) {
+        if (requestedAmount > remainingBalance + 0.01) {
+          return jsonResponse({ error: `El monto excede el saldo restante de ${remainingBalance.toFixed(2)} MXN` }, 400);
+        }
+        amount = requestedAmount;
+      } else {
+        amount = remainingBalance;
       }
     } else if (context === "supplement") {
       const supplementId = charge_reference_id || booking_id;

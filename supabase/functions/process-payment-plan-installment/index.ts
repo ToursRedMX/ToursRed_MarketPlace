@@ -597,6 +597,10 @@ Deno.serve(async (req: Request) => {
           payment_method_type: conekta_method,
           context: "payment_plan_installment",
           charge_reference_id: plan_id,
+          effective_amount: String(effectiveAmount),
+          net_service_charge: String(netServiceCharge),
+          gross_service_charge: String(grossServiceCharge),
+          membership_exemption_applied: String(exemptionApplied > 0),
           ...(conekta_method === "bnpl" ? { bnpl_product_type } : {}),
         },
       };
@@ -606,7 +610,7 @@ Deno.serve(async (req: Request) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/vnd.conekta-v2.0+json",
+          "Accept": "application/vnd.conekta-v2.2.0+json",
           "Authorization": `Bearer ${conektaPrivateKey}`,
           "X-Conekta-Client-Info": '{"name":"toursred","version":"1.0.0"}',
         },

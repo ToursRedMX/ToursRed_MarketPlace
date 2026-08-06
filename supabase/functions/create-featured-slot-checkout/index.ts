@@ -332,8 +332,8 @@ Deno.serve(async (req: Request) => {
           type: "HostedPayment",
           allowed_payment_methods: [method === "spei" ? "bank_transfer" : method],
           success_url: successUrl + (successUrl.includes("?") ? "&" : "?") + "provider=conekta",
-          failure_url: cancel_url,
-          cancel_url: cancel_url,
+          failure_url: cancelUrl,
+          cancel_url: cancelUrl,
           expires_at: Math.floor(Date.now() / 1000) + 71 * 3600,
         },
         metadata: {

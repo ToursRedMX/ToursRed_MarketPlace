@@ -105,6 +105,9 @@ export interface BookingFlowState {
   openpayMethod: OpenpayMethod;
   paymentMode: PaymentMode;
   customPaymentAmount: number | null;
+  payNowMode: 'full' | 'partial';
+  partialPaymentAmount: number;
+  bnplProductType: 'aplazo_bnpl' | 'creditea_bnpl' | 'coppel_bnpl';
 
   restrictionsAccepted: boolean;
 
@@ -149,6 +152,9 @@ export const INITIAL_FLOW_STATE: BookingFlowState = {
   openpayMethod: 'card',
   paymentMode: 'standard',
   customPaymentAmount: null,
+  payNowMode: 'full',
+  partialPaymentAmount: 0,
+  bnplProductType: 'aplazo_bnpl',
   restrictionsAccepted: false,
   pendingRedirectMessage: null,
 };

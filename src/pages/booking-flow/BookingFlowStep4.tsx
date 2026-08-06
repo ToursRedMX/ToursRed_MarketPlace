@@ -223,7 +223,9 @@ const BookingFlowStep4: React.FC = () => {
     return Math.round(grandTotal * (pct / 100) * 100) / 100;
   }, [tour, grandTotal]);
 
-  const amountToPay = depositAmount;
+  const amountToPay = flow.payNowMode === 'partial'
+    ? Math.min(flow.partialPaymentAmount, depositAmount)
+    : depositAmount;
 
   // ToursRed Cash benefit: wallet covers 100% of the total
   const wouldQualifyForWalletBenefit = !useWallet
@@ -280,6 +282,11 @@ const BookingFlowStep4: React.FC = () => {
   const handlePayment = async () => {
     if (!user) {
       navigate('/login');
+      return;
+    }
+
+    if (flow.payNowMode === 'partial' && (flow.partialPaymentAmount <= 0 || flow.partialPaymentAmount >= depositAmount - 10)) {
+      setCreateError('El monto del pago parcial debe ser menor al depósito total (dejando al menos $10 MXN de saldo).');
       return;
     }
 
@@ -476,12 +483,23 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}`, method: flow.conektaMethod }),
+            body: JSON.stringify({
+              booking_id: bookingId,
+              amount: amountToPay,
+              description: `Deposito para ${tour.name}`,
+              payment_method_type: flow.conektaMethod,
+              context: 'booking_deposit',
+              ...(flow.conektaMethod === 'bnpl' ? { bnpl_product_type: flow.bnplProductType } : {}),
+            }),
           }
         );
-        if (!resp.ok) throw new Error('Error al crear la orden de Conekta');
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || 'Error al crear la orden de Conekta');
+        }
         const data = await resp.json();
-        if (data.checkoutUrl) window.location.href = data.checkoutUrl;
+        if (data.checkout_url) window.location.href = data.checkout_url;
+        else throw new Error('No se recibió la URL de pago de Conekta');
         return;
       }
 
@@ -864,6 +882,49 @@ const BookingFlowStep4: React.FC = () => {
             onOpenpayMethodChange={(m) => updateFlow({ openpayMethod: m })}
           />
         </div>
+
+        {/* Partial payment option */}
+        {depositAmount > 500 && (
+          <div className="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={flow.payNowMode === 'partial'}
+                onChange={(e) => updateFlow({
+                  payNowMode: e.target.checked ? 'partial' : 'full',
+                  partialPaymentAmount: e.target.checked ? Math.min(500, depositAmount - 10) : 0,
+                })}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <span className="text-sm font-medium text-gray-700">Quiero pagar con más de un método de pago</span>
+            </label>
+
+            {flow.payNowMode === 'partial' && (
+              <div className="mt-3 pl-6">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  ¿Cuánto quieres pagar ahora?
+                </label>
+                <input
+                  type="number"
+                  min={flow.conektaMethod === 'bnpl' || flow.openpayMethod === 'bnpl' ? 1200 : 500}
+                  max={flow.conektaMethod === 'bnpl' || flow.openpayMethod === 'bnpl' ? Math.min(16000, depositAmount - 10) : depositAmount - 10}
+                  value={flow.partialPaymentAmount || ''}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    const isBnpl = flow.conektaMethod === 'bnpl' || flow.openpayMethod === 'bnpl';
+                    const minVal = isBnpl ? 1200 : 500;
+                    const maxVal = isBnpl ? Math.min(16000, depositAmount - 10) : depositAmount - 10;
+                    updateFlow({ partialPaymentAmount: Math.min(Math.max(val, 0), maxVal) });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500 text-sm"
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Quedará un saldo de {formatCurrencyMXN(depositAmount - amountToPay)} por pagar. Podrás completarlo después desde 'Mis Reservas' con cualquier método de pago.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Navigation */}
         <div className="flex gap-3 pt-4">
