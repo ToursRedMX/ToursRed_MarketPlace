@@ -113,43 +113,36 @@ const AdminOpenPayConciliation: React.FC = () => {
         return;
       }
 
-      const transactionType = topup.payment_method_type === 'codi' ? 'topup_codi' : 'topup_spei';
-      const referenceType = topup.payment_method_type === 'codi'
-        ? 'openpay_codi_topup'
-        : 'openpay_spei_topup';
+      const { data: session } = await supabase.auth.getSession();
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-credit-wallet-topup`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({
+            topup_id: topup.id,
+            user_id: topup.user_id,
+            amount: topup.amount,
+            payment_method_type: topup.payment_method_type,
+            provider_charge_id: topup.provider_charge_id,
+            order_id: topup.order_id,
+            description: 'Recarga acreditada manualmente por admin',
+            idempotency_key: topup.provider_charge_id || `manual_${topup.id}`,
+          }),
+        }
+      );
+      const result = await response.json();
 
-      const { error: creditError } = await supabase.rpc('update_wallet_balance', {
-        p_user_id: topup.user_id,
-        p_amount: topup.amount,
-        p_type: transactionType,
-        p_description: 'Recarga acreditada manualmente por admin',
-        p_reference_id: topup.id,
-        p_reference_type: referenceType,
-        p_idempotency_key: topup.provider_charge_id || `manual_${topup.id}`,
-      });
-
-      if (creditError) {
-        if (creditError.message?.includes('idempotency')) {
+      if (!response.ok || !result.success) {
+        if (result.idempotent_replay || result.message?.includes('anteriormente')) {
           setActionResult('Esta recarga ya fue acreditada anteriormente');
         } else {
-          setActionResult(`Error: ${creditError.message}`);
+          setActionResult(`Error: ${result.error || response.status}`);
         }
       } else {
-        await supabase
-          .from('openpay_wallet_topups')
-          .update({
-            status: 'completed',
-            credited_at: new Date().toISOString(),
-            conciliation_status: 'resuelto_acreditado',
-          })
-          .eq('id', topupId);
-
-        try {
-          await supabase.rpc('create_accounting_entry_for_wallet_topup', { p_topup_id: topupId });
-        } catch {
-          // non-blocking — credit already succeeded
-        }
-
         setActionResult('Saldo acreditado exitosamente');
         await loadData();
       }
@@ -299,26 +292,33 @@ const AdminOpenPayConciliation: React.FC = () => {
         topupId = newTopup.id;
       }
 
-      // Credit wallet using provider_charge_id as idempotency key (closes double-credit hole)
-      const transactionType = paymentMethodType === 'codi' ? 'topup_codi' : 'topup_spei';
-      const referenceType = paymentMethodType === 'codi'
-        ? 'openpay_codi_topup'
-        : 'openpay_spei_topup';
       const idempotencyKey = providerChargeId || `manual_event_${selectedEvent.id}`;
 
-      const { error: creditError } = await supabase.rpc('update_wallet_balance', {
-        p_user_id: assignUserId,
-        p_amount: finalAmount,
-        p_type: transactionType,
-        p_description: 'Deposito asignado manualmente por admin (conciliacion)',
-        p_reference_id: topupId,
-        p_reference_type: referenceType,
-        p_idempotency_key: idempotencyKey,
-      });
+      const { data: session } = await supabase.auth.getSession();
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-credit-wallet-topup`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({
+            topup_id: topupId,
+            user_id: assignUserId,
+            amount: finalAmount,
+            payment_method_type: paymentMethodType,
+            provider_charge_id: providerChargeId,
+            order_id: orderId,
+            description: 'Deposito asignado manualmente por admin (conciliacion)',
+            idempotency_key: idempotencyKey,
+          }),
+        }
+      );
+      const result = await response.json();
 
-      if (creditError) {
-        if (creditError.message?.includes('idempotency')) {
-          // Wallet was already credited for this charge — treat as already resolved
+      if (!response.ok || !result.success) {
+        if (result.idempotent_replay || result.message?.includes('anteriormente')) {
           await supabase
             .from('openpay_webhook_events')
             .update({
@@ -329,15 +329,9 @@ const AdminOpenPayConciliation: React.FC = () => {
             .eq('id', selectedEvent.id);
           setActionResult('Esta recarga ya fue acreditada anteriormente');
         } else {
-          setActionResult(`Error: ${creditError.message}`);
+          setActionResult(`Error: ${result.error || response.status}`);
         }
       } else {
-        // Create accounting entry (non-blocking)
-        try {
-          await supabase.rpc('create_accounting_entry_for_wallet_topup', { p_topup_id: topupId });
-        } catch {
-          // non-blocking — credit already succeeded
-        }
 
         const resultMsg = isReplay
           ? `Recarga existente completada — ${finalAmount} acreditados`

@@ -22,62 +22,30 @@ const BookingCancelPage: React.FC = () => {
     try {
       setIsLoading(true);
 
-      const { data: booking, error: fetchError } = await supabase
-        .from('bookings')
-        .select('booking_code, user_id, points_used, toursred_cash_used')
-        .eq('id', id)
-        .single();
+      const { data: session } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
 
-      if (fetchError) {
-        console.error('Error fetching booking:', fetchError);
-        setIsLoading(false);
-        return;
-      }
-
-      setBookingCode(booking.booking_code);
-
-      const pointsUsed = booking.points_used || 0;
-      const toursRedCashUsed = parseFloat(booking.toursred_cash_used || '0');
-
-      if (pointsUsed > 0) {
-        const { error: pointsError } = await supabase.rpc('refund_points_for_cancelled_booking', {
-          p_booking_id: id,
-          p_points_to_refund: pointsUsed
-        });
-
-        if (pointsError) {
-          console.error('Error refunding points:', pointsError);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment-cancellation`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({ booking_id: id }),
         }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        console.error('Error processing cancellation:', result.error || response.status);
       }
 
-      if (toursRedCashUsed > 0) {
-        const { error: cashError } = await supabase.rpc('update_wallet_balance', {
-          p_user_id: booking.user_id,
-          p_amount: toursRedCashUsed,
-          p_type: 'credit',
-          p_description: `Reembolso de reserva cancelada #${booking.booking_code}`,
-          p_reference_id: id,
-          p_reference_type: 'booking_refund',
-          p_idempotency_key: `${id}_refund_cancel`
-        });
-
-        if (cashError) {
-          console.error('Error refunding ToursRed Cash:', cashError);
-        }
+      if (result.booking_code) {
+        setBookingCode(result.booking_code);
       }
-
-      const { error } = await supabase
-        .from('bookings')
-        .update({
-          status: 'cancelled',
-          payment_status: 'canceled'
-        })
-        .eq('id', id);
-
-      if (error) {
-        console.error('Error updating booking status:', error);
-      }
-
     } catch (err: any) {
       console.error('Error in updateBookingStatus:', err);
     } finally {
