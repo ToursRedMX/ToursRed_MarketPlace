@@ -20,11 +20,78 @@ Deno.serve(async (req: Request) => {
 
     const { formData, preferenceId, bookingId } = await req.json();
 
+    if (!bookingId) {
+      return new Response(JSON.stringify({ error: "bookingId es requerido" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!formData) {
       return new Response(JSON.stringify({ error: "Datos del formulario requeridos" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Verify the user is authenticated and owns this booking
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Check if bookingId is a gift card (gift cards don't have user_id)
+    const { data: giftCardCheck } = await supabase
+      .from("gift_cards")
+      .select("id, purchaser_email")
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (!giftCardCheck) {
+      // Verify the booking belongs to the authenticated user
+      const { data: booking } = await supabase
+        .from("bookings")
+        .select("user_id, payment_status, deposit_amount")
+        .eq("id", bookingId)
+        .maybeSingle();
+
+      if (!booking) {
+        return new Response(JSON.stringify({ error: "Reserva no encontrada" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (booking.user_id !== user.id) {
+        return new Response(JSON.stringify({ error: "No tienes permiso para pagar esta reserva" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Idempotency: reject if already fully paid
+      if (booking.payment_status === "succeeded") {
+        return new Response(JSON.stringify({ error: "La reserva ya esta pagada" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     let mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
@@ -43,8 +110,33 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Calculate the server-side amount for bookings (not gift cards)
+    let serverAmount: number | null = null;
+    if (giftCardCheck) {
+      serverAmount = parseFloat(formData.transaction_amount || "0");
+    } else {
+      const { data: booking } = await supabase
+        .from("bookings")
+        .select("deposit_amount")
+        .eq("id", bookingId)
+        .maybeSingle();
+      const depositAmount = Number(booking?.deposit_amount || 0);
+
+      const { data: existingPayments } = await supabase
+        .from("payment_transactions")
+        .select("amount")
+        .eq("booking_id", bookingId)
+        .eq("status", "succeeded")
+        .eq("payment_processor", "mercadopago");
+
+      const alreadyPaid = (existingPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      const remaining = Math.max(0, depositAmount - alreadyPaid);
+      serverAmount = remaining > 0 ? remaining : depositAmount;
+    }
+
     const paymentPayload = {
       ...formData,
+      transaction_amount: serverAmount,
       external_reference: bookingId,
       notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
       metadata: {
@@ -81,12 +173,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (bookingId && payment.status === "approved") {
-      const { data: giftCardCheck } = await supabase
-        .from("gift_cards")
-        .select("id")
-        .eq("id", bookingId)
-        .maybeSingle();
-
+      // Gift card flow
       if (giftCardCheck) {
         await supabase
           .from("gift_cards")
@@ -125,243 +212,141 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const { error: updateError } = await supabase
+      // Booking flow: check if the total has been covered (incremental payment support)
+      const mpAmount = parseFloat(payment.transaction_amount || payment.amount || "0");
+      const { data: bookingForTotal } = await supabase
         .from("bookings")
-        .update({
-          payment_status: "succeeded",
-          status: "confirmed",
-          paid_at: new Date().toISOString(),
-          payment_method: "mercadopago",
-        })
-        .eq("id", bookingId);
+        .select("deposit_amount, payment_status")
+        .eq("id", bookingId)
+        .maybeSingle();
 
-      if (updateError) {
-        console.error("Error updating booking after approved MP payment:", updateError);
-      } else {
-        console.log("Booking confirmed after MP payment approval:", bookingId);
+      const depositAmount = Number(bookingForTotal?.deposit_amount || 0);
 
-        // Persist payment_transactions record for multi-processor refund support
-        try {
-          const mpFee = Array.isArray(payment.fee_details)
-            ? payment.fee_details
-                .filter((fd: any) => fd.type === "mercadopago_fee")
-                .reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
-            : 0;
-          const mpAmount = parseFloat(payment.transaction_amount || payment.amount || "0");
+      const { data: priorPayments } = await supabase
+        .from("payment_transactions")
+        .select("amount")
+        .eq("booking_id", bookingId)
+        .eq("status", "succeeded")
+        .eq("payment_processor", "mercadopago");
 
-          const { data: existingTx } = await supabase
-            .from("payment_transactions")
-            .select("id")
-            .eq("mercadopago_payment_id", String(payment.id))
-            .maybeSingle();
+      const previouslyPaid = (priorPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      const totalPaid = previouslyPaid + mpAmount;
+      const isFullyPaid = totalPaid >= depositAmount - 0.50;
 
-          if (!existingTx) {
-            await supabase.from("payment_transactions").insert({
-              booking_id: bookingId,
-              mercadopago_payment_id: String(payment.id),
-              payment_processor: "mercadopago",
-              amount: mpAmount,
-              currency: "mxn",
-              status: "succeeded",
-              payment_method_type: "Tarjeta",
-              processor_fee: mpFee,
-              net_amount: mpAmount - mpFee,
-              metadata: payment,
-            });
-            console.log(`payment_transactions record created for MP payment ${payment.id}, fee=${mpFee}`);
-          }
-        } catch (txErr) {
-          console.error("Error inserting payment_transactions (MercadoPago):", txErr);
-        }
+      // Persist payment_transactions record for multi-processor refund support
+      try {
+        const mpFee = Array.isArray(payment.fee_details)
+          ? payment.fee_details
+              .filter((fd: any) => fd.type === "mercadopago_fee")
+              .reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
+          : 0;
 
-        const { data: booking } = await supabase
-          .from("bookings")
-          .select("agency_id, deposit_amount, service_charge")
-          .eq("id", bookingId)
+        const { data: existingTx } = await supabase
+          .from("payment_transactions")
+          .select("id")
+          .eq("mercadopago_payment_id", String(payment.id))
           .maybeSingle();
 
-        if (booking) {
-          const { data: existing } = await supabase
-            .from("commission_records")
-            .select("id")
-            .eq("booking_id", bookingId)
-            .maybeSingle();
-
-          if (!existing) {
-            const { data: platformSettings } = await supabase
-              .from("platform_settings")
-              .select("agency_commission_percentage")
-              .maybeSingle();
-
-            const commissionRate = (platformSettings?.agency_commission_percentage || 15) / 100;
-            const depositAmount = Number(booking.deposit_amount || 0);
-            const platformAmount = depositAmount * commissionRate;
-            const agencyAmount = depositAmount - platformAmount;
-
-            await supabase.from("commission_records").insert({
-              booking_id: bookingId,
-              agency_id: booking.agency_id,
-              agency_amount: agencyAmount,
-              platform_amount: platformAmount,
-              status: "pending",
-            });
-          }
+        if (!existingTx) {
+          await supabase.from("payment_transactions").insert({
+            booking_id: bookingId,
+            mercadopago_payment_id: String(payment.id),
+            payment_processor: "mercadopago",
+            amount: mpAmount,
+            currency: "mxn",
+            status: "succeeded",
+            payment_method_type: "Tarjeta",
+            processor_fee: mpFee,
+            net_amount: mpAmount - mpFee,
+            metadata: payment,
+          });
+          console.log(`payment_transactions record created for MP payment ${payment.id}, fee=${mpFee}`);
         }
+      } catch (txErr) {
+        console.error("Error inserting payment_transactions (MercadoPago):", txErr);
+      }
 
-        // Record insurance discount code usage if applicable
-        try {
-          const { data: bookingForInsurance } = await supabase
+      if (isFullyPaid && bookingForTotal?.payment_status !== "succeeded") {
+        const { error: updateError } = await supabase
+          .from("bookings")
+          .update({
+            payment_status: "succeeded",
+            status: "confirmed",
+            paid_at: new Date().toISOString(),
+            payment_method: "mercadopago",
+          })
+          .eq("id", bookingId);
+
+        if (updateError) {
+          console.error("Error updating booking after approved MP payment:", updateError);
+        } else {
+          console.log("Booking confirmed after MP payment approval:", bookingId);
+
+          const { data: booking } = await supabase
             .from("bookings")
-            .select("user_id, insurance_discount_code_id")
+            .select("agency_id, deposit_amount, service_charge")
             .eq("id", bookingId)
             .maybeSingle();
 
-          if (bookingForInsurance?.insurance_discount_code_id) {
-            const insCodeId = bookingForInsurance.insurance_discount_code_id;
-            const { data: existingInsUsage } = await supabase
-              .from("discount_code_usage")
+          if (booking) {
+            const { data: existing } = await supabase
+              .from("commission_records")
               .select("id")
-              .eq("discount_code_id", insCodeId)
-              .eq("user_id", bookingForInsurance.user_id)
+              .eq("booking_id", bookingId)
               .maybeSingle();
 
-            if (!existingInsUsage) {
-              await supabase.from("discount_code_usage").insert({
-                discount_code_id: insCodeId,
-                user_id: bookingForInsurance.user_id,
+            if (!existing) {
+              const { data: platformSettings } = await supabase
+                .from("platform_settings")
+                .select("agency_commission_percentage")
+                .maybeSingle();
+
+              const commissionRate = (platformSettings?.agency_commission_percentage || 15) / 100;
+              const platformAmount = depositAmount * commissionRate;
+              const agencyAmount = depositAmount - platformAmount;
+
+              await supabase.from("commission_records").insert({
                 booking_id: bookingId,
+                agency_id: booking.agency_id,
+                agency_amount: agencyAmount,
+                platform_amount: platformAmount,
+                status: "pending",
               });
             }
           }
-        } catch (insDiscountError) {
-          console.error("Error recording insurance discount code usage:", insDiscountError);
-        }
 
-        try {
-          await fetch(
-            `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-booking-confirmation`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-              },
-              body: JSON.stringify({ booking_id: bookingId }),
-            }
-          );
-          console.log("Booking confirmation emails triggered for:", bookingId);
-        } catch (emailErr) {
-          console.error("Error sending booking confirmation email:", emailErr);
-        }
+          // Record insurance discount code usage if applicable
+          try {
+            const { data: bookingForInsurance } = await supabase
+              .from("bookings")
+              .select("user_id, insurance_discount_code_id")
+              .eq("id", bookingId)
+              .maybeSingle();
 
-        // Activate payment plan if the booking was created with selected_payment_mode === 'plan'
-        try {
-          const { data: bkForPlan } = await supabase
-            .from('bookings')
-            .select(`
-              id, selected_payment_mode, total_price, deposit_amount,
-              tours:tour_id(payment_option, payment_plan_mode, installment_definitions, start_date, full_payment_days_before_departure)
-            `)
-            .eq('id', bookingId)
-            .maybeSingle();
-
-          if (bkForPlan?.selected_payment_mode === 'plan') {
-            const tour = bkForPlan.tours as any;
-            const totalPrice = parseFloat(bkForPlan.total_price) || 0;
-            const depositPaid = parseFloat(bkForPlan.deposit_amount) || 0;
-            const defs: any[] = tour?.installment_definitions || [];
-
-            if (defs.length > 0) {
-              const { data: existingPlan } = await supabase
-                .from('booking_payment_plans')
-                .select('id')
-                .eq('booking_id', bookingId)
+            if (bookingForInsurance?.insurance_discount_code_id) {
+              const insCodeId = bookingForInsurance.insurance_discount_code_id;
+              const { data: existingInsUsage } = await supabase
+                .from("discount_code_usage")
+                .select("id")
+                .eq("discount_code_id", insCodeId)
+                .eq("user_id", bookingForInsurance.user_id)
                 .maybeSingle();
 
-              if (!existingPlan) {
-                const { data: plan, error: planErr } = await supabase
-                  .from('booking_payment_plans')
-                  .insert({
-                    booking_id: bookingId,
-                    mode: 'installments',
-                    total_plan_amount: totalPrice,
-                    total_amount_paid: depositPaid,
-                    status: 'active',
-                    paid_100_pct_at_booking: false,
-                  })
-                  .select('id')
-                  .single();
-
-                if (planErr || !plan) {
-                  console.error('Error creating payment plan (MP brick):', planErr);
-                } else {
-                  const bookingDate = new Date();
-                  const departureDate = tour?.start_date ? new Date(tour.start_date) : null;
-
-                  const installments = defs.map((def: any, idx: number) => {
-                    const amount = Math.round(totalPrice * (def.pct_of_total / 100) * 100) / 100;
-                    let dueDate: Date;
-                    if (def.specific_date) {
-                      dueDate = new Date(def.specific_date + 'T12:00:00');
-                    } else if (def.days_before_departure !== undefined && departureDate) {
-                      dueDate = new Date(departureDate);
-                      dueDate.setDate(dueDate.getDate() - def.days_before_departure);
-                    } else {
-                      dueDate = new Date(bookingDate);
-                      dueDate.setDate(dueDate.getDate() + (def.days_after_booking || 0));
-                    }
-
-                    const isFirstInstallment = idx === 0;
-                    const amountPaidForThisInstallment = isFirstInstallment ? Math.min(depositPaid, amount) : 0;
-                    const isPaid = isFirstInstallment && amountPaidForThisInstallment >= amount;
-
-                    return {
-                      plan_id: plan.id,
-                      booking_id: bookingId,
-                      installment_number: idx + 1,
-                      label: def.label || `Pago ${idx + 1}`,
-                      amount_due: amount,
-                      amount_paid: amountPaidForThisInstallment,
-                      due_date: dueDate.toISOString().split('T')[0],
-                      status: isPaid ? 'paid' : 'pending',
-                      paid_at: isPaid ? new Date().toISOString() : null,
-                    };
-                  });
-
-                  const { error: instErr } = await supabase
-                    .from('booking_payment_plan_installments')
-                    .insert(installments);
-
-                  if (instErr) {
-                    console.error('Error creating installments (MP brick):', instErr);
-                  } else {
-                    await supabase
-                      .from('bookings')
-                      .update({
-                        has_payment_plan: true,
-                        payment_plan_status: 'active',
-                        payment_plan_total: totalPrice,
-                        payment_plan_paid: depositPaid,
-                      })
-                      .eq('id', bookingId);
-                    console.log(`✅ Payment plan created for booking ${bookingId} with ${installments.length} installments (MP brick)`);
-                  }
-                }
+              if (!existingInsUsage) {
+                await supabase.from("discount_code_usage").insert({
+                  discount_code_id: insCodeId,
+                  user_id: bookingForInsurance.user_id,
+                  booking_id: bookingId,
+                });
               }
             }
+          } catch (insDiscountError) {
+            console.error("Error recording insurance discount code usage:", insDiscountError);
           }
-        } catch (planErr) {
-          console.error('Error creating payment plan (MP brick):', planErr);
-        }
 
-        try {
-          const { data: cfdiSettings } = await supabase
-            .from("platform_settings")
-            .select("pac_provider")
-            .maybeSingle();
-          if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
+          try {
             await fetch(
-              `${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-booking-cfdi`,
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-booking-confirmation`,
               {
                 method: "POST",
                 headers: {
@@ -371,10 +356,140 @@ Deno.serve(async (req: Request) => {
                 body: JSON.stringify({ booking_id: bookingId }),
               }
             );
+            console.log("Booking confirmation emails triggered for:", bookingId);
+          } catch (emailErr) {
+            console.error("Error sending booking confirmation email:", emailErr);
           }
-        } catch (cfdiErr) {
-          console.error("Error triggering booking CFDI (mp-brick):", cfdiErr);
+
+          // Activate payment plan if the booking was created with selected_payment_mode === 'plan'
+          try {
+            const { data: bkForPlan } = await supabase
+              .from('bookings')
+              .select(`
+                id, selected_payment_mode, total_price, deposit_amount,
+                tours:tour_id(payment_option, payment_plan_mode, installment_definitions, start_date, full_payment_days_before_departure)
+              `)
+              .eq('id', bookingId)
+              .maybeSingle();
+
+            if (bkForPlan?.selected_payment_mode === 'plan') {
+              const tour = bkForPlan.tours as any;
+              const totalPrice = parseFloat(bkForPlan.total_price) || 0;
+              const depositPaid = parseFloat(bkForPlan.deposit_amount) || 0;
+              const defs: any[] = tour?.installment_definitions || [];
+
+              if (defs.length > 0) {
+                const { data: existingPlan } = await supabase
+                  .from('booking_payment_plans')
+                  .select('id')
+                  .eq('booking_id', bookingId)
+                  .maybeSingle();
+
+                if (!existingPlan) {
+                  const { data: plan, error: planErr } = await supabase
+                    .from('booking_payment_plans')
+                    .insert({
+                      booking_id: bookingId,
+                      mode: 'installments',
+                      total_plan_amount: totalPrice,
+                      total_amount_paid: depositPaid,
+                      status: 'active',
+                      paid_100_pct_at_booking: false,
+                    })
+                    .select('id')
+                    .single();
+
+                  if (planErr || !plan) {
+                    console.error('Error creating payment plan (MP brick):', planErr);
+                  } else {
+                    const bookingDate = new Date();
+                    const departureDate = tour?.start_date ? new Date(tour.start_date) : null;
+
+                    const installments = defs.map((def: any, idx: number) => {
+                      const amount = Math.round(totalPrice * (def.pct_of_total / 100) * 100) / 100;
+                      let dueDate: Date;
+                      if (def.specific_date) {
+                        dueDate = new Date(def.specific_date + 'T12:00:00');
+                      } else if (def.days_before_departure !== undefined && departureDate) {
+                        dueDate = new Date(departureDate);
+                        dueDate.setDate(dueDate.getDate() - def.days_before_departure);
+                      } else {
+                        dueDate = new Date(bookingDate);
+                        dueDate.setDate(dueDate.getDate() + (def.days_after_booking || 0));
+                      }
+
+                      const isFirstInstallment = idx === 0;
+                      const amountPaidForThisInstallment = isFirstInstallment ? Math.min(depositPaid, amount) : 0;
+                      const isPaid = isFirstInstallment && amountPaidForThisInstallment >= amount;
+
+                      return {
+                        plan_id: plan.id,
+                        booking_id: bookingId,
+                        installment_number: idx + 1,
+                        label: def.label || `Pago ${idx + 1}`,
+                        amount_due: amount,
+                        amount_paid: amountPaidForThisInstallment,
+                        due_date: dueDate.toISOString().split('T')[0],
+                        status: isPaid ? 'paid' : 'pending',
+                        paid_at: isPaid ? new Date().toISOString() : null,
+                      };
+                    });
+
+                    const { error: instErr } = await supabase
+                      .from('booking_payment_plan_installments')
+                      .insert(installments);
+
+                    if (instErr) {
+                      console.error('Error creating installments (MP brick):', instErr);
+                    } else {
+                      await supabase
+                        .from('bookings')
+                        .update({
+                          has_payment_plan: true,
+                          payment_plan_status: 'active',
+                          payment_plan_total: totalPrice,
+                          payment_plan_paid: depositPaid,
+                        })
+                        .eq('id', bookingId);
+                      console.log(`Payment plan created for booking ${bookingId} with ${installments.length} installments (MP brick)`);
+                    }
+                  }
+                }
+              }
+            }
+          } catch (planErr) {
+            console.error('Error creating payment plan (MP brick):', planErr);
+          }
+
+          try {
+            const { data: cfdiSettings } = await supabase
+              .from("platform_settings")
+              .select("pac_provider")
+              .maybeSingle();
+            if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
+              await fetch(
+                `${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-booking-cfdi`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  },
+                  body: JSON.stringify({ booking_id: bookingId }),
+                }
+              );
+            }
+          } catch (cfdiErr) {
+            console.error("Error triggering booking CFDI (mp-brick):", cfdiErr);
+          }
         }
+      } else if (!isFullyPaid) {
+        // Partial payment: mark as processing, don't confirm yet
+        await supabase
+          .from("bookings")
+          .update({ payment_status: "processing" })
+          .eq("id", bookingId);
+        console.log(`Partial MP payment for booking ${bookingId}: ${totalPaid}/${depositAmount} paid`);
       }
     } else if (bookingId && (payment.status === "in_process" || payment.status === "pending")) {
       await supabase

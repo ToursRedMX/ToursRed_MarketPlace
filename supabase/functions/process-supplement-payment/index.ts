@@ -42,6 +42,7 @@ Deno.serve(async (req: Request) => {
       payment_method,
       stripe_payment_intent_id,
       mp_form_data,
+      mercadopago_payment_id,
       paypal_order_id,
       conekta_method,
       bnpl_product_type,
@@ -446,18 +447,8 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 4. MercadoPago (Brick direct charge OR redirect-confirmed)
+    // 4. MercadoPago (Brick direct charge, redirect verification, or Checkout Pro redirect)
     if (payment_method === "mercadopago") {
-      // No mp_form_data means the payment was confirmed via MP redirect (back_urls flow)
-      // Just finalize without charging again
-      if (!mp_form_data) {
-        const pointsEarned = await finalizePayment("mercadopago", null);
-        return new Response(JSON.stringify({
-          success: true, total_charged: totalToPay, points_earned: pointsEarned,
-          message: "Pago con MercadoPago confirmado.",
-        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
       const mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || platformSettings?.mercadopago_access_token;
       if (!mpAccessToken) {
         return new Response(JSON.stringify({ error: "MercadoPago no configurado" }), {
@@ -465,11 +456,85 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const notificationUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`;
+
+      // Path (a): No form data and no payment_id → create Checkout Pro preference for redirect flow
+      if (!mp_form_data && !mercadopago_payment_id) {
+        const preferencePayload = {
+          items: [{
+            id: booking_supplement_id,
+            title: supplementName,
+            description: "Pago de suplemento para reserva",
+            quantity: 1,
+            unit_price: totalToPay,
+            currency_id: "MXN",
+          }],
+          external_reference: booking_supplement_id,
+          notification_url: notificationUrl,
+          back_urls: {
+            success: `${origin}/payment-return?provider=mercadopago&booking_supplement_id=${booking_supplement_id}&tr_status=success`,
+            failure: `${origin}/traveler/bookings`,
+            pending: `${origin}/payment-return?provider=mercadopago&booking_supplement_id=${booking_supplement_id}&tr_status=pending`,
+          },
+          auto_return: "approved",
+          payment_methods: { excluded_payment_types: [{ id: "ticket" }] },
+          metadata: { booking_supplement_id, payment_for: "supplement", user_id: user.id },
+        };
+
+        const prefResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${mpAccessToken}` },
+          body: JSON.stringify(preferencePayload),
+        });
+        const prefData = await prefResponse.json();
+        if (!prefResponse.ok) {
+          return new Response(JSON.stringify({ error: prefData.message || "Error al crear preferencia de MercadoPago" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ success: true, url: prefData.init_point }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Path (c): mercadopago_payment_id present → verify against MP API before confirming
+      if (mercadopago_payment_id) {
+        const verifyResponse = await fetch(`https://api.mercadopago.com/v1/payments/${mercadopago_payment_id}`, {
+          headers: { Authorization: `Bearer ${mpAccessToken}` },
+        });
+        const mpPayment = await verifyResponse.json();
+        if (!verifyResponse.ok || mpPayment.status !== "approved") {
+          return new Response(JSON.stringify({
+            error: "El pago no fue aprobado por MercadoPago",
+            mp_status: mpPayment.status,
+            status_detail: mpPayment.status_detail,
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        if (mpPayment.external_reference !== booking_supplement_id) {
+          return new Response(JSON.stringify({ error: "La referencia externa del pago no coincide" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const mpAmount = parseFloat(mpPayment.transaction_amount || "0");
+        if (Math.abs(mpAmount - totalToPay) > 0.50) {
+          return new Response(JSON.stringify({
+            error: `El monto del pago (${mpAmount}) no coincide con el esperado (${totalToPay})`,
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        const pointsEarned = await finalizePayment("mercadopago", String(mercadopago_payment_id));
+        return new Response(JSON.stringify({
+          success: true, total_charged: totalToPay, points_earned: pointsEarned,
+          message: "Pago con MercadoPago completado.",
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Path (b): mp_form_data present → direct Brick charge with server-calculated amount
       const mpPayload = {
         ...mp_form_data,
         transaction_amount: totalToPay,
         external_reference: booking_supplement_id,
-        notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
+        notification_url: notificationUrl,
         metadata: { ...(mp_form_data.metadata || {}), booking_supplement_id, payment_for: "supplement" },
       };
 

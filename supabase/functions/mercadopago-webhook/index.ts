@@ -364,26 +364,15 @@ Deno.serve(async (req: Request) => {
 
       const { data: booking } = await supabase
         .from("bookings")
-        .select("id, user_id, payment_status")
+        .select("id, user_id, payment_status, deposit_amount")
         .eq("id", externalReference)
         .maybeSingle();
 
       if (booking && booking.payment_status !== "succeeded") {
-        await supabase
-          .from("bookings")
-          .update({
-            payment_status: "succeeded",
-            status: "confirmed",
-            payment_method: "mercadopago",
-            payment_provider: "mercadopago",
-            paid_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", externalReference);
-
-        // Persist payment_transactions record for multi-processor refund support
+        // Persist payment_transactions record first (needed for incremental calculation)
+        let mpAmount = 0;
         try {
-          const mpAmount = parseFloat(payment.transaction_amount || payment.amount || "0");
+          mpAmount = parseFloat(payment.transaction_amount || payment.amount || "0");
           const mpFee = Array.isArray(payment.fee_details)
             ? payment.fee_details
                 .filter((fd: any) => fd.type === "mercadopago_fee")
@@ -414,6 +403,48 @@ Deno.serve(async (req: Request) => {
         } catch (txErr) {
           console.error("Error inserting payment_transactions (MP webhook):", txErr);
         }
+
+        // Incremental payment check: sum all confirmed MP payments and compare to deposit_amount
+        const depositAmount = Number(booking.deposit_amount || 0);
+        const { data: priorPayments } = await supabase
+          .from("payment_transactions")
+          .select("amount")
+          .eq("booking_id", externalReference)
+          .eq("status", "succeeded")
+          .eq("payment_processor", "mercadopago");
+
+        const totalPaid = (priorPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+        const isFullyPaid = totalPaid >= depositAmount - 0.50;
+
+        if (!isFullyPaid) {
+          // Partial payment: mark as processing, don't confirm yet
+          await supabase
+            .from("bookings")
+            .update({
+              payment_status: "processing",
+              payment_method: "mercadopago",
+              payment_provider: "mercadopago",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", externalReference);
+          console.log(`Partial MP payment for booking ${externalReference}: ${totalPaid}/${depositAmount} paid — marked as processing`);
+          return new Response(JSON.stringify({ received: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Full payment confirmed: mark as succeeded and run all side effects
+        await supabase
+          .from("bookings")
+          .update({
+            payment_status: "succeeded",
+            status: "confirmed",
+            payment_method: "mercadopago",
+            payment_provider: "mercadopago",
+            paid_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", externalReference);
 
         // Apply preventa commission discount (10% on first 10 preventa bookings)
         try {

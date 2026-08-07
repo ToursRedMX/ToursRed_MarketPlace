@@ -2085,30 +2085,6 @@ const TravelerBookings: React.FC = () => {
             ...openpayExtra,
           };
 
-      if (selectedMethod === 'mercadopago') {
-        const amount = type === 'optional_service'
-          ? Number(item.price_per_person) * quantity
-          : extrasModal.insuranceCost || Number((booking as any).travel_insurance_cost || 0);
-        const description = type === 'optional_service' ? `Servicio: ${item.name}` : 'Seguro de viaje';
-
-        const mpRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-mercadopago-preference`, {
-          method: 'POST', headers,
-          body: JSON.stringify({
-            bookingId: booking.id,
-            customerEmail: (await supabase.auth.getUser()).data.user?.email,
-            amount,
-            description,
-            context: 'extras',
-            extrasBody: body,
-          }),
-        });
-        const mpData = await mpRes.json();
-        if (!mpRes.ok || !mpData.success) throw new Error(mpData.error || 'Error al crear preferencia de MercadoPago');
-        setExtrasPaymentModal(prev => ({ ...prev, open: false, isProcessing: false }));
-        window.location.href = mpData.url || mpData.init_point;
-        return;
-      }
-
       if (selectedMethod === 'paypal') {
         const amount = type === 'optional_service'
           ? Number(item.price_per_person) * quantity

@@ -25,6 +25,7 @@ export default function PaymentReturnPage() {
   const extraBosId = searchParams.get('bos_id');
   const extraTourOptionalServiceId = searchParams.get('tour_optional_service_id');
   const extraQuantity = searchParams.get('quantity');
+  const mpPaymentId = searchParams.get('payment_id') || searchParams.get('collection_id');
 
   // Our custom status param, but MercadoPago may override 'status' with its own value
   // Use 'tr_status' as our param to avoid conflicts, falling back to 'status' for backwards compat
@@ -51,7 +52,7 @@ export default function PaymentReturnPage() {
           setMessage('Pago del suplemento exitoso.');
           const { data: { session } } = await supabase.auth.getSession();
           try {
-            await fetch(
+            const confirmRes = await fetch(
               `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-supplement-payment`,
               {
                 method: 'POST',
@@ -63,17 +64,38 @@ export default function PaymentReturnPage() {
                 body: JSON.stringify({
                   booking_supplement_id: bookingSupplementId,
                   payment_method: 'mercadopago',
+                  mercadopago_payment_id: mpPaymentId,
                 }),
               }
             );
-          } catch (_) { /* idempotent — ignore if already processed */ }
+            if (!confirmRes.ok) {
+              const errData = await confirmRes.json().catch(() => ({}));
+              setStatus('error');
+              setMessage(errData.error || 'Hubo un problema al confirmar tu pago del suplemento. Contacta soporte.');
+              return;
+            }
+          } catch (err) {
+            setStatus('error');
+            setMessage('Error al confirmar el pago del suplemento. Contacta soporte si el cargo fue aplicado.');
+            return;
+          }
           setTimeout(() => navigate(`/supplement-success?supplement_id=${bookingSupplementId}`), 2000);
         } else if (extraType && bookingId) {
           // Post-booking extra (insurance or optional service) via MercadoPago
           setMessage('Pago del extra exitoso.');
           const { data: { session } } = await supabase.auth.getSession();
           try {
-            await fetch(
+            const extrasBody: Record<string, unknown> = {
+              booking_id: bookingId,
+              type: extraType,
+              payment_method: 'mercadopago',
+              mercadopago_payment_id: mpPaymentId,
+            };
+            if (extraType === 'optional_service' && extraTourOptionalServiceId) {
+              extrasBody.tour_optional_service_id = extraTourOptionalServiceId;
+              extrasBody.quantity = Number(extraQuantity) || 1;
+            }
+            const extrasRes = await fetch(
               `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/purchase-post-booking-extras`,
               {
                 method: 'POST',
@@ -82,18 +104,58 @@ export default function PaymentReturnPage() {
                   'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
                   'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
                 },
-                body: JSON.stringify({
-                  booking_id: bookingId,
-                  type: extraType,
-                  payment_method: 'mercadopago',
-                }),
+                body: JSON.stringify(extrasBody),
               }
             );
-          } catch (_) { /* idempotent */ }
+            if (!extrasRes.ok) {
+              const errData = await extrasRes.json().catch(() => ({}));
+              setStatus('error');
+              setMessage(errData.error || 'Hubo un problema al confirmar tu pago del extra. Contacta soporte.');
+              return;
+            }
+          } catch (err) {
+            setStatus('error');
+            setMessage('Error al confirmar el pago del extra. Contacta soporte si el cargo fue aplicado.');
+            return;
+          }
           const successUrl = extraType === 'insurance'
             ? `/extras-success?type=insurance&booking_id=${bookingId}`
             : `/extras-success?type=optional_service&bos_id=${extraBosId}&booking_id=${bookingId}`;
           setTimeout(() => navigate(successUrl), 2000);
+        } else if (returnUrlContext === 'payment_plan_installment' && planId) {
+          // Payment plan installment via MercadoPago
+          setMessage('Abono completado.');
+          const { data: { session } } = await supabase.auth.getSession();
+          try {
+            const planRes = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment-plan-installment`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session?.access_token}`,
+                  'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                },
+                body: JSON.stringify({
+                  plan_id: planId,
+                  payment_method: 'mercadopago',
+                  mercadopago_payment_id: mpPaymentId,
+                  pay_full_balance: payFullBalance,
+                }),
+              }
+            );
+            if (!planRes.ok) {
+              const errData = await planRes.json().catch(() => ({}));
+              setStatus('error');
+              setMessage(errData.error || 'Hubo un problema al confirmar tu abono. Contacta soporte.');
+              return;
+            }
+          } catch (err) {
+            setStatus('error');
+            setMessage('Error al confirmar el abono. Contacta soporte si el cargo fue aplicado.');
+            return;
+          }
+          setTimeout(() => navigate(`/payment-plan-success?plan_id=${planId}`), 2000);
         } else if (bookingId) {
           setMessage('Pago exitoso. Tu reserva ha sido confirmada.');
           setTimeout(() => navigate(`/booking-success?booking_id=${bookingId}`), 2000);

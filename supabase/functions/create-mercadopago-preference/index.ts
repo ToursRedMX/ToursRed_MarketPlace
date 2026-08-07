@@ -44,6 +44,15 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (context === "extras") {
+      return new Response(JSON.stringify({
+        error: "Contexto 'extras' no soportado. Use purchase-post-booking-extras para extras.",
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (context !== "supplement" && !bookingId) {
       return new Response(JSON.stringify({ error: "Datos incompletos" }), {
         status: 400,
@@ -73,6 +82,76 @@ Deno.serve(async (req: Request) => {
     // a valid public HTTPS domain instead of the local dev/webcontainer URL.
     const origin = platformSettings?.platform_url?.replace(/\/$/, "") || "https://toursred.com";
 
+    // Server-side amount validation: calculate the real amount from the database
+    // instead of trusting the client-supplied amount
+    let serverAmount: number | null = null;
+
+    if (context === "gift_card") {
+      const { data: giftCardAmounts } = await supabase
+        .from("platform_settings")
+        .select("gift_card_amounts")
+        .maybeSingle();
+      const allowedAmounts: number[] = [];
+      if (giftCardAmounts?.gift_card_amounts) {
+        if (Array.isArray(giftCardAmounts.gift_card_amounts)) {
+          allowedAmounts.push(...giftCardAmounts.gift_card_amounts.map((a: any) => Number(a)));
+        } else if (typeof giftCardAmounts.gift_card_amounts === "string") {
+          try {
+            const parsed = JSON.parse(giftCardAmounts.gift_card_amounts);
+            if (Array.isArray(parsed)) allowedAmounts.push(...parsed.map((a: any) => Number(a)));
+          } catch {}
+        }
+      }
+      if (allowedAmounts.length > 0) {
+        const match = allowedAmounts.find((a) => Math.abs(a - Number(amount)) < 0.01);
+        serverAmount = match || allowedAmounts[0];
+      } else {
+        serverAmount = Number(amount);
+      }
+    } else if (context === "supplement" && supplementId) {
+      const { data: supplement } = await supabase
+        .from("booking_supplements")
+        .select("total_paid")
+        .eq("id", supplementId)
+        .maybeSingle();
+      if (supplement?.total_paid) {
+        serverAmount = Number(supplement.total_paid);
+      }
+    } else if (bookingId) {
+      const { data: booking } = await supabase
+        .from("bookings")
+        .select("deposit_amount, payment_status")
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (booking) {
+        const depositAmount = Number(booking.deposit_amount || 0);
+        if (booking.payment_status === "succeeded") {
+          return new Response(JSON.stringify({ error: "La reserva ya esta pagada" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const { data: existingPayments } = await supabase
+          .from("payment_transactions")
+          .select("amount")
+          .eq("booking_id", bookingId)
+          .eq("status", "succeeded")
+          .eq("payment_processor", "mercadopago");
+        const alreadyPaid = (existingPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+        const remaining = Math.max(0, depositAmount - alreadyPaid);
+        serverAmount = remaining > 0 ? remaining : depositAmount;
+      }
+    }
+
+    if (serverAmount === null) {
+      return new Response(JSON.stringify({ error: "No se pudo determinar el monto a cobrar" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const validatedAmount = Math.round(serverAmount * 100) / 100;
+
     let items: any[] = [];
     let successUrl = "";
     let cancelUrl = "";
@@ -84,7 +163,7 @@ Deno.serve(async (req: Request) => {
           title: description || "Tarjeta de Regalo ToursRed",
           description: "Tarjeta de regalo valida por 1 ano",
           quantity: 1,
-          unit_price: Math.round(amount * 100) / 100,
+          unit_price: validatedAmount,
           currency_id: "MXN",
         },
       ];
@@ -97,7 +176,7 @@ Deno.serve(async (req: Request) => {
           title: description || "Suplemento - ToursRed",
           description: "Pago de suplemento para reserva",
           quantity: 1,
-          unit_price: Math.round(amount * 100) / 100,
+          unit_price: validatedAmount,
           currency_id: "MXN",
         },
       ];
@@ -110,7 +189,7 @@ Deno.serve(async (req: Request) => {
           title: description || "Deposito de Reserva - ToursRed",
           description: "Deposito para reserva de tour",
           quantity: 1,
-          unit_price: Math.round(amount * 100) / 100,
+          unit_price: validatedAmount,
           currency_id: "MXN",
         },
       ];
