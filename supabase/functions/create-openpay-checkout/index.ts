@@ -114,12 +114,34 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      amount = Number(booking.deposit_amount);
-      if (amount <= 0) {
+      const { data: alreadySucceeded } = await supabase
+        .from("payment_transactions")
+        .select("amount")
+        .eq("booking_id", bookingId)
+        .eq("charge_context", "booking_deposit")
+        .eq("status", "succeeded");
+
+      const alreadyPaid = (alreadySucceeded || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+      const remainingBalance = Number(booking.deposit_amount) - alreadyPaid;
+
+      if (remainingBalance <= 0) {
         return new Response(
-          JSON.stringify({ error: "El monto del depósito no es válido" }),
+          JSON.stringify({ error: "Esta reserva ya está pagada en su totalidad" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
+      }
+
+      const requestedAmount = bodyAmount != null ? Number(bodyAmount) : null;
+      if (requestedAmount != null && requestedAmount > 0) {
+        if (requestedAmount > remainingBalance + 0.01) {
+          return new Response(
+            JSON.stringify({ error: `El monto excede el saldo restante de ${remainingBalance.toFixed(2)} MXN` }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        amount = requestedAmount;
+      } else {
+        amount = remainingBalance;
       }
     } else if (context === "supplement") {
       const supplementId = chargeReferenceId || bookingId;

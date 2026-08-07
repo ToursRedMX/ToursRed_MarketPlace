@@ -146,21 +146,29 @@ Deno.serve(async (req: Request) => {
 
         let verifiedApiCharge;
         try {
-          // Look up the payment_transaction to get the openpay_customer_id if available
-          const { data: ptRecord } = await supabase
-            .from("payment_transactions")
-            .select("openpay_customer_id, openpay_charge_id, status")
-            .eq("charge_context", chargeContext)
-            .eq("charge_reference_id", chargeReferenceId)
-            .eq("payment_processor", "openpay")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+          let customerIdForVerification: string | null = null;
 
-          if (ptRecord?.openpay_customer_id) {
-            verifiedApiCharge = await getCharge(ptRecord.openpay_customer_id, transaction.id);
+          if (chargeContext === "booking_deposit" || chargeContext === "booking") {
+            const { data: bk } = await supabase.from("bookings").select("user_id").eq("id", chargeReferenceId).maybeSingle();
+            if (bk?.user_id) {
+              const { data: usr } = await supabase.from("users").select("openpay_customer_id").eq("id", bk.user_id).maybeSingle();
+              customerIdForVerification = usr?.openpay_customer_id || null;
+            }
+          } else if (chargeContext === "supplement") {
+            const { data: supp } = await supabase.from("booking_supplements").select("booking_id").eq("id", chargeReferenceId).maybeSingle();
+            if (supp?.booking_id) {
+              const { data: bk2 } = await supabase.from("bookings").select("user_id").eq("id", supp.booking_id).maybeSingle();
+              if (bk2?.user_id) {
+                const { data: usr2 } = await supabase.from("users").select("openpay_customer_id").eq("id", bk2.user_id).maybeSingle();
+                customerIdForVerification = usr2?.openpay_customer_id || null;
+              }
+            }
+          }
+          // gift_card no tiene cliente asociado — customerIdForVerification queda null y cae correctamente a getChargeMerchant
+
+          if (customerIdForVerification) {
+            verifiedApiCharge = await getCharge(customerIdForVerification, transaction.id);
           } else {
-            // Merchant-level charge (no customer, e.g. gift card)
             verifiedApiCharge = await getChargeMerchant(transaction.id);
           }
         } catch (verifyErr) {
@@ -207,19 +215,18 @@ Deno.serve(async (req: Request) => {
         if (chargeContext === "booking_deposit" || chargeContext === "booking") {
           const bookingId = chargeReferenceId;
 
-          // ── Idempotency check: skip if payment_transaction already succeeded ──
+          // ── Idempotency check: skip if this exact charge was already processed ──
           const { data: existingPt } = await supabase
             .from("payment_transactions")
             .select("id, status")
             .eq("booking_id", bookingId)
             .eq("payment_processor", "openpay")
             .eq("charge_context", "booking_deposit")
-            .order("created_at", { ascending: false })
-            .limit(1)
+            .eq("openpay_charge_id", transaction.id)
             .maybeSingle();
 
           if (existingPt?.status === "succeeded") {
-            console.log(`Booking ${bookingId} payment_transaction already succeeded — idempotent skip`);
+            console.log(`Booking ${bookingId} charge ${transaction.id} already succeeded — idempotent skip`);
             if (webhookEventId) {
               await supabase.from("openpay_webhook_events").update({
                 processing_status: "processed",
@@ -230,7 +237,7 @@ Deno.serve(async (req: Request) => {
             return new Response("OK", { status: 200, headers: corsHeaders });
           }
 
-          // Update the pending payment_transaction
+          // Update the specific pending payment_transaction for this charge
           await supabase
             .from("payment_transactions")
             .update({
@@ -243,48 +250,88 @@ Deno.serve(async (req: Request) => {
             })
             .eq("booking_id", bookingId)
             .eq("payment_processor", "openpay")
-            .eq("charge_context", "booking_deposit");
+            .eq("charge_context", "booking_deposit")
+            .eq("status", "pending");
 
-          // Mark booking as paid
-          await supabase
+          // Soporte de pago incremental: sumar TODOS los pagos succeeded de cualquier
+          // procesador para este booking_deposit antes de confirmar la reserva —
+          // mismo patrón que ya usan stripe-webhook y conekta-webhook.
+          const { data: allTx } = await supabase
+            .from("payment_transactions")
+            .select("amount, status")
+            .eq("booking_id", bookingId)
+            .eq("charge_context", "booking_deposit")
+            .eq("status", "succeeded");
+
+          const totalPaid = (allTx || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+
+          const { data: booking } = await supabase
             .from("bookings")
-            .update({
-              payment_status: "succeeded",
-              paid_at: new Date().toISOString(),
-            })
-            .eq("id", bookingId);
-
-          // Trigger CFDI + confirmation + accounting (non-blocking)
-          const cfdiSettings = await supabase
-            .from("platform_settings")
-            .select("pac_provider, pac_api_key_encrypted")
+            .select("deposit_amount, total_price, user_payment, payment_status, status")
+            .eq("id", bookingId)
             .maybeSingle();
 
-          if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
-            EdgeRuntime.waitUntil(
-              fetch(`${supabaseUrl}/functions/v1/generate-booking-cfdi`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
-                body: JSON.stringify({ booking_id: bookingId, payment_form: paymentForm }),
-              }).catch((e) => console.error("Error triggering booking CFDI (Openpay):", e))
-            );
+          if (booking) {
+            const requiredAmount = Number(booking.deposit_amount) || Number(booking.total_price) || 0;
+            const newUserPayment = Math.max(0, Number(booking.user_payment || 0) - chargeAmount);
+
+            if (totalPaid >= requiredAmount) {
+              await supabase
+                .from("bookings")
+                .update({
+                  payment_status: "succeeded",
+                  payment_provider: "openpay",
+                  user_payment: newUserPayment,
+                  paid_at: new Date().toISOString(),
+                  status: "confirmed",
+                })
+                .eq("id", bookingId);
+
+              console.log(`Booking ${bookingId} confirmed (Openpay) — total paid: ${totalPaid}/${requiredAmount}`);
+
+              const cfdiSettings = await supabase
+                .from("platform_settings")
+                .select("pac_provider, pac_api_key_encrypted")
+                .maybeSingle();
+
+              if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
+                EdgeRuntime.waitUntil(
+                  fetch(`${supabaseUrl}/functions/v1/generate-booking-cfdi`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+                    body: JSON.stringify({ booking_id: bookingId, payment_form: paymentForm }),
+                  }).catch((e) => console.error("Error triggering booking CFDI (Openpay):", e))
+                );
+              }
+
+              EdgeRuntime.waitUntil(
+                fetch(`${supabaseUrl}/functions/v1/send-booking-confirmation`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+                  body: JSON.stringify({ booking_id: bookingId }),
+                }).catch((e) => console.error("Error sending booking confirmation (Openpay):", e))
+              );
+
+              EdgeRuntime.waitUntil(
+                fetch(`${supabaseUrl}/functions/v1/sync-booking-to-accounting`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+                  body: JSON.stringify({ booking_id: bookingId }),
+                }).catch((e) => console.error("Error syncing booking to accounting (Openpay):", e))
+              );
+            } else {
+              await supabase
+                .from("bookings")
+                .update({
+                  user_payment: newUserPayment,
+                  payment_provider: "openpay",
+                  payment_status: "processing",
+                })
+                .eq("id", bookingId);
+
+              console.log(`Booking ${bookingId} partial payment (Openpay) — paid: ${totalPaid}/${requiredAmount}`);
+            }
           }
-
-          EdgeRuntime.waitUntil(
-            fetch(`${supabaseUrl}/functions/v1/send-booking-confirmation`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
-              body: JSON.stringify({ booking_id: bookingId }),
-            }).catch((e) => console.error("Error sending booking confirmation (Openpay):", e))
-          );
-
-          EdgeRuntime.waitUntil(
-            fetch(`${supabaseUrl}/functions/v1/sync-booking-to-accounting`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
-              body: JSON.stringify({ booking_id: bookingId }),
-            }).catch((e) => console.error("Error syncing booking to accounting (Openpay):", e))
-          );
 
         } else if (chargeContext === "supplement" && chargeReferenceId) {
           // ── Idempotency check: skip if payment_transaction already succeeded ──

@@ -18,7 +18,7 @@ const MAX_AMOUNT = 50000;
 
 interface CreateTopupRequest {
   amount: number;
-  payment_method_type: "spei" | "codi";
+  payment_method_type: "spei";
 }
 
 Deno.serve(async (req: Request) => {
@@ -107,9 +107,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (payment_method_type !== "spei" && payment_method_type !== "codi") {
+    if (payment_method_type === "codi") {
       return new Response(
-        JSON.stringify({ error: "Método de pago no válido. Use 'spei' o 'codi'." }),
+        JSON.stringify({ error: "CoDi ya no está disponible como método de recarga. Usa SPEI." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (payment_method_type !== "spei") {
+      return new Response(
+        JSON.stringify({ error: "Método de pago no válido. Use 'spei'." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
