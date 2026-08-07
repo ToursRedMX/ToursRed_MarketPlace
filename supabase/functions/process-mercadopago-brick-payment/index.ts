@@ -110,10 +110,34 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Calculate the server-side amount for bookings (not gift cards)
+    // Calculate the server-side amount for bookings and gift cards — nunca se confía
+    // en formData.transaction_amount del navegador.
     let serverAmount: number | null = null;
     if (giftCardCheck) {
-      serverAmount = parseFloat(formData.transaction_amount || "0");
+      const { data: gc, error: gcErr } = await supabase
+        .from("gift_cards")
+        .select("amount, discount_amount, payment_status")
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (gcErr || !gc) {
+        return new Response(JSON.stringify({ error: "Tarjeta de regalo no encontrada" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (gc.payment_status === "paid") {
+        return new Response(JSON.stringify({ error: "Esta tarjeta de regalo ya fue pagada" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      serverAmount = Number(gc.amount) - Number(gc.discount_amount || 0);
+      if (serverAmount <= 0) {
+        return new Response(JSON.stringify({ error: "Monto de gift card inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     } else {
       const { data: booking } = await supabase
         .from("bookings")
