@@ -96,6 +96,29 @@ Deno.serve(async (req: Request) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
+  // Auth: accept internal service_role calls OR any valid user JWT
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return respond({ geo_provider: "none", ip_masked: "", error: "unauthorized" }, 401);
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const token = authHeader.replace("Bearer ", "");
+  const isServiceRole = token === supabaseServiceKey;
+
+  if (!isServiceRole) {
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { error: authError } = await userClient.auth.getUser();
+    if (authError) {
+      return respond({ geo_provider: "none", ip_masked: "", error: "unauthorized" }, 401);
+    }
+  }
+
   try {
     const body = await req.json();
     const ip: string = (body.ip ?? "").trim();

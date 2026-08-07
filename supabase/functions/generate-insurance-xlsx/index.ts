@@ -28,6 +28,34 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Verify caller identity
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: callerUser } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const callerRole = callerUser?.role;
+
     const { booking_id } = await req.json();
     if (!booking_id) {
       return new Response(JSON.stringify({ error: "booking_id requerido" }), {
@@ -41,15 +69,28 @@ Deno.serve(async (req: Request) => {
       .from("bookings")
       .select(`
         booking_code,
+        user_id,
         travel_insurance_included,
         tour:tours(name, start_date, end_date),
-        agency:agencies(name)
+        agency:agencies(name, user_id)
       `)
       .eq("id", booking_id)
       .maybeSingle();
 
     if (bookingError || !booking) {
       throw new Error("Reserva no encontrada");
+    }
+
+    // Authorization: booking owner, agency owner, or admin/super_admin
+    const isAdmin = callerRole === "admin" || callerRole === "super_admin";
+    const isOwner = booking.user_id === user.id;
+    const agencyUserId = (booking.agency as any)?.user_id;
+    const isAgencyOwner = agencyUserId === user.id;
+
+    if (!isAdmin && !isOwner && !isAgencyOwner) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (!booking.travel_insurance_included) {

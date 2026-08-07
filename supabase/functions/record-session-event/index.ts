@@ -155,8 +155,6 @@ Deno.serve(async (req: Request) => {
     const body: SessionEventBody = await req.json();
     const {
       event_type,
-      user_id,
-      email,
       session_id,
       user_agent,
       device_fingerprint,
@@ -184,22 +182,58 @@ Deno.serve(async (req: Request) => {
     const ip_address = extractClientIp(req);
     const ipMasked = ip_address ? maskIp(ip_address) : null;
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Verify caller identity: require a valid JWT (user session or anon-key session).
+    // The service_role key is also accepted for internal calls.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "No autorizado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const isServiceRole = token === supabaseServiceKey;
+
+    // Derive verified identity for login/logout events
+    let verifiedUserId: string | null = null;
+    let verifiedEmail: string | null = null;
+
+    if (!isServiceRole) {
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+
+      const { data: { user }, error: authError } = await userClient.auth.getUser();
+      if (authError) {
+        return new Response(
+          JSON.stringify({ error: "No autorizado" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (user) {
+        verifiedUserId = user.id;
+        verifiedEmail = user.email ?? null;
+      }
+    }
 
     // Async geo lookup — never blocks session recording
     let geoData: Record<string, unknown> = {};
     if (ip_address) {
       try {
         const geoRes = await fetch(
-          `${Deno.env.get("SUPABASE_URL")}/functions/v1/geo-lookup`,
+          `${supabaseUrl}/functions/v1/geo-lookup`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+              Authorization: `Bearer ${supabaseServiceKey}`,
             },
             body: JSON.stringify({ ip: ip_address }),
             signal: AbortSignal.timeout(4500),
@@ -226,9 +260,14 @@ Deno.serve(async (req: Request) => {
     }
 
     if (event_type === "failed_login") {
+      // For failed_login, use the email from the body (the email that failed to log in).
+      // user_id may or may not be known — keep it from the body if provided.
+      const failedEmail = body.email ?? null;
+      const failedUserId = body.user_id ?? null;
+
       await supabase.from("failed_login_attempts").insert({
-        user_id: user_id ?? null,
-        email: email ?? null,
+        user_id: failedUserId,
+        email: failedEmail,
         ip_address: ip_address ?? null,
         device_fingerprint: device_fingerprint ?? null,
         failure_reason: failure_reason ?? "unknown",
@@ -236,8 +275,8 @@ Deno.serve(async (req: Request) => {
 
       await supabase.rpc("insert_audit_log", {
         p_tenant_type: "system",
-        p_actor_id: user_id ?? null,
-        p_actor_email: email ?? null,
+        p_actor_id: failedUserId,
+        p_actor_email: failedEmail,
         p_target_table: "auth",
         p_action: "FAILED_LOGIN",
         p_severity: "warning",
@@ -258,7 +297,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (!user_id) {
+    // For login/logout events, derive user_id and email from the verified session token
+    // instead of trusting client-supplied values.
+    if (!verifiedUserId && !isServiceRole) {
+      return new Response(
+        JSON.stringify({ error: "No se pudo verificar la identidad del usuario" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // If service_role is calling internally, fall back to body values
+    const effectiveUserId = verifiedUserId ?? body.user_id;
+    const effectiveEmail = verifiedEmail ?? body.email ?? null;
+
+    if (!effectiveUserId) {
       return new Response(
         JSON.stringify({ error: "user_id required for login/logout events" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -267,7 +319,7 @@ Deno.serve(async (req: Request) => {
 
     if (event_type === "login") {
       await supabase.from("user_sessions").insert({
-        user_id,
+        user_id: effectiveUserId,
         session_id: session_id ?? null,
         ip_address: ip_address ?? null,
         ip_masked: ipMasked,
@@ -286,8 +338,8 @@ Deno.serve(async (req: Request) => {
 
       await supabase.rpc("insert_audit_log", {
         p_tenant_type: "system",
-        p_actor_id: user_id,
-        p_actor_email: email ?? null,
+        p_actor_id: effectiveUserId,
+        p_actor_email: effectiveEmail,
         p_target_table: "auth",
         p_action: "LOGIN",
         p_ip_address: ip_address ?? null,
@@ -304,7 +356,7 @@ Deno.serve(async (req: Request) => {
       const { data: openSession } = await supabase
         .from("user_sessions")
         .select("id")
-        .eq("user_id", user_id)
+        .eq("user_id", effectiveUserId)
         .is("logout_at", null)
         .order("login_at", { ascending: false })
         .limit(1)
@@ -319,8 +371,8 @@ Deno.serve(async (req: Request) => {
 
       await supabase.rpc("insert_audit_log", {
         p_tenant_type: "system",
-        p_actor_id: user_id,
-        p_actor_email: email ?? null,
+        p_actor_id: effectiveUserId,
+        p_actor_email: effectiveEmail,
         p_target_table: "auth",
         p_action: "LOGOUT",
         p_ip_address: ip_address ?? null,
