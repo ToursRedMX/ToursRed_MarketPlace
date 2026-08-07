@@ -47,25 +47,6 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // --- Auth verification ---
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "No autorizado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const { data: { user }, error: userErr } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
-    if (userErr || !user) {
-      return new Response(
-        JSON.stringify({ error: "No autorizado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
     const body: CheckoutRequest = await req.json();
     const {
       bookingId,
@@ -78,6 +59,28 @@ Deno.serve(async (req: Request) => {
       redirectUrl,
       method,
     } = body;
+
+    // --- Auth verification (conditional — gift_card does not require an account) ---
+    let user: { id: string } | null = null;
+    if (context !== "gift_card") {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: "No autorizado" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const { data: { user: authedUser }, error: userErr } = await supabase.auth.getUser(
+        authHeader.replace("Bearer ", "")
+      );
+      if (userErr || !authedUser) {
+        return new Response(
+          JSON.stringify({ error: "No autorizado" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      user = authedUser;
+    }
     const referenceId = chargeReferenceId || bookingId;
     const paymentMethod = method || "card";
 
@@ -180,28 +183,31 @@ Deno.serve(async (req: Request) => {
         );
       }
     } else {
-      // context === "gift_card" — validate against configured denominations
-      const { data: settings } = await supabase
-        .from("platform_settings")
-        .select("gift_card_amounts, gift_card_max_amount")
+      // context === "gift_card" — validar contra el monto real de ESTA tarjeta específica,
+      // incluyendo cualquier descuento ya aplicado y persistido en purchase-gift-card
+      const { data: gc, error: gcErr } = await supabase
+        .from("gift_cards")
+        .select("amount, discount_amount, payment_status")
+        .eq("id", bookingId)
         .maybeSingle();
 
-      const validAmounts: number[] = (settings?.gift_card_amounts || [100, 200, 500, 1000]).map(Number);
-      const maxAmount: number = settings?.gift_card_max_amount || 10000;
-      const requestedAmount = Number(bodyAmount);
-
-      if (requestedAmount <= 0) {
+      if (gcErr || !gc) {
         return new Response(
-          JSON.stringify({ error: "Monto de gift card inválido" }),
+          JSON.stringify({ error: "Tarjeta de regalo no encontrada" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (gc.payment_status === "paid") {
+        return new Response(
+          JSON.stringify({ error: "Esta tarjeta de regalo ya fue pagada" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
-      if (validAmounts.includes(requestedAmount) || requestedAmount <= maxAmount) {
-        amount = requestedAmount;
-      } else {
+      amount = Number(gc.amount) - Number(gc.discount_amount || 0);
+      if (amount <= 0) {
         return new Response(
-          JSON.stringify({ error: `El monto excede el máximo permitido (${maxAmount})` }),
+          JSON.stringify({ error: "Monto de gift card inválido" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }

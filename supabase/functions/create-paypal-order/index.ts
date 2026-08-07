@@ -44,8 +44,9 @@ Deno.serve(async (req: Request) => {
     );
 
     const authHeader = req.headers.get("Authorization");
-    const { bookingId, amount, description, context, extrasBody, plan_id, effective_amount, pay_full_balance } = await req.json();
+    const { bookingId, amount: bodyAmount, description, context, extrasBody, plan_id, effective_amount, pay_full_balance } = await req.json();
 
+    let ppUser: { id: string } | null = null;
     if (context !== "gift_card") {
       if (!authHeader) {
         return new Response(JSON.stringify({ error: "No autorizado" }), {
@@ -53,23 +54,111 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const { data: { user }, error: userError } = await supabase.auth.getUser(
+      const { data: { user: authedUser }, error: userError } = await supabase.auth.getUser(
         authHeader.replace("Bearer ", "")
       );
-      if (userError || !user) {
+      if (userError || !authedUser) {
         return new Response(JSON.stringify({ error: "No autorizado" }), {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      ppUser = authedUser;
     }
 
     const isPlanInstallment = context === "payment_plan_installment";
-    if (isPlanInstallment ? (!plan_id || !amount) : (!bookingId || !amount)) {
+    if (isPlanInstallment ? !plan_id : !bookingId) {
       return new Response(JSON.stringify({ error: "Datos incompletos" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // --- Validación de monto server-side, nunca se confía en bodyAmount directamente ---
+    let amount: number;
+
+    if (context === "gift_card") {
+      const { data: gc, error: gcErr } = await supabase
+        .from("gift_cards")
+        .select("amount, discount_amount, payment_status")
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (gcErr || !gc) {
+        return new Response(JSON.stringify({ error: "Tarjeta de regalo no encontrada" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (gc.payment_status === "paid") {
+        return new Response(JSON.stringify({ error: "Esta tarjeta de regalo ya fue pagada" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      amount = Number(gc.amount) - Number(gc.discount_amount || 0);
+    } else if (context === "supplement") {
+      const { data: supp, error: suppErr } = await supabase
+        .from("booking_supplements")
+        .select("total_paid, booking_id")
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (suppErr || !supp) {
+        return new Response(JSON.stringify({ error: "Suplemento no encontrado" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: suppBooking } = await supabase.from("bookings").select("user_id").eq("id", supp.booking_id).maybeSingle();
+      if (!suppBooking || suppBooking.user_id !== ppUser?.id) {
+        return new Response(JSON.stringify({ error: "No tienes permiso sobre este suplemento" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      amount = Number(supp.total_paid);
+    } else if (context === "extras" || context === "payment_plan_installment") {
+      amount = Number(bodyAmount);
+      if (!amount || amount <= 0) {
+        return new Response(JSON.stringify({ error: "Monto inválido" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      const { data: booking, error: bookingErr } = await supabase
+        .from("bookings")
+        .select("deposit_amount, payment_status")
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (bookingErr || !booking) {
+        return new Response(JSON.stringify({ error: "Reserva no encontrada" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (booking.payment_status === "succeeded") {
+        return new Response(JSON.stringify({ error: "La reserva ya está pagada" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: existingPayments } = await supabase
+        .from("payment_transactions")
+        .select("amount")
+        .eq("booking_id", bookingId)
+        .eq("status", "succeeded")
+        .eq("payment_processor", "paypal");
+      const alreadyPaid = (existingPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      const remainingBalance = Math.max(0, Number(booking.deposit_amount) - alreadyPaid);
+      if (remainingBalance <= 0) {
+        return new Response(JSON.stringify({ error: "Esta reserva ya está pagada en su totalidad" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const requestedAmount = bodyAmount != null ? Number(bodyAmount) : null;
+      if (requestedAmount != null && requestedAmount > 0) {
+        if (requestedAmount > remainingBalance + 0.5) {
+          return new Response(JSON.stringify({ error: `El monto excede el saldo restante de ${remainingBalance.toFixed(2)} MXN` }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        amount = requestedAmount;
+      } else {
+        amount = remainingBalance;
+      }
     }
 
     let paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID");

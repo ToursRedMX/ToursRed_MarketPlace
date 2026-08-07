@@ -600,6 +600,13 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      const capturedAmountPp = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
+      if (Math.abs(capturedAmountPp - totalToPay) > 0.5) {
+        return new Response(JSON.stringify({
+          error: `El monto capturado (${capturedAmountPp}) no coincide con el esperado (${totalToPay})`,
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       const transactionId = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? paypal_order_id;
       const pointsEarned = await finalizePayment("paypal", transactionId);
       return new Response(JSON.stringify({

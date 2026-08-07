@@ -48,6 +48,17 @@ async function getPayPalOrderDetails(base: string, accessToken: string, orderId:
 }
 
 async function activateGiftCard(supabase: any, giftCardId: string, paypalTransactionId: string | null) {
+  const { data: existingGc } = await supabase
+    .from("gift_cards")
+    .select("payment_status")
+    .eq("id", giftCardId)
+    .maybeSingle();
+
+  if (existingGc?.payment_status === "paid") {
+    console.log(`Gift card ${giftCardId} already paid — skipping duplicate activation (PayPal)`);
+    return;
+  }
+
   const { error } = await supabase
     .from("gift_cards")
     .update({
@@ -80,6 +91,36 @@ async function activateGiftCard(supabase: any, giftCardId: string, paypalTransac
 }
 
 async function confirmBooking(supabase: any, bookingId: string, paypalTransactionId: string | null, captureData?: any) {
+  const { data: existingBooking } = await supabase
+    .from("bookings")
+    .select("payment_status, deposit_amount")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (existingBooking?.payment_status === "succeeded") {
+    console.log(`Booking ${bookingId} already confirmed — skipping duplicate side effects (PayPal)`);
+    return;
+  }
+
+  const capturedAmount = parseFloat(
+    (captureData?.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value) ?? captureData?.amount?.value ?? "0"
+  );
+  const { data: priorPaypalPayments } = await supabase
+    .from("payment_transactions")
+    .select("amount")
+    .eq("booking_id", bookingId)
+    .eq("status", "succeeded")
+    .eq("payment_processor", "paypal");
+  const alreadyPaid = (priorPaypalPayments || []).reduce((sum: number, tx: any) => sum + Number(tx.amount || 0), 0);
+  const totalPaid = alreadyPaid + capturedAmount;
+  const requiredAmount = Number(existingBooking?.deposit_amount || 0);
+
+  if (totalPaid < requiredAmount - 0.5) {
+    await supabase.from("bookings").update({ payment_status: "processing" }).eq("id", bookingId);
+    console.log(`Partial PayPal payment for booking ${bookingId}: ${totalPaid}/${requiredAmount} paid — marked as processing`);
+    return;
+  }
+
   const { error } = await supabase
     .from("bookings")
     .update({

@@ -141,6 +141,7 @@ Deno.serve(async (req: Request) => {
       .insert({
         code,
         amount,
+        discount_amount: discountAmount,
         currency: "MXN",
         status: isPendingPayment ? "pending_payment" : "active",
         payment_status: isPendingPayment ? "pending" : "paid",

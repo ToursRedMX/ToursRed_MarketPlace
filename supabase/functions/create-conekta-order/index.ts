@@ -25,18 +25,6 @@ Deno.serve(async (req: Request) => {
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return jsonResponse({ error: "No autorizado" }, 401);
-    }
-
-    const { data: { user }, error: userErr } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
-    if (userErr || !user) {
-      return jsonResponse({ error: "No autorizado" }, 401);
-    }
-
     const {
       booking_id,
       amount: bodyAmount,
@@ -47,6 +35,21 @@ Deno.serve(async (req: Request) => {
       charge_reference_id,
       description,
     } = await req.json();
+
+    let user: { id: string; email?: string } | null = null;
+    if (context !== "gift_card") {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return jsonResponse({ error: "No autorizado" }, 401);
+      }
+      const { data: { user: authedUser }, error: userErr } = await supabase.auth.getUser(
+        authHeader.replace("Bearer ", "")
+      );
+      if (userErr || !authedUser) {
+        return jsonResponse({ error: "No autorizado" }, 401);
+      }
+      user = authedUser;
+    }
 
     if (!booking_id || !payment_method_type) {
       return jsonResponse({ error: "Datos incompletos: booking_id y payment_method_type son requeridos" }, 400);
@@ -127,24 +130,24 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "El monto del suplemento no es válido" }, 400);
       }
     } else {
-      // context === "gift_card" — validate against configured denominations
-      const { data: settings } = await supabase
-        .from("platform_settings")
-        .select("gift_card_amounts, gift_card_max_amount")
+      // context === "gift_card" — validar contra el monto real de ESTA tarjeta específica,
+      // incluyendo cualquier descuento ya aplicado y persistido en purchase-gift-card
+      const { data: gc, error: gcErr } = await supabase
+        .from("gift_cards")
+        .select("amount, discount_amount, payment_status")
+        .eq("id", booking_id)
         .maybeSingle();
 
-      const validAmounts: number[] = (settings?.gift_card_amounts || [100, 200, 500, 1000]).map(Number);
-      const maxAmount: number = settings?.gift_card_max_amount || 10000;
-      const requestedAmount = Number(bodyAmount);
-
-      if (requestedAmount <= 0) {
-        return jsonResponse({ error: "Monto de gift card inválido" }, 400);
+      if (gcErr || !gc) {
+        return jsonResponse({ error: "Tarjeta de regalo no encontrada" }, 404);
+      }
+      if (gc.payment_status === "paid") {
+        return jsonResponse({ error: "Esta tarjeta de regalo ya fue pagada" }, 400);
       }
 
-      if (validAmounts.includes(requestedAmount) || requestedAmount <= maxAmount) {
-        amount = requestedAmount;
-      } else {
-        return jsonResponse({ error: `El monto excede el máximo permitido (${maxAmount})` }, 400);
+      amount = Number(gc.amount) - Number(gc.discount_amount || 0);
+      if (amount <= 0) {
+        return jsonResponse({ error: "Monto de gift card inválido" }, 400);
       }
     }
 
@@ -181,15 +184,21 @@ Deno.serve(async (req: Request) => {
     }
 
     // Fetch user profile for customer_info (Conekta requires name + email on every order)
-    const { data: userProfile } = await supabase
-      .from("users")
-      .select("first_name, last_name, phone_number")
-      .eq("id", user.id)
-      .maybeSingle();
+    let customerName = "Cliente";
+    let customerEmail = "no-email@toursred.com";
+    let customerPhone: string | null = null;
 
-    const customerName = `${userProfile?.first_name || ""} ${userProfile?.last_name || ""}`.trim() || "Cliente";
-    const customerEmail = user.email || "no-email@toursred.com";
-    const customerPhone = userProfile?.phone_number || null;
+    if (user) {
+      const { data: userProfile } = await supabase
+        .from("users")
+        .select("first_name, last_name, phone_number")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      customerName = `${userProfile?.first_name || ""} ${userProfile?.last_name || ""}`.trim() || "Cliente";
+      customerEmail = user.email || "no-email@toursred.com";
+      customerPhone = userProfile?.phone_number || null;
+    }
 
     const customerInfo: Record<string, string> = {
       name: customerName,

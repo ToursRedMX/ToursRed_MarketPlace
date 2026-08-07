@@ -18,25 +18,26 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "No autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "No autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const { bookingId, supplementId, customerEmail, amount, description, context } = await req.json();
+
+    if (context !== "gift_card") {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "No autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: { user }, error: userError } = await supabase.auth.getUser(
+        authHeader.replace("Bearer ", "")
+      );
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: "No autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     if (!amount) {
       return new Response(JSON.stringify({ error: "Datos incompletos" }), {
@@ -87,28 +88,27 @@ Deno.serve(async (req: Request) => {
     let serverAmount: number | null = null;
 
     if (context === "gift_card") {
-      const { data: giftCardSettings } = await supabase
-        .from("platform_settings")
-        .select("gift_card_amounts, gift_card_max_amount")
+      const { data: gc, error: gcErr } = await supabase
+        .from("gift_cards")
+        .select("amount, discount_amount, payment_status")
+        .eq("id", bookingId)
         .maybeSingle();
 
-      const allowedAmounts: number[] = (giftCardSettings?.gift_card_amounts || [100, 200, 500, 1000]).map((a: any) => Number(a));
-      const maxAmount: number = giftCardSettings?.gift_card_max_amount || 10000;
-      const requestedAmount = Number(amount);
-
-      if (requestedAmount <= 0) {
-        return new Response(JSON.stringify({ error: "Monto de gift card inválido" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+      if (gcErr || !gc) {
+        return new Response(JSON.stringify({ error: "Tarjeta de regalo no encontrada" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (gc.payment_status === "paid") {
+        return new Response(JSON.stringify({ error: "Esta tarjeta de regalo ya fue pagada" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      if (allowedAmounts.includes(requestedAmount) || requestedAmount <= maxAmount) {
-        serverAmount = requestedAmount;
-      } else {
-        return new Response(JSON.stringify({ error: `El monto excede el máximo permitido (${maxAmount} MXN)` }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+      serverAmount = Number(gc.amount) - Number(gc.discount_amount || 0);
+      if (serverAmount <= 0) {
+        return new Response(JSON.stringify({ error: "Monto de gift card inválido" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     } else if (context === "supplement" && supplementId) {

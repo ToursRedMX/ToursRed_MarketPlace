@@ -1,0 +1,1 @@
+ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS discount_amount numeric NOT NULL DEFAULT 0;
