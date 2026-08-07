@@ -138,9 +138,10 @@ export default function PaymentReturnPage() {
                 },
                 body: JSON.stringify({
                   plan_id: planId,
+                  amount: 1,
                   payment_method: 'mercadopago',
                   mercadopago_payment_id: mpPaymentId,
-                  pay_full_balance: payFullBalance,
+                  pay_full_balance: true,
                 }),
               }
             );

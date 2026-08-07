@@ -446,9 +446,9 @@ Deno.serve(async (req: Request) => {
           external_reference: plan_id,
           notification_url: notificationUrl,
           back_urls: {
-            success: `${origin}/payment-return?provider=mercadopago&plan_id=${plan_id}&status=success&context=payment_plan_installment`,
-            failure: `${origin}/payment-return?provider=mercadopago&plan_id=${plan_id}&status=failure&context=payment_plan_installment`,
-            pending: `${origin}/payment-return?provider=mercadopago&plan_id=${plan_id}&status=pending&context=payment_plan_installment`,
+            success: `${origin}/payment-return?provider=mercadopago&plan_id=${plan_id}&status=success&context=payment_plan_installment&pay_full_balance=${pay_full_balance}`,
+            failure: `${origin}/payment-return?provider=mercadopago&plan_id=${plan_id}&status=failure&context=payment_plan_installment&pay_full_balance=${pay_full_balance}`,
+            pending: `${origin}/payment-return?provider=mercadopago&plan_id=${plan_id}&status=pending&context=payment_plan_installment&pay_full_balance=${pay_full_balance}`,
           },
           auto_return: "approved",
           payment_methods: { excluded_payment_types: [{ id: "ticket" }] },

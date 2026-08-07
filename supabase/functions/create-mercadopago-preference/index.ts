@@ -87,26 +87,29 @@ Deno.serve(async (req: Request) => {
     let serverAmount: number | null = null;
 
     if (context === "gift_card") {
-      const { data: giftCardAmounts } = await supabase
+      const { data: giftCardSettings } = await supabase
         .from("platform_settings")
-        .select("gift_card_amounts")
+        .select("gift_card_amounts, gift_card_max_amount")
         .maybeSingle();
-      const allowedAmounts: number[] = [];
-      if (giftCardAmounts?.gift_card_amounts) {
-        if (Array.isArray(giftCardAmounts.gift_card_amounts)) {
-          allowedAmounts.push(...giftCardAmounts.gift_card_amounts.map((a: any) => Number(a)));
-        } else if (typeof giftCardAmounts.gift_card_amounts === "string") {
-          try {
-            const parsed = JSON.parse(giftCardAmounts.gift_card_amounts);
-            if (Array.isArray(parsed)) allowedAmounts.push(...parsed.map((a: any) => Number(a)));
-          } catch {}
-        }
+
+      const allowedAmounts: number[] = (giftCardSettings?.gift_card_amounts || [100, 200, 500, 1000]).map((a: any) => Number(a));
+      const maxAmount: number = giftCardSettings?.gift_card_max_amount || 10000;
+      const requestedAmount = Number(amount);
+
+      if (requestedAmount <= 0) {
+        return new Response(JSON.stringify({ error: "Monto de gift card inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      if (allowedAmounts.length > 0) {
-        const match = allowedAmounts.find((a) => Math.abs(a - Number(amount)) < 0.01);
-        serverAmount = match || allowedAmounts[0];
+
+      if (allowedAmounts.includes(requestedAmount) || requestedAmount <= maxAmount) {
+        serverAmount = requestedAmount;
       } else {
-        serverAmount = Number(amount);
+        return new Response(JSON.stringify({ error: `El monto excede el máximo permitido (${maxAmount} MXN)` }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     } else if (context === "supplement" && supplementId) {
       const { data: supplement } = await supabase
