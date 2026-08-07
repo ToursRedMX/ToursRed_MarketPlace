@@ -488,13 +488,19 @@ Deno.serve(async (req: Request) => {
           console.log("PayPal order details status:", orderDetails.status);
 
           if (orderDetails.status === "COMPLETED") {
-            const referenceId = giftCardId || bookingId || orderDetails.purchase_units?.[0]?.reference_id;
+            const referenceId = orderDetails.purchase_units?.[0]?.reference_id;
+            const verifiedSlotId = orderDetails.purchase_units?.[0]?.custom_id;
             const paypalTransactionId = orderDetails.purchase_units?.[0]?.payments?.captures?.[0]?.id || null;
 
-            if (context === "featured_slot" && slotId) {
+            if (context === "featured_slot") {
+              if (!verifiedSlotId) {
+                return new Response(JSON.stringify({ error: "No se pudo verificar el tour destacado de esta orden" }), {
+                  status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+                });
+              }
               const totalPaid = parseFloat(orderDetails.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
               await supabase.rpc("confirm_featured_slot_payment", {
-                p_slot_id: slotId,
+                p_slot_id: verifiedSlotId,
                 p_payment_id: paypalTransactionId ?? orderId,
                 p_payment_provider: "paypal",
                 p_total: totalPaid,
@@ -506,7 +512,7 @@ Deno.serve(async (req: Request) => {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                   },
-                  body: JSON.stringify({ slot_id: slotId }),
+                  body: JSON.stringify({ slot_id: verifiedSlotId }),
                 }).catch((err) => console.error("Error triggering featured slot CFDI (paypal already captured):", err))
               );
             } else if (context === "gift_card" && referenceId) {
@@ -546,13 +552,19 @@ Deno.serve(async (req: Request) => {
     console.log("PayPal capture status:", captureStatus, "orderId:", orderId);
 
     if (captureStatus === "COMPLETED") {
-      const referenceId = giftCardId || bookingId || captureData.purchase_units?.[0]?.reference_id;
+      const referenceId = captureData.purchase_units?.[0]?.reference_id;
+      const verifiedSlotId = captureData.purchase_units?.[0]?.custom_id;
       const paypalTransactionId = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.id || null;
 
-      if (context === "featured_slot" && slotId) {
+      if (context === "featured_slot") {
+        if (!verifiedSlotId) {
+          return new Response(JSON.stringify({ error: "No se pudo verificar el tour destacado de esta orden" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         const totalPaid = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
         await supabase.rpc("confirm_featured_slot_payment", {
-          p_slot_id: slotId,
+          p_slot_id: verifiedSlotId,
           p_payment_id: paypalTransactionId ?? orderId,
           p_payment_provider: "paypal",
           p_total: totalPaid,
@@ -564,7 +576,7 @@ Deno.serve(async (req: Request) => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
             },
-            body: JSON.stringify({ slot_id: slotId }),
+            body: JSON.stringify({ slot_id: verifiedSlotId }),
           }).catch((err) => console.error("Error triggering featured slot CFDI (paypal):", err))
         );
       } else if (context === "gift_card" && referenceId) {
