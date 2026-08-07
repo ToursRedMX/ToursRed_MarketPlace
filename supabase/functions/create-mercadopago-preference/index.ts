@@ -141,8 +141,27 @@ Deno.serve(async (req: Request) => {
           .eq("status", "succeeded")
           .eq("payment_processor", "mercadopago");
         const alreadyPaid = (existingPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-        const remaining = Math.max(0, depositAmount - alreadyPaid);
-        serverAmount = remaining > 0 ? remaining : depositAmount;
+        const remainingBalanceMp = Math.max(0, depositAmount - alreadyPaid);
+
+        if (remainingBalanceMp <= 0) {
+          return new Response(JSON.stringify({ error: "Esta reserva ya está pagada en su totalidad" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const requestedAmountMp = amount != null ? Number(amount) : null;
+        if (requestedAmountMp != null && requestedAmountMp > 0) {
+          if (requestedAmountMp > remainingBalanceMp + 0.5) {
+            return new Response(JSON.stringify({ error: `El monto excede el saldo restante de ${remainingBalanceMp.toFixed(2)} MXN` }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          serverAmount = requestedAmountMp;
+        } else {
+          serverAmount = remainingBalanceMp;
+        }
       }
     }
 

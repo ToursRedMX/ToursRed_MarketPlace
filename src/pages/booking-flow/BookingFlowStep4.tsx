@@ -452,9 +452,10 @@ const BookingFlowStep4: React.FC = () => {
             body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}` }),
           }
         );
-        if (!resp.ok) throw new Error('Error al crear la preferencia de pago');
-        const { init_point } = await resp.json();
-        window.location.href = init_point;
+        const mpResult = await resp.json();
+        if (!resp.ok || !mpResult.success) throw new Error(mpResult.error || 'Error al crear la preferencia de pago');
+        if (!mpResult.url) throw new Error('No se recibió la URL de pago de MercadoPago');
+        window.location.href = mpResult.url;
         return;
       }
 
