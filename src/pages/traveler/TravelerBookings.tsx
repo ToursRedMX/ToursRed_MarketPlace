@@ -4076,7 +4076,7 @@ const TravelerBookings: React.FC = () => {
 
                   <div className="border-t pt-3">
                     <div className="flex justify-between text-lg font-bold">
-                      <span>Total a Pagar{paymentModal.toursRedCashToUse > 0 ? ` con ${paymentModal.selectedProvider === 'mercadopago' ? 'MercadoPago' : paymentModal.selectedProvider === 'paypal' ? 'PayPal' : paymentModal.selectedProvider === 'conekta' ? 'Conekta' : 'Stripe'}` : ''}:</span>
+                      <span>Total a Pagar{paymentModal.toursRedCashToUse > 0 ? ` con ${paymentModal.selectedProvider === 'mercadopago' ? 'MercadoPago' : paymentModal.selectedProvider === 'paypal' ? 'PayPal' : paymentModal.selectedProvider === 'conekta' ? 'Conekta' : paymentModal.selectedProvider === 'openpay' ? 'Openpay' : 'Stripe'}` : ''}:</span>
                       <span className="text-primary-600">
                         {formatCurrencyMXN((() => {
                           const originalAmount = paymentModal.booking?.user_payment || paymentModal.booking?.deposit_amount || 0;

@@ -539,7 +539,7 @@ Deno.serve(async (req: Request) => {
           }).eq("charge_context", "payment_plan_installment").eq("charge_reference_id", planId).eq("payment_processor", "openpay");
 
         } else if (chargeContext === "featured_slot" && chargeReferenceId) {
-          const { data: slotOp } = await supabase.from("featured_tour_slots").select("id").eq("id", chargeReferenceId).maybeSingle();
+          const { data: slotOp } = await supabase.from("featured_tour_slots").select("id, pending_payment_metadata").eq("id", chargeReferenceId).maybeSingle();
 
           if (slotOp) {
             const { error: confirmErrOp } = await supabase.rpc("confirm_featured_slot_payment", {
@@ -549,6 +549,11 @@ Deno.serve(async (req: Request) => {
             if (confirmErrOp) {
               console.error(`Error confirming featured slot ${slotOp.id} (Openpay):`, confirmErrOp.message);
             } else {
+              const existingMeta = (slotOp.pending_payment_metadata as Record<string, any>) || {};
+              await supabase.from("featured_tour_slots").update({
+                pending_payment_metadata: { ...existingMeta, openpay_status: "completed" },
+              }).eq("id", slotOp.id);
+
               EdgeRuntime.waitUntil(
                 fetch(`${supabaseUrl}/functions/v1/generate-featured-slot-cfdi`, {
                   method: "POST",
