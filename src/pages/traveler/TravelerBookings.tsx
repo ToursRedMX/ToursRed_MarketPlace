@@ -37,8 +37,9 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
-    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
+    openpayMethod: 'card' | 'spei' | 'cash';
     cashToUse: number;
   }>({
     open: false,
@@ -53,6 +54,7 @@ const TravelerBookings: React.FC = () => {
     pointsValueMxn: 0,
     selectedMethod: 'stripe',
     conektaMethod: 'card',
+    openpayMethod: 'card',
     cashToUse: 0,
   });
   const [supplementsModal, setSupplementsModal] = useState<{
@@ -70,8 +72,9 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
-    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
+    openpayMethod: 'card' | 'spei' | 'cash';
   }>({
     open: false,
     bookingSupplement: null,
@@ -83,6 +86,7 @@ const TravelerBookings: React.FC = () => {
     pointsValueMxn: 0,
     selectedMethod: 'stripe',
     conektaMethod: 'card',
+    openpayMethod: 'card',
   });
   const [extrasModal, setExtrasModal] = useState<{
     open: boolean;
@@ -122,8 +126,9 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
-    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
+    openpayMethod: 'card' | 'spei' | 'cash';
   }>({
     open: false,
     type: null,
@@ -137,6 +142,7 @@ const TravelerBookings: React.FC = () => {
     pointsValueMxn: 0,
     selectedMethod: 'stripe',
     conektaMethod: 'card',
+    openpayMethod: 'card',
   });
   const [reviewModal, setReviewModal] = useState<{
     open: boolean;
@@ -205,8 +211,9 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     toursRedCashToUse: number;
     isProcessing: boolean;
-    selectedProvider: 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+    selectedProvider: 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
+    openpayMethod: 'card' | 'spei' | 'cash';
   }>({
     open: false,
     booking: null,
@@ -215,6 +222,7 @@ const TravelerBookings: React.FC = () => {
     isProcessing: false,
     selectedProvider: 'stripe',
     conektaMethod: 'card',
+    openpayMethod: 'card',
   });
   const [mpBrickModal, setMpBrickModal] = useState<{
     open: boolean;
@@ -1549,6 +1557,36 @@ const TravelerBookings: React.FC = () => {
         } else {
           throw new Error('No se recibió la URL de pago de Conekta');
         }
+      } else if (selectedProvider === 'openpay') {
+        const opResp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-openpay-checkout`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              bookingId: booking.id,
+              amount: amountToCharge,
+              description: `Depósito para ${booking.tours?.name || 'Tour'}`,
+              context: 'booking',
+              method: paymentModal.openpayMethod,
+              redirectUrl: `${window.location.origin}/payment-pending/${booking.id}?context=booking_deposit`,
+            }),
+          }
+        );
+
+        const opResult = await opResp.json();
+        if (!opResult.success) throw new Error(opResult.error || 'Error al crear cargo de Openpay');
+
+        if (opResult.url) {
+          window.location.href = opResult.url;
+        } else if (opResult.payment_method) {
+          navigate(`/payment-pending/${booking.id}?context=booking_deposit`);
+        } else {
+          throw new Error('Respuesta inesperada de Openpay');
+        }
       } else {
         // Stripe
         const response = await fetch(
@@ -1859,6 +1897,7 @@ const TravelerBookings: React.FC = () => {
           booking_supplement_id: bookingSupplement.id,
           payment_method: selectedMethod,
           ...(selectedMethod === 'conekta' ? { conekta_method: supplementDirectPayModal.conektaMethod, ...(supplementDirectPayModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) } : {}),
+          ...(selectedMethod === 'openpay' ? { openpay_method: supplementDirectPayModal.openpayMethod } : {}),
         }),
       });
       const payData = await payRes.json();
@@ -1866,6 +1905,10 @@ const TravelerBookings: React.FC = () => {
 
       if (payData.url) {
         window.location.href = payData.url;
+        return;
+      }
+      if (payData.payment_method) {
+        navigate(`/payment-pending/${bookingSupplement.id}?context=supplement`);
         return;
       }
 
@@ -2028,14 +2071,18 @@ const TravelerBookings: React.FC = () => {
       const conektaExtra = selectedMethod === 'conekta'
         ? { conekta_method: extrasPaymentModal.conektaMethod, ...(extrasPaymentModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) }
         : {};
+      const openpayExtra = selectedMethod === 'openpay'
+        ? { openpay_method: extrasPaymentModal.openpayMethod }
+        : {};
       const body = type === 'optional_service'
-        ? { booking_id: booking.id, type: 'optional_service', tour_optional_service_id: item.id, quantity, payment_method: selectedMethod, ...conektaExtra }
+        ? { booking_id: booking.id, type: 'optional_service', tour_optional_service_id: item.id, quantity, payment_method: selectedMethod, ...conektaExtra, ...openpayExtra }
         : {
             booking_id: booking.id,
             type: 'insurance',
             payment_method: selectedMethod,
             ...(isStandaloneInsurance ? { insurance_days: extrasModal.insuranceDays } : {}),
             ...conektaExtra,
+            ...openpayExtra,
           };
 
       if (selectedMethod === 'mercadopago') {
@@ -2085,6 +2132,12 @@ const TravelerBookings: React.FC = () => {
 
       if (data.url) {
         window.location.href = data.url;
+        return;
+      }
+      if (data.payment_method) {
+        const extraRefId = data.booking_optional_service_id || booking.id;
+        const extraCtx = type === 'insurance' ? 'insurance' : 'optional_service';
+        navigate(`/payment-pending/${extraRefId}?context=${extraCtx}`);
         return;
       }
 
@@ -2187,6 +2240,7 @@ const TravelerBookings: React.FC = () => {
             payment_method: selectedMethod,
             toursred_cash_amount: selectedMethod === 'toursred_cash' ? cashToUse : 0,
             ...(selectedMethod === 'conekta' ? { conekta_method: supplementPaymentModal.conektaMethod, ...(supplementPaymentModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) } : {}),
+            ...(selectedMethod === 'openpay' ? { openpay_method: supplementPaymentModal.openpayMethod } : {}),
           }),
         });
         const payData = await payRes.json();
@@ -2194,6 +2248,10 @@ const TravelerBookings: React.FC = () => {
 
         if (payData.url) {
           window.location.href = payData.url;
+          return;
+        }
+        if (payData.payment_method) {
+          navigate(`/payment-pending/${data.booking_supplement_id}?context=supplement`);
           return;
         }
       }
@@ -3893,6 +3951,8 @@ const TravelerBookings: React.FC = () => {
                         amount={finalAmount}
                         conektaMethod={paymentModal.conektaMethod}
                         onConektaMethodChange={(m) => setPaymentModal(prev => ({ ...prev, conektaMethod: m }))}
+                        openpayMethod={paymentModal.openpayMethod}
+                        onOpenpayMethodChange={(m) => setPaymentModal(prev => ({ ...prev, openpayMethod: m }))}
                       />
                     );
                   }
@@ -4587,6 +4647,7 @@ const TravelerBookings: React.FC = () => {
                       { id: 'mercadopago', label: 'MercadoPago' },
                       { id: 'paypal', label: 'PayPal' },
                       { id: 'conekta', label: 'Conekta (Tarjeta, Efectivo, SPEI, BNPL)' },
+                      { id: 'openpay', label: 'Openpay (Tarjeta, Efectivo, SPEI)' },
                     ].map(method => (
                       <label key={method.id} className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -4614,6 +4675,24 @@ const TravelerBookings: React.FC = () => {
                           <input type="radio" name="supplement_conekta_method" value={m.id}
                             checked={supplementPaymentModal.conektaMethod === m.id}
                             onChange={() => setSupplementPaymentModal(prev => ({ ...prev, conektaMethod: m.id }))}
+                            className="w-4 h-4 text-teal-600" />
+                          <span className="text-sm text-gray-700">{m.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {supplementPaymentModal.selectedMethod === 'openpay' && (
+                    <div className="mt-3 pl-6 space-y-2 border-l-2 border-gray-200">
+                      {([
+                        { id: 'card', label: 'Tarjeta de credito/debito' },
+                        { id: 'spei', label: 'Transferencia SPEI' },
+                        { id: 'cash', label: 'Efectivo (referencia de pago)' },
+                      ] as const).map(m => (
+                        <label key={m.id} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="supplement_openpay_method" value={m.id}
+                            checked={supplementPaymentModal.openpayMethod === m.id}
+                            onChange={() => setSupplementPaymentModal(prev => ({ ...prev, openpayMethod: m.id }))}
                             className="w-4 h-4 text-teal-600" />
                           <span className="text-sm text-gray-700">{m.label}</span>
                         </label>
@@ -4907,6 +4986,7 @@ const TravelerBookings: React.FC = () => {
                       { id: 'mercadopago', label: 'MercadoPago' },
                       { id: 'paypal', label: 'PayPal' },
                       { id: 'conekta', label: 'Conekta (Tarjeta, Efectivo, SPEI, BNPL)' },
+                      { id: 'openpay', label: 'Openpay (Tarjeta, Efectivo, SPEI)' },
                     ].map(method => (
                       <label key={method.id} className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -4934,6 +5014,24 @@ const TravelerBookings: React.FC = () => {
                           <input type="radio" name="direct_supplement_conekta_method" value={m.id}
                             checked={supplementDirectPayModal.conektaMethod === m.id}
                             onChange={() => setSupplementDirectPayModal(prev => ({ ...prev, conektaMethod: m.id }))}
+                            className="w-4 h-4 text-teal-600" />
+                          <span className="text-sm text-gray-700">{m.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {supplementDirectPayModal.selectedMethod === 'openpay' && (
+                    <div className="mt-3 pl-6 space-y-2 border-l-2 border-gray-200">
+                      {([
+                        { id: 'card', label: 'Tarjeta de credito/debito' },
+                        { id: 'spei', label: 'Transferencia SPEI' },
+                        { id: 'cash', label: 'Efectivo (referencia de pago)' },
+                      ] as const).map(m => (
+                        <label key={m.id} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="direct_supplement_openpay_method" value={m.id}
+                            checked={supplementDirectPayModal.openpayMethod === m.id}
+                            onChange={() => setSupplementDirectPayModal(prev => ({ ...prev, openpayMethod: m.id }))}
                             className="w-4 h-4 text-teal-600" />
                           <span className="text-sm text-gray-700">{m.label}</span>
                         </label>
@@ -5275,6 +5373,7 @@ const TravelerBookings: React.FC = () => {
                       { id: 'mercadopago', label: 'MercadoPago' },
                       { id: 'paypal', label: 'PayPal' },
                       { id: 'conekta', label: 'Conekta (Tarjeta, Efectivo, SPEI, BNPL)' },
+                      { id: 'openpay', label: 'Openpay (Tarjeta, Efectivo, SPEI)' },
                     ].map(method => (
                       <label key={method.id} className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -5309,6 +5408,24 @@ const TravelerBookings: React.FC = () => {
                       {(totalAmount < 1200 || totalAmount > 16000) && (
                         <p className="text-xs text-gray-500">BNPL disponible solo entre $1,200 y $16,000 MXN.</p>
                       )}
+                    </div>
+                  )}
+
+                  {extrasPaymentModal.selectedMethod === 'openpay' && (
+                    <div className="mt-3 pl-6 space-y-2 border-l-2 border-gray-200">
+                      {([
+                        { id: 'card', label: 'Tarjeta de credito/debito' },
+                        { id: 'spei', label: 'Transferencia SPEI' },
+                        { id: 'cash', label: 'Efectivo (referencia de pago)' },
+                      ] as const).map(m => (
+                        <label key={m.id} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="extras_openpay_method" value={m.id}
+                            checked={extrasPaymentModal.openpayMethod === m.id}
+                            onChange={() => setExtrasPaymentModal(prev => ({ ...prev, openpayMethod: m.id }))}
+                            className="w-4 h-4 text-teal-600" />
+                          <span className="text-sm text-gray-700">{m.label}</span>
+                        </label>
+                      ))}
                     </div>
                   )}
                 </div>

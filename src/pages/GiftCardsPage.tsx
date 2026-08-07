@@ -7,7 +7,7 @@ import { usePreventUnload } from '../hooks/usePreventUnload';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import Seo from '../components/Seo';
-import PaymentProviderSelector, { PaymentProvider, ConektaMethod } from '../components/PaymentProviderSelector';
+import PaymentProviderSelector, { PaymentProvider, ConektaMethod, OpenpayMethod } from '../components/PaymentProviderSelector';
 import MercadoPagoBrick from '../components/MercadoPagoBrick';
 
 const DEFAULT_GIFT_CARD_AMOUNTS = [100, 200, 500, 1000];
@@ -27,6 +27,7 @@ export default function GiftCardsPage() {
   const [error, setError] = useState<string | null>(null);
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('stripe');
   const [conektaMethod, setConektaMethod] = useState<ConektaMethod>('card');
+  const [openpayMethod, setOpenpayMethod] = useState<OpenpayMethod>('card');
 
   const [discountCode, setDiscountCode] = useState('');
   const [isValidatingCode, setIsValidatingCode] = useState(false);
@@ -395,6 +396,8 @@ export default function GiftCardsPage() {
               amount: finalAmount,
               description: `Tarjeta de Regalo ToursRed ${finalAmount} MXN`,
               context: 'gift_card',
+              method: openpayMethod,
+              redirectUrl: `${window.location.origin}/payment-pending/${giftCardId}?context=gift_card`,
               customerEmail: purchaserEmail,
               customerName: purchaserName,
             }),
@@ -404,7 +407,13 @@ export default function GiftCardsPage() {
         const opResult = await opResponse.json();
         if (!opResult.success) throw new Error(opResult.error || 'Error al crear cargo de Openpay');
         giftCardFormPersistence.clearStorage();
-        window.location.href = opResult.url;
+        if (opResult.url) {
+          window.location.href = opResult.url;
+        } else if (opResult.payment_method) {
+          navigate(`/payment-pending/${giftCardId}?context=gift_card`);
+        } else {
+          throw new Error('Respuesta inesperada de Openpay');
+        }
         return;
       }
 
@@ -807,6 +816,8 @@ export default function GiftCardsPage() {
               amount={calculateFinalAmount()}
               conektaMethod={conektaMethod}
               onConektaMethodChange={setConektaMethod}
+              openpayMethod={openpayMethod}
+              onOpenpayMethodChange={setOpenpayMethod}
             />
 
             <button

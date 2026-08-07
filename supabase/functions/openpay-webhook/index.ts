@@ -447,6 +447,118 @@ Deno.serve(async (req: Request) => {
               body: JSON.stringify({ giftCardId: chargeReferenceId }),
             }).catch((e) => console.error("Error sending gift card email (Openpay):", e))
           );
+
+        } else if (chargeContext === "insurance" && chargeReferenceId) {
+          const extraSubtotal = parseFloat(transaction.metadata?.extra_subtotal || String(chargeAmount));
+          await supabase.from("bookings").update({
+            travel_insurance_included: true,
+            travel_insurance_cost: extraSubtotal,
+            updated_at: new Date().toISOString(),
+          }).eq("id", chargeReferenceId);
+
+          await supabase.from("payment_transactions").update({
+            status: "succeeded", processor_fee: processorFee, processor_fee_base: feeBase,
+            processor_fee_iva: feeIva, net_amount: chargeAmount - processorFee, openpay_charge_id: transaction.id,
+          }).eq("charge_context", "insurance").eq("charge_reference_id", chargeReferenceId).eq("payment_processor", "openpay");
+
+          await awardExtraPointsOpenpay(supabase, chargeReferenceId, extraSubtotal, chargeReferenceId, "insurance_payment", "Puntos por seguro (Openpay)");
+
+          const cfdiSettingsIns = await supabase.from("platform_settings").select("pac_provider, pac_api_key_encrypted").maybeSingle();
+          if (cfdiSettingsIns?.pac_provider && cfdiSettingsIns.pac_provider !== "none") {
+            EdgeRuntime.waitUntil(
+              fetch(`${supabaseUrl}/functions/v1/generate-post-booking-insurance-cfdi`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+                body: JSON.stringify({ booking_id: chargeReferenceId, payment_form: paymentForm }),
+              }).catch((e) => console.error("Error triggering insurance CFDI (Openpay):", e))
+            );
+          }
+
+        } else if (chargeContext === "optional_service" && chargeReferenceId) {
+          const { data: bosRowOp } = await supabase.from("booking_optional_services").select("subtotal, booking_id").eq("id", chargeReferenceId).maybeSingle();
+          const extraSubtotalOs = Number(bosRowOp?.subtotal) || parseFloat(transaction.metadata?.extra_subtotal || String(chargeAmount));
+
+          await supabase.from("booking_optional_services").update({
+            paid_at: new Date().toISOString(), payment_method: "openpay", updated_at: new Date().toISOString(),
+          }).eq("id", chargeReferenceId);
+
+          await supabase.from("payment_transactions").update({
+            status: "succeeded", processor_fee: processorFee, processor_fee_base: feeBase,
+            processor_fee_iva: feeIva, net_amount: chargeAmount - processorFee, openpay_charge_id: transaction.id,
+          }).eq("charge_context", "optional_service").eq("charge_reference_id", chargeReferenceId).eq("payment_processor", "openpay");
+
+          if (bosRowOp?.booking_id) {
+            await awardExtraPointsOpenpay(supabase, bosRowOp.booking_id, extraSubtotalOs, chargeReferenceId, "optional_service_payment", "Puntos por extra: servicio opcional (Openpay)");
+          }
+
+          const cfdiSettingsOs = await supabase.from("platform_settings").select("pac_provider, pac_api_key_encrypted").maybeSingle();
+          if (cfdiSettingsOs?.pac_provider && cfdiSettingsOs.pac_provider !== "none") {
+            EdgeRuntime.waitUntil(
+              fetch(`${supabaseUrl}/functions/v1/generate-optional-service-cfdi`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+                body: JSON.stringify({ booking_optional_service_id: chargeReferenceId, payment_form: paymentForm }),
+              }).catch((e) => console.error("Error triggering optional service CFDI (Openpay):", e))
+            );
+          }
+
+        } else if (chargeContext === "payment_plan_installment" && chargeReferenceId) {
+          const planId = chargeReferenceId;
+
+          const { data: planRow } = await supabase.from("booking_payment_plans").select("booking_id").eq("id", planId).maybeSingle();
+          let planUserId: string | null = null;
+          if (planRow) {
+            const { data: bookingRow } = await supabase.from("bookings").select("user_id").eq("id", planRow.booking_id).maybeSingle();
+            planUserId = bookingRow?.user_id || null;
+          }
+
+          const metaEffectiveAmount = transaction.metadata?.effective_amount;
+          const metaNetServiceCharge = transaction.metadata?.net_service_charge;
+          const metaGrossServiceCharge = transaction.metadata?.gross_service_charge;
+          const metaExemptionApplied = transaction.metadata?.membership_exemption_applied === "true";
+
+          const effectiveAmountPp = metaEffectiveAmount != null ? parseFloat(metaEffectiveAmount) : chargeAmount;
+          const serviceChargePp = metaNetServiceCharge != null ? parseFloat(metaNetServiceCharge) : 0;
+          const grossServiceChargePp = metaGrossServiceCharge != null ? parseFloat(metaGrossServiceCharge) : 0;
+          const membershipExemptionUsedPp = metaEffectiveAmount != null ? metaExemptionApplied : false;
+
+          const { error: allocError } = await supabase.rpc("allocate_payment_plan_installment", {
+            p_plan_id: planId, p_amount: effectiveAmountPp, p_provider: "openpay",
+            p_service_charge: serviceChargePp, p_gross_service_charge: grossServiceChargePp,
+            p_provider_transaction_id: transaction.id, p_user_id: planUserId,
+            p_membership_exemption_used: membershipExemptionUsedPp, p_is_wallet_payment: false,
+          });
+
+          if (allocError) {
+            console.error(`Error allocating payment plan installment (Openpay) for plan ${planId}:`, allocError.message);
+          }
+
+          await supabase.from("payment_transactions").update({
+            status: "succeeded", processor_fee: processorFee, processor_fee_base: feeBase,
+            processor_fee_iva: feeIva, net_amount: chargeAmount - processorFee, openpay_charge_id: transaction.id,
+          }).eq("charge_context", "payment_plan_installment").eq("charge_reference_id", planId).eq("payment_processor", "openpay");
+
+        } else if (chargeContext === "featured_slot" && chargeReferenceId) {
+          const { data: slotOp } = await supabase.from("featured_tour_slots").select("id").eq("id", chargeReferenceId).maybeSingle();
+
+          if (slotOp) {
+            const { error: confirmErrOp } = await supabase.rpc("confirm_featured_slot_payment", {
+              p_slot_id: slotOp.id, p_payment_id: transaction.id, p_payment_provider: "openpay", p_total: chargeAmount,
+            });
+
+            if (confirmErrOp) {
+              console.error(`Error confirming featured slot ${slotOp.id} (Openpay):`, confirmErrOp.message);
+            } else {
+              EdgeRuntime.waitUntil(
+                fetch(`${supabaseUrl}/functions/v1/generate-featured-slot-cfdi`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+                  body: JSON.stringify({ slot_id: slotOp.id }),
+                }).catch((e) => console.error("Error triggering featured slot CFDI (Openpay):", e))
+              );
+            }
+          }
+
         }
 
         if (webhookEventId) {
@@ -662,3 +774,26 @@ Deno.serve(async (req: Request) => {
     return new Response("OK", { status: 200, headers: corsHeaders });
   }
 });
+
+async function awardExtraPointsOpenpay(supabase: any, bookingId: string, subtotal: number, referenceId: string, referenceType: string, description: string) {
+  try {
+    const { data: booking } = await supabase.from("bookings").select("user_id").eq("id", bookingId).maybeSingle();
+    if (!booking?.user_id || subtotal <= 0) return;
+    const { data: activeMembership } = await supabase.from("memberships").select("id")
+      .eq("user_id", booking.user_id).eq("status", "active").gt("current_period_end", new Date().toISOString()).maybeSingle();
+    if (!activeMembership) return;
+    const pointsEarned = Math.floor(subtotal);
+    if (pointsEarned <= 0) return;
+    const { data: walletId } = await supabase.rpc("get_or_create_points_wallet", { p_user_id: booking.user_id });
+    if (!walletId) return;
+    const { data: pWallet } = await supabase.from("toursred_points_wallets").select("id, balance, total_earned").eq("id", walletId).maybeSingle();
+    if (!pWallet) return;
+    const newBalance = pWallet.balance + pointsEarned;
+    await supabase.from("toursred_points_transactions").insert({
+      wallet_id: walletId, user_id: booking.user_id, amount: pointsEarned, balance_after: newBalance,
+      type: "earned", description, reference_id: referenceId, reference_type: referenceType,
+      expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    await supabase.from("toursred_points_wallets").update({ balance: newBalance, total_earned: pWallet.total_earned + pointsEarned }).eq("id", walletId);
+  } catch (e) { console.error("Error awarding extra points (Openpay):", e); }
+}

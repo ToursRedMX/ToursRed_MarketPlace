@@ -45,6 +45,7 @@ Deno.serve(async (req: Request) => {
       paypal_order_id,
       conekta_method,
       bnpl_product_type,
+      openpay_method,   // "card" | "spei" | "cash"
     } = await req.json();
 
     if (!booking_supplement_id || !payment_method) {
@@ -554,7 +555,8 @@ Deno.serve(async (req: Request) => {
           amount: totalToPay,
           description: `Suplemento: ${supplementName} (${suppReq.quantity}x)`,
           context: "supplement",
-          redirectUrl: `${origin}/supplement-success?supplement_id=${booking_supplement_id}`,
+          method: openpay_method || "card",
+          redirectUrl: `${origin}/payment-pending/${booking_supplement_id}?context=supplement`,
         }),
       });
       const opResult = await opResponse.json();
@@ -566,6 +568,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         success: true,
         url: opResult.url,
+        payment_method: opResult.payment_method,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

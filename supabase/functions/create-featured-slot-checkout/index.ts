@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@22.3.0";
+import { isConfigured as isOpenpayConfigured, getDashboardUrl, getMerchantId, createOrReuseCustomer as createOrReuseOpenpayCustomer, createSpeiCharge, createCashCharge, createCardCheckoutCharge } from "../_shared/openpay.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,7 +42,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { slot_id, provider, success_url, cancel_url, discount_code, conekta_method, bnpl_product_type } = await req.json();
+    const { slot_id, provider, success_url, cancel_url, discount_code, conekta_method, bnpl_product_type, openpay_method } = await req.json();
 
     if (!slot_id || !provider) {
       return new Response(
@@ -382,6 +383,79 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ provider: "conekta", url: checkoutUrl, order_id: orderId }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    if (provider === "openpay") {
+      if (!openpay_method || !["card", "spei", "cash"].includes(openpay_method)) {
+        return new Response(JSON.stringify({ error: "openpay_method debe ser card, spei o cash" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!isOpenpayConfigured()) {
+        return new Response(JSON.stringify({ error: "Openpay not configured" }), {
+          status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let customerIdOp: string;
+      try {
+        customerIdOp = await createOrReuseOpenpayCustomer(supabase, user.id, {
+          first_name: user.email?.split("@")[0] || "Agencia", email: user.email || "no-email@toursred.com",
+        });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const orderIdOp = `featured_slot_${slot_id}_${Date.now()}`;
+      const successUrlOp = `${(success_url?.split("?")[0]) || cancelUrl}?provider=openpay`;
+      const roundedAmtFs = Math.round(finalAmount * 100) / 100;
+
+      let chargeOp;
+      try {
+        if (openpay_method === "spei") {
+          chargeOp = await createSpeiCharge(customerIdOp, roundedAmtFs, orderIdOp, description);
+        } else if (openpay_method === "cash") {
+          chargeOp = await createCashCharge(customerIdOp, roundedAmtFs, orderIdOp, description);
+        } else {
+          chargeOp = await createCardCheckoutCharge(customerIdOp, roundedAmtFs, orderIdOp, description, successUrlOp, {
+            charge_context: "featured_slot", charge_reference_id: slot_id,
+          });
+        }
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const paymentMethodMetadataFs: Record<string, any> = {
+        openpay_method, openpay_charge_id: chargeOp.id, openpay_status: chargeOp.status,
+      };
+      if (openpay_method === "spei") {
+        if (chargeOp.payment_method?.clabe) paymentMethodMetadataFs.clabe = chargeOp.payment_method.clabe;
+        if (chargeOp.payment_method?.bank) paymentMethodMetadataFs.bank = chargeOp.payment_method.bank;
+        if (chargeOp.payment_method?.name) paymentMethodMetadataFs.reference = chargeOp.payment_method.name;
+        paymentMethodMetadataFs.spei_pdf_url = `${getDashboardUrl()}/spei-pdf/${getMerchantId()}/${chargeOp.id}`;
+      } else if (openpay_method === "cash") {
+        if (chargeOp.payment_method?.reference) paymentMethodMetadataFs.reference = chargeOp.payment_method.reference;
+        if (chargeOp.payment_method?.store) paymentMethodMetadataFs.store = chargeOp.payment_method.store;
+        if (chargeOp.payment_method?.expiry_date) paymentMethodMetadataFs.expiry_date = chargeOp.payment_method.expiry_date;
+        if (chargeOp.payment_method?.barcode_url) paymentMethodMetadataFs.barcode_url = chargeOp.payment_method.barcode_url;
+        if (chargeOp.payment_method?.reference) paymentMethodMetadataFs.cash_pdf_url = `${getDashboardUrl()}/paynet-pdf/${getMerchantId()}/${chargeOp.payment_method.reference}`;
+      }
+
+      await supabase.from("featured_tour_slots").update({ payment_id: chargeOp.id, payment_provider: "openpay" }).eq("id", slot_id);
+
+      // Los featured slots no tienen payment_transactions (booking_id NOT NULL) — la metadata de
+      // pago pendiente (clabe/referencia/PDFs) se guarda directo en featured_tour_slots.
+      await supabase.from("featured_tour_slots").update({ pending_payment_metadata: paymentMethodMetadataFs }).eq("id", slot_id);
+
+      return new Response(JSON.stringify({
+        provider: "openpay",
+        url: openpay_method === "card" ? chargeOp.payment_method?.url : undefined,
+        payment_method: openpay_method !== "card" ? chargeOp.payment_method : undefined,
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     return new Response(

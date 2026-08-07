@@ -170,8 +170,9 @@ const AgencyTours: React.FC = () => {
     step: 'plan' | 'payment' | 'done';
     couponExpanded: boolean;
     pendingSlotId: string;
-    selectedProvider: 'stripe' | 'mercadopago' | 'paypal' | 'conekta';
+    selectedProvider: 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
+    openpayMethod: 'card' | 'spei' | 'cash';
     couponCode: string;
     couponError: string;
     couponDiscount: number;
@@ -193,6 +194,7 @@ const AgencyTours: React.FC = () => {
     pendingSlotId: '',
     selectedProvider: 'stripe',
     conektaMethod: 'card',
+    openpayMethod: 'card',
     couponCode: '',
     couponError: '',
     couponDiscount: 0,
@@ -1077,12 +1079,15 @@ const AgencyTours: React.FC = () => {
           cancel_url: `${origin}/agency/tours`,
           ...(featuredModal.couponApplied && featuredModal.couponCode ? { discount_code: featuredModal.couponCode } : {}),
           ...(featuredModal.selectedProvider === 'conekta' ? { conekta_method: featuredModal.conektaMethod, ...(featuredModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) } : {}),
+          ...(featuredModal.selectedProvider === 'openpay' ? { openpay_method: featuredModal.openpayMethod } : {}),
         },
       });
       if (res.error) throw new Error(res.error.message);
       const url = res.data?.url;
       if (url) {
         window.location.href = url;
+      } else if (res.data?.payment_method) {
+        window.location.href = `${origin}/payment-pending/${featuredModal.pendingSlotId}?context=featured_slot`;
       } else {
         throw new Error('No se recibio URL de pago');
       }
@@ -7033,7 +7038,8 @@ const AgencyTours: React.FC = () => {
                       { id: 'mercadopago', label: 'MercadoPago', sub: 'Tarjeta, efectivo, transferencia SPEI' },
                       { id: 'paypal', label: 'PayPal', sub: 'Cuenta PayPal o tarjeta de credito/debito' },
                       { id: 'conekta', label: 'Conekta', sub: 'Tarjeta, Efectivo, SPEI, BNPL' },
-                    ] as { id: 'stripe' | 'mercadopago' | 'paypal' | 'conekta'; label: string; sub: string }[]).map(p => (
+                      { id: 'openpay', label: 'Openpay', sub: 'Tarjeta, Efectivo, SPEI' },
+                    ] as { id: 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay'; label: string; sub: string }[]).map(p => (
                       <label
                         key={p.id}
                         className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${featuredModal.selectedProvider === p.id ? 'border-primary-400 bg-primary-50' : 'border-gray-100 hover:border-primary-200'}`}
@@ -7066,6 +7072,24 @@ const AgencyTours: React.FC = () => {
                           <input type="radio" name="conekta_method" value={m.id}
                             checked={featuredModal.conektaMethod === m.id}
                             onChange={() => setFeaturedModal(prev => ({ ...prev, conektaMethod: m.id }))}
+                            className="accent-primary-600" />
+                          <span className="text-sm text-gray-900">{m.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {featuredModal.selectedProvider === 'openpay' && (
+                    <div className="space-y-2 mb-5 pl-4 border-l-2 border-gray-200">
+                      {([
+                        { id: 'card', label: 'Tarjeta de credito/debito' },
+                        { id: 'spei', label: 'Transferencia SPEI' },
+                        { id: 'cash', label: 'Efectivo (referencia de pago)' },
+                      ] as const).map(m => (
+                        <label key={m.id} className="flex items-center gap-3 p-2 rounded-lg border cursor-pointer">
+                          <input type="radio" name="openpay_method" value={m.id}
+                            checked={featuredModal.openpayMethod === m.id}
+                            onChange={() => setFeaturedModal(prev => ({ ...prev, openpayMethod: m.id }))}
                             className="accent-primary-600" />
                           <span className="text-sm text-gray-900">{m.label}</span>
                         </label>

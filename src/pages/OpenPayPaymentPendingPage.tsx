@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import {
   Clock, Landmark, Banknote, ExternalLink, Download, AlertCircle,
   CheckCircle, ArrowRight, Home, Loader2, Calendar, Mail,
@@ -21,60 +21,77 @@ interface PaymentTransactionMeta {
   cash_pdf_url?: string;
 }
 
-interface BookingInfo {
-  id: string;
-  booking_code: string;
-  total_price: number;
-  deposit_amount: number;
-  user_payment: number;
-  status: string;
-  payment_status: string;
-  tours: {
-    name: string;
-    destination: string;
-    image_url: string;
-  } | null;
+interface ContextSummary {
+  title: string;
+  tourName: string;
+  destination?: string;
+  imageUrl?: string;
+  bookingCode?: string;
+  amount: number;
 }
 
 const OpenPayPaymentPendingPage: React.FC = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
-  const [booking, setBooking] = useState<BookingInfo | null>(null);
+  const [searchParams] = useSearchParams();
+  const rawContext = searchParams.get('context') || 'booking_deposit';
+  const context = rawContext === 'booking' ? 'booking_deposit' : rawContext;
+
+  const [summary, setSummary] = useState<ContextSummary | null>(null);
   const [transaction, setTransaction] = useState<PaymentTransactionMeta | null>(null);
   const [txStatus, setTxStatus] = useState<string>('');
+  const [txAmount, setTxAmount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!bookingId) {
-      setError('ID de reserva no encontrado');
+      setError('ID no encontrado');
       setIsLoading(false);
       return;
     }
-    fetchData(bookingId);
-  }, [bookingId]);
+    fetchData(bookingId, context);
+  }, [bookingId, context]);
 
-  const fetchData = async (id: string) => {
+  const fetchData = async (id: string, ctx: string) => {
     try {
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .select(`
-          id, booking_code, total_price, deposit_amount, user_payment,
-          status, payment_status,
-          tours ( name, destination, image_url )
-        `)
-        .eq('id', id)
-        .maybeSingle();
+      // For featured_slot, metadata lives on featured_tour_slots, not payment_transactions
+      if (ctx === 'featured_slot') {
+        const { data: slot, error: slotError } = await supabase
+          .from('featured_tour_slots')
+          .select(`
+            id, total_amount, pending_payment_metadata,
+            tours ( name, destination, image_url ),
+            featured_plans ( name )
+          `)
+          .eq('id', id)
+          .maybeSingle();
 
-      if (bookingError) throw bookingError;
-      if (!bookingData) throw new Error('Reserva no encontrada');
+        if (slotError) throw slotError;
+        if (!slot) throw new Error('Slot no encontrado');
 
-      setBooking(bookingData as BookingInfo);
+        const meta = slot.pending_payment_metadata as PaymentTransactionMeta | null;
+        if (meta) setTransaction(meta);
 
+        setSummary({
+          title: 'Tour destacado activado correctamente',
+          tourName: (slot.tours as any)?.name || 'Tour destacado',
+          destination: (slot.tours as any)?.destination,
+          imageUrl: (slot.tours as any)?.image_url,
+          amount: Number(slot.total_amount) || 0,
+        });
+        setTxAmount(Number(slot.total_amount) || 0);
+        setTxStatus(meta?.openpay_status || 'pending');
+        setIsLoading(false);
+        return;
+      }
+
+      // All other contexts: query payment_transactions by charge_reference_id + charge_context
       const { data: txData, error: txError } = await supabase
         .from('payment_transactions')
         .select('metadata, status, amount, payment_processor')
-        .eq('booking_id', id)
+        .eq('charge_reference_id', id)
+        .eq('charge_context', ctx)
         .eq('payment_processor', 'openpay')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -87,10 +104,145 @@ const OpenPayPaymentPendingPage: React.FC = () => {
       if (txData?.status) {
         setTxStatus(txData.status);
       }
+      if (txData?.amount) {
+        setTxAmount(Number(txData.amount));
+      }
+
+      // Fetch context-specific summary
+      await fetchContextSummary(id, ctx, txData?.amount);
     } catch (err: any) {
       setError(err.message || 'Error al cargar la información');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchContextSummary = async (id: string, ctx: string, txAmount: number | undefined) => {
+    try {
+      if (ctx === 'booking_deposit' || ctx === 'insurance') {
+        const { data: bookingData, error: bookingError } = await supabase
+          .from('bookings')
+          .select(`
+            id, booking_code, total_price, deposit_amount, user_payment,
+            status, payment_status,
+            tours ( name, destination, image_url )
+          `)
+          .eq('id', id)
+          .maybeSingle();
+
+        if (bookingError) throw bookingError;
+        if (!bookingData) throw new Error('Reserva no encontrada');
+
+        const amount = ctx === 'insurance'
+          ? (txAmount ?? 0)
+          : (bookingData.user_payment ?? bookingData.deposit_amount ?? 0);
+
+        setSummary({
+          title: ctx === 'insurance'
+            ? 'Seguro de viaje agregado correctamente'
+            : 'Reserva creada correctamente',
+          tourName: (bookingData.tours as any)?.name || 'Tour',
+          destination: (bookingData.tours as any)?.destination,
+          imageUrl: (bookingData.tours as any)?.image_url,
+          bookingCode: bookingData.booking_code,
+          amount,
+        });
+        setTxAmount(amount);
+      } else if (ctx === 'supplement') {
+        const { data: supp, error: suppError } = await supabase
+          .from('booking_supplements')
+          .select(`
+            id, total_paid,
+            tour_supplements ( name ),
+            bookings ( booking_code, tours ( name, destination, image_url ) )
+          `)
+          .eq('id', id)
+          .maybeSingle();
+
+        if (suppError) throw suppError;
+        if (!supp) throw new Error('Suplemento no encontrado');
+
+        const booking = (supp as any).bookings;
+        setSummary({
+          title: 'Suplemento creado correctamente',
+          tourName: booking?.tours?.name || 'Tour',
+          destination: booking?.tours?.destination,
+          imageUrl: booking?.tours?.image_url,
+          bookingCode: booking?.booking_code,
+          amount: Number((supp as any).total_paid) || txAmount || 0,
+        });
+        setTxAmount(Number((supp as any).total_paid) || txAmount || 0);
+      } else if (ctx === 'optional_service') {
+        const { data: os, error: osError } = await supabase
+          .from('booking_optional_services')
+          .select(`
+            id, total_paid,
+            tour_optional_services ( name ),
+            bookings ( booking_code, tours ( name, destination, image_url ) )
+          `)
+          .eq('id', id)
+          .maybeSingle();
+
+        if (osError) throw osError;
+        if (!os) throw new Error('Servicio opcional no encontrado');
+
+        const booking = (os as any).bookings;
+        setSummary({
+          title: 'Servicio opcional agregado correctamente',
+          tourName: booking?.tours?.name || 'Tour',
+          destination: booking?.tours?.destination,
+          imageUrl: booking?.tours?.image_url,
+          bookingCode: booking?.booking_code,
+          amount: Number((os as any).total_paid) || txAmount || 0,
+        });
+        setTxAmount(Number((os as any).total_paid) || txAmount || 0);
+      } else if (ctx === 'payment_plan_installment') {
+        const { data: plan, error: planError } = await supabase
+          .from('booking_payment_plans')
+          .select(`
+            id,
+            bookings ( booking_code, tours ( name, destination, image_url ) )
+          `)
+          .eq('id', id)
+          .maybeSingle();
+
+        if (planError) throw planError;
+        if (!plan) throw new Error('Plan de pago no encontrado');
+
+        const booking = (plan as any).bookings;
+        setSummary({
+          title: 'Abono registrado correctamente',
+          tourName: booking?.tours?.name || 'Tour',
+          destination: booking?.tours?.destination,
+          imageUrl: booking?.tours?.image_url,
+          bookingCode: booking?.booking_code,
+          amount: txAmount || 0,
+        });
+      } else if (ctx === 'gift_card') {
+        const { data: gc, error: gcError } = await supabase
+          .from('gift_cards')
+          .select('id, amount, recipient_name')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (gcError) throw gcError;
+        if (!gc) throw new Error('Tarjeta de regalo no encontrada');
+
+        setSummary({
+          title: 'Tarjeta de regalo creada correctamente',
+          tourName: `Tarjeta de Regalo ToursRed`,
+          amount: Number(gc.amount) || txAmount || 0,
+        });
+        setTxAmount(Number(gc.amount) || txAmount || 0);
+      } else {
+        setSummary({
+          title: 'Pago en proceso',
+          tourName: 'Pago',
+          amount: txAmount || 0,
+        });
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar la información');
     }
   };
 
@@ -110,13 +262,13 @@ const OpenPayPaymentPendingPage: React.FC = () => {
     );
   }
 
-  if (error || !booking) {
+  if (error || !summary) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Error</h2>
-          <p className="text-gray-600 mb-4">{error || 'No se pudo cargar la reserva'}</p>
+          <p className="text-gray-600 mb-4">{error || 'No se pudo cargar la información'}</p>
           <Link to="/traveler/bookings" className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors">
             Ver mis reservas
           </Link>
@@ -127,10 +279,13 @@ const OpenPayPaymentPendingPage: React.FC = () => {
 
   const isSpei = transaction?.openpay_method === 'spei';
   const isCash = transaction?.openpay_method === 'cash';
-  const amount = booking.user_payment ?? booking.deposit_amount ?? 0;
+  const amount = txAmount || summary.amount || 0;
   const isTxPending = txStatus === 'pending' || !txStatus;
   const pdfUrl = isSpei ? transaction?.spei_pdf_url : transaction?.cash_pdf_url;
   const canDownloadPdf = isTxPending && !!pdfUrl;
+  const isFeaturedSlot = context === 'featured_slot';
+  const backLink = isFeaturedSlot ? '/agency/tours' : '/traveler/bookings';
+  const backLabel = isFeaturedSlot ? 'Mis tours' : 'Ver mis reservas';
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -140,11 +295,13 @@ const OpenPayPaymentPendingPage: React.FC = () => {
           <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
             <CheckCircle className="h-8 w-8 text-green-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Reserva creada correctamente</h1>
-          <p className="text-gray-600">
-            Tu código de reserva es{' '}
-            <span className="font-bold text-primary-600 tracking-wide">{booking.booking_code}</span>
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{summary.title}</h1>
+          {summary.bookingCode && (
+            <p className="text-gray-600">
+              Tu código de reserva es{' '}
+              <span className="font-bold text-primary-600 tracking-wide">{summary.bookingCode}</span>
+            </p>
+          )}
         </div>
 
         {/* 3-day deadline alert */}
@@ -154,9 +311,13 @@ const OpenPayPaymentPendingPage: React.FC = () => {
             <div>
               <p className="font-semibold text-amber-900">Tienes 3 días para completar el pago</p>
               <p className="text-sm text-amber-800 mt-1">
-                Tu reserva no será cancelada por falta de pago durante este período.
+                {context === 'gift_card'
+                  ? 'Tu tarjeta de regalo no será cancelada por falta de pago durante este período.'
+                  : context === 'featured_slot'
+                    ? 'Tu slot destacado no será cancelado por falta de pago durante este período.'
+                    : 'Tu reserva no será cancelada por falta de pago durante este período.'}
                 Una vez que recibamos y validemos tu pago, te enviaremos un correo electrónico
-                con la confirmación de tu reserva.
+                con la confirmación.
               </p>
             </div>
           </div>
@@ -164,17 +325,17 @@ const OpenPayPaymentPendingPage: React.FC = () => {
 
         {/* Tour summary */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-          {booking.tours?.image_url && (
+          {summary.imageUrl && (
             <div className="relative h-32">
               <img
-                src={booking.tours.image_url}
-                alt={booking.tours.name}
+                src={summary.imageUrl}
+                alt={summary.tourName}
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-black/40 flex items-end">
                 <div className="p-4 text-white">
-                  <h2 className="text-lg font-bold">{booking.tours.name}</h2>
-                  <p className="text-sm">{booking.tours.destination}</p>
+                  <h2 className="text-lg font-bold">{summary.tourName}</h2>
+                  {summary.destination && <p className="text-sm">{summary.destination}</p>}
                 </div>
               </div>
             </div>
@@ -300,8 +461,8 @@ const OpenPayPaymentPendingPage: React.FC = () => {
             <div>
               <p className="text-sm text-blue-900">
                 <strong>¿Qué pasa después?</strong> Una vez que tu pago sea confirmado,
-                recibirás un correo electrónico con la confirmación de tu reserva y
-                todos los detalles de tu tour.
+                recibirás un correo electrónico con la confirmación y
+                todos los detalles.
               </p>
             </div>
           </div>
@@ -310,18 +471,20 @@ const OpenPayPaymentPendingPage: React.FC = () => {
         {/* Action buttons */}
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
-            to="/traveler/bookings"
+            to={backLink}
             className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 transition-colors"
           >
-            Ver mis reservas
+            {backLabel}
             <ArrowRight className="w-4 h-4" />
           </Link>
-          <Link
-            to="/tours"
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
-          >
-            Explorar más tours
-          </Link>
+          {!isFeaturedSlot && (
+            <Link
+              to="/tours"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              Explorar más tours
+            </Link>
+          )}
           <Link
             to="/"
             className="inline-flex items-center justify-center gap-2 px-5 py-3 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"

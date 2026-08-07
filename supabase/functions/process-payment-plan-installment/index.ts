@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@22.3.0";
+import { isConfigured as isOpenpayConfigured, getDashboardUrl, getMerchantId, createOrReuseCustomer as createOrReuseOpenpayCustomer, createSpeiCharge, createCashCharge, createCardCheckoutCharge } from "../_shared/openpay.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,6 +49,7 @@ Deno.serve(async (req: Request) => {
       mp_form_data,
       conekta_method,
       bnpl_product_type,
+      openpay_method,   // "card" | "spei" | "cash"
       pay_full_balance = false,
     } = await req.json();
 
@@ -684,6 +686,93 @@ Deno.serve(async (req: Request) => {
         total_charged: totalToPay,
         points_earned: pointsEarned,
         message: `Abono por ${payment_method === "bank_transfer" ? "transferencia bancaria" : "efectivo"} registrado.`,
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // 8. Openpay
+    if (payment_method === "openpay") {
+      if (!openpay_method || !["card", "spei", "cash"].includes(openpay_method)) {
+        return new Response(JSON.stringify({ error: "openpay_method es requerido y debe ser card, spei o cash" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!isOpenpayConfigured()) {
+        return new Response(JSON.stringify({ error: "Openpay no está configurado" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: userRecordOp } = await supabase
+        .from("users").select("id, first_name, last_name, email, phone_number").eq("id", user.id).maybeSingle();
+
+      let customerIdOp: string;
+      try {
+        customerIdOp = await createOrReuseOpenpayCustomer(supabase, user.id, {
+          first_name: userRecordOp?.first_name, last_name: userRecordOp?.last_name,
+          email: userRecordOp?.email || user.email || "", phone_number: userRecordOp?.phone_number,
+        });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const origin = req.headers.get("origin") || "https://toursred.com";
+      const successUrlOp = `${origin}/payment-pending/${plan_id}?context=payment_plan_installment`;
+      const orderIdOp = `payment_plan_installment_${plan_id}_${Date.now()}`;
+      const roundedAmtPp = Math.round(totalToPay * 100) / 100;
+      const descPp = `Abono plan de pago: ${tourName} (${bookingCode})`;
+
+      let chargeOp;
+      try {
+        if (openpay_method === "spei") {
+          chargeOp = await createSpeiCharge(customerIdOp, roundedAmtPp, orderIdOp, descPp);
+        } else if (openpay_method === "cash") {
+          chargeOp = await createCashCharge(customerIdOp, roundedAmtPp, orderIdOp, descPp);
+        } else {
+          chargeOp = await createCardCheckoutCharge(customerIdOp, roundedAmtPp, orderIdOp, descPp, successUrlOp, {
+            charge_context: "payment_plan_installment", charge_reference_id: plan_id,
+            effective_amount: String(effectiveAmount), net_service_charge: String(netServiceCharge),
+            gross_service_charge: String(grossServiceCharge), membership_exemption_applied: String(exemptionApplied > 0),
+          });
+        }
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const paymentMethodMetadataPp: Record<string, any> = {
+        openpay_method, openpay_charge_id: chargeOp.id, openpay_status: chargeOp.status,
+        effective_amount: String(effectiveAmount), net_service_charge: String(netServiceCharge),
+        gross_service_charge: String(grossServiceCharge), membership_exemption_applied: String(exemptionApplied > 0),
+      };
+      if (openpay_method === "spei") {
+        if (chargeOp.payment_method?.clabe) paymentMethodMetadataPp.clabe = chargeOp.payment_method.clabe;
+        if (chargeOp.payment_method?.bank) paymentMethodMetadataPp.bank = chargeOp.payment_method.bank;
+        if (chargeOp.payment_method?.name) paymentMethodMetadataPp.reference = chargeOp.payment_method.name;
+        paymentMethodMetadataPp.spei_pdf_url = `${getDashboardUrl()}/spei-pdf/${getMerchantId()}/${chargeOp.id}`;
+      } else if (openpay_method === "cash") {
+        if (chargeOp.payment_method?.reference) paymentMethodMetadataPp.reference = chargeOp.payment_method.reference;
+        if (chargeOp.payment_method?.store) paymentMethodMetadataPp.store = chargeOp.payment_method.store;
+        if (chargeOp.payment_method?.expiry_date) paymentMethodMetadataPp.expiry_date = chargeOp.payment_method.expiry_date;
+        if (chargeOp.payment_method?.barcode_url) paymentMethodMetadataPp.barcode_url = chargeOp.payment_method.barcode_url;
+        if (chargeOp.payment_method?.reference) paymentMethodMetadataPp.cash_pdf_url = `${getDashboardUrl()}/paynet-pdf/${getMerchantId()}/${chargeOp.payment_method.reference}`;
+      }
+
+      await supabase.from("payment_transactions").insert({
+        booking_id: booking.id, amount: totalToPay, currency: "mxn", status: "pending",
+        payment_method_type: openpay_method, payment_processor: "openpay",
+        processor_fee: 0, net_amount: totalToPay, openpay_charge_id: chargeOp.id,
+        charge_context: "payment_plan_installment", charge_reference_id: plan_id,
+        metadata: paymentMethodMetadataPp,
+      });
+
+      return new Response(JSON.stringify({
+        success: true,
+        url: openpay_method === "card" ? chargeOp.payment_method?.url : undefined,
+        payment_method: openpay_method !== "card" ? chargeOp.payment_method : undefined,
+        amount: totalToPay,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
