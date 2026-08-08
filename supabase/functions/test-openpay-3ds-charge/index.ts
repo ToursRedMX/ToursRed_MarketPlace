@@ -87,6 +87,12 @@ Deno.serve(async (req: Request) => {
       order_id: orderId,
       use_3d_secure: use_3d_secure === true,
       redirect_url: redirectUrl,
+      customer: {
+        name: "Prueba",
+        last_name: "3DS Openpay",
+        email: "test-3ds-openpay@toursred.com",
+        phone_number: "5555555555",
+      },
     };
 
     const response = await fetch(`${baseUrl}/${merchantId}/charges`, {
