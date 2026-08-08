@@ -9,8 +9,8 @@ declare global {
 }
 
 const SCRIPTS = [
-  'https://sandbox-api.openpay.mx/v1/openpay.v1.min.js',
-  'https://sandbox-api.openpay.mx/v1/openpay-data.v1.min.js',
+  'https://js.openpay.mx/openpay.v1.min.js',
+  'https://js.openpay.mx/openpay-data.v1.min.js',
 ];
 
 function loadScript(src: string): Promise<void> {
