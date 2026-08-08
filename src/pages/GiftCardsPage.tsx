@@ -8,7 +8,6 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import Seo from '../components/Seo';
 import PaymentProviderSelector, { PaymentProvider, ConektaMethod, OpenpayMethod } from '../components/PaymentProviderSelector';
-import MercadoPagoBrick from '../components/MercadoPagoBrick';
 
 const DEFAULT_GIFT_CARD_AMOUNTS = [100, 200, 500, 1000];
 const DEFAULT_MAX_AMOUNT = 10000;
@@ -38,7 +37,6 @@ export default function GiftCardsPage() {
     discountAmount: number;
   } | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
-  const [mpBrick, setMpBrick] = useState<{ preferenceId: string; publicKey: string; giftCardId: string; amount: number } | null>(null);
   const [giftCardAmounts, setGiftCardAmounts] = useState<number[]>(DEFAULT_GIFT_CARD_AMOUNTS);
   const [maxAmount, setMaxAmount] = useState<number>(DEFAULT_MAX_AMOUNT);
   const [isCustomAmount, setIsCustomAmount] = useState(false);
@@ -252,10 +250,7 @@ export default function GiftCardsPage() {
         const mpResult = await mpResponse.json();
         if (!mpResult.success) throw new Error(mpResult.error || 'Error al crear preferencia de MercadoPago');
         giftCardFormPersistence.clearStorage();
-        if (mpResult.preference_id && mpResult.public_key) {
-          setMpBrick({ preferenceId: mpResult.preference_id, publicKey: mpResult.public_key, giftCardId, amount: finalAmount });
-          setIsProcessing(false);
-        } else if (mpResult.url) {
+        if (mpResult.url) {
           window.location.href = mpResult.url;
         } else {
           throw new Error('No se recibió la información de MercadoPago');
@@ -458,45 +453,6 @@ export default function GiftCardsPage() {
       setIsProcessing(false);
     }
   };
-
-  if (mpBrick) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 py-12 px-4">
-        <div className="max-w-xl mx-auto">
-          <button
-            onClick={() => setMpBrick(null)}
-            className="flex items-center text-gray-600 hover:text-gray-900 mb-6"
-          >
-            <X className="w-5 h-5 mr-2" />
-            Volver
-          </button>
-          <div className="bg-white rounded-2xl shadow-xl p-8">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                <Gift className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Completa tu pago</h2>
-                <p className="text-sm text-gray-500">Tarjeta de Regalo ToursRed ${calculateFinalAmount()} MXN</p>
-              </div>
-            </div>
-            <div className="border-t my-6" />
-            <MercadoPagoBrick
-              preferenceId={mpBrick.preferenceId}
-              publicKey={mpBrick.publicKey}
-              amount={mpBrick.amount}
-              onSuccess={() => navigate(`/gift-card/success?gift_card_id=${mpBrick.giftCardId}&provider=mercadopago`)}
-              onPending={() => navigate(`/gift-card/success?gift_card_id=${mpBrick.giftCardId}&provider=mercadopago&pending=true`)}
-              onError={(err) => {
-                setMpBrick(null);
-                setError(err);
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 py-12 px-4">

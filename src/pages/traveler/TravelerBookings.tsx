@@ -13,7 +13,6 @@ import { usePreventUnload } from '../../hooks/usePreventUnload';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
 import { validateAllTravelers } from '../../utils/birthDateValidation';
 import PaymentProviderSelector from '../../components/PaymentProviderSelector';
-import MercadoPagoBrick from '../../components/MercadoPagoBrick';
 
 const TravelerBookings: React.FC = () => {
   const { user } = useAuth();
@@ -224,20 +223,6 @@ const TravelerBookings: React.FC = () => {
     conektaMethod: 'card',
     openpayMethod: 'card',
   });
-  const [mpBrickModal, setMpBrickModal] = useState<{
-    open: boolean;
-    preferenceId: string;
-    publicKey: string;
-    bookingId: string;
-    amount: number;
-  } | null>(null);
-  const [mpSupplementBrickModal, setMpSupplementBrickModal] = useState<{
-    open: boolean;
-    preferenceId: string;
-    publicKey: string;
-    supplementId: string;
-    amount: number;
-  } | null>(null);
   const [rescheduleModal, setRescheduleModal] = useState<{
     open: boolean;
     booking: Booking | null;
@@ -1487,10 +1472,7 @@ const TravelerBookings: React.FC = () => {
 
         const mpResult = await mpResponse.json();
         if (!mpResult.success) throw new Error(mpResult.error || 'Error al crear preferencia de MercadoPago');
-        if (mpResult.preference_id && mpResult.public_key) {
-          setPaymentModal({ open: false, booking: null, walletBalance: 0, toursRedCashToUse: 0, isProcessing: false, selectedProvider: 'stripe' });
-          setMpBrickModal({ open: true, preferenceId: mpResult.preference_id, publicKey: mpResult.public_key, bookingId: booking.id, amount: amountToCharge });
-        } else if (mpResult.url) {
+        if (mpResult.url) {
           window.location.href = mpResult.url;
         } else {
           throw new Error('No se recibió la información de MercadoPago');
@@ -1858,8 +1840,9 @@ const TravelerBookings: React.FC = () => {
         });
         const mpData = await mpRes.json();
         if (!mpRes.ok || !mpData.success) throw new Error(mpData.error || 'Error al crear preferencia de MercadoPago');
+        if (!mpData.url) throw new Error('No se recibió la URL de pago de MercadoPago');
         setSupplementDirectPayModal(prev => ({ ...prev, open: false, isProcessing: false }));
-        setMpSupplementBrickModal({ open: true, preferenceId: mpData.preference_id, publicKey: mpData.public_key, supplementId: bookingSupplement.id, amount: totalAmount });
+        window.location.href = mpData.url;
         return;
       }
 
@@ -2175,8 +2158,9 @@ const TravelerBookings: React.FC = () => {
           });
           const mpData = await mpRes.json();
           if (!mpRes.ok || !mpData.success) throw new Error(mpData.error || 'Error al crear preferencia de MercadoPago');
+          if (!mpData.url) throw new Error('No se recibió la URL de pago de MercadoPago');
           setSupplementPaymentModal(prev => ({ ...prev, open: false, isProcessing: false }));
-          setMpSupplementBrickModal({ open: true, preferenceId: mpData.preference_id, publicKey: mpData.public_key, supplementId: data.booking_supplement_id, amount: totalAmount });
+          window.location.href = mpData.url;
           return;
         }
 
@@ -4103,85 +4087,6 @@ const TravelerBookings: React.FC = () => {
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {mpBrickModal?.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Completa tu pago</h2>
-                  <p className="text-sm text-gray-500 mt-1">Pago seguro con MercadoPago</p>
-                </div>
-                <button
-                  onClick={() => setMpBrickModal(null)}
-                  className="text-gray-400 hover:text-gray-500"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              <MercadoPagoBrick
-                preferenceId={mpBrickModal.preferenceId}
-                publicKey={mpBrickModal.publicKey}
-                amount={mpBrickModal.amount}
-                onSuccess={() => {
-                  setMpBrickModal(null);
-                  fetchBookings();
-                  navigate(`/booking-success?booking_id=${mpBrickModal.bookingId}`);
-                }}
-                onPending={() => {
-                  setMpBrickModal(null);
-                  fetchBookings();
-                  navigate(`/payment-return?provider=mercadopago&booking_id=${mpBrickModal.bookingId}&tr_status=pending`);
-                }}
-                onError={(err) => {
-                  setMpBrickModal(null);
-                  alert(`Error en el pago: ${err}`);
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {mpSupplementBrickModal?.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Completa tu pago</h2>
-                  <p className="text-sm text-gray-500 mt-1">Pago seguro con MercadoPago</p>
-                </div>
-                <button
-                  onClick={() => setMpSupplementBrickModal(null)}
-                  className="text-gray-400 hover:text-gray-500"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              <MercadoPagoBrick
-                preferenceId={mpSupplementBrickModal.preferenceId}
-                publicKey={mpSupplementBrickModal.publicKey}
-                amount={mpSupplementBrickModal.amount}
-                supplementId={mpSupplementBrickModal.supplementId}
-                onSuccess={() => {
-                  setMpSupplementBrickModal(null);
-                  fetchBookings();
-                }}
-                onPending={() => {
-                  setMpSupplementBrickModal(null);
-                  fetchBookings();
-                }}
-                onError={(err) => {
-                  setMpSupplementBrickModal(null);
-                  alert(`Error en el pago: ${err}`);
-                }}
-              />
             </div>
           </div>
         </div>
