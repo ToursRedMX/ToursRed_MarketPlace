@@ -170,7 +170,13 @@ export default function TestOpenPay3DSPage() {
       return;
     }
 
-    window.OpenPay.token.create(formRef.current, handleTokenSuccess, handleTokenError);
+    window.OpenPay.token.create({
+      card_number: cardNumber.replace(/\s/g, ''),
+      holder_name: holderName,
+      expiration_year: expYear,
+      expiration_month: expMonth,
+      cvv2: cvv,
+    }, handleTokenSuccess, handleTokenError);
   };
 
   const handleLookup = async () => {
@@ -474,3 +480,6 @@ export default function TestOpenPay3DSPage() {
     </div>
   );
 }
+
+
+export default TestOpenPay3DSPage
