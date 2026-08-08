@@ -36,6 +36,19 @@ Deno.serve(async (req: Request) => {
       throw new Error('Unauthorized');
     }
 
+    // Prevent duplicate subscriptions: check for existing active membership
+    const { data: existingActiveMembership } = await supabase
+      .from('memberships')
+      .select('id, plan_type, status')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .gt('current_period_end', new Date().toISOString())
+      .maybeSingle();
+
+    if (existingActiveMembership) {
+      throw new Error('Ya tienes una membresía activa. Ve a "Mi Membresía" para administrarla.');
+    }
+
     const { planType, discountCode } = await req.json();
 
     if (!planType || !['monthly', 'annual'].includes(planType)) {

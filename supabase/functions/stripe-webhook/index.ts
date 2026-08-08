@@ -2137,6 +2137,57 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object;
+        const subscriptionId = invoice.subscription;
+
+        if (!subscriptionId) {
+          console.log('invoice.payment_failed: sin suscripcion, omitiendo');
+          break;
+        }
+
+        console.log(`invoice.payment_failed: suscripcion ${subscriptionId}, intento ${invoice.attempt_count}, next_attempt: ${invoice.next_payment_attempt}`);
+
+        const { data: membership } = await supabase
+          .from('memberships')
+          .select('id, user_id, plan_type')
+          .eq('stripe_subscription_id', subscriptionId)
+          .maybeSingle();
+
+        if (!membership) {
+          console.error(`No se encontro membresia para subscription ${subscriptionId} (invoice.payment_failed)`);
+          break;
+        }
+
+        const { data: userData } = await supabase
+          .from('users')
+          .select('email, first_name')
+          .eq('id', membership.user_id)
+          .maybeSingle();
+
+        if (userData) {
+          const nextAttemptDate = invoice.next_payment_attempt
+            ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+            : null;
+
+          EdgeRuntime.waitUntil(
+            fetch(`${supabaseUrl}/functions/v1/send-membership-payment-failed`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({
+                email: userData.email,
+                firstName: userData.first_name || 'Viajero',
+                planType: membership.plan_type || 'monthly',
+                nextAttemptDate,
+                amountDue: invoice.amount_due ? invoice.amount_due / 100 : null,
+              }),
+            }).catch((err) => console.error('Error enviando correo de pago fallido:', err))
+          );
+        }
+
+        break;
+      }
+
       case 'checkout.session.expired': {
         const session = event.data.object;
         const bookingId = session.metadata?.booking_id;
