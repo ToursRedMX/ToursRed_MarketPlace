@@ -586,12 +586,21 @@ export default function GiftCardsPage() {
                       type="number"
                       min={100}
                       max={maxAmount}
-                      step={100}
+                      step={1}
                       value={customAmount}
                       onChange={(e) => {
-                        const val = Math.round(Number(e.target.value) / 100) * 100;
-                        setCustomAmount(String(val));
-                        setSelectedAmount(val);
+                        const raw = e.target.value;
+                        setCustomAmount(raw);
+                        const num = Number(raw);
+                        if (!isNaN(num)) setSelectedAmount(num);
+                      }}
+                      onBlur={() => {
+                        const num = Number(customAmount);
+                        if (!isNaN(num) && num > 0) {
+                          const clamped = Math.max(100, Math.min(num, maxAmount));
+                          setCustomAmount(String(clamped));
+                          setSelectedAmount(clamped);
+                        }
                       }}
                       placeholder="Ej. 1500"
                       className="w-full pl-8 pr-4 py-3 border-2 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
