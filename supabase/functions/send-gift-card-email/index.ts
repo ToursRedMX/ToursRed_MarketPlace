@@ -110,9 +110,29 @@ Deno.serve(async (req: Request) => {
       await supabase
         .from("gift_cards")
         .update({
+          email_sent: true,
           email_sent_at: new Date().toISOString(),
         })
         .eq("id", giftCardId);
+    }
+
+    // Notify admin about the gift card purchase
+    try {
+      const { data: adminEmailSettings } = await supabase
+        .from("email_settings")
+        .select("contact_email, smtp_api_key")
+        .single();
+
+      if (adminEmailSettings?.contact_email && adminEmailSettings?.smtp_api_key) {
+        await sendAdminNotificationEmail(
+          adminEmailSettings.smtp_api_key,
+          adminEmailSettings.contact_email,
+          giftCard,
+          appUrl
+        );
+      }
+    } catch (adminErr) {
+      console.error("Error sending admin notification:", adminErr);
     }
 
     return new Response(
@@ -361,5 +381,114 @@ Válida hasta: ${expiryDate}
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(`Failed to send email: ${JSON.stringify(errorData)}`);
+  }
+}
+
+async function sendAdminNotificationEmail(
+  apiKey: string,
+  adminEmail: string,
+  giftCard: any,
+  appUrl: string
+): Promise<void> {
+  const formattedAmount = new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  }).format(giftCard.amount);
+
+  const purchaseDate = new Intl.DateTimeFormat("es-MX", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(giftCard.purchased_at || giftCard.created_at));
+
+  const subject = `Nueva venta de Tarjeta de Regalo - ${formattedAmount}`;
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .header { background: #1E40AF; padding: 30px; text-align: center; }
+    .content { background-color: #ffffff; padding: 30px; }
+    .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #E5E7EB; }
+    .info-label { color: #6B7280; font-weight: 600; }
+    .info-value { color: #1F2937; }
+    .footer { background-color: #F9FAFB; padding: 20px; text-align: center; font-size: 12px; color: #9CA3AF; }
+  </style>
+</head>
+<body style="background-color: #F3F4F6; padding: 20px;">
+  <table class="container" width="600" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border-radius: 8px; overflow: hidden;">
+    <tr>
+      <td class="header">
+        <h1 style="color: #FFFFFF; margin: 0; font-size: 24px;">Nueva Venta de Tarjeta de Regalo</h1>
+      </td>
+    </tr>
+    <tr>
+      <td class="content">
+        <p style="font-size: 16px;">Se ha completado la compra de una tarjeta de regalo.</p>
+
+        <div style="background: #FEF3C7; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+          <p style="color: #78350F; font-size: 14px; margin: 0 0 5px 0; font-weight: 600;">CODIGO</p>
+          <p style="color: #1F2937; font-size: 28px; font-weight: bold; margin: 0; font-family: monospace; letter-spacing: 3px;">${giftCard.code}</p>
+          <p style="color: #D97706; font-size: 24px; font-weight: bold; margin: 10px 0 0 0;">${formattedAmount}</p>
+        </div>
+
+        <div style="margin: 20px 0;">
+          <div class="info-row"><span class="info-label">Comprador:</span><span class="info-value">${giftCard.purchaser_name} (${giftCard.purchaser_email})</span></div>
+          ${giftCard.recipient_email ? `<div class="info-row"><span class="info-label">Receptor:</span><span class="info-value">${giftCard.recipient_name || 'N/A'} (${giftCard.recipient_email})</span></div>` : ''}
+          <div class="info-row"><span class="info-label">Fecha de compra:</span><span class="info-value">${purchaseDate}</span></div>
+          <div class="info-row"><span class="info-label">Proveedor de pago:</span><span class="info-value">${giftCard.payment_provider || 'stripe'}</span></div>
+          ${giftCard.discount_amount > 0 ? `<div class="info-row"><span class="info-label">Descuento aplicado:</span><span class="info-value">${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(giftCard.discount_amount)}</span></div>` : ''}
+        </div>
+
+        <p style="font-size: 14px; color: #6B7280;">Puedes ver mas detalles en el panel de administracion de ToursRed.</p>
+      </td>
+    </tr>
+    <tr>
+      <td class="footer">© 2025 ToursRed. Notificacion automatica.</td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const textBody = `
+Nueva venta de Tarjeta de Regalo
+
+Codigo: ${giftCard.code}
+Monto: ${formattedAmount}
+
+Comprador: ${giftCard.purchaser_name} (${giftCard.purchaser_email})
+${giftCard.recipient_email ? `Receptor: ${giftCard.recipient_name || 'N/A'} (${giftCard.recipient_email})\n` : ''}Fecha: ${purchaseDate}
+Proveedor: ${giftCard.payment_provider || 'stripe'}
+
+© 2025 ToursRed
+  `;
+
+  const emailPayload = {
+    to: [adminEmail],
+    sender: "ToursRed <noreply@toursred.com>",
+    subject: subject,
+    html_body: htmlBody,
+    text_body: textBody,
+  };
+
+  const response = await fetch("https://api.smtp2go.com/v3/email/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Smtp2go-Api-Key": apiKey,
+    },
+    body: JSON.stringify(emailPayload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`Failed to send admin email: ${JSON.stringify(errorData)}`);
   }
 }

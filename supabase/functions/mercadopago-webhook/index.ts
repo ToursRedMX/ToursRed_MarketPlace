@@ -681,7 +681,9 @@ Deno.serve(async (req: Request) => {
           .from("gift_cards")
           .update({
             payment_status: "paid",
+            status: "active",
             payment_provider: "mercadopago",
+            purchased_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq("id", externalReference);

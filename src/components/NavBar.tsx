@@ -221,6 +221,7 @@ const NavBar: React.FC = () => {
     comercialItems.push({ to: '/admin/promotions', label: 'Promociones', icon: <BadgePercent className="h-4 w-4" /> });
     comercialItems.push({ to: '/admin/featured-tours', label: 'Tours Destacados', icon: <Sparkles className="h-4 w-4" /> });
     comercialItems.push({ to: '/admin/referrals', label: 'Referidos', icon: <Gift className="h-4 w-4" /> });
+    comercialItems.push({ to: '/admin/gift-cards', label: 'Tarjetas de Regalo', icon: <Gift className="h-4 w-4" /> });
 
     if (comercialItems.length > 0)
       groups.push({ title: 'Comercial', icon: <CreditCard className="h-4 w-4" />, items: comercialItems });
