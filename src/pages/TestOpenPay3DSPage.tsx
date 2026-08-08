@@ -48,6 +48,7 @@ export default function TestOpenPay3DSPage() {
   const [lookupResult, setLookupResult] = useState<any>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [attemptLog, setAttemptLog] = useState<Array<{ label: string; result: any }>>([]);
+  const [debugDsid, setDebugDsid] = useState<string>('');
 
   const formRef = useRef<HTMLFormElement>(null);
   const deviceSessionIdRef = useRef<string>('');
@@ -63,7 +64,9 @@ export default function TestOpenPay3DSPage() {
   useEffect(() => {
     (async () => {
       try {
-        await Promise.all(SCRIPTS.map(loadScript));
+        for (const src of SCRIPTS) {
+          await loadScript(src);
+        }
 
         if (!window.OpenPay) {
           throw new Error('OpenPay SDK no disponible tras cargar los scripts');
@@ -101,6 +104,7 @@ export default function TestOpenPay3DSPage() {
         if (formRef.current) {
           const dsid = window.OpenPay.deviceData.setup('openpay-test-form', 'device_session_id');
           deviceSessionIdRef.current = dsid || '';
+          setDebugDsid(dsid || '(vacio)');
         }
 
         const returned = await returnUrl();
@@ -384,6 +388,8 @@ export default function TestOpenPay3DSPage() {
               />
             </div>
           </div>
+
+          <p className="text-xs text-gray-500 mb-2">device_session_id capturado: <code className="font-mono text-gray-700">{debugDsid || '(sin capturar)'}</code></p>
 
           <button
             type="submit"
