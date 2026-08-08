@@ -98,7 +98,7 @@ export default function TestOpenPay3DSPage() {
         window.OpenPay.setSandboxMode(true);
 
         if (formRef.current) {
-          window.OpenPay.deviceData.setup(formRef.current, 'device_session_id');
+          window.OpenPay.deviceData.setup('openpay-test-form', 'device_session_id');
         }
 
         const returned = await returnUrl();
@@ -281,7 +281,7 @@ export default function TestOpenPay3DSPage() {
         </div>
 
         {/* Card form */}
-        <form ref={formRef} onSubmit={handleSubmit} className="mb-6 rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+        <form ref={formRef} id="openpay-test-form" onSubmit={handleSubmit} className="mb-6 rounded-lg bg-white border border-gray-200 p-6 space-y-4">
           <div className="flex items-center gap-2 mb-2">
             <CreditCard className="w-5 h-5 text-orange-500" />
             <h2 className="text-lg font-semibold text-gray-900">Datos de tarjeta de prueba</h2>
@@ -480,6 +480,3 @@ export default function TestOpenPay3DSPage() {
     </div>
   );
 }
-
-
-export default TestOpenPay3DSPage
