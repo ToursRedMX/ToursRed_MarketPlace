@@ -44,11 +44,12 @@ Deno.serve(async (req: Request) => {
 
     // POST — create a test 3DS charge
     const body = await req.json();
-    const { source_id, device_session_id, amount, charge_id } = body as {
+    const { source_id, device_session_id, amount, charge_id, use_3d_secure } = body as {
       source_id?: string;
       device_session_id?: string;
       amount?: number;
       charge_id?: string;
+      use_3d_secure?: boolean;
     };
 
     // If charge_id is provided, query the charge status instead
@@ -84,7 +85,7 @@ Deno.serve(async (req: Request) => {
       currency: "MXN",
       description: "PRUEBA 3DS - temporal",
       order_id: orderId,
-      use_3d_secure: true,
+      use_3d_secure: use_3d_secure === true,
       redirect_url: redirectUrl,
     };
 

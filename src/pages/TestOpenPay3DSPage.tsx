@@ -47,6 +47,7 @@ export default function TestOpenPay3DSPage() {
   const [lookupId, setLookupId] = useState('');
   const [lookupResult, setLookupResult] = useState<any>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [attemptLog, setAttemptLog] = useState<Array<{ label: string; result: any }>>([]);
 
   const formRef = useRef<HTMLFormElement>(null);
   const deviceSessionIdRef = useRef<string>('');
@@ -125,26 +126,50 @@ export default function TestOpenPay3DSPage() {
 
     const dsid = deviceSessionIdRef.current;
 
+    setAttemptLog([]);
+    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-openpay-3ds-charge`;
+    const authHeaders = {
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+    };
+
     try {
-      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-openpay-3ds-charge`;
-      const res = await fetch(fnUrl, {
+      // Intento 1: cargo normal, sin 3DS
+      const res1 = await fetch(fnUrl, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          source_id: tokenId,
-          device_session_id: dsid,
-          amount: 10,
-        }),
+        headers: authHeaders,
+        body: JSON.stringify({ source_id: tokenId, device_session_id: dsid, amount: 10, use_3d_secure: false }),
       });
+      const data1 = await res1.json();
+      setAttemptLog(prev => [...prev, { label: 'Intento 1 \u2014 cargo normal (sin 3DS)', result: data1 }]);
 
-      const data = await res.json();
-      setChargeResult(data);
+      const errorCode1 = data1?.raw?.error_code ?? data1?.error_code;
 
-      if (!res.ok) {
-        setErrorResult(data);
+      if (res1.ok) {
+        setChargeResult(data1);
+        setTokenizing(false);
+        return;
+      }
+
+      if (errorCode1 !== 3005) {
+        // Rechazado por una razon distinta a riesgo/antifraude \u2014 no tiene caso reintentar con 3DS
+        setErrorResult(data1);
+        setTokenizing(false);
+        return;
+      }
+
+      // Intento 2: mismo token, ahora con 3DS \u2014 porque Openpay pidio reintentar (codigo 3005)
+      const res2 = await fetch(fnUrl, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ source_id: tokenId, device_session_id: dsid, amount: 10, use_3d_secure: true }),
+      });
+      const data2 = await res2.json();
+      setAttemptLog(prev => [...prev, { label: 'Intento 2 \u2014 reintento con 3D Secure (codigo 3005 recibido)', result: data2 }]);
+
+      setChargeResult(data2);
+      if (!res2.ok) {
+        setErrorResult(data2);
       }
     } catch (err: any) {
       setErrorResult({ error: err.message });
@@ -414,6 +439,16 @@ export default function TestOpenPay3DSPage() {
             )}
           </div>
         )}
+
+        {/* Attempt log */}
+        {attemptLog.map((attempt, i) => (
+          <div key={i} className="mb-4 rounded-lg bg-gray-50 border border-gray-200 p-4">
+            <p className="text-gray-800 text-sm font-medium mb-2">{attempt.label}</p>
+            <pre className="text-xs text-gray-700 bg-white rounded p-3 overflow-auto max-h-60 border border-gray-100">
+              {JSON.stringify(attempt.result, null, 2)}
+            </pre>
+          </div>
+        ))}
 
         {/* Results */}
         {tokenResult && (
