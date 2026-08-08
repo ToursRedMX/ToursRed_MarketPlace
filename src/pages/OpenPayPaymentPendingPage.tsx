@@ -86,6 +86,12 @@ const OpenPayPaymentPendingPage: React.FC = () => {
         return;
       }
 
+      // gift_card context: use server function to bypass RLS for anonymous users
+      if (ctx === 'gift_card') {
+        await fetchGiftCardSummary(id);
+        return;
+      }
+
       // All other contexts: query payment_transactions by charge_reference_id + charge_context
       const { data: txData, error: txError } = await supabase
         .from('payment_transactions')
@@ -241,6 +247,55 @@ const OpenPayPaymentPendingPage: React.FC = () => {
           amount: txAmount || 0,
         });
       }
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar la información');
+    }
+  };
+
+  const fetchGiftCardSummary = async (id: string) => {
+    try {
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-gift-card-status`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ gift_card_id: id }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al consultar la tarjeta de regalo');
+      }
+
+      const data = await response.json();
+
+      if (data.payment_instructions) {
+        const instr = data.payment_instructions;
+        setTransaction({
+          openpay_method: instr.openpay_method || undefined,
+          openpay_status: instr.openpay_status || undefined,
+          clabe: instr.clabe || undefined,
+          bank: instr.bank || undefined,
+          reference: instr.reference || undefined,
+          store: instr.store || undefined,
+          expiry_date: instr.expiry_date || undefined,
+          barcode_url: instr.barcode_url || undefined,
+          spei_pdf_url: instr.spei_pdf_url || undefined,
+          cash_pdf_url: instr.cash_pdf_url || undefined,
+        });
+      }
+
+      setTxStatus(data.tx_status || data.payment_status || 'pending');
+      const effectiveAmount = (Number(data.amount) || 0) - (Number(data.discount_amount) || 0);
+      setTxAmount(data.tx_amount || effectiveAmount);
+
+      setSummary({
+        title: 'Tarjeta de regalo creada correctamente',
+        tourName: `Tarjeta de Regalo ToursRed`,
+        amount: effectiveAmount,
+      });
     } catch (err: any) {
       setError(err.message || 'Error al cargar la información');
     }

@@ -356,6 +356,46 @@ export default function PaymentReturnPage() {
     // The return URL just tells us which outcome the hosted checkout reported.
     if (provider === 'conekta') {
       if (returnStatus === 'success') {
+        // Gift card: poll via server function (RLS blocks anonymous reads of gift_cards)
+        if (returnUrlContext === 'gift_card' && bookingId) {
+          setStatus('pending');
+          setMessage('Estamos confirmando tu pago con Conekta. Esto puede tomar unos momentos.');
+
+          for (let i = 0; i < 10; i++) {
+            await new Promise(r => setTimeout(r, 5000));
+            try {
+              const gcRes = await fetch(
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-gift-card-status`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                  },
+                  body: JSON.stringify({ gift_card_id: bookingId }),
+                }
+              );
+              if (gcRes.ok) {
+                const gcData = await gcRes.json();
+                if (gcData.payment_status === 'paid') {
+                  setStatus('success');
+                  setMessage('Pago exitoso. Tu tarjeta de regalo fue procesada.');
+                  setTimeout(() => navigate(`/gift-card/success?gift_card_id=${bookingId}&provider=conekta`), 2000);
+                  return;
+                }
+                if (gcData.status === 'cancelled' || gcData.payment_status === 'cancelled') {
+                  setStatus('error');
+                  setMessage('El pago no pudo ser completado. Por favor intenta nuevamente.');
+                  return;
+                }
+              }
+            } catch (_) { /* keep polling */ }
+          }
+          setStatus('pending');
+          setMessage('Tu pago está siendo procesado. Te notificaremos por correo cuando sea confirmado.');
+          return;
+        }
+
         // The webhook may or may not have processed yet — poll the booking status
         setStatus('pending');
         setMessage('Estamos confirmando tu pago con Conekta. Esto puede tomar unos momentos.');
