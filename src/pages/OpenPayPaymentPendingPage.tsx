@@ -339,8 +339,9 @@ const OpenPayPaymentPendingPage: React.FC = () => {
   const pdfUrl = isSpei ? transaction?.spei_pdf_url : transaction?.cash_pdf_url;
   const canDownloadPdf = isTxPending && !!pdfUrl;
   const isFeaturedSlot = context === 'featured_slot';
-  const backLink = isFeaturedSlot ? '/agency/tours' : '/traveler/bookings';
-  const backLabel = isFeaturedSlot ? 'Mis tours' : 'Ver mis reservas';
+  const isGiftCard = context === 'gift_card';
+  const backLink = isFeaturedSlot ? '/agency/tours' : isGiftCard ? '/' : '/traveler/bookings';
+  const backLabel = isFeaturedSlot ? 'Mis tours' : isGiftCard ? 'Ir al inicio' : 'Ver mis reservas';
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -359,24 +360,42 @@ const OpenPayPaymentPendingPage: React.FC = () => {
           )}
         </div>
 
-        {/* 3-day deadline alert */}
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-          <div className="flex items-start gap-3">
-            <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-amber-900">Tienes 3 días para completar el pago</p>
-              <p className="text-sm text-amber-800 mt-1">
-                {context === 'gift_card'
-                  ? 'Tu tarjeta de regalo no será cancelada por falta de pago durante este período.'
-                  : context === 'featured_slot'
-                    ? 'Tu slot destacado no será cancelado por falta de pago durante este período.'
-                    : 'Tu reserva no será cancelada por falta de pago durante este período.'}
-                Una vez que recibamos y validemos tu pago, te enviaremos un correo electrónico
-                con la confirmación.
-              </p>
+        {/* 3-day deadline alert — solo si el pago sigue pendiente */}
+        {isTxPending ? (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-amber-900">Tienes 3 días para completar el pago</p>
+                <p className="text-sm text-amber-800 mt-1">
+                  {context === 'gift_card'
+                    ? 'Tu tarjeta de regalo no será cancelada por falta de pago durante este período.'
+                    : context === 'featured_slot'
+                      ? 'Tu slot destacado no será cancelado por falta de pago durante este período.'
+                      : 'Tu reserva no será cancelada por falta de pago durante este período.'}
+                  Una vez que recibamos y validemos tu pago, te enviaremos un correo electrónico
+                  con la confirmación.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-green-900">Tu pago fue confirmado</p>
+                <p className="text-sm text-green-800 mt-1">
+                  {context === 'gift_card'
+                    ? 'Tu tarjeta de regalo ya está activa. Revisa tu correo para ver el código y los detalles.'
+                    : context === 'featured_slot'
+                      ? 'Tu tour destacado ya está activo.'
+                      : 'Recibirás un correo electrónico con la confirmación y todos los detalles.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tour summary */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
@@ -494,7 +513,7 @@ const OpenPayPaymentPendingPage: React.FC = () => {
               </p>
             ) : null}
           </div>
-        ) : (
+        ) : isTxPending ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
             <div className="flex items-start gap-3">
               <Mail className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -503,6 +522,18 @@ const OpenPayPaymentPendingPage: React.FC = () => {
                 <p className="text-sm text-gray-600 mt-1">
                   Tu pago está siendo procesado. Recibirás un correo de confirmación
                   una vez que se haya completado.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-gray-900">Pago completado con tarjeta</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Tu pago fue procesado exitosamente.
                 </p>
               </div>
             </div>
