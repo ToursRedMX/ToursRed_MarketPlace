@@ -101,12 +101,6 @@ export default function TestOpenPay3DSPage() {
         window.OpenPay.setApiKey(pk);
         window.OpenPay.setSandboxMode(true);
 
-        if (formRef.current) {
-          const dsid = window.OpenPay.deviceData.setup('openpay-test-form', 'device_session_id');
-          deviceSessionIdRef.current = dsid || '';
-          setDebugDsid(dsid || '(vacio)');
-        }
-
         const returned = await returnUrl();
         if (returned) {
           // stay on page, user will use the lookup section
@@ -118,6 +112,14 @@ export default function TestOpenPay3DSPage() {
       }
     })();
   }, [returnUrl]);
+
+  useEffect(() => {
+    if (loading || !merchantId || !window.OpenPay?.deviceData) return;
+    if (!formRef.current) return;
+    const dsid = window.OpenPay.deviceData.setup('openpay-test-form', 'device_session_id');
+    deviceSessionIdRef.current = dsid || '';
+    setDebugDsid(dsid || '(vacio)');
+  }, [loading, merchantId]);
 
   const handleTokenSuccess = async (response: any) => {
     setTokenResult(response);
