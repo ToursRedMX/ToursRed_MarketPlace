@@ -98,7 +98,8 @@ export default function TestOpenPay3DSPage() {
         window.OpenPay.setSandboxMode(true);
 
         if (formRef.current) {
-          window.OpenPay.deviceData.setup('openpay-test-form', 'device_session_id');
+          const dsid = window.OpenPay.deviceData.setup('openpay-test-form', 'device_session_id');
+          deviceSessionIdRef.current = dsid || '';
         }
 
         const returned = await returnUrl();
@@ -122,7 +123,7 @@ export default function TestOpenPay3DSPage() {
       return;
     }
 
-    const dsid = (document.getElementById('device_session_id') as HTMLInputElement)?.value || deviceSessionIdRef.current;
+    const dsid = deviceSessionIdRef.current;
 
     try {
       const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-openpay-3ds-charge`;
@@ -286,8 +287,6 @@ export default function TestOpenPay3DSPage() {
             <CreditCard className="w-5 h-5 text-orange-500" />
             <h2 className="text-lg font-semibold text-gray-900">Datos de tarjeta de prueba</h2>
           </div>
-
-          <input type="hidden" id="device_session_id" name="device_session_id" />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del titular</label>
