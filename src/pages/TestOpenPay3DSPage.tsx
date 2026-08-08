@@ -103,7 +103,18 @@ export default function TestOpenPay3DSPage() {
 
         const returned = await returnUrl();
         if (returned) {
-          // stay on page, user will use the lookup section
+          const params = new URLSearchParams(window.location.search);
+          const returnedChargeId = params.get('id');
+          if (returnedChargeId) {
+            setLookupId(returnedChargeId);
+            const lookupRes = await fetch(fnUrl, {
+              method: 'POST',
+              headers: fnHeaders,
+              body: JSON.stringify({ charge_id: returnedChargeId }),
+            });
+            const lookupData = await lookupRes.json();
+            setLookupResult(lookupData);
+          }
         }
       } catch (err: any) {
         setInitError(err.message || 'Error inicializando OpenPay');
@@ -283,9 +294,13 @@ export default function TestOpenPay3DSPage() {
 
         {isReturned && (
           <div className="mb-6 rounded-lg bg-blue-100 border border-blue-300 px-4 py-3">
-            <p className="text-blue-800 text-sm font-medium">Regresaste de la autenticacion 3DS</p>
+            <p className="text-blue-800 text-sm font-medium">Regresaste de la autenticacion 3D Secure</p>
             <p className="text-blue-700 text-sm mt-1">
-              Si tienes el ID del cargo, usalo abajo para consultar su estado actual.
+              El resultado del cargo se muestra abajo, en la seccion{' '}
+              <span className="font-semibold">Consultar estado de cargo</span>.
+            </p>
+            <p className="text-blue-600 text-lg mt-2 animate-bounce">
+              ↓
             </p>
           </div>
         )}
