@@ -48,6 +48,17 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     return null;
   };
 
+  const getAgencyId = async (): Promise<string | null> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase
+      .from('agencies')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return data?.id ?? null;
+  };
+
   const processFile = async (file: File) => {
     setIsUploading(true);
     setError('');
@@ -60,7 +71,18 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
       }
 
       const fileExt = file.name.split('.').pop() || 'jpg';
-      const fileName = `${storageFolder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`;
+      let fileName: string;
+
+      if (storageFolder === 'tours' || storageFolder === 'agencies') {
+        const agencyId = await getAgencyId();
+        if (!agencyId) {
+          setError('No se pudo determinar la agencia para subir esta imagen.');
+          return;
+        }
+        fileName = `${storageFolder}/${agencyId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`;
+      } else {
+        fileName = `${storageFolder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`;
+      }
 
       const { error: uploadError } = await supabase.storage
         .from('images')
