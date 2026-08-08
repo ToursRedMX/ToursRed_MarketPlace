@@ -29,6 +29,7 @@ interface PlatformSettings {
   paypal_enabled: boolean;
   conekta_enabled: boolean;
   openpay_enabled: boolean;
+  openpay_public_key: string;
   openpay_commission_pct: number;
   openpay_commission_fixed: number;
   stripe_commission_pct: number;
@@ -119,6 +120,7 @@ const AdminSettings: React.FC = () => {
     paypal_enabled: false,
     conekta_enabled: false,
     openpay_enabled: false,
+    openpay_public_key: '',
     openpay_commission_pct: 2.9,
     openpay_commission_fixed: 0,
     stripe_commission_pct: 3.1034,
@@ -406,6 +408,7 @@ const AdminSettings: React.FC = () => {
             paypal_enabled: platformSettings.paypal_enabled,
             conekta_enabled: platformSettings.conekta_enabled,
             openpay_enabled: platformSettings.openpay_enabled,
+            openpay_public_key: platformSettings.openpay_public_key,
             openpay_commission_pct: platformSettings.openpay_commission_pct,
             openpay_commission_fixed: platformSettings.openpay_commission_fixed,
             stripe_commission_pct: platformSettings.stripe_commission_pct,
@@ -1411,10 +1414,37 @@ const AdminSettings: React.FC = () => {
                       <div className="text-xs text-blue-800">
                         <p className="font-medium mb-1">Configuracion de Openpay:</p>
                         <ul className="space-y-1">
-                          <li>• Las llaves se configuran como secrets de Supabase Edge Functions (OPENPAY_MERCHANT_ID y OPENPAY_PRIVATE_KEY)</li>
+                          <li>• La <strong>llave publica</strong> se configura aqui abajo; la llave privada y el Merchant ID se configuran como secrets de Supabase Edge Functions (OPENPAY_MERCHANT_ID y OPENPAY_PRIVATE_KEY)</li>
                           <li>• Metodos disponibles: tarjeta de credito/debito, SPEI, efectivo</li>
                         </ul>
                       </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="openpay_public_key" className="block text-xs font-medium text-gray-700 mb-1">
+                      Llave publica (Public Key)
+                    </label>
+                    <p className="text-xs text-gray-500 mb-1">
+                      Llave publica de Openpay para inicializar el SDK en el frontend (formato pk_...)
+                    </p>
+                    <div className="relative">
+                      <input
+                        type={showSecrets['openpay_public_key'] ? 'text' : 'password'}
+                        id="openpay_public_key"
+                        name="openpay_public_key"
+                        value={platformSettings.openpay_public_key || ''}
+                        onChange={handlePlatformChange}
+                        placeholder="pk_..."
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleSecret('openpay_public_key')}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                      >
+                        {showSecrets['openpay_public_key'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
                   </div>
                 </div>
