@@ -570,18 +570,30 @@ Deno.serve(async (req: Request) => {
       let refundTransactionId: string | null = null;
 
       if (totalRefund > 0) {
-        const { data: refundData, error: refundError } = await adminClient.rpc("update_wallet_balance", {
-          p_user_id: user.id,
-          p_amount: totalRefund,
-          p_type: "refund",
-          p_description: `Reembolso por rechazo de reagendado de slot`,
-          p_reference_id: booking_id,
+        const { data: refundResult, error: refundError } = await adminClient.rpc("process_cancellation_refund", {
+          p_booking_id: booking_id,
+          p_refund_amount: totalRefund,
           p_reference_type: "slot_reschedule_rejection",
-          p_idempotency_key: `${rescheduleResponse.id}_refund_slot_reschedule`,
+          p_description: `Reembolso por rechazo de reagendado de slot`,
+          p_new_status: "cancelled",
+          p_set_cancelled_at: true,
+          p_cancellation_type: "slot_reschedule_rejection",
+          p_cancellation_refund_amount: totalRefund,
         });
 
         if (refundError) throw refundError;
-        refundTransactionId = refundData?.transaction_id || null;
+        refundTransactionId = refundResult?.transaction_id || null;
+      } else {
+        // No refund needed but still cancel atomically to prevent race conditions
+        const { error: cancelError } = await adminClient.rpc("process_cancellation_refund", {
+          p_booking_id: booking_id,
+          p_refund_amount: 0,
+          p_reference_type: "slot_reschedule_rejection",
+          p_new_status: "cancelled",
+          p_set_cancelled_at: true,
+          p_cancellation_type: "slot_reschedule_rejection",
+        });
+        if (cancelError) throw cancelError;
       }
 
       await adminClient
@@ -599,10 +611,6 @@ Deno.serve(async (req: Request) => {
       await adminClient
         .from("bookings")
         .update({
-          status: "cancelled",
-          cancelled_at: now,
-          cancellation_type: "slot_reschedule_rejection",
-          cancellation_refund_amount: totalRefund,
           has_pending_slot_reschedule: false,
           slot_reschedule_response: "rejected",
           slot_reschedule_responded_at: now,

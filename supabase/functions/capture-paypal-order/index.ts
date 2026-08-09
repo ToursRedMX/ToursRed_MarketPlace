@@ -93,7 +93,7 @@ async function activateGiftCard(supabase: any, giftCardId: string, paypalTransac
 async function confirmBooking(supabase: any, bookingId: string, paypalTransactionId: string | null, captureData?: any) {
   const { data: existingBooking } = await supabase
     .from("bookings")
-    .select("payment_status, deposit_amount")
+    .select("payment_status, deposit_amount, user_id, toursred_cash_used, points_used")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -136,6 +136,60 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
 
   if (error) {
     console.error("Error updating booking:", error);
+  }
+
+  // Deduct ToursRed Cash from wallet if used
+  const toursRedCashUsed = parseFloat(existingBooking?.toursred_cash_used || '0');
+  if (toursRedCashUsed > 0 && existingBooking?.user_id) {
+    try {
+      const { data: existingWalletTx } = await supabase
+        .from("wallet_transactions")
+        .select("id")
+        .eq("user_id", existingBooking.user_id)
+        .eq("reference_id", bookingId)
+        .eq("reference_type", "booking")
+        .eq("type", "debit")
+        .maybeSingle();
+
+      if (existingWalletTx) {
+        console.log(`⚠️ ToursRed Cash already deducted for booking ${bookingId} (PayPal), skipping...`);
+      } else {
+        const { error: walletError } = await supabase.rpc('update_wallet_balance', {
+          p_user_id: existingBooking.user_id,
+          p_amount: -toursRedCashUsed,
+          p_type: 'debit',
+          p_description: `Aplicado a reserva #${bookingId}`,
+          p_reference_id: bookingId,
+          p_reference_type: 'booking',
+          p_idempotency_key: `${bookingId}_charge_booking`,
+        });
+        if (walletError) {
+          console.error(`Error deducting ToursRed Cash (PayPal): ${walletError.message}`);
+        } else {
+          console.log(`Successfully deducted ${toursRedCashUsed} MXN from user wallet (PayPal)`);
+        }
+      }
+    } catch (walletErr) {
+      console.error('Error processing ToursRed Cash deduction (PayPal):', walletErr);
+    }
+  }
+
+  // Deduct ToursRed Points if used
+  const pointsUsed = parseInt(existingBooking?.points_used || '0');
+  if (pointsUsed > 0) {
+    try {
+      const { error: pointsError } = await supabase.rpc('deduct_points_for_booking', {
+        p_booking_id: bookingId,
+        p_points_to_deduct: pointsUsed,
+      });
+      if (pointsError) {
+        console.error(`Error deducting points (PayPal): ${pointsError.message}`);
+      } else {
+        console.log(`Successfully deducted ${pointsUsed} points from user points wallet (PayPal)`);
+      }
+    } catch (pointsErr) {
+      console.error('Error processing points deduction (PayPal):', pointsErr);
+    }
   }
 
   // Persist payment_transactions record for multi-processor refund support

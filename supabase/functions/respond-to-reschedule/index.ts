@@ -246,24 +246,25 @@ Deno.serve(async (req: Request) => {
       const toursredCashUsed = Number(booking.toursred_cash_used || 0);
       const totalRefund = refundAmount + toursredCashUsed;
 
-      const { data: walletUpdate, error: walletError } = await supabase.rpc(
-        "update_wallet_balance",
+      const { data: refundResult, error: refundError } = await supabase.rpc(
+        "process_cancellation_refund",
         {
-          p_user_id: user.id,
-          p_amount: totalRefund,
-          p_type: "refund",
-          p_description: `Reembolso por reagendamiento rechazado - ${booking.tour.name}`,
-          p_reference_id: booking_id,
+          p_booking_id: booking_id,
+          p_refund_amount: totalRefund,
           p_reference_type: "reschedule_rejection",
-          p_idempotency_key: `${rescheduleResponse.id}_refund_reschedule`
+          p_description: `Reembolso por reagendamiento rechazado - ${booking.tour.name}`,
+          p_new_status: "cancelled",
+          p_set_cancelled_at: true,
+          p_cancellation_type: "reschedule_rejection",
+          p_cancellation_refund_amount: totalRefund,
         }
       );
 
-      if (walletError) {
-        throw new Error("Error al procesar el reembolso");
+      if (refundError) {
+        throw new Error("Error al procesar el reembolso: " + refundError.message);
       }
 
-      const transactionId = walletUpdate;
+      const transactionId = refundResult?.transaction_id || null;
 
       await supabase
         .from("booking_reschedule_responses")
@@ -278,13 +279,9 @@ Deno.serve(async (req: Request) => {
       await supabase
         .from("bookings")
         .update({
-          status: "cancelled",
           has_pending_reschedule: false,
           reschedule_response: "rejected",
           reschedule_responded_at: now,
-          cancelled_at: now,
-          cancellation_type: "reschedule_rejection",
-          cancellation_refund_amount: totalRefund
         })
         .eq("id", booking_id);
 

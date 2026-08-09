@@ -149,42 +149,24 @@ Deno.serve(async (req: Request) => {
 
         const refundAmount = principalPaid + originalServiceCharge + insuranceRefund + optionalServicesRefundable;
 
-        // Get or create wallet
-        let { data: wallet } = await supabase
-          .from("toursred_cash_wallets")
-          .select("*")
-          .eq("user_id", booking.user_id)
-          .maybeSingle();
-
-        if (!wallet) {
-          const { data: newWallet, error: walletError } = await supabase
-            .from("toursred_cash_wallets")
-            .insert({ user_id: booking.user_id, balance: 0, currency: "MXN" })
-            .select()
-            .single();
-          if (walletError || !newWallet) throw new Error("Error creando wallet");
-          wallet = newWallet;
-        }
-
-        const newBalance = Number(wallet.balance) + refundAmount;
-
-        const { error: transactionError } = await supabase
-          .from("toursred_cash_transactions")
-          .insert({
-            wallet_id: wallet.id, user_id: booking.user_id, amount: refundAmount,
-            balance_after: newBalance, type: "refund",
-            description: `Reembolso completo por cancelación del tour: ${tour.name}`,
-            reference_id: cancellationRecord.id, reference_type: "tour_cancellation",
-          });
-        if (transactionError) throw new Error("Error creando transacción");
-
-        const { error: walletUpdateError } = await supabase
-          .from("toursred_cash_wallets")
-          .update({ balance: newBalance })
-          .eq("id", wallet.id);
-        if (walletUpdateError) throw new Error("Error actualizando balance");
+        // Atomic refund + booking status update with row-level locking
+        const { data: refundResult, error: refundError } = await supabase.rpc(
+          "process_cancellation_refund",
+          {
+            p_booking_id: booking.id,
+            p_refund_amount: refundAmount,
+            p_reference_type: "tour_cancellation",
+            p_description: `Reembolso completo por cancelación del tour: ${tour.name}`,
+            p_new_status: "cancelled",
+            p_set_cancelled_at: true,
+            p_cancellation_type: "agency_cancellation",
+            p_cancellation_refund_amount: refundAmount,
+          }
+        );
+        if (refundError) throw new Error(`Error en reembolso atómico: ${refundError.message}`);
 
         // Create booking_cancellations record with correct amounts
+        // Note: booking is now cancelled (status + cancelled_at set atomically above)
         const { data: bookingCancellationRecord } = await supabase
           .from("booking_cancellations")
           .insert({
@@ -215,16 +197,11 @@ Deno.serve(async (req: Request) => {
           console.error("Error cancelling optional services (tour cancellation):", rpcErr);
         }
 
-        // Update booking status
-        const { error: bookingUpdateError } = await supabase
+        // Set agency_cancellation_id (status already set atomically above)
+        await supabase
           .from("bookings")
-          .update({
-            status: "cancelled", cancelled_at: new Date().toISOString(),
-            cancellation_type: "agency_cancellation", cancellation_refund_amount: refundAmount,
-            agency_cancellation_id: cancellationRecord.id,
-          })
+          .update({ agency_cancellation_id: cancellationRecord.id })
           .eq("id", booking.id);
-        if (bookingUpdateError) throw new Error("Error actualizando reserva");
 
         // Refund paid supplements
         const { data: paidSupplements } = await supabase
@@ -238,23 +215,16 @@ Deno.serve(async (req: Request) => {
             const supRefundAmount = Number(sup.total_paid) || 0;
             if (supRefundAmount <= 0) continue;
 
-            const { data: updatedWallet } = await supabase
-              .from("toursred_cash_wallets")
-              .select("id, balance")
-              .eq("user_id", booking.user_id)
-              .maybeSingle();
-
-            const walletId = updatedWallet?.id || wallet.id;
-            const currentBalance = updatedWallet?.balance ?? wallet.balance ?? 0;
-            const newSupBalance = Number(currentBalance) + supRefundAmount;
-
-            await supabase.from("toursred_cash_transactions").insert({
-              wallet_id: walletId, user_id: booking.user_id, amount: supRefundAmount,
-              balance_after: newSupBalance, type: "refund",
-              description: `Reembolso suplemento "${(sup.tour_supplements as any)?.name}" por cancelación del tour: ${tour.name}`,
-              reference_id: sup.id, reference_type: "supplement_cancellation",
+            const { error: supWalletError } = await supabase.rpc("update_wallet_balance", {
+              p_user_id: booking.user_id,
+              p_amount: supRefundAmount,
+              p_type: "refund",
+              p_description: `Reembolso suplemento "${(sup.tour_supplements as any)?.name}" por cancelación del tour: ${tour.name}`,
+              p_reference_id: sup.id,
+              p_reference_type: "supplement_cancellation",
+              p_idempotency_key: `${sup.id}_tour_cancel_supplement_refund`,
             });
-            await supabase.from("toursred_cash_wallets").update({ balance: newSupBalance }).eq("id", walletId);
+            if (supWalletError) console.error(`Error refunding supplement ${sup.id}:`, supWalletError.message);
 
             await supabase.from("booking_supplements").update({
               status: "cancelled", cancelled_at: new Date().toISOString(),

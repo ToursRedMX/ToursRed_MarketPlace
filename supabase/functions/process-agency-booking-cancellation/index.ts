@@ -160,58 +160,27 @@ Deno.serve(async (req: Request) => {
     // Total refund = principal + service charge + insurance + optionals
     const refundAmount = principalPaid + originalServiceCharge + insuranceRefund + optionalServicesRefundable;
 
-    // Process refund to ToursRed Cash wallet
-    let wallet = await supabase
-      .from("toursred_cash_wallets")
-      .select("*")
-      .eq("user_id", booking.user_id)
-      .maybeSingle();
-
-    if (!wallet.data) {
-      const { data: newWallet, error: walletError } = await supabase
-        .from("toursred_cash_wallets")
-        .insert({ user_id: booking.user_id, balance: 0, currency: "MXN" })
-        .select()
-        .single();
-
-      if (walletError || !newWallet) throw new Error("Error creando wallet");
-      wallet.data = newWallet;
-    }
-
+    // Process refund atomically with row-level locking to prevent double-refund
     let transactionId: string | null = null;
-    if (refundAmount > 0) {
-      const newBalance = Number(wallet.data.balance) + refundAmount;
+    const descParts: string[] = [];
+    if (originalServiceCharge > 0) descParts.push(`cargo de servicio ${originalServiceCharge.toFixed(2)}`);
+    if (insuranceRefund > 0) descParts.push(`seguro ${insuranceRefund.toFixed(2)}`);
+    if (optionalServicesRefundable > 0) descParts.push(`opcionales ${optionalServicesRefundable.toFixed(2)}`);
+    const descSuffix = descParts.length > 0 ? ` (incluye ${descParts.join(", ")})` : "";
 
-      const descParts: string[] = [];
-      if (originalServiceCharge > 0) descParts.push(`cargo de servicio $${originalServiceCharge.toFixed(2)}`);
-      if (insuranceRefund > 0) descParts.push(`seguro $${insuranceRefund.toFixed(2)}`);
-      if (optionalServicesRefundable > 0) descParts.push(`opcionales $${optionalServicesRefundable.toFixed(2)}`);
-      const descSuffix = descParts.length > 0 ? ` (incluye ${descParts.join(", ")})` : "";
+    const { data: refundResult, error: refundError } = await supabase.rpc("process_cancellation_refund", {
+      p_booking_id: booking_id,
+      p_refund_amount: refundAmount,
+      p_reference_type: "agency_booking_cancellation",
+      p_description: `Reembolso completo por cancelación de agencia - ${tour.name}${descSuffix}`,
+      p_new_status: "cancelled",
+      p_set_cancelled_at: true,
+      p_cancellation_type: "agency_cancellation",
+      p_cancellation_refund_amount: refundAmount,
+    });
 
-      const { data: transaction, error: txError } = await supabase
-        .from("toursred_cash_transactions")
-        .insert({
-          wallet_id: wallet.data.id,
-          user_id: booking.user_id,
-          amount: refundAmount,
-          balance_after: newBalance,
-          type: "refund",
-          description: `Reembolso completo por cancelación de agencia - ${tour.name}${descSuffix}`,
-          reference_id: booking_id,
-          reference_type: "agency_booking_cancellation",
-        })
-        .select()
-        .single();
-
-      if (txError || !transaction) throw new Error("Error creando transacción de reembolso");
-      transactionId = transaction.id;
-
-      const { error: walletUpdateError } = await supabase
-        .from("toursred_cash_wallets")
-        .update({ balance: newBalance })
-        .eq("id", wallet.data.id);
-      if (walletUpdateError) throw new Error("Error actualizando balance del wallet");
-    }
+    if (refundError) throw new Error(`Error en reembolso atómico: ${refundError.message}`);
+    transactionId = refundResult?.transaction_id || null;
 
     // Cancel optional services
     await supabase.rpc("cancel_booking_optional_services", {
@@ -281,21 +250,6 @@ Deno.serve(async (req: Request) => {
 
     if (pointsDeducted > 0) {
       await markPointsAsClawedBack(supabase, booking_id, cancellationRecord.id, "administrativa");
-    }
-
-    // Update booking status
-    const { error: updateBookingError } = await supabase
-      .from("bookings")
-      .update({
-        status: "cancelled",
-        cancelled_at: new Date().toISOString(),
-        cancellation_type: "agency_cancellation",
-        cancellation_refund_amount: refundAmount,
-      })
-      .eq("id", booking_id);
-
-    if (updateBookingError) {
-      throw new Error(`Error actualizando reserva: ${updateBookingError.message}`);
     }
 
     // Generate accounting entry

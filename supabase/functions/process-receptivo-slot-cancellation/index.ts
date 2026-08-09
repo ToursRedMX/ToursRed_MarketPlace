@@ -355,25 +355,20 @@ Deno.serve(async (req: Request) => {
     const refundPromises = (affectedBookings || []).map(async (booking: any) => {
       const depositAmount = Number(booking.deposit_amount || 0);
 
-      await adminClient.rpc("update_wallet_balance", {
-        p_user_id: booking.user_id,
-        p_amount: depositAmount,
-        p_type: "refund",
-        p_description: `Reembolso por cancelacion de slot: ${tourName} - ${slot.slot_date}`,
-        p_reference_id: booking.id,
+      const { error: refundError } = await adminClient.rpc("process_cancellation_refund", {
+        p_booking_id: booking.id,
+        p_refund_amount: depositAmount,
         p_reference_type: "slot_cancellation",
-        p_idempotency_key: `${booking.id}_refund_slot_cancel`,
+        p_description: `Reembolso por cancelacion de slot: ${tourName} - ${slot.slot_date}`,
+        p_new_status: "cancelled",
+        p_set_cancelled_at: true,
+        p_cancellation_type: "no_refund",
+        p_cancellation_refund_amount: depositAmount,
       });
 
-      await adminClient
-        .from("bookings")
-        .update({
-          status: "cancelled",
-          cancelled_at: new Date().toISOString(),
-          cancellation_type: "no_refund",
-          cancellation_refund_amount: depositAmount,
-        })
-        .eq("id", booking.id);
+      if (refundError) {
+        console.error(`Error in atomic refund for booking ${booking.id}:`, refundError.message);
+      }
 
       await adminClient.rpc("create_user_notification", {
         p_user_id: booking.user_id,

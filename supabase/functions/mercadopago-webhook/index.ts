@@ -364,7 +364,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: booking } = await supabase
         .from("bookings")
-        .select("id, user_id, payment_status, deposit_amount")
+        .select("id, user_id, payment_status, deposit_amount, toursred_cash_used, points_used")
         .eq("id", externalReference)
         .maybeSingle();
 
@@ -445,6 +445,60 @@ Deno.serve(async (req: Request) => {
             updated_at: new Date().toISOString(),
           })
           .eq("id", externalReference);
+
+        // Deduct ToursRed Cash from wallet if used
+        const toursRedCashUsedMP = parseFloat(booking.toursred_cash_used || '0');
+        if (toursRedCashUsedMP > 0 && booking.user_id) {
+          try {
+            const { data: existingWalletTx } = await supabase
+              .from("wallet_transactions")
+              .select("id")
+              .eq("user_id", booking.user_id)
+              .eq("reference_id", externalReference)
+              .eq("reference_type", "booking")
+              .eq("type", "debit")
+              .maybeSingle();
+
+            if (existingWalletTx) {
+              console.log(`⚠️ ToursRed Cash already deducted for booking ${externalReference} (MP), skipping...`);
+            } else {
+              const { error: walletError } = await supabase.rpc('update_wallet_balance', {
+                p_user_id: booking.user_id,
+                p_amount: -toursRedCashUsedMP,
+                p_type: 'debit',
+                p_description: `Aplicado a reserva #${externalReference}`,
+                p_reference_id: externalReference,
+                p_reference_type: 'booking',
+                p_idempotency_key: `${externalReference}_charge_booking`,
+              });
+              if (walletError) {
+                console.error(`Error deducting ToursRed Cash (MP): ${walletError.message}`);
+              } else {
+                console.log(`Successfully deducted ${toursRedCashUsedMP} MXN from user wallet (MP)`);
+              }
+            }
+          } catch (walletErr) {
+            console.error('Error processing ToursRed Cash deduction (MP):', walletErr);
+          }
+        }
+
+        // Deduct ToursRed Points if used
+        const pointsUsedMP = parseInt(booking.points_used || '0');
+        if (pointsUsedMP > 0) {
+          try {
+            const { error: pointsError } = await supabase.rpc('deduct_points_for_booking', {
+              p_booking_id: externalReference,
+              p_points_to_deduct: pointsUsedMP,
+            });
+            if (pointsError) {
+              console.error(`Error deducting points (MP): ${pointsError.message}`);
+            } else {
+              console.log(`Successfully deducted ${pointsUsedMP} points from user points wallet (MP)`);
+            }
+          } catch (pointsErr) {
+            console.error('Error processing points deduction (MP):', pointsErr);
+          }
+        }
 
         // Apply preventa commission discount (10% on first 10 preventa bookings)
         try {
