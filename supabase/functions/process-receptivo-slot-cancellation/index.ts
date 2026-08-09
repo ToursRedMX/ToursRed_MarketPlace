@@ -362,7 +362,7 @@ Deno.serve(async (req: Request) => {
         p_description: `Reembolso por cancelacion de slot: ${tourName} - ${slot.slot_date}`,
         p_new_status: "cancelled",
         p_set_cancelled_at: true,
-        p_cancellation_type: "no_refund",
+        p_cancellation_type: "slot_cancellation",
         p_cancellation_refund_amount: depositAmount,
       });
 
