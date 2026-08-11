@@ -1,4 +1,4 @@
-name: Test Supabase Edge Functions Restore
+name: Test Supabase Edge Functions Restore Sample
 
 on:
   workflow_dispatch:
@@ -43,15 +43,14 @@ jobs:
             echo "============================================"
             echo "CRITICAL SAFETY STOP"
             echo "============================================"
-            echo ""
-            echo "Restore Test Project Ref matches production."
-            echo "This workflow WILL NOT deploy anything."
+            echo "Restore Test matches production."
+            echo "Nothing will be modified."
             exit 1
           fi
 
           echo ""
           echo "Safety check passed."
-          echo "Target is NOT the production Supabase project."
+          echo "Target is NOT production."
 
       - name: Verify local Edge Functions
         run: |
@@ -72,7 +71,7 @@ jobs:
             exit 1
           fi
 
-          echo "LOCAL_COUNT=${LOCAL_COUNT}" >> "$GITHUB_ENV"
+          echo "Local Edge Function count is correct."
 
       - name: Verify config.toml
         run: |
@@ -98,7 +97,10 @@ jobs:
               if value.get("verify_jwt", True) is False
           )
 
-          print(f"Explicit verify_jwt=false entries: {false_count}")
+          print(
+              f"Explicit verify_jwt=false entries: "
+              f"{false_count}"
+          )
 
           if false_count != 69:
               raise SystemExit(
@@ -109,7 +111,49 @@ jobs:
           print("config.toml validation passed.")
           PY
 
-      - name: Export production Edge Function configuration
+      - name: Validate verify-contract-otp shared imports
+        run: |
+          FILE="supabase/functions/verify-contract-otp/index.ts"
+
+          echo "Checking ${FILE}"
+
+          if [ ! -f "$FILE" ]; then
+            echo "ERROR: verify-contract-otp/index.ts does not exist."
+            exit 1
+          fi
+
+          if grep -q '"\./_shared/' "$FILE"; then
+            echo "ERROR: verify-contract-otp still contains incorrect ./_shared paths."
+            echo ""
+            grep -n '"\./_shared/' "$FILE" || true
+            exit 1
+          fi
+
+          CONTRACT_IMPORTS=$(
+            grep -c '\.\./_shared/contractDocDefinition\.ts' "$FILE" || true
+          )
+
+          FONT_IMPORTS=$(
+            grep -c '\.\./_shared/robotoFonts\.ts' "$FILE" || true
+          )
+
+          echo "contractDocDefinition correct imports: ${CONTRACT_IMPORTS}"
+          echo "robotoFonts correct imports:           ${FONT_IMPORTS}"
+
+          if [ "$CONTRACT_IMPORTS" -lt 2 ]; then
+            echo "ERROR: Expected at least 2 correct contractDocDefinition imports."
+            exit 1
+          fi
+
+          if [ "$FONT_IMPORTS" -lt 1 ]; then
+            echo "ERROR: Expected at least 1 correct robotoFonts import."
+            exit 1
+          fi
+
+          echo ""
+          echo "PASS: verify-contract-otp shared imports are correct."
+
+      - name: Export production Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -133,71 +177,356 @@ jobs:
           ' production-functions-raw.json \
           > production-functions.json
 
-          PRODUCTION_COUNT=$(
-            jq 'length' production-functions.json
-          )
+          COUNT=$(jq 'length' production-functions.json)
 
-          PRODUCTION_TRUE=$(
+          JWT_TRUE=$(
             jq '
               [.[] | select(.verify_jwt == true)]
               | length
             ' production-functions.json
           )
 
-          PRODUCTION_FALSE=$(
+          JWT_FALSE=$(
             jq '
               [.[] | select(.verify_jwt == false)]
               | length
             ' production-functions.json
           )
 
-          echo "Production functions: ${PRODUCTION_COUNT}"
-          echo "Production JWT true:  ${PRODUCTION_TRUE}"
-          echo "Production JWT false: ${PRODUCTION_FALSE}"
+          echo "Production functions:        ${COUNT}"
+          echo "Production verify_jwt=true:  ${JWT_TRUE}"
+          echo "Production verify_jwt=false: ${JWT_FALSE}"
 
-          if [ "$PRODUCTION_COUNT" -ne 169 ]; then
-            echo "ERROR: Production no longer has 169 functions."
+          if [ "$COUNT" -ne 169 ]; then
+            echo "ERROR: Expected 169 production functions."
             exit 1
           fi
 
-          if [ "$PRODUCTION_TRUE" -ne 100 ]; then
-            echo "ERROR: Production verify_jwt=true count changed."
+          if [ "$JWT_TRUE" -ne 100 ]; then
+            echo "ERROR: Expected 100 production verify_jwt=true functions."
             exit 1
           fi
 
-          if [ "$PRODUCTION_FALSE" -ne 69 ]; then
-            echo "ERROR: Production verify_jwt=false count changed."
+          if [ "$JWT_FALSE" -ne 69 ]; then
+            echo "ERROR: Expected 69 production verify_jwt=false functions."
             exit 1
           fi
 
-      - name: Show Restore Test functions before deployment
+      - name: Build 100-function DRP sample
+        run: |
+          python3 <<'PY'
+          import json
+          import pathlib
+
+          REQUIRED_FUNCTION = "verify-contract-otp"
+
+          production = json.loads(
+              pathlib.Path(
+                  "production-functions.json"
+              ).read_text()
+          )
+
+          jwt_false = sorted(
+              [
+                  item
+                  for item in production
+                  if item["verify_jwt"] is False
+              ],
+              key=lambda item: item["slug"]
+          )
+
+          jwt_true = sorted(
+              [
+                  item
+                  for item in production
+                  if item["verify_jwt"] is True
+              ],
+              key=lambda item: item["slug"]
+          )
+
+          if len(jwt_false) != 69:
+              raise SystemExit(
+                  f"ERROR: Expected 69 JWT-false functions, "
+                  f"found {len(jwt_false)}."
+              )
+
+          required = next(
+              (
+                  item
+                  for item in jwt_true
+                  if item["slug"] == REQUIRED_FUNCTION
+              ),
+              None
+          )
+
+          if required is None:
+              raise SystemExit(
+                  f"ERROR: Required function "
+                  f"{REQUIRED_FUNCTION} was not found "
+                  f"with verify_jwt=true in production."
+              )
+
+          remaining_true = [
+              item
+              for item in jwt_true
+              if item["slug"] != REQUIRED_FUNCTION
+          ]
+
+          sample = (
+              jwt_false
+              + [required]
+              + remaining_true[:30]
+          )
+
+          if len(sample) != 100:
+              raise SystemExit(
+                  f"ERROR: Expected sample size 100, "
+                  f"found {len(sample)}."
+              )
+
+          if not any(
+              item["slug"] == REQUIRED_FUNCTION
+              for item in sample
+          ):
+              raise SystemExit(
+                  "ERROR: verify-contract-otp "
+                  "is not included in the sample."
+              )
+
+          false_count = sum(
+              1
+              for item in sample
+              if item["verify_jwt"] is False
+          )
+
+          true_count = sum(
+              1
+              for item in sample
+              if item["verify_jwt"] is True
+          )
+
+          if false_count != 69:
+              raise SystemExit(
+                  f"ERROR: Expected 69 JWT-false functions "
+                  f"in sample, found {false_count}."
+              )
+
+          if true_count != 31:
+              raise SystemExit(
+                  f"ERROR: Expected 31 JWT-true functions "
+                  f"in sample, found {true_count}."
+              )
+
+          pathlib.Path(
+              "sample-functions.json"
+          ).write_text(
+              json.dumps(sample, indent=2)
+          )
+
+          pathlib.Path(
+              "sample-functions.txt"
+          ).write_text(
+              "\n".join(
+                  item["slug"]
+                  for item in sample
+              ) + "\n"
+          )
+
+          print("============================================")
+          print("DRP EDGE FUNCTION SAMPLE")
+          print("============================================")
+          print(f"Total sample:              {len(sample)}")
+          print(f"verify_jwt=false:          {false_count}")
+          print(f"verify_jwt=true:           {true_count}")
+          print(f"Required function present: YES")
+          print(f"Required function:         {REQUIRED_FUNCTION}")
+          print("")
+          print("Selected functions:")
+
+          for item in sample:
+              marker = (
+                  "  <-- REQUIRED"
+                  if item["slug"] == REQUIRED_FUNCTION
+                  else ""
+              )
+
+              print(
+                  f"{item['slug']} "
+                  f"verify_jwt={str(item['verify_jwt']).lower()}"
+                  f"{marker}"
+              )
+          PY
+
+      - name: Verify sample exists locally
+        run: |
+          ERROR_COUNT=0
+
+          while IFS= read -r FUNCTION; do
+            if [ ! -f "supabase/functions/${FUNCTION}/index.ts" ]; then
+              echo "ERROR: Missing local function: ${FUNCTION}"
+              ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
+          done < sample-functions.txt
+
+          if [ "$ERROR_COUNT" -ne 0 ]; then
+            echo "ERROR: ${ERROR_COUNT} sample functions are missing locally."
+            exit 1
+          fi
+
+          echo "All 100 sample functions exist locally."
+
+      - name: Confirm verify-contract-otp is in sample
+        run: |
+          if ! grep -Fxq "verify-contract-otp" sample-functions.txt; then
+            echo "ERROR: verify-contract-otp is not in the sample."
+            exit 1
+          fi
+
+          echo "PASS: verify-contract-otp is included in the 100-function sample."
+
+      - name: List existing Restore Test functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          echo "Functions currently deployed in Restore Test:"
-
           supabase functions list \
             --project-ref "$RESTORE_PROJECT_REF" \
-            || true
+            --output json \
+            > restore-before-raw.json
 
-      - name: Deploy all Edge Functions to Restore Test
+          jq '
+            (
+              if type == "array"
+              then .
+              else (.functions // [])
+              end
+            )
+            | map(.slug // .name)
+            | sort
+          ' restore-before-raw.json \
+          > restore-before.json
+
+          EXISTING_COUNT=$(jq 'length' restore-before.json)
+
+          echo "Existing Restore Test functions: ${EXISTING_COUNT}"
+
+          jq -r '.[]' restore-before.json || true
+
+      - name: Clean Restore Test Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          echo "============================================"
-          echo "DEPLOYING 169 EDGE FUNCTIONS TO RESTORE TEST"
-          echo "============================================"
-          echo ""
-          echo "Target project:"
-          echo "${RESTORE_PROJECT_REF}"
-          echo ""
+          EXISTING_COUNT=$(jq 'length' restore-before.json)
 
-          supabase functions deploy \
+          if [ "$EXISTING_COUNT" -eq 0 ]; then
+            echo "Restore Test has no Edge Functions to remove."
+            exit 0
+          fi
+
+          echo "Deleting existing Restore Test Edge Functions..."
+
+          jq -r '.[]' restore-before.json \
+          | while IFS= read -r FUNCTION; do
+              echo "Deleting ${FUNCTION}"
+
+              supabase functions delete \
+                "$FUNCTION" \
+                --project-ref "$RESTORE_PROJECT_REF"
+            done
+
+          echo ""
+          echo "Restore Test Edge Functions cleaned."
+
+      - name: Verify Restore Test is empty
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions list \
             --project-ref "$RESTORE_PROJECT_REF" \
-            --use-api \
-            --jobs 4
+            --output json \
+            > restore-empty-check.json
 
-      - name: Export Restore Test Edge Function configuration
+          EMPTY_COUNT=$(
+            jq '
+              if type == "array"
+              then length
+              else (.functions // []) | length
+              end
+            ' restore-empty-check.json
+          )
+
+          echo "Functions remaining: ${EMPTY_COUNT}"
+
+          if [ "$EMPTY_COUNT" -ne 0 ]; then
+            echo "ERROR: Restore Test was not completely cleaned."
+            exit 1
+          fi
+
+          echo "Restore Test is empty."
+
+      - name: Deploy 100-function DRP sample
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          DEPLOYED=0
+
+          while IFS= read -r FUNCTION; do
+            echo ""
+            echo "============================================"
+            echo "Deploying ${FUNCTION}"
+            echo "============================================"
+
+            supabase functions deploy \
+              "$FUNCTION" \
+              --project-ref "$RESTORE_PROJECT_REF" \
+              --use-api
+
+            DEPLOYED=$((DEPLOYED + 1))
+
+            echo "Deployed ${DEPLOYED}/100"
+          done < sample-functions.txt
+
+          echo ""
+          echo "All 100 sample functions deployed."
+
+      - name: Confirm verify-contract-otp deployed successfully
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions list \
+            --project-ref "$RESTORE_PROJECT_REF" \
+            --output json \
+            > verify-contract-check.json
+
+          FOUND=$(
+            jq '
+              (
+                if type == "array"
+                then .
+                else (.functions // [])
+                end
+              )
+              | [
+                  .[]
+                  | select(
+                      (.slug // .name)
+                      == "verify-contract-otp"
+                    )
+                ]
+              | length
+            ' verify-contract-check.json
+          )
+
+          echo "verify-contract-otp instances in Restore Test: ${FOUND}"
+
+          if [ "$FOUND" -ne 1 ]; then
+            echo "ERROR: verify-contract-otp was not deployed successfully."
+            exit 1
+          fi
+
+          echo ""
+          echo "PASS: verify-contract-otp deployed successfully."
+
+      - name: Export Restore Test Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -227,13 +556,6 @@ jobs:
             jq 'length' restore-functions.json
           )
 
-          RESTORE_TRUE=$(
-            jq '
-              [.[] | select(.verify_jwt == true)]
-              | length
-            ' restore-functions.json
-          )
-
           RESTORE_FALSE=$(
             jq '
               [.[] | select(.verify_jwt == false)]
@@ -241,43 +563,50 @@ jobs:
             ' restore-functions.json
           )
 
+          RESTORE_TRUE=$(
+            jq '
+              [.[] | select(.verify_jwt == true)]
+              | length
+            ' restore-functions.json
+          )
+
           echo "============================================"
-          echo "RESTORE TEST EDGE FUNCTION COUNTS"
+          echo "RESTORE TEST SAMPLE COUNTS"
           echo "============================================"
           echo ""
           echo "Functions:        ${RESTORE_COUNT}"
-          echo "verify_jwt=true:  ${RESTORE_TRUE}"
           echo "verify_jwt=false: ${RESTORE_FALSE}"
+          echo "verify_jwt=true:  ${RESTORE_TRUE}"
 
           echo "RESTORE_COUNT=${RESTORE_COUNT}" >> "$GITHUB_ENV"
-          echo "RESTORE_TRUE=${RESTORE_TRUE}" >> "$GITHUB_ENV"
           echo "RESTORE_FALSE=${RESTORE_FALSE}" >> "$GITHUB_ENV"
+          echo "RESTORE_TRUE=${RESTORE_TRUE}" >> "$GITHUB_ENV"
 
-          if [ "$RESTORE_COUNT" -ne 169 ]; then
-            echo "ERROR: Restore Test does not contain 169 functions."
-            exit 1
-          fi
-
-          if [ "$RESTORE_TRUE" -ne 100 ]; then
-            echo "ERROR: Restore Test JWT true count is incorrect."
+          if [ "$RESTORE_COUNT" -ne 100 ]; then
+            echo "ERROR: Expected exactly 100 restored functions."
             exit 1
           fi
 
           if [ "$RESTORE_FALSE" -ne 69 ]; then
-            echo "ERROR: Restore Test JWT false count is incorrect."
+            echo "ERROR: Expected 69 JWT-false functions."
             exit 1
           fi
 
-      - name: Compare production and Restore Test exactly
+          if [ "$RESTORE_TRUE" -ne 31 ]; then
+            echo "ERROR: Expected 31 JWT-true functions."
+            exit 1
+          fi
+
+      - name: Compare sample with production exactly
         run: |
           python3 <<'PY'
           import json
           import pathlib
           import sys
 
-          production = json.loads(
+          sample = json.loads(
               pathlib.Path(
-                  "production-functions.json"
+                  "sample-functions.json"
               ).read_text()
           )
 
@@ -287,107 +616,111 @@ jobs:
               ).read_text()
           )
 
-          prod_map = {
+          expected = {
               item["slug"]: item["verify_jwt"]
-              for item in production
+              for item in sample
           }
 
-          restore_map = {
+          actual = {
               item["slug"]: item["verify_jwt"]
               for item in restore
           }
 
           missing = sorted(
-              set(prod_map) - set(restore_map)
+              set(expected) - set(actual)
           )
 
           extra = sorted(
-              set(restore_map) - set(prod_map)
+              set(actual) - set(expected)
           )
 
           jwt_mismatches = sorted(
               slug
-              for slug in set(prod_map) & set(restore_map)
-              if prod_map[slug] != restore_map[slug]
+              for slug in set(expected) & set(actual)
+              if expected[slug] != actual[slug]
           )
 
           print("============================================")
-          print("PRODUCTION VS RESTORE TEST")
+          print("PRODUCTION SAMPLE VS RESTORE TEST")
           print("============================================")
           print("")
-          print(f"Production functions:       {len(prod_map)}")
-          print(f"Restore Test functions:     {len(restore_map)}")
-          print(f"Missing in Restore Test:    {len(missing)}")
-          print(f"Extra in Restore Test:      {len(extra)}")
-          print(f"JWT mismatches:             {len(jwt_mismatches)}")
-          print("")
+          print(f"Expected functions:       {len(expected)}")
+          print(f"Restored functions:       {len(actual)}")
+          print(f"Missing:                  {len(missing)}")
+          print(f"Extra:                    {len(extra)}")
+          print(f"JWT mismatches:           {len(jwt_mismatches)}")
 
           if missing:
-              print("MISSING FUNCTIONS")
-              print("-----------------")
+              print("")
+              print("MISSING:")
               for slug in missing:
                   print(slug)
 
           if extra:
               print("")
-              print("EXTRA FUNCTIONS")
-              print("---------------")
+              print("EXTRA:")
               for slug in extra:
                   print(slug)
 
           if jwt_mismatches:
               print("")
-              print("JWT MISMATCHES")
-              print("--------------")
+              print("JWT MISMATCHES:")
 
               for slug in jwt_mismatches:
                   print(
                       f"{slug}: "
-                      f"production={prod_map[slug]}, "
-                      f"restore={restore_map[slug]}"
+                      f"production={expected[slug]}, "
+                      f"restore={actual[slug]}"
                   )
 
           if missing or extra or jwt_mismatches:
               print("")
               print(
-                  "FAIL: Restore Test does not exactly "
-                  "match production."
+                  "FAIL: Restore sample differs "
+                  "from production."
               )
               sys.exit(1)
 
+          print("")
           print(
-              "PASS: Restore Test exactly matches "
-              "production function names and JWT settings."
+              "PASS: All 100 sampled Edge Functions "
+              "match production exactly."
           )
           PY
 
-      - name: DRP Edge Functions restore summary
+      - name: DRP sample restore summary
         run: |
           echo "============================================"
-          echo "TOURSRED EDGE FUNCTIONS DRP RESTORE TEST"
+          echo "TOURSRED EDGE FUNCTIONS DRP SAMPLE TEST"
           echo "============================================"
           echo ""
-          echo "Source code:              169 / 169"
-          echo "Deployed to Restore Test: ${RESTORE_COUNT} / 169"
-          echo "verify_jwt=true:          ${RESTORE_TRUE} / 100"
-          echo "verify_jwt=false:         ${RESTORE_FALSE} / 69"
-          echo "Missing functions:        0"
-          echo "Extra functions:          0"
-          echo "JWT mismatches:           0"
+          echo "Functions tested:       ${RESTORE_COUNT} / 100"
+          echo "verify_jwt=false:       ${RESTORE_FALSE} / 69"
+          echo "verify_jwt=true:        ${RESTORE_TRUE} / 31"
+          echo "verify-contract-otp:    DEPLOYED"
+          echo "Missing functions:      0"
+          echo "Extra functions:        0"
+          echo "JWT mismatches:         0"
           echo ""
           echo "PASS"
           echo ""
-          echo "Edge Functions structural disaster recovery"
-          echo "has been successfully validated."
+          echo "100-function Edge Functions reconstruction"
+          echo "validated successfully on Free plan."
 
       - name: Upload DRP verification report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: toursred-edge-functions-restore-test
+          name: toursred-edge-functions-restore-sample
           path: |
             production-functions-raw.json
             production-functions.json
+            sample-functions.json
+            sample-functions.txt
+            restore-before-raw.json
+            restore-before.json
+            restore-empty-check.json
+            verify-contract-check.json
             restore-functions-raw.json
             restore-functions.json
           retention-days: 30
