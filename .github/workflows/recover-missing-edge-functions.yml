@@ -1,0 +1,199 @@
+name: Recover Missing Supabase Edge Functions
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  recover-edge-functions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify Supabase CLI
+        run: |
+          supabase --version
+
+      - name: Verify functions directory
+        run: |
+          mkdir -p supabase/functions
+
+          echo "Current function count:"
+          find supabase/functions \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            | wc -l
+
+      - name: Download fix-orphaned-google-identity
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions download \
+            fix-orphaned-google-identity \
+            --project-ref huzsedewwzjywcpbkjkm
+
+      - name: Download generate-signed-contract
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions download \
+            generate-signed-contract \
+            --project-ref huzsedewwzjywcpbkjkm
+
+      - name: Download process-agency-payout
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions download \
+            process-agency-payout \
+            --project-ref huzsedewwzjywcpbkjkm
+
+      - name: Download process-payment
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions download \
+            process-payment \
+            --project-ref huzsedewwzjywcpbkjkm
+
+      - name: Download send-payout-notification
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions download \
+            send-payout-notification \
+            --project-ref huzsedewwzjywcpbkjkm
+
+      - name: Download sync-transport-locations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions download \
+            sync-transport-locations \
+            --project-ref huzsedewwzjywcpbkjkm
+
+      - name: Verify recovered functions
+        run: |
+          FUNCTIONS=(
+            "fix-orphaned-google-identity"
+            "generate-signed-contract"
+            "process-agency-payout"
+            "process-payment"
+            "send-payout-notification"
+            "sync-transport-locations"
+          )
+
+          ERROR_COUNT=0
+
+          for FUNCTION in "${FUNCTIONS[@]}"; do
+            echo "Checking ${FUNCTION}..."
+
+            if [ ! -d "supabase/functions/${FUNCTION}" ]; then
+              echo "ERROR: Directory missing for ${FUNCTION}"
+              ERROR_COUNT=$((ERROR_COUNT + 1))
+              continue
+            fi
+
+            if [ ! -f "supabase/functions/${FUNCTION}/index.ts" ]; then
+              echo "ERROR: index.ts missing for ${FUNCTION}"
+              ERROR_COUNT=$((ERROR_COUNT + 1))
+              continue
+            fi
+
+            echo "OK: ${FUNCTION}"
+          done
+
+          if [ "$ERROR_COUNT" -ne 0 ]; then
+            echo ""
+            echo "ERROR: ${ERROR_COUNT} functions could not be recovered correctly."
+            exit 1
+          fi
+
+          echo ""
+          echo "All 6 Edge Functions recovered successfully."
+
+      - name: Show recovered files
+        run: |
+          for FUNCTION in \
+            fix-orphaned-google-identity \
+            generate-signed-contract \
+            process-agency-payout \
+            process-payment \
+            send-payout-notification \
+            sync-transport-locations
+          do
+            echo ""
+            echo "======================================"
+            echo "${FUNCTION}"
+            echo "======================================"
+
+            find "supabase/functions/${FUNCTION}" \
+              -type f \
+              -maxdepth 3 \
+              -print
+          done
+
+      - name: Check Git changes
+        run: |
+          echo "Git changes after recovery:"
+          git status --short
+
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit recovered Edge Functions
+        run: |
+          git add \
+            supabase/functions/fix-orphaned-google-identity \
+            supabase/functions/generate-signed-contract \
+            supabase/functions/process-agency-payout \
+            supabase/functions/process-payment \
+            supabase/functions/send-payout-notification \
+            supabase/functions/sync-transport-locations
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit \
+              -m "Backup missing Supabase Edge Functions for DRP"
+
+            git push
+          fi
+
+      - name: Final verification
+        run: |
+          EXPECTED=169
+
+          ACTUAL=$(
+            find supabase/functions \
+              -mindepth 1 \
+              -maxdepth 1 \
+              -type d \
+              -printf '%f\n' \
+            | grep -v '^_' \
+            | wc -l
+          )
+
+          echo "Expected function directories: ${EXPECTED}"
+          echo "Actual function directories:   ${ACTUAL}"
+
+          if [ "$ACTUAL" -ne "$EXPECTED" ]; then
+            echo "WARNING: Function count is not 169."
+            echo "Run the Edge Functions audit again for definitive comparison."
+          else
+            echo "Local function count is now 169."
+          fi
