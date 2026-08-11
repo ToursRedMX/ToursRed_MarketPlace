@@ -1,0 +1,436 @@
+name: Test Supabase Cron Restore
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cron-restore:
+    runs-on: ubuntu-latest
+
+    env:
+      PRODUCTION_PROJECT_REF: huzsedewwzjywcpbkjkm
+      RESTORE_PROJECT_REF: ${{ secrets.SUPABASE_RESTORE_PROJECT_REF }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget ca-certificates gnupg
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+
+          sudo wget \
+            -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Verify tools
+        run: |
+          /usr/lib/postgresql/17/bin/psql --version
+          aws --version
+          python3 --version
+
+      - name: Safety check Restore Test project
+        run: |
+          echo "Production project:   ${PRODUCTION_PROJECT_REF}"
+          echo "Restore Test project: ${RESTORE_PROJECT_REF}"
+
+          if [ -z "$RESTORE_PROJECT_REF" ]; then
+            echo "ERROR: SUPABASE_RESTORE_PROJECT_REF is empty."
+            exit 1
+          fi
+
+          if [ "$RESTORE_PROJECT_REF" = "$PRODUCTION_PROJECT_REF" ]; then
+            echo "============================================"
+            echo "CRITICAL SAFETY STOP"
+            echo "============================================"
+            echo ""
+            echo "Restore project matches production."
+            echo "Cron Jobs WILL NOT be modified."
+            exit 1
+          fi
+
+          echo ""
+          echo "PASS: Target is not production."
+
+      - name: Test Restore Test database connection
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT
+                current_database(),
+                current_user,
+                version();
+            "
+
+      - name: Find latest logical backup
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          LATEST_FOLDER=$(
+            aws s3 ls \
+              "s3://${B2_BUCKET}/logical/" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION" \
+            | awk '{print $2}' \
+            | sed 's:/$::' \
+            | sort \
+            | tail -n 1
+          )
+
+          if [ -z "$LATEST_FOLDER" ]; then
+            echo "ERROR: No logical backups found."
+            exit 1
+          fi
+
+          echo "Latest logical backup: ${LATEST_FOLDER}"
+          echo "LATEST_FOLDER=${LATEST_FOLDER}" >> "$GITHUB_ENV"
+
+      - name: Download Cron backup
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          mkdir -p cron-restore
+
+          aws s3 cp \
+            "s3://${B2_BUCKET}/logical/${LATEST_FOLDER}/cron_jobs.sql" \
+            "cron-restore/cron_jobs.sql" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+          aws s3 cp \
+            "s3://${B2_BUCKET}/logical/${LATEST_FOLDER}/cron_jobs.tsv" \
+            "cron-restore/cron_jobs.tsv" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+      - name: Verify Cron backup files
+        run: |
+          test -s cron-restore/cron_jobs.sql
+          test -s cron-restore/cron_jobs.tsv
+
+          EXPECTED_COUNT=$(
+            wc -l < cron-restore/cron_jobs.tsv
+          )
+
+          SQL_COUNT=$(
+            grep -c "SELECT cron.schedule" cron-restore/cron_jobs.sql
+          )
+
+          echo "Expected Cron Jobs: ${EXPECTED_COUNT}"
+          echo "Cron schedule commands: ${SQL_COUNT}"
+
+          if [ "$EXPECTED_COUNT" -ne 15 ]; then
+            echo "ERROR: Expected inventory does not contain 15 Cron Jobs."
+            exit 1
+          fi
+
+          if [ "$SQL_COUNT" -ne 15 ]; then
+            echo "ERROR: Restore SQL does not contain 15 schedules."
+            exit 1
+          fi
+
+      - name: Ensure pg_cron extension exists
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --command "
+              CREATE EXTENSION IF NOT EXISTS pg_cron;
+            "
+
+          EXISTS=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$RESTORE_DATABASE_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM pg_extension
+                WHERE extname = 'pg_cron';
+              "
+          )
+
+          echo "pg_cron installed: ${EXISTS}"
+
+          if [ "$EXISTS" -ne 1 ]; then
+            echo "ERROR: pg_cron is not installed."
+            exit 1
+          fi
+
+      - name: Show existing Restore Test Cron Jobs
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT
+                jobid,
+                jobname,
+                schedule,
+                active
+              FROM cron.job
+              ORDER BY jobid;
+            "
+
+      - name: Remove existing Restore Test Cron Jobs
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --command "
+              DO \$\$
+              DECLARE
+                job_record RECORD;
+              BEGIN
+                FOR job_record IN
+                  SELECT jobid
+                  FROM cron.job
+                LOOP
+                  PERFORM cron.unschedule(job_record.jobid);
+                END LOOP;
+              END
+              \$\$;
+            "
+
+      - name: Verify Cron is empty
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          COUNT=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$RESTORE_DATABASE_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM cron.job;
+              "
+          )
+
+          echo "Cron Jobs remaining: ${COUNT}"
+
+          if [ "$COUNT" -ne 0 ]; then
+            echo "ERROR: Restore Test Cron Jobs were not completely removed."
+            exit 1
+          fi
+
+          echo "Restore Test Cron configuration is clean."
+
+      - name: Restore Cron Jobs
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --file cron-restore/cron_jobs.sql
+
+      - name: Export restored Cron inventory
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --no-align \
+            --field-separator=$'\t' \
+            --tuples-only \
+            --command "
+              SELECT
+                jobname,
+                schedule,
+                active,
+                database,
+                username,
+                encode(convert_to(command, 'UTF8'), 'hex')
+              FROM cron.job
+              ORDER BY jobname;
+            " \
+            > cron-restore/restored_cron_jobs.tsv
+
+      - name: Validate Cron count
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          RESTORE_COUNT=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$RESTORE_DATABASE_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM cron.job;
+              "
+          )
+
+          echo "Restored Cron Jobs: ${RESTORE_COUNT}"
+
+          if [ "$RESTORE_COUNT" -ne 15 ]; then
+            echo "ERROR: Expected 15 Cron Jobs after restore."
+            exit 1
+          fi
+
+          INVENTORY_COUNT=$(
+            wc -l < cron-restore/restored_cron_jobs.tsv
+          )
+
+          echo "Restored inventory rows: ${INVENTORY_COUNT}"
+
+          if [ "$INVENTORY_COUNT" -ne 15 ]; then
+            echo "ERROR: Restored Cron inventory does not contain 15 rows."
+            exit 1
+          fi
+
+      - name: Compare Cron Jobs exactly
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import sys
+
+          expected_path = Path(
+              "cron-restore/cron_jobs.tsv"
+          )
+
+          actual_path = Path(
+              "cron-restore/restored_cron_jobs.tsv"
+          )
+
+          expected = [
+              line
+              for line in expected_path
+              .read_text(encoding="utf-8")
+              .splitlines()
+              if line.strip()
+          ]
+
+          actual = [
+              line
+              for line in actual_path
+              .read_text(encoding="utf-8")
+              .splitlines()
+              if line.strip()
+          ]
+
+          expected_set = set(expected)
+          actual_set = set(actual)
+
+          missing = sorted(
+              expected_set - actual_set
+          )
+
+          extra = sorted(
+              actual_set - expected_set
+          )
+
+          print("============================================")
+          print("CRON JOB DRP COMPARISON")
+          print("============================================")
+          print("")
+          print(f"Expected Cron Jobs: {len(expected)}")
+          print(f"Restored Cron Jobs: {len(actual)}")
+          print(f"Missing:            {len(missing)}")
+          print(f"Extra / changed:    {len(extra)}")
+
+          if missing:
+              print("")
+              print("MISSING OR DIFFERENT:")
+              for item in missing:
+                  print(item)
+
+          if extra:
+              print("")
+              print("EXTRA OR DIFFERENT:")
+              for item in extra:
+                  print(item)
+
+          if missing or extra:
+              print("")
+              print(
+                  "FAIL: Cron configuration differs "
+                  "from production backup."
+              )
+              sys.exit(1)
+
+          print("")
+          print(
+              "PASS: All 15 Cron Jobs match "
+              "the production backup exactly."
+          )
+          PY
+
+      - name: Show restored Cron Jobs
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT
+                jobid,
+                jobname,
+                schedule,
+                active
+              FROM cron.job
+              ORDER BY jobname;
+            "
+
+      - name: DRP Cron restore summary
+        run: |
+          echo "============================================"
+          echo "TOURSRED CRON DRP RESTORE TEST"
+          echo "============================================"
+          echo ""
+          echo "Production backup jobs:       15"
+          echo "Restore Test jobs:            15"
+          echo "Schedule comparison:          PASS"
+          echo "Command comparison:           PASS"
+          echo "Active status comparison:     PASS"
+          echo "Database/user comparison:     PASS"
+          echo ""
+          echo "PASS"
+          echo ""
+          echo "Cron Jobs disaster recovery"
+          echo "validated successfully."
+
+      - name: Upload Cron DRP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: toursred-cron-restore-test
+          path: |
+            cron-restore/cron_jobs.sql
+            cron-restore/cron_jobs.tsv
+            cron-restore/restored_cron_jobs.tsv
+          retention-days: 30
+
+      - name: Cleanup temporary files
+        if: always()
+        run: |
+          rm -rf cron-restore
