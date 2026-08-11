@@ -11,10 +11,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install PostgreSQL client and AWS CLI
+      - name: Install PostgreSQL client
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client awscli
+          sudo apt-get install -y postgresql-client
+
+      - name: Verify AWS CLI
+        run: |
+          aws --version
 
       - name: Generate backup filename
         run: |
