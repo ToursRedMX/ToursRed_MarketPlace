@@ -1,0 +1,321 @@
+name: Audit Supabase Edge Function JWT Config
+
+on:
+  workflow_dispatch:
+
+jobs:
+  audit-edge-jwt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify tools
+        run: |
+          supabase --version
+          python3 --version
+          jq --version
+
+      - name: Export deployed Edge Functions as JSON
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions list \
+            --project-ref huzsedewwzjywcpbkjkm \
+            --output json \
+            > remote-functions.json
+
+          echo "Raw function count:"
+
+          jq '
+            if type == "array"
+            then length
+            else (.functions // []) | length
+            end
+          ' remote-functions.json
+
+      - name: Normalize deployed JWT configuration
+        run: |
+          jq '
+            (
+              if type == "array"
+              then .
+              else (.functions // [])
+              end
+            )
+            | map({
+                slug: (.slug // .name),
+                verify_jwt: .verify_jwt
+              })
+            | sort_by(.slug)
+          ' remote-functions.json \
+          > remote-jwt-config.json
+
+          REMOTE_COUNT=$(jq 'length' remote-jwt-config.json)
+          JWT_TRUE_COUNT=$(jq '[.[] | select(.verify_jwt == true)] | length' remote-jwt-config.json)
+          JWT_FALSE_COUNT=$(jq '[.[] | select(.verify_jwt == false)] | length' remote-jwt-config.json)
+
+          echo "Remote functions: ${REMOTE_COUNT}"
+          echo "verify_jwt=true:  ${JWT_TRUE_COUNT}"
+          echo "verify_jwt=false: ${JWT_FALSE_COUNT}"
+
+          echo "REMOTE_COUNT=${REMOTE_COUNT}" >> "$GITHUB_ENV"
+          echo "JWT_TRUE_COUNT=${JWT_TRUE_COUNT}" >> "$GITHUB_ENV"
+          echo "JWT_FALSE_COUNT=${JWT_FALSE_COUNT}" >> "$GITHUB_ENV"
+
+      - name: Show functions with JWT verification disabled
+        run: |
+          echo "========================================"
+          echo "FUNCTIONS WITH verify_jwt = false"
+          echo "========================================"
+
+          jq -r '
+            .[]
+            | select(.verify_jwt == false)
+            | .slug
+          ' remote-jwt-config.json
+
+      - name: Check local Supabase config
+        run: |
+          if [ -f "supabase/config.toml" ]; then
+            echo "LOCAL_CONFIG_EXISTS=true" >> "$GITHUB_ENV"
+            echo "supabase/config.toml exists."
+            echo ""
+            cat supabase/config.toml
+          else
+            echo "LOCAL_CONFIG_EXISTS=false" >> "$GITHUB_ENV"
+            echo "WARNING: supabase/config.toml does not exist."
+          fi
+
+      - name: Compare remote JWT settings with config.toml
+        run: |
+          python3 <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          try:
+              import tomllib
+          except ImportError:
+              print("ERROR: Python tomllib is unavailable.")
+              sys.exit(1)
+
+          remote_path = pathlib.Path("remote-jwt-config.json")
+          config_path = pathlib.Path("supabase/config.toml")
+
+          remote = json.loads(remote_path.read_text())
+
+          if config_path.exists():
+              config = tomllib.loads(config_path.read_text())
+          else:
+              config = {}
+
+          local_functions = config.get("functions", {})
+
+          mismatches = []
+          missing_false = []
+          unnecessary_false = []
+          matched = []
+
+          for function in remote:
+              slug = function["slug"]
+              remote_value = function["verify_jwt"]
+
+              function_config = local_functions.get(slug, {})
+
+              # Supabase default is verify_jwt = true
+              local_value = function_config.get("verify_jwt", True)
+
+              if local_value == remote_value:
+                  matched.append({
+                      "slug": slug,
+                      "remote": remote_value,
+                      "local_effective": local_value
+                  })
+              else:
+                  mismatch = {
+                      "slug": slug,
+                      "remote": remote_value,
+                      "local_effective": local_value
+                  }
+                  mismatches.append(mismatch)
+
+                  if remote_value is False and local_value is True:
+                      missing_false.append(slug)
+
+                  if remote_value is True and local_value is False:
+                      unnecessary_false.append(slug)
+
+          pathlib.Path("jwt-mismatches.json").write_text(
+              json.dumps(mismatches, indent=2)
+          )
+
+          pathlib.Path("missing-false-functions.txt").write_text(
+              "\n".join(sorted(missing_false)) +
+              ("\n" if missing_false else "")
+          )
+
+          pathlib.Path("unexpected-local-false.txt").write_text(
+              "\n".join(sorted(unnecessary_false)) +
+              ("\n" if unnecessary_false else "")
+          )
+
+          print("")
+          print("========================================")
+          print("JWT CONFIG COMPARISON")
+          print("========================================")
+          print(f"Remote functions:              {len(remote)}")
+          print(f"Correct effective config:      {len(matched)}")
+          print(f"JWT mismatches:                {len(mismatches)}")
+          print(f"Missing verify_jwt=false:      {len(missing_false)}")
+          print(f"Local false but remote true:   {len(unnecessary_false)}")
+          print("")
+
+          if missing_false:
+              print("REMOTE FALSE BUT LOCAL EFFECTIVE TRUE")
+              print("-------------------------------------")
+              for slug in sorted(missing_false):
+                  print(slug)
+
+          if unnecessary_false:
+              print("")
+              print("LOCAL FALSE BUT REMOTE TRUE")
+              print("---------------------------")
+              for slug in sorted(unnecessary_false):
+                  print(slug)
+          PY
+
+      - name: Generate proposed function config
+        run: |
+          python3 <<'PY'
+          import json
+          import pathlib
+
+          remote = json.loads(
+              pathlib.Path("remote-jwt-config.json").read_text()
+          )
+
+          false_functions = sorted(
+              item["slug"]
+              for item in remote
+              if item["verify_jwt"] is False
+          )
+
+          output = [
+              "# ToursRed Supabase Edge Function configuration",
+              "# Generated from production for DRP recovery.",
+              "#",
+              "# verify_jwt defaults to true in Supabase.",
+              "# Therefore only functions requiring false",
+              "# need to be declared below.",
+              ""
+          ]
+
+          for slug in false_functions:
+              output.append(f'[functions."{slug}"]')
+              output.append("verify_jwt = false")
+              output.append("")
+
+          pathlib.Path(
+              "generated-functions-config.toml"
+          ).write_text(
+              "\n".join(output),
+              encoding="utf-8"
+          )
+
+          print("========================================")
+          print("PROPOSED JWT CONFIG")
+          print("========================================")
+          print("")
+          print(
+              pathlib.Path(
+                  "generated-functions-config.toml"
+              ).read_text()
+          )
+          PY
+
+      - name: Validate generated config
+        run: |
+          python3 <<'PY'
+          import json
+          import pathlib
+          import tomllib
+          import sys
+
+          remote = json.loads(
+              pathlib.Path("remote-jwt-config.json").read_text()
+          )
+
+          config = tomllib.loads(
+              pathlib.Path(
+                  "generated-functions-config.toml"
+              ).read_text()
+          )
+
+          functions = config.get("functions", {})
+
+          errors = []
+
+          for item in remote:
+              slug = item["slug"]
+              remote_value = item["verify_jwt"]
+
+              local_value = (
+                  functions
+                  .get(slug, {})
+                  .get("verify_jwt", True)
+              )
+
+              if remote_value != local_value:
+                  errors.append(
+                      (slug, remote_value, local_value)
+                  )
+
+          if errors:
+              print("ERROR: Generated configuration does not match production.")
+
+              for slug, remote, local in errors:
+                  print(
+                      f"{slug}: remote={remote}, generated={local}"
+                  )
+
+              sys.exit(1)
+
+          print(
+              f"PASS: Generated configuration exactly reproduces "
+              f"JWT behavior for {len(remote)} deployed functions."
+          )
+          PY
+
+      - name: DRP JWT audit summary
+        run: |
+          echo "========================================"
+          echo "TOURSRED EDGE FUNCTIONS JWT DRP AUDIT"
+          echo "========================================"
+          echo ""
+          echo "Deployed functions:      ${REMOTE_COUNT}"
+          echo "verify_jwt=true:         ${JWT_TRUE_COUNT}"
+          echo "verify_jwt=false:        ${JWT_FALSE_COUNT}"
+          echo "config.toml exists:      ${LOCAL_CONFIG_EXISTS}"
+          echo ""
+          echo "Generated DRP configuration validated successfully."
+
+      - name: Upload JWT audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: toursred-edge-jwt-audit
+          path: |
+            remote-functions.json
+            remote-jwt-config.json
+            jwt-mismatches.json
+            missing-false-functions.txt
+            unexpected-local-false.txt
+            generated-functions-config.toml
+          retention-days: 30
