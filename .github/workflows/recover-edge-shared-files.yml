@@ -1,0 +1,100 @@
+name: Recover Supabase Edge Shared Files
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  recover-shared-files:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify Supabase CLI
+        run: |
+          supabase --version
+
+      - name: Download deployed generate-signed-contract
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions download \
+            generate-signed-contract \
+            --project-ref huzsedewwzjywcpbkjkm
+
+      - name: Show downloaded changes
+        run: |
+          echo "Changes produced by Supabase download:"
+          git status --short
+
+          echo ""
+          echo "contractDocDefinition.ts diff:"
+          git diff -- \
+            supabase/functions/_shared/contractDocDefinition.ts
+
+          echo ""
+          echo "robotoFonts.ts diff:"
+          git diff -- \
+            supabase/functions/_shared/robotoFonts.ts
+
+      - name: Verify shared files exist
+        run: |
+          test -s \
+            supabase/functions/_shared/contractDocDefinition.ts
+
+          test -s \
+            supabase/functions/_shared/robotoFonts.ts
+
+          echo "Both shared files exist."
+
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit deployed shared dependencies
+        run: |
+          git add -- \
+            supabase/functions/_shared/contractDocDefinition.ts \
+            supabase/functions/_shared/robotoFonts.ts
+
+          echo "Files staged for commit:"
+          git diff --cached --name-only
+
+          if git diff --cached --quiet; then
+            echo "No shared dependency changes detected."
+          else
+            git commit \
+              -m "Sync deployed Supabase Edge shared dependencies"
+
+            git push
+          fi
+
+      - name: Confirm Supabase temp files were not committed
+        run: |
+          if git ls-files | grep -q '^supabase/\.temp/'; then
+            echo "ERROR: Supabase temporary files are tracked by Git."
+            exit 1
+          fi
+
+          echo "Supabase temporary files are not tracked."
+
+      - name: Final status
+        run: |
+          echo "Final runner status:"
+          git status --short
+
+          echo ""
+          echo "Shared Edge Function dependencies recovered."
