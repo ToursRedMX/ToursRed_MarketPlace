@@ -3,6 +3,9 @@ name: Backup Supabase Logical to Backblaze B2
 on:
   workflow_dispatch:
 
+  schedule:
+    - cron: "45 9 * * *"
+
 jobs:
   logical-backup:
     runs-on: ubuntu-latest
