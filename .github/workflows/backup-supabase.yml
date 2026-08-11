@@ -11,10 +11,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install PostgreSQL client
+      - name: Install PostgreSQL 17 client
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y wget ca-certificates gnupg
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+
+          sudo wget \
+            -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Verify PostgreSQL version
+        run: |
+          /usr/lib/postgresql/17/bin/pg_dump --version
+          /usr/lib/postgresql/17/bin/pg_restore --version
 
       - name: Verify AWS CLI
         run: |
@@ -28,7 +45,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          pg_dump \
+          /usr/lib/postgresql/17/bin/pg_dump \
             "$DATABASE_URL" \
             --format=custom \
             --no-owner \
@@ -37,7 +54,7 @@ jobs:
 
       - name: Verify backup file
         run: |
-          pg_restore \
+          /usr/lib/postgresql/17/bin/pg_restore \
             --list \
             "toursred-${BACKUP_DATE}.dump" \
             > backup_contents.txt
