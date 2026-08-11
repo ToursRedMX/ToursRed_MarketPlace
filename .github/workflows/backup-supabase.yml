@@ -1,0 +1,71 @@
+name: Backup Supabase to Backblaze B2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client and AWS CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client awscli
+
+      - name: Generate backup filename
+        run: |
+          echo "BACKUP_DATE=$(date -u +'%Y-%m-%d_%H-%M-%S')" >> "$GITHUB_ENV"
+
+      - name: Create PostgreSQL backup
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          pg_dump \
+            "$DATABASE_URL" \
+            --format=custom \
+            --no-owner \
+            --no-acl \
+            --file="toursred-${BACKUP_DATE}.dump"
+
+      - name: Verify backup file
+        run: |
+          pg_restore \
+            --list \
+            "toursred-${BACKUP_DATE}.dump" \
+            > backup_contents.txt
+
+          echo "Backup file successfully generated:"
+          ls -lh "toursred-${BACKUP_DATE}.dump"
+
+      - name: Upload backup to Backblaze B2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          aws s3 cp \
+            "toursred-${BACKUP_DATE}.dump" \
+            "s3://${B2_BUCKET}/database/toursred-${BACKUP_DATE}.dump" \
+            --endpoint-url "$B2_ENDPOINT"
+
+      - name: Verify backup in Backblaze
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          aws s3 ls \
+            "s3://${B2_BUCKET}/database/toursred-${BACKUP_DATE}.dump" \
+            --endpoint-url "$B2_ENDPOINT"
+
+      - name: Delete temporary backup
+        if: always()
+        run: |
+          rm -f "toursred-${BACKUP_DATE}.dump"
+          rm -f backup_contents.txt
