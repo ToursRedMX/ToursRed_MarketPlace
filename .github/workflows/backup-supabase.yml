@@ -3,6 +3,9 @@ name: Backup Supabase to Backblaze B2
 on:
   workflow_dispatch:
 
+  schedule:
+    - cron: "15 9 * * *"
+
 jobs:
   backup:
     runs-on: ubuntu-latest
