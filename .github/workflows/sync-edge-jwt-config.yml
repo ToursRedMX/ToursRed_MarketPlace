@@ -1,0 +1,261 @@
+name: Sync Supabase Edge JWT Config
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-edge-jwt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify tools
+        run: |
+          supabase --version
+          python3 --version
+          jq --version
+
+      - name: Export production Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions list \
+            --project-ref huzsedewwzjywcpbkjkm \
+            --output json \
+            > remote-functions.json
+
+      - name: Normalize production JWT configuration
+        run: |
+          jq '
+            (
+              if type == "array"
+              then .
+              else (.functions // [])
+              end
+            )
+            | map({
+                slug: (.slug // .name),
+                verify_jwt: .verify_jwt
+              })
+            | sort_by(.slug)
+          ' remote-functions.json \
+          > remote-jwt-config.json
+
+          REMOTE_COUNT=$(jq 'length' remote-jwt-config.json)
+
+          JWT_TRUE_COUNT=$(
+            jq '[.[] | select(.verify_jwt == true)] | length' \
+              remote-jwt-config.json
+          )
+
+          JWT_FALSE_COUNT=$(
+            jq '[.[] | select(.verify_jwt == false)] | length' \
+              remote-jwt-config.json
+          )
+
+          echo "Functions:        ${REMOTE_COUNT}"
+          echo "verify_jwt=true:  ${JWT_TRUE_COUNT}"
+          echo "verify_jwt=false: ${JWT_FALSE_COUNT}"
+
+          if [ "$REMOTE_COUNT" -ne 169 ]; then
+            echo "ERROR: Expected 169 deployed Edge Functions."
+            exit 1
+          fi
+
+          if [ "$JWT_TRUE_COUNT" -ne 100 ]; then
+            echo "ERROR: Expected 100 functions with verify_jwt=true."
+            exit 1
+          fi
+
+          if [ "$JWT_FALSE_COUNT" -ne 69 ]; then
+            echo "ERROR: Expected 69 functions with verify_jwt=false."
+            exit 1
+          fi
+
+      - name: Generate supabase config.toml
+        run: |
+          python3 <<'PY'
+          import json
+          import pathlib
+
+          source = pathlib.Path("remote-jwt-config.json")
+
+          remote = json.loads(
+              source.read_text(encoding="utf-8")
+          )
+
+          false_functions = sorted(
+              item["slug"]
+              for item in remote
+              if item["verify_jwt"] is False
+          )
+
+          lines = [
+              "# ToursRed Supabase configuration",
+              "#",
+              "# Edge Function JWT configuration synchronized",
+              "# from the production project for DRP recovery.",
+              "#",
+              "# Supabase defaults verify_jwt to true.",
+              "# Only functions requiring verify_jwt=false",
+              "# are explicitly declared below.",
+              "",
+              'project_id = "ToursRed_MarketPlace"',
+              ""
+          ]
+
+          for slug in false_functions:
+              lines.append(f'[functions."{slug}"]')
+              lines.append("verify_jwt = false")
+              lines.append("")
+
+          target = pathlib.Path("supabase/config.toml")
+
+          target.write_text(
+              "\n".join(lines),
+              encoding="utf-8"
+          )
+
+          print(
+              f"Generated config.toml with "
+              f"{len(false_functions)} JWT exceptions."
+          )
+          PY
+
+      - name: Validate TOML syntax
+        run: |
+          python3 <<'PY'
+          import pathlib
+          import tomllib
+
+          config_path = pathlib.Path("supabase/config.toml")
+
+          with config_path.open("rb") as file:
+              config = tomllib.load(file)
+
+          print("config.toml syntax is valid.")
+
+          functions = config.get("functions", {})
+
+          print(
+              f"Functions explicitly configured: "
+              f"{len(functions)}"
+          )
+          PY
+
+      - name: Compare generated config with production
+        run: |
+          python3 <<'PY'
+          import json
+          import pathlib
+          import tomllib
+          import sys
+
+          remote = json.loads(
+              pathlib.Path(
+                  "remote-jwt-config.json"
+              ).read_text(encoding="utf-8")
+          )
+
+          with pathlib.Path(
+              "supabase/config.toml"
+          ).open("rb") as file:
+              config = tomllib.load(file)
+
+          local_functions = config.get("functions", {})
+
+          errors = []
+
+          for item in remote:
+              slug = item["slug"]
+              remote_value = item["verify_jwt"]
+
+              local_value = (
+                  local_functions
+                  .get(slug, {})
+                  .get("verify_jwt", True)
+              )
+
+              if remote_value != local_value:
+                  errors.append(
+                      {
+                          "slug": slug,
+                          "production": remote_value,
+                          "config": local_value
+                      }
+                  )
+
+          if errors:
+              print(
+                  "ERROR: config.toml does not reproduce "
+                  "production JWT configuration."
+              )
+
+              for error in errors:
+                  print(error)
+
+              sys.exit(1)
+
+          print(
+              f"PASS: config.toml exactly reproduces "
+              f"JWT behavior for {len(remote)} functions."
+          )
+          PY
+
+      - name: Show generated JWT summary
+        run: |
+          echo "======================================"
+          echo "TOURSRED EDGE JWT CONFIG"
+          echo "======================================"
+          echo ""
+
+          echo "Functions explicitly set to false:"
+          grep -c 'verify_jwt = false' supabase/config.toml
+
+          echo ""
+          echo "Generated file:"
+          cat supabase/config.toml
+
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit JWT configuration
+        run: |
+          git add supabase/config.toml
+
+          if git diff --cached --quiet; then
+            echo "No JWT configuration changes to commit."
+          else
+            git commit \
+              -m "Backup Supabase Edge Function JWT configuration"
+
+            git push
+          fi
+
+      - name: Final verification
+        run: |
+          echo "======================================"
+          echo "EDGE FUNCTIONS DRP STATUS"
+          echo "======================================"
+          echo ""
+          echo "169 Edge Functions"
+          echo "100 verify_jwt=true"
+          echo "69 verify_jwt=false"
+          echo "JWT configuration saved to GitHub"
+          echo ""
+          echo "PASS"
