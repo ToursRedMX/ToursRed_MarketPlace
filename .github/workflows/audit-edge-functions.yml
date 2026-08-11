@@ -1,0 +1,185 @@
+name: Audit Supabase Edge Functions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  audit-edge-functions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify Supabase CLI
+        run: |
+          supabase --version
+
+      - name: Verify functions directory
+        run: |
+          if [ ! -d "supabase/functions" ]; then
+            echo "ERROR: supabase/functions directory does not exist."
+            exit 1
+          fi
+
+          echo "Supabase functions directory found."
+
+      - name: List local Edge Functions
+        run: |
+          find supabase/functions \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf '%f\n' \
+            | grep -v '^_' \
+            | sort \
+            > local-functions.txt
+
+          echo "LOCAL EDGE FUNCTIONS"
+          echo "===================="
+          cat local-functions.txt
+
+          LOCAL_COUNT=$(wc -l < local-functions.txt)
+
+          echo ""
+          echo "Local function count: ${LOCAL_COUNT}"
+          echo "LOCAL_COUNT=${LOCAL_COUNT}" >> "$GITHUB_ENV"
+
+      - name: List deployed Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions list \
+            --project-ref huzsedewwzjywcpbkjkm \
+            > remote-functions-raw.txt
+
+          echo "REMOTE OUTPUT"
+          echo "============="
+          cat remote-functions-raw.txt
+
+      - name: Extract deployed function names
+        run: |
+          awk '
+            BEGIN { found=0 }
+            /^ *ID +NAME +SLUG/ { found=1; next }
+            found && NF >= 3 {
+              if ($1 ~ /^[0-9a-f-]+$/) {
+                print $3
+              }
+            }
+          ' remote-functions-raw.txt \
+          | sort -u \
+          > remote-functions.txt
+
+          echo ""
+          echo "DEPLOYED EDGE FUNCTIONS"
+          echo "======================="
+          cat remote-functions.txt
+
+          REMOTE_COUNT=$(wc -l < remote-functions.txt)
+
+          echo ""
+          echo "Remote function count: ${REMOTE_COUNT}"
+          echo "REMOTE_COUNT=${REMOTE_COUNT}" >> "$GITHUB_ENV"
+
+      - name: Find functions missing from GitHub
+        run: |
+          comm -23 \
+            remote-functions.txt \
+            local-functions.txt \
+            > missing-from-github.txt
+
+          MISSING_COUNT=$(wc -l < missing-from-github.txt)
+
+          echo "FUNCTIONS DEPLOYED BUT MISSING FROM GITHUB"
+          echo "=========================================="
+
+          if [ "$MISSING_COUNT" -eq 0 ]; then
+            echo "None."
+          else
+            cat missing-from-github.txt
+          fi
+
+          echo ""
+          echo "Missing from GitHub: ${MISSING_COUNT}"
+          echo "MISSING_COUNT=${MISSING_COUNT}" >> "$GITHUB_ENV"
+
+      - name: Find local functions not deployed
+        run: |
+          comm -13 \
+            remote-functions.txt \
+            local-functions.txt \
+            > local-only-functions.txt
+
+          LOCAL_ONLY_COUNT=$(wc -l < local-only-functions.txt)
+
+          echo "FUNCTIONS IN GITHUB BUT NOT DEPLOYED"
+          echo "===================================="
+
+          if [ "$LOCAL_ONLY_COUNT" -eq 0 ]; then
+            echo "None."
+          else
+            cat local-only-functions.txt
+          fi
+
+          echo ""
+          echo "GitHub-only functions: ${LOCAL_ONLY_COUNT}"
+          echo "LOCAL_ONLY_COUNT=${LOCAL_ONLY_COUNT}" >> "$GITHUB_ENV"
+
+      - name: Validate local function entrypoints
+        run: |
+          INVALID_COUNT=0
+
+          while IFS= read -r FUNCTION; do
+            if [ ! -f "supabase/functions/${FUNCTION}/index.ts" ]; then
+              echo "Missing index.ts: ${FUNCTION}"
+              INVALID_COUNT=$((INVALID_COUNT + 1))
+            fi
+          done < local-functions.txt
+
+          echo ""
+          echo "Functions without index.ts: ${INVALID_COUNT}"
+
+          if [ "$INVALID_COUNT" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: DRP audit summary
+        run: |
+          echo "======================================"
+          echo "TOURSRED EDGE FUNCTIONS DRP AUDIT"
+          echo "======================================"
+          echo ""
+          echo "Local functions:          ${LOCAL_COUNT}"
+          echo "Deployed functions:       ${REMOTE_COUNT}"
+          echo "Missing from GitHub:      ${MISSING_COUNT}"
+          echo "GitHub-only functions:    ${LOCAL_ONLY_COUNT}"
+          echo ""
+
+          if [ "$MISSING_COUNT" -eq 0 ]; then
+            echo "PASS: Every deployed Edge Function exists in GitHub."
+          else
+            echo "FAIL: Some deployed Edge Functions are not backed up in GitHub."
+            echo ""
+            echo "Functions requiring backup:"
+            cat missing-from-github.txt
+            exit 1
+          fi
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: toursred-edge-functions-audit
+          path: |
+            local-functions.txt
+            remote-functions.txt
+            missing-from-github.txt
+            local-only-functions.txt
+            remote-functions-raw.txt
+          retention-days: 30
