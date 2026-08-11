@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import type { ContractData, AnexoBData } from "./_shared/contractDocDefinition.ts";
+import type { ContractData, AnexoBData } from "../_shared/contractDocDefinition.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -226,8 +226,8 @@ Deno.serve(async (req: Request) => {
         ROBOTO_BOLD_B64,
         ROBOTO_ITALICS_B64,
         ROBOTO_BOLDITALICS_B64,
-      } = await import("./_shared/robotoFonts.ts");
-      const { buildSignedContractDocDefinition } = await import("./_shared/contractDocDefinition.ts");
+      } = await import("../_shared/robotoFonts.ts");
+      const { buildSignedContractDocDefinition } = await import("../_shared/contractDocDefinition.ts");
 
       const fonts = {
         Roboto: {
