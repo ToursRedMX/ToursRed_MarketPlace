@@ -19,12 +19,27 @@ jobs:
         with:
           version: latest
 
-      - name: Verify Supabase CLI
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget ca-certificates gnupg
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+
+          sudo wget \
+            -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Verify tools
         run: |
           supabase --version
-
-      - name: Verify AWS CLI
-        run: |
+          /usr/lib/postgresql/17/bin/psql --version
           aws --version
 
       - name: Generate backup timestamp
@@ -106,6 +121,84 @@ jobs:
             --data-only \
             --schema supabase_migrations
 
+      - name: Export Cron inventory
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$SUPABASE_DB_URL" \
+            --no-align \
+            --field-separator=$'\t' \
+            --tuples-only \
+            --command "
+              SELECT
+                jobname,
+                schedule,
+                active,
+                database,
+                username,
+                encode(convert_to(command, 'UTF8'), 'base64')
+              FROM cron.job
+              ORDER BY jobname;
+            " \
+            > logical-backup/cron_jobs.tsv
+
+          CRON_COUNT=$(wc -l < logical-backup/cron_jobs.tsv)
+
+          echo "Production Cron Jobs: ${CRON_COUNT}"
+
+          if [ "$CRON_COUNT" -ne 15 ]; then
+            echo "ERROR: Expected 15 Cron Jobs in production."
+            exit 1
+          fi
+
+      - name: Generate Cron restore SQL
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          cat > logical-backup/cron_jobs.sql <<'SQL'
+          -- ToursRed Cron Jobs DRP restore
+          --
+          -- Generated automatically from production.
+          -- Do not edit manually.
+          --
+          -- Assumes pg_cron is installed in the destination project.
+
+          SQL
+
+          /usr/lib/postgresql/17/bin/psql \
+            "$SUPABASE_DB_URL" \
+            --no-align \
+            --tuples-only \
+            --command "
+              SELECT
+                format(
+                  'SELECT cron.schedule(%L, %L, %L);',
+                  jobname,
+                  schedule,
+                  command
+                )
+              FROM cron.job
+              ORDER BY jobname;
+            " \
+            >> logical-backup/cron_jobs.sql
+
+          /usr/lib/postgresql/17/bin/psql \
+            "$SUPABASE_DB_URL" \
+            --no-align \
+            --tuples-only \
+            --command "
+              SELECT
+                format(
+                  'SELECT cron.alter_job((SELECT jobid FROM cron.job WHERE jobname = %L), active := false);',
+                  jobname
+                )
+              FROM cron.job
+              WHERE active = false
+              ORDER BY jobname;
+            " \
+            >> logical-backup/cron_jobs.sql
+
       - name: Verify backup files
         run: |
           test -s logical-backup/roles.sql
@@ -113,7 +206,31 @@ jobs:
           test -s logical-backup/data.sql
           test -s logical-backup/history_schema.sql
           test -s logical-backup/history_data.sql
+          test -s logical-backup/cron_jobs.sql
+          test -s logical-backup/cron_jobs.tsv
 
+          CRON_SQL_COUNT=$(
+            grep -c "SELECT cron.schedule" logical-backup/cron_jobs.sql
+          )
+
+          CRON_TSV_COUNT=$(
+            wc -l < logical-backup/cron_jobs.tsv
+          )
+
+          echo "Cron schedules in SQL: ${CRON_SQL_COUNT}"
+          echo "Cron jobs in inventory: ${CRON_TSV_COUNT}"
+
+          if [ "$CRON_SQL_COUNT" -ne 15 ]; then
+            echo "ERROR: cron_jobs.sql does not contain 15 schedules."
+            exit 1
+          fi
+
+          if [ "$CRON_TSV_COUNT" -ne 15 ]; then
+            echo "ERROR: cron_jobs.tsv does not contain 15 jobs."
+            exit 1
+          fi
+
+          echo ""
           echo "Logical backup generated:"
           ls -lh logical-backup/
 
@@ -139,7 +256,9 @@ jobs:
             schema.sql \
             data.sql \
             history_schema.sql \
-            history_data.sql
+            history_data.sql \
+            cron_jobs.sql \
+            cron_jobs.tsv
           do
             aws s3 cp \
               "logical-backup/${FILE}" \
@@ -160,6 +279,20 @@ jobs:
             "s3://${B2_BUCKET}/logical/${BACKUP_DATE}/" \
             --endpoint-url "$B2_ENDPOINT" \
             --region "$AWS_DEFAULT_REGION"
+
+      - name: DRP backup summary
+        run: |
+          echo "============================================"
+          echo "TOURSRED LOGICAL BACKUP"
+          echo "============================================"
+          echo ""
+          echo "Database roles             BACKED UP"
+          echo "Database schema            BACKED UP"
+          echo "Database data              BACKED UP"
+          echo "Migration history          BACKED UP"
+          echo "Cron Jobs                  15 / 15"
+          echo ""
+          echo "PASS"
 
       - name: Cleanup temporary files
         if: always()
