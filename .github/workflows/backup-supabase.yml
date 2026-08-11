@@ -66,24 +66,28 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
           B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
           B2_BUCKET: ${{ secrets.B2_BUCKET }}
         run: |
           aws s3 cp \
             "toursred-${BACKUP_DATE}.dump" \
             "s3://${B2_BUCKET}/database/toursred-${BACKUP_DATE}.dump" \
-            --endpoint-url "$B2_ENDPOINT"
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
 
       - name: Verify backup in Backblaze
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
           B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
           B2_BUCKET: ${{ secrets.B2_BUCKET }}
         run: |
           aws s3 ls \
             "s3://${B2_BUCKET}/database/toursred-${BACKUP_DATE}.dump" \
-            --endpoint-url "$B2_ENDPOINT"
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
 
       - name: Delete temporary backup
         if: always()
