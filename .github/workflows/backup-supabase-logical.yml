@@ -1,0 +1,131 @@
+name: Backup Supabase Logical to Backblaze B2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  logical-backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify Supabase CLI
+        run: |
+          supabase --version
+
+      - name: Verify AWS CLI
+        run: |
+          aws --version
+
+      - name: Generate backup timestamp
+        run: |
+          echo "BACKUP_DATE=$(date -u +'%Y-%m-%d_%H-%M-%S')" >> "$GITHUB_ENV"
+
+      - name: Create backup directory
+        run: |
+          mkdir -p logical-backup
+
+      - name: Backup database roles
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          supabase db dump \
+            --db-url "$SUPABASE_DB_URL" \
+            -f logical-backup/roles.sql \
+            --role-only
+
+      - name: Backup database schema
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          supabase db dump \
+            --db-url "$SUPABASE_DB_URL" \
+            -f logical-backup/schema.sql
+
+      - name: Backup database data
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          supabase db dump \
+            --db-url "$SUPABASE_DB_URL" \
+            -f logical-backup/data.sql \
+            --use-copy \
+            --data-only \
+            -x "storage.buckets_vectors" \
+            -x "storage.vector_indexes"
+
+      - name: Verify backup files
+        run: |
+          echo "Logical backup generated:"
+          ls -lh logical-backup/
+
+          test -s logical-backup/roles.sql
+          test -s logical-backup/schema.sql
+          test -s logical-backup/data.sql
+
+      - name: Upload roles backup to Backblaze B2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          aws s3 cp \
+            logical-backup/roles.sql \
+            "s3://${B2_BUCKET}/logical/${BACKUP_DATE}/roles.sql" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+      - name: Upload schema backup to Backblaze B2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          aws s3 cp \
+            logical-backup/schema.sql \
+            "s3://${B2_BUCKET}/logical/${BACKUP_DATE}/schema.sql" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+      - name: Upload data backup to Backblaze B2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          aws s3 cp \
+            logical-backup/data.sql \
+            "s3://${B2_BUCKET}/logical/${BACKUP_DATE}/data.sql" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+      - name: Verify logical backup in Backblaze
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          aws s3 ls \
+            "s3://${B2_BUCKET}/logical/${BACKUP_DATE}/" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+      - name: Cleanup temporary files
+        if: always()
+        run: |
+          rm -rf logical-backup
