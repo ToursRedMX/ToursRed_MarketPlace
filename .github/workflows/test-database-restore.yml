@@ -1,0 +1,193 @@
+name: Test Supabase Database Restore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  restore-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget ca-certificates gnupg
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+
+          sudo wget \
+            -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Verify PostgreSQL tools
+        run: |
+          /usr/lib/postgresql/17/bin/pg_restore --version
+          /usr/lib/postgresql/17/bin/psql --version
+
+      - name: Verify AWS CLI
+        run: |
+          aws --version
+
+      - name: Find latest backup in Backblaze
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          LATEST_BACKUP=$(
+            aws s3 ls \
+              "s3://${B2_BUCKET}/database/" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION" \
+            | sort \
+            | tail -n 1 \
+            | awk '{print $4}'
+          )
+
+          if [ -z "$LATEST_BACKUP" ]; then
+            echo "No backup files found in Backblaze."
+            exit 1
+          fi
+
+          echo "Latest backup: $LATEST_BACKUP"
+          echo "LATEST_BACKUP=$LATEST_BACKUP" >> "$GITHUB_ENV"
+
+      - name: Download latest backup from Backblaze
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          aws s3 cp \
+            "s3://${B2_BUCKET}/database/${LATEST_BACKUP}" \
+            "./restore-test.dump" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+          ls -lh restore-test.dump
+
+      - name: Verify downloaded backup
+        run: |
+          /usr/lib/postgresql/17/bin/pg_restore \
+            --list \
+            restore-test.dump \
+            > restore_contents.txt
+
+          echo "Backup archive is readable."
+          wc -l restore_contents.txt
+
+      - name: Test connection to restore project
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            -c "SELECT version();"
+
+      - name: Restore database
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/pg_restore \
+            --dbname="$RESTORE_DATABASE_URL" \
+            --no-owner \
+            --no-acl \
+            --verbose \
+            restore-test.dump
+
+      - name: Validate schemas
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          echo "Schemas:"
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            -c "\dn"
+
+      - name: Validate public tables
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          echo "Public tables:"
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            -c "\dt public.*"
+
+      - name: Count public tables
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            -c "
+              SELECT COUNT(*) AS public_table_count
+              FROM information_schema.tables
+              WHERE table_schema = 'public'
+                AND table_type = 'BASE TABLE';
+            "
+
+      - name: Validate functions
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            -c "
+              SELECT COUNT(*) AS public_function_count
+              FROM information_schema.routines
+              WHERE routine_schema = 'public';
+            "
+
+      - name: Validate RLS policies
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            -c "
+              SELECT COUNT(*) AS rls_policy_count
+              FROM pg_policies
+              WHERE schemaname = 'public';
+            "
+
+      - name: Validate Auth users
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            -c "
+              SELECT COUNT(*) AS auth_user_count
+              FROM auth.users;
+            "
+
+      - name: Validate Storage metadata
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            -c "
+              SELECT
+                (SELECT COUNT(*) FROM storage.buckets) AS storage_buckets,
+                (SELECT COUNT(*) FROM storage.objects) AS storage_objects;
+            "
+
+      - name: Cleanup temporary files
+        if: always()
+        run: |
+          rm -f restore-test.dump
+          rm -f restore_contents.txt
