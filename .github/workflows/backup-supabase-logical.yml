@@ -137,18 +137,36 @@ jobs:
                 active,
                 database,
                 username,
-                encode(convert_to(command, 'UTF8'), 'base64')
+                encode(convert_to(command, 'UTF8'), 'hex')
               FROM cron.job
               ORDER BY jobname;
             " \
             > logical-backup/cron_jobs.tsv
 
-          CRON_COUNT=$(wc -l < logical-backup/cron_jobs.tsv)
+          CRON_COUNT=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$SUPABASE_DB_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM cron.job;
+              "
+          )
 
           echo "Production Cron Jobs: ${CRON_COUNT}"
 
           if [ "$CRON_COUNT" -ne 15 ]; then
             echo "ERROR: Expected 15 Cron Jobs in production."
+            exit 1
+          fi
+
+          FILE_COUNT=$(wc -l < logical-backup/cron_jobs.tsv)
+
+          echo "Cron inventory rows: ${FILE_COUNT}"
+
+          if [ "$FILE_COUNT" -ne 15 ]; then
+            echo "ERROR: cron_jobs.tsv does not contain exactly 15 rows."
             exit 1
           fi
 
@@ -291,6 +309,8 @@ jobs:
           echo "Database data              BACKED UP"
           echo "Migration history          BACKED UP"
           echo "Cron Jobs                  15 / 15"
+          echo ""
+          echo "Files in logical snapshot: 7"
           echo ""
           echo "PASS"
 
