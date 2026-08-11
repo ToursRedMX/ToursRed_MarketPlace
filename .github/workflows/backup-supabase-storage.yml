@@ -1,0 +1,144 @@
+name: Backup Supabase Storage to Backblaze B2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  storage-backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rclone
+
+      - name: Verify rclone
+        run: |
+          rclone version
+
+      - name: Generate backup timestamp
+        run: |
+          echo "BACKUP_DATE=$(date -u +'%Y-%m-%d_%H-%M-%S')" >> "$GITHUB_ENV"
+
+      - name: Configure Supabase Storage S3
+        env:
+          SUPABASE_S3_ACCESS_KEY: ${{ secrets.SUPABASE_STORAGE_S3_ACCESS_KEY }}
+          SUPABASE_S3_SECRET_KEY: ${{ secrets.SUPABASE_STORAGE_S3_SECRET_KEY }}
+          SUPABASE_S3_ENDPOINT: ${{ secrets.SUPABASE_STORAGE_S3_ENDPOINT }}
+          SUPABASE_S3_REGION: ${{ secrets.SUPABASE_STORAGE_S3_REGION }}
+        run: |
+          mkdir -p ~/.config/rclone
+
+          cat > ~/.config/rclone/rclone.conf <<EOF
+          [supabase]
+          type = s3
+          provider = Other
+          access_key_id = ${SUPABASE_S3_ACCESS_KEY}
+          secret_access_key = ${SUPABASE_S3_SECRET_KEY}
+          endpoint = ${SUPABASE_S3_ENDPOINT}
+          region = ${SUPABASE_S3_REGION}
+          force_path_style = true
+          EOF
+
+      - name: Configure Backblaze B2 S3
+        env:
+          B2_ACCESS_KEY: ${{ secrets.B2_KEY_ID }}
+          B2_SECRET_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_REGION: ${{ secrets.B2_REGION }}
+        run: |
+          cat >> ~/.config/rclone/rclone.conf <<EOF
+
+          [backblaze]
+          type = s3
+          provider = Other
+          access_key_id = ${B2_ACCESS_KEY}
+          secret_access_key = ${B2_SECRET_KEY}
+          endpoint = ${B2_ENDPOINT}
+          region = ${B2_REGION}
+          force_path_style = true
+          EOF
+
+      - name: Test Supabase S3 connection
+        run: |
+          echo "Supabase buckets:"
+          rclone lsd supabase:
+
+      - name: Test Backblaze S3 connection
+        run: |
+          echo "Backblaze buckets:"
+          rclone lsd backblaze:
+
+      - name: Count Supabase Storage objects
+        run: |
+          SUPABASE_COUNT=$(rclone lsf supabase: --recursive --files-only | wc -l)
+
+          echo "Supabase Storage object count: ${SUPABASE_COUNT}"
+          echo "SUPABASE_COUNT=${SUPABASE_COUNT}" >> "$GITHUB_ENV"
+
+          if [ "$SUPABASE_COUNT" -eq 0 ]; then
+            echo "ERROR: No Supabase Storage objects found."
+            exit 1
+          fi
+
+      - name: Calculate Supabase Storage size
+        run: |
+          rclone size supabase:
+
+      - name: Backup Supabase Storage to Backblaze
+        env:
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          rclone copy \
+            supabase: \
+            "backblaze:${B2_BUCKET}/storage/${BACKUP_DATE}/" \
+            --fast-list \
+            --transfers 8 \
+            --checkers 16 \
+            --stats 10s \
+            --stats-one-line
+
+      - name: Count Backblaze backup objects
+        env:
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          BACKBLAZE_COUNT=$(
+            rclone lsf \
+              "backblaze:${B2_BUCKET}/storage/${BACKUP_DATE}/" \
+              --recursive \
+              --files-only \
+            | wc -l
+          )
+
+          echo "Backblaze Storage backup object count: ${BACKBLAZE_COUNT}"
+          echo "BACKBLAZE_COUNT=${BACKBLAZE_COUNT}" >> "$GITHUB_ENV"
+
+      - name: Validate Storage backup
+        run: |
+          echo "Supabase objects:  ${SUPABASE_COUNT}"
+          echo "Backblaze objects: ${BACKBLAZE_COUNT}"
+
+          if [ "$SUPABASE_COUNT" -ne "$BACKBLAZE_COUNT" ]; then
+            echo "ERROR: Object count mismatch."
+            exit 1
+          fi
+
+          echo "Storage backup validation successful."
+
+      - name: Verify backup listing
+        env:
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          rclone lsf \
+            "backblaze:${B2_BUCKET}/storage/${BACKUP_DATE}/" \
+            --recursive \
+            --files-only
+
+      - name: Cleanup rclone configuration
+        if: always()
+        run: |
+          rm -f ~/.config/rclone/rclone.conf
