@@ -37,14 +37,14 @@ jobs:
             -type d \
             -printf '%f\n' \
             | grep -v '^_' \
-            | sort \
+            | sort -u \
             > local-functions.txt
 
           echo "LOCAL EDGE FUNCTIONS"
           echo "===================="
           cat local-functions.txt
 
-          LOCAL_COUNT=$(wc -l < local-functions.txt)
+          LOCAL_COUNT=$(wc -l < local-functions.txt | tr -d ' ')
 
           echo ""
           echo "Local function count: ${LOCAL_COUNT}"
@@ -64,13 +64,11 @@ jobs:
 
       - name: Extract deployed function names
         run: |
-          awk '
-            BEGIN { found=0 }
-            /^ *ID +NAME +SLUG/ { found=1; next }
-            found && NF >= 3 {
-              if ($1 ~ /^[0-9a-f-]+$/) {
-                print $3
-              }
+          awk -F'|' '
+            /^[[:space:]]*[0-9a-fA-F-]{36}[[:space:]]*\|/ {
+              slug=$3
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", slug)
+              if (slug != "") print slug
             }
           ' remote-functions-raw.txt \
           | sort -u \
@@ -81,11 +79,16 @@ jobs:
           echo "======================="
           cat remote-functions.txt
 
-          REMOTE_COUNT=$(wc -l < remote-functions.txt)
+          REMOTE_COUNT=$(wc -l < remote-functions.txt | tr -d ' ')
 
           echo ""
           echo "Remote function count: ${REMOTE_COUNT}"
           echo "REMOTE_COUNT=${REMOTE_COUNT}" >> "$GITHUB_ENV"
+
+          if [ "$REMOTE_COUNT" -eq 0 ]; then
+            echo "ERROR: Supabase returned a function table but no deployed functions were parsed."
+            exit 1
+          fi
 
       - name: Find functions missing from GitHub
         run: |
@@ -94,7 +97,7 @@ jobs:
             local-functions.txt \
             > missing-from-github.txt
 
-          MISSING_COUNT=$(wc -l < missing-from-github.txt)
+          MISSING_COUNT=$(wc -l < missing-from-github.txt | tr -d ' ')
 
           echo "FUNCTIONS DEPLOYED BUT MISSING FROM GITHUB"
           echo "=========================================="
@@ -116,7 +119,7 @@ jobs:
             local-functions.txt \
             > local-only-functions.txt
 
-          LOCAL_ONLY_COUNT=$(wc -l < local-only-functions.txt)
+          LOCAL_ONLY_COUNT=$(wc -l < local-only-functions.txt | tr -d ' ')
 
           echo "FUNCTIONS IN GITHUB BUT NOT DEPLOYED"
           echo "===================================="
