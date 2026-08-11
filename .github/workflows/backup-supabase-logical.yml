@@ -59,7 +59,11 @@ jobs:
             --use-copy \
             --data-only \
             -x "storage.buckets_vectors" \
-            -x "storage.vector_indexes"
+            -x "storage.vector_indexes" \
+            -x "supabase_functions.*" \
+            -x "supabase_migrations.*" \
+            -x "realtime.*" \
+            -x "vault.*"
 
       - name: Verify backup files
         run: |
@@ -69,6 +73,15 @@ jobs:
           test -s logical-backup/roles.sql
           test -s logical-backup/schema.sql
           test -s logical-backup/data.sql
+
+      - name: Check for unwanted internal schemas
+        run: |
+          if grep -E '^(COPY|INSERT INTO) (supabase_functions|supabase_migrations|realtime|vault)\.' logical-backup/data.sql; then
+            echo "Internal Supabase schema data was found in data.sql"
+            exit 1
+          fi
+
+          echo "No unwanted internal schema data found."
 
       - name: Upload roles backup to Backblaze B2
         env:
