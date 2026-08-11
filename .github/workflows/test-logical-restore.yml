@@ -1,0 +1,187 @@
+name: Test Supabase Logical Restore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  logical-restore:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget ca-certificates gnupg
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+
+          sudo wget \
+            -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Verify PostgreSQL tools
+        run: |
+          /usr/lib/postgresql/17/bin/psql --version
+
+      - name: Verify AWS CLI
+        run: |
+          aws --version
+
+      - name: Find latest logical backup
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          LATEST_FOLDER=$(
+            aws s3 ls \
+              "s3://${B2_BUCKET}/logical/" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION" \
+            | awk '{print $2}' \
+            | sed 's:/$::' \
+            | sort \
+            | tail -n 1
+          )
+
+          if [ -z "$LATEST_FOLDER" ]; then
+            echo "No logical backups found."
+            exit 1
+          fi
+
+          echo "Latest logical backup: $LATEST_FOLDER"
+          echo "LATEST_FOLDER=$LATEST_FOLDER" >> "$GITHUB_ENV"
+
+      - name: Download logical backup
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          mkdir -p restore-logical
+
+          aws s3 cp \
+            "s3://${B2_BUCKET}/logical/${LATEST_FOLDER}/roles.sql" \
+            restore-logical/roles.sql \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+          aws s3 cp \
+            "s3://${B2_BUCKET}/logical/${LATEST_FOLDER}/schema.sql" \
+            restore-logical/schema.sql \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+          aws s3 cp \
+            "s3://${B2_BUCKET}/logical/${LATEST_FOLDER}/data.sql" \
+            restore-logical/data.sql \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+      - name: Verify downloaded files
+        run: |
+          test -s restore-logical/roles.sql
+          test -s restore-logical/schema.sql
+          test -s restore-logical/data.sql
+
+          echo "Downloaded files:"
+          ls -lh restore-logical/
+
+      - name: Test connection to Restore Test
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "SELECT version();"
+
+      - name: Restore logical backup
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            --single-transaction \
+            --variable ON_ERROR_STOP=1 \
+            --file restore-logical/roles.sql \
+            --file restore-logical/schema.sql \
+            --command "SET session_replication_role = replica" \
+            --file restore-logical/data.sql \
+            --dbname "$RESTORE_DATABASE_URL"
+
+      - name: Validate public tables
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS public_tables
+              FROM information_schema.tables
+              WHERE table_schema = 'public'
+                AND table_type = 'BASE TABLE';
+            "
+
+      - name: Validate public functions
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS public_functions
+              FROM information_schema.routines
+              WHERE routine_schema = 'public';
+            "
+
+      - name: Validate RLS policies
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS rls_policies
+              FROM pg_policies
+              WHERE schemaname = 'public';
+            "
+
+      - name: Validate Auth users
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS auth_users
+              FROM auth.users;
+            "
+
+      - name: Validate Storage metadata
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT
+                (SELECT COUNT(*) FROM storage.buckets) AS storage_buckets,
+                (SELECT COUNT(*) FROM storage.objects) AS storage_objects;
+            "
+
+      - name: Cleanup temporary files
+        if: always()
+        run: |
+          rm -rf restore-logical
