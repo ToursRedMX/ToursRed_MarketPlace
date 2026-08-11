@@ -1,0 +1,202 @@
+name: Test Supabase Storage Restore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  storage-restore:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install rclone and jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rclone jq
+
+      - name: Verify tools
+        run: |
+          rclone version
+          jq --version
+
+      - name: Configure Backblaze B2
+        env:
+          B2_ACCESS_KEY: ${{ secrets.B2_KEY_ID }}
+          B2_SECRET_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_REGION: ${{ secrets.B2_REGION }}
+        run: |
+          mkdir -p ~/.config/rclone
+
+          cat > ~/.config/rclone/rclone.conf <<EOF
+          [backblaze]
+          type = s3
+          provider = Other
+          access_key_id = ${B2_ACCESS_KEY}
+          secret_access_key = ${B2_SECRET_KEY}
+          endpoint = ${B2_ENDPOINT}
+          region = ${B2_REGION}
+          force_path_style = true
+          EOF
+
+      - name: Configure Restore Test Storage
+        env:
+          RESTORE_ACCESS_KEY: ${{ secrets.SUPABASE_RESTORE_STORAGE_S3_ACCESS_KEY }}
+          RESTORE_SECRET_KEY: ${{ secrets.SUPABASE_RESTORE_STORAGE_S3_SECRET_KEY }}
+          RESTORE_ENDPOINT: ${{ secrets.SUPABASE_RESTORE_STORAGE_S3_ENDPOINT }}
+          RESTORE_REGION: ${{ secrets.SUPABASE_RESTORE_STORAGE_S3_REGION }}
+        run: |
+          cat >> ~/.config/rclone/rclone.conf <<EOF
+
+          [restore]
+          type = s3
+          provider = Other
+          access_key_id = ${RESTORE_ACCESS_KEY}
+          secret_access_key = ${RESTORE_SECRET_KEY}
+          endpoint = ${RESTORE_ENDPOINT}
+          region = ${RESTORE_REGION}
+          force_path_style = true
+          EOF
+
+      - name: Test Backblaze connection
+        run: |
+          rclone lsd backblaze:
+
+      - name: Test Restore Test connection
+        run: |
+          rclone lsd restore:
+
+      - name: Find latest Storage snapshot
+        env:
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          LATEST_FOLDER=$(
+            rclone lsf \
+              "backblaze:${B2_BUCKET}/storage/" \
+              --dirs-only \
+            | sed 's:/$::' \
+            | sort \
+            | tail -n 1
+          )
+
+          if [ -z "$LATEST_FOLDER" ]; then
+            echo "ERROR: No Storage snapshots found in Backblaze."
+            exit 1
+          fi
+
+          echo "Latest Storage snapshot: ${LATEST_FOLDER}"
+          echo "LATEST_FOLDER=${LATEST_FOLDER}" >> "$GITHUB_ENV"
+
+      - name: Measure source backup
+        env:
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          SOURCE_COUNT=$(
+            rclone lsf \
+              "backblaze:${B2_BUCKET}/storage/${LATEST_FOLDER}/" \
+              --recursive \
+              --files-only \
+            | wc -l
+          )
+
+          SOURCE_BYTES=$(
+            rclone size \
+              "backblaze:${B2_BUCKET}/storage/${LATEST_FOLDER}/" \
+              --json \
+            | jq -r '.bytes'
+          )
+
+          echo "Source files: ${SOURCE_COUNT}"
+          echo "Source bytes: ${SOURCE_BYTES}"
+
+          echo "SOURCE_COUNT=${SOURCE_COUNT}" >> "$GITHUB_ENV"
+          echo "SOURCE_BYTES=${SOURCE_BYTES}" >> "$GITHUB_ENV"
+
+          if [ "$SOURCE_COUNT" -eq 0 ]; then
+            echo "ERROR: Backup snapshot contains no files."
+            exit 1
+          fi
+
+      - name: Restore physical Storage files
+        env:
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          rclone copy \
+            "backblaze:${B2_BUCKET}/storage/${LATEST_FOLDER}/" \
+            "restore:" \
+            --fast-list \
+            --transfers 8 \
+            --checkers 16 \
+            --stats 10s \
+            --stats-one-line
+
+      - name: Measure restored Storage
+        run: |
+          RESTORE_COUNT=$(
+            rclone lsf \
+              restore: \
+              --recursive \
+              --files-only \
+            | wc -l
+          )
+
+          RESTORE_BYTES=$(
+            rclone size \
+              restore: \
+              --json \
+            | jq -r '.bytes'
+          )
+
+          echo "Restored files: ${RESTORE_COUNT}"
+          echo "Restored bytes: ${RESTORE_BYTES}"
+
+          echo "RESTORE_COUNT=${RESTORE_COUNT}" >> "$GITHUB_ENV"
+          echo "RESTORE_BYTES=${RESTORE_BYTES}" >> "$GITHUB_ENV"
+
+      - name: Validate object counts and size
+        run: |
+          echo "Backup files:    ${SOURCE_COUNT}"
+          echo "Restored files:  ${RESTORE_COUNT}"
+          echo "Backup bytes:    ${SOURCE_BYTES}"
+          echo "Restored bytes:  ${RESTORE_BYTES}"
+
+          if [ "$SOURCE_COUNT" -ne "$RESTORE_COUNT" ]; then
+            echo "ERROR: File count mismatch."
+            exit 1
+          fi
+
+          if [ "$SOURCE_BYTES" -ne "$RESTORE_BYTES" ]; then
+            echo "ERROR: Total byte size mismatch."
+            exit 1
+          fi
+
+          echo "File count and byte size match."
+
+      - name: Verify files individually
+        env:
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          rclone check \
+            "backblaze:${B2_BUCKET}/storage/${LATEST_FOLDER}/" \
+            "restore:" \
+            --size-only \
+            --one-way
+
+      - name: Show restored buckets
+        run: |
+          echo "Restore Test buckets:"
+          rclone lsd restore:
+
+      - name: Show restored files
+        run: |
+          rclone lsf \
+            restore: \
+            --recursive \
+            --files-only
+
+      - name: Cleanup rclone configuration
+        if: always()
+        run: |
+          rm -f ~/.config/rclone/rclone.conf
