@@ -1,0 +1,217 @@
+# ToursRed Supabase configuration
+#
+# Edge Function JWT configuration synchronized
+# from the production project for DRP recovery.
+#
+# Supabase defaults verify_jwt to true.
+# Only functions requiring verify_jwt=false
+# are explicitly declared below.
+
+project_id = "ToursRed_MarketPlace"
+
+[functions."check-login-risk"]
+verify_jwt = false
+
+[functions."cleanup-incomplete-google-users"]
+verify_jwt = false
+
+[functions."conekta-webhook"]
+verify_jwt = false
+
+[functions."expire-supplement-approvals"]
+verify_jwt = false
+
+[functions."facturapi-webhook"]
+verify_jwt = false
+
+[functions."fix-orphaned-google-identity"]
+verify_jwt = false
+
+[functions."generate-booking-qr-token"]
+verify_jwt = false
+
+[functions."get-booking-checkin-details"]
+verify_jwt = false
+
+[functions."get-gift-card-status"]
+verify_jwt = false
+
+[functions."mercadopago-webhook"]
+verify_jwt = false
+
+[functions."notify-ops-refund-failed"]
+verify_jwt = false
+
+[functions."openpay-webhook"]
+verify_jwt = false
+
+[functions."paypal-webhook"]
+verify_jwt = false
+
+[functions."process-incremental-payment-deadlines"]
+verify_jwt = false
+
+[functions."process-membership-renewal-reminders"]
+verify_jwt = false
+
+[functions."process-receptivo-slot-cancellation"]
+verify_jwt = false
+
+[functions."record-terms-acceptance"]
+verify_jwt = false
+
+[functions."send-agency-approval"]
+verify_jwt = false
+
+[functions."send-agency-booking-cancellation-notification-admin"]
+verify_jwt = false
+
+[functions."send-agency-booking-cancellation-notification-traveler"]
+verify_jwt = false
+
+[functions."send-agency-cancellation-notification-admin"]
+verify_jwt = false
+
+[functions."send-agency-cancellation-notification-traveler"]
+verify_jwt = false
+
+[functions."send-agency-credentials"]
+verify_jwt = false
+
+[functions."send-agency-registration-admin"]
+verify_jwt = false
+
+[functions."send-agency-welcome"]
+verify_jwt = false
+
+[functions."send-booking-approval-notification"]
+verify_jwt = false
+
+[functions."send-booking-request-notification"]
+verify_jwt = false
+
+[functions."send-cancellation-notification-admin"]
+verify_jwt = false
+
+[functions."send-cancellation-notification-agency"]
+verify_jwt = false
+
+[functions."send-cancellation-notification-traveler"]
+verify_jwt = false
+
+[functions."send-cfdi-email"]
+verify_jwt = false
+
+[functions."send-checkin-confirmation-email"]
+verify_jwt = false
+
+[functions."send-contact-email"]
+verify_jwt = false
+
+[functions."send-executive-credentials"]
+verify_jwt = false
+
+[functions."send-executive-notification"]
+verify_jwt = false
+
+[functions."send-extras-purchase-notification"]
+verify_jwt = false
+
+[functions."send-gift-card-email"]
+verify_jwt = false
+
+[functions."send-inquiry-email"]
+verify_jwt = false
+
+[functions."send-membership-cancellation"]
+verify_jwt = false
+
+[functions."send-membership-renewal-reminder"]
+verify_jwt = false
+
+[functions."send-membership-welcome"]
+verify_jwt = false
+
+[functions."send-no-show-notification"]
+verify_jwt = false
+
+[functions."send-partial-cancellation-notification-agency"]
+verify_jwt = false
+
+[functions."send-password-reset"]
+verify_jwt = false
+
+[functions."send-payment-plan-reminder"]
+verify_jwt = false
+
+[functions."send-payout-notification"]
+verify_jwt = false
+
+[functions."send-referral-completed-notification"]
+verify_jwt = false
+
+[functions."send-referral-signup-notification"]
+verify_jwt = false
+
+[functions."send-reschedule-response-agency"]
+verify_jwt = false
+
+[functions."send-reschedule-response-confirmation"]
+verify_jwt = false
+
+[functions."send-slot-reschedule-auto-cancelled-agency"]
+verify_jwt = false
+
+[functions."send-slot-reschedule-auto-cancelled-traveler"]
+verify_jwt = false
+
+[functions."send-slot-reschedule-notification"]
+verify_jwt = false
+
+[functions."send-support-ticket-agent-assigned"]
+verify_jwt = false
+
+[functions."send-support-ticket-created"]
+verify_jwt = false
+
+[functions."send-support-ticket-updated"]
+verify_jwt = false
+
+[functions."send-tour-reschedule-notification"]
+verify_jwt = false
+
+[functions."send-travel-insurance-notification"]
+verify_jwt = false
+
+[functions."send-verification-email"]
+verify_jwt = false
+
+[functions."send-welcome-email"]
+verify_jwt = false
+
+[functions."stripe-checkout"]
+verify_jwt = false
+
+[functions."stripe-webhook"]
+verify_jwt = false
+
+[functions."subscribe-newsletter"]
+verify_jwt = false
+
+[functions."support-create-ticket"]
+verify_jwt = false
+
+[functions."sync-booking-to-accounting"]
+verify_jwt = false
+
+[functions."unsubscribe-newsletter"]
+verify_jwt = false
+
+[functions."validate-referral-code"]
+verify_jwt = false
+
+[functions."verify-email-code"]
+verify_jwt = false
+
+[functions."verify-reset-code"]
+verify_jwt = false
