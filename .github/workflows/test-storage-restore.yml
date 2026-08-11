@@ -129,6 +129,8 @@ jobs:
             --fast-list \
             --transfers 8 \
             --checkers 16 \
+            --size-only \
+            --no-update-modtime \
             --stats 10s \
             --stats-one-line
 
