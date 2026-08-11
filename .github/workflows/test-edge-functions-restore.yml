@@ -1,0 +1,393 @@
+name: Test Supabase Edge Functions Restore
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  edge-functions-restore:
+    runs-on: ubuntu-latest
+
+    env:
+      PRODUCTION_PROJECT_REF: huzsedewwzjywcpbkjkm
+      RESTORE_PROJECT_REF: ${{ secrets.SUPABASE_RESTORE_PROJECT_REF }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify tools
+        run: |
+          supabase --version
+          jq --version
+          python3 --version
+
+      - name: Safety check Restore Test project
+        run: |
+          echo "Production project: ${PRODUCTION_PROJECT_REF}"
+          echo "Restore Test project: ${RESTORE_PROJECT_REF}"
+
+          if [ -z "$RESTORE_PROJECT_REF" ]; then
+            echo "ERROR: SUPABASE_RESTORE_PROJECT_REF is empty."
+            exit 1
+          fi
+
+          if [ "$RESTORE_PROJECT_REF" = "$PRODUCTION_PROJECT_REF" ]; then
+            echo "============================================"
+            echo "CRITICAL SAFETY STOP"
+            echo "============================================"
+            echo ""
+            echo "Restore Test Project Ref matches production."
+            echo "This workflow WILL NOT deploy anything."
+            exit 1
+          fi
+
+          echo ""
+          echo "Safety check passed."
+          echo "Target is NOT the production Supabase project."
+
+      - name: Verify local Edge Functions
+        run: |
+          LOCAL_COUNT=$(
+            find supabase/functions \
+              -mindepth 1 \
+              -maxdepth 1 \
+              -type d \
+              -printf '%f\n' \
+            | grep -v '^_' \
+            | wc -l
+          )
+
+          echo "Local Edge Functions: ${LOCAL_COUNT}"
+
+          if [ "$LOCAL_COUNT" -ne 169 ]; then
+            echo "ERROR: Expected 169 local Edge Functions."
+            exit 1
+          fi
+
+          echo "LOCAL_COUNT=${LOCAL_COUNT}" >> "$GITHUB_ENV"
+
+      - name: Verify config.toml
+        run: |
+          if [ ! -f "supabase/config.toml" ]; then
+            echo "ERROR: supabase/config.toml does not exist."
+            exit 1
+          fi
+
+          python3 <<'PY'
+          import pathlib
+          import tomllib
+
+          config_path = pathlib.Path("supabase/config.toml")
+
+          with config_path.open("rb") as f:
+              config = tomllib.load(f)
+
+          functions = config.get("functions", {})
+
+          false_count = sum(
+              1
+              for value in functions.values()
+              if value.get("verify_jwt", True) is False
+          )
+
+          print(f"Explicit verify_jwt=false entries: {false_count}")
+
+          if false_count != 69:
+              raise SystemExit(
+                  f"ERROR: Expected 69 verify_jwt=false entries, "
+                  f"found {false_count}."
+              )
+
+          print("config.toml validation passed.")
+          PY
+
+      - name: Export production Edge Function configuration
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions list \
+            --project-ref "$PRODUCTION_PROJECT_REF" \
+            --output json \
+            > production-functions-raw.json
+
+          jq '
+            (
+              if type == "array"
+              then .
+              else (.functions // [])
+              end
+            )
+            | map({
+                slug: (.slug // .name),
+                verify_jwt: .verify_jwt
+              })
+            | sort_by(.slug)
+          ' production-functions-raw.json \
+          > production-functions.json
+
+          PRODUCTION_COUNT=$(
+            jq 'length' production-functions.json
+          )
+
+          PRODUCTION_TRUE=$(
+            jq '
+              [.[] | select(.verify_jwt == true)]
+              | length
+            ' production-functions.json
+          )
+
+          PRODUCTION_FALSE=$(
+            jq '
+              [.[] | select(.verify_jwt == false)]
+              | length
+            ' production-functions.json
+          )
+
+          echo "Production functions: ${PRODUCTION_COUNT}"
+          echo "Production JWT true:  ${PRODUCTION_TRUE}"
+          echo "Production JWT false: ${PRODUCTION_FALSE}"
+
+          if [ "$PRODUCTION_COUNT" -ne 169 ]; then
+            echo "ERROR: Production no longer has 169 functions."
+            exit 1
+          fi
+
+          if [ "$PRODUCTION_TRUE" -ne 100 ]; then
+            echo "ERROR: Production verify_jwt=true count changed."
+            exit 1
+          fi
+
+          if [ "$PRODUCTION_FALSE" -ne 69 ]; then
+            echo "ERROR: Production verify_jwt=false count changed."
+            exit 1
+          fi
+
+      - name: Show Restore Test functions before deployment
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          echo "Functions currently deployed in Restore Test:"
+
+          supabase functions list \
+            --project-ref "$RESTORE_PROJECT_REF" \
+            || true
+
+      - name: Deploy all Edge Functions to Restore Test
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          echo "============================================"
+          echo "DEPLOYING 169 EDGE FUNCTIONS TO RESTORE TEST"
+          echo "============================================"
+          echo ""
+          echo "Target project:"
+          echo "${RESTORE_PROJECT_REF}"
+          echo ""
+
+          supabase functions deploy \
+            --project-ref "$RESTORE_PROJECT_REF" \
+            --use-api \
+            --jobs 4
+
+      - name: Export Restore Test Edge Function configuration
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions list \
+            --project-ref "$RESTORE_PROJECT_REF" \
+            --output json \
+            > restore-functions-raw.json
+
+          jq '
+            (
+              if type == "array"
+              then .
+              else (.functions // [])
+              end
+            )
+            | map({
+                slug: (.slug // .name),
+                verify_jwt: .verify_jwt
+              })
+            | sort_by(.slug)
+          ' restore-functions-raw.json \
+          > restore-functions.json
+
+      - name: Validate Restore Test counts
+        run: |
+          RESTORE_COUNT=$(
+            jq 'length' restore-functions.json
+          )
+
+          RESTORE_TRUE=$(
+            jq '
+              [.[] | select(.verify_jwt == true)]
+              | length
+            ' restore-functions.json
+          )
+
+          RESTORE_FALSE=$(
+            jq '
+              [.[] | select(.verify_jwt == false)]
+              | length
+            ' restore-functions.json
+          )
+
+          echo "============================================"
+          echo "RESTORE TEST EDGE FUNCTION COUNTS"
+          echo "============================================"
+          echo ""
+          echo "Functions:        ${RESTORE_COUNT}"
+          echo "verify_jwt=true:  ${RESTORE_TRUE}"
+          echo "verify_jwt=false: ${RESTORE_FALSE}"
+
+          echo "RESTORE_COUNT=${RESTORE_COUNT}" >> "$GITHUB_ENV"
+          echo "RESTORE_TRUE=${RESTORE_TRUE}" >> "$GITHUB_ENV"
+          echo "RESTORE_FALSE=${RESTORE_FALSE}" >> "$GITHUB_ENV"
+
+          if [ "$RESTORE_COUNT" -ne 169 ]; then
+            echo "ERROR: Restore Test does not contain 169 functions."
+            exit 1
+          fi
+
+          if [ "$RESTORE_TRUE" -ne 100 ]; then
+            echo "ERROR: Restore Test JWT true count is incorrect."
+            exit 1
+          fi
+
+          if [ "$RESTORE_FALSE" -ne 69 ]; then
+            echo "ERROR: Restore Test JWT false count is incorrect."
+            exit 1
+          fi
+
+      - name: Compare production and Restore Test exactly
+        run: |
+          python3 <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          production = json.loads(
+              pathlib.Path(
+                  "production-functions.json"
+              ).read_text()
+          )
+
+          restore = json.loads(
+              pathlib.Path(
+                  "restore-functions.json"
+              ).read_text()
+          )
+
+          prod_map = {
+              item["slug"]: item["verify_jwt"]
+              for item in production
+          }
+
+          restore_map = {
+              item["slug"]: item["verify_jwt"]
+              for item in restore
+          }
+
+          missing = sorted(
+              set(prod_map) - set(restore_map)
+          )
+
+          extra = sorted(
+              set(restore_map) - set(prod_map)
+          )
+
+          jwt_mismatches = sorted(
+              slug
+              for slug in set(prod_map) & set(restore_map)
+              if prod_map[slug] != restore_map[slug]
+          )
+
+          print("============================================")
+          print("PRODUCTION VS RESTORE TEST")
+          print("============================================")
+          print("")
+          print(f"Production functions:       {len(prod_map)}")
+          print(f"Restore Test functions:     {len(restore_map)}")
+          print(f"Missing in Restore Test:    {len(missing)}")
+          print(f"Extra in Restore Test:      {len(extra)}")
+          print(f"JWT mismatches:             {len(jwt_mismatches)}")
+          print("")
+
+          if missing:
+              print("MISSING FUNCTIONS")
+              print("-----------------")
+              for slug in missing:
+                  print(slug)
+
+          if extra:
+              print("")
+              print("EXTRA FUNCTIONS")
+              print("---------------")
+              for slug in extra:
+                  print(slug)
+
+          if jwt_mismatches:
+              print("")
+              print("JWT MISMATCHES")
+              print("--------------")
+
+              for slug in jwt_mismatches:
+                  print(
+                      f"{slug}: "
+                      f"production={prod_map[slug]}, "
+                      f"restore={restore_map[slug]}"
+                  )
+
+          if missing or extra or jwt_mismatches:
+              print("")
+              print(
+                  "FAIL: Restore Test does not exactly "
+                  "match production."
+              )
+              sys.exit(1)
+
+          print(
+              "PASS: Restore Test exactly matches "
+              "production function names and JWT settings."
+          )
+          PY
+
+      - name: DRP Edge Functions restore summary
+        run: |
+          echo "============================================"
+          echo "TOURSRED EDGE FUNCTIONS DRP RESTORE TEST"
+          echo "============================================"
+          echo ""
+          echo "Source code:              169 / 169"
+          echo "Deployed to Restore Test: ${RESTORE_COUNT} / 169"
+          echo "verify_jwt=true:          ${RESTORE_TRUE} / 100"
+          echo "verify_jwt=false:         ${RESTORE_FALSE} / 69"
+          echo "Missing functions:        0"
+          echo "Extra functions:          0"
+          echo "JWT mismatches:           0"
+          echo ""
+          echo "PASS"
+          echo ""
+          echo "Edge Functions structural disaster recovery"
+          echo "has been successfully validated."
+
+      - name: Upload DRP verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: toursred-edge-functions-restore-test
+          path: |
+            production-functions-raw.json
+            production-functions.json
+            restore-functions-raw.json
+            restore-functions.json
+          retention-days: 30
