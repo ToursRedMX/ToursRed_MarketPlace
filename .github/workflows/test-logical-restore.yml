@@ -73,29 +73,27 @@ jobs:
         run: |
           mkdir -p restore-logical
 
-          aws s3 cp \
-            "s3://${B2_BUCKET}/logical/${LATEST_FOLDER}/roles.sql" \
-            restore-logical/roles.sql \
-            --endpoint-url "$B2_ENDPOINT" \
-            --region "$AWS_DEFAULT_REGION"
-
-          aws s3 cp \
-            "s3://${B2_BUCKET}/logical/${LATEST_FOLDER}/schema.sql" \
-            restore-logical/schema.sql \
-            --endpoint-url "$B2_ENDPOINT" \
-            --region "$AWS_DEFAULT_REGION"
-
-          aws s3 cp \
-            "s3://${B2_BUCKET}/logical/${LATEST_FOLDER}/data.sql" \
-            restore-logical/data.sql \
-            --endpoint-url "$B2_ENDPOINT" \
-            --region "$AWS_DEFAULT_REGION"
+          for FILE in \
+            roles.sql \
+            schema.sql \
+            data.sql \
+            history_schema.sql \
+            history_data.sql
+          do
+            aws s3 cp \
+              "s3://${B2_BUCKET}/logical/${LATEST_FOLDER}/${FILE}" \
+              "restore-logical/${FILE}" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION"
+          done
 
       - name: Verify downloaded files
         run: |
           test -s restore-logical/roles.sql
           test -s restore-logical/schema.sql
           test -s restore-logical/data.sql
+          test -s restore-logical/history_schema.sql
+          test -s restore-logical/history_data.sql
 
           echo "Downloaded files:"
           ls -lh restore-logical/
@@ -108,7 +106,7 @@ jobs:
             "$RESTORE_DATABASE_URL" \
             --command "SELECT version();"
 
-      - name: Restore logical backup
+      - name: Restore main logical backup
         env:
           RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
         run: |
@@ -119,6 +117,17 @@ jobs:
             --file restore-logical/schema.sql \
             --command "SET session_replication_role = replica" \
             --file restore-logical/data.sql \
+            --dbname "$RESTORE_DATABASE_URL"
+
+      - name: Restore migration history
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            --single-transaction \
+            --variable ON_ERROR_STOP=1 \
+            --file restore-logical/history_schema.sql \
+            --file restore-logical/history_data.sql \
             --dbname "$RESTORE_DATABASE_URL"
 
       - name: Validate public tables
@@ -144,6 +153,21 @@ jobs:
               SELECT COUNT(*) AS public_functions
               FROM information_schema.routines
               WHERE routine_schema = 'public';
+            "
+
+      - name: Validate public triggers
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS public_triggers
+              FROM pg_trigger t
+              JOIN pg_class c ON c.oid = t.tgrelid
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE NOT t.tgisinternal
+                AND n.nspname = 'public';
             "
 
       - name: Validate RLS policies
@@ -179,6 +203,17 @@ jobs:
               SELECT
                 (SELECT COUNT(*) FROM storage.buckets) AS storage_buckets,
                 (SELECT COUNT(*) FROM storage.objects) AS storage_objects;
+            "
+
+      - name: Validate migration history
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS migration_history_rows
+              FROM supabase_migrations.schema_migrations;
             "
 
       - name: Cleanup temporary files
