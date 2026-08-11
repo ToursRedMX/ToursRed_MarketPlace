@@ -60,10 +60,21 @@ jobs:
             --data-only \
             -x "storage.buckets_vectors" \
             -x "storage.vector_indexes" \
-            -x "supabase_functions.*" \
-            -x "supabase_migrations.*" \
-            -x "realtime.*" \
-            -x "vault.*"
+            -x "supabase_functions.migrations" \
+            -x "supabase_functions.hooks" \
+            -x "supabase_migrations.schema_migrations" \
+            -x "supabase_migrations.seed_files" \
+            -x "realtime.schema_migrations" \
+            -x "realtime.subscription" \
+            -x "realtime.messages" \
+            -x "realtime.messages_2026_08_08" \
+            -x "realtime.messages_2026_08_09" \
+            -x "realtime.messages_2026_08_10" \
+            -x "realtime.messages_2026_08_11" \
+            -x "realtime.messages_2026_08_12" \
+            -x "realtime.messages_2026_08_13" \
+            -x "realtime.messages_2026_08_14" \
+            -x "vault.secrets"
 
       - name: Verify backup files
         run: |
