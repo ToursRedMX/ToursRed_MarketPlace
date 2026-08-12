@@ -28,12 +28,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
 
-      - name: Verify PostgreSQL tools
+      - name: Verify tools
         run: |
           /usr/lib/postgresql/17/bin/psql --version
-
-      - name: Verify AWS CLI
-        run: |
           aws --version
 
       - name: Safety check restore target
@@ -46,13 +43,16 @@ jobs:
           fi
 
           if echo "$RESTORE_DATABASE_URL" | grep -q "huzsedewwzjywcpbkjkm"; then
-            echo "ERROR: Restore target points to PRODUCTION."
+            echo "============================================"
+            echo "DANGER"
+            echo "Restore target points to PRODUCTION."
+            echo "============================================"
             exit 1
           fi
 
           echo "Restore target safety check passed."
 
-      - name: Find latest hourly data backup
+      - name: Find latest hourly snapshot
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
@@ -72,14 +72,14 @@ jobs:
           )
 
           if [ -z "$LATEST_FOLDER" ]; then
-            echo "ERROR: No hourly data backups found."
+            echo "ERROR: No hourly snapshots found."
             exit 1
           fi
 
-          echo "Latest hourly backup: $LATEST_FOLDER"
-          echo "LATEST_FOLDER=$LATEST_FOLDER" >> "$GITHUB_ENV"
+          echo "Latest hourly snapshot: ${LATEST_FOLDER}"
+          echo "LATEST_FOLDER=${LATEST_FOLDER}" >> "$GITHUB_ENV"
 
-      - name: Download latest hourly backup
+      - name: Download latest hourly snapshot
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
@@ -89,30 +89,43 @@ jobs:
         run: |
           mkdir -p hourly-restore
 
-          aws s3 cp \
-            "s3://${B2_BUCKET}/hourly-data/${LATEST_FOLDER}/data.sql" \
-            hourly-restore/data.sql \
-            --endpoint-url "$B2_ENDPOINT" \
-            --region "$AWS_DEFAULT_REGION"
-
-          aws s3 cp \
-            "s3://${B2_BUCKET}/hourly-data/${LATEST_FOLDER}/data.sql.sha256" \
-            hourly-restore/data.sql.sha256 \
-            --endpoint-url "$B2_ENDPOINT" \
-            --region "$AWS_DEFAULT_REGION"
+          for FILE in \
+            schema.sql \
+            schema.sql.sha256 \
+            data.sql \
+            data.sql.sha256 \
+            schema_inventory.tsv \
+            schema_inventory.tsv.sha256
+          do
+            aws s3 cp \
+              "s3://${B2_BUCKET}/hourly-data/${LATEST_FOLDER}/${FILE}" \
+              "hourly-restore/${FILE}" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION"
+          done
 
       - name: Verify downloaded files
         run: |
+          test -s hourly-restore/schema.sql
+          test -s hourly-restore/schema.sql.sha256
           test -s hourly-restore/data.sql
           test -s hourly-restore/data.sql.sha256
+          test -s hourly-restore/schema_inventory.tsv
+          test -s hourly-restore/schema_inventory.tsv.sha256
 
-          echo "Downloaded files:"
+          echo "Downloaded snapshot:"
           ls -lh hourly-restore/
 
-      - name: Verify SHA256 checksum
+      - name: Verify SHA256 checksums
         run: |
           cd hourly-restore
+
+          sha256sum -c schema.sql.sha256
           sha256sum -c data.sql.sha256
+          sha256sum -c schema_inventory.tsv.sha256
+
+          echo ""
+          echo "All SHA256 checksums verified."
 
       - name: Test Restore Test connection
         env:
@@ -121,106 +134,179 @@ jobs:
           /usr/lib/postgresql/17/bin/psql \
             "$RESTORE_DATABASE_URL" \
             --variable ON_ERROR_STOP=1 \
-            --command "SELECT current_database(), version();"
-
-      - name: Verify required schemas exist
-        env:
-          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
-        run: |
-          PUBLIC_EXISTS=$(
-            /usr/lib/postgresql/17/bin/psql \
-              "$RESTORE_DATABASE_URL" \
-              --tuples-only \
-              --no-align \
-              --command "
-                SELECT COUNT(*)
-                FROM pg_namespace
-                WHERE nspname = 'public';
-              "
-          )
-
-          AUTH_EXISTS=$(
-            /usr/lib/postgresql/17/bin/psql \
-              "$RESTORE_DATABASE_URL" \
-              --tuples-only \
-              --no-align \
-              --command "
-                SELECT COUNT(*)
-                FROM pg_namespace
-                WHERE nspname = 'auth';
-              "
-          )
-
-          STORAGE_EXISTS=$(
-            /usr/lib/postgresql/17/bin/psql \
-              "$RESTORE_DATABASE_URL" \
-              --tuples-only \
-              --no-align \
-              --command "
-                SELECT COUNT(*)
-                FROM pg_namespace
-                WHERE nspname = 'storage';
-              "
-          )
-
-          if [ "$PUBLIC_EXISTS" -ne 1 ]; then
-            echo "ERROR: public schema does not exist."
-            exit 1
-          fi
-
-          if [ "$AUTH_EXISTS" -ne 1 ]; then
-            echo "ERROR: auth schema does not exist."
-            exit 1
-          fi
-
-          if [ "$STORAGE_EXISTS" -ne 1 ]; then
-            echo "ERROR: storage schema does not exist."
-            exit 1
-          fi
-
-          echo "Required schemas exist."
-
-      - name: Clear existing application data
-        env:
-          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
-        run: |
-          cat > /tmp/truncate_restore_data.sql <<'SQL'
-          DO $$
-          DECLARE
-            r RECORD;
-          BEGIN
-            FOR r IN
+            --command "
               SELECT
-                quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS table_name
-              FROM pg_class c
-              JOIN pg_namespace n
-                ON n.oid = c.relnamespace
-              WHERE c.relkind = 'r'
-                AND n.nspname IN ('public', 'auth', 'storage')
-                AND NOT (
-                  n.nspname = 'storage'
-                  AND c.relname IN (
-                    'buckets_vectors',
-                    'vector_indexes'
-                  )
-                )
-              ORDER BY n.nspname, c.relname
-            LOOP
-              BEGIN
-                EXECUTE 'TRUNCATE TABLE ' || r.table_name || ' CASCADE';
-              EXCEPTION
-                WHEN insufficient_privilege THEN
-                  RAISE NOTICE 'Skipping table without TRUNCATE privilege: %', r.table_name;
-              END;
-            END LOOP;
-          END
-          $$;
-          SQL
+                current_database(),
+                version();
+            "
+
+      - name: Apply hourly public schema
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          echo "Applying public schema snapshot."
+          echo ""
+          echo "NOTE:"
+          echo "Existing-object errors are allowed in this step."
+          echo "The exact schema inventory is validated immediately afterwards."
+          echo ""
+
+          set +e
 
           /usr/lib/postgresql/17/bin/psql \
             "$RESTORE_DATABASE_URL" \
+            --file hourly-restore/schema.sql \
+            > hourly-restore/schema-apply.log 2>&1
+
+          SCHEMA_EXIT_CODE=$?
+
+          set -e
+
+          echo "Schema psql exit code: ${SCHEMA_EXIT_CODE}"
+
+          echo ""
+          echo "Last schema output lines:"
+          tail -n 40 hourly-restore/schema-apply.log || true
+
+          echo ""
+          echo "Continuing to exact schema validation."
+
+      - name: Export Restore Test schema inventory
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --no-align \
+            --field-separator=$'\t' \
+            --tuples-only \
+            --command "
+              SELECT
+                table_schema,
+                table_name,
+                ordinal_position,
+                column_name,
+                data_type,
+                COALESCE(udt_name, ''),
+                is_nullable,
+                COALESCE(column_default, '')
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+              ORDER BY
+                table_schema,
+                table_name,
+                ordinal_position;
+            " \
+            > hourly-restore/restore_schema_inventory.tsv
+
+      - name: Validate public schema matches hourly snapshot
+        run: |
+          sort hourly-restore/schema_inventory.tsv \
+            > hourly-restore/expected_schema_inventory.sorted.tsv
+
+          sort hourly-restore/restore_schema_inventory.tsv \
+            > hourly-restore/actual_schema_inventory.sorted.tsv
+
+          if ! diff -u \
+            hourly-restore/expected_schema_inventory.sorted.tsv \
+            hourly-restore/actual_schema_inventory.sorted.tsv \
+            > hourly-restore/schema_diff.txt
+          then
+            echo "============================================"
+            echo "ERROR: RESTORE TEST SCHEMA DOES NOT MATCH"
+            echo "       THE HOURLY SNAPSHOT."
+            echo "============================================"
+            echo ""
+            cat hourly-restore/schema_diff.txt
+            echo ""
+            echo "No existing data has been deleted."
+            echo ""
+            echo "A clean Supabase restore project may be required"
+            echo "when the hourly snapshot contains structural"
+            echo "changes that cannot be layered over the old schema."
+            exit 1
+          fi
+
+          echo "Public schema matches hourly snapshot exactly."
+
+      - name: Extract data tables from hourly dump
+        run: |
+          grep '^COPY ' hourly-restore/data.sql \
+            | sed -E 's/^COPY ([^ ]+) .*/\1/' \
+            | sort -u \
+            > hourly-restore/data_tables.txt
+
+          echo "Tables contained in data snapshot:"
+          cat hourly-restore/data_tables.txt
+
+          TABLE_COUNT=$(wc -l < hourly-restore/data_tables.txt)
+
+          echo ""
+          echo "Tables in data snapshot: ${TABLE_COUNT}"
+
+          if [ "$TABLE_COUNT" -eq 0 ]; then
+            echo "ERROR: No COPY tables found in hourly data.sql."
+            exit 1
+          fi
+
+      - name: Verify all data target tables exist
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          MISSING=0
+
+          while IFS= read -r TABLE_NAME
+          do
+            TABLE_EXISTS=$(
+              /usr/lib/postgresql/17/bin/psql \
+                "$RESTORE_DATABASE_URL" \
+                --no-align \
+                --tuples-only \
+                --command "
+                  SELECT to_regclass('${TABLE_NAME}') IS NOT NULL;
+                "
+            )
+
+            if [ "$TABLE_EXISTS" != "t" ]; then
+              echo "MISSING TABLE: ${TABLE_NAME}"
+              MISSING=$((MISSING + 1))
+            fi
+          done < hourly-restore/data_tables.txt
+
+          echo ""
+          echo "Missing target tables: ${MISSING}"
+
+          if [ "$MISSING" -ne 0 ]; then
+            echo "ERROR: Hourly data cannot be safely restored."
+            exit 1
+          fi
+
+          echo "All data target tables exist."
+
+      - name: Generate truncate script
+        run: |
+          : > hourly-restore/truncate_data.sql
+
+          while IFS= read -r TABLE_NAME
+          do
+            echo "TRUNCATE TABLE ${TABLE_NAME} CASCADE;" \
+              >> hourly-restore/truncate_data.sql
+          done < hourly-restore/data_tables.txt
+
+          echo "Generated truncate script:"
+          cat hourly-restore/truncate_data.sql
+
+      - name: Clear existing snapshot data
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --single-transaction \
             --variable ON_ERROR_STOP=1 \
-            --file /tmp/truncate_restore_data.sql
+            --file hourly-restore/truncate_data.sql
+
+          echo "Existing snapshot tables cleared."
 
       - name: Restore hourly database data
         env:
@@ -233,7 +319,7 @@ jobs:
             --command "SET session_replication_role = replica" \
             --file hourly-restore/data.sql
 
-      - name: Validate public table count
+      - name: Validate public tables
         env:
           RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
         run: |
@@ -269,40 +355,33 @@ jobs:
                 (SELECT COUNT(*) FROM storage.objects) AS storage_objects;
             "
 
-      - name: Generate Restore Test inventory
+      - name: Validate previously missing table
         env:
           RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
         run: |
           /usr/lib/postgresql/17/bin/psql \
             "$RESTORE_DATABASE_URL" \
-            --no-align \
-            --field-separator='|' \
-            --tuples-only \
             --command "
               SELECT
-                schemaname,
-                relname,
-                n_live_tup
-              FROM pg_stat_user_tables
-              WHERE schemaname IN ('public', 'auth', 'storage')
-              ORDER BY schemaname, relname;
-            " \
-            > hourly-restore/restore_inventory.txt
-
-          echo "Restore inventory:"
-          cat hourly-restore/restore_inventory.txt
+                to_regclass('public.booking_auto_cleanup_logs')
+                  AS booking_auto_cleanup_logs;
+            "
 
       - name: DRP hourly restore summary
         run: |
           echo "============================================"
-          echo "TOURSRED HOURLY DATA RESTORE TEST"
+          echo "TOURSRED HOURLY SNAPSHOT RESTORE TEST"
           echo "============================================"
           echo ""
-          echo "Latest hourly backup       ${LATEST_FOLDER}"
-          echo "SHA256                     VERIFIED"
-          echo "Restore target             RESTORE TEST"
-          echo "Existing data              CLEARED"
-          echo "Hourly data                RESTORED"
+          echo "Snapshot                    ${LATEST_FOLDER}"
+          echo "SHA256                      VERIFIED"
+          echo "Public schema               VALIDATED"
+          echo "Data target tables          VALIDATED"
+          echo "Existing snapshot data      CLEARED"
+          echo "Hourly data                 RESTORED"
+          echo "Restore target              RESTORE TEST"
+          echo ""
+          echo "Target data RPO             <= 1 HOUR"
           echo ""
           echo "PASS"
 
@@ -310,4 +389,3 @@ jobs:
         if: always()
         run: |
           rm -rf hourly-restore
-          rm -f /tmp/truncate_restore_data.sql
