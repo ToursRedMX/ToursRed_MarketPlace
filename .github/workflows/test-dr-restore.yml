@@ -133,6 +133,16 @@ jobs:
           echo "Latest hourly snapshot: ${LATEST_HOURLY}"
           echo "LATEST_HOURLY=${LATEST_HOURLY}" >> "$GITHUB_ENV"
 
+      - name: Show recovery points
+        run: |
+          echo "============================================"
+          echo "TOURSRED DR RECOVERY POINTS"
+          echo "============================================"
+          echo ""
+          echo "Logical snapshot: ${LATEST_LOGICAL}"
+          echo "Hourly snapshot:  ${LATEST_HOURLY}"
+          echo ""
+
       # ============================================================
       # 4. DOWNLOAD BACKUPS
       # ============================================================
@@ -187,7 +197,7 @@ jobs:
           done
 
       # ============================================================
-      # 5. VERIFY FILES
+      # 5. VERIFY BACKUP FILES
       # ============================================================
 
       - name: Verify downloaded files
@@ -205,6 +215,14 @@ jobs:
           test -s dr-restore/hourly/schema_inventory.tsv
           test -s dr-restore/hourly/schema_inventory.tsv.sha256
 
+          echo ""
+          echo "Logical DR files:"
+          ls -lh dr-restore/logical/
+
+          echo ""
+          echo "Hourly snapshot files:"
+          ls -lh dr-restore/hourly/
+
       - name: Verify hourly SHA256 checksums
         run: |
           cd dr-restore/hourly
@@ -213,10 +231,37 @@ jobs:
           sha256sum -c data.sql.sha256
           sha256sum -c schema_inventory.tsv.sha256
 
-          echo "All hourly checksums verified."
+          echo ""
+          echo "All hourly SHA256 checksums verified."
 
       # ============================================================
-      # 6. RESTORE ROLES AND EXTENSIONS
+      # 6. RESET RESTORE TEST PUBLIC SCHEMA
+      # ============================================================
+
+      - name: Reset Restore Test public schema
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --command "
+              DROP SCHEMA IF EXISTS public CASCADE;
+
+              CREATE SCHEMA public;
+
+              GRANT ALL ON SCHEMA public TO postgres;
+              GRANT USAGE ON SCHEMA public TO anon;
+              GRANT USAGE ON SCHEMA public TO authenticated;
+              GRANT USAGE ON SCHEMA public TO service_role;
+              GRANT ALL ON SCHEMA public TO service_role;
+            "
+
+          echo ""
+          echo "Restore Test public schema reset successfully."
+
+      # ============================================================
+      # 7. RESTORE ROLES
       # ============================================================
 
       - name: Restore database roles
@@ -227,6 +272,10 @@ jobs:
             "$RESTORE_DATABASE_URL" \
             --variable ON_ERROR_STOP=1 \
             --file dr-restore/logical/roles.sql
+
+      # ============================================================
+      # 8. RESTORE REQUIRED EXTENSIONS
+      # ============================================================
 
       - name: Ensure extensions schema exists
         env:
@@ -274,7 +323,7 @@ jobs:
             "
 
       # ============================================================
-      # 7. RESTORE LATEST PUBLIC SCHEMA
+      # 9. RESTORE LATEST HOURLY PUBLIC SCHEMA
       # ============================================================
 
       - name: Restore latest hourly public schema
@@ -288,7 +337,7 @@ jobs:
             --file dr-restore/hourly/schema.sql
 
       # ============================================================
-      # 8. SEMANTIC SCHEMA VALIDATION
+      # 10. SEMANTIC SCHEMA VALIDATION
       # ============================================================
 
       - name: Export restored public schema inventory
@@ -343,7 +392,7 @@ jobs:
           echo "Public schema matches hourly snapshot semantically."
 
       # ============================================================
-      # 9. VERIFY DATA TARGET TABLES
+      # 11. EXTRACT DATA TABLES
       # ============================================================
 
       - name: Extract tables contained in hourly data
@@ -355,16 +404,21 @@ jobs:
 
           TABLE_COUNT=$(wc -l < dr-restore/data_tables.txt)
 
-          echo "Tables contained in hourly data:"
+          echo ""
+          echo "Tables contained in hourly snapshot:"
           cat dr-restore/data_tables.txt
 
           echo ""
           echo "Total data tables: ${TABLE_COUNT}"
 
           if [ "$TABLE_COUNT" -eq 0 ]; then
-            echo "ERROR: No COPY tables found in data.sql."
+            echo "ERROR: No COPY tables found in hourly data.sql."
             exit 1
           fi
+
+      # ============================================================
+      # 12. VERIFY TARGET TABLES
+      # ============================================================
 
       - name: Verify all hourly data target tables exist
         env:
@@ -398,10 +452,41 @@ jobs:
             exit 1
           fi
 
-          echo "All data target tables exist."
+          echo "All hourly data target tables exist."
 
       # ============================================================
-      # 10. RESTORE HOURLY DATA
+      # 13. CLEAR EXISTING DATA FOR REPEATABLE TESTS
+      # ============================================================
+
+      - name: Generate truncate script for snapshot tables
+        run: |
+          : > dr-restore/truncate_snapshot_tables.sql
+
+          while IFS= read -r TABLE_NAME
+          do
+            echo "TRUNCATE TABLE ${TABLE_NAME} CASCADE;" \
+              >> dr-restore/truncate_snapshot_tables.sql
+          done < dr-restore/data_tables.txt
+
+          echo ""
+          echo "Generated truncate script:"
+          cat dr-restore/truncate_snapshot_tables.sql
+
+      - name: Clear existing snapshot data
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --single-transaction \
+            --variable ON_ERROR_STOP=1 \
+            --file dr-restore/truncate_snapshot_tables.sql
+
+          echo ""
+          echo "Existing snapshot data cleared."
+
+      # ============================================================
+      # 14. RESTORE LATEST HOURLY DATA
       # ============================================================
 
       - name: Restore latest hourly database data
@@ -416,8 +501,19 @@ jobs:
             --file dr-restore/hourly/data.sql
 
       # ============================================================
-      # 11. RESTORE MIGRATION HISTORY
+      # 15. RESTORE MIGRATION HISTORY
       # ============================================================
+
+      - name: Clear existing migration history
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --command "
+              TRUNCATE TABLE supabase_migrations.schema_migrations;
+            "
 
       - name: Restore migration history
         env:
@@ -425,16 +521,14 @@ jobs:
         run: |
           /usr/lib/postgresql/17/bin/psql \
             "$RESTORE_DATABASE_URL" \
-            --single-transaction \
             --variable ON_ERROR_STOP=1 \
-            --file dr-restore/logical/history_schema.sql \
             --file dr-restore/logical/history_data.sql
 
       # ============================================================
-      # 12. VALIDATE CORE DATABASE
+      # 16. VALIDATE CORE OBJECTS
       # ============================================================
 
-      - name: Validate core objects
+      - name: Validate core database objects
         env:
           RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
         run: |
@@ -457,6 +551,17 @@ jobs:
 
                 (
                   SELECT COUNT(*)
+                  FROM pg_trigger t
+                  JOIN pg_class c
+                    ON c.oid = t.tgrelid
+                  JOIN pg_namespace n
+                    ON n.oid = c.relnamespace
+                  WHERE NOT t.tgisinternal
+                    AND n.nspname = 'public'
+                ) AS public_triggers,
+
+                (
+                  SELECT COUNT(*)
                   FROM pg_policies
                   WHERE schemaname = 'public'
                 ) AS rls_policies,
@@ -474,11 +579,16 @@ jobs:
                 (
                   SELECT COUNT(*)
                   FROM storage.objects
-                ) AS storage_objects;
+                ) AS storage_objects,
+
+                (
+                  SELECT COUNT(*)
+                  FROM supabase_migrations.schema_migrations
+                ) AS migration_history;
             "
 
       # ============================================================
-      # 13. VALIDATE REALTIME
+      # 17. VALIDATE REALTIME
       # ============================================================
 
       - name: Verify notifications is in Realtime publication
@@ -505,6 +615,8 @@ jobs:
               "
           )
 
+          echo "Realtime notifications publication entries: ${REALTIME_COUNT}"
+
           if [ "$REALTIME_COUNT" -ne 1 ]; then
             echo "ERROR: public.notifications is not in supabase_realtime."
             exit 1
@@ -513,8 +625,38 @@ jobs:
           echo "Realtime publication validated."
 
       # ============================================================
-      # 14. VALIDATE EXTENSIONS
+      # 18. VALIDATE EXTENSIONS
       # ============================================================
+
+      - name: Validate required extensions
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT
+                e.extname AS extension_name,
+                e.extversion AS extension_version,
+                n.nspname AS schema_name
+              FROM pg_extension e
+              JOIN pg_namespace n
+                ON n.oid = e.extnamespace
+              WHERE e.extname IN (
+                'hypopg',
+                'index_advisor',
+                'pg_cron',
+                'pg_net',
+                'pg_stat_statements',
+                'pgcrypto',
+                'plpgsql',
+                'postgis',
+                'supabase_vault',
+                'uuid-ossp',
+                'wrappers'
+              )
+              ORDER BY e.extname;
+            "
 
       - name: Verify extension count
         env:
@@ -552,7 +694,7 @@ jobs:
           fi
 
       # ============================================================
-      # 15. RESTORE CRON
+      # 19. RESTORE CRON JOBS
       # ============================================================
 
       - name: Clear existing Cron Jobs
@@ -608,8 +750,10 @@ jobs:
             exit 1
           fi
 
+          echo "Cron Jobs validated."
+
       # ============================================================
-      # 16. CRON PORTABILITY
+      # 20. VERIFY CRON PORTABILITY
       # ============================================================
 
       - name: Verify Cron portability
@@ -638,8 +782,10 @@ jobs:
             exit 1
           fi
 
+          echo "Cron portability validated."
+
       # ============================================================
-      # 17. SUMMARY
+      # 21. FINAL DR SUMMARY
       # ============================================================
 
       - name: Full DR restore summary
@@ -651,11 +797,14 @@ jobs:
           echo "Daily logical backup      ${LATEST_LOGICAL}"
           echo "Hourly snapshot           ${LATEST_HOURLY}"
           echo ""
+          echo "Restore safety            PASS"
           echo "Hourly SHA256             PASS"
+          echo "Public schema reset       PASS"
           echo "Database roles            RESTORED"
           echo "Required extensions       11 / 11"
           echo "Latest public schema      RESTORED"
           echo "Schema semantic match     PASS"
+          echo "Data target tables        VALIDATED"
           echo "Latest hourly data        RESTORED"
           echo "Migration history         RESTORED"
           echo "Auth data                 RESTORED"
@@ -669,6 +818,10 @@ jobs:
           echo "================================================"
           echo "DATABASE DR TEST: PASS"
           echo "================================================"
+
+      # ============================================================
+      # 22. CLEANUP
+      # ============================================================
 
       - name: Cleanup temporary files
         if: always()
