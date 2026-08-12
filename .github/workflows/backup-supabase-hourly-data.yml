@@ -19,9 +19,27 @@ jobs:
         with:
           version: latest
 
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget ca-certificates gnupg
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+
+          sudo wget \
+            -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
       - name: Verify tools
         run: |
           supabase --version
+          /usr/lib/postgresql/17/bin/psql --version
           aws --version
 
       - name: Generate backup timestamp
@@ -31,6 +49,15 @@ jobs:
       - name: Create backup directory
         run: |
           mkdir -p hourly-data-backup
+
+      - name: Backup public schema
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          supabase db dump \
+            --db-url "$SUPABASE_DB_URL" \
+            -f hourly-data-backup/schema.sql \
+            --schema public
 
       - name: Backup database data
         env:
@@ -66,9 +93,39 @@ jobs:
           sed -i '/"realtime"\./d' hourly-data-backup/data.sql
           sed -i '/"vault"\./d' hourly-data-backup/data.sql
 
-      - name: Verify data backup
+      - name: Export public schema inventory
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$SUPABASE_DB_URL" \
+            --no-align \
+            --field-separator=$'\t' \
+            --tuples-only \
+            --command "
+              SELECT
+                table_schema,
+                table_name,
+                ordinal_position,
+                column_name,
+                data_type,
+                COALESCE(udt_name, ''),
+                is_nullable,
+                COALESCE(column_default, '')
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+              ORDER BY
+                table_schema,
+                table_name,
+                ordinal_position;
+            " \
+            > hourly-data-backup/schema_inventory.tsv
+
+      - name: Verify backup files
+        run: |
+          test -s hourly-data-backup/schema.sql
           test -s hourly-data-backup/data.sql
+          test -s hourly-data-backup/schema_inventory.tsv
 
           if grep -E 'supabase_functions|supabase_migrations|"realtime"\.|"vault"\.' hourly-data-backup/data.sql; then
             echo "ERROR: Internal Supabase references still exist in data.sql"
@@ -76,18 +133,24 @@ jobs:
           fi
 
           echo ""
-          echo "Hourly data backup generated:"
-          ls -lh hourly-data-backup/data.sql
+          echo "Hourly snapshot generated:"
+          ls -lh hourly-data-backup/
 
-      - name: Generate SHA256 checksum
+      - name: Generate SHA256 checksums
         run: |
           cd hourly-data-backup
 
+          sha256sum schema.sql > schema.sql.sha256
           sha256sum data.sql > data.sql.sha256
+          sha256sum schema_inventory.tsv > schema_inventory.tsv.sha256
 
+          echo ""
+          echo "Checksums:"
+          cat schema.sql.sha256
           cat data.sql.sha256
+          cat schema_inventory.tsv.sha256
 
-      - name: Upload hourly data backup to Backblaze B2
+      - name: Upload hourly snapshot to Backblaze B2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
@@ -95,19 +158,22 @@ jobs:
           B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
           B2_BUCKET: ${{ secrets.B2_BUCKET }}
         run: |
-          aws s3 cp \
-            hourly-data-backup/data.sql \
-            "s3://${B2_BUCKET}/hourly-data/${BACKUP_DATE}/data.sql" \
-            --endpoint-url "$B2_ENDPOINT" \
-            --region "$AWS_DEFAULT_REGION"
+          for FILE in \
+            schema.sql \
+            schema.sql.sha256 \
+            data.sql \
+            data.sql.sha256 \
+            schema_inventory.tsv \
+            schema_inventory.tsv.sha256
+          do
+            aws s3 cp \
+              "hourly-data-backup/${FILE}" \
+              "s3://${B2_BUCKET}/hourly-data/${BACKUP_DATE}/${FILE}" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION"
+          done
 
-          aws s3 cp \
-            hourly-data-backup/data.sql.sha256 \
-            "s3://${B2_BUCKET}/hourly-data/${BACKUP_DATE}/data.sql.sha256" \
-            --endpoint-url "$B2_ENDPOINT" \
-            --region "$AWS_DEFAULT_REGION"
-
-      - name: Verify hourly backup in Backblaze
+      - name: Verify hourly snapshot in Backblaze
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
@@ -115,21 +181,40 @@ jobs:
           B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
           B2_BUCKET: ${{ secrets.B2_BUCKET }}
         run: |
+          REMOTE_FILES=$(
+            aws s3 ls \
+              "s3://${B2_BUCKET}/hourly-data/${BACKUP_DATE}/" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION" \
+            | wc -l
+          )
+
           aws s3 ls \
             "s3://${B2_BUCKET}/hourly-data/${BACKUP_DATE}/" \
             --endpoint-url "$B2_ENDPOINT" \
             --region "$AWS_DEFAULT_REGION"
 
+          echo ""
+          echo "Remote files: ${REMOTE_FILES}"
+
+          if [ "$REMOTE_FILES" -ne 6 ]; then
+            echo "ERROR: Expected 6 files in hourly snapshot."
+            exit 1
+          fi
+
       - name: DRP hourly backup summary
         run: |
           echo "============================================"
-          echo "TOURSRED HOURLY DATA BACKUP"
+          echo "TOURSRED HOURLY SNAPSHOT"
           echo "============================================"
           echo ""
+          echo "Public schema              BACKED UP"
           echo "Database data              BACKED UP"
-          echo "SHA256 checksum            GENERATED"
+          echo "Schema inventory           BACKED UP"
+          echo "SHA256 checksums           GENERATED"
+          echo "Remote files               6 / 6"
           echo "Backup frequency           HOURLY"
-          echo "Target RPO                 <= 1 HOUR"
+          echo "Target data RPO            <= 1 HOUR"
           echo ""
           echo "PASS"
 
