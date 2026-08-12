@@ -515,10 +515,10 @@ jobs:
             --file dr-restore/hourly/data.sql
 
       # ============================================================
-      # 16. RESTORE MIGRATION HISTORY
+      # 16. RESET + RESTORE MIGRATION HISTORY
       # ============================================================
 
-      - name: Clear existing migration history
+      - name: Reset migration history schema
         env:
           RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
         run: |
@@ -526,25 +526,25 @@ jobs:
             "$RESTORE_DATABASE_URL" \
             --variable ON_ERROR_STOP=1 \
             --command "
-              TRUNCATE TABLE supabase_migrations.schema_migrations;
-
-              DO \$\$
-              BEGIN
-                IF to_regclass('supabase_migrations.seed_files') IS NOT NULL THEN
-                  EXECUTE 'TRUNCATE TABLE supabase_migrations.seed_files';
-                END IF;
-              END
-              \$\$;
+              DROP SCHEMA IF EXISTS supabase_migrations CASCADE;
             "
 
-      - name: Restore migration history
+          echo ""
+          echo "supabase_migrations schema reset."
+
+      - name: Restore migration history schema and data
         env:
           RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
         run: |
           /usr/lib/postgresql/17/bin/psql \
             "$RESTORE_DATABASE_URL" \
+            --single-transaction \
             --variable ON_ERROR_STOP=1 \
+            --file dr-restore/logical/history_schema.sql \
             --file dr-restore/logical/history_data.sql
+
+          echo ""
+          echo "Migration history schema and data restored."
 
       # ============================================================
       # 17. VALIDATE CORE DATABASE
