@@ -11,6 +11,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ============================================================
+      # 1. TOOLS
+      # ============================================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -42,6 +46,10 @@ jobs:
           /usr/lib/postgresql/17/bin/psql --version
           aws --version
 
+      # ============================================================
+      # 2. TIMESTAMP
+      # ============================================================
+
       - name: Generate backup timestamp
         run: |
           echo "BACKUP_DATE=$(date -u +'%Y-%m-%d_%H-%M-%S')" >> "$GITHUB_ENV"
@@ -50,14 +58,22 @@ jobs:
         run: |
           mkdir -p hourly-data-backup
 
-      - name: Backup public schema
+      # ============================================================
+      # 3. BACKUP APPLICATION SCHEMAS
+      # ============================================================
+
+      - name: Backup application schemas
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           supabase db dump \
             --db-url "$SUPABASE_DB_URL" \
             -f hourly-data-backup/schema.sql \
-            --schema public
+            --schema public,corporate
+
+      # ============================================================
+      # 4. BACKUP DATABASE DATA
+      # ============================================================
 
       - name: Backup database data
         env:
@@ -86,6 +102,10 @@ jobs:
             -x "realtime.messages_2026_08_14" \
             -x "vault.secrets"
 
+      # ============================================================
+      # 5. SANITIZE DATA
+      # ============================================================
+
       - name: Remove internal Supabase references
         run: |
           sed -i '/supabase_functions/d' hourly-data-backup/data.sql
@@ -93,7 +113,11 @@ jobs:
           sed -i '/"realtime"\./d' hourly-data-backup/data.sql
           sed -i '/"vault"\./d' hourly-data-backup/data.sql
 
-      - name: Export public schema inventory
+      # ============================================================
+      # 6. EXPORT APPLICATION SCHEMA INVENTORY
+      # ============================================================
+
+      - name: Export application schema inventory
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
@@ -112,14 +136,21 @@ jobs:
                 is_nullable,
                 COALESCE(column_default, '')
               FROM information_schema.columns
-              WHERE table_schema = 'public'
-                AND table_name <> 'wrappers_fdw_stats'
+              WHERE table_schema IN ('public', 'corporate')
+                AND NOT (
+                  table_schema = 'public'
+                  AND table_name = 'wrappers_fdw_stats'
+                )
               ORDER BY
                 table_schema,
                 table_name,
                 column_name;
             " \
             > hourly-data-backup/schema_inventory.tsv
+
+      # ============================================================
+      # 7. VERIFY BACKUP
+      # ============================================================
 
       - name: Verify backup files
         run: |
@@ -136,6 +167,10 @@ jobs:
           echo "Hourly snapshot generated:"
           ls -lh hourly-data-backup/
 
+      # ============================================================
+      # 8. CHECKSUMS
+      # ============================================================
+
       - name: Generate SHA256 checksums
         run: |
           cd hourly-data-backup
@@ -149,6 +184,10 @@ jobs:
           cat schema.sql.sha256
           cat data.sql.sha256
           cat schema_inventory.tsv.sha256
+
+      # ============================================================
+      # 9. UPLOAD TO BACKBLAZE
+      # ============================================================
 
       - name: Upload hourly snapshot to Backblaze B2
         env:
@@ -172,6 +211,10 @@ jobs:
               --endpoint-url "$B2_ENDPOINT" \
               --region "$AWS_DEFAULT_REGION"
           done
+
+      # ============================================================
+      # 10. VERIFY REMOTE BACKUP
+      # ============================================================
 
       - name: Verify hourly snapshot in Backblaze
         env:
@@ -202,6 +245,10 @@ jobs:
             exit 1
           fi
 
+      # ============================================================
+      # 11. SUMMARY
+      # ============================================================
+
       - name: DRP hourly backup summary
         run: |
           echo "============================================"
@@ -209,6 +256,7 @@ jobs:
           echo "============================================"
           echo ""
           echo "Public schema              BACKED UP"
+          echo "Corporate schema           BACKED UP"
           echo "Database data              BACKED UP"
           echo "Schema inventory           BACKED UP"
           echo "SHA256 checksums           GENERATED"
@@ -217,6 +265,10 @@ jobs:
           echo "Target data RPO            <= 1 HOUR"
           echo ""
           echo "PASS"
+
+      # ============================================================
+      # 12. CLEANUP
+      # ============================================================
 
       - name: Cleanup temporary files
         if: always()
