@@ -106,7 +106,6 @@ jobs:
               SELECT
                 table_schema,
                 table_name,
-                ordinal_position,
                 column_name,
                 data_type,
                 COALESCE(udt_name, ''),
@@ -114,10 +113,11 @@ jobs:
                 COALESCE(column_default, '')
               FROM information_schema.columns
               WHERE table_schema = 'public'
+                AND table_name <> 'wrappers_fdw_stats'
               ORDER BY
                 table_schema,
                 table_name,
-                ordinal_position;
+                column_name;
             " \
             > hourly-data-backup/schema_inventory.tsv
 
