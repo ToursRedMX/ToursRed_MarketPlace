@@ -1,0 +1,138 @@
+name: Backup Supabase Hourly Data to Backblaze B2
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "10 * * * *"
+
+jobs:
+  hourly-data-backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify tools
+        run: |
+          supabase --version
+          aws --version
+
+      - name: Generate backup timestamp
+        run: |
+          echo "BACKUP_DATE=$(date -u +'%Y-%m-%d_%H-%M-%S')" >> "$GITHUB_ENV"
+
+      - name: Create backup directory
+        run: |
+          mkdir -p hourly-data-backup
+
+      - name: Backup database data
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          supabase db dump \
+            --db-url "$SUPABASE_DB_URL" \
+            -f hourly-data-backup/data.sql \
+            --use-copy \
+            --data-only \
+            -x "storage.buckets_vectors" \
+            -x "storage.vector_indexes" \
+            -x "supabase_functions.migrations" \
+            -x "supabase_functions.hooks" \
+            -x "supabase_migrations.schema_migrations" \
+            -x "supabase_migrations.seed_files" \
+            -x "realtime.schema_migrations" \
+            -x "realtime.subscription" \
+            -x "realtime.messages" \
+            -x "realtime.messages_2026_08_08" \
+            -x "realtime.messages_2026_08_09" \
+            -x "realtime.messages_2026_08_10" \
+            -x "realtime.messages_2026_08_11" \
+            -x "realtime.messages_2026_08_12" \
+            -x "realtime.messages_2026_08_13" \
+            -x "realtime.messages_2026_08_14" \
+            -x "vault.secrets"
+
+      - name: Remove internal Supabase references
+        run: |
+          sed -i '/supabase_functions/d' hourly-data-backup/data.sql
+          sed -i '/supabase_migrations/d' hourly-data-backup/data.sql
+          sed -i '/"realtime"\./d' hourly-data-backup/data.sql
+          sed -i '/"vault"\./d' hourly-data-backup/data.sql
+
+      - name: Verify data backup
+        run: |
+          test -s hourly-data-backup/data.sql
+
+          if grep -E 'supabase_functions|supabase_migrations|"realtime"\.|"vault"\.' hourly-data-backup/data.sql; then
+            echo "ERROR: Internal Supabase references still exist in data.sql"
+            exit 1
+          fi
+
+          echo ""
+          echo "Hourly data backup generated:"
+          ls -lh hourly-data-backup/data.sql
+
+      - name: Generate SHA256 checksum
+        run: |
+          sha256sum hourly-data-backup/data.sql \
+            > hourly-data-backup/data.sql.sha256
+
+          cat hourly-data-backup/data.sql.sha256
+
+      - name: Upload hourly data backup to Backblaze B2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          aws s3 cp \
+            hourly-data-backup/data.sql \
+            "s3://${B2_BUCKET}/hourly-data/${BACKUP_DATE}/data.sql" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+          aws s3 cp \
+            hourly-data-backup/data.sql.sha256 \
+            "s3://${B2_BUCKET}/hourly-data/${BACKUP_DATE}/data.sql.sha256" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+      - name: Verify hourly backup in Backblaze
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          aws s3 ls \
+            "s3://${B2_BUCKET}/hourly-data/${BACKUP_DATE}/" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --region "$AWS_DEFAULT_REGION"
+
+      - name: DRP hourly backup summary
+        run: |
+          echo "============================================"
+          echo "TOURSRED HOURLY DATA BACKUP"
+          echo "============================================"
+          echo ""
+          echo "Database data              BACKED UP"
+          echo "SHA256 checksum            GENERATED"
+          echo "Backup frequency           HOURLY"
+          echo "Target RPO                 <= 1 HOUR"
+          echo ""
+          echo "PASS"
+
+      - name: Cleanup temporary files
+        if: always()
+        run: |
+          rm -rf hourly-data-backup
