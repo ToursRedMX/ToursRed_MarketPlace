@@ -144,7 +144,7 @@ jobs:
           echo ""
 
       # ============================================================
-      # 4. DOWNLOAD BACKUPS
+      # 4. DOWNLOAD LOGICAL COMPONENTS
       # ============================================================
 
       - name: Download logical DR components
@@ -170,6 +170,10 @@ jobs:
               --endpoint-url "$B2_ENDPOINT" \
               --region "$AWS_DEFAULT_REGION"
           done
+
+      # ============================================================
+      # 5. DOWNLOAD HOURLY SNAPSHOT
+      # ============================================================
 
       - name: Download latest hourly snapshot
         env:
@@ -197,7 +201,7 @@ jobs:
           done
 
       # ============================================================
-      # 5. VERIFY BACKUP FILES
+      # 6. VERIFY FILES
       # ============================================================
 
       - name: Verify downloaded files
@@ -235,10 +239,10 @@ jobs:
           echo "All hourly SHA256 checksums verified."
 
       # ============================================================
-      # 6. RESET RESTORE TEST PUBLIC SCHEMA
+      # 7. RESET APPLICATION SCHEMAS
       # ============================================================
 
-      - name: Reset Restore Test public schema
+      - name: Reset Restore Test application schemas
         env:
           RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
         run: |
@@ -246,22 +250,29 @@ jobs:
             "$RESTORE_DATABASE_URL" \
             --variable ON_ERROR_STOP=1 \
             --command "
+              DROP SCHEMA IF EXISTS corporate CASCADE;
               DROP SCHEMA IF EXISTS public CASCADE;
 
               CREATE SCHEMA public;
+              CREATE SCHEMA corporate;
 
               GRANT ALL ON SCHEMA public TO postgres;
               GRANT USAGE ON SCHEMA public TO anon;
               GRANT USAGE ON SCHEMA public TO authenticated;
-              GRANT USAGE ON SCHEMA public TO service_role;
               GRANT ALL ON SCHEMA public TO service_role;
+
+              GRANT ALL ON SCHEMA corporate TO postgres;
+              GRANT USAGE ON SCHEMA corporate TO anon;
+              GRANT USAGE ON SCHEMA corporate TO authenticated;
+              GRANT ALL ON SCHEMA corporate TO service_role;
             "
 
           echo ""
-          echo "Restore Test public schema reset successfully."
+          echo "public schema reset."
+          echo "corporate schema reset."
 
       # ============================================================
-      # 7. RESTORE ROLES
+      # 8. RESTORE ROLES
       # ============================================================
 
       - name: Restore database roles
@@ -274,7 +285,7 @@ jobs:
             --file dr-restore/logical/roles.sql
 
       # ============================================================
-      # 8. RESTORE REQUIRED EXTENSIONS
+      # 9. EXTENSIONS
       # ============================================================
 
       - name: Ensure extensions schema exists
@@ -323,10 +334,10 @@ jobs:
             "
 
       # ============================================================
-      # 9. RESTORE LATEST HOURLY PUBLIC SCHEMA
+      # 10. RESTORE APPLICATION SCHEMAS
       # ============================================================
 
-      - name: Restore latest hourly public schema
+      - name: Restore latest hourly application schemas
         env:
           RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
         run: |
@@ -337,10 +348,10 @@ jobs:
             --file dr-restore/hourly/schema.sql
 
       # ============================================================
-      # 10. SEMANTIC SCHEMA VALIDATION
+      # 11. SEMANTIC SCHEMA VALIDATION
       # ============================================================
 
-      - name: Export restored public schema inventory
+      - name: Export restored application schema inventory
         env:
           RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
         run: |
@@ -359,8 +370,11 @@ jobs:
                 is_nullable,
                 COALESCE(column_default, '')
               FROM information_schema.columns
-              WHERE table_schema = 'public'
-                AND table_name <> 'wrappers_fdw_stats'
+              WHERE table_schema IN ('public', 'corporate')
+                AND NOT (
+                  table_schema = 'public'
+                  AND table_name = 'wrappers_fdw_stats'
+                )
               ORDER BY
                 table_schema,
                 table_name,
@@ -368,7 +382,7 @@ jobs:
             " \
             > dr-restore/restored_schema_inventory.tsv
 
-      - name: Validate restored public schema
+      - name: Validate restored application schemas
         run: |
           sort dr-restore/hourly/schema_inventory.tsv \
             > dr-restore/expected_schema.sorted.tsv
@@ -382,17 +396,17 @@ jobs:
             > dr-restore/schema_diff.txt
           then
             echo "============================================"
-            echo "ERROR: PUBLIC SCHEMA DOES NOT MATCH BACKUP"
+            echo "ERROR: APPLICATION SCHEMAS DO NOT MATCH"
             echo "============================================"
             echo ""
             cat dr-restore/schema_diff.txt
             exit 1
           fi
 
-          echo "Public schema matches hourly snapshot semantically."
+          echo "public + corporate schemas match hourly snapshot."
 
       # ============================================================
-      # 11. EXTRACT DATA TABLES
+      # 12. EXTRACT DATA TABLES
       # ============================================================
 
       - name: Extract tables contained in hourly data
@@ -417,7 +431,7 @@ jobs:
           fi
 
       # ============================================================
-      # 12. VERIFY TARGET TABLES
+      # 13. VERIFY TARGET TABLES
       # ============================================================
 
       - name: Verify all hourly data target tables exist
@@ -455,7 +469,7 @@ jobs:
           echo "All hourly data target tables exist."
 
       # ============================================================
-      # 13. CLEAR EXISTING DATA FOR REPEATABLE TESTS
+      # 14. CLEAR EXISTING SNAPSHOT DATA
       # ============================================================
 
       - name: Generate truncate script for snapshot tables
@@ -486,7 +500,7 @@ jobs:
           echo "Existing snapshot data cleared."
 
       # ============================================================
-      # 14. RESTORE LATEST HOURLY DATA
+      # 15. RESTORE HOURLY DATA
       # ============================================================
 
       - name: Restore latest hourly database data
@@ -501,7 +515,7 @@ jobs:
             --file dr-restore/hourly/data.sql
 
       # ============================================================
-      # 15. RESTORE MIGRATION HISTORY
+      # 16. RESTORE MIGRATION HISTORY
       # ============================================================
 
       - name: Clear existing migration history
@@ -513,6 +527,14 @@ jobs:
             --variable ON_ERROR_STOP=1 \
             --command "
               TRUNCATE TABLE supabase_migrations.schema_migrations;
+
+              DO \$\$
+              BEGIN
+                IF to_regclass('supabase_migrations.seed_files') IS NOT NULL THEN
+                  EXECUTE 'TRUNCATE TABLE supabase_migrations.seed_files';
+                END IF;
+              END
+              \$\$;
             "
 
       - name: Restore migration history
@@ -525,7 +547,7 @@ jobs:
             --file dr-restore/logical/history_data.sql
 
       # ============================================================
-      # 16. VALIDATE CORE OBJECTS
+      # 17. VALIDATE CORE DATABASE
       # ============================================================
 
       - name: Validate core database objects
@@ -545,9 +567,22 @@ jobs:
 
                 (
                   SELECT COUNT(*)
+                  FROM information_schema.tables
+                  WHERE table_schema = 'corporate'
+                    AND table_type = 'BASE TABLE'
+                ) AS corporate_tables,
+
+                (
+                  SELECT COUNT(*)
                   FROM information_schema.routines
                   WHERE routine_schema = 'public'
                 ) AS public_functions,
+
+                (
+                  SELECT COUNT(*)
+                  FROM information_schema.routines
+                  WHERE routine_schema = 'corporate'
+                ) AS corporate_functions,
 
                 (
                   SELECT COUNT(*)
@@ -557,14 +592,14 @@ jobs:
                   JOIN pg_namespace n
                     ON n.oid = c.relnamespace
                   WHERE NOT t.tgisinternal
-                    AND n.nspname = 'public'
-                ) AS public_triggers,
+                    AND n.nspname IN ('public', 'corporate')
+                ) AS application_triggers,
 
                 (
                   SELECT COUNT(*)
                   FROM pg_policies
-                  WHERE schemaname = 'public'
-                ) AS rls_policies,
+                  WHERE schemaname IN ('public', 'corporate')
+                ) AS application_rls_policies,
 
                 (
                   SELECT COUNT(*)
@@ -588,7 +623,7 @@ jobs:
             "
 
       # ============================================================
-      # 17. VALIDATE REALTIME
+      # 18. VALIDATE REALTIME
       # ============================================================
 
       - name: Verify notifications is in Realtime publication
@@ -625,7 +660,7 @@ jobs:
           echo "Realtime publication validated."
 
       # ============================================================
-      # 18. VALIDATE EXTENSIONS
+      # 19. VALIDATE EXTENSIONS
       # ============================================================
 
       - name: Validate required extensions
@@ -694,7 +729,7 @@ jobs:
           fi
 
       # ============================================================
-      # 19. RESTORE CRON JOBS
+      # 20. RESTORE CRON JOBS
       # ============================================================
 
       - name: Clear existing Cron Jobs
@@ -753,7 +788,7 @@ jobs:
           echo "Cron Jobs validated."
 
       # ============================================================
-      # 20. VERIFY CRON PORTABILITY
+      # 21. CRON PORTABILITY
       # ============================================================
 
       - name: Verify Cron portability
@@ -785,7 +820,7 @@ jobs:
           echo "Cron portability validated."
 
       # ============================================================
-      # 21. FINAL DR SUMMARY
+      # 22. FINAL SUMMARY
       # ============================================================
 
       - name: Full DR restore summary
@@ -799,10 +834,8 @@ jobs:
           echo ""
           echo "Restore safety            PASS"
           echo "Hourly SHA256             PASS"
-          echo "Public schema reset       PASS"
-          echo "Database roles            RESTORED"
-          echo "Required extensions       11 / 11"
-          echo "Latest public schema      RESTORED"
+          echo "Public schema             RESTORED"
+          echo "Corporate schema          RESTORED"
           echo "Schema semantic match     PASS"
           echo "Data target tables        VALIDATED"
           echo "Latest hourly data        RESTORED"
@@ -810,6 +843,7 @@ jobs:
           echo "Auth data                 RESTORED"
           echo "Storage metadata          RESTORED"
           echo "Realtime                  VALIDATED"
+          echo "Required extensions       11 / 11"
           echo "Cron Jobs                 15 / 15"
           echo "Cron portability          PASS"
           echo ""
@@ -820,7 +854,7 @@ jobs:
           echo "================================================"
 
       # ============================================================
-      # 22. CLEANUP
+      # 23. CLEANUP
       # ============================================================
 
       - name: Cleanup temporary files
