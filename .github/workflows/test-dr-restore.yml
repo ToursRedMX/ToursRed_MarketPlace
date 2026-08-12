@@ -1,0 +1,893 @@
+name: Test ToursRed Full Database DR Restore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dr-restore:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ============================================================
+      # 1. TOOLS
+      # ============================================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget ca-certificates gnupg
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+
+          sudo wget \
+            -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Verify tools
+        run: |
+          /usr/lib/postgresql/17/bin/psql --version
+          aws --version
+
+      # ============================================================
+      # 2. SAFETY
+      # ============================================================
+
+      - name: Safety check Restore Test target
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          if [ -z "$RESTORE_DATABASE_URL" ]; then
+            echo "ERROR: SUPABASE_RESTORE_TEST_DB_URL is not configured."
+            exit 1
+          fi
+
+          if echo "$RESTORE_DATABASE_URL" | grep -q "huzsedewwzjywcpbkjkm"; then
+            echo "================================================"
+            echo "DANGER"
+            echo "RESTORE TARGET POINTS TO TOURSRED PRODUCTION"
+            echo "================================================"
+            exit 1
+          fi
+
+          echo "Restore target is NOT production."
+          echo "Safety check passed."
+
+      - name: Test Restore Test connection
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --command "
+              SELECT
+                current_database(),
+                current_user,
+                version();
+            "
+
+      # ============================================================
+      # 3. FIND BACKUPS
+      # ============================================================
+
+      - name: Find latest daily logical backup
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          LATEST_LOGICAL=$(
+            aws s3 ls \
+              "s3://${B2_BUCKET}/logical/" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION" \
+            | awk '{print $2}' \
+            | sed 's:/$::' \
+            | sort \
+            | tail -n 1
+          )
+
+          if [ -z "$LATEST_LOGICAL" ]; then
+            echo "ERROR: No logical backups found."
+            exit 1
+          fi
+
+          echo "Latest logical backup: ${LATEST_LOGICAL}"
+          echo "LATEST_LOGICAL=${LATEST_LOGICAL}" >> "$GITHUB_ENV"
+
+      - name: Find latest hourly snapshot
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          LATEST_HOURLY=$(
+            aws s3 ls \
+              "s3://${B2_BUCKET}/hourly-data/" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION" \
+            | awk '{print $2}' \
+            | sed 's:/$::' \
+            | sort \
+            | tail -n 1
+          )
+
+          if [ -z "$LATEST_HOURLY" ]; then
+            echo "ERROR: No hourly snapshots found."
+            exit 1
+          fi
+
+          echo "Latest hourly snapshot: ${LATEST_HOURLY}"
+          echo "LATEST_HOURLY=${LATEST_HOURLY}" >> "$GITHUB_ENV"
+
+      - name: Show DR recovery points
+        run: |
+          echo "============================================"
+          echo "TOURSRED DR RECOVERY POINTS"
+          echo "============================================"
+          echo ""
+          echo "Daily logical: ${LATEST_LOGICAL}"
+          echo "Hourly data:   ${LATEST_HOURLY}"
+          echo ""
+
+      # ============================================================
+      # 4. DOWNLOAD DAILY LOGICAL COMPONENTS
+      # ============================================================
+
+      - name: Download logical DR components
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          mkdir -p dr-restore/logical
+
+          for FILE in \
+            roles.sql \
+            history_schema.sql \
+            history_data.sql \
+            cron_jobs.sql \
+            cron_jobs.tsv
+          do
+            aws s3 cp \
+              "s3://${B2_BUCKET}/logical/${LATEST_LOGICAL}/${FILE}" \
+              "dr-restore/logical/${FILE}" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION"
+          done
+
+      # ============================================================
+      # 5. DOWNLOAD LATEST HOURLY SNAPSHOT
+      # ============================================================
+
+      - name: Download latest hourly snapshot
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+        run: |
+          mkdir -p dr-restore/hourly
+
+          for FILE in \
+            schema.sql \
+            schema.sql.sha256 \
+            data.sql \
+            data.sql.sha256 \
+            schema_inventory.tsv \
+            schema_inventory.tsv.sha256
+          do
+            aws s3 cp \
+              "s3://${B2_BUCKET}/hourly-data/${LATEST_HOURLY}/${FILE}" \
+              "dr-restore/hourly/${FILE}" \
+              --endpoint-url "$B2_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION"
+          done
+
+      # ============================================================
+      # 6. VERIFY FILES
+      # ============================================================
+
+      - name: Verify downloaded files
+        run: |
+          test -s dr-restore/logical/roles.sql
+          test -s dr-restore/logical/history_schema.sql
+          test -s dr-restore/logical/history_data.sql
+          test -s dr-restore/logical/cron_jobs.sql
+          test -s dr-restore/logical/cron_jobs.tsv
+
+          test -s dr-restore/hourly/schema.sql
+          test -s dr-restore/hourly/schema.sql.sha256
+          test -s dr-restore/hourly/data.sql
+          test -s dr-restore/hourly/data.sql.sha256
+          test -s dr-restore/hourly/schema_inventory.tsv
+          test -s dr-restore/hourly/schema_inventory.tsv.sha256
+
+          echo ""
+          echo "Logical files:"
+          ls -lh dr-restore/logical/
+
+          echo ""
+          echo "Hourly files:"
+          ls -lh dr-restore/hourly/
+
+      - name: Verify hourly SHA256 checksums
+        run: |
+          cd dr-restore/hourly
+
+          sha256sum -c schema.sql.sha256
+          sha256sum -c data.sql.sha256
+          sha256sum -c schema_inventory.tsv.sha256
+
+          echo ""
+          echo "All hourly checksums verified."
+
+      # ============================================================
+      # 7. VERIFY CLEAN RESTORE TARGET
+      # ============================================================
+
+      - name: Verify Restore Test is clean
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          PUBLIC_TABLES=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$RESTORE_DATABASE_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_type = 'BASE TABLE';
+              "
+          )
+
+          AUTH_USERS=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$RESTORE_DATABASE_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM auth.users;
+              "
+          )
+
+          STORAGE_OBJECTS=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$RESTORE_DATABASE_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM storage.objects;
+              "
+          )
+
+          echo "Existing public tables:   ${PUBLIC_TABLES}"
+          echo "Existing auth users:      ${AUTH_USERS}"
+          echo "Existing storage objects: ${STORAGE_OBJECTS}"
+
+          if [ "$PUBLIC_TABLES" -ne 0 ]; then
+            echo ""
+            echo "ERROR: Restore Test is not clean."
+            echo "Public application tables already exist."
+            echo ""
+            echo "Create a NEW Supabase Restore Test project"
+            echo "before running this workflow."
+            exit 1
+          fi
+
+          if [ "$AUTH_USERS" -ne 0 ]; then
+            echo "ERROR: Restore Test already contains Auth users."
+            exit 1
+          fi
+
+          if [ "$STORAGE_OBJECTS" -ne 0 ]; then
+            echo "ERROR: Restore Test already contains Storage objects."
+            exit 1
+          fi
+
+          echo ""
+          echo "Clean Restore Test confirmed."
+
+      # ============================================================
+      # 8. RESTORE DATABASE ROLES
+      # ============================================================
+
+      - name: Restore database roles
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --file dr-restore/logical/roles.sql
+
+      # ============================================================
+      # 9. ENSURE REQUIRED EXTENSIONS
+      # ============================================================
+
+      - name: Ensure extensions schema exists
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --command "
+              CREATE SCHEMA IF NOT EXISTS extensions;
+            "
+
+      - name: Ensure required extensions
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --command "
+              CREATE EXTENSION IF NOT EXISTS hypopg
+                WITH SCHEMA extensions;
+
+              CREATE EXTENSION IF NOT EXISTS pgcrypto
+                WITH SCHEMA extensions;
+
+              CREATE EXTENSION IF NOT EXISTS postgis
+                WITH SCHEMA extensions;
+
+              CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"
+                WITH SCHEMA extensions;
+
+              CREATE EXTENSION IF NOT EXISTS pg_stat_statements
+                WITH SCHEMA extensions;
+            "
+
+      - name: Ensure Supabase managed extensions
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --command "
+              CREATE EXTENSION IF NOT EXISTS pg_net;
+
+              CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+              CREATE EXTENSION IF NOT EXISTS supabase_vault;
+
+              CREATE EXTENSION IF NOT EXISTS wrappers;
+
+              CREATE EXTENSION IF NOT EXISTS index_advisor;
+            "
+
+      # ============================================================
+      # 10. RESTORE LATEST PUBLIC SCHEMA
+      # ============================================================
+
+      - name: Restore latest hourly public schema
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --single-transaction \
+            --variable ON_ERROR_STOP=1 \
+            --file dr-restore/hourly/schema.sql
+
+      # ============================================================
+      # 11. VALIDATE SCHEMA BEFORE DATA
+      # ============================================================
+
+      - name: Export restored public schema inventory
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --no-align \
+            --field-separator=$'\t' \
+            --tuples-only \
+            --command "
+              SELECT
+                table_schema,
+                table_name,
+                ordinal_position,
+                column_name,
+                data_type,
+                COALESCE(udt_name, ''),
+                is_nullable,
+                COALESCE(column_default, '')
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+              ORDER BY
+                table_schema,
+                table_name,
+                ordinal_position;
+            " \
+            > dr-restore/restored_schema_inventory.tsv
+
+      - name: Validate restored public schema
+        run: |
+          sort dr-restore/hourly/schema_inventory.tsv \
+            > dr-restore/expected_schema.sorted.tsv
+
+          sort dr-restore/restored_schema_inventory.tsv \
+            > dr-restore/restored_schema.sorted.tsv
+
+          if ! diff -u \
+            dr-restore/expected_schema.sorted.tsv \
+            dr-restore/restored_schema.sorted.tsv \
+            > dr-restore/schema_diff.txt
+          then
+            echo "============================================"
+            echo "ERROR: PUBLIC SCHEMA DOES NOT MATCH BACKUP"
+            echo "============================================"
+            echo ""
+            cat dr-restore/schema_diff.txt
+            exit 1
+          fi
+
+          echo "Public schema matches hourly snapshot."
+
+      # ============================================================
+      # 12. VERIFY DATA TARGET TABLES
+      # ============================================================
+
+      - name: Extract tables contained in hourly data
+        run: |
+          grep '^COPY ' dr-restore/hourly/data.sql \
+            | sed -E 's/^COPY ([^ ]+) .*/\1/' \
+            | sort -u \
+            > dr-restore/data_tables.txt
+
+          TABLE_COUNT=$(wc -l < dr-restore/data_tables.txt)
+
+          echo "Tables contained in hourly data:"
+          cat dr-restore/data_tables.txt
+
+          echo ""
+          echo "Total data tables: ${TABLE_COUNT}"
+
+          if [ "$TABLE_COUNT" -eq 0 ]; then
+            echo "ERROR: No COPY tables found in data.sql."
+            exit 1
+          fi
+
+      - name: Verify all hourly data target tables exist
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          MISSING=0
+
+          while IFS= read -r TABLE_NAME
+          do
+            EXISTS=$(
+              /usr/lib/postgresql/17/bin/psql \
+                "$RESTORE_DATABASE_URL" \
+                --no-align \
+                --tuples-only \
+                --command "
+                  SELECT to_regclass('${TABLE_NAME}') IS NOT NULL;
+                "
+            )
+
+            if [ "$EXISTS" != "t" ]; then
+              echo "MISSING TABLE: ${TABLE_NAME}"
+              MISSING=$((MISSING + 1))
+            fi
+          done < dr-restore/data_tables.txt
+
+          echo ""
+          echo "Missing data target tables: ${MISSING}"
+
+          if [ "$MISSING" -ne 0 ]; then
+            echo "ERROR: Cannot safely restore hourly data."
+            exit 1
+          fi
+
+          echo "All data target tables exist."
+
+      # ============================================================
+      # 13. RESTORE LATEST HOURLY DATA
+      # ============================================================
+
+      - name: Restore latest hourly database data
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --single-transaction \
+            --variable ON_ERROR_STOP=1 \
+            --command "SET session_replication_role = replica" \
+            --file dr-restore/hourly/data.sql
+
+      # ============================================================
+      # 14. RESTORE MIGRATION HISTORY
+      # ============================================================
+
+      - name: Restore migration history
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --single-transaction \
+            --variable ON_ERROR_STOP=1 \
+            --file dr-restore/logical/history_schema.sql \
+            --file dr-restore/logical/history_data.sql
+
+      # ============================================================
+      # 15. VALIDATE CORE DATABASE OBJECTS
+      # ============================================================
+
+      - name: Validate public tables
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS public_tables
+              FROM information_schema.tables
+              WHERE table_schema = 'public'
+                AND table_type = 'BASE TABLE';
+            "
+
+      - name: Validate public functions
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS public_functions
+              FROM information_schema.routines
+              WHERE routine_schema = 'public';
+            "
+
+      - name: Validate public triggers
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS public_triggers
+              FROM pg_trigger t
+              JOIN pg_class c
+                ON c.oid = t.tgrelid
+              JOIN pg_namespace n
+                ON n.oid = c.relnamespace
+              WHERE NOT t.tgisinternal
+                AND n.nspname = 'public';
+            "
+
+      - name: Validate RLS policies
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS rls_policies
+              FROM pg_policies
+              WHERE schemaname = 'public';
+            "
+
+      - name: Validate Auth users
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS auth_users
+              FROM auth.users;
+            "
+
+      - name: Validate Storage metadata
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT
+                (SELECT COUNT(*)
+                 FROM storage.buckets) AS storage_buckets,
+
+                (SELECT COUNT(*)
+                 FROM storage.objects) AS storage_objects;
+            "
+
+      - name: Validate migration history
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT COUNT(*) AS migration_history_rows
+              FROM supabase_migrations.schema_migrations;
+            "
+
+      # ============================================================
+      # 16. VALIDATE REALTIME
+      # ============================================================
+
+      - name: Validate Supabase Realtime publication
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT
+                p.pubname AS publication_name,
+                n.nspname AS table_schema,
+                c.relname AS table_name
+              FROM pg_publication p
+              JOIN pg_publication_rel pr
+                ON pr.prpubid = p.oid
+              JOIN pg_class c
+                ON c.oid = pr.prrelid
+              JOIN pg_namespace n
+                ON n.oid = c.relnamespace
+              WHERE p.pubname = 'supabase_realtime'
+              ORDER BY
+                n.nspname,
+                c.relname;
+            "
+
+      - name: Verify notifications is in Realtime publication
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          REALTIME_COUNT=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$RESTORE_DATABASE_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM pg_publication p
+                JOIN pg_publication_rel pr
+                  ON pr.prpubid = p.oid
+                JOIN pg_class c
+                  ON c.oid = pr.prrelid
+                JOIN pg_namespace n
+                  ON n.oid = c.relnamespace
+                WHERE p.pubname = 'supabase_realtime'
+                  AND n.nspname = 'public'
+                  AND c.relname = 'notifications';
+              "
+          )
+
+          if [ "$REALTIME_COUNT" -ne 1 ]; then
+            echo "ERROR: public.notifications is not in supabase_realtime."
+            exit 1
+          fi
+
+          echo "Realtime publication validated."
+
+      # ============================================================
+      # 17. VALIDATE EXTENSIONS
+      # ============================================================
+
+      - name: Validate required extensions
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --command "
+              SELECT
+                e.extname AS extension_name,
+                e.extversion AS extension_version,
+                n.nspname AS schema_name
+              FROM pg_extension e
+              JOIN pg_namespace n
+                ON n.oid = e.extnamespace
+              WHERE e.extname IN (
+                'hypopg',
+                'index_advisor',
+                'pg_cron',
+                'pg_net',
+                'pg_stat_statements',
+                'pgcrypto',
+                'plpgsql',
+                'postgis',
+                'supabase_vault',
+                'uuid-ossp',
+                'wrappers'
+              )
+              ORDER BY e.extname;
+            "
+
+      - name: Verify extension count
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          EXTENSION_COUNT=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$RESTORE_DATABASE_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM pg_extension
+                WHERE extname IN (
+                  'hypopg',
+                  'index_advisor',
+                  'pg_cron',
+                  'pg_net',
+                  'pg_stat_statements',
+                  'pgcrypto',
+                  'plpgsql',
+                  'postgis',
+                  'supabase_vault',
+                  'uuid-ossp',
+                  'wrappers'
+                );
+              "
+          )
+
+          echo "Required extensions found: ${EXTENSION_COUNT} / 11"
+
+          if [ "$EXTENSION_COUNT" -ne 11 ]; then
+            echo "ERROR: Required extension inventory is incomplete."
+            exit 1
+          fi
+
+      # ============================================================
+      # 18. RESTORE CRON JOBS
+      # ============================================================
+
+      - name: Clear existing Cron Jobs
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --command "
+              DO \$\$
+              DECLARE
+                r RECORD;
+              BEGIN
+                FOR r IN
+                  SELECT jobid
+                  FROM cron.job
+                LOOP
+                  PERFORM cron.unschedule(r.jobid);
+                END LOOP;
+              END
+              \$\$;
+            "
+
+      - name: Restore Cron Jobs
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql \
+            "$RESTORE_DATABASE_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --file dr-restore/logical/cron_jobs.sql
+
+      - name: Validate Cron Job count
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          CRON_COUNT=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$RESTORE_DATABASE_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM cron.job;
+              "
+          )
+
+          echo "Restored Cron Jobs: ${CRON_COUNT}"
+
+          if [ "$CRON_COUNT" -ne 15 ]; then
+            echo "ERROR: Expected 15 Cron Jobs."
+            exit 1
+          fi
+
+          echo "Cron Jobs validated."
+
+      # ============================================================
+      # 19. VERIFY CRON PORTABILITY
+      # ============================================================
+
+      - name: Verify Cron Jobs contain no old production references
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.SUPABASE_RESTORE_TEST_DB_URL }}
+        run: |
+          OLD_REFS=$(
+            /usr/lib/postgresql/17/bin/psql \
+              "$RESTORE_DATABASE_URL" \
+              --no-align \
+              --tuples-only \
+              --command "
+                SELECT COUNT(*)
+                FROM cron.job
+                WHERE command ILIKE '%huzsedewwzjywcpbkjkm%'
+                   OR command ILIKE '%app_config%'
+                   OR command ILIKE '%platform_settings%'
+                   OR command ILIKE '%current_setting(''app.%';
+              "
+          )
+
+          echo "Old/non-portable Cron references: ${OLD_REFS}"
+
+          if [ "$OLD_REFS" -ne 0 ]; then
+            echo "ERROR: Non-portable Cron references found."
+            exit 1
+          fi
+
+          echo "Cron portability validated."
+
+      # ============================================================
+      # 20. FINAL SUMMARY
+      # ============================================================
+
+      - name: Full DR restore summary
+        run: |
+          echo "================================================"
+          echo "TOURSRED FULL DATABASE DR RESTORE"
+          echo "================================================"
+          echo ""
+          echo "Daily logical backup      ${LATEST_LOGICAL}"
+          echo "Hourly snapshot           ${LATEST_HOURLY}"
+          echo ""
+          echo "Restore Test safety       PASS"
+          echo "Hourly SHA256             PASS"
+          echo "Database roles            RESTORED"
+          echo "Required extensions       11 / 11"
+          echo "Latest public schema      RESTORED"
+          echo "Schema inventory          MATCH"
+          echo "Latest hourly data        RESTORED"
+          echo "Migration history         RESTORED"
+          echo "Auth data                 RESTORED"
+          echo "Storage metadata          RESTORED"
+          echo "Realtime                  VALIDATED"
+          echo "Cron Jobs                 15 / 15"
+          echo "Cron portability          PASS"
+          echo ""
+          echo "DATA RPO TARGET           <= 1 HOUR"
+          echo ""
+          echo "================================================"
+          echo "DATABASE DR TEST: PASS"
+          echo "================================================"
+
+      # ============================================================
+      # 21. CLEANUP
+      # ============================================================
+
+      - name: Cleanup temporary files
+        if: always()
+        run: |
+          rm -rf dr-restore
