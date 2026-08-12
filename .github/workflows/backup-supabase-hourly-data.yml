@@ -81,10 +81,11 @@ jobs:
 
       - name: Generate SHA256 checksum
         run: |
-          sha256sum hourly-data-backup/data.sql \
-            > hourly-data-backup/data.sql.sha256
+          cd hourly-data-backup
 
-          cat hourly-data-backup/data.sql.sha256
+          sha256sum data.sql > data.sql.sha256
+
+          cat data.sql.sha256
 
       - name: Upload hourly data backup to Backblaze B2
         env:
