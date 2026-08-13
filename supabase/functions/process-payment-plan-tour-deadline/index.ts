@@ -17,7 +17,7 @@ async function cancelStampedCfds(
     .from("cfdi_invoices")
     .select("id")
     .eq("booking_id", bookingId)
-    .in("invoice_type", ["booking", "booking_installment"])
+    .in("invoice_type", ["booking", "booking_installment", "supplement", "insurance", "optional_service", "checkin_wallet"])
     .eq("status", "stamped");
 
   for (const cfdi of stampedCfds || []) {
@@ -355,37 +355,17 @@ Deno.serve(async (req: Request) => {
           }).catch((e) => console.error(`Error inserting notification for booking ${booking.id}:`, e));
 
           // Email notification
-          const { data: emailSettings } = await supabase
-            .from("platform_settings")
-            .select("platform_url")
-            .maybeSingle();
-
-          const appUrl = (emailSettings as any)?.platform_url || "https://toursredmx.netlify.app";
-
+          // Email notification via existing cancellation notification function
           EdgeRuntime.waitUntil(
-            fetch(`${supabaseUrl}/functions/v1/send-email`, {
+            fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-traveler`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${supabaseServiceKey}`,
               },
               body: JSON.stringify({
-                to: traveler.email,
-                subject: `Reserva cancelada por falta de pago — ${tour.name}`,
-                html: `
-                  <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2>Tu reserva fue cancelada automáticamente</h2>
-                    <p>Hola ${traveler.first_name},</p>
-                    <p>Tu reserva <strong>${booking.booking_code}</strong> para el tour <strong>${tour.name}</strong> fue cancelada porque tu plan de pagos no estaba liquidado a 16 días de la fecha de salida.</p>
-                    <p>Se reembolsaron <strong>$${refundAmount.toFixed(2)} MXN</strong> a tu monedero de ToursRed Cash. Los cargos de servicio no son reembolsables.</p>
-                    <p>Si crees que esto es un error, contacta a soporte.</p>
-                    <br>
-                    <a href="${appUrl}/traveler/wallet"
-                       style="background: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
-                      Ver mi monedero
-                    </a>
-                  </div>
-                `,
+                booking_id: booking.id,
+                cancellation_id: cancellationRecord.id,
               }),
             }).catch(() => {})
           );

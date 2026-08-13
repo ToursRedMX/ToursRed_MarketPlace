@@ -133,6 +133,11 @@ Deno.serve(async (req: Request) => {
           policyColor = '#6b7280';
           policyBadge = 'Sin Cargos';
           break;
+        case 'payment_plan_auto_cancel':
+          policyTitle = 'Cancelación Automática por Falta de Pago';
+          policyColor = '#dc2626';
+          policyBadge = 'Plan de Pagos No Liquidado';
+          break;
       }
     }
 
