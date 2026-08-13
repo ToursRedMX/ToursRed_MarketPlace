@@ -43,19 +43,37 @@ const SeatReselectionModal: React.FC<SeatReselectionModalProps> = ({
     setError('');
 
     try {
-      const seatRecords = selectedSeats.map((seatNum) => ({
-        tour_id: tourId,
-        slot_id: slotId,
-        seat_number: seatNum,
-        status: 'reservado_online',
-        booking_id: bookingId,
-      }));
+      const { data: bookingData, error: bookingFetchError } = await supabase
+        .from('bookings')
+        .select('agency_id')
+        .eq('id', bookingId)
+        .maybeSingle();
 
-      const { error: upsertError } = await supabase
-        .from('slot_seat_status')
-        .upsert(seatRecords, { onConflict: 'tour_id,slot_id,seat_number' });
+      if (bookingFetchError || !bookingData) {
+        throw new Error('No se pudo obtener la información de la reserva.');
+      }
 
-      if (upsertError) throw upsertError;
+      const { data: rpcResult, error: rpcError } = await supabase
+        .rpc('reserve_seats', {
+          p_tour_id: tourId,
+          p_slot_id: slotId,
+          p_agency_id: bookingData.agency_id,
+          p_booking_id: bookingId,
+          p_seat_numbers: selectedSeats,
+        });
+
+      if (rpcError) throw rpcError;
+
+      if (rpcResult && rpcResult.success === false) {
+        const conflicting = rpcResult.conflicting_seats as number[] | undefined;
+        if (conflicting && conflicting.length > 0) {
+          const sorted = [...conflicting].sort((a, b) => a - b);
+          setError(`Los siguientes asientos ya no estan disponibles: ${sorted.join(', ')}. Por favor selecciona otros.`);
+        } else {
+          setError(rpcResult.error || 'Algunos asientos ya no estan disponibles. Intenta de nuevo.');
+        }
+        return;
+      }
 
       const { error: bookingError } = await supabase
         .from('bookings')

@@ -43,116 +43,36 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Validate booking belongs to traveler
-    const { data: booking } = await supabase
-      .from("bookings")
-      .select("id, user_id, tour_id, status")
-      .eq("id", booking_id)
-      .eq("user_id", user.id)
-      .maybeSingle();
+    // Call the atomic RPC function that takes an advisory lock, validates,
+    // and inserts the booking_supplement in a single transaction.
+    const { data: rpcResult, error: rpcError } = await userClient
+      .rpc("request_supplement_with_lock", {
+        p_user_id: user.id,
+        p_booking_id: booking_id,
+        p_tour_supplement_id,
+        p_quantity: quantity,
+      });
 
-    if (!booking) {
-      return new Response(JSON.stringify({ error: "Reserva no encontrada" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (rpcError) {
+      return new Response(JSON.stringify({ error: rpcError.message }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (booking.status === "cancelled" || booking.status === "cancellation_processing") {
-      return new Response(JSON.stringify({ error: "No se pueden agregar suplementos a una reserva cancelada o en proceso de cancelación" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Validate supplement belongs to the booking's tour and is active
-    const { data: supplement } = await supabase
-      .from("tour_supplements")
-      .select("id, tour_id, name, price, requires_approval, is_active, max_capacity")
-      .eq("id", tour_supplement_id)
-      .eq("tour_id", booking.tour_id)
-      .eq("is_active", true)
-      .maybeSingle();
-
-    if (!supplement) {
-      return new Response(JSON.stringify({ error: "Suplemento no encontrado o no disponible" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Check capacity
-    const { data: availableCapacity } = await supabase
-      .rpc("get_supplement_available_capacity", { p_supplement_id: tour_supplement_id });
-
-    if (availableCapacity !== null && quantity > availableCapacity) {
+    if (!rpcResult || rpcResult.success === false) {
+      const status = rpcResult?.existing_id ? 409 : 400;
       return new Response(JSON.stringify({
-        error: `Cupo insuficiente. Solo hay ${availableCapacity} lugar(es) disponible(s)`,
-      }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // Check for duplicate active (not yet resolved) request
-    const { data: existingRequest } = await supabase
-      .from("booking_supplements")
-      .select("id, status")
-      .eq("booking_id", booking_id)
-      .eq("tour_supplement_id", tour_supplement_id)
-      .in("status", ["pending_approval", "approved", "pending_payment"])
-      .maybeSingle();
-
-    if (existingRequest) {
-      return new Response(JSON.stringify({
-        error: "Ya existe una solicitud activa para este suplemento",
-        existing_id: existingRequest.id,
-        existing_status: existingRequest.status,
-      }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // Determine initial status
-    const initialStatus = supplement.requires_approval ? "pending_approval" : "pending_payment";
-
-    // Get platform settings
-    const { data: platformSettings } = await supabase
-      .from("platform_settings")
-      .select("service_charge_percentage, supplement_commission_percentage")
-      .maybeSingle();
-
-    const serviceChargePct = platformSettings?.service_charge_percentage ?? 5;
-    const supplementCommissionPct = platformSettings?.supplement_commission_percentage ?? 10;
-    const subtotal = Number(supplement.price) * quantity;
-    const serviceChargeGross = parseFloat((subtotal * serviceChargePct / 100).toFixed(2));
-    const supplementCommission = parseFloat((subtotal * supplementCommissionPct / 100).toFixed(2));
-
-    // For pending_payment (no approval required), set a 48-hour payment deadline
-    const expiresAt = initialStatus === "pending_payment"
-      ? new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
-      : null;
-
-    // Create booking_supplement record
-    const { data: newRecord, error: insertError } = await supabase
-      .from("booking_supplements")
-      .insert({
-        booking_id,
-        tour_supplement_id,
-        quantity,
-        unit_price: supplement.price,
-        service_charge: serviceChargeGross,
-        supplement_commission: supplementCommission,
-        total_paid: 0,
-        status: initialStatus,
-        requested_at: new Date().toISOString(),
-        ...(expiresAt ? { expires_at: expiresAt } : {}),
-      })
-      .select()
-      .single();
-
-    if (insertError || !newRecord) {
-      throw new Error(`Error creando solicitud: ${insertError?.message}`);
+        error: rpcResult?.error || "Error desconocido",
+        ...(rpcResult?.existing_id ? { existing_id: rpcResult.existing_id, existing_status: rpcResult.existing_status } : {}),
+      }), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Notify agency if requires approval
-    if (supplement.requires_approval) {
+    if (rpcResult.requires_approval) {
       const { data: tourData } = await supabase
         .from("tours")
         .select("agency_id, agencies!inner(user_id)")
-        .eq("id", booking.tour_id)
+        .eq("id", rpcResult.tour_id)
         .maybeSingle();
 
       const agencyUserId = (tourData?.agencies as any)?.user_id;
@@ -161,19 +81,17 @@ Deno.serve(async (req: Request) => {
           user_id: agencyUserId,
           type: "supplement_approval_request",
           title: "Nueva solicitud de suplemento",
-          message: `Un viajero ha solicitado ${quantity}x "${supplement.name}". Aprueba o rechaza la solicitud.`,
-          data: { booking_supplement_id: newRecord.id, booking_id, supplement_name: supplement.name },
+          message: `Un viajero ha solicitado ${quantity}x "${rpcResult.supplement_name}". Aprueba o rechaza la solicitud.`,
+          data: { booking_supplement_id: rpcResult.booking_supplement_id, booking_id, supplement_name: rpcResult.supplement_name },
         });
       }
     }
 
     return new Response(JSON.stringify({
       success: true,
-      booking_supplement_id: newRecord.id,
-      status: initialStatus,
-      message: supplement.requires_approval
-        ? "Solicitud enviada. La agencia revisará y te notificará cuando sea aprobada."
-        : "Suplemento listo para pago. Procede a completar el pago.",
+      booking_supplement_id: rpcResult.booking_supplement_id,
+      status: rpcResult.status,
+      message: rpcResult.message,
     }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (err) {
