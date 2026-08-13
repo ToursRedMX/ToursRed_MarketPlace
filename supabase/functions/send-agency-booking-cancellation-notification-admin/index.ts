@@ -243,20 +243,22 @@ Deno.serve(async (req: Request) => {
 
               <div style="background-color: #f3f4f6; border: 1px solid #d1d5db; padding: 20px; margin-bottom: 25px; border-radius: 8px;">
                 <h3 style="color: #374151; margin: 0 0 15px 0; font-size: 16px;">📊 Estadísticas de la Reserva</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-                  <div style="background-color: #fff; padding: 15px; border-radius: 4px; text-align: center;">
-                    <div style="font-size: 24px; font-weight: bold; color: #3b82f6; margin-bottom: 5px;">${cancellation.days_before_tour}</div>
-                    <div style="font-size: 12px; color: #6b7280;">Días antes del tour</div>
-                  </div>
-                  <div style="background-color: #fff; padding: 15px; border-radius: 4px; text-align: center;">
-                    <div style="font-size: 24px; font-weight: bold; color: #10b981; margin-bottom: 5px;">100%</div>
-                    <div style="font-size: 12px; color: #6b7280;">Reembolso al viajero</div>
-                  </div>
-                  <div style="background-color: #fff; padding: 15px; border-radius: 4px; text-align: center;">
-                    <div style="font-size: 24px; font-weight: bold; color: #ef4444; margin-bottom: 5px;">0%</div>
-                    <div style="font-size: 12px; color: #6b7280;">Comisión a agencia</div>
-                  </div>
-                </div>
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; border-spacing: 10px 0;">
+                  <tr>
+                    <td width="33%" style="background-color: #fff; padding: 15px; border-radius: 4px; text-align: center;">
+                      <div style="font-size: 24px; font-weight: bold; color: #3b82f6; margin-bottom: 5px;">${cancellation.days_before_tour}</div>
+                      <div style="font-size: 12px; color: #6b7280;">Días antes del tour</div>
+                    </td>
+                    <td width="33%" style="background-color: #fff; padding: 15px; border-radius: 4px; text-align: center;">
+                      <div style="font-size: 24px; font-weight: bold; color: #10b981; margin-bottom: 5px;">100%</div>
+                      <div style="font-size: 12px; color: #6b7280;">Reembolso al viajero</div>
+                    </td>
+                    <td width="33%" style="background-color: #fff; padding: 15px; border-radius: 4px; text-align: center;">
+                      <div style="font-size: 24px; font-weight: bold; color: #ef4444; margin-bottom: 5px;">0%</div>
+                      <div style="font-size: 12px; color: #6b7280;">Comisión a agencia</div>
+                    </td>
+                  </tr>
+                </table>
               </div>
 
               <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin-bottom: 25px; border-radius: 4px;">

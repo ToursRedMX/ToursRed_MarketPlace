@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: platformSettings, error: platformError } = await supabase
       .from("platform_settings")
-      .select("membership_monthly_price, membership_annual_price, platform_url")
+      .select("membership_monthly_price, membership_annual_price, platform_url, membership_service_fee_exemption_monthly_limit")
       .maybeSingle();
 
     if (platformError || !platformSettings) {
@@ -84,9 +84,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const appUrl = platformSettings.platform_url || "https://toursredmx.netlify.app";
-    const monthlyPrice = parseFloat(platformSettings.membership_monthly_price) || 49;
-    const annualPrice = parseFloat(platformSettings.membership_annual_price) || 490;
+    const monthlyPrice = parseFloat(platformSettings.membership_monthly_price) || 89;
+    const annualPrice = parseFloat(platformSettings.membership_annual_price) || 890;
     const annualSavings = (monthlyPrice * 12) - annualPrice;
+    const serviceFeeExemptionLimit = parseFloat((platformSettings as any).membership_service_fee_exemption_monthly_limit) || 500;
 
     const planName = planType === 'monthly' ? 'Mensual' : 'Anual';
     const planPrice = planType === 'monthly' ? `$${monthlyPrice.toFixed(0)} MXN/mes` : `$${annualPrice.toFixed(0)} MXN/año`;
@@ -104,22 +105,25 @@ Deno.serve(async (req: Request) => {
     });
 
     const monthlyBenefits = `
-✓ Exención de $500 MXN mensuales en Cargos por Servicio en reservas nacionales
+✓ Exención del Cargo por Servicio con tope de hasta $${serviceFeeExemptionLimit.toFixed(0)} MXN mensuales
   Ahorra en comisiones cada mes
 
-✓ Ahorra hasta un 5% en cada Reserva Nacional
-  Descuento aplicado automáticamente en tours dentro de México
+✓ Acumula ToursRed Points en cada reserva
+  Suma puntos que puedes canjear en tus proximos viajes
 
-✓ Acceso prioritario a nuevos tours
-  Sé el primero en reservar experiencias exclusivas
+✓ Doble de Puntos pagando con ToursRed Cash
+  Multiplica tus puntos cuando pagas con tu saldo ToursRed Cash
 
-✓ Soporte premium
-  Atención preferencial para miembros ToursRed+
+✓ Acceso a Preventas exclusivas
+  Se el primero en reservar experiencias exclusivas antes que nadie
+
+✓ Soporte Prioritario
+  Atencion preferencial para miembros ToursRed+
 `;
 
     const annualBenefits = `
 ✓ Todo lo del plan mensual incluido
-  Exención de $500 MXN mensuales + 5% de descuento + acceso prioritario + soporte premium
+  Exención del Cargo por Servicio (tope $${serviceFeeExemptionLimit.toFixed(0)} MXN) + ToursRed Points + Doble Puntos con ToursRed Cash + Preventas exclusivas + Soporte Prioritario
 
 ✓ 2 meses gratis de la membresía
   Paga 10 meses y recibe 12 meses completos
@@ -200,103 +204,111 @@ Equipo ToursRed
   </style>
 </head>
 <body>
-  <div class=\"container\">
-    <div class=\"header\">
-      <img src=\"https://huzsedewwzjywcpbkjkm.supabase.co/storage/v1/object/public/images/email-logo.png\" alt=\"ToursRed Logo\" class=\"logo\" />
-      <div class=\"plus-badge\">ToursRed+</div>
-      <h1 style=\"margin: 15px 0 5px 0;\">¡Bienvenido a ToursRed+!</h1>
-      <p style=\"margin: 0; font-size: 16px; opacity: 0.9;\">Tu membresía premium ha sido activada</p>
+  <div class="container">
+    <div class="header">
+      <img src="https://huzsedewwzjywcpbkjkm.supabase.co/storage/v1/object/public/images/email-logo.png" alt="ToursRed Logo" class="logo" />
+      <div class="plus-badge">ToursRed+</div>
+      <h1 style="margin: 15px 0 5px 0;">¡Bienvenido a ToursRed+!</h1>
+      <p style="margin: 0; font-size: 16px; opacity: 0.9;">Tu membresía premium ha sido activada</p>
     </div>
 
-    <div class=\"content\">
-      <div class=\"welcome-box\">
+    <div class="content">
+      <div class="welcome-box">
         <h2>¡Hola ${firstName}!</h2>
-        <p style=\"font-size: 16px; color: #78350f; margin: 10px 0;\">Gracias por unirte a ToursRed+. Ahora eres parte de nuestra comunidad premium de viajeros.</p>
+        <p style="font-size: 16px; color: #78350f; margin: 10px 0;">Gracias por unirte a ToursRed+. Ahora eres parte de nuestra comunidad premium de viajeros.</p>
       </div>
 
-      <div class=\"membership-details\">
-        <h3 style=\"color: #f59e0b; margin-top: 0; text-align: center;\">Detalles de tu Membresía</h3>
-        <div class=\"detail-row\">
-          <span class=\"detail-label\">Plan:</span>
-          <span class=\"detail-value\"><strong>${planName}</strong></span>
+      <div class="membership-details">
+        <h3 style="color: #f59e0b; margin-top: 0; text-align: center;">Detalles de tu Membresía</h3>
+        <div class="detail-row">
+          <span class="detail-label">Plan:</span>
+          <span class="detail-value"><strong>${planName}</strong></span>
         </div>
-        <div class=\"detail-row\">
-          <span class=\"detail-label\">Precio:</span>
-          <span class=\"detail-value\"><strong>${planPrice}</strong></span>
+        <div class="detail-row">
+          <span class="detail-label">Precio:</span>
+          <span class="detail-value"><strong>${planPrice}</strong></span>
         </div>
-        <div class=\"detail-row\">
-          <span class=\"detail-label\">Fecha de inicio:</span>
-          <span class=\"detail-value\">${formattedStartDate}</span>
+        <div class="detail-row">
+          <span class="detail-label">Fecha de inicio:</span>
+          <span class="detail-value">${formattedStartDate}</span>
         </div>
-        <div class=\"detail-row\">
-          <span class=\"detail-label\">Próxima renovación:</span>
-          <span class=\"detail-value\"><strong>${formattedEndDate}</strong></span>
+        <div class="detail-row">
+          <span class="detail-label">Próxima renovación:</span>
+          <span class="detail-value"><strong>${formattedEndDate}</strong></span>
         </div>
       </div>
 
-      <div class=\"benefits-section\">
-        <h2 style=\"color: #f59e0b; text-align: center;\">Tus Beneficios Exclusivos</h2>
+      <div class="benefits-section">
+        <h2 style="color: #f59e0b; text-align: center;">Tus Beneficios Exclusivos</h2>
 
         ${planType === 'monthly' ? `
-        <div class=\"benefit-item\">
-          <div class=\"benefit-icon\">💰</div>
-          <div class=\"benefit-content\">
-            <h4>Exención de $500 MXN mensuales</h4>
-            <p>Ahorra en Cargos por Servicio en reservas nacionales cada mes</p>
+        <div class="benefit-item">
+          <div class="benefit-icon">💰</div>
+          <div class="benefit-content">
+            <h4>Exención del Cargo por Servicio</h4>
+            <p>Hasta $${serviceFeeExemptionLimit.toFixed(0)} MXN mensuales en reservas nacionales</p>
           </div>
         </div>
 
-        <div class=\"benefit-item\">
-          <div class=\"benefit-icon\">🎯</div>
-          <div class=\"benefit-content\">
-            <h4>Ahorra hasta un 5% en cada Reserva Nacional</h4>
-            <p>Descuento aplicado automáticamente en tours dentro de México</p>
+        <div class="benefit-item">
+          <div class="benefit-icon">⭐</div>
+          <div class="benefit-content">
+            <h4>Acumula ToursRed Points</h4>
+            <p>Suma puntos en cada reserva y canjealos en tus proximos viajes</p>
           </div>
         </div>
 
-        <div class=\"benefit-item\">
-          <div class=\"benefit-icon\">⚡</div>
-          <div class=\"benefit-content\">
-            <h4>Acceso prioritario a nuevos tours</h4>
+        <div class="benefit-item">
+          <div class="benefit-icon">✨</div>
+          <div class="benefit-content">
+            <h4>Doble de Puntos con ToursRed Cash</h4>
+            <p>Multiplica tus puntos cuando pagas con tu saldo ToursRed Cash</p>
+          </div>
+        </div>
+
+        <div class="benefit-item">
+          <div class="benefit-icon">⚡</div>
+          <div class="benefit-content">
+            <h4>Acceso a Preventas exclusivas</h4>
             <p>Sé el primero en reservar experiencias exclusivas</p>
           </div>
         </div>
 
-        <div class=\"benefit-item\">
-          <div class=\"benefit-icon\">🎧</div>
-          <div class=\"benefit-content\">
-            <h4>Soporte premium</h4>
+        <div class="benefit-item">
+          <div class="benefit-icon">🎧</div>
+          <div class="benefit-content">
+            <h4>Soporte Prioritario</h4>
             <p>Atención preferencial para miembros ToursRed+</p>
           </div>
         </div>
         ` : `
-        <div class=\"benefit-item\">
-          <div class=\"benefit-icon\">✨</div>
-          <div class=\"benefit-content\">
+        <div class="benefit-item">
+          <div class="benefit-icon">✨</div>
+          <div class="benefit-content">
             <h4>Todo lo del plan mensual incluido</h4>
-            <p>Exención de $500 MXN mensuales + 5% de descuento + acceso prioritario + soporte premium</p>
+            <p>Exención del Cargo por Servicio (tope $${serviceFeeExemptionLimit.toFixed(0)} MXN) + ToursRed Points + Doble Puntos con ToursRed Cash + Preventas exclusivas + Soporte Prioritario</p>
           </div>
         </div>
 
-        <div class=\"benefit-item\">
-          <div class=\"benefit-icon\">🎁</div>
-          <div class=\"benefit-content\">
+        <div class="benefit-item">
+          <div class="benefit-icon">🎁</div>
+          <div class="benefit-content">
             <h4>2 meses gratis de la membresía</h4>
             <p>Paga 10 meses y recibe 12 meses completos</p>
           </div>
         </div>
 
-        <div class=\"benefit-item\">
-          <div class=\"benefit-icon\">🏆</div>
-          <div class=\"benefit-content\">
+        <div class="benefit-item">
+          <div class="benefit-icon">🏆</div>
+          <div class="benefit-content">
             <h4>Descuentos exclusivos en tours selectos</h4>
             <p>Ofertas especiales adicionales en experiencias seleccionadas</p>
           </div>
         </div>
 
-        <div class=\"benefit-item\">
-          <div class=\"benefit-icon\">🎉</div>
-          <div class=\"benefit-content\">
+        <div class="benefit-item">
+          <div class="benefit-icon">🎉</div>
+          <div class="benefit-content">
             <h4>Invitaciones a eventos especiales</h4>
             <p>Acceso VIP a eventos y experiencias exclusivas para miembros anuales</p>
           </div>
@@ -304,30 +316,30 @@ Equipo ToursRed
         `}
       </div>
 
-      <div class=\"renewal-box\">
+      <div class="renewal-box">
         <h3>📅 Renovación Automática</h3>
         <p>Tu membresía se renovará automáticamente el <strong>${formattedEndDate}</strong>.</p>
         <p>Te enviaremos un recordatorio 5 días antes de la fecha de renovación.</p>
-        <p style=\"margin-top: 10px;\">Si deseas cancelar tu membresía, puedes hacerlo en cualquier momento desde tu perfil. Tu acceso continuará hasta el final del período pagado.</p>
+        <p style="margin-top: 10px;">Si deseas cancelar tu membresía, puedes hacerlo en cualquier momento desde tu perfil. Tu acceso continuará hasta el final del período pagado.</p>
       </div>
 
-      <div class=\"cta-section\">
+      <div class="cta-section">
         <h3>¡Comienza a Disfrutar tus Beneficios!</h3>
-        <a href=\"${appUrl}/tours\" class=\"button\">Explorar Tours</a>
-        <a href=\"${appUrl}/traveler/membership\" class=\"button\" style=\"background-color: #6b7280;\">Ver mi Membresía</a>
+        <a href="${appUrl}/tours" class="button">Explorar Tours</a>
+        <a href="${appUrl}/traveler/membership" class="button" style="background-color: #6b7280;">Ver mi Membresía</a>
       </div>
 
-      <p style=\"text-align: center; color: #6b7280; margin-top: 30px;\">
+      <p style="text-align: center; color: #6b7280; margin-top: 30px;">
         ¿Tienes preguntas sobre tu membresía?<br>
-        Estamos aquí para ayudarte: <a href=\"mailto:contacto@toursred.com\" style=\"color: #f59e0b;\">contacto@toursred.com</a>
+        Estamos aquí para ayudarte: <a href="mailto:contacto@toursred.com" style="color: #f59e0b;">contacto@toursred.com</a>
       </p>
 
-      <p style=\"text-align: center; margin-top: 30px; font-size: 18px; color: #f59e0b;\">
+      <p style="text-align: center; margin-top: 30px; font-size: 18px; color: #f59e0b;">
         <strong>¡Disfruta de tu membresía ToursRed+!</strong>
       </p>
     </div>
 
-    <div class=\"footer\">
+    <div class="footer">
       <p><strong>Equipo ToursRed</strong></p>
       <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
       <p>Para soporte, contacta a: contacto@toursred.com</p>
@@ -340,7 +352,7 @@ Equipo ToursRed
     const emailPayload = {
       api_key: emailSettings.smtp_api_key,
       to: [email],
-      sender: "no-reply@toursred.com",
+      sender: emailSettings.contact_email || "no-reply@toursred.com",
       subject: `¡Bienvenido a ToursRed+ ${firstName}! 🌟`,
       text_body: textContent,
       html_body: htmlContent,

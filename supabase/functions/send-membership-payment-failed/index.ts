@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
 
     const [{ data: emailSettings, error: settingsError }, { data: platformSettings }] = await Promise.all([
       supabase.from("email_settings").select("*").maybeSingle(),
-      supabase.from("platform_settings").select("platform_url").maybeSingle(),
+      supabase.from("platform_settings").select("platform_url, membership_monthly_price, membership_annual_price, membership_service_fee_exemption_monthly_limit").maybeSingle(),
     ]);
 
     if (settingsError || !emailSettings) {
@@ -69,7 +69,11 @@ Deno.serve(async (req: Request) => {
 
     const appUrl = platformSettings?.platform_url || "https://toursredmx.netlify.app";
     const planName = planType === 'monthly' ? 'Mensual' : 'Anual';
-    const planPrice = planType === 'monthly' ? '$49 MXN/mes' : '$490 MXN/ano';
+    // CORREGIDO: antes el precio estaba hardcoded ($49/$490); ahora se lee de platform_settings
+    const monthlyPrice = parseFloat((platformSettings as any)?.membership_monthly_price) || 89;
+    const annualPrice = parseFloat((platformSettings as any)?.membership_annual_price) || 890;
+    const planPrice = planType === 'monthly' ? `$${monthlyPrice.toFixed(0)} MXN/mes` : `$${annualPrice.toFixed(0)} MXN/ano`;
+    const serviceFeeExemptionLimit = parseFloat((platformSettings as any)?.membership_service_fee_exemption_monthly_limit) || 500;
     const hasRetry = nextAttemptDate !== null;
 
     const formattedNextAttempt = hasRetry
@@ -120,10 +124,9 @@ ${amountText ? `- Monto: ${amountText}` : ''}
 
 ACCION REQUERIDA:
 Este fue el ultimo intento de cobro automatico. Si no actualizas tu metodo de pago, tu membresia ToursRed+ sera cancelada y perderas acceso a todos los beneficios:
-- Exencion de $500 MXN mensuales en Cargos por Servicio
-- Ahorro de hasta un 5% en cada Reserva Nacional
-- Acceso prioritario a nuevos tours
-- Soporte premium
+- Exencion del Cargo por Servicio (tope $${serviceFeeExemptionLimit.toFixed(0)} MXN/mes)
+- ToursRed Points y Doble Puntos con ToursRed Cash
+- Preventas exclusivas y Soporte Prioritario
 
 COMO ACTUALIZAR TU METODO DE PAGO:
 1. Inicia sesion en tu cuenta de ToursRed
@@ -154,10 +157,10 @@ Equipo ToursRed`;
         <h3>Tu membresia esta en riesgo</h3>
         <p>Este fue el <strong>ultimo intento</strong> de cobro automatico. Si no actualizas tu metodo de pago, tu membresia ToursRed+ sera cancelada y <strong>perderas acceso a:</strong></p>
         <ul>
-          <li>Exencion de $500 MXN mensuales en Cargos por Servicio</li>
-          <li>Descuentos exclusivos del 5% en reservas nacionales</li>
-          <li>Acceso prioritario a nuevos tours</li>
-          <li>Soporte premium</li>
+          <li>Exencion del Cargo por Servicio (tope $${serviceFeeExemptionLimit.toFixed(0)} MXN/mes)</li>
+          <li>ToursRed Points y Doble Puntos con ToursRed Cash</li>
+          <li>Preventas exclusivas</li>
+          <li>Soporte Prioritario</li>
         </ul>
       </div>`;
 
@@ -242,7 +245,7 @@ Equipo ToursRed`;
     const emailPayload = {
       api_key: emailSettings.smtp_api_key,
       to: [email],
-      sender: "no-reply@toursred.com",
+      sender: emailSettings.contact_email || "no-reply@toursred.com",
       subject,
       text_body: textContent,
       html_body: htmlContent,

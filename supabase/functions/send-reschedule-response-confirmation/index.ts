@@ -27,7 +27,7 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing required fields");
     }
 
-    if (!["accepted", "rejected"].includes(response)) {
+    if (["accepted", "rejected"].includes(response) === false) {
       throw new Error("Invalid response value");
     }
 
@@ -64,15 +64,18 @@ Deno.serve(async (req: Request) => {
       throw new Error("Reschedule response not found");
     }
 
-    // Obtener configuración de email
-    const { data: emailSettings } = await supabase
-      .from("email_settings")
-      .select("*")
-      .single();
+    // Obtener configuración de email y plataforma
+    const [{ data: emailSettings }, { data: platformSettings }] = await Promise.all([
+      supabase.from("email_settings").select("*").single(),
+      supabase.from("platform_settings").select("platform_url").maybeSingle(),
+    ]);
 
     if (!emailSettings?.smtp_api_key) {
       throw new Error("Email settings not configured");
     }
+
+    // CORREGIDO: antes el link usaba SUPABASE_URL (la URL de la API, no el sitio)
+    const appUrl = platformSettings?.platform_url || "https://toursredmx.netlify.app";
 
     const recipientEmail = booking.user.email;
     const recipientName = `${booking.user.first_name} ${booking.user.last_name}`;
@@ -322,7 +325,7 @@ Deno.serve(async (req: Request) => {
                 <p style="margin: 0 0 20px 0; color: #fed7aa; font-size: 14px;">
                   Explora cientos de tours y experiencias increíbles. Usa tu saldo ToursRed Cash en tu próxima reserva.
                 </p>
-                <a href="${Deno.env.get("SUPABASE_URL")?.replace('//', '//')}/catalog" style="display: inline-block; background-color: #ffffff; color: #ea580c; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                <a href="${appUrl}/tours" style="display: inline-block; background-color: #ffffff; color: #ea580c; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
                   Explorar Tours
                 </a>
               </div>

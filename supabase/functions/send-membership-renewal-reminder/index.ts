@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
 
     const [{ data: emailSettings, error: settingsError }, { data: platformSettings }] = await Promise.all([
       supabase.from("email_settings").select("*").maybeSingle(),
-      supabase.from("platform_settings").select("platform_url").maybeSingle(),
+      supabase.from("platform_settings").select("platform_url, membership_service_fee_exemption_monthly_limit").maybeSingle(),
     ]);
 
     if (settingsError || !emailSettings) {
@@ -68,6 +68,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const appUrl = platformSettings?.platform_url || "https://toursredmx.netlify.app";
+    const serviceFeeExemptionLimit = parseFloat((platformSettings as any)?.membership_service_fee_exemption_monthly_limit) || 500;
     const planName = planType === 'monthly' ? 'Mensual' : 'Anual';
 
     const formattedRenewalDate = new Date(renewalDate).toLocaleDateString('es-MX', {
@@ -77,14 +78,15 @@ Deno.serve(async (req: Request) => {
     });
 
     const monthlyBenefitsText = `
-✓ Exención de $500 MXN mensuales en Cargos por Servicio en reservas nacionales
-✓ Ahorra hasta un 5% en cada Reserva Nacional
-✓ Acceso prioritario a nuevos tours
-✓ Soporte premium
+✓ Exención del Cargo por Servicio con tope de hasta $${serviceFeeExemptionLimit.toFixed(0)} MXN mensuales
+✓ Acumula ToursRed Points en cada reserva
+✓ Doble de Puntos pagando con ToursRed Cash
+✓ Acceso a Preventas exclusivas
+✓ Soporte Prioritario
 `;
 
     const annualBenefitsText = `
-✓ Todo lo del plan mensual (Exención de $500 MXN + 5% descuento + acceso prioritario + soporte premium)
+✓ Todo lo del plan mensual (Exención con tope $${serviceFeeExemptionLimit.toFixed(0)} MXN + ToursRed Points + Doble Puntos con ToursRed Cash + Preventas exclusivas + Soporte Prioritario)
 ✓ 2 meses gratis de la membresía
 ✓ Descuentos exclusivos en tours selectos
 ✓ Invitaciones a eventos especiales
@@ -177,48 +179,48 @@ Equipo ToursRed
   </style>
 </head>
 <body>
-  <div class=\"container\">
-    <div class=\"header\">
-      <img src=\"https://huzsedewwzjywcpbkjkm.supabase.co/storage/v1/object/public/images/email-logo.png\" alt=\"ToursRed Logo\" class=\"logo\" />
-      <div class=\"plus-badge\">ToursRed+</div>
-      <h1 style=\"margin: 15px 0 5px 0;\">Recordatorio de Renovación</h1>
-      <p style=\"margin: 0; font-size: 16px; opacity: 0.9;\">Tu membresía está próxima a renovarse</p>
+  <div class="container">
+    <div class="header">
+      <img src="https://huzsedewwzjywcpbkjkm.supabase.co/storage/v1/object/public/images/email-logo.png" alt="ToursRed Logo" class="logo" />
+      <div class="plus-badge">ToursRed+</div>
+      <h1 style="margin: 15px 0 5px 0;">Recordatorio de Renovación</h1>
+      <p style="margin: 0; font-size: 16px; opacity: 0.9;">Tu membresía está próxima a renovarse</p>
     </div>
 
-    <div class=\"content\">
-      <div class=\"reminder-box\">
+    <div class="content">
+      <div class="reminder-box">
         <h2>🔔 Hola ${firstName}</h2>
-        <p style=\"font-size: 16px; color: #1e3a8a; margin: 10px 0;\">Tu membresía ToursRed+ se renovará automáticamente en 5 días.</p>
+        <p style="font-size: 16px; color: #1e3a8a; margin: 10px 0;">Tu membresía ToursRed+ se renovará automáticamente en 5 días.</p>
       </div>
 
-      <div class=\"renewal-details\">
-        <h3 style=\"color: #3b82f6; margin-top: 0; text-align: center;\">Detalles de la Renovación</h3>
-        <div class=\"detail-row\">
-          <span class=\"detail-label\">Plan:</span>
-          <span class=\"detail-value\"><strong>${planName}</strong></span>
+      <div class="renewal-details">
+        <h3 style="color: #3b82f6; margin-top: 0; text-align: center;">Detalles de la Renovación</h3>
+        <div class="detail-row">
+          <span class="detail-label">Plan:</span>
+          <span class="detail-value"><strong>${planName}</strong></span>
         </div>
-        <div class=\"detail-row\">
-          <span class=\"detail-label\">Monto a cargar:</span>
-          <span class=\"detail-value\"><strong>${amount}</strong></span>
+        <div class="detail-row">
+          <span class="detail-label">Monto a cargar:</span>
+          <span class="detail-value"><strong>${amount}</strong></span>
         </div>
-        <div class=\"detail-row\">
-          <span class=\"detail-label\">Fecha de renovación:</span>
-          <span class=\"detail-value\"><strong>${formattedRenewalDate}</strong></span>
+        <div class="detail-row">
+          <span class="detail-label">Fecha de renovación:</span>
+          <span class="detail-value"><strong>${formattedRenewalDate}</strong></span>
         </div>
-        <div class=\"detail-row\">
-          <span class=\"detail-label\">Método de pago:</span>
-          <span class=\"detail-value\">Tarjeta registrada</span>
+        <div class="detail-row">
+          <span class="detail-label">Método de pago:</span>
+          <span class="detail-value">Tarjeta registrada</span>
         </div>
       </div>
 
-      <div class=\"legal-notice\">
+      <div class="legal-notice">
         <h3>⚠️ IMPORTANTE - Aviso Legal</h3>
         <p>De acuerdo con la normativa vigente, te informamos que:</p>
         <p><strong>Si no cancelas tu membresía antes del ${formattedRenewalDate}</strong>, se realizará automáticamente el cargo de <strong>${amount}</strong> a tu forma de pago registrada y tu membresía se renovará por el período contratado (${planName.toLowerCase()}).</p>
       </div>
 
-      <div class=\"action-section\">
-        <div class=\"action-box cancel-box\">
+      <div class="action-section">
+        <div class="action-box cancel-box">
           <h3>❌ ¿Deseas Cancelar tu Membresía?</h3>
           <p>Si no deseas que tu membresía se renueve automáticamente, puedes cancelarla siguiendo estos pasos:</p>
           <ol>
@@ -226,21 +228,22 @@ Equipo ToursRed
             <li>Ve a "Mi Perfil" > "Membresía"</li>
             <li>Haz clic en "Cancelar Membresía"</li>
           </ol>
-          <p style=\"color: #dc2626; margin-top: 15px;\"><strong>Importante:</strong> Si cancelas, mantendrás acceso a todos tus beneficios hasta el ${formattedRenewalDate}. No se realizarán reembolsos por el tiempo restante.</p>
-          <div style=\"text-align: center; margin-top: 20px;\">
-            <a href=\"${appUrl}/traveler/membership\" class=\"button button-cancel\">Gestionar mi Membresía</a>
+          <p style="color: #dc2626; margin-top: 15px;"><strong>Importante:</strong> Si cancelas, mantendrás acceso a todos tus beneficios hasta el ${formattedRenewalDate}. No se realizarán reembolsos por el tiempo restante.</p>
+          <div style="text-align: center; margin-top: 20px;">
+            <a href="${appUrl}/traveler/membership" class="button button-cancel">Gestionar mi Membresía</a>
           </div>
         </div>
 
-        <div class=\"action-box continue-box\">
+        <div class="action-box continue-box">
           <h3>✅ ¿Deseas Continuar con tu Membresía?</h3>
           <p><strong>¡Excelente!</strong> No necesitas hacer nada. El cargo se procesará automáticamente y seguirás disfrutando de:</p>
-          <ul class=\"benefits-list\">
+          <ul class="benefits-list">
             ${planType === 'monthly' ? `
-            <li>✓ Exención de $500 MXN mensuales en Cargos por Servicio</li>
-            <li>✓ Ahorra hasta un 5% en cada Reserva Nacional</li>
-            <li>✓ Acceso prioritario a nuevos tours</li>
-            <li>✓ Soporte premium</li>
+            <li>✓ Exención del Cargo por Servicio (tope $${serviceFeeExemptionLimit.toFixed(0)} MXN/mes)</li>
+            <li>✓ Acumula ToursRed Points en cada reserva</li>
+            <li>✓ Doble de Puntos pagando con ToursRed Cash</li>
+            <li>✓ Acceso a Preventas exclusivas</li>
+            <li>✓ Soporte Prioritario</li>
             ` : `
             <li>✓ Todo lo del plan mensual incluido</li>
             <li>✓ 2 meses gratis de la membresía</li>
@@ -248,23 +251,23 @@ Equipo ToursRed
             <li>✓ Invitaciones a eventos especiales</li>
             `}
           </ul>
-          <div style=\"text-align: center; margin-top: 20px;\">
-            <a href=\"${appUrl}/tours\" class=\"button button-primary\">Explorar Tours</a>
+          <div style="text-align: center; margin-top: 20px;">
+            <a href="${appUrl}/tours" class="button button-primary">Explorar Tours</a>
           </div>
         </div>
       </div>
 
-      <p style=\"text-align: center; color: #6b7280; margin-top: 30px;\">
+      <p style="text-align: center; color: #6b7280; margin-top: 30px;">
         ¿Tienes preguntas sobre tu membresía o renovación?<br>
-        Estamos aquí para ayudarte: <a href=\"mailto:contacto@toursred.com\" style=\"color: #3b82f6;\">contacto@toursred.com</a>
+        Estamos aquí para ayudarte: <a href="mailto:contacto@toursred.com" style="color: #3b82f6;">contacto@toursred.com</a>
       </p>
 
-      <p style=\"text-align: center; margin-top: 30px; font-size: 16px; color: #3b82f6;\">
+      <p style="text-align: center; margin-top: 30px; font-size: 16px; color: #3b82f6;">
         <strong>Gracias por ser parte de ToursRed+</strong>
       </p>
     </div>
 
-    <div class=\"footer\">
+    <div class="footer">
       <p><strong>Equipo ToursRed</strong></p>
       <p>Este es un recordatorio automático requerido por ley.</p>
       <p>Para soporte, contacta a: contacto@toursred.com</p>
@@ -277,7 +280,7 @@ Equipo ToursRed
     const emailPayload = {
       api_key: emailSettings.smtp_api_key,
       to: [email],
-      sender: "no-reply@toursred.com",
+      sender: emailSettings.contact_email || "no-reply@toursred.com",
       subject: `⏰ Recordatorio: Tu membresía ToursRed+ se renueva el ${formattedRenewalDate}`,
       text_body: textContent,
       html_body: htmlContent,

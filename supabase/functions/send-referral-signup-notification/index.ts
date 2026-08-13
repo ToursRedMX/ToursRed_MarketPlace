@@ -33,10 +33,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: emailSettings } = await supabase
-      .from("email_settings")
-      .select("smtp_api_key, contact_email")
-      .maybeSingle();
+    const [{ data: emailSettings }, { data: platformSettings }] = await Promise.all([
+      supabase.from("email_settings").select("smtp_api_key, contact_email").maybeSingle(),
+      supabase.from("platform_settings").select("platform_url").maybeSingle(),
+    ]);
 
     const smtpApiKey = emailSettings?.smtp_api_key;
 
@@ -50,7 +50,8 @@ Deno.serve(async (req: Request) => {
 
     const fromEmail = emailSettings?.contact_email || "contacto@toursred.com";
     const logoUrl = `${supabaseUrl}/storage/v1/object/public/images/email-logo.png`;
-    const appUrl = "https://toursred.com";
+    // CORREGIDO: antes appUrl estaba hardcoded a "https://toursred.com"
+    const appUrl = platformSettings?.platform_url || "https://toursredmx.netlify.app";
 
     const htmlContent = `
       <!DOCTYPE html>

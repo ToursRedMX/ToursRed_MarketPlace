@@ -181,16 +181,18 @@ Deno.serve(async (req: Request) => {
 
               <div style="background-color: #fef3c7; border: 2px solid #eab308; padding: 20px; margin-bottom: 25px; border-radius: 8px;">
                 <h3 style="color: #713f12; margin: 0 0 15px 0; font-size: 16px;">📊 Impacto de la Cancelación</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                  <div style="background-color: #fff; padding: 15px; border-radius: 4px; text-align: center;">
-                    <div style="font-size: 28px; font-weight: bold; color: #f59e0b; margin-bottom: 5px;">${cancellation.affected_bookings_count}</div>
-                    <div style="font-size: 13px; color: #854d0e;">Reservas Canceladas</div>
-                  </div>
-                  <div style="background-color: #fff; padding: 15px; border-radius: 4px; text-align: center;">
-                    <div style="font-size: 28px; font-weight: bold; color: #10b981; margin-bottom: 5px;">$${Number(cancellation.total_refunded_amount).toFixed(2)}</div>
-                    <div style="font-size: 13px; color: #854d0e;">Total Reembolsado</div>
-                  </div>
-                </div>
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; border-spacing: 15px 0;">
+                  <tr>
+                    <td width="50%" style="background-color: #fff; padding: 15px; border-radius: 4px; text-align: center;">
+                      <div style="font-size: 28px; font-weight: bold; color: #f59e0b; margin-bottom: 5px;">${cancellation.affected_bookings_count}</div>
+                      <div style="font-size: 13px; color: #854d0e;">Reservas Canceladas</div>
+                    </td>
+                    <td width="50%" style="background-color: #fff; padding: 15px; border-radius: 4px; text-align: center;">
+                      <div style="font-size: 28px; font-weight: bold; color: #10b981; margin-bottom: 5px;">$${Number(cancellation.total_refunded_amount).toFixed(2)}</div>
+                      <div style="font-size: 13px; color: #854d0e;">Total Reembolsado</div>
+                    </td>
+                  </tr>
+                </table>
                 <p style="color: #854d0e; font-size: 13px; margin: 15px 0 0 0; text-align: center;">
                   ${cancellation.emails_sent_to_travelers} de ${cancellation.affected_bookings_count} emails enviados exitosamente
                 </p>
