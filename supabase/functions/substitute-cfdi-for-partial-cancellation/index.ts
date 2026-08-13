@@ -296,11 +296,20 @@ Deno.serve(async (req: Request) => {
     const bookingCode = booking.booking_code || booking_id;
 
     const agency = (booking as any).agencies;
-    const terceroAgencia = agency?.rfc && agency?.codigo_postal_fiscal
+    const needsTercero = agency?.rfc && agency.rfc !== rec.rfc;
+    if (needsTercero && (!agency.regimen_fiscal || !agency.codigo_postal_fiscal)) {
+      return new Response(
+        JSON.stringify({
+          error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const terceroAgencia = needsTercero && agency?.codigo_postal_fiscal
       ? {
           rfc: agency.rfc,
           nombre: agency.razon_social || "Agencia",
-          regimen_fiscal: agency.regimen_fiscal || "601",
+          regimen_fiscal: agency.regimen_fiscal,
           domicilio_fiscal: agency.codigo_postal_fiscal,
         }
       : null;
@@ -361,28 +370,26 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Preserve non-tour, non-seguro concepts (penalty, service charge) from original CFDIs
-      // that are NOT already sustitutos. For already-sustituted CFDIs, the non-tour portion
-      // cannot be perfectly reconstructed without stored concept breakdowns.
-      const isAlreadySustituto = !!originalCfdi.tipo_relacion;
-      if (!isAlreadySustituto) {
-        const originalTourAmount = isInstallment
-          ? (Number((originalCfdi as any).booking_payment_plan_transactions?.amount) || 0)
-          : depositAmount;
-        const originalSeguroAmount = (isDeposit && insuranceIncluded) ? insuranceCost : 0;
-        const nonTourNonSeguro = Math.max(0,
-          Number(originalCfdi.total) - originalTourAmount - originalSeguroAmount
-        );
+      // Preserve non-tour, non-seguro concepts (penalty, service charge) from the CFDI
+      // being substituted. Works for both original CFDIs and chained sustitutos by using
+      // the same subtraction logic: total of the CFDI minus the tour and seguro amounts
+      // that CFDI specifically represented.
+      const originalTourAmount = isInstallment
+        ? (Number((originalCfdi as any).booking_payment_plan_transactions?.amount) || 0)
+        : depositAmount;
+      const originalSeguroAmount = (isDeposit && insuranceIncluded) ? insuranceCost : 0;
+      const nonTourNonSeguro = Math.max(0,
+        Number(originalCfdi.total) - originalTourAmount - originalSeguroAmount
+      );
 
-        if (nonTourNonSeguro > 0) {
-          conceptos.push({
-            clave_prod_serv: "81141600",
-            cantidad: 1,
-            clave_unidad: "E48",
-            descripcion: `Cargo por servicio y penalizaciones conservados — ${tourName} (Reserva ${bookingCode})`,
-            valor_unitario: r6(nonTourNonSeguro / 1.16),
-          });
-        }
+      if (nonTourNonSeguro > 0) {
+        conceptos.push({
+          clave_prod_serv: "81141600",
+          cantidad: 1,
+          clave_unidad: "E48",
+          descripcion: `Cargo por servicio y penalizaciones conservados — ${tourName} (Reserva ${bookingCode})`,
+          valor_unitario: r6(nonTourNonSeguro / 1.16),
+        });
       }
 
       if (conceptos.length === 0) continue;

@@ -241,6 +241,14 @@ Deno.serve(async (req: Request) => {
     const iva = Math.round(total * 16 / 116 * 100) / 100;
     const subtotal = Math.round((total - iva) * 100) / 100;
 
+    if (!agency.regimen_fiscal || !agency.postal_code) {
+      return new Response(
+        JSON.stringify({
+          error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     const serie = settings.cfdi_serie_commission || "B";
     const facturapiBody = {
       type: "I",
@@ -250,8 +258,8 @@ Deno.serve(async (req: Request) => {
       customer: {
         legal_name: agency.razon_social,
         tax_id: agency.rfc,
-        tax_system: agency.regimen_fiscal || "612",
-        address: { zip: agency.postal_code || "06600" },
+        tax_system: agency.regimen_fiscal,
+        address: { zip: agency.postal_code },
       },
       items: [
         {
@@ -281,9 +289,9 @@ Deno.serve(async (req: Request) => {
         serie,
         receptor_rfc: agency.rfc,
         receptor_razon_social: agency.razon_social,
-        receptor_regimen_fiscal: agency.regimen_fiscal || "612",
+        receptor_regimen_fiscal: agency.regimen_fiscal,
         receptor_uso_cfdi: "G03",
-        receptor_codigo_postal: agency.postal_code || "06600",
+        receptor_codigo_postal: agency.postal_code,
         subtotal,
         iva_amount: iva,
         total,
@@ -302,8 +310,8 @@ Deno.serve(async (req: Request) => {
           receptor: {
             rfc: agency.rfc,
             razon_social: agency.razon_social,
-            regimen_fiscal: agency.regimen_fiscal || "612",
-            postal_code: agency.postal_code || "06600",
+            regimen_fiscal: agency.regimen_fiscal,
+            postal_code: agency.postal_code,
             uso_cfdi: "G03",
           },
           conceptos: facturapiBody.items?.map((i: { product: { description: string; price: number } }) => ({

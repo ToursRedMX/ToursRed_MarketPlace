@@ -212,11 +212,19 @@ Deno.serve(async (req: Request) => {
     // Agency tercero (same pattern as supplement)
     let terceroAgencia: CfdiConcepto["tercero"] | undefined;
     if (agencyData?.rfc && agencyData?.razon_social && agencyData.rfc !== receptorRfc && agencyData.rfc !== settings.pac_issuer_rfc) {
+      if (!agencyData.regimen_fiscal || !agencyData.postal_code) {
+        return new Response(
+          JSON.stringify({
+            error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
+          }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       terceroAgencia = {
         rfc: agencyData.rfc,
         nombre: agencyData.razon_social,
-        regimen_fiscal: agencyData.regimen_fiscal || "612",
-        domicilio_fiscal: agencyData.postal_code || "06600",
+        regimen_fiscal: agencyData.regimen_fiscal,
+        domicilio_fiscal: agencyData.postal_code,
       };
     }
 
