@@ -64,13 +64,18 @@ Deno.serve(async (req: Request) => {
 
     if (notification_type === "payment_plan_overdue") {
       title = `Pago vencido: ${tour.name}`;
-      message = `Tu parcialidad "${installment.label}" por $${amountPending.toFixed(2)} MXN venció el ${installment.due_date}. Realiza tu pago lo antes posible.`;
+      message = `Tu parcialidad "${installment.label}" por ${amountPending.toFixed(2)} MXN venció el ${installment.due_date}. Realiza tu pago lo antes posible.`;
     } else if (notification_type === "payment_plan_overdue_critical") {
       title = `Pago en mora crítica: ${tour.name}`;
-      message = `Tu parcialidad "${installment.label}" por $${amountPending.toFixed(2)} MXN lleva más de 30 días vencida. Tu reserva puede ser cancelada.`;
+      message = `Tu parcialidad "${installment.label}" por ${amountPending.toFixed(2)} MXN lleva más de 30 días vencida. Tu reserva puede ser cancelada.`;
+    } else if (notification_type === "payment_plan_final_deadline_warning") {
+      const deadlineDate = (req as any).body?.deadline_date;
+      const deadlineStr = deadlineDate ? new Date(deadlineDate).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" }) : "16 días antes de la fecha del tour";
+      title = `Última oportunidad: liquida tu reserva o será cancelada — ${tour.name}`;
+      message = `Tienes hasta el ${deadlineStr} para liquidar el anticipo y todas tus parcialidades pendientes. Si no completas el pago de tu plan, tu reserva será cancelada automáticamente y el monto pagado se reembolsará a tu monedero ToursRed Cash (excepto cargos de servicio).`;
     } else {
       title = `Recordatorio de pago: ${tour.name}`;
-      message = `Tu próxima parcialidad "${installment.label}" por $${amountPending.toFixed(2)} MXN vence el ${installment.due_date}.`;
+      message = `Tu próxima parcialidad "${installment.label}" por ${amountPending.toFixed(2)} MXN vence el ${installment.due_date}.`;
     }
 
     // Create in-app notification
