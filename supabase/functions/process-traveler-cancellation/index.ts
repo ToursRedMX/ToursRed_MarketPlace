@@ -11,7 +11,7 @@ async function cancelStampedCfds(
     .from("cfdi_invoices")
     .select("id")
     .eq("booking_id", bookingId)
-    .in("invoice_type", ["booking", "booking_installment"])
+    .in("invoice_type", ["booking", "booking_installment", "supplement", "insurance", "optional_service", "checkin_wallet"])
     .eq("status", "stamped");
 
   for (const cfdi of stampedCfds || []) {

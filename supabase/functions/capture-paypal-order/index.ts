@@ -571,6 +571,37 @@ Deno.serve(async (req: Request) => {
               );
             } else if (context === "gift_card" && referenceId) {
               await activateGiftCard(supabase, referenceId, paypalTransactionId);
+            } else if (context === "supplement" && referenceId) {
+              await supabase.from("booking_supplements").update({
+                status: "paid", payment_provider: "paypal", updated_at: new Date().toISOString(),
+              }).eq("id", referenceId);
+              supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: referenceId })
+                .catch((e) => console.error("Error creating supplement accounting entry (PayPal already captured):", e));
+            } else if (context === "extras" && referenceId) {
+              const extrasType = orderDetails.purchase_units?.[0]?.custom_id || "insurance";
+              if (extrasType === "optional_service") {
+                await supabase.from("booking_optional_services").update({
+                  paid_at: new Date().toISOString(), payment_method: "paypal",
+                }).eq("id", referenceId);
+                supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: referenceId })
+                  .catch((e) => console.error("Error creating optional service accounting entry (PayPal already captured):", e));
+              } else {
+                await supabase.from("bookings").update({
+                  travel_insurance_included: true,
+                  travel_insurance_cost: parseFloat(orderDetails.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0"),
+                  updated_at: new Date().toISOString(),
+                }).eq("id", referenceId);
+                supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: referenceId })
+                  .catch((e) => console.error("Error creating insurance accounting entry (PayPal already captured):", e));
+              }
+            } else if (context === "payment_plan_installment" && referenceId) {
+              const { data: planTx } = await supabase.from("booking_payment_plan_transactions")
+                .select("id").eq("plan_id", referenceId).eq("payment_provider", "paypal")
+                .order("created_at", { ascending: false }).limit(1).maybeSingle();
+              if (planTx?.id) {
+                supabase.rpc("create_accounting_entry_for_payment_plan_installment", { p_installment_tx_id: planTx.id })
+                  .catch((e) => console.error("Error creating payment plan installment accounting entry (PayPal already captured):", e));
+              }
             } else if (referenceId) {
               await confirmBooking(supabase, referenceId, paypalTransactionId, orderDetails);
             }
@@ -635,6 +666,119 @@ Deno.serve(async (req: Request) => {
         );
       } else if (context === "gift_card" && referenceId) {
         await activateGiftCard(supabase, referenceId, paypalTransactionId);
+      } else if (context === "supplement" && referenceId) {
+        await supabase.from("booking_supplements").update({
+          status: "paid", payment_id: paypalTransactionId ?? orderId,
+          payment_provider: "paypal", updated_at: new Date().toISOString(),
+        }).eq("id", referenceId);
+
+        const capturedAmt = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
+        const ppFee = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.seller_receivable_breakdown?.paypal_fee?.value ?? "0");
+        await supabase.from("payment_transactions").insert({
+          booking_id: (await supabase.from("booking_supplements").select("booking_id").eq("id", referenceId).maybeSingle()).data?.booking_id,
+          paypal_capture_id: paypalTransactionId, payment_processor: "paypal",
+          amount: capturedAmt, currency: "mxn", status: "succeeded",
+          processor_fee: ppFee, net_amount: capturedAmt - ppFee,
+          charge_context: "supplement", charge_reference_id: referenceId,
+        });
+
+        EdgeRuntime.waitUntil(
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-supplement-cfdi`, {
+            method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({ booking_supplement_id: referenceId, payment_form: "04" }),
+          }).catch((e) => console.error("Error triggering supplement CFDI (PayPal):", e))
+        );
+        supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: referenceId })
+          .catch((e) => console.error("Error creating supplement accounting entry (PayPal):", e));
+
+      } else if (context === "extras" && referenceId) {
+        const extrasType = captureData.purchase_units?.[0]?.custom_id || "insurance";
+        if (extrasType === "optional_service") {
+          await supabase.from("booking_optional_services").update({
+            paid_at: new Date().toISOString(), payment_method: "paypal", updated_at: new Date().toISOString(),
+          }).eq("id", referenceId);
+
+          const capturedAmt = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
+          const ppFee = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.seller_receivable_breakdown?.paypal_fee?.value ?? "0");
+          const bosBooking = (await supabase.from("booking_optional_services").select("booking_id").eq("id", referenceId).maybeSingle()).data?.booking_id;
+          await supabase.from("payment_transactions").insert({
+            booking_id: bosBooking, paypal_capture_id: paypalTransactionId, payment_processor: "paypal",
+            amount: capturedAmt, currency: "mxn", status: "succeeded",
+            processor_fee: ppFee, net_amount: capturedAmt - ppFee,
+            charge_context: "optional_service", charge_reference_id: referenceId,
+          });
+
+          EdgeRuntime.waitUntil(
+            fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-optional-service-cfdi`, {
+              method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+              body: JSON.stringify({ booking_optional_service_id: referenceId, payment_form: "04" }),
+            }).catch((e) => console.error("Error triggering optional service CFDI (PayPal):", e))
+          );
+          supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: referenceId })
+            .catch((e) => console.error("Error creating optional service accounting entry (PayPal):", e));
+        } else {
+          await supabase.from("bookings").update({
+            travel_insurance_included: true,
+            travel_insurance_cost: parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0"),
+            updated_at: new Date().toISOString(),
+          }).eq("id", referenceId);
+
+          const capturedAmt = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
+          const ppFee = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.seller_receivable_breakdown?.paypal_fee?.value ?? "0");
+          await supabase.from("payment_transactions").insert({
+            booking_id: referenceId, paypal_capture_id: paypalTransactionId, payment_processor: "paypal",
+            amount: capturedAmt, currency: "mxn", status: "succeeded",
+            processor_fee: ppFee, net_amount: capturedAmt - ppFee,
+            charge_context: "insurance", charge_reference_id: referenceId,
+          });
+
+          EdgeRuntime.waitUntil(
+            fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-post-booking-insurance-cfdi`, {
+              method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+              body: JSON.stringify({ booking_id: referenceId, payment_form: "04" }),
+            }).catch((e) => console.error("Error triggering insurance CFDI (PayPal):", e))
+          );
+          supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: referenceId })
+            .catch((e) => console.error("Error creating insurance accounting entry (PayPal):", e));
+        }
+
+      } else if (context === "payment_plan_installment" && referenceId) {
+        const planId = referenceId;
+        const { data: planRow } = await supabase.from("booking_payment_plans").select("booking_id").eq("id", planId).maybeSingle();
+        let planUserId: string | null = null;
+        if (planRow) {
+          const { data: bkRow } = await supabase.from("bookings").select("user_id").eq("id", planRow.booking_id).maybeSingle();
+          planUserId = bkRow?.user_id || null;
+        }
+        const capturedAmt = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
+        const ppFee = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.seller_receivable_breakdown?.paypal_fee?.value ?? "0");
+
+        const { error: allocError } = await supabase.rpc("allocate_payment_plan_installment", {
+          p_plan_id: planId, p_amount: capturedAmt, p_provider: "paypal",
+          p_service_charge: 0, p_gross_service_charge: 0,
+          p_provider_transaction_id: paypalTransactionId ?? orderId,
+          p_user_id: planUserId, p_membership_exemption_used: false, p_is_wallet_payment: false,
+        });
+
+        if (allocError) {
+          console.error(`Error allocating payment plan installment (PayPal) for plan ${planId}:`, allocError.message);
+        }
+
+        await supabase.from("payment_transactions").insert({
+          booking_id: planRow?.booking_id, paypal_capture_id: paypalTransactionId,
+          payment_processor: "paypal", amount: capturedAmt, currency: "mxn",
+          status: "succeeded", processor_fee: ppFee, net_amount: capturedAmt - ppFee,
+          charge_context: "payment_plan_installment", charge_reference_id: planId,
+        });
+
+        const { data: planTx } = await supabase.from("booking_payment_plan_transactions")
+          .select("id").eq("plan_id", planId).eq("payment_provider", "paypal")
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (planTx?.id) {
+          supabase.rpc("create_accounting_entry_for_payment_plan_installment", { p_installment_tx_id: planTx.id })
+            .catch((e) => console.error("Error creating payment plan installment accounting entry (PayPal):", e));
+        }
+
       } else if (referenceId) {
         await confirmBooking(supabase, referenceId, paypalTransactionId, captureData);
       }

@@ -289,6 +289,110 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      // Check if this is a post-booking insurance payment
+      const { data: pendingInsurance } = await supabase
+        .from("payment_transactions")
+        .select("id, booking_id, amount")
+        .eq("charge_context", "insurance")
+        .eq("charge_reference_id", externalReference)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (pendingInsurance) {
+        const insAmount = Number(payment.transaction_amount || payment.amount || 0);
+        const insFee = Array.isArray(payment.fee_details)
+          ? payment.fee_details.filter((fd: any) => fd.type === "mercadopago_fee").reduce((s: number, fd: any) => s + parseFloat(fd.amount || "0"), 0)
+          : 0;
+
+        await supabase.from("bookings").update({
+          travel_insurance_included: true,
+          travel_insurance_cost: insAmount,
+          updated_at: new Date().toISOString(),
+        }).eq("id", externalReference);
+
+        await supabase.from("payment_transactions").update({
+          status: "succeeded",
+          processor_fee: insFee,
+          net_amount: insAmount - insFee,
+          mercadopago_payment_id: String(notificationId),
+        }).eq("id", pendingInsurance.id);
+
+        // Trigger insurance CFDI
+        try {
+          const { data: cfdiSettings } = await supabase.from("platform_settings").select("pac_provider").maybeSingle();
+          if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
+            await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-post-booking-insurance-cfdi`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+              body: JSON.stringify({ booking_id: externalReference, payment_form: getMercadoPagoPaymentForm(payment) }),
+            });
+          }
+        } catch (cfdiErr) { console.error("Error triggering insurance CFDI (MP):", cfdiErr); }
+
+        // Accounting entry for insurance (fire and forget)
+        supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: externalReference })
+          .catch((e) => console.error("Error creating insurance accounting entry (MP):", e));
+
+        return new Response(JSON.stringify({ received: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Check if this is a post-booking optional service payment
+      const { data: pendingOptService } = await supabase
+        .from("booking_optional_services")
+        .select("id, booking_id, subtotal, total_paid")
+        .eq("id", externalReference)
+        .eq("is_cancelled", false)
+        .is("paid_at", null)
+        .maybeSingle();
+
+      if (pendingOptService) {
+        const optAmount = Number(pendingOptService.total_paid || pendingOptService.subtotal || 0);
+        const optFee = Array.isArray(payment.fee_details)
+          ? payment.fee_details.filter((fd: any) => fd.type === "mercadopago_fee").reduce((s: number, fd: any) => s + parseFloat(fd.amount || "0"), 0)
+          : 0;
+
+        await supabase.from("booking_optional_services").update({
+          paid_at: new Date().toISOString(),
+          payment_method: "mercadopago",
+          updated_at: new Date().toISOString(),
+        }).eq("id", externalReference);
+
+        await supabase.from("payment_transactions").insert({
+          booking_id: pendingOptService.booking_id,
+          mercadopago_payment_id: String(notificationId),
+          amount: optAmount,
+          currency: "mxn",
+          status: "succeeded",
+          payment_processor: "mercadopago",
+          processor_fee: optFee,
+          net_amount: optAmount - optFee,
+          charge_context: "optional_service",
+          charge_reference_id: externalReference,
+        });
+
+        // Trigger optional service CFDI
+        try {
+          const { data: cfdiSettings } = await supabase.from("platform_settings").select("pac_provider").maybeSingle();
+          if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
+            await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-optional-service-cfdi`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+              body: JSON.stringify({ booking_optional_service_id: externalReference, payment_form: getMercadoPagoPaymentForm(payment) }),
+            });
+          }
+        } catch (cfdiErr) { console.error("Error triggering optional service CFDI (MP):", cfdiErr); }
+
+        // Accounting entry for optional service (fire and forget)
+        supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: externalReference })
+          .catch((e) => console.error("Error creating optional service accounting entry (MP):", e));
+
+        return new Response(JSON.stringify({ received: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Check if this is a booking supplement payment
       const { data: bookingSupplement } = await supabase
         .from("booking_supplements")
@@ -356,6 +460,10 @@ Deno.serve(async (req: Request) => {
               body: JSON.stringify({ supplement_id: externalReference, payment_form: getMercadoPagoPaymentForm(payment) }),
             }
           ).catch((err) => console.error("Error triggering supplement CFDI (MP webhook):", err));
+
+          // Accounting entry for supplement (fire and forget)
+          supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: externalReference })
+            .catch((e) => console.error("Error creating supplement accounting entry (MP):", e));
         }
         return new Response(JSON.stringify({ received: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },

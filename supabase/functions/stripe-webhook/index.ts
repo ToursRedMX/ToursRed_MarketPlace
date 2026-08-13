@@ -500,6 +500,15 @@ Deno.serve(async (req) => {
                 }).catch(() => {})
               );
             }
+
+            // Accounting entry for insurance or optional service (fire and forget)
+            if (extraType === 'optional_service' && extraBosId) {
+              supabase.rpc('create_accounting_entry_for_optional_service', { p_bos_id: extraBosId })
+                .catch((e) => console.error('Error creating optional service accounting entry (Stripe):', e));
+            } else if (extraType === 'insurance') {
+              supabase.rpc('create_accounting_entry_for_insurance_purchase', { p_booking_id: extraBookingId })
+                .catch((e) => console.error('Error creating insurance accounting entry (Stripe):', e));
+            }
           }
           break;
         }
@@ -769,6 +778,12 @@ Deno.serve(async (req) => {
                   );
                 }
               }
+            }
+
+            // Accounting entry for payment plan installment (fire and forget)
+            if (txRecord?.id) {
+              supabase.rpc('create_accounting_entry_for_payment_plan_installment', { p_installment_tx_id: txRecord.id })
+                .catch((e) => console.error('Error creating payment plan installment accounting entry (Stripe):', e));
             }
 
             console.log(`✅ Payment plan installment processed for plan ${planId}`);

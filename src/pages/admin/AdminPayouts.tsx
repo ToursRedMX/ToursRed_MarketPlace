@@ -802,12 +802,14 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
         if (penaltyUpdateError) throw penaltyUpdateError;
       }
 
-      const agencyIdToNotify = agencyId || paymentDetails.records?.[0]?.agency_id;
-      if (agencyIdToNotify && paymentDetails.records?.length > 0) {
+      const hasCommissions = paymentDetails.records?.length > 0;
+      const hasPenalties = paymentDetails.penalties?.length > 0;
+      const agencyIdToNotify = agencyId || paymentDetails.records?.[0]?.agency_id || paymentDetails.penalties?.[0]?.agency_id;
+      if (agencyIdToNotify && (hasCommissions || hasPenalties)) {
         await supabase.functions.invoke('send-payout-confirmation', {
           body: {
             agency_id: agencyIdToNotify,
-            commission_ids: paymentDetails.records.map((r: any) => r.id),
+            commission_ids: hasCommissions ? paymentDetails.records.map((r: any) => r.id) : [],
             total_amount: paymentDetails.totalAmount,
             payment_method: paymentMethod, payment_notes: notes, receipt_url: receiptUrl
           }
@@ -833,15 +835,16 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
                 payout_code: payoutCode,
                 bill_number: billNumber.trim() || null,
                 status: 'completed',
-                commission_records_count: paymentDetails.records?.length || 0,
+                commission_records_count: (paymentDetails.records?.length || 0) + (paymentDetails.penalties?.length || 0),
               })
               .select('id')
               .single();
             if (newPayout?.id) {
-              await supabase.functions.invoke('generate-commission-cfdi', {
-                body: { payout_id: newPayout.id }
-              });
-              // Sync payout to accounting system (fire and forget)
+              if (hasCommissions) {
+                await supabase.functions.invoke('generate-commission-cfdi', {
+                  body: { payout_id: newPayout.id }
+                });
+              }
               supabase.functions.invoke('sync-payout-to-accounting', {
                 body: { payout_id: newPayout.id }
               }).catch((err) => console.error('Error syncing payout to accounting:', err));

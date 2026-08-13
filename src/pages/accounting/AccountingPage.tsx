@@ -459,6 +459,11 @@ const AccountingPage: React.FC = () => {
       .from('insurance_settlements')
       .update({ status: 'completed' })
       .eq('id', id);
+    if (!error) {
+      try {
+        await supabase.rpc('create_accounting_entry_for_insurance_settlement', { p_settlement_id: id });
+      } catch (e) { console.error('Error creating insurance settlement accounting entry:', e); }
+    }
     setMarkingId(null);
     setConfirmMarkPaid(null);
     if (error) showToast('Error al actualizar la liquidación', false);
@@ -471,6 +476,11 @@ const AccountingPage: React.FC = () => {
       .from('insurance_commission_receipts')
       .update({ status: 'completed' })
       .eq('id', id);
+    if (!error) {
+      try {
+        await supabase.rpc('create_accounting_entry_for_insurance_commission', { p_receipt_id: id });
+      } catch (e) { console.error('Error creating insurance commission accounting entry:', e); }
+    }
     setMarkingId(null);
     setConfirmMarkReceived(null);
     if (error) showToast('Error al actualizar la comisión', false);
