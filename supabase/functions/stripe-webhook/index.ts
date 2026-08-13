@@ -313,6 +313,10 @@ Deno.serve(async (req) => {
                 }).catch(() => {})
               );
             }
+
+            // Accounting entry for supplement (fire and forget)
+            supabase.rpc('create_accounting_entry_for_supplement', { p_supplement_id: bookingSupplementId })
+              .catch((e) => console.error('Error creating supplement accounting entry (Stripe):', e));
           }
           break;
         }
@@ -2055,6 +2059,37 @@ Deno.serve(async (req) => {
           } catch (activationErr) {
             console.error('Error activando membresía:', activationErr);
           }
+        }
+
+        // --- Record payment transaction for accounting ---
+        const membershipAmount = invoice.amount_paid ? invoice.amount_paid / 100 : 0;
+        const { data: existingMembershipTx } = await supabase
+          .from('payment_transactions')
+          .select('id')
+          .eq('stripe_payment_intent_id', invoice.id)
+          .maybeSingle();
+        let membershipTxId: string | null = null;
+        if (!existingMembershipTx && membershipAmount > 0) {
+          const { data: newMembershipTx } = await supabase.from('payment_transactions').insert({
+            stripe_payment_intent_id: invoice.id,
+            amount: membershipAmount,
+            currency: 'mxn',
+            status: 'succeeded',
+            payment_processor: 'stripe',
+            processor_fee: 0,
+            net_amount: membershipAmount,
+            charge_context: 'membership',
+            charge_reference_id: membership!.id,
+          }).select('id').single();
+          membershipTxId = newMembershipTx?.id ?? null;
+        } else if (existingMembershipTx) {
+          membershipTxId = existingMembershipTx.id;
+        }
+
+        // Accounting entry for membership (fire and forget)
+        if (membershipTxId) {
+          supabase.rpc('create_accounting_entry_for_membership', { p_payment_transaction_id: membershipTxId })
+            .catch((e) => console.error('Error creating membership accounting entry (Stripe):', e));
         }
 
         // --- CFDI (fire-and-forget, no bloquea la activación) ---
