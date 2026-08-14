@@ -62,13 +62,12 @@ Deno.serve(async (req: Request) => {
       : { data: null };
 
     const { data: emailSettings } = await supabase
-      .from("platform_settings")
-      .select("smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, from_email, from_name, platform_url")
+      .from("email_settings")
+      .select("smtp_api_key, contact_email, platform_url")
       .maybeSingle();
 
     const platformUrl = emailSettings?.platform_url || Deno.env.get("SUPABASE_URL") || "";
-    const fromEmail = emailSettings?.from_email || "no-reply@toursred.com";
-    const fromName = emailSettings?.from_name || "ToursRed";
+    const fromEmail = emailSettings?.contact_email || "no-reply@toursred.com";
 
     const bookingCode = booking?.booking_code || refund.booking_id;
     const tourName = (booking?.tours as any)?.name || "N/A";
@@ -95,36 +94,25 @@ Deno.serve(async (req: Request) => {
     `;
 
     const emailPayload = {
-      from: { email: fromEmail, name: fromName },
-      to: [{ email: "contacto@toursred.com" }],
+      api_key: emailSettings?.smtp_api_key,
+      to: ["contacto@toursred.com"],
+      sender: fromEmail,
       subject: `[ALERTA] Reembolso Fallido - ${bookingCode} - ${refund.payment_processor}`,
-      html: emailHtml,
+      html_body: emailHtml,
     };
 
-    const smtpHost = emailSettings?.smtp_host;
-    const smtpPort = emailSettings?.smtp_port;
-    const smtpUser = emailSettings?.smtp_user;
-
-    if (smtpHost && smtpUser) {
-      const { data: smtpPassData } = await supabase
-        .rpc("decrypt_value", { p_encrypted_value: emailSettings.smtp_pass_encrypted })
-        .maybeSingle();
-
-      const smtpPass = smtpPassData?.decrypted_value || smtpPassData || "";
-
-      const authString = btoa(`${smtpUser}:${smtpPass}`);
-      const emailResponse = await fetch(`https://${smtpHost}/api/send`, {
+    if (emailSettings?.smtp_api_key) {
+      const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Basic ${authString}`,
         },
         body: JSON.stringify(emailPayload),
       });
 
       if (!emailResponse.ok) {
         const errText = await emailResponse.text();
-        console.error("Failed to send refund-failed email via SMTP:", errText);
+        console.error("Failed to send refund-failed email via smtp2go:", errText);
       } else {
         console.log("Refund-failed email sent to ops");
       }

@@ -18,7 +18,7 @@ Deno.serve(async (req)=>{
     if (!payout_id || !agency_email || !agency_name || !amount) {
       throw new Error("Missing required fields");
     }
-    const { data: settings } = await supabase.from("platform_settings").select("smtp_api_key").single();
+    const { data: settings } = await supabase.from("email_settings").select("smtp_api_key, contact_email").maybeSingle();
     if (!settings?.smtp_api_key) {
       console.log("SMTP not configured, skipping email notification");
       return new Response(JSON.stringify({
@@ -121,19 +121,17 @@ Deno.serve(async (req)=>{
         </body>
       </html>
     `;
-    const emailResponse = await fetch("https://api.resend.com/emails", {
+    const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${settings.smtp_api_key}`
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        from: "ToursRed <notifications@toursred.com>",
-        to: [
-          agency_email
-        ],
+        api_key: settings.smtp_api_key,
+        to: [agency_email],
+        sender: settings.contact_email || "notifications@toursred.com",
         subject: emailSubject,
-        html: emailBody
+        html_body: emailBody
       })
     });
     if (!emailResponse.ok) {
@@ -144,8 +142,7 @@ Deno.serve(async (req)=>{
     const emailResult = await emailResponse.json();
     return new Response(JSON.stringify({
       success: true,
-      message: "Payout notification email sent successfully",
-      email_id: emailResult.id
+      message: "Payout notification email sent successfully"
     }), {
       headers: {
         ...corsHeaders,

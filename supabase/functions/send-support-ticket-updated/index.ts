@@ -19,6 +19,12 @@ Deno.serve(async (req: Request) => {
 
     const { folio, solicitante_nombre, solicitante_email, nuevo_status, mensaje_agente } = await req.json();
 
+    const escapeHtml = (str: string): string =>
+      String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+    const safeNombre = escapeHtml(solicitante_nombre);
+    const safeMensajeAgente = escapeHtml(mensaje_agente);
+
     if (!folio || !solicitante_email) {
       return new Response(
         JSON.stringify({ error: "Faltan campos requeridos" }),
@@ -78,7 +84,7 @@ Deno.serve(async (req: Request) => {
                 ${hasResponse ? "Tienes una respuesta" : "Actualizacion en tu ticket"}
               </p>
               <p style="margin:0 0 24px;font-size:15px;color:#6b7280;">
-                Hola ${solicitante_nombre}, hay novedades en tu ticket de soporte.
+                Hola ${safeNombre}, hay novedades en tu ticket de soporte.
               </p>
 
               <div style="background-color:#eff6ff;border-radius:8px;padding:16px;margin-bottom:24px;text-align:center;">
@@ -96,7 +102,7 @@ Deno.serve(async (req: Request) => {
               ${hasResponse ? `
               <div style="background-color:#eff6ff;border-left:4px solid #3b82f6;border-radius:4px;padding:20px;margin-bottom:24px;">
                 <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#3b82f6;text-transform:uppercase;">Respuesta del agente</p>
-                <p style="margin:0;font-size:14px;color:#374151;white-space:pre-wrap;">${mensaje_agente}</p>
+                <p style="margin:0;font-size:14px;color:#374151;white-space:pre-wrap;">${safeMensajeAgente}</p>
               </div>
               ` : ""}
 

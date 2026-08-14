@@ -241,14 +241,17 @@ Deno.serve(async (req: Request) => {
     // Fetch optional services
     const { data: optionalServicesData } = await supabase
       .from("booking_optional_services")
-      .select("subtotal, service_charge, tour_optional_service_id, tour_optional_services(is_refundable)")
+      .select("subtotal, service_charge, service_kind, tour_optional_service_id, tour_optional_services(is_refundable)")
       .eq("booking_id", booking_id)
       .eq("is_cancelled", false);
 
     let optionalServicesRefundable = 0;
     let optionalServicesServiceCharge = 0;
     for (const bos of (optionalServicesData || [])) {
-      const isRefundable = (bos as any).tour_optional_services?.is_refundable !== false;
+      const serviceKind = (bos as any).service_kind;
+      const isRefundable = serviceKind === 'pickup' || serviceKind === 'language'
+        ? true
+        : (bos as any).tour_optional_services?.is_refundable !== false;
       if (isRefundable) optionalServicesRefundable += Number((bos as any).subtotal || 0);
       optionalServicesServiceCharge += Number((bos as any).service_charge || 0);
     }

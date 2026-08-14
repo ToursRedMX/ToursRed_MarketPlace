@@ -334,6 +334,20 @@ const AdminUsers: React.FC = () => {
         throw new Error('No hay sesión activa');
       }
 
+      // Delete the auth account first so the email can be reused
+      try {
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-auth-user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ user_id: userId }),
+        });
+      } catch (authErr: any) {
+        console.warn('Could not delete auth identity (may already be gone):', authErr);
+      }
+
       const { error: permsError } = await supabase
         .from('admin_permissions')
         .delete()

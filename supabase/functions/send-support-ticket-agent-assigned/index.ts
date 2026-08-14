@@ -19,6 +19,13 @@ Deno.serve(async (req: Request) => {
 
     const { folio, agente_nombre, agente_email, solicitante_nombre, categoria, descripcion } = await req.json();
 
+    const escapeHtml = (str: string): string =>
+      String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+    const safeSolicitanteNombre = escapeHtml(solicitante_nombre);
+    const safeCategoria = escapeHtml(categoria);
+    const safeDescripcion = escapeHtml(descripcion);
+
     if (!folio || !agente_email) {
       return new Response(
         JSON.stringify({ error: "Faltan campos requeridos" }),
@@ -71,17 +78,17 @@ Deno.serve(async (req: Request) => {
                   <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                       <td style="font-size:13px;color:#6b7280;padding-bottom:8px;width:35%;">Solicitante:</td>
-                      <td style="font-size:13px;color:#111827;font-weight:500;padding-bottom:8px;">${solicitante_nombre}</td>
+                      <td style="font-size:13px;color:#111827;font-weight:500;padding-bottom:8px;">${safeSolicitanteNombre}</td>
                     </tr>
                     ${categoria ? `
                     <tr>
                       <td style="font-size:13px;color:#6b7280;padding-bottom:8px;">Categoria:</td>
-                      <td style="font-size:13px;color:#111827;font-weight:500;padding-bottom:8px;">${categoria}</td>
+                      <td style="font-size:13px;color:#111827;font-weight:500;padding-bottom:8px;">${safeCategoria}</td>
                     </tr>` : ""}
                     ${descripcion ? `
                     <tr>
                       <td style="font-size:13px;color:#6b7280;vertical-align:top;">Descripcion:</td>
-                      <td style="font-size:13px;color:#374151;">${descripcion}</td>
+                      <td style="font-size:13px;color:#374151;">${safeDescripcion}</td>
                     </tr>` : ""}
                   </table>
                 </td></tr>

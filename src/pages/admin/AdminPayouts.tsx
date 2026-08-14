@@ -781,77 +781,67 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
         setUploadingReceipt(false);
       }
 
-      if (paymentDetails.records?.length > 0) {
-        const commissionIds = paymentDetails.records.map((r: any) => r.id);
-        const { error: updateError } = await supabase.from('commission_records').update({
-          status: 'processed', processed_at: new Date().toISOString(),
-          payment_method: paymentMethod, payment_notes: notes || null,
-          payment_receipt_url: receiptUrl, payment_receipt_filename: receiptFilename,
-          notified_at: new Date().toISOString()
-        }).in('id', commissionIds);
-        if (updateError) throw updateError;
-      }
+      if (paymentDetails.records?.length > 0 || paymentDetails.penalties?.length > 0) {
+        const agencyIdToNotify = agencyId || paymentDetails.records?.[0]?.agency_id || paymentDetails.penalties?.[0]?.agency_id;
+        if (agencyIdToNotify) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error('No hay sesión activa');
 
-      if (paymentDetails.penalties?.length > 0) {
-        const penaltyIds = paymentDetails.penalties.map((r: any) => r.id);
-        const { error: penaltyUpdateError } = await supabase.from('cancellation_penalty_records').update({
-          status: 'processed', processed_at: new Date().toISOString(),
-          payment_method: paymentMethod, payment_notes: notes || null,
-          payment_receipt_url: receiptUrl, payment_receipt_filename: receiptFilename,
-        }).in('id', penaltyIds);
-        if (penaltyUpdateError) throw penaltyUpdateError;
-      }
+          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-agency-payout`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              agency_id: agencyIdToNotify,
+              commission_ids: paymentDetails.records?.map((r: any) => r.id) || [],
+              penalty_ids: paymentDetails.penalties?.map((r: any) => r.id) || [],
+              total_amount: paymentDetails.totalAmount,
+              net_amount: paymentDetails.totalAmount,
+              platform_commission_amount: paymentDetails.platformCommissionTotal,
+              payment_method: paymentMethod,
+              notes: notes || null,
+              receipt_url: receiptUrl,
+              receipt_filename: receiptFilename,
+              bill_number: billNumber.trim() || null,
+            }),
+          });
 
-      const hasCommissions = paymentDetails.records?.length > 0;
-      const hasPenalties = paymentDetails.penalties?.length > 0;
-      const agencyIdToNotify = agencyId || paymentDetails.records?.[0]?.agency_id || paymentDetails.penalties?.[0]?.agency_id;
-      if (agencyIdToNotify && (hasCommissions || hasPenalties)) {
-        await supabase.functions.invoke('send-payout-confirmation', {
-          body: {
-            agency_id: agencyIdToNotify,
-            commission_ids: hasCommissions ? paymentDetails.records.map((r: any) => r.id) : [],
-            total_amount: paymentDetails.totalAmount,
-            payment_method: paymentMethod, payment_notes: notes, receipt_url: receiptUrl
+          const result = await response.json();
+          if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Error al procesar el pago via process-agency-payout');
           }
-        });
 
-        try {
-          const { data: cfdiSettings } = await supabase
-            .from('platform_settings')
-            .select('pac_provider')
-            .maybeSingle();
-          if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== 'none') {
-            const payoutCode = `PAY-${Date.now()}`;
-            const { data: newPayout } = await supabase
-              .from('agency_payouts')
-              .insert({
-                agency_id: agencyIdToNotify,
-                amount: paymentDetails.totalAmount,
-                net_amount: paymentDetails.totalAmount,
-                platform_commission_amount: paymentDetails.platformCommissionTotal,
-                payment_method: paymentMethod,
-                notes: notes || null,
-                receipt_url: receiptUrl || null,
-                payout_code: payoutCode,
-                bill_number: billNumber.trim() || null,
-                status: 'completed',
-                commission_records_count: (paymentDetails.records?.length || 0) + (paymentDetails.penalties?.length || 0),
-              })
-              .select('id')
-              .single();
-            if (newPayout?.id) {
-              if (hasCommissions) {
+          // Send confirmation email
+          await supabase.functions.invoke('send-payout-confirmation', {
+            body: {
+              agency_id: agencyIdToNotify,
+              commission_ids: paymentDetails.records?.map((r: any) => r.id) || [],
+              total_amount: paymentDetails.totalAmount,
+              payment_method: paymentMethod, payment_notes: notes, receipt_url: receiptUrl
+            }
+          });
+
+          // Trigger CFDI generation if PAC is configured
+          try {
+            const { data: cfdiSettings } = await supabase
+              .from('platform_settings')
+              .select('pac_provider')
+              .maybeSingle();
+            if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== 'none' && result.payout_id) {
+              if (paymentDetails.records?.length > 0) {
                 await supabase.functions.invoke('generate-commission-cfdi', {
-                  body: { payout_id: newPayout.id }
+                  body: { payout_id: result.payout_id }
                 });
               }
               supabase.functions.invoke('sync-payout-to-accounting', {
-                body: { payout_id: newPayout.id }
+                body: { payout_id: result.payout_id }
               }).catch((err) => console.error('Error syncing payout to accounting:', err));
             }
+          } catch (cfdiErr) {
+            console.error('Error triggering commission CFDI:', cfdiErr);
           }
-        } catch (cfdiErr) {
-          console.error('Error triggering commission CFDI:', cfdiErr);
         }
       }
 

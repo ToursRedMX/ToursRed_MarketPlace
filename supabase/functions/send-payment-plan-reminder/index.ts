@@ -94,10 +94,10 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    // Send email via platform email service
+    // Send email via smtp2go directly
     const { data: emailSettings } = await supabase
-      .from("platform_settings")
-      .select("smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_name, smtp_from_email, supabase_service_key, platform_url")
+      .from("email_settings")
+      .select("smtp_api_key, contact_email, platform_url")
       .maybeSingle();
 
     const appUrl = (emailSettings as any)?.platform_url || "https://toursredmx.netlify.app";
@@ -108,30 +108,40 @@ Deno.serve(async (req: Request) => {
       .eq("id", booking.user_id)
       .maybeSingle();
 
-    if (traveler?.email && emailSettings) {
+    if (traveler?.email && emailSettings?.smtp_api_key) {
       EdgeRuntime.waitUntil(
-        supabase.functions.invoke("send-email", {
-          body: {
-            to: traveler.email,
-            subject: title,
-            html: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>${title}</h2>
-                <p>Hola ${traveler.first_name},</p>
-                <p>${message}</p>
-                <p><strong>Tour:</strong> ${tour.name}</p>
-                <p><strong>Reserva:</strong> ${booking.booking_code}</p>
-                <p><strong>Monto pendiente:</strong> $${amountPending.toFixed(2)} MXN</p>
-                <p><strong>Fecha de vencimiento:</strong> ${installment.due_date}</p>
-                <br>
-                <a href="${appUrl}/traveler/bookings"
-                   style="background: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
-                  Realizar pago
-                </a>
-              </div>
-            `,
-          },
-        }).catch(() => {})
+        (async () => {
+          try {
+            await fetch("https://api.smtp2go.com/v3/email/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                api_key: emailSettings.smtp_api_key,
+                to: [traveler.email],
+                sender: emailSettings.contact_email || "noreply@toursred.com",
+                subject: title,
+                html_body: `
+                  <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2>${title}</h2>
+                    <p>Hola ${traveler.first_name},</p>
+                    <p>${message}</p>
+                    <p><strong>Tour:</strong> ${tour.name}</p>
+                    <p><strong>Reserva:</strong> ${booking.booking_code}</p>
+                    <p><strong>Monto pendiente:</strong> ${amountPending.toFixed(2)} MXN</p>
+                    <p><strong>Fecha de vencimiento:</strong> ${installment.due_date}</p>
+                    <br>
+                    <a href="${appUrl}/traveler/bookings"
+                       style="background: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
+                      Realizar pago
+                    </a>
+                  </div>
+                `,
+              }),
+            });
+          } catch (e) {
+            console.error("Error sending payment plan reminder email:", e);
+          }
+        })()
       );
     }
 

@@ -1610,6 +1610,17 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No hay sesión activa');
 
+      const { data: existingRefund } = await supabase
+        .from('payment_refunds')
+        .select('id')
+        .eq('payment_transaction_id', txId)
+        .eq('status', 'succeeded')
+        .maybeSingle();
+
+      if (existingRefund) {
+        throw new Error('Ya existe un reembolso registrado para este pago');
+      }
+
       const { error: insertError } = await supabase
         .from('payment_refunds')
         .insert({

@@ -301,6 +301,34 @@ Deno.serve(async (req: Request) => {
 });
 
 async function confirmPayPalRefund(supabase: any, refundRecord: any, processorRefundId: string, event: any) {
+  // Idempotency check: if already succeeded, skip to prevent duplicate accounting entries
+  if (refundRecord.status === "succeeded") {
+    console.log(`PayPal refund ${processorRefundId} already confirmed, skipping duplicate webhook`);
+    return;
+  }
+
+  // Also check if an accounting entry already exists for this refund (covers edge cases)
+  const { data: existingEntry } = await supabase
+    .from("accounting_entries")
+    .select("id")
+    .eq("source_type", "payment_refund")
+    .eq("source_id", refundRecord.id)
+    .maybeSingle();
+
+  if (existingEntry) {
+    console.log(`Accounting entry already exists for PayPal refund ${refundRecord.id}, marking as succeeded and skipping duplicate`);
+    await supabase
+      .from("payment_refunds")
+      .update({
+        status: "succeeded",
+        confirmed_at: new Date().toISOString(),
+        webhook_last_event: event.event_type,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", refundRecord.id);
+    return;
+  }
+
   await supabase
     .from("payment_refunds")
     .update({

@@ -49,7 +49,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: emailSettings } = await supabase
       .from("email_settings")
-      .select("smtp_api_key, from_email, from_name, logo_url")
+      .select("smtp_api_key, contact_email")
       .maybeSingle();
 
     if (!emailSettings?.smtp_api_key) {
@@ -120,10 +120,8 @@ Deno.serve(async (req: Request) => {
     const folioDisplay = cfdi.folio ? `${cfdi.serie || ""}${cfdi.folio}` : cfdi.id.slice(0, 8).toUpperCase();
     const totalFormatted = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(Number(cfdi.total) || 0);
 
-    const logoUrl = emailSettings.logo_url || "";
-    const logoHtml = logoUrl
-      ? `<img src="${logoUrl}" alt="ToursRed" style="height:40px;margin-bottom:16px;" />`
-      : `<span style="font-size:20px;font-weight:700;color:#0e7490;">ToursRed</span>`;
+    const senderEmail = emailSettings.contact_email || "noreply@toursred.com";
+    const logoHtml = `<span style="font-size:20px;font-weight:700;color:#0e7490;">ToursRed</span>`;
 
     const xmlLink = cfdi.xml_url
       ? `<a href="${cfdi.xml_url}" style="display:inline-block;background:#0e7490;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;margin:4px;">Descargar XML</a>`
@@ -214,19 +212,16 @@ Deno.serve(async (req: Request) => {
 </html>`;
 
     const emailPayload = {
-      sender: {
-        name: emailSettings.from_name || "ToursRed",
-        email: emailSettings.from_email || "noreply@toursred.com",
-      },
-      to: [{ email: recipientEmail, name: recipientName || recipientEmail }],
+      api_key: emailSettings.smtp_api_key,
+      to: [recipientEmail],
+      sender: senderEmail,
       subject: `Tu factura electronica ToursRed - ${invoiceTypeLabel} (${folioDisplay})`,
-      htmlContent: emailHtml,
+      html_body: emailHtml,
     };
 
-    const sendRes = await fetch("https://api.brevo.com/v3/smtp/email", {
+    const sendRes = await fetch("https://api.smtp2go.com/v3/email/send", {
       method: "POST",
       headers: {
-        "api-key": emailSettings.smtp_api_key,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(emailPayload),
@@ -234,7 +229,7 @@ Deno.serve(async (req: Request) => {
 
     if (!sendRes.ok) {
       const errText = await sendRes.text();
-      console.error("Brevo send error:", errText);
+      console.error("smtp2go send error:", errText);
       return new Response(
         JSON.stringify({ success: false, message: "Email send failed", detail: errText }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

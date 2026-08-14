@@ -1448,9 +1448,6 @@ Deno.serve(async (req) => {
           console.error(`Error creating transaction record: ${transactionError.message}`);
         }
 
-        // FIX 2026-07-06: se reemplazó .insert().on_conflict().merge() (sintaxis inválida en
-        // supabase-js v2 — causaba TypeError no capturado → 500 → Stripe reintentaba el webhook
-        // indefinidamente) por .upsert() con onConflict, que es la API correcta en v2.
         const { error: orderError } = await supabase
           .from('stripe_orders')
           .upsert({
@@ -1460,8 +1457,8 @@ Deno.serve(async (req) => {
             amount_subtotal: session.amount_subtotal / 100,
             amount_total: session.amount_total / 100,
             currency: session.currency,
-            payment_status: 'succeeded',
-            status: 'completed'
+            payment_status: paymentStatus === 'unpaid' ? 'unpaid' : 'succeeded',
+            status: paymentStatus === 'unpaid' ? 'pending' : 'completed'
           }, { onConflict: 'checkout_session_id' });
 
         if (orderError) {
@@ -2379,6 +2376,51 @@ Deno.serve(async (req) => {
           console.error(`Error cancelling failed booking: ${bookingError.message}`);
         } else {
           console.log(`Successfully cancelled failed booking ${bookingId}`);
+        }
+
+        // Update stripe_orders to reflect the failed payment
+        if (paymentIntent.id) {
+          await supabase
+            .from('stripe_orders')
+            .update({
+              payment_status: 'failed',
+              status: 'failed',
+            })
+            .eq('payment_intent_id', paymentIntent.id);
+          console.log(`Updated stripe_orders for failed payment_intent ${paymentIntent.id}`);
+        }
+
+        break;
+      }
+
+      case 'oxxo_payment.expired': {
+        const oxxoPayment = event.data.object;
+        const paymentIntentId = oxxoPayment.payment_intent;
+
+        console.log(`OXXO payment expired for payment_intent: ${paymentIntentId}`);
+
+        if (paymentIntentId) {
+          await supabase
+            .from('stripe_orders')
+            .update({
+              payment_status: 'expired',
+              status: 'expired',
+            })
+            .eq('payment_intent_id', paymentIntentId);
+          console.log(`Updated stripe_orders for expired OXXO payment ${paymentIntentId}`);
+        }
+
+        const bookingId = oxxoPayment.metadata?.booking_id;
+        if (bookingId) {
+          await supabase
+            .from('bookings')
+            .update({
+              status: 'cancelled',
+              payment_status: 'failed',
+            })
+            .eq('id', bookingId)
+            .eq('payment_status', 'processing');
+          console.log(`Marked booking ${bookingId} as cancelled due to expired OXXO payment`);
         }
 
         break;

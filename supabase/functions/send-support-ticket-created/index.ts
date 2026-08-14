@@ -26,6 +26,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const escapeHtml = (str: string): string =>
+      String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+    const safeNombre = escapeHtml(solicitante_nombre);
+    const safeDescripcion = escapeHtml(descripcion);
+    const safeCategoria = escapeHtml(categoria);
+
     const { data: emailSettings, error: settingsError } = await supabase
       .from("email_settings")
       .select("*")
@@ -69,7 +76,7 @@ Deno.serve(async (req: Request) => {
           <tr>
             <td style="padding:40px;">
               <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Ticket Registrado</p>
-              <p style="margin:0 0 24px;font-size:15px;color:#6b7280;">Hola ${solicitante_nombre}, recibimos tu solicitud de soporte.</p>
+              <p style="margin:0 0 24px;font-size:15px;color:#6b7280;">Hola ${safeNombre}, recibimos tu solicitud de soporte.</p>
 
               <div style="background-color:#eff6ff;border-radius:10px;padding:24px;margin-bottom:24px;text-align:center;">
                 <p style="margin:0 0 6px;font-size:13px;color:#3b82f6;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Tu folio de seguimiento</p>
@@ -85,7 +92,7 @@ Deno.serve(async (req: Request) => {
                     <table width="100%" cellpadding="0" cellspacing="0">
                       <tr>
                         <td style="font-size:13px;color:#6b7280;padding-bottom:8px;width:40%;">Categoria:</td>
-                        <td style="font-size:13px;color:#111827;font-weight:500;padding-bottom:8px;">${categoria ?? "Soporte"}</td>
+                        <td style="font-size:13px;color:#111827;font-weight:500;padding-bottom:8px;">${safeCategoria ?? "Soporte"}</td>
                       </tr>
                       <tr>
                         <td style="font-size:13px;color:#6b7280;padding-bottom:8px;">Tiempo de respuesta:</td>
@@ -93,7 +100,7 @@ Deno.serve(async (req: Request) => {
                       </tr>
                       <tr>
                         <td style="font-size:13px;color:#6b7280;vertical-align:top;padding-top:4px;">Descripcion:</td>
-                        <td style="font-size:13px;color:#374151;padding-top:4px;">${descripcion}</td>
+                        <td style="font-size:13px;color:#374151;padding-top:4px;">${safeDescripcion}</td>
                       </tr>
                     </table>
                   </td>

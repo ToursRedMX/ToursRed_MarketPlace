@@ -27,45 +27,50 @@ Deno.serve(async (req)=>{
     if (userDataError || !userData || userData.role !== 'admin' && userData.role !== 'super_admin') {
       throw new Error("Unauthorized: Admin access required");
     }
-    const { agency_id, commission_record_ids, payment_method, bank_reference, notes } = await req.json();
-    if (!agency_id || !commission_record_ids || commission_record_ids.length === 0) {
-      throw new Error("Missing required fields: agency_id and commission_record_ids");
+
+    const body = await req.json();
+    const agency_id = body.agency_id;
+    const commission_ids = body.commission_ids || body.commission_record_ids || [];
+    const penalty_ids = body.penalty_ids || [];
+    const payment_method = body.payment_method || 'bank_transfer';
+    const notes = body.notes || null;
+    const receipt_url = body.receipt_url || null;
+    const receipt_filename = body.receipt_filename || null;
+    const bill_number = body.bill_number || null;
+    const total_amount = body.total_amount;
+    const net_amount = body.net_amount || total_amount;
+    const platform_commission_amount = body.platform_commission_amount || 0;
+    const bank_reference = body.bank_reference || null;
+
+    if (!agency_id || (commission_ids.length === 0 && penalty_ids.length === 0)) {
+      throw new Error("Missing required fields: agency_id and commission_ids or penalty_ids");
     }
-    const { data: commissions, error: commissionsError } = await supabase.from("commission_records").select("*").in("id", commission_record_ids).eq("agency_id", agency_id).is("payout_id", null);
-    if (commissionsError) {
-      throw new Error(`Error fetching commissions: ${commissionsError.message}`);
+
+    // Use RPC for atomic transaction: insert payout + update commissions + update penalties
+    const { data: payoutResult, error: rpcError } = await supabase.rpc('process_agency_payout_atomic', {
+      p_agency_id: agency_id,
+      p_commission_ids: commission_ids,
+      p_penalty_ids: penalty_ids,
+      p_total_amount: total_amount,
+      p_net_amount: net_amount,
+      p_platform_commission_amount: platform_commission_amount,
+      p_payment_method: payment_method,
+      p_notes: notes,
+      p_receipt_url: receipt_url,
+      p_receipt_filename: receipt_filename,
+      p_bill_number: bill_number,
+      p_bank_reference: bank_reference,
+      p_processed_by: user.id
+    });
+
+    if (rpcError) {
+      throw new Error(`Error in atomic payout: ${rpcError.message}`);
     }
-    if (!commissions || commissions.length === 0) {
-      throw new Error("No valid commission records found or already paid");
-    }
-    const totalAmount = commissions.reduce((sum, c)=>sum + Number(c.agency_net_amount || 0), 0);
-    const { data: payout, error: payoutError } = await supabase.from("agency_payouts").insert([
-      {
-        agency_id,
-        payout_date: new Date().toISOString().split('T')[0],
-        amount: totalAmount,
-        payment_method: payment_method || 'spei_transfer',
-        bank_reference: bank_reference || null,
-        status: 'completed',
-        notes: notes || null,
-        processed_by_user_id: user.id,
-        commission_records_count: commissions.length
-      }
-    ]).select().single();
-    if (payoutError) {
-      throw new Error(`Error creating payout: ${payoutError.message}`);
-    }
-    const { error: updateError } = await supabase.from("commission_records").update({
-      payout_id: payout.id,
-      status: 'paid_out',
-      payout_scheduled_date: new Date().toISOString().split('T')[0],
-      reconciliation_status: 'reconciled',
-      processed_at: new Date().toISOString()
-    }).in("id", commission_record_ids);
-    if (updateError) {
-      console.error('Error updating commissions:', updateError);
-      throw new Error(`Error linking commissions to payout: ${updateError.message}`);
-    }
+
+    const payoutId = payoutResult?.payout_id;
+    const commissionCount = payoutResult?.commission_count || commission_ids.length;
+
+    // Send notification + email outside the transaction
     const { data: agency, error: agencyError } = await supabase.from("agencies").select("name, contact_email, user_id").eq("id", agency_id).single();
     if (!agencyError && agency) {
       await supabase.from("notifications").insert([
@@ -73,10 +78,10 @@ Deno.serve(async (req)=>{
           user_id: agency.user_id,
           type: 'system_announcement',
           title: 'Pago Procesado',
-          message: `Se ha procesado un pago de $${totalAmount.toFixed(2)} MXN. Referencia: ${bank_reference || 'N/A'}`,
+          message: `Se ha procesado un pago de $${Number(total_amount).toFixed(2)} MXN. Referencia: ${bank_reference || 'N/A'}`,
           data: {
-            payout_id: payout.id,
-            amount: totalAmount,
+            payout_id: payoutId,
+            amount: total_amount,
             reference: bank_reference
           },
           is_read: false
@@ -90,12 +95,12 @@ Deno.serve(async (req)=>{
             'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
           },
           body: JSON.stringify({
-            payout_id: payout.id,
+            payout_id: payoutId,
             agency_email: agency.contact_email,
             agency_name: agency.name,
-            amount: totalAmount,
+            amount: total_amount,
             reference: bank_reference,
-            commission_count: commissions.length
+            commission_count: commissionCount
           })
         });
       } catch (emailError) {
@@ -104,9 +109,9 @@ Deno.serve(async (req)=>{
     }
     return new Response(JSON.stringify({
       success: true,
-      payout_id: payout.id,
-      amount: totalAmount,
-      commission_count: commissions.length,
+      payout_id: payoutId,
+      amount: total_amount,
+      commission_count: commissionCount,
       message: 'Payout processed successfully'
     }), {
       headers: {

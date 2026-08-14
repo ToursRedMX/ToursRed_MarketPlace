@@ -1,4 +1,5 @@
-
+-- Fix: get_blocked_ips_count had a broken first query that could throw when multiple IPs are blocked.
+-- Recreate the function with only the correct COUNT(*) subquery version.
 CREATE OR REPLACE FUNCTION get_blocked_ips_count()
 RETURNS bigint
 LANGUAGE plpgsql
