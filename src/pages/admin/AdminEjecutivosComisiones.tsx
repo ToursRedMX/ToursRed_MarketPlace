@@ -144,6 +144,15 @@ export default function AdminEjecutivosComisiones() {
           })
           .eq('id', commission.id);
         if (error) throw error;
+
+        try {
+          await supabase.rpc('create_accounting_entry_for_executive_commission', {
+            p_commission_id: commission.id,
+          });
+        } catch (acctErr) {
+          console.error('Error generating accounting entry for executive commission:', acctErr);
+        }
+
         setMessage({ type: 'success', text: 'Pago registrado exitosamente.' });
       }
 
