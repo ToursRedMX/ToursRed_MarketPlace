@@ -162,8 +162,14 @@ Deno.serve(async (req: Request) => {
     // Load PAC settings
     const { data: settings } = await supabase
       .from("platform_settings")
-      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_booking, pac_issuer_postal_code")
+      .select("pac_provider, pac_organization_id, cfdi_serie_booking, pac_issuer_postal_code")
       .maybeSingle();
+
+    const { data: secrets } = await supabase
+      .from("platform_secrets")
+      .select("pac_api_key_encrypted")
+      .maybeSingle();
+    const pacApiKey = secrets?.pac_api_key_encrypted || null;
 
     if (!settings || settings.pac_provider === "none") {
       return new Response(JSON.stringify({ error: "PAC no configurado" }), {
@@ -278,7 +284,7 @@ Deno.serve(async (req: Request) => {
       if (settings.pac_provider !== "facturapi") {
         throw new Error(`PAC ${settings.pac_provider} no soportado. Usa facturapi.`);
       }
-      cfdiResult = await facturapiStamp(settings.pac_api_key_encrypted!, settings.pac_organization_id || "", cfdiRequest);
+      cfdiResult = await facturapiStamp(pacApiKey!, settings.pac_organization_id || "", cfdiRequest);
     } catch (stampError) {
       await supabase.from("cfdi_invoices").update({
         status: "error",

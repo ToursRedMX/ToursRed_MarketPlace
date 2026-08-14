@@ -129,7 +129,11 @@ Deno.serve(async (req: Request) => {
     // Platform settings
     const { data: platformSettings } = await supabase
       .from("platform_settings")
-      .select("payment_plan_service_charge_pct, mercadopago_access_token, paypal_client_id, paypal_client_secret, paypal_sandbox, pac_provider, pac_api_key_encrypted")
+      .select("payment_plan_service_charge_pct, paypal_client_id, paypal_sandbox, pac_provider")
+      .maybeSingle();
+    const { data: platformSecrets } = await supabase
+      .from("platform_secrets")
+      .select("mercadopago_access_token, paypal_client_secret, pac_api_key_encrypted")
       .maybeSingle();
 
     const serviceChargePct = Number(platformSettings?.payment_plan_service_charge_pct ?? 5);
@@ -254,7 +258,7 @@ Deno.serve(async (req: Request) => {
       }
 
       // Trigger CFDI generation for each newly-paid installment
-      if (platformSettings?.pac_provider && platformSettings.pac_provider !== "none" && platformSettings.pac_api_key_encrypted) {
+      if (platformSettings?.pac_provider && platformSettings.pac_provider !== "none" && platformSecrets?.pac_api_key_encrypted) {
         for (const alloc of returnedAllocations) {
           const inst = installments!.find((i) => i.id === alloc.installment_id);
           if (!inst) continue;
@@ -423,7 +427,7 @@ Deno.serve(async (req: Request) => {
 
     // 4. MercadoPago
     if (payment_method === "mercadopago") {
-      const mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || platformSettings?.mercadopago_access_token;
+      const mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || platformSecrets?.mercadopago_access_token;
       if (!mpAccessToken) {
         return new Response(JSON.stringify({ error: "MercadoPago no configurado" }), {
           status: 500,
@@ -552,7 +556,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const paypalClientId = platformSettings?.paypal_client_id;
-      const paypalClientSecret = platformSettings?.paypal_client_secret;
+      const paypalClientSecret = platformSecrets?.paypal_client_secret;
       const isSandbox = platformSettings?.paypal_sandbox ?? true;
       if (!paypalClientId || !paypalClientSecret) {
         return new Response(JSON.stringify({ error: "PayPal no configurado" }), {

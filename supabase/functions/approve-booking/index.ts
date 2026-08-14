@@ -303,10 +303,15 @@ Deno.serve(async (req: Request) => {
       // Trigger CFDI si el PAC está configurado (pago con compensación: puntos y/o wallet)
       const { data: cfdiSettings } = await supabase
         .from("platform_settings")
-        .select("pac_provider, pac_api_key_encrypted")
+        .select("pac_provider")
         .maybeSingle();
 
-      if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none" && cfdiSettings.pac_api_key_encrypted) {
+      const { data: secrets } = await supabase
+        .from("platform_secrets")
+        .select("pac_api_key_encrypted")
+        .maybeSingle();
+
+      if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none" && secrets?.pac_api_key_encrypted) {
         EdgeRuntime.waitUntil(
           fetch(`${supabaseUrl}/functions/v1/generate-booking-cfdi`, {
             method: "POST",

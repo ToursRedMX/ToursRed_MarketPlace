@@ -137,7 +137,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: platform } = await supabase
       .from("platform_settings")
-      .select("pac_issuer_rfc, pac_issuer_razon_social, pac_issuer_regimen_fiscal, pac_issuer_zip, cfdi_serie_commission")
+      .select("pac_issuer_rfc, pac_issuer_razon_social, pac_issuer_regimen_fiscal, pac_issuer_postal_code, cfdi_serie_commission")
       .maybeSingle();
 
     if (!platform?.pac_issuer_rfc || !platform?.pac_issuer_razon_social) {
@@ -171,7 +171,7 @@ Deno.serve(async (req: Request) => {
         legal_name: platform.pac_issuer_razon_social,
         tax_id: platform.pac_issuer_rfc,
         tax_system: platform.pac_issuer_regimen_fiscal || "601",
-        address: { zip: (platform as any).pac_issuer_zip || "11560" },
+        address: { zip: platform.pac_issuer_postal_code || "11560" },
       },
       items: [{
         product: {

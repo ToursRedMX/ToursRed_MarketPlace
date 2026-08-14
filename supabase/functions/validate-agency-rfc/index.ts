@@ -55,11 +55,16 @@ Deno.serve(async (req: Request) => {
     // Load PAC credentials from platform_settings
     const { data: settings } = await supabase
       .from("platform_settings")
-      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, pac_sandbox_mode")
+      .select("pac_provider, pac_organization_id, pac_sandbox_mode")
       .maybeSingle();
+    const { data: secrets } = await supabase
+      .from("platform_secrets")
+      .select("pac_api_key_encrypted")
+      .maybeSingle();
+    const pacApiKey = secrets?.pac_api_key_encrypted || null;
 
-    if (!settings?.pac_api_key_encrypted) {
-      return new Response(JSON.stringify({ error: "PAC no configurado en platform_settings" }), {
+    if (!pacApiKey) {
+      return new Response(JSON.stringify({ error: "PAC no configurado en platform_secrets" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -83,7 +88,7 @@ Deno.serve(async (req: Request) => {
     const facturapiRes = await fetch(`${baseUrl}/customers`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${settings.pac_api_key_encrypted}`,
+        "Authorization": `Bearer ${pacApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(customerBody),

@@ -188,10 +188,16 @@ Deno.serve(async (req: Request) => {
 
     const { data: settings } = await supabase
       .from("platform_settings")
-      .select("pac_provider, pac_api_key_encrypted, pac_organization_id")
+      .select("pac_provider, pac_organization_id")
       .maybeSingle();
 
-    if (!settings?.pac_api_key_encrypted) {
+    const { data: secrets } = await supabase
+      .from("platform_secrets")
+      .select("pac_api_key_encrypted")
+      .maybeSingle();
+    const pacApiKey = secrets?.pac_api_key_encrypted || null;
+
+    if (!pacApiKey) {
       return new Response(
         JSON.stringify({ error: "PAC provider not configured" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -229,7 +235,7 @@ Deno.serve(async (req: Request) => {
     try {
       cancelResult = await cancelWithProvider(
         cfdi.pac_provider,
-        settings.pac_api_key_encrypted!,
+        pacApiKey!,
         settings.pac_organization_id || "",
         cfdi.pac_invoice_id,
         motivo,

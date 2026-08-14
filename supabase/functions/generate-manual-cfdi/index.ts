@@ -266,10 +266,16 @@ Deno.serve(async (req: Request) => {
     // Cargar configuracion del PAC
     const { data: settings } = await supabase
       .from("platform_settings")
-      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_booking, pac_sandbox_mode")
+      .select("pac_provider, pac_organization_id, cfdi_serie_booking, pac_sandbox_mode")
       .maybeSingle();
 
-    if (!settings?.pac_provider || settings.pac_provider === "none" || !settings.pac_api_key_encrypted) {
+    const { data: secrets } = await supabase
+      .from("platform_secrets")
+      .select("pac_api_key_encrypted")
+      .maybeSingle();
+    const pacApiKey = secrets?.pac_api_key_encrypted || null;
+
+    if (!settings?.pac_provider || settings.pac_provider === "none" || !pacApiKey) {
       return new Response(JSON.stringify({ error: "PAC provider no configurado" }), {
         status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -344,7 +350,7 @@ Deno.serve(async (req: Request) => {
         throw new Error("Solo FacturAPI está soportado para CFDI manual en esta versión");
       }
       cfdiResult = await facturapiStamp(
-        settings.pac_api_key_encrypted!,
+        pacApiKey!,
         settings.pac_organization_id ?? "",
         cfdiRequest,
         settings.pac_sandbox_mode ?? false

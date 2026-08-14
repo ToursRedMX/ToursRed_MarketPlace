@@ -302,9 +302,13 @@ Deno.serve(async (req) => {
             // Trigger CFDI async
             const { data: cfdiSettings } = await supabase
               .from('platform_settings')
-              .select('pac_provider, pac_api_key_encrypted')
+              .select('pac_provider')
               .maybeSingle();
-            if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== 'none' && cfdiSettings.pac_api_key_encrypted) {
+            const { data: secrets } = await supabase
+              .from('platform_secrets')
+              .select('pac_api_key_encrypted')
+              .maybeSingle();
+            if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== 'none' && secrets?.pac_api_key_encrypted) {
               EdgeRuntime.waitUntil(
                 fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-supplement-cfdi`, {
                   method: 'POST',
@@ -337,8 +341,12 @@ Deno.serve(async (req) => {
               .from('platform_settings')
               .select(`
                 service_charge_percentage, travel_insurance_price_per_day_per_traveler,
-                pac_provider, pac_api_key_encrypted
+                pac_provider
               `)
+              .maybeSingle();
+            const { data: secrets } = await supabase
+              .from('platform_secrets')
+              .select('pac_api_key_encrypted')
               .maybeSingle();
 
             const serviceChargePct = platformSettings?.service_charge_percentage ?? 5;
@@ -761,10 +769,14 @@ Deno.serve(async (req) => {
             // Trigger CFDI generation for each newly-paid installment
             const { data: platformSettings } = await supabase
               .from('platform_settings')
-              .select('pac_provider, pac_api_key_encrypted')
+              .select('pac_provider')
+              .maybeSingle();
+            const { data: secrets } = await supabase
+              .from('platform_secrets')
+              .select('pac_api_key_encrypted')
               .maybeSingle();
 
-            if (platformSettings?.pac_provider && platformSettings.pac_provider !== 'none' && platformSettings.pac_api_key_encrypted) {
+            if (platformSettings?.pac_provider && platformSettings.pac_provider !== 'none' && secrets?.pac_api_key_encrypted) {
               for (const alloc of allocations) {
                 const inst = installments.find((i) => i.id === alloc.installment_id)!;
                 const instAfterPaid = parseFloat((Number(inst.amount_paid) + alloc.amount_allocated).toFixed(2));

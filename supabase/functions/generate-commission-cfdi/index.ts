@@ -206,11 +206,17 @@ Deno.serve(async (req: Request) => {
     const { data: settings } = await supabase
       .from("platform_settings")
       .select(
-        "pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_commission, pac_sandbox_mode, pac_issuer_rfc, pac_issuer_razon_social, pac_issuer_regimen_fiscal"
+        "pac_provider, pac_organization_id, cfdi_serie_commission, pac_sandbox_mode, pac_issuer_rfc, pac_issuer_razon_social, pac_issuer_regimen_fiscal"
       )
       .maybeSingle();
 
-    if (!settings || settings.pac_provider === "none" || !settings.pac_api_key_encrypted) {
+    const { data: secrets } = await supabase
+      .from("platform_secrets")
+      .select("pac_api_key_encrypted")
+      .maybeSingle();
+    const pacApiKey = secrets?.pac_api_key_encrypted || null;
+
+    if (!settings || settings.pac_provider === "none" || !pacApiKey) {
       return new Response(
         JSON.stringify({ error: "PAC provider not configured" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -325,7 +331,7 @@ Deno.serve(async (req: Request) => {
     try {
       cfdiResult = await stampCfdi(
         settings.pac_provider,
-        settings.pac_api_key_encrypted!,
+        pacApiKey!,
         settings.pac_organization_id || "",
         stampBody,
         supabase,

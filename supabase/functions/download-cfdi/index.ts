@@ -98,10 +98,16 @@ Deno.serve(async (req: Request) => {
 
     const { data: settings } = await supabaseAdmin
       .from("platform_settings")
-      .select("pac_api_key_encrypted, pac_organization_id")
+      .select("pac_organization_id")
       .maybeSingle();
 
-    if (!settings?.pac_api_key_encrypted) {
+    const { data: secrets } = await supabaseAdmin
+      .from("platform_secrets")
+      .select("pac_api_key_encrypted")
+      .maybeSingle();
+    const pacApiKey = secrets?.pac_api_key_encrypted || null;
+
+    if (!pacApiKey) {
       return new Response(JSON.stringify({ error: "Proveedor PAC no configurado" }), {
         status: 422,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -111,7 +117,7 @@ Deno.serve(async (req: Request) => {
     const facturApiUrl = `https://www.facturapi.io/v2/invoices/${cfdi.pac_invoice_id}/${fileType}`;
 
     const facturHeaders: Record<string, string> = {
-      Authorization: `Bearer ${settings.pac_api_key_encrypted}`,
+      Authorization: `Bearer ${pacApiKey}`,
     };
     if (settings.pac_organization_id) {
       facturHeaders["X-Organization-Id"] = settings.pac_organization_id;
