@@ -291,7 +291,7 @@ Deno.serve(async (req: Request) => {
 
               const cfdiSettings = await supabase
                 .from("platform_settings")
-                .select("pac_provider, pac_api_key_encrypted")
+                .select("pac_provider")
                 .maybeSingle();
 
               if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
@@ -378,7 +378,7 @@ Deno.serve(async (req: Request) => {
 
           const cfdiSettings = await supabase
             .from("platform_settings")
-            .select("pac_provider, pac_api_key_encrypted")
+            .select("pac_provider")
             .maybeSingle();
 
           if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
@@ -471,7 +471,7 @@ Deno.serve(async (req: Request) => {
 
           await awardExtraPointsOpenpay(supabase, chargeReferenceId, extraSubtotal, chargeReferenceId, "insurance_payment", "Puntos por seguro (Openpay)");
 
-          const cfdiSettingsIns = await supabase.from("platform_settings").select("pac_provider, pac_api_key_encrypted").maybeSingle();
+          const cfdiSettingsIns = await supabase.from("platform_settings").select("pac_provider").maybeSingle();
           if (cfdiSettingsIns?.pac_provider && cfdiSettingsIns.pac_provider !== "none") {
             EdgeRuntime.waitUntil(
               fetch(`${supabaseUrl}/functions/v1/generate-post-booking-insurance-cfdi`, {
@@ -503,7 +503,7 @@ Deno.serve(async (req: Request) => {
             await awardExtraPointsOpenpay(supabase, bosRowOp.booking_id, extraSubtotalOs, chargeReferenceId, "optional_service_payment", "Puntos por extra: servicio opcional (Openpay)");
           }
 
-          const cfdiSettingsOs = await supabase.from("platform_settings").select("pac_provider, pac_api_key_encrypted").maybeSingle();
+          const cfdiSettingsOs = await supabase.from("platform_settings").select("pac_provider").maybeSingle();
           if (cfdiSettingsOs?.pac_provider && cfdiSettingsOs.pac_provider !== "none") {
             EdgeRuntime.waitUntil(
               fetch(`${supabaseUrl}/functions/v1/generate-optional-service-cfdi`, {

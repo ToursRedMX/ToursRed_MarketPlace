@@ -101,9 +101,13 @@ Deno.serve(async (req: Request) => {
       .select(`
         service_charge_percentage, agency_commission_percentage, optional_service_commission_percentage,
         travel_insurance_price_per_day_per_traveler,
-        mercadopago_access_token, paypal_client_id, paypal_client_secret, paypal_sandbox,
-        pac_provider, pac_api_key_encrypted
+        paypal_client_id, paypal_sandbox,
+        pac_provider
       `)
+      .maybeSingle();
+    const { data: platformSecrets } = await supabase
+      .from("platform_secrets")
+      .select("mercadopago_access_token, paypal_client_secret, pac_api_key_encrypted")
       .maybeSingle();
 
     const serviceChargePct = platformSettings?.service_charge_percentage ?? 5;
@@ -555,7 +559,7 @@ Deno.serve(async (req: Request) => {
 
     // 4. MercadoPago
     if (payment_method === "mercadopago") {
-      const mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || platformSettings?.mercadopago_access_token;
+      const mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || platformSecrets?.mercadopago_access_token;
       if (!mpAccessToken) {
         if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
         return new Response(JSON.stringify({ error: "MercadoPago no configurado" }), {
@@ -693,7 +697,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const paypalClientId = platformSettings?.paypal_client_id;
-      const paypalClientSecret = platformSettings?.paypal_client_secret;
+      const paypalClientSecret = platformSecrets?.paypal_client_secret;
       const isSandbox = platformSettings?.paypal_sandbox ?? true;
       if (!paypalClientId || !paypalClientSecret) {
         if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
