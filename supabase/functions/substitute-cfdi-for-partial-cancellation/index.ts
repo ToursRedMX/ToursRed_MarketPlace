@@ -137,13 +137,13 @@ async function facturapiStamp(
   };
 }
 
-function resolveReceptor(traveler: any): {
+function resolveReceptor(traveler: any, fallbackCP: string): {
   rfc: string; nombre: string; regimen: string; usoCfdi: string; cp: string;
   numRegIdTrib?: string; residenciaFiscal?: string;
 } {
   const fullName = [traveler?.first_name, traveler?.last_name].filter(Boolean).join(" ").trim();
   const isForeign = traveler?.is_foreign_traveler === true;
-  const issuerPostalCode = "06600";
+  const issuerPostalCode = fallbackCP;
 
   if (traveler?.rfc && traveler.rfc.length >= 12) {
     return {
@@ -258,7 +258,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, uuid_fiscal, pac_invoice_id, invoice_type, serie, subtotal, iva_amount, total,
         receptor_rfc, receptor_razon_social, receptor_regimen_fiscal, receptor_uso_cfdi,
-        receptor_codigo_postal, booking_payment_plan_transaction_id, tipo_relacion,
+        receptor_codigo_postal, booking_payment_plan_transaction_id, tipo_relacion, tour_amount,
         booking_payment_plan_transactions ( amount )
       `)
       .eq("booking_id", booking_id)
@@ -275,7 +275,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: settings } = await supabase
       .from("platform_settings")
-      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_booking, cfdi_serie_installment")
+      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_booking, cfdi_serie_installment, pac_issuer_postal_code")
       .maybeSingle();
 
     if (!settings || !settings.pac_api_key_encrypted) {
@@ -291,7 +291,13 @@ Deno.serve(async (req: Request) => {
       .eq("id", booking.user_id)
       .maybeSingle();
 
-    const rec = resolveReceptor(traveler);
+    const rec = resolveReceptor(traveler, settings.pac_issuer_postal_code || "");
+    if (!settings.pac_issuer_postal_code) {
+      return new Response(
+        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     const tourName = (booking as any).tours?.name || "";
     const bookingCode = booking.booking_code || booking_id;
 
@@ -376,7 +382,7 @@ Deno.serve(async (req: Request) => {
       // that CFDI specifically represented.
       const originalTourAmount = isInstallment
         ? (Number((originalCfdi as any).booking_payment_plan_transactions?.amount) || 0)
-        : depositAmount;
+        : (originalCfdi.tour_amount != null ? Number(originalCfdi.tour_amount) : depositAmount);
       const originalSeguroAmount = (isDeposit && insuranceIncluded) ? insuranceCost : 0;
       const nonTourNonSeguro = Math.max(0,
         Number(originalCfdi.total) - originalTourAmount - originalSeguroAmount
@@ -444,6 +450,7 @@ Deno.serve(async (req: Request) => {
           total,
           currency: "MXN",
           status: "pending",
+          tour_amount: newTourAmount,
         })
         .select()
         .single();

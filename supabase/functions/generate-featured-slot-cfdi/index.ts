@@ -162,7 +162,7 @@ Deno.serve(async (req: Request) => {
     // Cargar configuracion de plataforma
     const { data: settings } = await supabase
       .from("platform_settings")
-      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_booking, pac_sandbox_mode, pac_issuer_rfc, pac_issuer_zip")
+      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_booking, pac_sandbox_mode, pac_issuer_rfc, pac_issuer_postal_code")
       .maybeSingle();
 
     if (!settings || settings.pac_provider === "none" || !settings.pac_api_key_encrypted) {
@@ -177,7 +177,13 @@ Deno.serve(async (req: Request) => {
     const agencyUser = (agency?.users as Record<string, unknown>) || {};
 
     // Determinar datos fiscales del receptor (agencia)
-    const fallbackCP = (settings as any)?.pac_issuer_zip || "06600";
+    const fallbackCP = settings.pac_issuer_postal_code || "";
+    if (!fallbackCP) {
+      return new Response(
+        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     let receptorRfc: string;
     let receptorNombre: string;
     let receptorRegimen: string;

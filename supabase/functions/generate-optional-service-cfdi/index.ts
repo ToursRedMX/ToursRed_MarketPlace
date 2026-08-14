@@ -165,7 +165,7 @@ Deno.serve(async (req: Request) => {
     // Load PAC settings
     const { data: settings } = await supabase
       .from("platform_settings")
-      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_booking, pac_issuer_rfc")
+      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_booking, pac_issuer_rfc, pac_issuer_postal_code")
       .maybeSingle();
 
     if (!settings || settings.pac_provider === "none") {
@@ -183,7 +183,13 @@ Deno.serve(async (req: Request) => {
     const iva = Math.round(exactTotal * 16 / 116 * 100) / 100;
     const subtotal_db = Math.round((exactTotal - iva) * 100) / 100;
 
-    const issuerPostalCode = agencyData?.postal_code || "06600";
+    const issuerPostalCode = settings.pac_issuer_postal_code || "";
+    if (!issuerPostalCode) {
+      return new Response(
+        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     const fullName = [traveler?.first_name, traveler?.last_name].filter(Boolean).join(" ").trim();
     const isForeign = traveler?.is_foreign_traveler === true;
 

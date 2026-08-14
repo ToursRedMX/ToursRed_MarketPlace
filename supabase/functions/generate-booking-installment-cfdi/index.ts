@@ -256,7 +256,7 @@ Deno.serve(async (req: Request) => {
     // Load platform settings
     const { data: settings } = await supabase
       .from("platform_settings")
-      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_installment, pac_sandbox_mode, pac_issuer_rfc, pac_issuer_razon_social, pac_issuer_regimen_fiscal")
+      .select("pac_provider, pac_api_key_encrypted, pac_organization_id, cfdi_serie_installment, pac_sandbox_mode, pac_issuer_rfc, pac_issuer_razon_social, pac_issuer_regimen_fiscal, pac_issuer_postal_code")
       .maybeSingle();
 
     if (!settings || settings.pac_provider === "none" || !settings.pac_api_key_encrypted) {
@@ -327,7 +327,13 @@ Deno.serve(async (req: Request) => {
     // Receptor logic (same rules as generate-booking-cfdi)
     const fullName = [traveler?.first_name, traveler?.last_name].filter(Boolean).join(" ").trim();
     const isForeign = traveler?.is_foreign_traveler === true;
-    const issuerPostalCode = agencyData?.postal_code || "06600";
+    const issuerPostalCode = settings.pac_issuer_postal_code || "";
+    if (!issuerPostalCode) {
+      return new Response(
+        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     let receptorRfc: string;
     let receptorNombre: string;
@@ -457,6 +463,7 @@ Deno.serve(async (req: Request) => {
         iva_amount: iva,
         total,
         status: "pending",
+        tour_amount: txnAmount,
       })
       .select()
       .single();

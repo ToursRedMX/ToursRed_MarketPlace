@@ -53,6 +53,7 @@ interface PlatformSettings {
   pac_issuer_rfc: string;
   pac_issuer_razon_social: string;
   pac_issuer_regimen_fiscal: string;
+  pac_issuer_postal_code: string;
   accounting_provider: string;
   accounting_sync_enabled: boolean;
   zoho_client_id: string;
@@ -144,6 +145,7 @@ const AdminSettings: React.FC = () => {
     pac_issuer_rfc: '',
     pac_issuer_razon_social: '',
     pac_issuer_regimen_fiscal: '',
+    pac_issuer_postal_code: '',
     accounting_provider: 'none',
     accounting_sync_enabled: false,
     zoho_client_id: '',
@@ -432,6 +434,7 @@ const AdminSettings: React.FC = () => {
             pac_issuer_rfc: platformSettings.pac_issuer_rfc,
             pac_issuer_razon_social: platformSettings.pac_issuer_razon_social,
             pac_issuer_regimen_fiscal: platformSettings.pac_issuer_regimen_fiscal,
+            pac_issuer_postal_code: platformSettings.pac_issuer_postal_code,
             accounting_provider: platformSettings.accounting_provider,
             accounting_sync_enabled: platformSettings.accounting_sync_enabled,
             zoho_client_id: platformSettings.zoho_client_id,
@@ -1963,8 +1966,20 @@ const AdminSettings: React.FC = () => {
                   <option value="603">603 - Personas Morales con Fines no Lucrativos</option>
                   <option value="612">612 - Personas Físicas con Actividades Empresariales</option>
                   <option value="621">621 - Incorporación Fiscal</option>
-                  <option value="625">625 - Régimen Simplificado de Confianza</option>
+                  <option value="626">626 - Régimen Simplificado de Confianza</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal Fiscal</label>
+                <input
+                  type="text"
+                  value={platformSettings.pac_issuer_postal_code}
+                  onChange={(e) => setPlatformSettings(prev => ({ ...prev, pac_issuer_postal_code: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="Código postal fiscal de ToursRed"
+                  maxLength={5}
+                />
+                <p className="text-xs text-gray-400 mt-1">Se usa como código postal del receptor en CFDIs con RFC genérico (XAXX/XEXX).</p>
               </div>
             </div>
           </div>
