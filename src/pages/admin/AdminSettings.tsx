@@ -362,8 +362,8 @@ const AdminSettings: React.FC = () => {
         setPlatformSettings(platformResult.data);
       }
 
-      if (secretsResult.data) {
-        setPlatformSecrets(secretsResult.data);
+      if (secretsResult.data && Array.isArray(secretsResult.data) && secretsResult.data.length > 0) {
+        setPlatformSecrets(secretsResult.data[0]);
       }
     } catch (error: any) {
       console.error('Error fetching settings:', error);
