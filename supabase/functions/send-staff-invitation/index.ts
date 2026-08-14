@@ -203,6 +203,12 @@ Deno.serve(async (req: Request) => {
         </ul>
       </div>
 
+      <div class="warning-box" style="background-color: #fff7ed; border: 1px solid #fed7aa; color: #c2410c; font-size: 13px;">
+        <strong>Importante - Cambio de contraseña obligatorio:</strong> Por seguridad, deberás cambiar tu contraseña de inmediato la primera vez que inicies sesión. No compartas esta contraseña con nadie ni la reenvíes por correo u otro medio.
+        <br><br>
+        Si sospechas que alguien más tiene acceso a esta contraseña, contacta a soporte inmediatamente.
+      </div>
+
       <div class="warning-box">
         <strong>Esta invitacion expira en 7 dias.</strong> Si no puedes registrarte ahora, guarda este correo para hacerlo despues. Si no solicitaste esta invitacion, puedes ignorar este mensaje.
       </div>

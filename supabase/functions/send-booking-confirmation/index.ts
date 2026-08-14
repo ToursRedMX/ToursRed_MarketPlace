@@ -1248,6 +1248,14 @@ Deno.serve(async (req: Request) => {
           .maybeSingle();
 
         if (relationship) {
+          try {
+            await supabase.rpc('check_referral_fraud_signals', {
+              p_referral_relationship_id: relationship.id,
+            });
+          } catch (fraudErr) {
+            console.error("Error checking referral fraud signals:", fraudErr);
+          }
+
           const { data: referrer } = await supabase
             .from("users")
             .select("email, first_name, last_name")

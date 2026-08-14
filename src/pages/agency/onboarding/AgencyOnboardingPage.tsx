@@ -47,7 +47,7 @@ const AgencyOnboardingPage: React.FC = () => {
       supabase
         .from('support_categories')
         .select('id, nombre')
-        .ilike('nombre', '%pelac%')
+        .eq('slug', 'apelacion-rechazo')
         .maybeSingle(),
     ]);
 
