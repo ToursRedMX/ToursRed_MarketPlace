@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Minus, Plus, Calendar, Clock, AlertCircle, ChevronRight } from 'lucide-react';
+import { Users, Minus, Plus, Calendar, Clock, AlertCircle, ChevronRight, Crown, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useBookingFlow } from '../../context/BookingFlowContext';
@@ -59,9 +59,25 @@ const BookingFlowStep1: React.FC = () => {
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   const [isValidatingAdvance, setIsValidatingAdvance] = useState(false);
   const [error, setError] = useState('');
+  const [hasActiveMembership, setHasActiveMembership] = useState(false);
+  const [checkingMembership, setCheckingMembership] = useState(true);
   useEffect(() => {
     if (tour) setTour(tour);
   }, [tour, setTour]);
+
+  useEffect(() => {
+    if (!user) {
+      setCheckingMembership(false);
+      return;
+    }
+    supabase
+      .rpc('has_active_membership')
+      .then(({ data }) => {
+        setHasActiveMembership(!!data);
+        setCheckingMembership(false);
+      })
+      .catch(() => setCheckingMembership(false));
+  }, [user]);
 
   const fetchAvailability = async (slotId: string | null) => {
     if (!tour) return;
@@ -223,6 +239,39 @@ const BookingFlowStep1: React.FC = () => {
         <h1 className="text-2xl font-bold text-gray-900 mb-1">{tour.name}</h1>
         <p className="text-sm text-gray-500 mb-6">Paso 1 de 4 — Datos del tour</p>
 
+        {isEnPreventa && !hasActiveMembership && !checkingMembership ? (
+          <div className="mb-6">
+            <div className="p-6 bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-300 rounded-2xl text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-full mb-4">
+                <Lock className="w-8 h-8 text-amber-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Preventa Exclusiva ToursRed Plus</h2>
+              <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
+                Este tour esta en periodo de preventa exclusiva para socios ToursRed Plus.
+                Adquiere tu membresía para acceder anticipadamente y disfrutar precios especiales.
+              </p>
+              {tour.preventa_precio_especial && (
+                <div className="mb-4 p-3 bg-white rounded-xl inline-block">
+                  <span className="text-xs text-gray-500">Precio especial de preventa</span>
+                  <div className="text-2xl font-bold text-amber-600">{formatCurrencyMXN(tour.preventa_precio_especial)}</div>
+                </div>
+              )}
+              <div>
+                <a
+                  href="/traveler/membership"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-amber-500 text-white font-semibold rounded-xl hover:bg-amber-600 transition-colors"
+                >
+                  <Crown className="w-5 h-5" />
+                  Adquirir Membresía ToursRed Plus
+                </a>
+              </div>
+              <p className="text-xs text-gray-400 mt-4">
+                La preventa general abre despues del periodo exclusivo.
+              </p>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Price */}
         <div className="mb-6 p-4 bg-gray-50 rounded-xl">
           <div className="text-sm text-gray-500 mb-1">Precio por persona</div>
@@ -457,9 +506,10 @@ const BookingFlowStep1: React.FC = () => {
           </div>
         )}
 
-        {isEnPreventa && (
+        {isEnPreventa && hasActiveMembership && (
           <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
-            Este tour esta en periodo de preventa exclusiva para socios ToursRed Plus.
+            <Crown className="w-4 h-4 inline mr-1" />
+            Estas disfrutando de la preventa exclusiva ToursRed Plus con precios especiales.
           </div>
         )}
 
@@ -478,6 +528,8 @@ const BookingFlowStep1: React.FC = () => {
           {isValidatingAdvance ? 'Verificando disponibilidad...' : 'Continuar al Paso 2'}
           {!isValidatingAdvance && <ChevronRight className="w-5 h-5" />}
         </button>
+        </>
+        )}
       </div>
     </div>
   );

@@ -52,6 +52,11 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ tourId, agencyId, dat
       setError('La capacidad debe ser mayor a 0.');
       return;
     }
+    const currentSlot = slots.find(s => s.id === slotId);
+    if (currentSlot && cap < (currentSlot.booked_count || 0)) {
+      setError(`No se puede reducir la capacidad a ${cap} porque ya hay ${currentSlot.booked_count} reservas confirmadas para este slot.`);
+      return;
+    }
     setIsUpdating(slotId);
     setError('');
     try {

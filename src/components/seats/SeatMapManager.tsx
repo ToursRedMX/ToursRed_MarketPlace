@@ -226,6 +226,24 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
 
         const slotIds = (allSlots || []).map((s: any) => s.id);
 
+        if (slotIds.length > 0) {
+          const { data: reservedSeats } = await supabase
+            .from('slot_seat_status')
+            .select('slot_id')
+            .eq('tour_id', tourId)
+            .eq('seat_number', blockModal.seatNumber)
+            .eq('status', 'reservado_online')
+            .in('slot_id', slotIds)
+            .limit(1);
+
+          if (reservedSeats && reservedSeats.length > 0) {
+            setBlockModal(prev => ({ ...prev, isSubmitting: false }));
+            setActionFeedback({ seat: blockModal.seatNumber, message: 'No se puede bloquear: el asiento tiene una reserva activa en una de las salidas' });
+            setTimeout(() => setActionFeedback(null), 5000);
+            return;
+          }
+        }
+
         await supabase
           .from('slot_seat_status')
           .delete()
@@ -250,6 +268,29 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
 
         setActionFeedback({ seat: blockModal.seatNumber, message: `Asiento bloqueado en ${slotIds.length} salidas` });
       } else {
+        let checkQuery = supabase
+          .from('slot_seat_status')
+          .select('status, booking_id')
+          .eq('tour_id', tourId)
+          .eq('seat_number', blockModal.seatNumber)
+          .eq('status', 'reservado_online')
+          .limit(1);
+
+        if (activeSlotId) {
+          checkQuery = (checkQuery as any).eq('slot_id', activeSlotId);
+        } else {
+          checkQuery = (checkQuery as any).is('slot_id', null);
+        }
+
+        const { data: reservedCheck } = await checkQuery;
+
+        if (reservedCheck && reservedCheck.length > 0) {
+          setBlockModal(prev => ({ ...prev, isSubmitting: false }));
+          setActionFeedback({ seat: blockModal.seatNumber, message: 'No se puede bloquear: el asiento tiene una reserva activa' });
+          setTimeout(() => setActionFeedback(null), 5000);
+          return;
+        }
+
         let deleteQuery = supabase
           .from('slot_seat_status')
           .delete()

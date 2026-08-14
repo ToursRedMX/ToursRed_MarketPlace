@@ -372,7 +372,7 @@ const BookingFlowStep4: React.FC = () => {
         total_paid: s.total_paid,
       }));
 
-      const { data: bookingResult, error: bookingError } = await supabase.rpc('create_booking_atomic', {
+      const { data: bookingResult, error: bookingError } = await supabase.rpc('create_booking_atomic_with_preventa', {
         p_booking_data: bookingData,
         p_travelers: travelersJson,
         p_optional_services: optionalServicesJson,

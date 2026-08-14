@@ -7,14 +7,15 @@ interface ShareTourModalProps {
   tourId: string;
   tourName: string;
   tourImage?: string;
+  tourSlug?: string;
 }
 
-export default function ShareTourModal({ isOpen, onClose, tourId, tourName, tourImage }: ShareTourModalProps) {
+export default function ShareTourModal({ isOpen, onClose, tourId, tourName, tourImage, tourSlug }: ShareTourModalProps) {
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
 
-  const tourUrl = `${window.location.origin}/tours/${tourId}`;
+  const tourUrl = `${window.location.origin}/tours/${tourSlug || tourId}`;
   const encodedUrl = encodeURIComponent(tourUrl);
   const encodedTitle = encodeURIComponent(tourName);
   const shareMessage = encodeURIComponent(`¡Mira este tour increíble! ${tourName}`);

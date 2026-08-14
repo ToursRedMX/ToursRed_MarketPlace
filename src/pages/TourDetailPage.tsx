@@ -1542,6 +1542,7 @@ const TourDetailPage: React.FC = () => {
           tourId={tour.id}
           tourName={tour.name}
           tourImage={tour.image_url}
+          tourSlug={tour.slug}
         />
       )}
     </>

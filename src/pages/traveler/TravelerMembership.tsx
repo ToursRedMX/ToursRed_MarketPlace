@@ -55,8 +55,6 @@ export default function TravelerMembership() {
     if (!user) return;
 
     try {
-      await supabase.rpc('reset_monthly_service_fee_exemption');
-
       const { data, error } = await supabase
         .from('memberships')
         .select('*')
