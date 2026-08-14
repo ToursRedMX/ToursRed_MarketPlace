@@ -94,8 +94,11 @@ Deno.serve(async (req: Request) => {
               </div>
 
               <div style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 16px 20px; margin: 0 0 32px 0;">
-                <p style="margin: 0; color: #c2410c; font-size: 14px; line-height: 22px;">
-                  <strong>Importante:</strong> Por seguridad, te recomendamos cambiar tu contraseña la primera vez que inicies sesión.
+                <p style="margin: 0 0 8px 0; color: #c2410c; font-size: 14px; line-height: 22px;">
+                  <strong>Importante - Cambio de contraseña obligatorio:</strong> Por seguridad, deberás cambiar tu contraseña de inmediato la primera vez que inicies sesión. No compartas esta contraseña con nadie ni la reenvíes por correo u otro medio.
+                </p>
+                <p style="margin: 0; color: #c2410c; font-size: 13px; line-height: 20px;">
+                  Si sospechas que alguien más tiene acceso a esta contraseña, contacta a soporte inmediatamente.
                 </p>
               </div>
 

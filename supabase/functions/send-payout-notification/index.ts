@@ -18,6 +18,10 @@ Deno.serve(async (req)=>{
     if (!payout_id || !agency_email || !agency_name || !amount) {
       throw new Error("Missing required fields");
     }
+    const escapeHtml = (s: string): string =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const safeAgencyName = escapeHtml(String(agency_name));
+    const safeReference = reference ? escapeHtml(String(reference)) : '';
     const { data: settings } = await supabase.from("email_settings").select("smtp_api_key, contact_email").maybeSingle();
     if (!settings?.smtp_api_key) {
       console.log("SMTP not configured, skipping email notification");
@@ -58,7 +62,7 @@ Deno.serve(async (req)=>{
             </div>
 
             <div class="content">
-              <p>Hola <strong>${agency_name}</strong>,</p>
+              <p>Hola <strong>${safeAgencyName}</strong>,</p>
 
               <p>Te informamos que hemos procesado exitosamente un pago para tu agencia.</p>
 
@@ -79,7 +83,7 @@ Deno.serve(async (req)=>{
               ${reference ? `
               <div class="detail-row">
                 <span class="detail-label">Referencia Bancaria:</span>
-                <span class="detail-value" style="font-family: monospace;">${reference}</span>
+                <span class="detail-value" style="font-family: monospace;">${safeReference}</span>
               </div>
               ` : ''}
 

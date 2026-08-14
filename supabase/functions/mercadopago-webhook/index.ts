@@ -89,7 +89,11 @@ Deno.serve(async (req: Request) => {
         });
       }
     } else {
-      console.warn("MERCADOPAGO_WEBHOOK_SECRET not configured, skipping signature validation");
+      console.error("MERCADOPAGO_WEBHOOK_SECRET not configured, rejecting webhook");
+      return new Response(JSON.stringify({ error: "Webhook secret not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     let body: any = {};

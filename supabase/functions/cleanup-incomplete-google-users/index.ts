@@ -12,6 +12,35 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  const authHeader = req.headers.get("Authorization");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (authHeader === `Bearer ${serviceKey}`) {
+    // Cron job call — allowed
+  } else if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.replace("Bearer ", "");
+    const supabaseUser = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+    const { data: { user } } = await supabaseUser.auth.getUser(token);
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: u } = await supabaseUser.from("users").select("role").eq("id", user.id).maybeSingle();
+    if (!u || !["admin", "super_admin"].includes(u.role)) {
+      return new Response(JSON.stringify({ error: "Admin access required" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  } else {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,

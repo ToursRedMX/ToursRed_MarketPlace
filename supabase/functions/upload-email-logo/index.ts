@@ -15,6 +15,32 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+  const supabaseUser = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  );
+
+  const { data: userData, error: userErr } = await supabaseUser
+    .from("users")
+    .select("role")
+    .eq("id", (await supabaseUser.auth.getUser(token)).data.user?.id || "")
+    .maybeSingle();
+
+  if (userErr || !userData || !["admin", "super_admin"].includes(userData.role)) {
+    return new Response(JSON.stringify({ error: "Admin access required" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

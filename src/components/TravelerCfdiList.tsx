@@ -62,25 +62,15 @@ const TravelerCfdiList: React.FC<Props> = ({ userId }) => {
         .from('cfdi_invoices')
         .select(`
           *,
-          bookings(booking_code, tours(name))
+          bookings!inner(booking_code, user_id, tours(name))
         `)
         .eq('invoice_type', 'booking')
+        .eq('bookings.user_id', userId)
         .order('created_at', { ascending: false })
         .limit(50);
 
       if (data) {
-        const myInvoices = await Promise.all(
-          data.map(async (inv) => {
-            if (!inv.booking_id) return null;
-            const { data: booking } = await supabase
-              .from('bookings')
-              .select('user_id')
-              .eq('id', inv.booking_id)
-              .maybeSingle();
-            return booking?.user_id === userId ? inv : null;
-          })
-        );
-        setInvoices(myInvoices.filter(Boolean) as CfdiInvoice[]);
+        setInvoices(data as CfdiInvoice[]);
       }
     } finally {
       setIsLoading(false);

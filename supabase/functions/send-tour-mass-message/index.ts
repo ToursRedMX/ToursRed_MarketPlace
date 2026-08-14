@@ -237,13 +237,16 @@ Deno.serve(async (req: Request) => {
       data: Record<string, unknown>;
     }> = [];
 
-    for (const attendee of attendeeList) {
-      let emailDelivered = true;
+    const BATCH_SIZE = 15;
+    for (let i = 0; i < attendeeList.length; i += BATCH_SIZE) {
+      const batch = attendeeList.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(batch.map(async (attendee) => {
+        let emailDelivered = true;
 
-      if (needsEmail) {
-        const messageBodyFormatted = message_body.replace(/\n/g, "<br>");
+        if (needsEmail) {
+          const messageBodyFormatted = message_body.replace(/\n/g, "<br>");
 
-        const emailHtml = `
+          const emailHtml = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -296,80 +299,81 @@ Deno.serve(async (req: Request) => {
 </html>
         `.trim();
 
-        try {
-          const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              api_key: smtp2goApiKey,
-              to: [`${attendee.first_name} ${attendee.last_name} <${attendee.email}>`],
-              sender: `${fromName} <${fromEmail}>`,
-              subject,
-              html_body: emailHtml,
-            }),
-          });
+          try {
+            const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                api_key: smtp2goApiKey,
+                to: [`${attendee.first_name} ${attendee.last_name} <${attendee.email}>`],
+                sender: `${fromName} <${fromEmail}>`,
+                subject,
+                html_body: emailHtml,
+              }),
+            });
 
-          const emailResult = await emailResponse.json();
-          emailDelivered = emailResult?.data?.succeeded === 1;
+            const emailResult = await emailResponse.json();
+            emailDelivered = emailResult?.data?.succeeded === 1;
 
+            recipientRecords.push({
+              message_id: messageId,
+              user_id: attendee.user_id,
+              booking_id: attendee.booking_id,
+              email: attendee.email,
+              delivered: emailDelivered,
+              delivered_at: emailDelivered ? new Date().toISOString() : null,
+              error_message: !emailDelivered ? JSON.stringify(emailResult?.data?.failures || "Send failed") : null,
+            });
+          } catch (sendErr) {
+            console.error(`Error sending email to ${attendee.email}:`, sendErr);
+            emailDelivered = false;
+            recipientRecords.push({
+              message_id: messageId,
+              user_id: attendee.user_id,
+              booking_id: attendee.booking_id,
+              email: attendee.email,
+              delivered: false,
+              delivered_at: null,
+              error_message: String(sendErr),
+            });
+          }
+        } else {
           recipientRecords.push({
             message_id: messageId,
             user_id: attendee.user_id,
             booking_id: attendee.booking_id,
             email: attendee.email,
-            delivered: emailDelivered,
-            delivered_at: emailDelivered ? new Date().toISOString() : null,
-            error_message: !emailDelivered ? JSON.stringify(emailResult?.data?.failures || "Send failed") : null,
-          });
-        } catch (sendErr) {
-          console.error(`Error sending email to ${attendee.email}:`, sendErr);
-          emailDelivered = false;
-          recipientRecords.push({
-            message_id: messageId,
-            user_id: attendee.user_id,
-            booking_id: attendee.booking_id,
-            email: attendee.email,
-            delivered: false,
-            delivered_at: null,
-            error_message: String(sendErr),
+            delivered: true,
+            delivered_at: new Date().toISOString(),
+            error_message: null,
           });
         }
-      } else {
-        recipientRecords.push({
-          message_id: messageId,
-          user_id: attendee.user_id,
-          booking_id: attendee.booking_id,
-          email: attendee.email,
-          delivered: true,
-          delivered_at: new Date().toISOString(),
-          error_message: null,
-        });
-      }
 
-      if (needsNotification) {
-        const notifTitle = subject || `Mensaje de ${agency.name}`;
-        const truncatedMsg = message_body.length > 200 ? message_body.slice(0, 197) + "..." : message_body;
-        notificationInserts.push({
-          user_id: attendee.user_id,
-          type: "tour_announcement",
-          title: notifTitle,
-          message: truncatedMsg,
-          data: {
-            tour_id,
-            tour_name: tour.name,
-            agency_name: agency.name,
-            booking_id: attendee.booking_id,
-            booking_code: attendee.booking_code,
-            message_id: messageId,
-          },
-        });
-      }
+        if (needsNotification) {
+          const notifTitle = subject || `Mensaje de ${agency.name}`;
+          const truncatedMsg = message_body.length > 200 ? message_body.slice(0, 197) + "..." : message_body;
+          notificationInserts.push({
+            user_id: attendee.user_id,
+            type: "tour_announcement",
+            title: notifTitle,
+            message: truncatedMsg,
+            data: {
+              tour_id,
+              tour_name: tour.name,
+              agency_name: agency.name,
+              booking_id: attendee.booking_id,
+              booking_code: attendee.booking_code,
+              message_id: messageId,
+            },
+          });
+        }
 
-      const counted = needsEmail ? emailDelivered : true;
-      if (counted) {
-        successCount++;
-      } else {
-        errorCount++;
+        return needsEmail ? emailDelivered : true;
+      }));
+
+      for (const delivered of batchResults) {
+        if (delivered) successCount++;
+        else errorCount++;
       }
     }
 

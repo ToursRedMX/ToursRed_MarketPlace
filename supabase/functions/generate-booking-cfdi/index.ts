@@ -313,31 +313,6 @@ Deno.serve(async (req: Request) => {
 
     const isCheckinCharge = !!checkin_charge_id;
 
-    // Check if a CFDI already exists (stamped or pending) for this booking/charge
-    const existingQuery = isCheckinCharge
-      ? supabase
-          .from("cfdi_invoices")
-          .select("id, status")
-          .eq("checkin_charge_id", checkin_charge_id)
-          .in("status", ["stamped", "pending"])
-          .maybeSingle()
-      : supabase
-          .from("cfdi_invoices")
-          .select("id, status")
-          .eq("booking_id", booking_id)
-          .eq("invoice_type", "booking")
-          .in("status", ["stamped", "pending"])
-          .maybeSingle();
-
-    const { data: existingCfdi } = await existingQuery;
-
-    if (existingCfdi) {
-      return new Response(
-        JSON.stringify({ message: "CFDI already exists", cfdi_id: existingCfdi.id }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Load booking details
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
@@ -641,34 +616,38 @@ Deno.serve(async (req: Request) => {
     // Descuento total consolidado (con IVA incluido)
     const descuentoTotal = Math.round((descuentoTour + descuentoServicio) * 1.16 * 100) / 100;
 
-    // Create pending CFDI record
-    const { data: cfdiRecord, error: insertError } = await supabase
-      .from("cfdi_invoices")
-      .insert({
-        invoice_type: invoiceType,
-        booking_id: booking.id,
-        ...(isCheckinCharge ? { checkin_charge_id } : {}),
-        agency_id: agencyData?.id || null,
-        pac_provider: settings.pac_provider,
-        serie: settings.cfdi_serie_booking || "A",
-        receptor_rfc: receptorRfc,
-        receptor_razon_social: receptorNombre,
-        receptor_regimen_fiscal: receptorRegimen,
-        receptor_uso_cfdi: receptorUsoCfdi,
-        receptor_codigo_postal: receptorCP,
-        subtotal,
-        iva_amount: iva,
-        total,
-        ...(descuentoTotal > 0 ? { discount_amount: descuentoTotal } : {}),
-        status: "pending",
-        tour_amount: isCheckinCharge ? amountCharged : depositAmount,
-      })
-      .select()
-      .single();
+    // Create pending CFDI record atomically via RPC (prevents duplicate stamping)
+    const { data: claimResult, error: claimError } = await supabase.rpc("claim_cfdi_stamping_slot", {
+      p_booking_id: booking.id,
+      p_invoice_type: invoiceType,
+      p_checkin_charge_id: isCheckinCharge ? checkin_charge_id : null,
+      p_agency_id: agencyData?.id || null,
+      p_pac_provider: settings.pac_provider,
+      p_serie: settings.cfdi_serie_booking || "A",
+      p_receptor_rfc: receptorRfc,
+      p_receptor_razon_social: receptorNombre,
+      p_receptor_regimen_fiscal: receptorRegimen,
+      p_receptor_uso_cfdi: receptorUsoCfdi,
+      p_receptor_codigo_postal: receptorCP,
+      p_subtotal: subtotal,
+      p_iva_amount: iva,
+      p_total: total,
+      p_discount_amount: descuentoTotal > 0 ? descuentoTotal : null,
+      p_tour_amount: isCheckinCharge ? amountCharged : depositAmount,
+    });
 
-    if (insertError || !cfdiRecord) {
-      throw new Error(`Failed to create CFDI record: ${insertError?.message}`);
+    if (claimError || !claimResult) {
+      throw new Error(`Failed to claim CFDI slot: ${claimError?.message}`);
     }
+
+    if (!claimResult.success) {
+      return new Response(
+        JSON.stringify({ message: "CFDI already exists", cfdi_id: claimResult.cfdi_id }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const cfdiRecord = { id: claimResult.cfdi_id, retry_count: 0 };
 
     // Stamp with PAC
     let cfdiResult: CfdiResult;

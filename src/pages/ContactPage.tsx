@@ -3,6 +3,8 @@ import { Mail, Phone, MapPin, CheckCircle, AlertCircle, Loader } from 'lucide-re
 import { useFormPersistence } from '../hooks/useFormPersistence';
 import { usePreventUnload } from '../hooks/usePreventUnload';
 import Seo from '../components/Seo';
+import TurnstileWidget from '../components/TurnstileWidget';
+import { useTurnstileEnabled } from '../hooks/useTurnstileEnabled';
 
 const ContactPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -15,6 +17,8 @@ const ContactPage: React.FC = () => {
     type: 'success' | 'error' | null;
     message: string;
   }>({ type: null, message: '' });
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const { turnstileEnabled } = useTurnstileEnabled();
 
   const contactFormPersistence = useFormPersistence(
     formData,
@@ -42,6 +46,12 @@ const ContactPage: React.FC = () => {
     setIsSubmitting(true);
     setSubmitStatus({ type: null, message: '' });
 
+    if (turnstileEnabled && !turnstileToken) {
+      setSubmitStatus({ type: 'error', message: 'Por favor completa la verificación de seguridad.' });
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -52,7 +62,7 @@ const ContactPage: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${supabaseAnonKey}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, turnstile_token: turnstileToken }),
       });
 
       const data = await response.json();
@@ -144,6 +154,12 @@ const ContactPage: React.FC = () => {
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-primary-500 focus:ring-primary-500 disabled:bg-gray-100"
               ></textarea>
             </div>
+            {turnstileEnabled && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Verificación de seguridad</label>
+                <TurnstileWidget onToken={setTurnstileToken} />
+              </div>
+            )}
             <button
               type="submit"
               disabled={isSubmitting}

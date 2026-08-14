@@ -21,7 +21,7 @@ const INITIAL_FORM: FormData = {
   descripcion: '',
 };
 
-const APEL_CATEGORY_NAME_FRAGMENT = 'pelac'; // matches 'apelacón'
+const APEL_CATEGORY_SLUG = 'apelacion-rechazo';
 
 const SupportGeneralPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -50,11 +50,9 @@ const SupportGeneralPage: React.FC = () => {
       );
       setSubcategories(generalAndAgencySubs);
 
-      // Auto-detect APEL category by name fragment if no preselection
+      // Auto-detect APEL category by slug if no preselection
       if (!preselectedCategoryId && isApelacion) {
-        const apelCat = (cats ?? []).find((c: SupportCategory) =>
-          c.nombre?.toLowerCase().includes(APEL_CATEGORY_NAME_FRAGMENT)
-        );
+        const apelCat = (cats ?? []).find((c: any) => c.slug === APEL_CATEGORY_SLUG);
         if (apelCat) setForm(prev => ({ ...prev, category_id: apelCat.id }));
       }
     };

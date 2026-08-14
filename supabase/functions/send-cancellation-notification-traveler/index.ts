@@ -83,11 +83,11 @@ Deno.serve(async (req: Request) => {
     const currentBalance = wallet?.balance || 0;
 
     const [{ data: settings }, { data: platformSettingsData }] = await Promise.all([
-      supabase.from('email_settings').select('contact_email, smtp_host, smtp_port, smtp_user, smtp_password, smtp_api_key').single(),
+      supabase.from('email_settings').select('contact_email, smtp_api_key').single(),
       supabase.from('platform_settings').select('platform_url').maybeSingle(),
     ]);
 
-    if (!settings || !settings.smtp_host) {
+    if (!settings || !settings.smtp_api_key) {
       throw new Error('SMTP no configurado');
     }
 

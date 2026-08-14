@@ -11,6 +11,7 @@ interface ContactFormData {
   name: string;
   email: string;
   message: string;
+  turnstile_token?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -26,7 +27,7 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { name, email, message }: ContactFormData = await req.json();
+    const { name, email, message, turnstile_token }: ContactFormData = await req.json();
 
     if (!name || !email || !message) {
       return new Response(
@@ -37,6 +38,46 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    // Rate limit: max 3 submissions per email in 1 hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recentSubmissions } = await supabase
+      .from('contact_form_submissions')
+      .select('id', { count: 'exact', head: true })
+      .eq('email', email)
+      .gte('created_at', oneHourAgo);
+
+    if (recentSubmissions && recentSubmissions >= 3) {
+      return new Response(
+        JSON.stringify({ error: "Has alcanzado el lmite de envos. Intenta de nuevo en una hora." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify Turnstile token if provided
+    if (turnstile_token) {
+      const turnstileSecret = Deno.env.get('TURNSTILE_SECRET_KEY');
+      if (turnstileSecret) {
+        const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `secret=${turnstileSecret}&response=${turnstile_token}`,
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyData.success) {
+          return new Response(
+            JSON.stringify({ error: 'Verificacin de seguridad fallida' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    }
+
+    // Log submission for rate limiting
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
+    await supabase.from('contact_form_submissions').insert({
+      name, email, message, ip_address: clientIp,
+    });
 
     const { data: emailSettings, error: settingsError } = await supabase
       .from("email_settings")

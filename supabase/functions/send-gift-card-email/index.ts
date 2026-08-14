@@ -21,9 +21,38 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const token = authHeader.replace("Bearer ", "");
+  const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+  const { data: { user } } = await supabaseUser.auth.getUser(token);
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const { data: caller } = await supabaseUser.from("users").select("role").eq("id", user.id).maybeSingle();
+  if (!caller || !["admin", "super_admin", "traveler", "agency_owner"].includes(caller.role)) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  if (caller.role === "traveler") {
+    const { data: gc } = await supabase.from("gift_cards").select("purchaser_user_id").eq("id", giftCardId).maybeSingle();
+    if (!gc || gc.purchaser_user_id !== user.id) {
+      return new Response(JSON.stringify({ error: "Not authorized for this gift card" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { giftCardId, sendToRecipient = true, sendToPurchaser = true }: SendGiftCardEmailRequest = await req.json();
@@ -51,6 +80,21 @@ Deno.serve(async (req: Request) => {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
+      );
+    }
+
+    // Resend limit: max 3 emails in 24h per gift card
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: recentSends } = await supabase
+      .from("gift_cards")
+      .select("id", { count: "exact", head: true })
+      .eq("id", giftCardId)
+      .gte("email_sent_at", yesterday);
+
+    if (recentSends && recentSends >= 3) {
+      return new Response(
+        JSON.stringify({ error: "Se ha alcanzado el limite de 3 reenvios en 24 horas para esta tarjeta de regalo" }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
