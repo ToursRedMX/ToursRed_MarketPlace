@@ -41,11 +41,8 @@ interface PlatformSettings {
   conekta_commission_pct: number;
   conekta_commission_fixed: number;
   mercadopago_public_key: string;
-  mercadopago_access_token: string;
   paypal_client_id: string;
-  paypal_client_secret: string;
   pac_provider: string;
-  pac_api_key_encrypted: string;
   pac_organization_id: string;
   cfdi_serie_booking: string;
   cfdi_serie_commission: string;
@@ -57,12 +54,10 @@ interface PlatformSettings {
   accounting_provider: string;
   accounting_sync_enabled: boolean;
   zoho_client_id: string;
-  zoho_client_secret: string;
   zoho_org_id: string;
   zoho_region: string;
   zoho_sandbox_mode: boolean;
   odoo_url: string;
-  odoo_api_key_encrypted: string;
   odoo_database: string;
   travel_insurance_enabled: boolean;
   travel_insurance_price_per_day_per_traveler: number;
@@ -134,11 +129,8 @@ const AdminSettings: React.FC = () => {
     conekta_commission_pct: 3.29,
     conekta_commission_fixed: 2.5,
     mercadopago_public_key: '',
-    mercadopago_access_token: '',
     paypal_client_id: '',
-    paypal_client_secret: '',
     pac_provider: 'none',
-    pac_api_key_encrypted: '',
     pac_organization_id: '',
     cfdi_serie_booking: 'A',
     cfdi_serie_commission: 'B',
@@ -150,12 +142,10 @@ const AdminSettings: React.FC = () => {
     accounting_provider: 'none',
     accounting_sync_enabled: false,
     zoho_client_id: '',
-    zoho_client_secret: '',
     zoho_org_id: '',
     zoho_region: 'com',
     zoho_sandbox_mode: true,
     odoo_url: '',
-    odoo_api_key_encrypted: '',
     odoo_database: '',
     travel_insurance_enabled: true,
     travel_insurance_price_per_day_per_traveler: 79,
@@ -187,6 +177,13 @@ const AdminSettings: React.FC = () => {
     stripe_memberships_enabled: true,
     gift_card_amounts: [100, 200, 500, 1000],
     gift_card_max_amount: 10000,
+  });
+  const [platformSecrets, setPlatformSecrets] = useState<PlatformSecrets>({
+    mercadopago_access_token: '',
+    paypal_client_secret: '',
+    pac_api_key_encrypted: '',
+    zoho_client_secret: '',
+    odoo_api_key_encrypted: '',
   });
   const [zohoStatus, setZohoStatus] = useState<{
     connected: boolean;
@@ -348,9 +345,10 @@ const AdminSettings: React.FC = () => {
     try {
       setIsLoading(true);
 
-      const [emailResult, platformResult] = await Promise.all([
+      const [emailResult, platformResult, secretsResult] = await Promise.all([
         supabase.from('email_settings').select('*').maybeSingle(),
-        supabase.from('platform_settings').select('*').maybeSingle()
+        supabase.from('platform_settings').select('*').maybeSingle(),
+        supabase.rpc('get_platform_secrets')
       ]);
 
       if (emailResult.error) throw emailResult.error;
@@ -362,6 +360,10 @@ const AdminSettings: React.FC = () => {
 
       if (platformResult.data) {
         setPlatformSettings(platformResult.data);
+      }
+
+      if (secretsResult.data) {
+        setPlatformSecrets(secretsResult.data);
       }
     } catch (error: any) {
       console.error('Error fetching settings:', error);
@@ -424,11 +426,8 @@ const AdminSettings: React.FC = () => {
             conekta_commission_pct: platformSettings.conekta_commission_pct,
             conekta_commission_fixed: platformSettings.conekta_commission_fixed,
             mercadopago_public_key: platformSettings.mercadopago_public_key,
-            mercadopago_access_token: platformSettings.mercadopago_access_token,
             paypal_client_id: platformSettings.paypal_client_id,
-            paypal_client_secret: platformSettings.paypal_client_secret,
             pac_provider: platformSettings.pac_provider,
-            pac_api_key_encrypted: platformSettings.pac_api_key_encrypted,
             pac_organization_id: platformSettings.pac_organization_id,
             cfdi_serie_booking: platformSettings.cfdi_serie_booking,
             cfdi_serie_commission: platformSettings.cfdi_serie_commission,
@@ -440,12 +439,10 @@ const AdminSettings: React.FC = () => {
             accounting_provider: platformSettings.accounting_provider,
             accounting_sync_enabled: platformSettings.accounting_sync_enabled,
             zoho_client_id: platformSettings.zoho_client_id,
-            zoho_client_secret: platformSettings.zoho_client_secret,
             zoho_org_id: platformSettings.zoho_org_id,
             zoho_region: platformSettings.zoho_region,
             zoho_sandbox_mode: platformSettings.zoho_sandbox_mode,
             odoo_url: platformSettings.odoo_url,
-            odoo_api_key_encrypted: platformSettings.odoo_api_key_encrypted,
             odoo_database: platformSettings.odoo_database,
             travel_insurance_enabled: platformSettings.travel_insurance_enabled,
             travel_insurance_price_per_day_per_traveler: platformSettings.travel_insurance_price_per_day_per_traveler,
@@ -489,14 +486,29 @@ const AdminSettings: React.FC = () => {
       if (emailResult.error) throw emailResult.error;
       if (platformResult.error) throw platformResult.error;
 
-      setMessage({
-        type: 'success',
-        text: 'Configuración guardada correctamente',
+      const { error: secretsError } = await supabase.rpc('update_platform_secrets', {
+        p_mercadopago_access_token: platformSecrets.mercadopago_access_token,
+        p_paypal_client_secret: platformSecrets.paypal_client_secret,
+        p_pac_api_key_encrypted: platformSecrets.pac_api_key_encrypted,
+        p_zoho_client_secret: platformSecrets.zoho_client_secret,
+        p_odoo_api_key_encrypted: platformSecrets.odoo_api_key_encrypted,
       });
 
-      setTimeout(() => {
-        setMessage({ type: null, text: '' });
-      }, 3000);
+      if (secretsError) {
+        setMessage({
+          type: 'error',
+          text: 'La configuración general se guardó correctamente, pero hubo un error al guardar las credenciales sensibles: ' + secretsError.message,
+        });
+      } else {
+        setMessage({
+          type: 'success',
+          text: 'Configuración guardada correctamente',
+        });
+
+        setTimeout(() => {
+          setMessage({ type: null, text: '' });
+        }, 3000);
+      }
     } catch (error: any) {
       console.error('Error saving settings:', error);
       setMessage({
@@ -514,6 +526,11 @@ const AdminSettings: React.FC = () => {
       ...prev,
       [name]: name === 'smtp_port' ? parseInt(value) || 0 : value,
     }));
+  };
+
+  const handleSecretChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setPlatformSecrets(prev => ({ ...prev, [name]: value }));
   };
 
   const handlePlatformChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1265,8 +1282,8 @@ const AdminSettings: React.FC = () => {
                       <input
                         type={showSecrets['mercadopago_access_token'] ? 'text' : 'password'}
                         name="mercadopago_access_token"
-                        value={platformSettings.mercadopago_access_token}
-                        onChange={handlePlatformChange}
+                        value={platformSecrets.mercadopago_access_token}
+                        onChange={handleSecretChange}
                         placeholder="APP_USR-xxxxxxxxxxxxxxxxxxxx"
                         className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
                       />
@@ -1331,8 +1348,8 @@ const AdminSettings: React.FC = () => {
                       <input
                         type={showSecrets['paypal_client_secret'] ? 'text' : 'password'}
                         name="paypal_client_secret"
-                        value={platformSettings.paypal_client_secret}
-                        onChange={handlePlatformChange}
+                        value={platformSecrets.paypal_client_secret}
+                        onChange={handleSecretChange}
                         placeholder="EGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                         className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
                       />
@@ -1879,8 +1896,8 @@ const AdminSettings: React.FC = () => {
               <div className="relative">
                 <input
                   type={showSecrets['pac_api_key_encrypted'] ? 'text' : 'password'}
-                  value={platformSettings.pac_api_key_encrypted}
-                  onChange={(e) => setPlatformSettings(prev => ({ ...prev, pac_api_key_encrypted: e.target.value }))}
+                  value={platformSecrets.pac_api_key_encrypted}
+                  onChange={(e) => setPlatformSecrets(prev => ({ ...prev, pac_api_key_encrypted: e.target.value }))}
                   className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
                   placeholder="sk_live_xxxxxxxxxxxx o equivalente"
                   autoComplete="off"
@@ -2126,8 +2143,8 @@ const AdminSettings: React.FC = () => {
                     <div className="relative">
                       <input
                         type={showSecrets['zoho_client_secret'] ? 'text' : 'password'}
-                        value={platformSettings.zoho_client_secret}
-                        onChange={(e) => setPlatformSettings(prev => ({ ...prev, zoho_client_secret: e.target.value }))}
+                        value={platformSecrets.zoho_client_secret}
+                        onChange={(e) => setPlatformSecrets(prev => ({ ...prev, zoho_client_secret: e.target.value }))}
                         className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
                         placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                         autoComplete="off"
@@ -2316,8 +2333,8 @@ const AdminSettings: React.FC = () => {
                     <div className="relative">
                       <input
                         type={showSecrets['odoo_api_key_encrypted'] ? 'text' : 'password'}
-                        value={platformSettings.odoo_api_key_encrypted}
-                        onChange={(e) => setPlatformSettings(prev => ({ ...prev, odoo_api_key_encrypted: e.target.value }))}
+                        value={platformSecrets.odoo_api_key_encrypted}
+                        onChange={(e) => setPlatformSecrets(prev => ({ ...prev, odoo_api_key_encrypted: e.target.value }))}
                         className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
                         placeholder="Bearer token generado en Preferencias → Seguridad"
                         autoComplete="off"
@@ -2346,7 +2363,7 @@ const AdminSettings: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleCheckOdoo}
-                    disabled={isCheckingOdoo || !platformSettings.odoo_url || !platformSettings.odoo_api_key_encrypted}
+                    disabled={isCheckingOdoo || !platformSettings.odoo_url || !platformSecrets.odoo_api_key_encrypted}
                     className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCheckingOdoo ? <Loader className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
