@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Lock, Eye, EyeOff, Save, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import TurnstileWidget from './TurnstileWidget';
+import { useTurnstileEnabled } from '../hooks/useTurnstileEnabled';
 
 const isLeakedPasswordError = (message: string) =>
   /leaked|pwned|compromised|common password/i.test(message);
@@ -14,6 +15,7 @@ const ChangePasswordSection: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
+  const { turnstileEnabled } = useTurnstileEnabled();
 
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -214,9 +216,11 @@ const ChangePasswordSection: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex justify-center">
-          <TurnstileWidget onToken={setTurnstileToken} />
-        </div>
+        {(turnstileEnabled || turnstileToken) && (
+          <div className="flex justify-center">
+            <TurnstileWidget onToken={setTurnstileToken} />
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 pt-2">
           <button
@@ -229,7 +233,7 @@ const ChangePasswordSection: React.FC = () => {
           </button>
           <button
             type="submit"
-            disabled={isChanging || !turnstileToken}
+            disabled={isChanging || (turnstileEnabled && !turnstileToken)}
             className="btn btn-primary flex items-center"
           >
             {isChanging ? (

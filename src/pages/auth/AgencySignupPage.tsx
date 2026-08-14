@@ -4,6 +4,7 @@ import { signUp, supabase } from '../../lib/supabase';
 import { UserRole } from '../../lib/supabase';
 import { useFieldAvailability } from '../../hooks/useFieldAvailability';
 import TurnstileWidget from '../../components/TurnstileWidget';
+import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
 import AgencySignupFormBody, {
   AgencyFormData,
   defaultAgencyFormData,
@@ -21,6 +22,7 @@ const AgencySignupPage: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
+  const { turnstileEnabled } = useTurnstileEnabled();
   const [activeTermsVersion, setActiveTermsVersion] = useState<{ version_number: number; published_at: string } | null>(null);
   const [formData, setFormData] = useState<AgencyFormData>(defaultAgencyFormData);
 
@@ -234,8 +236,8 @@ const AgencySignupPage: React.FC = () => {
       emailReadOnly={false}
       oauthProviderLabel={null}
       submitLabel="Registrar Agencia"
-      turnstileToken={turnstileToken}
-      onTurnstileToken={setTurnstileToken}
+      turnstileToken={turnstileEnabled ? turnstileToken : ''}
+      onTurnstileToken={turnstileEnabled ? setTurnstileToken : undefined}
     />
   );
 };

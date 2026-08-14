@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Loader, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import TurnstileWidget from '../../components/TurnstileWidget';
+import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
 
 const MaintenanceAdminPage: React.FC = () => {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ const MaintenanceAdminPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
+  const { turnstileEnabled } = useTurnstileEnabled();
 
   // If already logged in as super admin, redirect immediately
   useEffect(() => {
@@ -131,13 +133,15 @@ const MaintenanceAdminPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex justify-center">
-              <TurnstileWidget onToken={setTurnstileToken} />
-            </div>
+            {(turnstileEnabled || turnstileToken) && (
+              <div className="flex justify-center">
+                <TurnstileWidget onToken={setTurnstileToken} />
+              </div>
+            )}
 
             <button
               type="submit"
-              disabled={isLoading || !turnstileToken}
+              disabled={isLoading || (turnstileEnabled && !turnstileToken)}
               className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-800 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 mt-2"
             >
               {isLoading ? (

@@ -84,6 +84,7 @@ interface PlatformSettings {
   oauth_azure_login_enabled: boolean;
   oauth_twitter_login_enabled: boolean;
   oauth_facebook_login_enabled: boolean;
+  turnstile_auth_enabled: boolean;
   oauth_google_link_enabled: boolean;
   oauth_azure_link_enabled: boolean;
   oauth_twitter_link_enabled: boolean;
@@ -176,6 +177,7 @@ const AdminSettings: React.FC = () => {
     oauth_azure_login_enabled: true,
     oauth_twitter_login_enabled: false,
     oauth_facebook_login_enabled: false,
+    turnstile_auth_enabled: false,
     oauth_google_link_enabled: true,
     oauth_azure_link_enabled: true,
     oauth_twitter_link_enabled: false,
@@ -468,6 +470,7 @@ const AdminSettings: React.FC = () => {
             oauth_azure_login_enabled: platformSettings.oauth_azure_login_enabled,
             oauth_twitter_login_enabled: platformSettings.oauth_twitter_login_enabled,
             oauth_facebook_login_enabled: platformSettings.oauth_facebook_login_enabled,
+            turnstile_auth_enabled: platformSettings.turnstile_auth_enabled,
             oauth_google_link_enabled: platformSettings.oauth_google_link_enabled,
             oauth_azure_link_enabled: platformSettings.oauth_azure_link_enabled,
             oauth_twitter_link_enabled: platformSettings.oauth_twitter_link_enabled,
@@ -516,7 +519,7 @@ const AdminSettings: React.FC = () => {
   const handlePlatformChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     const numericFields = ['service_charge_percentage', 'agency_commission_percentage', 'supplement_commission_percentage', 'optional_service_commission_percentage', 'membership_monthly_price', 'membership_annual_price', 'membership_service_fee_exemption_monthly_limit', 'default_max_referrals_per_user', 'referral_bonus_points', 'openpay_commission_pct', 'openpay_commission_fixed', 'stripe_commission_pct', 'stripe_commission_fixed', 'paypal_commission_pct', 'paypal_commission_fixed', 'mercadopago_commission_pct', 'mercadopago_commission_fixed', 'conekta_commission_pct', 'conekta_commission_fixed'];
-    const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'conekta_enabled', 'openpay_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
+    const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'conekta_enabled', 'openpay_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'turnstile_auth_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
     setPlatformSettings(prev => ({
       ...prev,
       [name]: booleanFields.includes(name) ? checked : (numericFields.includes(name) ? (parseFloat(value) || 0) : value),
@@ -2763,6 +2766,28 @@ const AdminSettings: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Turnstile CAPTCHA toggle */}
+        <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-gray-800">Protección CAPTCHA (Turnstile)</h4>
+              <p className="text-xs text-gray-500 mt-1">
+                Muestra el widget de Cloudflare Turnstile en los formularios de inicio de sesión, registro y cambio de contraseña. Actívalo solo en producción — el widget no funciona en previews.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                name="turnstile_auth_enabled"
+                checked={platformSettings.turnstile_auth_enabled}
+                onChange={handlePlatformChange}
+                className="sr-only peer"
+              />
+              <div className="w-10 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+            </label>
           </div>
         </div>
 
