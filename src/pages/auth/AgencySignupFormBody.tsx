@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, CheckCircle, XCircle, Loader } from 'lucide-react';
+import TurnstileWidget from '../../components/TurnstileWidget';
 
 export interface AgencyFormData {
   firstName: string;
@@ -93,6 +94,8 @@ interface Props {
   /** Ícono SVG del proveedor OAuth */
   oauthProviderIcon?: React.ReactNode;
   submitLabel?: string;
+  turnstileToken?: string;
+  onTurnstileToken?: (token: string) => void;
 }
 
 const inputClass =
@@ -117,6 +120,8 @@ const AgencySignupFormBody: React.FC<Props> = ({
   oauthProviderLabel = null,
   oauthProviderIcon = null,
   submitLabel,
+  turnstileToken,
+  onTurnstileToken,
 }) => {
   const identifierUnavailable =
     curpAvailability.isAvailable === false ||
@@ -657,10 +662,17 @@ const AgencySignupFormBody: React.FC<Props> = ({
               </label>
             </div>
 
+            {/* ── Turnstile ────────────────────────────────────────────── */}
+            {onTurnstileToken && (
+              <div className="flex justify-center">
+                <TurnstileWidget onToken={onTurnstileToken} />
+              </div>
+            )}
+
             {/* ── Submit ───────────────────────────────────────────────── */}
             <button
               type="submit"
-              disabled={isLoading || !termsAccepted || identifierUnavailable}
+              disabled={isLoading || !termsAccepted || identifierUnavailable || (!!turnstileToken && !turnstileToken)}
               className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Procesando...' : label}

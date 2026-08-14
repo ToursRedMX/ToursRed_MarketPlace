@@ -42,7 +42,8 @@ export const signUp = async (
   email: string,
   password: string,
   role: UserRole,
-  profileData: Record<string, any> = {}
+  profileData: Record<string, any> = {},
+  captchaToken?: string
 ) => {
   try {
     console.log('🔐 Registrando usuario con email:', email, 'y rol:', role);
@@ -64,6 +65,7 @@ export const signUp = async (
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
+        options: captchaToken ? { captchaToken } : undefined,
       });
 
       if (error) throw error;
@@ -103,7 +105,8 @@ export const signUp = async (
       email,
       password,
       options: {
-        data: { role }
+        data: { role },
+        ...(captchaToken ? { captchaToken } : {}),
       }
     });
 
@@ -176,13 +179,14 @@ export const signUp = async (
   }
 };
 
-export const signIn = async (email: string, password: string) => {
+export const signIn = async (email: string, password: string, captchaToken?: string) => {
   try {
     console.log('🔐 Iniciando sesión con email:', email);
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
+      options: captchaToken ? { captchaToken } : undefined,
     });
 
     if (error) throw error;

@@ -4,6 +4,7 @@ import { Eye, EyeOff, CheckCircle, XCircle, Loader } from 'lucide-react';
 import { signUp, supabase, UserRole } from '../../lib/supabase';
 import { calcularPrefijoCurp } from '../../utils/curpUtils';
 import { useFieldAvailability } from '../../hooks/useFieldAvailability';
+import TurnstileWidget from '../../components/TurnstileWidget';
 
 const isLeakedPasswordError = (message: string) =>
   /leaked|pwned|compromised|common password/i.test(message);
@@ -25,6 +26,7 @@ const SignupPage: React.FC = () => {
     referrer_id?: string;
   } | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
   const [activeTermsVersion, setActiveTermsVersion] = useState<{ version_number: number; published_at: string } | null>(null);
 
   const searchParams = new URLSearchParams(location.search);
@@ -230,7 +232,8 @@ const SignupPage: React.FC = () => {
           state: state || null,
           postal_code: postalCode || null,
           country: country || 'México'
-        }
+        },
+        turnstileToken || undefined
       );
 
       if (error) {
@@ -975,10 +978,14 @@ const SignupPage: React.FC = () => {
               </label>
             </div>
 
+            <div className="flex justify-center">
+              <TurnstileWidget onToken={setTurnstileToken} />
+            </div>
+
             <div>
               <button
                 type="submit"
-                disabled={isLoading || !termsAccepted || identifierUnavailable}
+                disabled={isLoading || !termsAccepted || identifierUnavailable || !turnstileToken}
                 className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? 'Creando cuenta...' : 'Registrarse'}

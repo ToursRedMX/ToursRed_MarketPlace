@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, ShieldAlert } from 'lucide-react';
 import { signIn, supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import TurnstileWidget from '../../components/TurnstileWidget';
 
 interface OAuthToggles {
   google: boolean;
@@ -58,6 +59,7 @@ const LoginPage: React.FC = () => {
   const [isTwitterLoading, setIsTwitterLoading] = useState(false);
   const [isFacebookLoading, setIsFacebookLoading] = useState(false);
   const [ipBlocked, setIpBlocked] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
   const [oauthToggles, setOauthToggles] = useState<OAuthToggles>({ google: true, azure: true, x: false, facebook: false });
   const deviceFingerprintRef = useRef<string>(computeDeviceFingerprint());
   const navigate = useNavigate();
@@ -136,7 +138,7 @@ const LoginPage: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, Math.min(risk.delay_ms, 30000)));
       }
 
-      const { data, error } = await signIn(email, password);
+      const { data, error } = await signIn(email, password, turnstileToken || undefined);
 
       if (error) {
         throw error;
@@ -304,10 +306,14 @@ const LoginPage: React.FC = () => {
               </div>
             </div>
 
+            <div className="flex justify-center">
+              <TurnstileWidget onToken={setTurnstileToken} />
+            </div>
+
             <div>
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !turnstileToken}
                 className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
               >
                 {isLoading ? (

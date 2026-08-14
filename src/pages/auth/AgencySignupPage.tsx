@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { signUp, supabase } from '../../lib/supabase';
 import { UserRole } from '../../lib/supabase';
 import { useFieldAvailability } from '../../hooks/useFieldAvailability';
+import TurnstileWidget from '../../components/TurnstileWidget';
 import AgencySignupFormBody, {
   AgencyFormData,
   defaultAgencyFormData,
@@ -19,6 +20,7 @@ const AgencySignupPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
   const [activeTermsVersion, setActiveTermsVersion] = useState<{ version_number: number; published_at: string } | null>(null);
   const [formData, setFormData] = useState<AgencyFormData>(defaultAgencyFormData);
 
@@ -103,7 +105,7 @@ const AgencySignupPage: React.FC = () => {
     }
 
     try {
-      const { data, error: signUpError, profileData, isExistingUser } = await signUp(email, password, UserRole.AGENCY);
+      const { data, error: signUpError, profileData, isExistingUser } = await signUp(email, password, UserRole.AGENCY, {}, turnstileToken || undefined);
 
       if (signUpError) {
         if (isLeakedPasswordError(signUpError.message)) {
@@ -232,6 +234,8 @@ const AgencySignupPage: React.FC = () => {
       emailReadOnly={false}
       oauthProviderLabel={null}
       submitLabel="Registrar Agencia"
+      turnstileToken={turnstileToken}
+      onTurnstileToken={setTurnstileToken}
     />
   );
 };

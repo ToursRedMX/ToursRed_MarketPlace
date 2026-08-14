@@ -53,12 +53,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Anti-enumeration: always return the same generic response regardless of
+    // whether the email exists or the phone matches. Only proceed with sending
+    // the code if all checks pass — but the external response is identical.
+    const GENERIC_MSG = "Si los datos coinciden con una cuenta registrada, se enviará un código de verificación.";
+
     if (!userData) {
       return new Response(
-        JSON.stringify({ success: false, error: "No existe una cuenta con ese correo electrónico" }),
+        JSON.stringify({ success: true, message: GENERIC_MSG }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 404,
+          status: 200,
         }
       );
     }
@@ -75,10 +80,10 @@ Deno.serve(async (req: Request) => {
       if (agencyError) {
         console.error("Error buscando datos de agencia:", agencyError);
         return new Response(
-          JSON.stringify({ success: false, error: "Error al buscar información de la agencia" }),
+          JSON.stringify({ success: true, message: GENERIC_MSG }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 500,
+            status: 200,
           }
         );
       }
@@ -90,10 +95,10 @@ Deno.serve(async (req: Request) => {
 
     if (!userPhoneNumber || userPhoneNumber !== phoneNumber) {
       return new Response(
-        JSON.stringify({ success: false, error: "El correo y número de teléfono no coinciden" }),
+        JSON.stringify({ success: true, message: GENERIC_MSG }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 400,
+          status: 200,
         }
       );
     }

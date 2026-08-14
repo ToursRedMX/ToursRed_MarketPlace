@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const MAX_FAILED_ATTEMPTS = 5;
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -42,11 +44,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Look up the most recent unused, non-expired code for this email
     const { data: resetCode, error: codeError } = await supabase
       .from("password_reset_codes")
-      .select("id, user_id, expires_at, used")
+      .select("id, user_id, expires_at, used, failed_attempts")
       .eq("email", email)
-      .eq("code", code)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (codeError) {
@@ -80,6 +84,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Block after too many failed attempts
+    if (resetCode.failed_attempts >= MAX_FAILED_ATTEMPTS) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Demasiados intentos fallidos. Solicita un nuevo código." }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429,
+        }
+      );
+    }
+
     const expiresAt = new Date(resetCode.expires_at);
     const now = new Date();
 
@@ -93,6 +108,31 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Verify the code matches
+    if (code !== resetCode.code?.toString()) {
+      // Increment failed attempts
+      await supabase
+        .from("password_reset_codes")
+        .update({ failed_attempts: resetCode.failed_attempts + 1 })
+        .eq("id", resetCode.id);
+
+      const attemptsLeft = MAX_FAILED_ATTEMPTS - (resetCode.failed_attempts + 1);
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: attemptsLeft > 0
+            ? `Código incorrecto. Te quedan ${attemptsLeft} ${attemptsLeft === 1 ? 'intento' : 'intentos'}.`
+            : "Demasiados intentos fallidos. Solicita un nuevo código.",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: attemptsLeft > 0 ? 400 : 429,
+        }
+      );
+    }
+
+    // Code is correct — update the password
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       resetCode.user_id,
       { password: newPassword }
