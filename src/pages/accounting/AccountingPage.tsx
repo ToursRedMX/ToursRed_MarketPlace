@@ -634,7 +634,7 @@ const AccountingPage: React.FC = () => {
 
   const balanceMap = Object.fromEntries(accountBalances.map(b => [b.code, b]));
 
-  const yearsOptions = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);
+  const yearsOptions = Array.from({ length: 10 }, (_, i) => now.getFullYear() - i);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1269,8 +1269,19 @@ const AccountingPage: React.FC = () => {
         {/* ── BALANCE SHEET ── */}
         {activeTab === 'balance_sheet' && (
           <div className="space-y-6">
-            {/* Compare toggle */}
-            <div className="flex flex-wrap items-center gap-3">
+            {/* Period selector + Compare toggle */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <Calendar className="w-4 h-4 text-gray-500" />
+                <select value={month} onChange={e => setMonth(Number(e.target.value))}
+                  className="text-sm bg-transparent border-none outline-none text-gray-700 font-medium">
+                  {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+                </select>
+                <select value={year} onChange={e => setYear(Number(e.target.value))}
+                  className="text-sm bg-transparent border-none outline-none text-gray-700 font-medium">
+                  {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
               <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
                 <input type="checkbox" checked={showCompare} onChange={e => setShowCompare(e.target.checked)}
                   className="rounded border-gray-300 text-sky-600" />
@@ -1296,6 +1307,7 @@ const AccountingPage: React.FC = () => {
                   <h2 className="text-base font-bold text-gray-800">Balance General — {MONTHS[month-1]} {year}</h2>
                   <p className="text-xs text-gray-500 mt-0.5">Saldos acumulados al cierre del periodo</p>
                 </div>
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-xs text-gray-500 uppercase bg-gray-50">
@@ -1307,7 +1319,7 @@ const AccountingPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(['activo','pasivo','capital'] as const).map(type => {
+                    {(['activo','pasivo','capital','ingreso','costo','gasto'] as const).map(type => {
                       const rows = balanceSheet.filter(r => r.account_type === type);
                       if (rows.length === 0) return null;
                       const total = rows.reduce((s, r) => s + Number(r.balance), 0);
@@ -1344,8 +1356,27 @@ const AccountingPage: React.FC = () => {
                         </React.Fragment>
                       );
                     })}
+                    {/* Resultado del Ejercicio */}
+                    {(() => {
+                      const bsIncome = balanceSheet.filter(r => r.account_type === 'ingreso').reduce((s, r) => s + Number(r.balance), 0);
+                      const bsExpenses = balanceSheet.filter(r => ['gasto','costo'].includes(r.account_type)).reduce((s, r) => s + Number(r.balance), 0);
+                      const bsResult = bsIncome - bsExpenses;
+                      const cBsIncome = compareBalanceSheet.filter(r => r.account_type === 'ingreso').reduce((s, r) => s + Number(r.balance), 0);
+                      const cBsExpenses = compareBalanceSheet.filter(r => ['gasto','costo'].includes(r.account_type)).reduce((s, r) => s + Number(r.balance), 0);
+                      const cBsResult = cBsIncome - cBsExpenses;
+                      if (bsIncome === 0 && bsExpenses === 0) return null;
+                      return (
+                        <tr className="bg-gray-900 text-white">
+                          <td className="px-6 py-4 font-bold text-base" colSpan={2}>{bsResult >= 0 ? 'Utilidad del Ejercicio' : 'Perdida del Ejercicio'}</td>
+                          <td className={`px-6 py-4 text-right font-bold text-base ${bsResult >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt(Math.abs(bsResult))}</td>
+                          {showCompare && <td className="px-6 py-4 text-right font-semibold text-gray-300">{fmt(Math.abs(cBsResult))}</td>}
+                          {showCompare && <td className={`px-6 py-4 text-right font-bold ${bsResult - cBsResult >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{bsResult - cBsResult >= 0 ? '+' : ''}{fmt(bsResult - cBsResult)}</td>}
+                        </tr>
+                      );
+                    })()}
                   </tbody>
                 </table>
+                </div>
                 {balanceSheet.length === 0 && (
                   <p className="text-center text-gray-400 text-sm py-12">Sin datos para este periodo. Genera polizas primero.</p>
                 )}
