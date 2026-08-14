@@ -225,103 +225,56 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
           .gte('slot_date', today);
 
         const slotIds = (allSlots || []).map((s: any) => s.id);
+        let blockedCount = 0;
+        let blockedByReservation = false;
 
-        if (slotIds.length > 0) {
-          const { data: reservedSeats } = await supabase
-            .from('slot_seat_status')
-            .select('slot_id')
-            .eq('tour_id', tourId)
-            .eq('seat_number', blockModal.seatNumber)
-            .eq('status', 'reservado_online')
-            .in('slot_id', slotIds)
-            .limit(1);
-
-          if (reservedSeats && reservedSeats.length > 0) {
-            setBlockModal(prev => ({ ...prev, isSubmitting: false }));
-            setActionFeedback({ seat: blockModal.seatNumber, message: 'No se puede bloquear: el asiento tiene una reserva activa en una de las salidas' });
-            setTimeout(() => setActionFeedback(null), 5000);
-            return;
+        for (const sid of slotIds) {
+          const { data, error } = await supabase.rpc('toggle_agency_seat_block', {
+            p_tour_id: tourId,
+            p_agency_id: agencyId,
+            p_seat_number: blockModal.seatNumber,
+            p_block: true,
+            p_block_note: blockModal.note || null,
+            p_slot_id: sid,
+          });
+          if (error) throw error;
+          if (data && data.success) {
+            blockedCount++;
+          } else if (data && data.error && data.error.includes('reserva activa')) {
+            blockedByReservation = true;
           }
         }
 
-        await supabase
-          .from('slot_seat_status')
-          .delete()
-          .eq('tour_id', tourId)
-          .eq('seat_number', blockModal.seatNumber)
-          .in('slot_id', slotIds.length > 0 ? slotIds : ['_none_']);
-
-        if (slotIds.length > 0) {
-          const payloads = slotIds.map((sid: string) => ({
-            tour_id: tourId,
-            agency_id: agencyId,
-            seat_number: blockModal.seatNumber,
-            status: 'bloqueado_agencia',
-            block_note: blockModal.note || null,
-            blocked_by: user.id,
-            blocked_at: new Date().toISOString(),
-            slot_id: sid,
-          }));
-          const { error } = await supabase.from('slot_seat_status').insert(payloads);
-          if (error) throw error;
-        }
-
-        setActionFeedback({ seat: blockModal.seatNumber, message: `Asiento bloqueado en ${slotIds.length} salidas` });
-      } else {
-        let checkQuery = supabase
-          .from('slot_seat_status')
-          .select('status, booking_id')
-          .eq('tour_id', tourId)
-          .eq('seat_number', blockModal.seatNumber)
-          .eq('status', 'reservado_online')
-          .limit(1);
-
-        if (activeSlotId) {
-          checkQuery = (checkQuery as any).eq('slot_id', activeSlotId);
-        } else {
-          checkQuery = (checkQuery as any).is('slot_id', null);
-        }
-
-        const { data: reservedCheck } = await checkQuery;
-
-        if (reservedCheck && reservedCheck.length > 0) {
-          setBlockModal(prev => ({ ...prev, isSubmitting: false }));
-          setActionFeedback({ seat: blockModal.seatNumber, message: 'No se puede bloquear: el asiento tiene una reserva activa' });
+        if (blockedByReservation && blockedCount === 0) {
+          setActionFeedback({ seat: blockModal.seatNumber, message: 'No se puede bloquear: el asiento tiene una reserva activa en una de las salidas' });
           setTimeout(() => setActionFeedback(null), 5000);
+        } else if (blockedByReservation) {
+          setActionFeedback({ seat: blockModal.seatNumber, message: `Asiento bloqueado en ${blockedCount} de ${slotIds.length} salidas. Algunas tenian reservas activas.` });
+          setTimeout(() => setActionFeedback(null), 5000);
+        } else {
+          setActionFeedback({ seat: blockModal.seatNumber, message: `Asiento bloqueado en ${blockedCount} salidas` });
+          setTimeout(() => setActionFeedback(null), 3000);
+        }
+      } else {
+        const { data, error } = await supabase.rpc('toggle_agency_seat_block', {
+          p_tour_id: tourId,
+          p_agency_id: agencyId,
+          p_seat_number: blockModal.seatNumber,
+          p_block: true,
+          p_block_note: blockModal.note || null,
+          p_slot_id: activeSlotId || null,
+        });
+        if (error) throw error;
+        if (data && !data.success) {
+          setActionFeedback({ seat: blockModal.seatNumber, message: data.error || 'No se pudo bloquear el asiento' });
+          setTimeout(() => setActionFeedback(null), 5000);
+          setBlockModal(prev => ({ ...prev, isSubmitting: false }));
           return;
         }
-
-        let deleteQuery = supabase
-          .from('slot_seat_status')
-          .delete()
-          .eq('tour_id', tourId)
-          .eq('seat_number', blockModal.seatNumber);
-
-        if (activeSlotId) {
-          deleteQuery = (deleteQuery as any).eq('slot_id', activeSlotId);
-        } else {
-          deleteQuery = (deleteQuery as any).is('slot_id', null);
-        }
-        await deleteQuery;
-
-        const payload: any = {
-          tour_id: tourId,
-          agency_id: agencyId,
-          seat_number: blockModal.seatNumber,
-          status: 'bloqueado_agencia',
-          block_note: blockModal.note || null,
-          blocked_by: user.id,
-          blocked_at: new Date().toISOString(),
-        };
-        if (activeSlotId) payload.slot_id = activeSlotId;
-
-        const { error } = await supabase.from('slot_seat_status').insert(payload);
-        if (error) throw error;
-
         setActionFeedback({ seat: blockModal.seatNumber, message: 'Asiento bloqueado' });
+        setTimeout(() => setActionFeedback(null), 3000);
       }
 
-      setTimeout(() => setActionFeedback(null), 3000);
       setBlockModal({ open: false, seatNumber: 0, note: '', isSubmitting: false, blockAllSlots: false });
       await loadData();
     } catch (err: any) {
@@ -331,21 +284,19 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
 
   const handleUnblock = async (seatNumber: number) => {
     try {
-      let query = supabase
-        .from('slot_seat_status')
-        .delete()
-        .eq('tour_id', tourId)
-        .eq('seat_number', seatNumber)
-        .eq('status', 'bloqueado_agencia');
-
-      if (activeSlotId) {
-        query = (query as any).eq('slot_id', activeSlotId);
+      const { data, error } = await supabase.rpc('toggle_agency_seat_block', {
+        p_tour_id: tourId,
+        p_agency_id: agencyId,
+        p_seat_number: seatNumber,
+        p_block: false,
+        p_slot_id: activeSlotId || null,
+      });
+      if (error) throw error;
+      if (data && !data.success) {
+        setActionFeedback({ seat: seatNumber, message: data.error || 'No se pudo desbloquear el asiento' });
       } else {
-        query = (query as any).is('slot_id', null);
+        setActionFeedback({ seat: seatNumber, message: 'Asiento desbloqueado' });
       }
-
-      await query;
-      setActionFeedback({ seat: seatNumber, message: 'Asiento desbloqueado' });
       setTimeout(() => setActionFeedback(null), 2500);
       await loadData();
     } catch (err: any) {
