@@ -96,11 +96,11 @@ Deno.serve(async (req: Request) => {
 
     let mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
     if (!mpAccessToken) {
-      const { data: settings } = await supabase
-        .from("platform_settings")
+      const { data: secrets } = await supabase
+        .from("platform_secrets")
         .select("mercadopago_access_token")
         .maybeSingle();
-      if (settings?.mercadopago_access_token) mpAccessToken = settings.mercadopago_access_token;
+      if (secrets?.mercadopago_access_token) mpAccessToken = secrets.mercadopago_access_token;
     }
 
     if (!mpAccessToken) {

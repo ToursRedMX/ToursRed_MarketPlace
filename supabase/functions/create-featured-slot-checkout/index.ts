@@ -182,12 +182,12 @@ Deno.serve(async (req: Request) => {
     }
 
     if (provider === "mercadopago") {
-      const { data: settings } = await supabase
-        .from("platform_settings")
+      const { data: secrets } = await supabase
+        .from("platform_secrets")
         .select("mercadopago_access_token")
         .maybeSingle();
 
-      if (!settings?.mercadopago_access_token) {
+      if (!secrets?.mercadopago_access_token) {
         return new Response(
           JSON.stringify({ error: "MercadoPago not configured" }),
           { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -197,7 +197,7 @@ Deno.serve(async (req: Request) => {
       const mpRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${settings.mercadopago_access_token}`,
+          Authorization: `Bearer ${secrets.mercadopago_access_token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -236,10 +236,14 @@ Deno.serve(async (req: Request) => {
     if (provider === "paypal") {
       const { data: settings } = await supabase
         .from("platform_settings")
-        .select("paypal_client_id, paypal_client_secret, paypal_sandbox")
+        .select("paypal_client_id, paypal_sandbox")
+        .maybeSingle();
+      const { data: secrets } = await supabase
+        .from("platform_secrets")
+        .select("paypal_client_secret")
         .maybeSingle();
 
-      if (!settings?.paypal_client_id || !settings?.paypal_client_secret) {
+      if (!settings?.paypal_client_id || !secrets?.paypal_client_secret) {
         return new Response(
           JSON.stringify({ error: "PayPal not configured" }),
           { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -253,7 +257,7 @@ Deno.serve(async (req: Request) => {
       const tokenRes = await fetch(`${paypalBase}/v1/oauth2/token`, {
         method: "POST",
         headers: {
-          Authorization: `Basic ${btoa(`${settings.paypal_client_id}:${settings.paypal_client_secret}`)}`,
+          Authorization: `Basic ${btoa(`${settings.paypal_client_id}:${secrets.paypal_client_secret}`)}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: "grant_type=client_credentials",

@@ -289,10 +289,15 @@ Deno.serve(async (req: Request) => {
 
               console.log(`Booking ${bookingId} confirmed (Openpay) — total paid: ${totalPaid}/${requiredAmount}`);
 
-              const cfdiSettings = await supabase
+              const cfdiSettingsRes = await supabase
                 .from("platform_settings")
                 .select("pac_provider")
                 .maybeSingle();
+              const cfdiSecretsRes = await supabase
+                .from("platform_secrets")
+                .select("pac_api_key_encrypted")
+                .maybeSingle();
+              const cfdiSettings = { pac_provider: cfdiSettingsRes?.data?.pac_provider, pac_api_key_encrypted: cfdiSecretsRes?.data?.pac_api_key_encrypted };
 
               if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
                 EdgeRuntime.waitUntil(
@@ -376,10 +381,15 @@ Deno.serve(async (req: Request) => {
             .eq("charge_reference_id", chargeReferenceId)
             .eq("payment_processor", "openpay");
 
-          const cfdiSettings = await supabase
+          const cfdiSettingsRes2 = await supabase
             .from("platform_settings")
             .select("pac_provider")
             .maybeSingle();
+          const cfdiSecretsRes2 = await supabase
+            .from("platform_secrets")
+            .select("pac_api_key_encrypted")
+            .maybeSingle();
+          const cfdiSettings = { pac_provider: cfdiSettingsRes2?.data?.pac_provider, pac_api_key_encrypted: cfdiSecretsRes2?.data?.pac_api_key_encrypted };
 
           if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
             EdgeRuntime.waitUntil(
@@ -471,7 +481,9 @@ Deno.serve(async (req: Request) => {
 
           await awardExtraPointsOpenpay(supabase, chargeReferenceId, extraSubtotal, chargeReferenceId, "insurance_payment", "Puntos por seguro (Openpay)");
 
-          const cfdiSettingsIns = await supabase.from("platform_settings").select("pac_provider").maybeSingle();
+          const cfdiSettingsInsRes = await supabase.from("platform_settings").select("pac_provider").maybeSingle();
+          const cfdiSecretsInsRes = await supabase.from("platform_secrets").select("pac_api_key_encrypted").maybeSingle();
+          const cfdiSettingsIns = { pac_provider: cfdiSettingsInsRes?.data?.pac_provider, pac_api_key_encrypted: cfdiSecretsInsRes?.data?.pac_api_key_encrypted };
           if (cfdiSettingsIns?.pac_provider && cfdiSettingsIns.pac_provider !== "none") {
             EdgeRuntime.waitUntil(
               fetch(`${supabaseUrl}/functions/v1/generate-post-booking-insurance-cfdi`, {
@@ -503,7 +515,9 @@ Deno.serve(async (req: Request) => {
             await awardExtraPointsOpenpay(supabase, bosRowOp.booking_id, extraSubtotalOs, chargeReferenceId, "optional_service_payment", "Puntos por extra: servicio opcional (Openpay)");
           }
 
-          const cfdiSettingsOs = await supabase.from("platform_settings").select("pac_provider").maybeSingle();
+          const cfdiSettingsOsRes = await supabase.from("platform_settings").select("pac_provider").maybeSingle();
+          const cfdiSecretsOsRes = await supabase.from("platform_secrets").select("pac_api_key_encrypted").maybeSingle();
+          const cfdiSettingsOs = { pac_provider: cfdiSettingsOsRes?.data?.pac_provider, pac_api_key_encrypted: cfdiSecretsOsRes?.data?.pac_api_key_encrypted };
           if (cfdiSettingsOs?.pac_provider && cfdiSettingsOs.pac_provider !== "none") {
             EdgeRuntime.waitUntil(
               fetch(`${supabaseUrl}/functions/v1/generate-optional-service-cfdi`, {

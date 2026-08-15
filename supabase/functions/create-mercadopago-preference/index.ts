@@ -65,11 +65,15 @@ Deno.serve(async (req: Request) => {
 
     const { data: platformSettings } = await supabase
       .from("platform_settings")
-      .select("mercadopago_access_token, mercadopago_public_key, platform_url")
+      .select("mercadopago_public_key, platform_url")
+      .maybeSingle();
+    const { data: secrets } = await supabase
+      .from("platform_secrets")
+      .select("mercadopago_access_token")
       .maybeSingle();
 
-    if (!mpAccessToken && platformSettings?.mercadopago_access_token) {
-      mpAccessToken = platformSettings.mercadopago_access_token;
+    if (!mpAccessToken && secrets?.mercadopago_access_token) {
+      mpAccessToken = secrets.mercadopago_access_token;
     }
 
     if (!mpAccessToken) {

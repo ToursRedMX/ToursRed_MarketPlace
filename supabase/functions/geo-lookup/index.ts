@@ -136,11 +136,17 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: settings } = await supabase
+    const { data: settingsRow } = await supabase
       .from("platform_settings")
-      .select("geo_provider, geo_api_key")
+      .select("geo_provider")
       .limit(1)
       .maybeSingle();
+    const { data: secretsRow } = await supabase
+      .from("platform_secrets")
+      .select("geo_api_key")
+      .limit(1)
+      .maybeSingle();
+    const settings = { geo_provider: settingsRow?.geo_provider, geo_api_key: secretsRow?.geo_api_key };
 
     const provider: string = settings?.geo_provider ?? "ipinfo_lite";
     const apiKey: string = settings?.geo_api_key ?? "";

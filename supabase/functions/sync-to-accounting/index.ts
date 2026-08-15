@@ -203,10 +203,15 @@ async function getZohoAccessToken(supabase: ReturnType<typeof createClient>): Pr
     return { token: tokenRow.access_token, apiDomain: tokenRow.api_domain };
   }
 
-  const { data: settings } = await supabase
+  const { data: settingsRow } = await supabase
     .from("platform_settings")
-    .select("zoho_client_id, zoho_client_secret, zoho_region")
+    .select("zoho_client_id, zoho_region")
     .maybeSingle();
+  const { data: secretsRow } = await supabase
+    .from("platform_secrets")
+    .select("zoho_client_secret")
+    .maybeSingle();
+  const settings = { zoho_client_id: settingsRow?.zoho_client_id, zoho_region: settingsRow?.zoho_region, zoho_client_secret: secretsRow?.zoho_client_secret };
 
   if (!settings?.zoho_client_id || !settings?.zoho_client_secret) {
     throw new Error("Zoho client credentials not configured.");
@@ -1202,10 +1207,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { data: settings } = await supabase
+    const { data: settingsBase } = await supabase
       .from("platform_settings")
-      .select("accounting_provider, accounting_sync_enabled, zoho_org_id, zoho_region, zoho_sandbox_mode, odoo_url, odoo_api_key_encrypted, odoo_database")
+      .select("accounting_provider, accounting_sync_enabled, zoho_org_id, zoho_region, zoho_sandbox_mode, odoo_url, odoo_database")
       .maybeSingle();
+    const { data: odooSecretsRow } = await supabase
+      .from("platform_secrets")
+      .select("odoo_api_key_encrypted")
+      .maybeSingle();
+    const settings = settingsBase ? { ...settingsBase, odoo_api_key_encrypted: odooSecretsRow?.odoo_api_key_encrypted } : null;
 
     if (action === "health_check") {
       if (!settings?.accounting_provider || settings.accounting_provider === "none") {

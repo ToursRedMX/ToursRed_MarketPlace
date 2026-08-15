@@ -14,11 +14,15 @@ async function getPayPalAccessToken(supabase: any): Promise<{ token: string; bas
 
   const { data: settings } = await supabase
     .from("platform_settings")
-    .select("paypal_client_id, paypal_client_secret, paypal_sandbox")
+    .select("paypal_client_id, paypal_sandbox")
+    .maybeSingle();
+  const { data: secrets } = await supabase
+    .from("platform_secrets")
+    .select("paypal_client_secret")
     .maybeSingle();
 
   if (!paypalClientId && settings?.paypal_client_id) paypalClientId = settings.paypal_client_id;
-  if (!paypalClientSecret && settings?.paypal_client_secret) paypalClientSecret = settings.paypal_client_secret;
+  if (!paypalClientSecret && secrets?.paypal_client_secret) paypalClientSecret = secrets.paypal_client_secret;
   if (settings?.paypal_sandbox !== undefined && settings?.paypal_sandbox !== null) isSandbox = settings.paypal_sandbox;
 
   if (!paypalClientId || !paypalClientSecret) throw new Error("PayPal credentials not configured");

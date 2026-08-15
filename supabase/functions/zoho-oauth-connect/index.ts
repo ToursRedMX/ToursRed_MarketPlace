@@ -51,10 +51,15 @@ Deno.serve(async (req: Request) => {
 
     const { action, code, grant_token } = await req.json();
 
-    const { data: settings } = await supabase
+    const { data: settingsRow } = await supabase
       .from("platform_settings")
-      .select("zoho_client_id, zoho_client_secret, zoho_org_id, zoho_region")
+      .select("zoho_client_id, zoho_org_id, zoho_region")
       .maybeSingle();
+    const { data: secretsRow } = await supabase
+      .from("platform_secrets")
+      .select("zoho_client_secret")
+      .maybeSingle();
+    const settings = settingsRow ? { ...settingsRow, zoho_client_secret: secretsRow?.zoho_client_secret } : null;
 
     if (!settings?.zoho_client_id || !settings?.zoho_client_secret) {
       return new Response(

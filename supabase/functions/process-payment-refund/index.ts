@@ -252,10 +252,16 @@ Deno.serve(async (req: Request) => {
 
         const { data: settings } = await supabase
           .from("platform_settings")
-          .select("paypal_client_id, paypal_client_secret, paypal_sandbox")
+          .select("paypal_client_id, paypal_sandbox")
           .maybeSingle();
         if (!paypalClientId && settings?.paypal_client_id) paypalClientId = settings.paypal_client_id;
-        if (!paypalClientSecret && settings?.paypal_client_secret) paypalClientSecret = settings.paypal_client_secret;
+        if (!paypalClientSecret) {
+          const { data: secrets } = await supabase
+            .from("platform_secrets")
+            .select("paypal_client_secret")
+            .maybeSingle();
+          if (secrets?.paypal_client_secret) paypalClientSecret = secrets.paypal_client_secret;
+        }
         if (settings?.paypal_sandbox !== undefined && settings?.paypal_sandbox !== null) isSandbox = settings.paypal_sandbox;
 
         if (!paypalClientId || !paypalClientSecret) throw new Error("PayPal no configurado");
@@ -299,11 +305,11 @@ Deno.serve(async (req: Request) => {
       } else if (processor === "mercadopago") {
         let mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
         if (!mpAccessToken) {
-          const { data: settings } = await supabase
-            .from("platform_settings")
+          const { data: secrets } = await supabase
+            .from("platform_secrets")
             .select("mercadopago_access_token")
             .maybeSingle();
-          if (settings?.mercadopago_access_token) mpAccessToken = settings.mercadopago_access_token;
+          if (secrets?.mercadopago_access_token) mpAccessToken = secrets.mercadopago_access_token;
         }
         if (!mpAccessToken) throw new Error("MercadoPago no configurado");
 
@@ -330,7 +336,7 @@ Deno.serve(async (req: Request) => {
           : 0;
 
       } else if (processor === "conekta") {
-        // Conekta card-only refund: uses the order ID to refund the charge
+        // Conekta card only refund: uses the order ID to refund the charge
         const conektaPrivateKey = Deno.env.get("CONEKTA_PRIVATE_KEY");
         if (!conektaPrivateKey) throw new Error("CONEKTA_PRIVATE_KEY no configurado");
 
