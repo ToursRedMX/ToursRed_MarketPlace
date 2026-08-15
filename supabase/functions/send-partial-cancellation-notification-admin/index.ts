@@ -62,10 +62,10 @@ Deno.serve(async (req: Request) => {
 
     const { data: settings } = await supabase
       .from('email_settings')
-      .select('contact_email, smtp_api_key, smtp_host')
+      .select('contact_email, smtp_api_key')
       .single();
 
-    if (!settings || !settings.smtp_host) throw new Error('SMTP no configurado');
+    if (!settings || !settings.smtp_api_key) throw new Error('SMTP no configurado');
 
     const { data: platformSettings } = await supabase
       .from('platform_settings')

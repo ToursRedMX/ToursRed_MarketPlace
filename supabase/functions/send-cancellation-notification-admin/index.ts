@@ -90,10 +90,10 @@ Deno.serve(async (req: Request) => {
 
     const { data: emailSettings } = await supabase
       .from('email_settings')
-      .select('contact_email, smtp_host, smtp_port, smtp_user, smtp_password, smtp_api_key')
+      .select('contact_email, smtp_api_key')
       .single();
 
-    if (!emailSettings || !emailSettings.smtp_host || !emailSettings.contact_email) {
+    if (!emailSettings || !emailSettings.smtp_api_key || !emailSettings.contact_email) {
       throw new Error('SMTP o email de administrador no configurado');
     }
 

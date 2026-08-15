@@ -65,11 +65,11 @@ Deno.serve(async (req: Request) => {
     const currentBalance = wallet?.balance || 0;
 
     const [{ data: settings }, { data: platformSettingsData }] = await Promise.all([
-      supabase.from('email_settings').select('contact_email, smtp_api_key, smtp_host').single(),
+      supabase.from('email_settings').select('contact_email, smtp_api_key').single(),
       supabase.from('platform_settings').select('platform_url').maybeSingle(),
     ]);
 
-    if (!settings || !settings.smtp_host) throw new Error('SMTP no configurado');
+    if (!settings || !settings.smtp_api_key) throw new Error('SMTP no configurado');
 
     const appUrl = platformSettingsData?.platform_url || "https://toursredmx.netlify.app";
 
