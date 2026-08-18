@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, ShieldAlert } from 'lucide-react';
+import { Eye, EyeOff, ShieldAlert, Fingerprint } from 'lucide-react';
 import { signIn, supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import TurnstileWidget from '../../components/TurnstileWidget';
@@ -63,6 +63,8 @@ const LoginPage: React.FC = () => {
   const [turnstileToken, setTurnstileToken] = useState('');
   const { turnstileEnabled } = useTurnstileEnabled();
   const [oauthToggles, setOauthToggles] = useState<OAuthToggles>({ google: true, azure: true, x: false, facebook: false });
+  const [passkeysEnabled, setPasskeysEnabled] = useState(false);
+  const [isPasskeyLoading, setIsPasskeyLoading] = useState(false);
   const deviceFingerprintRef = useRef<string>(computeDeviceFingerprint());
   const navigate = useNavigate();
   const location = useLocation();
@@ -328,6 +330,64 @@ const LoginPage: React.FC = () => {
               </button>
             </div>
           </form>
+
+          {passkeysEnabled && typeof window !== 'undefined' && window.PublicKeyCredential && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsPasskeyLoading(true);
+                  setError('');
+                  try {
+                    const { error: pkError } = await supabase.auth.signInWithPasskey();
+                    if (pkError) throw pkError;
+                  } catch (err: any) {
+                    setError('No se pudo iniciar sesion con clave de acceso.');
+                  } finally {
+                    setIsPasskeyLoading(false);
+                  }
+                }}
+                disabled={isPasskeyLoading}
+                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-violet-300 rounded-md shadow-sm bg-violet-50 text-sm font-medium text-violet-700 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 disabled:opacity-50 transition-colors"
+              >
+                {isPasskeyLoading ? (
+                  <div className="w-5 h-5 border-t-2 border-b-2 border-violet-400 rounded-full animate-spin" />
+                ) : (
+                  <Fingerprint className="w-5 h-5" />
+                )}
+                Usar clave de acceso
+              </button>
+            </div>
+          )}
+
+          {passkeysEnabled && typeof window !== 'undefined' && window.PublicKeyCredential && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsPasskeyLoading(true);
+                  setError('');
+                  try {
+                    const { error: pkError } = await supabase.auth.signInWithPasskey();
+                    if (pkError) throw pkError;
+                  } catch (err: any) {
+                    setError('No se pudo iniciar sesion con clave de acceso.');
+                  } finally {
+                    setIsPasskeyLoading(false);
+                  }
+                }}
+                disabled={isPasskeyLoading}
+                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-violet-300 rounded-md shadow-sm bg-violet-50 text-sm font-medium text-violet-700 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 disabled:opacity-50 transition-colors"
+              >
+                {isPasskeyLoading ? (
+                  <div className="w-5 h-5 border-t-2 border-b-2 border-violet-400 rounded-full animate-spin" />
+                ) : (
+                  <Fingerprint className="w-5 h-5" />
+                )}
+                Usar clave de acceso
+              </button>
+            </div>
+          )}
 
           {(oauthToggles.google || oauthToggles.azure || oauthToggles.x || oauthToggles.facebook) && (
           <div className="mt-6">

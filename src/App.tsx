@@ -148,6 +148,7 @@ import MaintenanceBanner from './components/MaintenanceBanner';
 import AnnouncementPopup from './components/AnnouncementPopup';
 import MaintenanceAdminPage from './pages/auth/MaintenanceAdminPage';
 import FirstLoginPasswordGate from './components/FirstLoginPasswordGate';
+import { MfaGate } from './components/MfaGate';
 import { useSEO } from './hooks/useSEO';
 
 const PROTECTED_PREFIXES = [
@@ -200,6 +201,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <MfaGate>
     <div className="flex flex-col min-h-screen">
       <ScrollToTop />
       <GoogleAnalytics />
@@ -951,6 +953,7 @@ const App: React.FC = () => {
       </MaintenanceGate>
       <AnnouncementPopup />
     </div>
+    </MfaGate>
   );
 };
 

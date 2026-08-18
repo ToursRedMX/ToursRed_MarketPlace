@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Calendar, Shield, Save, Edit } from 'lucide-react';
+import { User, Mail, Calendar, Shield, Save, CreditCard as Edit } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import ChangePasswordSection from '../../components/ChangePasswordSection';
+import { MfaSettingsSection } from '../../components/MfaSettingsSection';
+import { PasskeySettingsSection } from '../../components/PasskeySettingsSection';
 
 const AdminProfile: React.FC = () => {
   const { user } = useAuth();
@@ -264,6 +266,16 @@ const AdminProfile: React.FC = () => {
               {/* Seguridad - Cambiar Contraseña */}
               <div className="border-t pt-6">
                 <ChangePasswordSection />
+              </div>
+
+              {/* Seguridad - MFA TOTP */}
+              <div className="border-t pt-6">
+                <MfaSettingsSection />
+              </div>
+
+              {/* Seguridad - Passkeys */}
+              <div className="border-t pt-6">
+                <PasskeySettingsSection />
               </div>
 
               {/* System Information */}
