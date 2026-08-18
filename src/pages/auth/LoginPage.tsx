@@ -84,7 +84,7 @@ const LoginPage: React.FC = () => {
   useEffect(() => {
     supabase
       .from('platform_settings')
-      .select('oauth_google_login_enabled, oauth_azure_login_enabled, oauth_twitter_login_enabled, oauth_facebook_login_enabled')
+      .select('oauth_google_login_enabled, oauth_azure_login_enabled, oauth_twitter_login_enabled, oauth_facebook_login_enabled, passkeys_enabled')
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
@@ -94,6 +94,7 @@ const LoginPage: React.FC = () => {
             x: data.oauth_twitter_login_enabled ?? false,
             facebook: data.oauth_facebook_login_enabled ?? false,
           });
+          setPasskeysEnabled(data.passkeys_enabled ?? false);
         }
       })
       .catch(() => {});
@@ -339,8 +340,22 @@ const LoginPage: React.FC = () => {
                   setIsPasskeyLoading(true);
                   setError('');
                   try {
-                    const { error: pkError } = await supabase.auth.signInWithPasskey();
+                    const { data: pkData, error: pkError } = await supabase.auth.signInWithPasskey();
                     if (pkError) throw pkError;
+                    if (pkData?.user) {
+                      const role = pkData.user.user_metadata?.role;
+                      if (redirectUrl) {
+                        navigate(redirectUrl, { replace: true });
+                      } else if (role === 'admin') {
+                        navigate('/admin/dashboard');
+                      } else if (role === 'agency') {
+                        navigate('/agency/dashboard');
+                      } else if (role === 'traveler') {
+                        navigate('/traveler/dashboard');
+                      } else {
+                        navigate(from, { replace: true });
+                      }
+                    }
                   } catch (err: any) {
                     setError('No se pudo iniciar sesion con clave de acceso.');
                   } finally {
@@ -348,39 +363,10 @@ const LoginPage: React.FC = () => {
                   }
                 }}
                 disabled={isPasskeyLoading}
-                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-violet-300 rounded-md shadow-sm bg-violet-50 text-sm font-medium text-violet-700 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 disabled:opacity-50 transition-colors"
+                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-blue-300 rounded-md shadow-sm bg-blue-50 text-sm font-medium text-blue-700 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
               >
                 {isPasskeyLoading ? (
-                  <div className="w-5 h-5 border-t-2 border-b-2 border-violet-400 rounded-full animate-spin" />
-                ) : (
-                  <Fingerprint className="w-5 h-5" />
-                )}
-                Usar clave de acceso
-              </button>
-            </div>
-          )}
-
-          {passkeysEnabled && typeof window !== 'undefined' && window.PublicKeyCredential && (
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={async () => {
-                  setIsPasskeyLoading(true);
-                  setError('');
-                  try {
-                    const { error: pkError } = await supabase.auth.signInWithPasskey();
-                    if (pkError) throw pkError;
-                  } catch (err: any) {
-                    setError('No se pudo iniciar sesion con clave de acceso.');
-                  } finally {
-                    setIsPasskeyLoading(false);
-                  }
-                }}
-                disabled={isPasskeyLoading}
-                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-violet-300 rounded-md shadow-sm bg-violet-50 text-sm font-medium text-violet-700 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 disabled:opacity-50 transition-colors"
-              >
-                {isPasskeyLoading ? (
-                  <div className="w-5 h-5 border-t-2 border-b-2 border-violet-400 rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-t-2 border-b-2 border-blue-400 rounded-full animate-spin" />
                 ) : (
                   <Fingerprint className="w-5 h-5" />
                 )}
