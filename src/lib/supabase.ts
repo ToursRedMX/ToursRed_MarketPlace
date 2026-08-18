@@ -14,7 +14,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     storage: window.localStorage,
     experimental: {
-      passkeys: true,
+      passkey: true,
     },
   }
 });
