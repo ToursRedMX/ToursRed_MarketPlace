@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,6 +42,12 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "Only super admin can delete auth users" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // AAL2 (MFA) check — blocks the action if MFA is required but not completed
+    const aal2 = await checkAal2Required(supabase);
+    if (!aal2.allowed) {
+      return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores");
     }
 
     const { user_id } = await req.json();

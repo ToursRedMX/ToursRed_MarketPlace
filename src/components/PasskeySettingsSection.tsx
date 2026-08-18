@@ -21,9 +21,14 @@ export const PasskeySettingsSection: React.FC = () => {
     setLoading(true);
     try {
       const { data, error: listError } = await supabase.auth.passkey.list();
-      if (listError) throw listError;
-      setPasskeys((data ?? []) as PasskeyInfo[]);
-    } catch {
+      if (listError) {
+        console.error('Error listing passkeys:', listError);
+        setPasskeys([]);
+      } else {
+        setPasskeys((data ?? []) as PasskeyInfo[]);
+      }
+    } catch (err: any) {
+      console.error('Exception listing passkeys:', err);
       setPasskeys([]);
     } finally {
       setLoading(false);
@@ -62,7 +67,9 @@ export const PasskeySettingsSection: React.FC = () => {
       setSuccess('Clave de acceso registrada correctamente');
       await loadPasskeys();
     } catch (err: any) {
-      setError(err.message || 'Error al registrar clave de acceso');
+      console.error('Error registering passkey:', err);
+      const msg = err.message || err.name || 'Error al registrar clave de acceso';
+      setError(msg);
     } finally {
       setRegistering(false);
     }

@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -26,6 +27,12 @@ Deno.serve(async (req)=>{
     const { data: userData, error: userDataError } = await supabase.from("users").select("role").eq("id", user.id).single();
     if (userDataError || !userData || userData.role !== 'admin' && userData.role !== 'super_admin') {
       throw new Error("Unauthorized: Admin access required");
+    }
+
+    // AAL2 (MFA) check — blocks the action if MFA is required but not completed
+    const aal2 = await checkAal2Required(supabase);
+    if (!aal2.allowed) {
+      return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores");
     }
 
     const body = await req.json();
