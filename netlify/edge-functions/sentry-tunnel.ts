@@ -1,10 +1,14 @@
 import { Config } from '@netlify/edge-functions';
 
 export default async (request: Request) => {
-  const body = await request.text();
+  const envelopeBytes = await request.arrayBuffer();
 
-  const envelopeItems = body.split('\n');
-  const header = JSON.parse(envelopeItems[0]);
+  // Solo decodificamos a texto para leer el header (primera línea).
+  // El resto de los bytes se reenvían sin tocar, para no corromper
+  // los envelopes binarios de Session Replay.
+  const envelopeText = new TextDecoder().decode(envelopeBytes);
+  const headerLine = envelopeText.split('\n')[0];
+  const header = JSON.parse(headerLine);
   const dsn = new URL(header.dsn);
   const projectId = dsn.pathname.replace('/', '');
   const host = dsn.host;
@@ -14,9 +18,9 @@ export default async (request: Request) => {
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/octet-stream',
+      'Content-Type': 'application/x-sentry-envelope',
     },
-    body,
+    body: envelopeBytes,
   });
 
   return new Response(response.body, {
