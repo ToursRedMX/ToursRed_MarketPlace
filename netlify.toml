@@ -7,6 +7,10 @@ SECRETS_SCAN_ENABLED = "false"
 NODE_VERSION = "20"
 
 [[edge_functions]]
+function = "sentry-tunnel"
+path = "/sentry-tunnel"
+
+[[edge_functions]]
 function = "tour-slug-redirect"
 path = "/tours/*"
 

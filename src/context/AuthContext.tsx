@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import * as Sentry from '@sentry/react';
 import { supabase, UserRole } from '../lib/supabase';
 
 export interface AdminPermissions {
@@ -392,6 +393,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setUser(authUser);
 
+      Sentry.setUser({ id: authUser.id, email: authUser.email || undefined });
+
       if (authUser) {
         // Check if Google or Azure OAuth user hasn't completed onboarding yet
         const isOAuthProvider =
@@ -634,6 +637,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setNeedsTermsAcceptance(false);
         }
       } else {
+        Sentry.setUser(null);
         setUserRole(null);
         setIsEmailVerified(false);
         setIsSuperAdmin(false);
@@ -799,6 +803,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+        Sentry.setUser(null);
         initializedUserIdRef.current = null;
         currentUserRef.current = null;
         currentRoleRef.current = null;
