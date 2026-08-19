@@ -7,6 +7,7 @@ import { getUserBookings, getUserPastBookings, getUserCancelledBookings, parseDa
 import { Booking, PendingReschedule } from '../../types';
 import { format } from 'date-fns';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useStepUp } from '../../context/StepUpContext';
 import ReviewForm from '../../components/ReviewForm';
 import { useFormPersistence } from '../../hooks/useFormPersistence';
 import { usePreventUnload } from '../../hooks/usePreventUnload';
@@ -17,6 +18,7 @@ import PaymentProviderSelector from '../../components/PaymentProviderSelector';
 const TravelerBookings: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { fetchWithStepUp } = useStepUp();
   const [searchParams, setSearchParams] = useSearchParams();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
@@ -1869,7 +1871,7 @@ const TravelerBookings: React.FC = () => {
         return;
       }
 
-      const payRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-supplement-payment`, {
+      const payRes = await fetchWithStepUp(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-supplement-payment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1884,7 +1886,14 @@ const TravelerBookings: React.FC = () => {
         }),
       });
       const payData = await payRes.json();
-      if (!payRes.ok && !payData.url) throw new Error(payData.error || 'Error procesando pago');
+      if (!payRes.ok && !payData.url) {
+        if (payData.code === 'MFA_NOT_CONFIGURED' || payData.code === 'STEP_UP_REQUIRED') {
+          // El usuario cancelo el paso de verificacion o activacion de MFA en el modal.
+          setSupplementDirectPayModal(prev => ({ ...prev, isProcessing: false }));
+          return;
+        }
+        throw new Error(payData.error || 'Error procesando pago');
+      }
 
       if (payData.url) {
         window.location.href = payData.url;
@@ -2083,11 +2092,17 @@ const TravelerBookings: React.FC = () => {
         return;
       }
 
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/purchase-post-booking-extras`, {
+      const res = await fetchWithStepUp(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/purchase-post-booking-extras`, {
         method: 'POST', headers, body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al procesar el pago');
+      if (!res.ok) {
+        if (data.code === 'MFA_NOT_CONFIGURED' || data.code === 'STEP_UP_REQUIRED') {
+          setExtrasPaymentModal(prev => ({ ...prev, isProcessing: false }));
+          return;
+        }
+        throw new Error(data.error || 'Error al procesar el pago');
+      }
 
       if (data.url) {
         window.location.href = data.url;
@@ -2188,7 +2203,7 @@ const TravelerBookings: React.FC = () => {
         }
 
         // Proceed to process payment for this supplement
-        const payRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-supplement-payment`, {
+        const payRes = await fetchWithStepUp(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-supplement-payment`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -2204,7 +2219,13 @@ const TravelerBookings: React.FC = () => {
           }),
         });
         const payData = await payRes.json();
-        if (!payRes.ok && !payData.url) throw new Error(payData.error || 'Error procesando pago');
+        if (!payRes.ok && !payData.url) {
+          if (payData.code === 'MFA_NOT_CONFIGURED' || payData.code === 'STEP_UP_REQUIRED') {
+            setSupplementPaymentModal(prev => ({ ...prev, isProcessing: false }));
+            return;
+          }
+          throw new Error(payData.error || 'Error procesando pago');
+        }
 
         if (payData.url) {
           window.location.href = payData.url;

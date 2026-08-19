@@ -8,6 +8,7 @@ import { es } from 'date-fns/locale';
 import TravelerReviewsDisplay from '../../components/TravelerReviewsDisplay';
 import ProfilePictureUploader from '../../components/ProfilePictureUploader';
 import ChangePasswordSection from '../../components/ChangePasswordSection';
+import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import LinkedAccountsSection from '../../components/LinkedAccountsSection';
 
 interface TravelerProfile {
@@ -1403,6 +1404,11 @@ const TravelerProfile: React.FC = () => {
         {/* Seguridad - Cambiar Contraseña */}
         <div className="mt-6">
           <ChangePasswordSection />
+        </div>
+
+        {/* Seguridad - Autenticacion en dos pasos (protege tu ToursRed Cash y puntos) */}
+        <div id="seguridad" className="mt-6 scroll-mt-20">
+          <MfaSettingsSection />
         </div>
 
         {/* Cuentas vinculadas */}

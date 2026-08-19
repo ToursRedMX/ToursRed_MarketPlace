@@ -109,12 +109,10 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
     }
     setIsSubmitting(true);
     try {
-      const { error: challengeError } = await supabase.auth.mfa.challenge({
+      const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
         factorId,
       });
       if (challengeError) throw challengeError;
-
-      const { data: challengeData } = await supabase.auth.mfa.challenge({ factorId });
       const challengeIdLocal = challengeData?.id;
 
       const { error: verifyError } = await supabase.auth.mfa.verify({
