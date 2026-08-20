@@ -42,7 +42,7 @@ export default function AdminGiftCards() {
 
   const fetchGiftCards = useCallback(async () => {
     setIsLoading(true);
-    let query = supabase
+    const query = supabase
       .from('gift_cards')
       .select(`
         id, code, amount, currency, status, payment_status,

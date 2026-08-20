@@ -1629,7 +1629,7 @@ const TravelerBookings: React.FC = () => {
   const formatDate = (dateString: string) => {
     try {
       // Extract date part if it's a timestamp (contains 'T')
-      let datePart = dateString.includes('T')
+      const datePart = dateString.includes('T')
         ? dateString.split('T')[0]
         : dateString;
 

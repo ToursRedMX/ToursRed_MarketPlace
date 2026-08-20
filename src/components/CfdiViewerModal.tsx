@@ -99,7 +99,7 @@ function qrBuildMatrix(data: Uint8Array, version: number): boolean[][] {
 
 function applyFormatBits(mat: boolean[][], size: number, formatData: number): boolean[][] {
   // BCH(15,5) for format
-  let d = formatData;
+  const d = formatData;
   let rem = d << 10;
   for (let i = 14; i >= 10; i--) { if (rem & (1 << i)) rem ^= 0x537 << (i - 10); }
   const bits = ((d << 10) | rem) ^ 0x5412;

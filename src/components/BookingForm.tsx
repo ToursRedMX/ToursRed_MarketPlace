@@ -431,7 +431,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
 
         const serviceIdsWithCap = data.filter(s => s.max_capacity !== null).map(s => s.id);
 
-        let capacityMap: Record<string, number | null> = {};
+        const capacityMap: Record<string, number | null> = {};
         if (serviceIdsWithCap.length > 0) {
           const { data: capData } = await supabase
             .rpc('get_optional_services_capacity', { p_service_ids: serviceIdsWithCap });

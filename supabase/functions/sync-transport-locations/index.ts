@@ -250,7 +250,7 @@ Deno.serve(async (req)=>{
 function buildOverpassQuery(city, system) {
   const bbox = `${city.bbox_south},${city.bbox_west},${city.bbox_north},${city.bbox_east}`;
   const osmQuery = system.osm_query;
-  let queries = [];
+  const queries = [];
   // Build node queries based on osm_query
   for (const [key, values] of Object.entries(osmQuery)){
     const valueArray = Array.isArray(values) ? values : [

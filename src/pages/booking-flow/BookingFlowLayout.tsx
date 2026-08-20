@@ -99,7 +99,7 @@ const BookingFlowLayout: React.FC = () => {
       setError('');
 
       try {
-        let { data, error: tourError } = await getTourBySlug(slug);
+        const { data, error: tourError } = await getTourBySlug(slug);
 
         if ((!data || tourError) && !tourError) {
           const newSlug = await resolveTourSlug(slug);

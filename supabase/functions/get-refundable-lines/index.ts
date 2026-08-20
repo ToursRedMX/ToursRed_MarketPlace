@@ -126,7 +126,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Fetch points earned per reference_id
-    let pointsMap: Record<string, number> = {};
+    const pointsMap: Record<string, number> = {};
     if (referenceIds.length > 0) {
       const { data: pointsTx } = await supabase
         .from("toursred_points_transactions")
@@ -157,7 +157,7 @@ Deno.serve(async (req: Request) => {
       .filter((t) => t.charge_context === "supplement" && t.charge_reference_id)
       .map((t) => t.charge_reference_id);
 
-    let supplementNames: Record<string, string> = {};
+    const supplementNames: Record<string, string> = {};
     if (supplementRefIds.length > 0) {
       const { data: supps } = await supabase
         .from("booking_supplements")
@@ -173,7 +173,7 @@ Deno.serve(async (req: Request) => {
       .filter((t) => t.charge_context === "optional_service" && t.charge_reference_id)
       .map((t) => t.charge_reference_id);
 
-    let optionalNames: Record<string, string> = {};
+    const optionalNames: Record<string, string> = {};
     if (optionalRefIds.length > 0) {
       const { data: opts } = await supabase
         .from("booking_optional_services")
@@ -190,7 +190,7 @@ Deno.serve(async (req: Request) => {
       .filter((t) => t.charge_context === "payment_plan_installment" && t.charge_reference_id)
       .map((t) => t.charge_reference_id);
 
-    let installmentLabels: Record<string, string> = {};
+    const installmentLabels: Record<string, string> = {};
     if (installmentRefIds.length > 0) {
       const { data: installments } = await supabase
         .from("booking_payment_plan_installments")
@@ -209,8 +209,8 @@ Deno.serve(async (req: Request) => {
       .filter((t) => t.charge_context === "payment_plan_installment" && t.charge_reference_id)
       .map((t) => String(t.charge_reference_id));
 
-    let planPointsMap: Record<string, number> = {};
-    let planTotalAmountMap: Record<string, number> = {};
+    const planPointsMap: Record<string, number> = {};
+    const planTotalAmountMap: Record<string, number> = {};
     let txToPlanIdMap: Record<string, string> = {};
 
     if (installmentTxIds.length > 0) {

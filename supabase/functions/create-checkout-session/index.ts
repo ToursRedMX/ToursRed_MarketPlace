@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    let { data: customers, error: customerError } = await supabase
+    const { data: customers, error: customerError } = await supabase
       .from("stripe_customers")
       .select("customer_id")
       .eq("user_id", booking.user_id)
@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
       customerId = customers.customer_id;
     }
 
-    let sessionConfig: any = {
+    const sessionConfig: any = {
       customer: customerId,
       success_url: success_url || `${req.headers.get("origin")}/booking-success?booking_id=${bookingId}`,
       cancel_url: cancel_url || `${req.headers.get("origin")}/booking-cancel?booking_id=${bookingId}`,
@@ -380,7 +380,7 @@ function buildDesgloseLineItems(
 
   // Optionals: apply discount across all subtotals proportionally is over-complex;
   // apply sequentially per optional for transparency
-  let optionalsAfterDiscount = optionalLines.map((o: any) => {
+  const optionalsAfterDiscount = optionalLines.map((o: any) => {
     if (remainingDiscount <= 0) return { ...o, final: o.subtotal };
     const applied = Math.min(o.subtotal, remainingDiscount);
     remainingDiscount = Math.max(0, Math.round((remainingDiscount - applied) * 100) / 100);

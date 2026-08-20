@@ -201,7 +201,7 @@ Deno.serve(async (req: Request) => {
     }
     optionalsRefundBucket = Math.round(optionalsRefundBucket * 100) / 100;
 
-    let optionalServicesRefundable = optionalsRefundBucket;
+    const optionalServicesRefundable = optionalsRefundBucket;
     let optionalServicesServiceCharge = 0;
     for (const os of (optionalServices || [])) {
       optionalServicesServiceCharge += Number((os as any).service_charge || 0);

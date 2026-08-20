@@ -114,7 +114,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Find the topup by provider_charge_id (fallback: order_id)
-    let topupQuery = supabase
+    const topupQuery = supabase
       .from("openpay_wallet_topups")
       .select("*")
       .eq("provider_charge_id", transaction.id);
