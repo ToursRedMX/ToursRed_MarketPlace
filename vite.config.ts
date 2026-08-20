@@ -2,9 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 
+const hasSentryToken = !!process.env.SENTRY_AUTH_TOKEN;
+
 const plugins: ReturnType<typeof react>[] = [react()];
 
-if (process.env.SENTRY_AUTH_TOKEN) {
+if (hasSentryToken) {
   plugins.push(
     sentryVitePlugin({
       org: process.env.SENTRY_ORG,
@@ -30,7 +32,7 @@ export default defineConfig({
     },
   },
   build: {
-    sourcemap: 'hidden',
+    sourcemap: hasSentryToken ? 'hidden' : false,
     rollupOptions: {
       output: {
         manualChunks: {
