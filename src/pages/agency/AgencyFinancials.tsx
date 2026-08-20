@@ -7,8 +7,8 @@ import AgencyCfdiList from '../../components/AgencyCfdiList';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { format } from 'date-fns';
 import type { FinancialSummary, TourFinancialSummary, CommissionRecord } from '../../types';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import jsPDF from 'jspdf';
+import { autoTable } from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 const AgencyFinancials: React.FC = () => {
