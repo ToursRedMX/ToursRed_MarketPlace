@@ -104,6 +104,7 @@ import BookingFlowLayout from './pages/booking-flow/BookingFlowLayout';
 import NotificationsPage from './pages/NotificationsPage';
 import AgencyPublicProfile from './pages/AgencyPublicProfile';
 import NotFoundPage from './pages/NotFoundPage';
+import QaSentryTestPage from './pages/QaSentryTestPage';
 import UnsubscribePage from './pages/UnsubscribePage';
 import GiftCardsPage from './pages/GiftCardsPage';
 import TestOpenPay3DSPage from './pages/TestOpenPay3DSPage';
@@ -945,6 +946,7 @@ const App: React.FC = () => {
             element={<DashboardRedirect />}
           />
           
+          <Route path="/qa/sentry-test" element={<QaSentryTestPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
