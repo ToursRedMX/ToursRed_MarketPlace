@@ -2,19 +2,25 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 
-// https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [
-    react(),
+const plugins: ReturnType<typeof react>[] = [react()];
+
+if (process.env.SENTRY_AUTH_TOKEN) {
+  plugins.push(
     sentryVitePlugin({
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,
+      telemetry: false,
       sourcemaps: {
         filesToDeleteAfterUpload: ['dist/**/*.js.map'],
       },
-    }),
-  ],
+    })
+  );
+}
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins,
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
