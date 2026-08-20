@@ -35,9 +35,15 @@ export default defineConfig({
     sourcemap: hasSentryToken ? 'hidden' : false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          supabase: ['@supabase/supabase-js'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-router-dom') || id.includes('/react/') || id.includes('/react-dom/')) {
+              return 'vendor';
+            }
+            if (id.includes('@supabase/supabase-js')) {
+              return 'supabase';
+            }
+          }
         },
       },
     },
