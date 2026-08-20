@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Link as LinkIcon, Mail, Facebook, MessageCircle, Check } from 'lucide-react';
+import { X, Link as LinkIcon, Mail, MessageCircle, Check } from 'lucide-react';
+import { SiFacebook } from '@icons-pack/react-simple-icons';
 
 interface ShareTourModalProps {
   isOpen: boolean;
@@ -125,7 +126,7 @@ export default function ShareTourModal({ isOpen, onClose, tourId, tourName, tour
               className="w-full flex items-center gap-4 p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-left"
             >
               <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                <Facebook className="w-6 h-6 text-white" />
+                <SiFacebook className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
                 <p className="font-medium text-gray-900">Facebook</p>

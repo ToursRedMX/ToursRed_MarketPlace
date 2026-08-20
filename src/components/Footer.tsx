@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Instagram, Linkedin, Mail, Phone } from 'lucide-react';
+import { Mail, Phone } from 'lucide-react';
+import { SiFacebook, SiInstagram, SiTiktok } from '@icons-pack/react-simple-icons';
+import linkedinIcon from '../assets/icons/linkedin-in-white.png';
 
 const Footer: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -62,16 +64,16 @@ const Footer: React.FC = () => {
             </p>
             <div className="flex space-x-3">
               <a href="https://www.facebook.com/ToursRedMX" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">
-                <Facebook className="h-5 w-5" />
+                <SiFacebook className="h-5 w-5" size={20} />
               </a>
               <a href="https://www.instagram.com/toursredmx" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">
-                <Instagram className="h-5 w-5" />
+                <SiInstagram className="h-5 w-5" size={20} />
               </a>
               <a href="https://www.tiktok.com/@toursredmx" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">
-                <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/tiktok.svg" alt="TikTok" loading="lazy" className="h-5 w-5" style={{ filter: 'invert(0.6)' }} />
+                <SiTiktok className="h-5 w-5" size={20} style={{ filter: 'invert(0.6)' }} />
               </a>
               <a href="https://www.linkedin.com/company/toursredmx" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">
-                <Linkedin className="h-5 w-5" />
+                <img src={linkedinIcon} alt="LinkedIn" className="h-5 w-5 opacity-60 hover:opacity-100 transition-opacity" />
               </a>
               <a href="https://x.com/ToursRedMX" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
