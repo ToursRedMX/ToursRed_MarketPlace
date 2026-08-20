@@ -1,6 +1,16 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import type { ContractData, AnexoBData } from "../_shared/contractDocDefinition.ts";
+import * as Sentry from "npm:@sentry/deno@9";
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -264,6 +274,15 @@ Deno.serve(async (req: Request) => {
       if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
     } catch (pdfError) {
       console.error("Fallo en generación de contrato firmado:", pdfError);
+      if (sentryDsn) {
+        Sentry.captureException(pdfError, {
+          tags: {
+            execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+            region: Deno.env.get("SB_REGION") || "unknown",
+          },
+        });
+        await Sentry.flush(2000);
+      }
       // NO tocar contract_acceptances.status, NO tocar agencies.onboarding_status.
       // El OTP ya se validó, así que no se pierde — el usuario puede
       // reintentar sin pedir código nuevo.
@@ -371,6 +390,15 @@ Deno.serve(async (req: Request) => {
     );
   } catch (err) {
     console.error("Unexpected error in verify-contract-otp:", err);
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(JSON.stringify({ error: "Error interno del servidor", detail: String(err?.message || err) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
