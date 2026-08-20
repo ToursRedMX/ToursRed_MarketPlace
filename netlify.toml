@@ -4,7 +4,7 @@ publish = "dist"
 
 [build.environment]
 SECRETS_SCAN_ENABLED = "false"
-NODE_VERSION = "20.19.0"
+NODE_VERSION = "24"
 
 [[edge_functions]]
 function = "sentry-tunnel"
