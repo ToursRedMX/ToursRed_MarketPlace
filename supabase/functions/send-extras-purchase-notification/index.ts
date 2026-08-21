@@ -1,11 +1,21 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 function formatMXN(amount: number): string {
   return new Intl.NumberFormat("es-MX", {
@@ -132,7 +142,7 @@ Deno.serve(async (req: Request) => {
        (booking.count_infantes || 0) + (booking.count_adultos_mayores || 0))
     );
 
-    // ── INSURANCE ────────────────────────────────────────────────────────────
+    // ── INSURANCE ───────────────────────────────────────────────
     if (extra_type === "insurance") {
       const insuranceCost = Number(booking.travel_insurance_cost || 0);
 
@@ -222,7 +232,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── OPTIONAL SERVICE ──────────────────────────────────────────────────────
+    // ── OPTIONAL SERVICE ─────────────────────────────────────────────────────
     if (extra_type === "optional_service") {
       if (!bos_id) {
         return new Response(JSON.stringify({ error: "bos_id es requerido para optional_service" }), {
@@ -368,6 +378,15 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err: any) {
     console.error("send-extras-purchase-notification error:", err);
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

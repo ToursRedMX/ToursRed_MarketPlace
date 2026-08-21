@@ -1,12 +1,22 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@22.3.0";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -435,6 +445,15 @@ Deno.serve(async (req: Request) => {
       );
 
     } catch (processorError: any) {
+      if (sentryDsn) {
+        Sentry.captureException(processorError, {
+          tags: {
+            execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+            region: Deno.env.get("SB_REGION") || "unknown",
+          },
+        });
+        await Sentry.flush(2000);
+      }
       await supabase
         .from("payment_refunds")
         .update({
@@ -466,6 +485,15 @@ Deno.serve(async (req: Request) => {
       );
     }
   } catch (err: any) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     console.error("Error in process-payment-refund:", err);
     return new Response(
       JSON.stringify({ error: err.message || "Error interno" }),
