@@ -1,6 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
-import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,15 +13,6 @@ interface SendGiftCardEmailRequest {
   sendToPurchaser?: boolean;
 }
 
-const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
-    tracesSampleRate: 0.1,
-  });
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -31,34 +21,39 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const token = authHeader.replace("Bearer ", "");
-    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } }
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-    const { data: { user } } = await supabaseUser.auth.getUser(token);
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const { data: caller } = await supabaseUser.from("users").select("role").eq("id", user.id).maybeSingle();
-    if (!caller || !["admin", "super_admin", "traveler", "agency_owner"].includes(caller.role)) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+  }
+  const token = authHeader.replace("Bearer ", "");
+  const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+  const { data: { user } } = await supabaseUser.auth.getUser(token);
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const { data: caller } = await supabaseUser.from("users").select("role").eq("id", user.id).maybeSingle();
+  if (!caller || !["admin", "super_admin", "traveler", "agency_owner"].includes(caller.role)) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  if (caller.role === "traveler") {
+    const { data: gc } = await supabase.from("gift_cards").select("purchaser_user_id").eq("id", giftCardId).maybeSingle();
+    if (!gc || gc.purchaser_user_id !== user.id) {
+      return new Response(JSON.stringify({ error: "Not authorized for this gift card" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+  }
+
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { giftCardId, sendToRecipient = true, sendToPurchaser = true }: SendGiftCardEmailRequest = await req.json();
 
@@ -70,15 +65,6 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
-    }
-
-    if (caller.role === "traveler") {
-      const { data: gc } = await supabase.from("gift_cards").select("purchaser_user_id").eq("id", giftCardId).maybeSingle();
-      if (!gc || gc.purchaser_user_id !== user.id) {
-        return new Response(JSON.stringify({ error: "Not authorized for this gift card" }), {
-          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
     }
 
     const { data: giftCard, error: giftCardError } = await supabase
@@ -205,15 +191,6 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error) {
     console.error("Error in send-gift-card-email function:", error);
-    if (sentryDsn) {
-      Sentry.captureException(error, {
-        tags: {
-          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
-          region: Deno.env.get("SB_REGION") || "unknown",
-        },
-      });
-      await Sentry.flush(2000);
-    }
     return new Response(
       JSON.stringify({ error: error.message || "Internal server error" }),
       {

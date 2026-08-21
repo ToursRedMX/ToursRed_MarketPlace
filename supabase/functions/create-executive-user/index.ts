@@ -1,21 +1,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { checkAal2Required, aal2Response } from '../_shared/aal2Check.ts';
-import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
-
-const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
-    tracesSampleRate: 0.1,
-  });
-}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -29,6 +18,7 @@ Deno.serve(async (req: Request) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
+    // Verify calling user is admin
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
@@ -56,17 +46,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // AAL2 (MFA) check — creating a new privileged (executive) account.
-    const userClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
-    const aal2 = await checkAal2Required(userClient);
-    if (!aal2.allowed) {
-      return aal2Response(aal2.reason || 'Se requiere autenticacion de dos factores');
-    }
-
     const { email, password, first_name, last_name, phone, notes } = await req.json();
 
     if (!email || !password || !first_name) {
@@ -75,6 +54,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Create auth user with admin API — does NOT affect the current session
     const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -90,6 +70,7 @@ Deno.serve(async (req: Request) => {
 
     const newUserId = authData.user.id;
 
+    // Insert into users table
     const { error: profileError } = await supabaseAdmin.from('users').insert({
       id: newUserId,
       email,
@@ -106,6 +87,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Insert into account_executives table
     const { error: execError } = await supabaseAdmin.from('account_executives').insert({
       user_id: newUserId,
       first_name,
@@ -125,6 +107,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Send credentials email (fire-and-forget — don't fail the creation if email fails)
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
       await fetch(`${supabaseUrl}/functions/v1/send-executive-credentials`, {
@@ -145,15 +128,6 @@ Deno.serve(async (req: Request) => {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    if (sentryDsn) {
-      Sentry.captureException(error, {
-        tags: {
-          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
-          region: Deno.env.get("SB_REGION") || "unknown",
-        },
-      });
-      await Sentry.flush(2000);
-    }
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Error interno' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

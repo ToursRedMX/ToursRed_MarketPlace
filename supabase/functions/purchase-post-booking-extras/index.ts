@@ -2,23 +2,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@22.3.0";
 import { isConfigured as isOpenpayConfigured, getDashboardUrl, getMerchantId, createOrReuseCustomer as createOrReuseOpenpayCustomer, createSpeiCharge, createCashCharge, createCardCheckoutCharge } from "../_shared/openpay.ts";
-import { enforceStepUp } from "../_shared/stepUpCheck.ts";
-import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
-
-const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
-    tracesSampleRate: 0.1,
-  });
-}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -62,7 +51,7 @@ Deno.serve(async (req: Request) => {
       conekta_method,        // "card" | "cash" | "spei" | "bnpl"
       bnpl_product_type,     // "aplazo_bnpl" | "creditea_bnpl" | "coppel_bnpl"
       openpay_method,        // "card" | "spei" | "cash"
-      insurance_days,
+      insurance_days, // optional: for standalone activities (transport/experience/ticket)
     } = await req.json();
 
     if (!booking_id || !type || !payment_method) {
@@ -77,12 +66,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Step-up auth: traveler is spending their own wallet/points directly (self-service).
-    if (payment_method === "toursred_cash" || payment_method === "points") {
-      const stepUpBlock = await enforceStepUp(userClient, supabaseServiceKey, supabaseUrl, user.id);
-      if (stepUpBlock) return stepUpBlock;
-    }
-
+    // Load booking and verify ownership
     const { data: booking } = await supabase
       .from("bookings")
       .select(`
@@ -111,6 +95,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Platform settings
     const { data: platformSettings } = await supabase
       .from("platform_settings")
       .select(`
@@ -128,6 +113,7 @@ Deno.serve(async (req: Request) => {
     const serviceChargePct = platformSettings?.service_charge_percentage ?? 5;
     const agencyCommissionPct = platformSettings?.optional_service_commission_percentage ?? 15;
 
+    // ── OPTIONAL SERVICE ─────────────────────────────────────────────────────
     let bookingOptionalServiceId: string | null = null;
     let itemName = "";
     let subtotal = 0;
@@ -155,6 +141,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      // Check capacity
       if (service.max_capacity != null) {
         const { data: usedData } = await supabase
           .from("booking_optional_services")
@@ -187,6 +174,7 @@ Deno.serve(async (req: Request) => {
       agencyCommission = parseFloat((subtotal * agencyCommissionPct / 100).toFixed(2));
       totalToPay = parseFloat((subtotal + netServiceCharge).toFixed(2));
 
+      // Insert booking_optional_services record
       const { data: bosRecord, error: bosError } = await supabase
         .from("booking_optional_services")
         .insert({
@@ -227,8 +215,10 @@ Deno.serve(async (req: Request) => {
          (booking.count_infantes || 0) + (booking.count_adultos_mayores || 0))
       );
 
+      // For standalone activities (transport/experience/ticket), use client-supplied insurance_days
       let tourDays = insurance_days && Number(insurance_days) > 0 ? Math.min(30, Number(insurance_days)) : 0;
       if (!tourDays) {
+        // Fall back to deriving days from tour dates
         const refDate = booking.selected_date || tourData?.start_date;
         const endDate = tourData?.end_date;
         tourDays = 1;
@@ -255,6 +245,7 @@ Deno.serve(async (req: Request) => {
         netServiceCharge = parseFloat(exemptionResult?.net_service_charge ?? grossServiceCharge.toString());
       }
       totalToPay = parseFloat((insuranceCost + netServiceCharge).toFixed(2));
+      // insurance commission is 0 (ToursRed keeps full amount)
       agencyCommission = 0;
 
     } else {
@@ -263,7 +254,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // ── FINALIZE PAYMENT ─────────────────────────────────────────────────────
     const finalizePayment = async (method: string, intentId: string | null) => {
+      // Exemption already consumed atomically by apply_membership_service_fee_exemption RPC above
+
       let pointsEarned = 0;
       const { data: activeMembership } = await supabase
         .from("memberships")
@@ -306,6 +300,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
+      // If insurance: update booking record
       if (type === "insurance") {
         const insuranceUpdate: Record<string, unknown> = {
           travel_insurance_included: true,
@@ -318,6 +313,7 @@ Deno.serve(async (req: Request) => {
         await supabase.from("bookings").update(insuranceUpdate).eq("id", booking_id);
       }
 
+      // Send notification emails (traveler + insurance team or agency)
       EdgeRuntime.waitUntil(
         fetch(`${supabaseUrl}/functions/v1/send-extras-purchase-notification`, {
           method: "POST",
@@ -330,6 +326,7 @@ Deno.serve(async (req: Request) => {
         }).catch((e) => console.error("send-extras-purchase-notification error:", e))
       );
 
+      // Trigger CFDI generation
       const cfdiFunction = type === "optional_service"
         ? "generate-optional-service-cfdi"
         : "generate-post-booking-insurance-cfdi";
@@ -348,12 +345,14 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      // Mark optional service as paid with payment method
       if (bookingOptionalServiceId) {
         await supabase.from("booking_optional_services")
           .update({ paid_at: new Date().toISOString(), payment_method: method })
           .eq("id", bookingOptionalServiceId);
       }
 
+      // Record in payment_transactions for refund tracking (processor payments only)
       const extraChargeContext = type === "insurance" ? "insurance" : "optional_service";
       const extraRefId = bookingOptionalServiceId || booking_id;
       if (method === "stripe" && intentId) {
@@ -421,6 +420,9 @@ Deno.serve(async (req: Request) => {
       return pointsEarned;
     };
 
+    // ── PAYMENT ROUTING ───────────────────────────────────────────────────────
+
+    // 1. ToursRed Cash
     if (payment_method === "toursred_cash") {
       const { data: wallet } = await supabase
         .from("toursred_cash_wallets")
@@ -431,6 +433,7 @@ Deno.serve(async (req: Request) => {
 
       const walletBalance = Number(wallet?.balance ?? 0);
       if (walletBalance < totalToPay) {
+        // Rollback BOS insert if optional_service
         if (bookingOptionalServiceId) {
           await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
         }
@@ -466,6 +469,7 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // 2. Points
     if (payment_method === "points") {
       const pointsNeeded = Math.ceil(totalToPay * 100);
       const { data: pWallet } = await supabase
@@ -509,6 +513,7 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // 3. Stripe
     if (payment_method === "stripe") {
       const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
       if (!stripeKey) {
@@ -552,6 +557,7 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // 4. MercadoPago
     if (payment_method === "mercadopago") {
       const mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || platformSecrets?.mercadopago_access_token;
       if (!mpAccessToken) {
@@ -566,6 +572,7 @@ Deno.serve(async (req: Request) => {
       const extraChargeContext = type === "insurance" ? "insurance" : "optional_service";
       const extraRefId = bookingOptionalServiceId || booking_id;
 
+      // Path (a): No form data and no payment_id → create Checkout Pro preference for redirect flow
       if (!mp_form_data && !mercadopago_payment_id) {
         const preferencePayload = {
           items: [{
@@ -603,6 +610,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      // Path (c): mercadopago_payment_id present → verify against MP API before confirming
       if (mercadopago_payment_id) {
         const verifyResponse = await fetch(`https://api.mercadopago.com/v1/payments/${mercadopago_payment_id}`, {
           headers: { Authorization: `Bearer ${mpAccessToken}` },
@@ -637,6 +645,7 @@ Deno.serve(async (req: Request) => {
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      // Path (b): mp_form_data present → direct Brick charge with server-calculated amount
       const mpPayload = {
         ...mp_form_data,
         transaction_amount: totalToPay,
@@ -678,6 +687,7 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // 5. PayPal
     if (payment_method === "paypal") {
       if (!paypal_order_id) {
         if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
@@ -734,6 +744,7 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // 6. Conekta
     if (payment_method === "conekta") {
       if (!conekta_method || !["card", "cash", "spei", "bnpl"].includes(conekta_method)) {
         if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
@@ -851,6 +862,7 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // 7. Openpay
     if (payment_method === "openpay") {
       if (!openpay_method || !["card", "spei", "cash"].includes(openpay_method)) {
         if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
@@ -945,15 +957,6 @@ Deno.serve(async (req: Request) => {
     });
 
   } catch (err) {
-    if (sentryDsn) {
-      Sentry.captureException(err, {
-        tags: {
-          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
-          region: Deno.env.get("SB_REGION") || "unknown",
-        },
-      });
-      await Sentry.flush(2000);
-    }
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

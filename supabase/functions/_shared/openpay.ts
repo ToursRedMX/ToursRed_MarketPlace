@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 
-// ── OpenPay API client (server-side only) ────────────────────────
+// ── OpenPay API client (server-side only) ──────────────────────
 
 const SANDBOX_URL = "https://sandbox-api.openpay.mx/v1";
 const PRODUCTION_URL = "https://api.openpay.mx/v1";
@@ -73,7 +73,7 @@ export interface OpenPayCharge {
   customer_id?: string;
 }
 
-// ── Create or reuse customer ─────────────────────────
+// ── Create or reuse customer ───────────────────────────────────
 
 export async function createOrReuseCustomer(
   supabase: ReturnType<typeof createClient>,
@@ -142,7 +142,7 @@ export async function createOrReuseCustomer(
   return customer.id;
 }
 
-// ── Create SPEI bank charge ────────────────────────
+// ── Create SPEI bank charge ────────────────────────────────────
 
 export async function createSpeiCharge(
   customerId: string,
@@ -181,7 +181,7 @@ export async function createSpeiCharge(
   return charge as OpenPayCharge;
 }
 
-// ── Create CODI QR charge ──────────────────────────
+// ── Create CODI QR charge ──────────────────────────────────────
 
 export async function createCodiCharge(
   customerId: string,
@@ -223,7 +223,7 @@ export async function createCodiCharge(
   return charge as OpenPayCharge;
 }
 
-// ── Create cash charge (store reference) ─────────────────
+// ── Create cash charge (store reference) ────────────────────────
 
 export async function createCashCharge(
   customerId: string,
@@ -262,7 +262,7 @@ export async function createCashCharge(
   return charge as OpenPayCharge;
 }
 
-// ── Get charge status from OpenPay ─────────────────────
+// ── Get charge status from OpenPay ─────────────────────────────
 
 export async function getCharge(
   customerId: string,
@@ -323,7 +323,7 @@ export async function getChargeMerchant(
   return charge as OpenPayCharge;
 }
 
-// ── Create card checkout charge (3DS redirect) ────────────
+// ── Create card checkout charge (3DS redirect) ────────────────
 
 export async function createCardCheckoutCharge(
   customerId: string,
@@ -357,8 +357,8 @@ export async function createCardCheckoutCharge(
   const charge = await response.json();
 
   if (!response.ok) {
-    console.error("OpenPay getChargeMerchant error:", charge);
-    throw new Error(charge.description || "No fue posible consultar el cargo en OpenPay");
+    console.error("OpenPay card checkout charge error:", charge);
+    throw new Error(charge.description || "No fue posible crear el cargo con tarjeta");
   }
 
   return charge as OpenPayCharge;
