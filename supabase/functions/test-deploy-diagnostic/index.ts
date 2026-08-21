@@ -1,1 +1,0 @@
-Deno.serve(() => new Response('deprecated, safe to delete'));
