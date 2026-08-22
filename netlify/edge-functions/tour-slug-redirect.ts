@@ -26,10 +26,10 @@ export default async (request: Request, context: Context): Promise<Response | vo
   }
 
   const supabaseUrl = Netlify.env.get("SUPABASE_URL");
-  const supabaseAnonKey = Netlify.env.get("SUPABASE_ANON_KEY");
+  const supabasePublishableKey = Netlify.env.get("SUPABASE_PUBLISHABLE_KEY");
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("tour-slug-redirect: SUPABASE_URL or SUPABASE_ANON_KEY not set in Netlify env (Functions scope)");
+  if (!supabaseUrl || !supabasePublishableKey) {
+    console.error("tour-slug-redirect: SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY not set in Netlify env (Functions scope)");
     return nextWithHeader(context);
   }
 
@@ -37,8 +37,7 @@ export default async (request: Request, context: Context): Promise<Response | vo
     const apiUrl = `${supabaseUrl}/rest/v1/rpc/resolve_tour_slug?p_old_slug=${encodeURIComponent(slug)}`;
     const response = await fetch(apiUrl, {
       headers: {
-        "apikey": supabaseAnonKey,
-        "Authorization": `Bearer ${supabaseAnonKey}`,
+        "apikey": supabasePublishableKey,
         "Content-Type": "application/json",
       },
     });
