@@ -392,7 +392,6 @@ Deno.serve(async (req: Request) => {
     if (sentryDsn) {
       Sentry.captureException(err, {
         tags: {
-          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
           region: Deno.env.get("SB_REGION") || "unknown",
         },
       });

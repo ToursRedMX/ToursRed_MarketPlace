@@ -1,11 +1,22 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
+import * as Sentry from "npm:@sentry/deno@9";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey"
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
+
 Deno.serve(async (req)=>{
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -29,8 +40,14 @@ Deno.serve(async (req)=>{
       throw new Error("Unauthorized: Admin access required");
     }
 
-    // AAL2 (MFA) check — blocks the action if MFA is required but not completed
-    const aal2 = await checkAal2Required(supabase);
+    // AAL2 (MFA) check — must use a client authenticated with the CALLER's own JWT,
+    // not the service-role client: requires_aal2_check()/has_aal2() read auth.uid()/
+    // auth.jwt(), which resolve to NULL under a service-role session and silently
+    // no-op the check.
+    const userClient = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_ANON_KEY"), {
+      global: { headers: { Authorization: authHeader } }
+    });
+    const aal2 = await checkAal2Required(userClient);
     if (!aal2.allowed) {
       return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores");
     }
@@ -53,7 +70,6 @@ Deno.serve(async (req)=>{
       throw new Error("Missing required fields: agency_id and commission_ids or penalty_ids");
     }
 
-    // Use RPC for atomic transaction: insert payout + update commissions + update penalties
     const { data: payoutResult, error: rpcError } = await supabase.rpc('process_agency_payout_atomic', {
       p_agency_id: agency_id,
       p_commission_ids: commission_ids,
@@ -77,7 +93,6 @@ Deno.serve(async (req)=>{
     const payoutId = payoutResult?.payout_id;
     const commissionCount = payoutResult?.commission_count || commission_ids.length;
 
-    // Send notification + email outside the transaction
     const { data: agency, error: agencyError } = await supabase.from("agencies").select("name, contact_email, user_id").eq("id", agency_id).single();
     if (!agencyError && agency) {
       await supabase.from("notifications").insert([
@@ -128,6 +143,15 @@ Deno.serve(async (req)=>{
     });
   } catch (error) {
     console.error('Error processing payout:', error);
+    if (sentryDsn) {
+      Sentry.captureException(error, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(JSON.stringify({
       success: false,
       error: error.message || 'Internal server error'

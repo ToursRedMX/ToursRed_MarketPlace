@@ -1,11 +1,21 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -22,8 +32,6 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Find bookings with partial payments (user_payment > 0) that are still incomplete
-    // Status must be pending or payment_pending_bnpl, and payment_status not succeeded
     const { data: bookings, error } = await supabase
       .from("bookings")
       .select(`
@@ -31,6 +39,7 @@ Deno.serve(async (req: Request) => {
         payment_status, status, created_at,
         incomplete_payment_reminder_72h_sent_at,
         incomplete_payment_reminder_24h_sent_at,
+        membership_purchased, used_membership_benefit,
         tours(id, name)
       `)
       .in("status", ["pending", "payment_pending_bnpl"])
@@ -55,6 +64,7 @@ Deno.serve(async (req: Request) => {
     let reminders72hSent = 0;
     let reminders24hSent = 0;
     let cancellationsProcessed = 0;
+    const errors: { booking_id: string; step: string; message: string }[] = [];
 
     for (const booking of bookings) {
       const firstPaymentTime = new Date(booking.created_at).getTime();
@@ -64,10 +74,9 @@ Deno.serve(async (req: Request) => {
       const requiredAmount = Number(booking.deposit_amount) || Number(booking.total_price) || 0;
       const paidAmount = Number(booking.user_payment) || 0;
 
-      // Skip if already fully paid (shouldn't happen due to filters, but safety check)
       if (paidAmount >= requiredAmount) continue;
 
-      // ─── 72h reminder ──────────────────────────────────────────
+      // 72h reminder
       if (elapsedHours >= 72 && elapsedHours < (6 * 24) && !booking.incomplete_payment_reminder_72h_sent_at) {
         try {
           const { data: userData } = await supabase
@@ -82,10 +91,7 @@ Deno.serve(async (req: Request) => {
 
             await fetch(`${supabaseUrl}/functions/v1/send-payment-plan-reminder`, {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${serviceKey}`,
-              },
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
               body: JSON.stringify({
                 email: userData.email,
                 firstName: userData.first_name || "Viajero",
@@ -99,18 +105,20 @@ Deno.serve(async (req: Request) => {
             }).catch((e) => console.error(`Error sending 72h reminder for booking ${booking.id}:`, e));
           }
 
-          await supabase
+          const { error: updErr } = await supabase
             .from("bookings")
             .update({ incomplete_payment_reminder_72h_sent_at: new Date().toISOString() })
             .eq("id", booking.id);
+          if (updErr) throw updErr;
 
           reminders72hSent++;
-        } catch (err) {
+        } catch (err: any) {
           console.error(`Error processing 72h reminder for booking ${booking.id}:`, err);
+          errors.push({ booking_id: booking.id, step: "72h_reminder", message: err.message || String(err) });
         }
       }
 
-      // ─── 24h before cancellation reminder (day 6) ─────────────
+      // 24h before cancellation reminder (day 6)
       if (elapsedHours >= (6 * 24) && elapsedHours < (7 * 24) && !booking.incomplete_payment_reminder_24h_sent_at) {
         try {
           const { data: userData } = await supabase
@@ -125,10 +133,7 @@ Deno.serve(async (req: Request) => {
 
             await fetch(`${supabaseUrl}/functions/v1/send-payment-plan-reminder`, {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${serviceKey}`,
-              },
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
               body: JSON.stringify({
                 email: userData.email,
                 firstName: userData.first_name || "Viajero",
@@ -142,18 +147,20 @@ Deno.serve(async (req: Request) => {
             }).catch((e) => console.error(`Error sending 24h reminder for booking ${booking.id}:`, e));
           }
 
-          await supabase
+          const { error: updErr } = await supabase
             .from("bookings")
             .update({ incomplete_payment_reminder_24h_sent_at: new Date().toISOString() })
             .eq("id", booking.id);
+          if (updErr) throw updErr;
 
           reminders24hSent++;
-        } catch (err) {
+        } catch (err: any) {
           console.error(`Error processing 24h reminder for booking ${booking.id}:`, err);
+          errors.push({ booking_id: booking.id, step: "24h_reminder", message: err.message || String(err) });
         }
       }
 
-      // ─── 7 days: cancel and refund to wallet ──────────────────
+      // 7 days: cancel and refund to ToursRed Cash wallet
       if (elapsedHours >= (7 * 24)) {
         try {
           const { data: userData } = await supabase
@@ -162,53 +169,43 @@ Deno.serve(async (req: Request) => {
             .eq("id", booking.user_id)
             .maybeSingle();
 
-          // Cancel the booking
-          await supabase
+          const { error: cancelErr } = await supabase
             .from("bookings")
             .update({
               status: "cancelled",
-              payment_status: "cancelled",
+              payment_status: "canceled",
               cancelled_at: new Date().toISOString(),
-              cancellation_reason: "pago incompleto después de 7 días",
+              cancellation_type: "system_cancelled_incomplete_payment",
             })
             .eq("id", booking.id);
+          if (cancelErr) throw cancelErr;
 
-          // Refund user_payment to ToursRed Cash wallet, minus service charge
-          const refundAmount = Math.max(0, paidAmount - (paidAmount * 0.05));
+          // FIX (2026-08-15, per Axel's review): a member exempt from the service
+          // charge (used_membership_benefit) never had that 5% embedded in what
+          // they paid, so withholding 5% here would wrongly penalize them.
+          // Only apply the 5% retention to non-exempt travelers.
+          const isServiceChargeExempt = booking.used_membership_benefit === true || booking.membership_purchased === true;
+          const refundAmount = isServiceChargeExempt
+            ? paidAmount
+            : Math.max(0, paidAmount - (paidAmount * 0.05));
 
           if (refundAmount > 0 && booking.user_id) {
-            const { data: walletId } = await supabase.rpc("get_or_create_points_wallet", {
+            const { error: refundErr } = await supabase.rpc("update_wallet_balance", {
               p_user_id: booking.user_id,
+              p_amount: refundAmount,
+              p_type: "refund",
+              p_description: `Reembolso por cancelación - pago incompleto (Reserva ${booking.booking_code})${isServiceChargeExempt ? " - exento de cargo de servicio" : ""}`,
+              p_reference_id: booking.id,
+              p_reference_type: "booking_cancellation",
+              p_idempotency_key: `incomplete_cancel_${booking.id}`,
             });
-
-            if (walletId) {
-              // Actually refund to ToursRed Cash wallet, not points wallet
-              const { data: cashWalletId } = await supabase.rpc("get_or_create_wallet", {
-                p_user_id: booking.user_id,
-              });
-
-              if (cashWalletId) {
-                await supabase.rpc("update_wallet_balance", {
-                  p_wallet_id: cashWalletId,
-                  p_amount: refundAmount,
-                  p_type: "refund",
-                  p_description: `Reembolso por cancelación - pago incompleto (Reserva ${booking.booking_code})`,
-                  p_reference_id: booking.id,
-                  p_reference_type: "booking_cancellation",
-                  p_idempotency_key: `incomplete_cancel_${booking.id}`,
-                });
-              }
-            }
+            if (refundErr) throw refundErr;
           }
 
-          // Send cancellation notification email
           if (userData?.email) {
             await fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-traveler`, {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${serviceKey}`,
-              },
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
               body: JSON.stringify({
                 booking_id: booking.id,
                 reason: "pago incompleto después de 7 días",
@@ -217,25 +214,36 @@ Deno.serve(async (req: Request) => {
           }
 
           cancellationsProcessed++;
-          console.log(`Booking ${booking.id} cancelled for incomplete payment after 7 days`);
-        } catch (err) {
+          console.log(`Booking ${booking.id} cancelled for incomplete payment after 7 days (exempt=${isServiceChargeExempt}, refund=${refundAmount})`);
+        } catch (err: any) {
           console.error(`Error processing cancellation for booking ${booking.id}:`, err);
+          errors.push({ booking_id: booking.id, step: "cancellation", message: err.message || String(err) });
         }
       }
     }
 
-    console.log(`process-incremental-payment-deadlines: 72h=${reminders72hSent}, 24h=${reminders24hSent}, cancellations=${cancellationsProcessed}`);
+    console.log(`process-incremental-payment-deadlines: 72h=${reminders72hSent}, 24h=${reminders24hSent}, cancellations=${cancellationsProcessed}, errors=${errors.length}`);
 
     return new Response(JSON.stringify({
       processed: bookings.length,
       reminders_72h_sent: reminders72hSent,
       reminders_24h_sent: reminders24hSent,
       cancellations_processed: cancellationsProcessed,
+      errors,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
     console.error("Error in process-incremental-payment-deadlines:", err);
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(JSON.stringify({ error: err.message || "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

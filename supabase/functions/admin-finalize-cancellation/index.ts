@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
+import * as Sentry from "npm:@sentry/deno@9";
 
 async function cancelStampedCfds(
   supabase: ReturnType<typeof createClient>,
@@ -31,6 +32,15 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -71,8 +81,14 @@ Deno.serve(async (req: Request) => {
       return err("Permisos insuficientes", 403);
     }
 
-    // AAL2 (MFA) check — blocks the action if MFA is required but not completed
-    const aal2 = await checkAal2Required(supabase);
+    // AAL2 (MFA) check — use a client authenticated ONLY with the caller's own JWT
+    // (anon key + Authorization), not the service-role client, so that
+    // requires_aal2_check()/has_aal2() reliably read the real auth.uid()/auth.jwt()
+    // instead of depending on how the service-role client resolves headers.
+    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const aal2 = await checkAal2Required(userClient);
     if (!aal2.allowed) {
       return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores");
     }
@@ -121,7 +137,6 @@ Deno.serve(async (req: Request) => {
       return err("No se encontraron transacciones de pago para esta reserva.");
     }
 
-    // Check each transaction has a refund in 'processing' or 'succeeded'
     const txIds = transactions.map((t) => t.id);
     const { data: refunds } = await serviceClient
       .from("payment_refunds")
@@ -139,7 +154,6 @@ Deno.serve(async (req: Request) => {
       return err(`Faltan reembolsos por iniciar en las siguientes líneas: ${missingLines.join(", ")}. La reserva permanece en 'cancellation_processing'.`);
     }
 
-    // Also check for any failed refunds
     const { data: failedRefunds } = await serviceClient
       .from("payment_refunds")
       .select("payment_transaction_id, status, failure_reason")
@@ -155,9 +169,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // Step 1: Clawback earned points — 1 peso reembolsado = 1 punto.
-    // Sum all refund amounts (processing or succeeded) and deduct
-    // Math.floor(total) points. This matches process-traveler-cancellation.
+    // Step 1: Clawback earned points
     // ============================================================
     const totalRefundAmount = (refunds || []).reduce(
       (sum, r) => sum + Number(r.requested_amount || 0),
@@ -189,15 +201,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Mark points as clawed back (audit traceability)
     if (pointsDeducted > 0) {
       await markPointsAsClawedBack(serviceClient, booking_id, cancellation_id, "administrativa");
     }
 
     // ============================================================
     // Step 2: Cancel optional services
-    // Retrieve service_charge_refunded from admin_booking_cancellations
-    // to pass the admin's refund decision to the RPC.
     // ============================================================
     const { data: adminCxlRecord } = await serviceClient
       .from("admin_booking_cancellations")
@@ -263,15 +272,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // Step 5: Mark booking_cancellations.refund_processed = true
-    //         + generate accounting entry + cancel stamped CFDIs
+    // Step 5: Mark refund_processed + accounting + cancel CFDIs
     // ============================================================
     await serviceClient
       .from("booking_cancellations")
       .update({ refund_processed: true })
       .eq("id", cancellation_id);
 
-    // Generate accounting entry for the cancellation
     try {
       await serviceClient.rpc("create_accounting_entry_for_cancellation", {
         p_cancellation_id: cancellation_id,
@@ -281,7 +288,6 @@ Deno.serve(async (req: Request) => {
       console.error("Error generando póliza contable (finalize):", accountingError);
     }
 
-    // Cancel stamped CFDIs if there's a refund to the traveler (non-blocking)
     const { data: cancellationRow } = await serviceClient
       .from("booking_cancellations")
       .select("refund_amount_to_traveler")
@@ -338,7 +344,6 @@ Deno.serve(async (req: Request) => {
 
     const notificationPromises: Promise<void>[] = [];
 
-    // 1. Notify traveler
     notificationPromises.push(
       fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-traveler`, {
         method: "POST",
@@ -359,7 +364,6 @@ Deno.serve(async (req: Request) => {
       }).then(() => {}).catch((e) => console.error("Error notifying traveler (finalize):", e))
     );
 
-    // 2. Notify agency
     if (agencyData?.contact_email) {
       notificationPromises.push(
         fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-agency`, {
@@ -378,7 +382,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 3. Notify admin
     notificationPromises.push(
       fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-admin`, {
         method: "POST",
@@ -401,7 +404,6 @@ Deno.serve(async (req: Request) => {
 
     await Promise.allSettled(notificationPromises);
 
-    // Mark emails as sent
     await serviceClient
       .from("booking_cancellations")
       .update({ emails_sent: true })
@@ -417,6 +419,15 @@ Deno.serve(async (req: Request) => {
     });
   } catch (e: any) {
     console.error("admin-finalize-cancellation error:", e);
+    if (sentryDsn) {
+      Sentry.captureException(e, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return err(e.message || "Error interno", 500);
   }
 });

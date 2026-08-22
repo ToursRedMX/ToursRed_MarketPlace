@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
+import * as Sentry from "npm:@sentry/deno@9";
 
 async function cancelStampedCfds(
   supabase: ReturnType<typeof createClient>,
@@ -30,6 +31,15 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 function ok(data: unknown) {
   return new Response(JSON.stringify(data), {
@@ -95,7 +105,7 @@ Deno.serve(async (req: Request) => {
     if (booking.status === "cancellation_processing") return err("Esta reserva ya tiene una cancelación en proceso");
     if ((booking as any).is_no_show) return err("Esta reserva está marcada como No Show y no puede cancelarse");
     if ((booking as any).approval_status === "rejected") return err("Esta reserva fue rechazada y no puede cancelarse");
-    if (!["pending", "confirmed"].includes(booking.status)) return err("Solo se pueden cancelar reservas pendientes o confirmadas");
+    if (["pending", "confirmed"].includes(booking.status) === false) return err("Solo se pueden cancelar reservas pendientes o confirmadas");
 
     const tour = (booking as any).tours as any;
     if (!tour) return err("Información del tour no encontrada");
@@ -482,6 +492,15 @@ Deno.serve(async (req: Request) => {
 
   } catch (error: any) {
     console.error("process-traveler-cancellation error:", error);
+    if (sentryDsn) {
+      Sentry.captureException(error, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return err(error.message || "Error al procesar la cancelación");
   }
 });
