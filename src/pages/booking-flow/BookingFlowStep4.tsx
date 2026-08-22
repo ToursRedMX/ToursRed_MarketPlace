@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
+import { useStepUp } from '../../context/StepUpContext';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
@@ -30,6 +31,7 @@ const CATEGORIA_ORDER = ['adulto', 'nino', 'infante', 'adulto_mayor', 'mascota']
 const BookingFlowStep4: React.FC = () => {
   const { flow, updateFlow, goToStep, sessionId, resetFlow } = useBookingFlow();
   const { user } = useAuth();
+  const { fetchWithStepUp } = useStepUp();
   const navigate = useNavigate();
   const { prices: membershipPrices } = useMembershipPrices();
 
@@ -410,13 +412,31 @@ const BookingFlowStep4: React.FC = () => {
 
       if (isWalletOnly) {
         const idempotencyKey = `${bookingId}-${Date.now()}`;
-        const { error: walletError } = await supabase.rpc('confirm_booking_paid_with_wallet', {
-          p_booking_id: bookingId,
-          p_points_to_use: usePoints ? flow.pointsUsed : 0,
-          p_cash_to_use: walletDiscount,
-          p_idempotency_key: idempotencyKey,
-        });
-        if (walletError) {
+        const { data: { session: walletSession } } = await supabase.auth.getSession();
+        const walletRes = await fetchWithStepUp(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-booking-wallet-payment`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${walletSession?.access_token}`,
+              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+            body: JSON.stringify({
+              p_booking_id: bookingId,
+              p_points_to_use: usePoints ? flow.pointsUsed : 0,
+              p_cash_to_use: walletDiscount,
+              p_idempotency_key: idempotencyKey,
+            }),
+          }
+        );
+        const walletData = await walletRes.json();
+        if (!walletRes.ok || walletData.error) {
+          if (walletData.code === 'MFA_NOT_CONFIGURED' || walletData.code === 'STEP_UP_REQUIRED') {
+            // El usuario cancelo el paso de verificacion o activacion de MFA en el modal.
+            // La reserva ya existe (pendiente de pago); la puede completar despues desde sus reservas.
+            return;
+          }
           throw new Error('La reserva se creo pero el pago con billetera fallo. Ve a tus reservas para completar el pago.');
         }
         resetFlow();

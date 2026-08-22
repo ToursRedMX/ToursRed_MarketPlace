@@ -5,6 +5,7 @@ import { formatCurrencyMXN, formatCurrency } from '../utils/formatCurrency';
 import { supabase } from '../lib/supabase';
 import { Booking, BookingTraveler, Tour, FrequentCompanion } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useStepUp } from '../context/StepUpContext';
 import { validateBirthDateForCategory, validateAllTravelers } from '../utils/birthDateValidation';
 import MercadoPagoBrick from '../components/MercadoPagoBrick';
 
@@ -29,6 +30,7 @@ const TravelersInfoPage: React.FC = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { fetchWithStepUp } = useStepUp();
   const [booking, setBooking] = useState<Booking | null>(null);
   const [tour, setTour] = useState<Tour | null>(null);
   const [travelers, setTravelers] = useState<TravelerFormData[]>([]);
@@ -628,18 +630,31 @@ const TravelersInfoPage: React.FC = () => {
       if (amountToCharge <= 0) {
         console.log('💰 Procesando pago con puntos y/o ToursRed Cash...');
 
-        const { data: rpcResult, error: rpcError } = await supabase.rpc(
-          'confirm_booking_paid_with_wallet',
+        const { data: { session: walletSession } } = await supabase.auth.getSession();
+        const walletRes = await fetchWithStepUp(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-booking-wallet-payment`,
           {
-            p_booking_id: bookingId,
-            p_points_to_use: pointsUsed,
-            p_cash_to_use: toursRedCashUsed,
-            p_idempotency_key: `${bookingId}_charge_booking`
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${walletSession?.access_token}`,
+              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+            body: JSON.stringify({
+              p_booking_id: bookingId,
+              p_points_to_use: pointsUsed,
+              p_cash_to_use: toursRedCashUsed,
+              p_idempotency_key: `${bookingId}_charge_booking`,
+            }),
           }
         );
+        const rpcResult = await walletRes.json();
 
-        if (rpcError || !rpcResult || rpcResult.success !== true) {
-          const errMsg = rpcError?.message || rpcResult?.error || 'Error desconocido';
+        if (!walletRes.ok || !rpcResult || rpcResult.success !== true) {
+          if (rpcResult?.code === 'MFA_NOT_CONFIGURED' || rpcResult?.code === 'STEP_UP_REQUIRED') {
+            return;
+          }
+          const errMsg = rpcResult?.error || 'Error desconocido';
           console.error('❌ Error en confirmación atómica de pago:', errMsg);
           throw new Error(`Error al procesar el pago: ${errMsg}`);
         }

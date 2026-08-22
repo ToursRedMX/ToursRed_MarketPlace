@@ -1399,18 +1399,30 @@ const TravelerBookings: React.FC = () => {
 
       // Si el monto es 0 o menor, confirmar directamente
       if (amountToCharge <= 0) {
-        const { data: rpcResult, error: rpcError } = await supabase.rpc(
-          'confirm_booking_paid_with_wallet',
+        const walletRes = await fetchWithStepUp(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-booking-wallet-payment`,
           {
-            p_booking_id: booking.id,
-            p_points_to_use: 0,
-            p_cash_to_use: toursRedCashToUse,
-            p_idempotency_key: `${booking.id}_charge_booking`
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+            body: JSON.stringify({
+              p_booking_id: booking.id,
+              p_points_to_use: 0,
+              p_cash_to_use: toursRedCashToUse,
+              p_idempotency_key: `${booking.id}_charge_booking`,
+            }),
           }
         );
+        const rpcResult = await walletRes.json();
 
-        if (rpcError || !rpcResult || rpcResult.success !== true) {
-          const errMsg = rpcError?.message || rpcResult?.error || 'Error desconocido';
+        if (!walletRes.ok || !rpcResult || rpcResult.success !== true) {
+          if (rpcResult?.code === 'MFA_NOT_CONFIGURED' || rpcResult?.code === 'STEP_UP_REQUIRED') {
+            return;
+          }
+          const errMsg = rpcResult?.error || 'Error desconocido';
           throw new Error(`Error al procesar el pago: ${errMsg}`);
         }
 
