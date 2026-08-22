@@ -1829,7 +1829,7 @@ const TravelerBookings: React.FC = () => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             bookingId: booking.id,
@@ -1855,7 +1855,7 @@ const TravelerBookings: React.FC = () => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             bookingId: bookingSupplement.id,
@@ -1876,7 +1876,7 @@ const TravelerBookings: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
-          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({
           booking_supplement_id: bookingSupplement.id,
@@ -2055,7 +2055,7 @@ const TravelerBookings: React.FC = () => {
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session?.access_token}`,
-        'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
       };
 
       const isStandaloneInsurance = type === 'insurance' &&
@@ -2134,7 +2134,7 @@ const TravelerBookings: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
-          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ booking_id: booking.id, tour_supplement_id: supplement.id, quantity }),
       });
@@ -2160,7 +2160,7 @@ const TravelerBookings: React.FC = () => {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session?.access_token}`,
-              'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             },
             body: JSON.stringify({
               bookingId: booking.id,
@@ -2186,7 +2186,7 @@ const TravelerBookings: React.FC = () => {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session?.access_token}`,
-              'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             },
             body: JSON.stringify({
               bookingId: data.booking_supplement_id,
@@ -2208,7 +2208,7 @@ const TravelerBookings: React.FC = () => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             booking_supplement_id: data.booking_supplement_id,

@@ -74,7 +74,7 @@ export default function TestOpenPay3DSPage() {
 
         const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-openpay-3ds-charge`;
         const fnHeaders = {
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           'Content-Type': 'application/json',
         };
 
@@ -146,7 +146,7 @@ export default function TestOpenPay3DSPage() {
     setAttemptLog([]);
     const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-openpay-3ds-charge`;
     const authHeaders = {
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       'Content-Type': 'application/json',
     };
 
@@ -231,7 +231,7 @@ export default function TestOpenPay3DSPage() {
       const res = await fetch(fnUrl, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ charge_id: lookupId.trim() }),

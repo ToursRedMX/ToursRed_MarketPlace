@@ -99,7 +99,7 @@ const SupportGeneralPage: React.FC = () => {
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
       const formData = new FormData();
       formData.append('data', JSON.stringify({

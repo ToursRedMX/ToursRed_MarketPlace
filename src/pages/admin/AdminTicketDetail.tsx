@@ -110,7 +110,7 @@ const AdminTicketDetail: React.FC = () => {
     if (!ticket) return;
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       await fetch(`${supabaseUrl}/functions/v1/send-support-ticket-updated`, {
         method: 'POST',
         headers: {
@@ -252,7 +252,7 @@ const AdminTicketDetail: React.FC = () => {
       if (agent?.email) {
         try {
           const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
           await fetch(`${supabaseUrl}/functions/v1/send-support-ticket-agent-assigned`, {
             method: 'POST',
             headers: {
@@ -337,7 +337,7 @@ const AdminTicketDetail: React.FC = () => {
       // Always send email when there is a solicitante_email
       if (ticketSolicitanteEmail) {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseServiceKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const supabaseServiceKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         await fetch(`${supabaseUrl}/functions/v1/send-support-ticket-updated`, {
           method: 'POST',
           headers: {
