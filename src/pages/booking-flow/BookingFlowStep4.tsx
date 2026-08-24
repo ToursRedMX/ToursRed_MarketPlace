@@ -28,6 +28,13 @@ const CATEGORIA_LABELS: Record<string, string> = {
 
 const CATEGORIA_ORDER = ['adulto', 'nino', 'infante', 'adulto_mayor', 'mascota'];
 
+// 100 pts = $1 MXN — misma conversion que deduct_points_for_booking en la BD.
+const POINTS_PER_MXN = 100;
+// Los ToursRed Points nunca cubren mas del 50% del monto.
+const MAX_POINTS_COVERAGE = 0.5;
+// Monto minimo que aceptan los procesadores; un residuo menor se absorbe como $0.
+const MIN_PROCESSOR_AMOUNT = 10;
+
 const BookingFlowStep4: React.FC = () => {
   const { flow, updateFlow, goToStep, sessionId, resetFlow } = useBookingFlow();
   const { user } = useAuth();
@@ -211,11 +218,48 @@ const BookingFlowStep4: React.FC = () => {
     return flow.membershipPlan === 'anual' ? membershipPrices.annualPrice : membershipPrices.monthlyPrice;
   }, [flow.addMembership, flow.membershipPlan, hasMembership, membershipPrices]);
 
-  const subtotalBeforeDiscount = baseTourPrice + extrasSubtotal + extrasServiceCharge + insuranceCost + depositServiceCharge + membershipCost;
-
   const discountAmount = flow.discountAmount || 0;
-  const pointsDiscount = usePoints ? Math.min(flow.pointsUsed, pointsBalance, subtotalBeforeDiscount - discountAmount) : 0;
-  const walletDiscount = useWallet ? Math.min(flow.toursredCashUsed, walletBalance, subtotalBeforeDiscount - discountAmount - pointsDiscount) : 0;
+
+  // ── PASE 1 (tentativo): ¿el wallet cubriria el 100% si el cargo por servicio fuera $0?
+  // Rompe la dependencia circular SC -> subtotal -> walletDiscount -> isFullWallet -> SC.
+  const netBeforeCharges = Math.max(
+    0,
+    baseTourPrice + extrasSubtotal + insuranceCost + membershipCost - discountAmount
+  );
+
+  // Tope del 50%: los puntos nunca cubren mas de la mitad del monto.
+  const maxPointsAllowed = Math.floor(netBeforeCharges * POINTS_PER_MXN * MAX_POINTS_COVERAGE);
+  const pointsApplied = usePoints
+    ? Math.min(flow.pointsUsed, pointsBalance, maxPointsAllowed)
+    : 0;
+  const pointsDiscount = pointsApplied / POINTS_PER_MXN;
+
+  const tentativeCashNeeded = Math.max(0, netBeforeCharges - pointsDiscount);
+  const tentativeRemaining = Math.max(
+    0,
+    tentativeCashNeeded - Math.min(walletBalance, tentativeCashNeeded)
+  );
+
+  // Exencion de cargo por servicio al pagar 100% con ToursRed Cash.
+  const isFullWalletPayment = useWallet
+    && tentativeCashNeeded > 0
+    && totalTravelers > 0
+    && !flow.addMembership
+    && tentativeRemaining < MIN_PROCESSOR_AMOUNT;
+
+  // ── PASE 2: aplicar la exencion y recalcular con los montos definitivos.
+  const effectiveDepositServiceCharge = isFullWalletPayment ? 0 : depositServiceCharge;
+  const effectiveExtrasServiceCharge = isFullWalletPayment ? 0 : extrasServiceCharge;
+
+  const subtotalBeforeDiscount = baseTourPrice + extrasSubtotal + effectiveExtrasServiceCharge + insuranceCost + effectiveDepositServiceCharge + membershipCost;
+
+  const walletDiscount = useWallet
+    ? Math.min(
+        flow.toursredCashUsed,
+        walletBalance,
+        Math.max(0, subtotalBeforeDiscount - discountAmount - pointsDiscount)
+      )
+    : 0;
 
   const grandTotal = Math.max(0, subtotalBeforeDiscount - discountAmount - pointsDiscount - walletDiscount);
 
@@ -225,16 +269,22 @@ const BookingFlowStep4: React.FC = () => {
     return Math.round(grandTotal * (pct / 100) * 100) / 100;
   }, [tour, grandTotal]);
 
-  const amountToPay = flow.payNowMode === 'partial'
+  const rawAmountToPay = flow.payNowMode === 'partial' && !isFullWalletPayment
     ? Math.min(flow.partialPaymentAmount, depositAmount)
     : depositAmount;
+
+  // Residuo por debajo del minimo del procesador -> $0.
+  const amountToPay = rawAmountToPay > 0 && rawAmountToPay < MIN_PROCESSOR_AMOUNT ? 0 : rawAmountToPay;
+
+  // Unica fuente de verdad para el gating del selector de procesador.
+  const isWalletOnlyPayment = amountToPay === 0 && (walletDiscount > 0 || pointsDiscount > 0);
 
   // ToursRed Cash benefit: wallet covers 100% of the total
   const wouldQualifyForWalletBenefit = !useWallet
     && walletBalance > 0
     && totalTravelers > 0
     && !flow.addMembership
-    && walletBalance >= grandTotal;
+    && walletBalance >= tentativeCashNeeded;
 
   // Points to earn on this payment
   const isDoublePoints = useWallet && hasMembership;
@@ -306,9 +356,9 @@ const BookingFlowStep4: React.FC = () => {
         total_price: grandTotal,
         deposit_amount: depositAmount,
         commission_amount: Math.round(baseTourPrice * ((tour.commission_rate || tour.agencies?.commission_rate || 10) / 100) * 100) / 100,
-        service_charge: depositServiceCharge,
+        service_charge: effectiveDepositServiceCharge,
         user_payment: amountToPay,
-        platform_revenue: depositServiceCharge + extrasServiceCharge,
+        platform_revenue: effectiveDepositServiceCharge + effectiveExtrasServiceCharge,
         booking_date: bookingDate,
         slot_id: flow.selectedSlot?.id || null,
         selected_date: flow.selectedDate || null,
@@ -321,7 +371,7 @@ const BookingFlowStep4: React.FC = () => {
         count_infantes: flow.travelerCounts.infantes,
         count_adultos_mayores: flow.travelerCounts.adultos_mayores,
         count_mascotas: flow.travelerCounts.mascotas,
-        points_used: usePoints ? flow.pointsUsed : 0,
+        points_used: pointsApplied,
         toursred_cash_used: walletDiscount,
         discount_code_id: flow.discountCodeId || null,
         discount_amount: discountAmount,
@@ -408,7 +458,7 @@ const BookingFlowStep4: React.FC = () => {
         // non-critical
       }
 
-      const isWalletOnly = flow.paymentProvider === 'toursred_cash' && amountToPay <= walletDiscount;
+      const isWalletOnly = isWalletOnlyPayment;
 
       if (isWalletOnly) {
         const idempotencyKey = `${bookingId}-${Date.now()}`;
@@ -424,7 +474,7 @@ const BookingFlowStep4: React.FC = () => {
             },
             body: JSON.stringify({
               p_booking_id: bookingId,
-              p_points_to_use: usePoints ? flow.pointsUsed : 0,
+              p_points_to_use: pointsApplied,
               p_cash_to_use: walletDiscount,
               p_idempotency_key: idempotencyKey,
             }),
@@ -614,9 +664,11 @@ const BookingFlowStep4: React.FC = () => {
             <>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Cargo por servicio (extras)</span>
-                <span className="font-medium text-gray-800">{formatCurrencyMXN(extrasServiceChargeBase)}</span>
+                <span className={`font-medium ${isFullWalletPayment ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                  {formatCurrencyMXN(extrasServiceChargeBase)}
+                </span>
               </div>
-              {shouldWaiveServiceCharge && extrasExemptionUsed > 0 && (
+              {!isFullWalletPayment && shouldWaiveServiceCharge && extrasExemptionUsed > 0 && (
                 <div className="flex justify-between text-sm text-green-600">
                   <span className="flex items-center gap-1">
                     <Check className="w-3 h-3" /> Descuento por membresía (extras)
@@ -624,7 +676,7 @@ const BookingFlowStep4: React.FC = () => {
                   <span className="font-medium">-{formatCurrencyMXN(extrasExemptionUsed)}</span>
                 </div>
               )}
-              {shouldWaiveServiceCharge && extrasExemptionUsed > 0 && (
+              {!isFullWalletPayment && shouldWaiveServiceCharge && extrasExemptionUsed > 0 && (
                 <div className="flex justify-between text-sm text-gray-500">
                   <span className="pl-4">Cargo por servicio (extras, con descuento)</span>
                   <span className="font-medium text-gray-700">{formatCurrencyMXN(extrasServiceCharge)}</span>
@@ -646,9 +698,27 @@ const BookingFlowStep4: React.FC = () => {
           {/* Deposit service charge: bruto → descuento → neto */}
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Cargo por servicio</span>
-            <span className="font-medium text-gray-800">{formatCurrencyMXN(baseServiceCharge)}</span>
+            <span className={`font-medium ${isFullWalletPayment ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+              {formatCurrencyMXN(baseServiceCharge)}
+            </span>
           </div>
-          {shouldWaiveServiceCharge && exemptionUsed > 0 && (
+          {isFullWalletPayment && (baseServiceCharge > 0 || extrasServiceChargeBase > 0) && (
+            <>
+              <div className="flex justify-between text-sm text-teal-700">
+                <span className="flex items-center gap-1">
+                  <Wallet className="w-3 h-3" /> Beneficio ToursRed Cash (100% con saldo)
+                </span>
+                <span className="font-medium">
+                  -{formatCurrencyMXN(baseServiceCharge + extrasServiceChargeBase)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm text-green-600">
+                <span className="pl-4">Cargo por servicio (a pagar)</span>
+                <span className="font-medium">{formatCurrencyMXN(0)}</span>
+              </div>
+            </>
+          )}
+          {!isFullWalletPayment && shouldWaiveServiceCharge && exemptionUsed > 0 && (
             <div className="flex justify-between text-sm text-green-600">
               <span className="flex items-center gap-1">
                 <Check className="w-3 h-3" /> {flow.addMembership ? 'Exento por nueva membresía' : 'Descuento por membresía'}
@@ -656,13 +726,13 @@ const BookingFlowStep4: React.FC = () => {
               <span className="font-medium">-{formatCurrencyMXN(exemptionUsed)}</span>
             </div>
           )}
-          {shouldWaiveServiceCharge && exemptionUsed > 0 && (
+          {!isFullWalletPayment && shouldWaiveServiceCharge && exemptionUsed > 0 && (
             <div className="flex justify-between text-sm text-gray-500">
               <span className="pl-4">Cargo por servicio (con descuento)</span>
               <span className="font-medium text-gray-700">{formatCurrencyMXN(depositServiceCharge)}</span>
             </div>
           )}
-          {hasReachedExemptionLimit && depositServiceCharge > 0 && (
+          {!isFullWalletPayment && hasReachedExemptionLimit && depositServiceCharge > 0 && (
             <div className="mt-1 p-2 bg-orange-50 border border-orange-200 rounded-md">
               <p className="text-xs text-gray-700">
                 Has usado {formatCurrencyMXN(monthlyExemptionLimit - remainingExemption)} MXN de tus {formatCurrencyMXN(monthlyExemptionLimit)} MXN de descuento este mes. Esta reserva aplicará un cargo por servicio de {formatCurrencyMXN(depositServiceCharge)} MXN.
@@ -696,7 +766,7 @@ const BookingFlowStep4: React.FC = () => {
               <span className="flex items-center gap-1">
                 <Award className="w-3 h-3" /> Puntos ToursRed
               </span>
-              <span className="font-medium">-{formatCurrencyMXN(pointsDiscount)} ({flow.pointsUsed.toLocaleString()} pts)</span>
+              <span className="font-medium">-{formatCurrencyMXN(pointsDiscount)} ({pointsApplied.toLocaleString()} pts)</span>
             </div>
           )}
 
@@ -835,7 +905,7 @@ const BookingFlowStep4: React.FC = () => {
                 onChange={(e) => {
                   setUsePoints(e.target.checked);
                   if (e.target.checked) {
-                    const maxPoints = Math.min(pointsBalance, Math.floor(subtotalBeforeDiscount - discountAmount));
+                    const maxPoints = Math.min(pointsBalance, maxPointsAllowed);
                     updateFlow({ pointsUsed: maxPoints });
                   } else {
                     updateFlow({ pointsUsed: 0 });
@@ -846,7 +916,9 @@ const BookingFlowStep4: React.FC = () => {
               <Award className="w-4 h-4 text-amber-600" />
               <div className="flex-1">
                 <span className="text-sm font-medium text-gray-800">Usar {pointsBalance.toLocaleString()} puntos ToursRed</span>
-                <p className="text-xs text-gray-500">1 punto = $1 MXN de descuento</p>
+                <p className="text-xs text-gray-500">
+                  100 puntos = $1 MXN · máximo 50% del total ({maxPointsAllowed.toLocaleString()} pts)
+                </p>
               </div>
             </label>
           </div>
@@ -890,22 +962,32 @@ const BookingFlowStep4: React.FC = () => {
           </div>
         )}
 
-        {/* Payment provider selector */}
-        <div className="mb-6">
-          <PaymentProviderSelector
-            context={paymentContext as any}
-            value={flow.paymentProvider as Provider}
-            onChange={(p) => updateFlow({ paymentProvider: p })}
-            amount={amountToPay}
-            conektaMethod={flow.conektaMethod as ConektaMethod}
-            onConektaMethodChange={(m) => updateFlow({ conektaMethod: m })}
-            openpayMethod={flow.openpayMethod as OpenpayMethod}
-            onOpenpayMethodChange={(m) => updateFlow({ openpayMethod: m })}
-          />
-        </div>
+        {/* Payment provider selector — se oculta cuando no hay nada que cobrar a un procesador */}
+        {!isWalletOnlyPayment ? (
+          <div className="mb-6">
+            <PaymentProviderSelector
+              context={paymentContext as any}
+              value={flow.paymentProvider as Provider}
+              onChange={(p) => updateFlow({ paymentProvider: p })}
+              amount={amountToPay}
+              conektaMethod={flow.conektaMethod as ConektaMethod}
+              onConektaMethodChange={(m) => updateFlow({ conektaMethod: m })}
+              openpayMethod={flow.openpayMethod as OpenpayMethod}
+              onOpenpayMethodChange={(m) => updateFlow({ openpayMethod: m })}
+            />
+          </div>
+        ) : (
+          <div className="mb-6 flex items-start gap-2 rounded-xl border-2 border-teal-400 bg-teal-50 p-4">
+            <Wallet className="w-5 h-5 text-teal-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-teal-900">
+              Tu saldo cubre el <strong>100%</strong> de esta reserva. No necesitas un método de
+              pago externo y el cargo por servicio queda exento.
+            </p>
+          </div>
+        )}
 
         {/* Partial payment option */}
-        {depositAmount > 500 && (
+        {depositAmount > 500 && !isWalletOnlyPayment && (
           <div className="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -969,8 +1051,10 @@ const BookingFlowStep4: React.FC = () => {
               </>
             ) : (
               <>
-                <CreditCard className="w-5 h-5" />
-                Pagar {formatCurrencyMXN(amountToPay)}
+                {isWalletOnlyPayment ? <Wallet className="w-5 h-5" /> : <CreditCard className="w-5 h-5" />}
+                {isWalletOnlyPayment
+                  ? 'Confirmar reserva con ToursRed Cash'
+                  : `Pagar ${formatCurrencyMXN(amountToPay)}`}
               </>
             )}
           </button>
