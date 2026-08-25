@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -154,7 +155,7 @@ Deno.serve(async (req: Request) => {
         subtotal, tax_amount, total_amount, payment_confirmed_at,
         featured_plans (name, duration_days, price),
         agencies (
-          id, name, rfc, razon_social, regimen_fiscal, postal_code,
+          id, name, user_id, rfc, razon_social, regimen_fiscal, postal_code,
           users (rfc, razon_social, regimen_fiscal, uso_cfdi, codigo_postal_fiscal)
         )
       `)
@@ -168,6 +169,17 @@ Deno.serve(async (req: Request) => {
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // --- Autorizacion ---
+    // El receptor es la agencia, asi que el dueno es agencies.user_id: mismo
+    // criterio que create-featured-slot-checkout, que ya valida ese campo antes
+    // de cobrar el slot.
+    const slotAgency = slot.agencies as { user_id?: string } | null;
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      ownerUserId: slotAgency?.user_id ?? null,
+      resource: `el slot destacado ${slot_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Cargar configuracion de plataforma
     const { data: settings } = await supabase

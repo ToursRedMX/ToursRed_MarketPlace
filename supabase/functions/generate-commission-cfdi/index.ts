@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -178,6 +179,16 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // --- Autorizacion ---
+    // Sin rama de dueno a proposito. Los dos llamadores son retry-failed-cfdi
+    // (service role) y AdminPayouts.tsx, pantalla restringida a admin. Una
+    // agencia no emite el CFDI de su propia comision: lo emite la plataforma
+    // al procesar el pago.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: `la comision del payout ${payout_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Check if CFDI already exists for this payout
     const { data: existing } = await supabase

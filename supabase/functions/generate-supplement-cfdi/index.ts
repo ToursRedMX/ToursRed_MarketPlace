@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -160,6 +161,15 @@ Deno.serve(async (req: Request) => {
 
     const tourId = (suppReq.tour_supplements as any)?.tour_id;
     const userId = (suppReq.bookings as any)?.user_id;
+
+    // --- Autorizacion ---
+    // Los importes salen de booking_supplements (ya validado status = paid),
+    // no del body, asi que el dueno de la reserva puede pedir su propio CFDI.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      ownerUserId: userId ?? null,
+      resource: `el suplemento ${booking_supplement_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Load agency data
     const { data: tourData } = await supabase

@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -262,6 +263,16 @@ Deno.serve(async (req: Request) => {
     const plan = (installment.booking_payment_plans as any);
     const booking = plan.bookings as any;
     const tour = booking.tours as any;
+
+    // --- Autorizacion ---
+    // Los importes se leen de la parcialidad, no del body, asi que el dueno de
+    // la reserva puede pedir el CFDI de su propia parcialidad sin poder alterar
+    // el monto.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      ownerUserId: booking?.user_id ?? null,
+      resource: `la parcialidad ${installment_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Load platform settings
     const { data: settings } = await supabase

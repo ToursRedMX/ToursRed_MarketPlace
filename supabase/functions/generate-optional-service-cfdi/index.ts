@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,6 +118,17 @@ Deno.serve(async (req: Request) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // --- Autorizacion ---
+    // Sin rama de dueno a proposito: service_charge y total_paid llegan por el
+    // body y determinan lo que se factura. Dejar entrar al dueno de la reserva
+    // cerraria el hueco de timbrar reservas ajenas pero abriria el de timbrarse
+    // importes inventados sobre la propia. Ningun llamador actual la invoca con
+    // JWT de usuario (todos usan service role).
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: `el extra ${booking_optional_service_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Idempotency
     const { data: existingCfdi } = await supabase

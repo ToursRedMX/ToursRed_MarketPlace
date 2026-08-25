@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -231,6 +232,16 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // --- Autorizacion ---
+    // Sin rama de dueno a proposito: stripe_amount_paid llega por el body y
+    // alimenta el calculo del descuento aplicado, asi que el socio podria
+    // timbrarse un importe que no pago. El unico llamador es stripe-webhook,
+    // con service role.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: `la membresia ${membership_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Idempotencia: evitar CFDI duplicado para el mismo periodo de Stripe
     if (stripe_invoice_id) {

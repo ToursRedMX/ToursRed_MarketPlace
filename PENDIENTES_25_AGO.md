@@ -78,6 +78,26 @@ Dejar para una sesión dedicada, con calma.
 
 ## 🟡 Deuda técnica documentada (no urgente)
 
+- **Dos convenciones para "super admin" en el mismo esquema** — `users.is_super_admin`
+  (boolean, default false) es la marca real: la leen `is_super_admin()`,
+  `create-admin-user:92`, `delete-auth-user:50`, `cleanup-orphan-agencies:62`,
+  `admin-cancel-booking:87` y `AuthContext.tsx:438`, siempre como escalación
+  *sobre* admin. En paralelo existe `role = 'super_admin'`, que consultan
+  `is_admin_user()` y los guards de CFDI, y que **no matchea ninguna fila**:
+  los únicos dos admins tienen `role='admin'` (uno de ellos además
+  `is_super_admin = true`). Hoy no excluye a nadie porque la marca implica
+  `role='admin'`, pero nada en la BD lo garantiza. Vale la pena unificar en
+  una sola convención. No es de la rama de autorización de CFDI.
+
+- **`transaction_id` sin validar en `generate-booking-installment-cfdi:306`** —
+  se carga por id sin verificar que la transacción pertenezca a esa parcialidad.
+  Mismo patrón de cruce de entidades que sí se cerró el 25-ago en
+  `generate-cancellation-commission-cfdi` (`cancellation_id` y
+  `replaces_cfdi_invoice_id`). Se dejó fuera a propósito para no mezclarlo con
+  el fix de autorización. El guard nuevo ya limita quién puede llegar ahí
+  (service role, dueño de la reserva o admin), así que el riesgo bajó pero
+  no está cerrado.
+
 - **`user_payment` con 3 semánticas incompatibles**: monto a cobrar al crear,
   saldo restante (Conekta/Openpay lo decrementan), monto pagado
   (`process-incremental-payment-deadlines:75`). Solo no explota por un

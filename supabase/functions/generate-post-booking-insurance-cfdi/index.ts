@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -113,6 +114,16 @@ Deno.serve(async (req: Request) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // --- Autorizacion ---
+    // Sin rama de dueno a proposito: total_paid llega por el body y sobreescribe
+    // travel_insurance_cost al calcular el importe (ver insuranceCost mas abajo),
+    // asi que el dueno podria timbrarse el monto que quisiera. Ningun llamador
+    // actual la invoca con JWT de usuario (todos usan service role).
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: `el seguro de la reserva ${booking_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Idempotency
     const { data: existingCfdi } = await supabase
