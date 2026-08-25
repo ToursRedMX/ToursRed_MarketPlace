@@ -7,6 +7,7 @@ import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { getDepositAmount, getEffectiveDepositPct } from '../../utils/depositCalculation';
 import { totalTravelerCount, TravelerCounts } from '../../types/booking-flow';
 import type { Tour, TourSlot } from '../../types';
 import SlotCalendarPicker from '../../components/receptivo/SlotCalendarPicker';
@@ -277,7 +278,7 @@ const BookingFlowStep1: React.FC = () => {
           <div className="text-sm text-gray-500 mb-1">Precio por persona</div>
           <div className="text-2xl font-bold text-primary-600">{formatCurrencyMXN(tour.price)}</div>
           <div className="text-sm text-gray-500 mt-1">
-            Deposito: {formatCurrencyMXN(tour.price * (tour.deposit_percentage / 100))} ({tour.deposit_percentage}%)
+            Deposito: {formatCurrencyMXN(getDepositAmount(tour.price, tour, flow.selectedDate))} ({getEffectiveDepositPct(tour, flow.selectedDate)}%)
           </div>
         </div>
 

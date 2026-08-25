@@ -10,6 +10,7 @@ import { useStepUp } from '../../context/StepUpContext';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { getEffectiveDepositPct } from '../../utils/depositCalculation';
 import { totalTravelerCount } from '../../types/booking-flow';
 import type { Tour } from '../../types';
 import PaymentProviderSelector, {
@@ -225,45 +226,13 @@ const BookingFlowStep4: React.FC = () => {
 
   const discountAmount = flow.discountAmount || 0;
 
-  // Anticipo efectivo. Mismo criterio que create_booking_atomic:
-  //   full_upfront                  -> 100%
-  //   payment_plan + installments   -> suma de las parcialidades YA VENCIDAS,
-  //                                    incluidas las de specific_date ya pasada
-  //   resto (standard, free_form)   -> % generico configurado por la agencia
-  const effectiveDepositPct = useMemo(() => {
-    if (!tour) return 50;
-    if (tour.payment_option === 'full_upfront') return 100;
-
-    const genericPct = tour.deposit_percentage || 50;
-    if (tour.payment_option !== 'payment_plan') return genericPct;
-    if ((tour.payment_plan_mode || 'installments') !== 'installments') return genericPct;
-
-    const defs = tour.installment_definitions;
-    if (!Array.isArray(defs) || defs.length === 0) return genericPct;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const departureSrc = flow.selectedDate || tour.start_date;
-    const departure = departureSrc ? new Date(departureSrc + 'T00:00:00') : null;
-
-    let pct = 0;
-    for (const def of defs) {
-      let due: Date | null = null;
-      if (def.days_after_booking != null) {
-        due = new Date(today);
-        due.setDate(due.getDate() + Number(def.days_after_booking));
-      } else if (def.days_before_departure != null && departure) {
-        due = new Date(departure);
-        due.setDate(due.getDate() - Number(def.days_before_departure));
-      } else if (def.specific_date) {
-        due = new Date(def.specific_date + 'T00:00:00');
-      }
-      if (due && due.getTime() <= today.getTime()) {
-        pct += Number(def.pct_of_total) || 0;
-      }
-    }
-    return pct > 0 ? Math.min(100, pct) : genericPct;
-  }, [tour, flow.selectedDate]);
+  // Anticipo efectivo. La regla vive en utils/depositCalculation para que Step1 y
+  // Step4 nunca muestren porcentajes distintos para el mismo tour, y se mantiene en
+  // paridad con la seccion 8 de create_booking_atomic.
+  const effectiveDepositPct = useMemo(
+    () => getEffectiveDepositPct(tour, flow.selectedDate),
+    [tour, flow.selectedDate]
+  );
 
   const tourPriceAfterDiscount = Math.max(0, baseTourPrice - discountAmount);
 
@@ -870,15 +839,30 @@ const BookingFlowStep4: React.FC = () => {
 
           {/* Grand total */}
           <div className="border-t pt-2 flex justify-between">
-            <span className="font-bold text-gray-900">Total</span>
+            <span className="font-bold text-gray-900">Total de la reserva</span>
             <span className="font-bold text-primary-600 text-lg">{formatCurrencyMXN(grandTotal)}</span>
           </div>
 
-          {depositAmount < grandTotal && (
-            <div className="flex justify-between text-sm bg-primary-50 -mx-4 -mb-4 px-4 py-2 rounded-b-xl">
-              <span className="font-medium text-primary-700">Depósito a pagar ahora ({tour.deposit_percentage}%)</span>
-              <span className="font-bold text-primary-700">{formatCurrencyMXN(depositAmount)}</span>
-            </div>
+          {/* Exigible ahora y resto. amountToPay es el mismo valor que cobra el boton
+              y que create_booking_atomic guarda en amount_due_now: anticipo + cargo por
+              servicio + extras + seguro + membresia, menos puntos y ToursRed Cash.
+              El porcentaje sale de effectiveDepositPct (que puede venir del plan de
+              pagos), no de tour.deposit_percentage, para que cuadre con el monto. */}
+          {amountToPay < grandTotal && (
+            <>
+              <div className="flex justify-between text-sm bg-primary-50 -mx-4 px-4 py-2">
+                <span className="font-medium text-primary-700">
+                  A pagar ahora (anticipo {effectiveDepositPct}% + cargos)
+                </span>
+                <span className="font-bold text-primary-700">{formatCurrencyMXN(amountToPay)}</span>
+              </div>
+              <div className="flex justify-between text-xs bg-gray-50 -mx-4 -mb-4 px-4 py-2 rounded-b-xl">
+                <span className="text-gray-600">Resto por pagar antes de la salida</span>
+                <span className="font-medium text-gray-700">
+                  {formatCurrencyMXN(Math.max(0, grandTotal - amountToPay))}
+                </span>
+              </div>
+            </>
           )}
         </div>
 
