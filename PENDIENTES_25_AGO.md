@@ -15,11 +15,27 @@
   nunca en `bookings` — por eso queda NULL y se ve mal en pantalla
 - Es cosmético (no afecta cobros ni CFDI), pero era trabajo ya comprometido.
 
-## 🟠 Hallazgo grave sin resolver — mismo riesgo que ya cerramos hoy
+## ✅ RESUELTO (25-ago, tarde) — 8 funciones de CFDI sin guard
 
-**8 funciones de CFDI sin guard de autorización**, mismo hueco que cerramos
-en `generate-booking-cfdi` (cualquiera con la llave publicable del front puede
-invocarlas pasando solo un `booking_id`):
+Cerrado en commit `e20787b`, desplegado y verificado en producción. Guard
+compartido en `_shared/cfdiAuth.ts`. Verificación en vivo con la llave
+publicable: 401 en las 4 que validan antes de cargar la entidad, y 401 también
+con un `booking_id` real en `generate-cancellation-commission-cfdi`.
+
+Detalle del criterio aplicado (no es el mismo en todas — son 4 identificadores
+y 3 tipos de entidad):
+- service role │ `bookings.user_id` │ admin: installment, supplement, cancellation
+- service role │ `agencies.user_id` │ admin: featured-slot
+- service role │ admin (SIN rama de dueño): commission, optional-service,
+  post-booking-insurance, membership — porque reciben el monto a facturar por
+  el body y el dueño podría timbrarse importes inventados.
+
+Excepción encontrada: `AdminPayouts.tsx:834` sí invoca `generate-commission-cfdi`
+con JWT de usuario desde una ruta restringida a admin, así que esa lleva rama de
+admin. Contradice la nota del commit de ayer que decía que ninguna pantalla
+invocaba funciones de CFDI.
+
+Lista original (ya resuelta):
 
 - `generate-booking-installment-cfdi`
 - `generate-cancellation-commission-cfdi`
@@ -77,6 +93,14 @@ Es la pieza más delicada — toca `create_booking_atomic` una cuarta vez.
 Dejar para una sesión dedicada, con calma.
 
 ## 🟡 Deuda técnica documentada (no urgente)
+
+- **`config.toml` no refleja producción, pese a decir que sí** — el encabezado
+  dice *"synchronized from the production project for DRP recovery"*, pero
+  `generate-booking-cfdi` corre en producción con `verify_jwt = false` y no
+  aparece en la lista del archivo. Hoy no abre ningún hueco (el guard rechaza
+  el bearer vacío con 401), pero quien reconstruya el proyecto desde ese archivo
+  le cambia el comportamiento. Vale la pena regenerarlo desde producción y
+  revisar si hay más funciones desalineadas.
 
 - **Dos convenciones para "super admin" en el mismo esquema** — `users.is_super_admin`
   (boolean, default false) es la marca real: la leen `is_super_admin()`,
