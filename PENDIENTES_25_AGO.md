@@ -92,6 +92,28 @@ resetear el contador del socio actual recalculándolo desde
 Es la pieza más delicada — toca `create_booking_atomic` una cuarta vez.
 Dejar para una sesión dedicada, con calma.
 
+## ✅ RESUELTO (25-ago, noche) — columnas de dinero sin escala
+
+`agency_payouts.net_amount` y `.platform_commission_amount` estaban declaradas
+`numeric` sin escala, a diferencia de `.amount` que es `numeric(12,2)`. Sin
+escala Postgres guarda el residuo de punto flotante tal cual llega.
+
+`PAY-1787694694` quedó con `net_amount = 78946.25999999998` mientras `amount`
+—que recibe **el mismo valor** desde `AdminPayouts.tsx:800-801`— quedó en
+`78946.26`. Esa diferencia entre dos columnas con la misma entrada descarta a la
+RPC: el residuo llega ya formado desde el front.
+
+Origen: `AdminPayouts.tsx:750-755` sumaba con `reduce()` en coma flotante. Los
+sumandos están limpios y la suma exacta en Postgres da `78946.26`; reproducido
+en Node, los 7 valores dan exactamente `78946.25999999998`. La suma flotante
+depende del orden: esos mismos 7 números de comisión dan `13718.26`,
+`13718.260000000002` o `13718.259999999998` según cómo se ordenen.
+
+Arreglado en dos capas: las 6 columnas de dinero sin escala pasaron a
+`numeric(12,2)` (incluida `cfdi_invoices.discount_amount`, que es fiscal y es
+donde se asientan los puntos como descuento), y se añadió `round2()` en el
+origen del cálculo. El `ALTER` redondeó la fila afectada sin necesidad de UPDATE.
+
 ## 🟡 Deuda técnica documentada (no urgente)
 
 - **`config.toml` no refleja producción, pese a decir que sí** — el encabezado

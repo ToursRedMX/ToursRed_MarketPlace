@@ -737,17 +737,27 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
         if (agencyId) penaltyQuery = penaltyQuery.eq('agency_id', agencyId);
         const { data: penalties } = await penaltyQuery;
 
-        const commissionTotal = data?.reduce((sum, r) => sum + Number(r.agency_net_amount), 0) || 0;
-        const platformCommissionFromBookings = data?.reduce((sum, r) => sum + Number(r.agency_commission_amount), 0) || 0;
-        const platformCommissionFromPenalties = slotId ? 0 : (penalties?.reduce((sum, r) => sum + Number(r.platform_amount), 0) || 0);
-        const platformCommissionTotal = platformCommissionFromBookings + platformCommissionFromPenalties;
-        const totalTourPrice = data?.reduce((sum, r) => sum + Number(r.total_tour_price), 0) || 0;
-        const penaltyTotal = slotId ? 0 : (penalties?.reduce((sum, r) => sum + Number(r.agency_net_amount), 0) || 0);
+        // Los sumandos vienen limpios de la BD (numeric con 2 decimales), pero
+        // acumularlos con reduce() en coma flotante deja residuo: los 7 registros
+        // del payout PAY-1787694694 daban 78946.25999999998 en vez de 78946.26, y
+        // se guardaba tal cual porque la columna destino no tenia escala. La
+        // columna ya es numeric(12,2), asi que Postgres redondea al insertar; se
+        // redondea aqui ademas para que el valor salga correcto del origen y no
+        // dependa de que cada consumidor lo limpie por su cuenta (el correo de
+        // confirmacion, por ejemplo, lo recibe directo del front sin pasar por la BD).
+        const round2 = (n: number) => Math.round(n * 100) / 100;
+
+        const commissionTotal = round2(data?.reduce((sum, r) => sum + Number(r.agency_net_amount), 0) || 0);
+        const platformCommissionFromBookings = round2(data?.reduce((sum, r) => sum + Number(r.agency_commission_amount), 0) || 0);
+        const platformCommissionFromPenalties = slotId ? 0 : round2(penalties?.reduce((sum, r) => sum + Number(r.platform_amount), 0) || 0);
+        const platformCommissionTotal = round2(platformCommissionFromBookings + platformCommissionFromPenalties);
+        const totalTourPrice = round2(data?.reduce((sum, r) => sum + Number(r.total_tour_price), 0) || 0);
+        const penaltyTotal = slotId ? 0 : round2(penalties?.reduce((sum, r) => sum + Number(r.agency_net_amount), 0) || 0);
 
         setPaymentDetails({
           records: data,
           penalties: slotId ? [] : (penalties || []),
-          totalAmount: commissionTotal + penaltyTotal,
+          totalAmount: round2(commissionTotal + penaltyTotal),
           commissionTotal, platformCommissionTotal, platformCommissionFromBookings, platformCommissionFromPenalties, totalTourPrice, penaltyTotal,
           recordsCount: data?.length || 0,
           penaltiesCount: slotId ? 0 : (penalties?.length || 0),
