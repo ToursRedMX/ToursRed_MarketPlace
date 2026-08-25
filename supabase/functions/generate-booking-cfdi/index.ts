@@ -62,6 +62,8 @@ interface CfdiRequest {
   receptor: CfdiReceptor;
   conceptos: CfdiConcepto[];
   payment_form?: string;
+  /** CFDIs relacionados. relationship "04" = sustitucion de los CFDI previos. */
+  related_documents?: Array<{ relationship: string; cfdi_uuids: string[] }>;
 }
 
 interface CfdiResult {
@@ -102,6 +104,9 @@ async function facturapiStamp(
     type: request.tipo_de_comprobante,
     payment_form: request.payment_form ?? "03",
     payment_method: "PUE",
+    ...(request.related_documents && request.related_documents.length > 0
+      ? { related_documents: request.related_documents }
+      : {}),
     customer,
     use: request.receptor.uso_cfdi,
     items: request.conceptos.map((c) => ({
@@ -313,7 +318,8 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { booking_id, checkin_charge_id, payment_form } = await req.json();
+    const { booking_id, checkin_charge_id, payment_form, replaces_cfdi_invoice_id } = await req.json();
+    const isSubstitution = !!replaces_cfdi_invoice_id;
     if (!booking_id) {
       return new Response(JSON.stringify({ error: "booking_id is required" }), {
         status: 400,
@@ -341,6 +347,95 @@ Deno.serve(async (req: Request) => {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // --- Autorizacion ---
+    // Esta funcion timbra ante el SAT usando el service role internamente, y hasta
+    // ahora no validaba quien la llamaba. Como verify_jwt acepta la llave publicable
+    // del front (es un JWT firmado del proyecto), cualquiera que la extraiga del
+    // bundle podia timbrar CFDIs de reservas ajenas pasando un booking_id.
+    //
+    // Los 10 llamadores internos (webhooks de Stripe, Openpay, Conekta, MercadoPago,
+    // PayPal, approve-booking, retry-failed-cfdi, etc.) usan el SERVICE ROLE KEY como
+    // bearer, asi que se dejan pasar por esa via. Cualquier otro llamador tiene que
+    // ser el dueno de la reserva o un admin, igual que en create-openpay-checkout.
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const bearer = authHeader.replace("Bearer ", "").trim();
+    const isServiceRole = bearer.length > 0 &&
+      bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!isServiceRole) {
+      const { data: { user: caller }, error: callerErr } = await supabase.auth.getUser(bearer);
+      if (callerErr || !caller) {
+        return new Response(JSON.stringify({ error: "No autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: callerProfile } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", caller.id)
+        .maybeSingle();
+
+      const isAdmin = callerProfile?.role === "admin" || callerProfile?.role === "super_admin";
+
+      // Sustituir un comprobante ya timbrado es operacion fiscal: solo admin.
+      // El dueno de la reserva puede pedir su CFDI normal, pero no reemplazarlo.
+      if (isSubstitution && !isAdmin) {
+        console.warn(
+          `Sustitucion CFDI denegada: usuario ${caller.id} no es admin (reserva ${booking_id})`
+        );
+        return new Response(
+          JSON.stringify({ error: "Solo un administrador puede sustituir un CFDI timbrado" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!isAdmin && booking.user_id !== caller.id) {
+        console.warn(
+          `CFDI denegado: usuario ${caller.id} intento timbrar la reserva ${booking_id} (dueno ${booking.user_id})`
+        );
+        return new Response(JSON.stringify({ error: "No tienes permiso sobre esta reserva" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // --- Sustitucion: validar el CFDI original ---
+    // Debe estar timbrado y pertenecer A ESTA reserva. Sin esto se podria relacionar
+    // un sustituto contra el comprobante de otro cliente.
+    let originalCfdi: { id: string; uuid_fiscal: string; invoice_type: string } | null = null;
+    if (isSubstitution) {
+      const { data: orig, error: origErr } = await supabase
+        .from("cfdi_invoices")
+        .select("id, uuid_fiscal, status, booking_id, invoice_type")
+        .eq("id", replaces_cfdi_invoice_id)
+        .maybeSingle();
+
+      if (origErr || !orig) {
+        return new Response(JSON.stringify({ error: "CFDI a sustituir no encontrado" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (orig.status !== "stamped" || !orig.uuid_fiscal) {
+        return new Response(
+          JSON.stringify({ error: `Solo se puede sustituir un CFDI timbrado (estado actual: ${orig.status})` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (orig.booking_id !== booking.id) {
+        console.warn(
+          `Sustitucion CFDI denegada: el CFDI ${orig.id} pertenece a la reserva ${orig.booking_id}, no a ${booking.id}`
+        );
+        return new Response(
+          JSON.stringify({ error: "El CFDI a sustituir no pertenece a esta reserva" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      originalCfdi = { id: orig.id, uuid_fiscal: orig.uuid_fiscal, invoice_type: orig.invoice_type };
     }
 
     const tourData = booking.tours as { name: string; agency_id: string } | null;
@@ -674,6 +769,9 @@ Deno.serve(async (req: Request) => {
       },
       conceptos,
       payment_form: effectivePaymentForm,
+      ...(originalCfdi
+        ? { related_documents: [{ relationship: "04", cfdi_uuids: [originalCfdi.uuid_fiscal] }] }
+        : {}),
     };
 
     // Repartir el saldo (puntos + ToursRed Cash) proporcionalmente entre las partidas.
@@ -704,6 +802,50 @@ Deno.serve(async (req: Request) => {
     // que incluya tambien el saldo repartido arriba, no solo los descuentos por codigo.
     const descuentoTotal = Math.round(
       conceptos.reduce((acc, c) => acc + (c.descuento ?? 0), 0) * 1.16 * 100) / 100;
+
+    // Sustitucion: se omite claim_cfdi_stamping_slot a proposito. Ese RPC rechaza con
+    // already_exists si la reserva ya tiene un CFDI stamped, que es justamente el caso
+    // aqui: el original sigue vivo porque el motivo 01 del SAT exige el UUID del
+    // sustituto para poder cancelarlo. Se inserta directo con la relacion, igual que
+    // hace substitute-cfdi-for-partial-cancellation.
+    let cfdiRecord: { id: string; retry_count: number };
+    if (isSubstitution) {
+      const { data: subRecord, error: subError } = await supabase
+        .from("cfdi_invoices")
+        .insert({
+          invoice_type: invoiceType,
+          booking_id: booking.id,
+          agency_id: agencyData?.id || null,
+          related_cfdi_invoice_id: originalCfdi!.id,
+          tipo_relacion: "04",
+          pac_provider: settings.pac_provider,
+          serie: settings.cfdi_serie_booking || "A",
+          receptor_rfc: receptorRfc,
+          receptor_razon_social: receptorNombre,
+          receptor_regimen_fiscal: receptorRegimen,
+          receptor_uso_cfdi: receptorUsoCfdi,
+          receptor_codigo_postal: receptorCP,
+          cfdi_type: "I",
+          subtotal,
+          iva_amount: iva,
+          total,
+          currency: "MXN",
+          status: "pending",
+          discount_amount: descuentoTotal > 0 ? descuentoTotal : null,
+          tour_amount: isCheckinCharge ? amountCharged : depositAmount,
+        })
+        .select("id")
+        .single();
+
+      if (subError || !subRecord) {
+        throw new Error(`Failed to create substitution CFDI record: ${subError?.message}`);
+      }
+      cfdiRecord = { id: subRecord.id, retry_count: 0 };
+      console.log(
+        `CFDI sustituto ${subRecord.id} creado para la reserva ${booking.id}, ` +
+        `relacion 04 -> ${originalCfdi!.uuid_fiscal} (total ${total})`
+      );
+    } else {
 
     // Create pending CFDI record atomically via RPC (prevents duplicate stamping)
     const { data: claimResult, error: claimError } = await supabase.rpc("claim_cfdi_stamping_slot", {
@@ -736,7 +878,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const cfdiRecord = { id: claimResult.cfdi_id, retry_count: 0 };
+    cfdiRecord = { id: claimResult.cfdi_id, retry_count: 0 };
+    }
 
     // Stamp with PAC
     let cfdiResult: CfdiResult;
