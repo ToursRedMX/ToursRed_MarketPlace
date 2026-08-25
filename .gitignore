@@ -26,4 +26,3 @@ dist-ssr
 
 # Supabase CLI temporary files
 supabase/.temp/
-.netlify/

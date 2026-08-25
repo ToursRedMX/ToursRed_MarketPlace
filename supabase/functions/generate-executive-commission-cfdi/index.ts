@@ -1,21 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
-
-const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
-    tracesSampleRate: 0.1,
-  });
-}
 
 interface CfdiResult {
   pac_invoice_id: string;
@@ -133,14 +123,14 @@ Deno.serve(async (req: Request) => {
 
     if (!exec.facturapi_api_key_encrypted) {
       return new Response(
-        JSON.stringify({ error: "El ejecutivo no tiene FacturAPI configurado. Configuralo en Mi Perfil." }),
+        JSON.stringify({ error: "El ejecutivo no tiene FacturAPI configurado. Configúralo en Mi Perfil." }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     if (!exec.tax_rfc || !exec.tax_name) {
       return new Response(
-        JSON.stringify({ error: "El ejecutivo no tiene RFC o razon social fiscal configurados. Actualiza tus datos fiscales en Mi Perfil." }),
+        JSON.stringify({ error: "El ejecutivo no tiene RFC o razón social fiscal configurados. Actualiza tus datos fiscales en Mi Perfil." }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -152,7 +142,7 @@ Deno.serve(async (req: Request) => {
 
     if (!platform?.pac_issuer_rfc || !platform?.pac_issuer_razon_social) {
       return new Response(
-        JSON.stringify({ error: "No se han configurado los datos fiscales de ToursRed (PAC issuer). Configuralos en Configuracion > Facturacion." }),
+        JSON.stringify({ error: "No se han configurado los datos fiscales de ToursRed (PAC issuer). Configúralos en Configuración > Facturación." }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -165,7 +155,7 @@ Deno.serve(async (req: Request) => {
     const isrAmount = withholdIsr ? Math.round(subtotal * 0.10 * 100) / 100 : 0;
 
     const serie = platform.cfdi_serie_commission || "B";
-    const description = `Honorarios / Comisiones de ejecutivo de cuenta - ${commissions.map((c: any) => (c.agencies as any)?.name || c.id).join(", ")}`;
+    const description = `Honorarios / Comisiones de ejecutivo de cuenta — ${commissions.map((c: any) => (c.agencies as any)?.name || c.id).join(", ")}`;
 
     const taxes: Record<string, unknown>[] = [
       { type: "IVA", rate: 0.16, factor: "Tasa", withholding: false },
@@ -238,15 +228,6 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    if (sentryDsn) {
-      Sentry.captureException(err, {
-        tags: {
-          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
-          region: Deno.env.get("SB_REGION") || "unknown",
-        },
-      });
-      await Sentry.flush(2000);
-    }
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

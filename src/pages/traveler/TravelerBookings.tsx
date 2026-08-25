@@ -1399,30 +1399,18 @@ const TravelerBookings: React.FC = () => {
 
       // Si el monto es 0 o menor, confirmar directamente
       if (amountToCharge <= 0) {
-        const walletRes = await fetchWithStepUp(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-booking-wallet-payment`,
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
+          'confirm_booking_paid_with_wallet',
           {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            },
-            body: JSON.stringify({
-              p_booking_id: booking.id,
-              p_points_to_use: 0,
-              p_cash_to_use: toursRedCashToUse,
-              p_idempotency_key: `${booking.id}_charge_booking`,
-            }),
+            p_booking_id: booking.id,
+            p_points_to_use: 0,
+            p_cash_to_use: toursRedCashToUse,
+            p_idempotency_key: `${booking.id}_charge_booking`
           }
         );
-        const rpcResult = await walletRes.json();
 
-        if (!walletRes.ok || !rpcResult || rpcResult.success !== true) {
-          if (rpcResult?.code === 'MFA_NOT_CONFIGURED' || rpcResult?.code === 'STEP_UP_REQUIRED') {
-            return;
-          }
-          const errMsg = rpcResult?.error || 'Error desconocido';
+        if (rpcError || !rpcResult || rpcResult.success !== true) {
+          const errMsg = rpcError?.message || rpcResult?.error || 'Error desconocido';
           throw new Error(`Error al procesar el pago: ${errMsg}`);
         }
 
@@ -1841,7 +1829,7 @@ const TravelerBookings: React.FC = () => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({
             bookingId: booking.id,
@@ -1867,7 +1855,7 @@ const TravelerBookings: React.FC = () => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({
             bookingId: bookingSupplement.id,
@@ -1888,7 +1876,7 @@ const TravelerBookings: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
-          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           booking_supplement_id: bookingSupplement.id,
@@ -2067,7 +2055,7 @@ const TravelerBookings: React.FC = () => {
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session?.access_token}`,
-        'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
       };
 
       const isStandaloneInsurance = type === 'insurance' &&
@@ -2146,7 +2134,7 @@ const TravelerBookings: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
-          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ booking_id: booking.id, tour_supplement_id: supplement.id, quantity }),
       });
@@ -2172,7 +2160,7 @@ const TravelerBookings: React.FC = () => {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session?.access_token}`,
-              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
             },
             body: JSON.stringify({
               bookingId: booking.id,
@@ -2198,7 +2186,7 @@ const TravelerBookings: React.FC = () => {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session?.access_token}`,
-              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
             },
             body: JSON.stringify({
               bookingId: data.booking_supplement_id,
@@ -2220,7 +2208,7 @@ const TravelerBookings: React.FC = () => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({
             booking_supplement_id: data.booking_supplement_id,

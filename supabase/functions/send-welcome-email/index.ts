@@ -1,15 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
-import * as Sentry from "npm:@sentry/deno@9";
-
-const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
-    tracesSampleRate: 0.1,
-  });
-}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -196,15 +186,6 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error) {
     console.error("Error in send-welcome-email:", error);
-    if (sentryDsn) {
-      Sentry.captureException(error, {
-        tags: {
-          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
-          region: Deno.env.get("SB_REGION") || "unknown",
-        },
-      });
-      await Sentry.flush(2000);
-    }
     return new Response(
       JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -153,8 +153,8 @@ export default function MercadoPagoBrick({
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                        'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                        'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                        'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
                       },
                       body: JSON.stringify({
                         booking_supplement_id: supplementId,
@@ -175,7 +175,7 @@ export default function MercadoPagoBrick({
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                      'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
                     },
                     body: JSON.stringify({ formData, preferenceId, bookingId }),
                   }

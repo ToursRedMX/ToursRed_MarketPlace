@@ -84,7 +84,7 @@ const GoogleTravelerSignupPage: React.FC = () => {
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-referral-code`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
           body: JSON.stringify({ code: code.trim().toLowerCase() }),
         }
       );

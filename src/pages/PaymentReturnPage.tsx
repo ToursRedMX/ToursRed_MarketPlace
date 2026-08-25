@@ -58,8 +58,8 @@ export default function PaymentReturnPage() {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                  'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                  'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                  'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
                 },
                 body: JSON.stringify({
                   booking_supplement_id: bookingSupplementId,
@@ -101,8 +101,8 @@ export default function PaymentReturnPage() {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                  'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                  'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                  'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
                 },
                 body: JSON.stringify(extrasBody),
               }
@@ -134,7 +134,7 @@ export default function PaymentReturnPage() {
                 headers: {
                   'Content-Type': 'application/json',
                   'Authorization': `Bearer ${session?.access_token}`,
-                  'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                  'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
                 },
                 body: JSON.stringify({
                   plan_id: planId,
@@ -197,8 +197,8 @@ export default function PaymentReturnPage() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
               },
               body: JSON.stringify({
                 booking_supplement_id: bookingSupplementId,
@@ -237,8 +237,8 @@ export default function PaymentReturnPage() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
               },
               body: JSON.stringify(extrasBody),
             }
@@ -296,7 +296,7 @@ export default function PaymentReturnPage() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
             },
             body: JSON.stringify({
               orderId: paypalOrderId,
@@ -370,7 +370,7 @@ export default function PaymentReturnPage() {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
                   },
                   body: JSON.stringify({ gift_card_id: bookingId }),
                 }

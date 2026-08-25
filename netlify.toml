@@ -17,11 +17,3 @@ path = "/tours/*"
 [[edge_functions]]
 function = "sitemap"
 path = "/sitemap.xml"
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://images.pexels.com https://flagcdn.com https://huzsedewwzjywcpbkjkm.supabase.co https://api.mapbox.com; connect-src 'self' https://huzsedewwzjywcpbkjkm.supabase.co wss://huzsedewwzjywcpbkjkm.supabase.co https://www.googletagmanager.com https://api.mapbox.com https://events.mapbox.com; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'"

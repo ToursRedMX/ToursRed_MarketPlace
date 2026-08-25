@@ -1,21 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
-
-const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
-    tracesSampleRate: 0.1,
-  });
-}
 
 // =============================================
 // BILLING PROVIDER INTERFACE (PAC-agnostic)
@@ -398,12 +388,6 @@ Deno.serve(async (req: Request) => {
     let invoiceType: string;
     let effectivePaymentForm: string;
     let exactTotal: number; // monto exacto cobrado al cliente (IVA incluido)
-    // FIX (bug crítico detectado 2026-08-20): estas dos variables se referencian
-    // más abajo (en p_tour_amount) FUERA de los bloques if/else donde antes
-    // estaban declaradas con const, causando ReferenceError en el 100% de las
-    // llamadas desde finales de julio. Se elevan a este scope con let.
-    let amountCharged: number | undefined;
-    let depositAmount: number | undefined;
 
     if (isCheckinCharge) {
       // Cargar montos desde wallet_checkin_charges
@@ -420,7 +404,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      amountCharged = Number(checkinCharge.amount_charged);
+      const amountCharged = Number(checkinCharge.amount_charged);
       const netServiceCharge = Number(checkinCharge.service_charge_applied) - Number(checkinCharge.membership_exemption_used);
 
       // r6: 6 decimales para valor_unitario en FacturAPI (evita error de centavo en XML)
@@ -437,7 +421,7 @@ Deno.serve(async (req: Request) => {
       effectivePaymentForm = payment_form || "17";
     } else {
       // Montos de la reserva original
-      depositAmount = Number((booking as any).deposit_amount || booking.total_price);
+      const depositAmount = Number((booking as any).deposit_amount || booking.total_price);
       const serviceCharge = Number((booking as any).service_charge || 0);
       const discountAmountRaw = Number((booking as any).discount_amount || 0);
       const serviceChargeDiscountRaw = Number((booking as any).service_charge_discount || 0);
@@ -736,15 +720,6 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    if (sentryDsn) {
-      Sentry.captureException(err, {
-        tags: {
-          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
-          region: Deno.env.get("SB_REGION") || "unknown",
-        },
-      });
-      await Sentry.flush(2000);
-    }
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

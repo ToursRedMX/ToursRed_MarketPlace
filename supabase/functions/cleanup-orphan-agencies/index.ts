@@ -1,21 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
-
-const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
-    tracesSampleRate: 0.1,
-  });
-}
 
 // Huérfanos: usuarios con role='agency' que no tienen fila correspondiente en agencies.
 // Esta función solo puede invocarla un usuario con role='admin' AND is_super_admin=true.
@@ -144,15 +134,6 @@ Deno.serve(async (req: Request) => {
       errors,
     });
   } catch (err: unknown) {
-    if (sentryDsn) {
-      Sentry.captureException(err, {
-        tags: {
-          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
-          region: Deno.env.get("SB_REGION") || "unknown",
-        },
-      });
-      await Sentry.flush(2000);
-    }
     const message = err instanceof Error ? err.message : String(err);
     return json({ error: message }, 500);
   }

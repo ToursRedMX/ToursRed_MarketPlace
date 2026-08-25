@@ -12,7 +12,7 @@ envContent.split('\n').forEach(line => {
 });
 
 const supabaseUrl = envVars.VITE_SUPABASE_URL;
-const supabaseAnonKey = envVars.VITE_SUPABASE_PUBLISHABLE_KEY;
+const supabaseAnonKey = envVars.VITE_SUPABASE_ANON_KEY;
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 

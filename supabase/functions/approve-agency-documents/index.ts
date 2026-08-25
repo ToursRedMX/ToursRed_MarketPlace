@@ -1,34 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import type { ContractData } from "../_shared/contractDocDefinition.ts";
-import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
-import * as Sentry from "npm:@sentry/deno@9";
-
-const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
-    tracesSampleRate: 0.1,
-  });
-}
-
-// deno-lint-ignore no-explicit-any
-async function pdfDocToBytes(pdfDoc: any): Promise<Uint8Array> {
-  const chunks: Uint8Array[] = [];
-  return new Promise((resolve, reject) => {
-    pdfDoc.on("data",  (chunk: Uint8Array) => chunks.push(chunk));
-    pdfDoc.on("error", reject);
-    pdfDoc.on("end", () => {
-      const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
-      const merged   = new Uint8Array(totalLen);
-      let offset     = 0;
-      for (const c of chunks) { merged.set(c, offset); offset += c.length; }
-      resolve(merged);
-    });
-    pdfDoc.end();
-  });
-}
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -88,18 +59,6 @@ Deno.serve(async (req: Request) => {
     const actorRole = actorUser?.role;
     if (!["admin", "super_admin", "account_executive"].includes(actorRole)) {
       return new Response(JSON.stringify({ error: "Acceso denegado" }), { status: 403, headers: corsHeaders });
-    }
-
-    // AAL2 (MFA) check — approves/rejects agency documents, generates contracts,
-    // and can initiate commission amendments.
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-    const aal2 = await checkAal2Required(userClient);
-    if (!aal2.allowed) {
-      return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores");
     }
 
     const body = await req.json();
@@ -201,27 +160,8 @@ Deno.serve(async (req: Request) => {
       };
 
       // Generate amendment PDF
-      const { default: PdfPrinter } = await import("npm:pdfmake@0.2.20");
-      const { Buffer } = await import("node:buffer");
-      const {
-        ROBOTO_NORMAL_B64,
-        ROBOTO_BOLD_B64,
-        ROBOTO_ITALICS_B64,
-        ROBOTO_BOLDITALICS_B64,
-      } = await import("../_shared/robotoFonts.ts");
-      const { buildContractDocDefinition } = await import("../_shared/contractDocDefinition.ts");
-
-      const fonts = {
-        Roboto: {
-          normal:      Buffer.from(ROBOTO_NORMAL_B64,      "base64"),
-          bold:        Buffer.from(ROBOTO_BOLD_B64,        "base64"),
-          italics:     Buffer.from(ROBOTO_ITALICS_B64,     "base64"),
-          bolditalics: Buffer.from(ROBOTO_BOLDITALICS_B64, "base64"),
-        },
-      };
-
       // deno-lint-ignore no-explicit-any
-      const printer  = new (PdfPrinter as any)(fonts);
+      const printer  = new (PdfPrinter as any)(await getFonts());
       const docDef   = buildContractDocDefinition(contractData);
       const pdfDoc   = printer.createPdfKitDocument(docDef);
       const pdfBytes = await pdfDocToBytes(pdfDoc);
@@ -658,15 +598,6 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err) {
     console.error("Unexpected error:", err);
-    if (sentryDsn) {
-      Sentry.captureException(err, {
-        tags: {
-          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
-          region: Deno.env.get("SB_REGION") || "unknown",
-        },
-      });
-      await Sentry.flush(2000);
-    }
     return new Response(JSON.stringify({ error: "Error interno del servidor" }), { status: 500, headers: corsHeaders });
   }
 });

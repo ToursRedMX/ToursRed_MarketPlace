@@ -33,6 +33,7 @@ async function fetchSupabase(
     const res = await fetch(url, {
       headers: {
         apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
       },
     });
     if (!res.ok) {
@@ -70,7 +71,7 @@ export default async (request: Request, _context: Context): Promise<Response> =>
   const origin = url.origin;
 
   const supabaseUrl = Netlify.env.get("SUPABASE_URL");
-  const supabaseAnonKey = Netlify.env.get("SUPABASE_PUBLISHABLE_KEY");
+  const supabaseAnonKey = Netlify.env.get("SUPABASE_ANON_KEY");
 
   const entries: SitemapEntry[] = [];
   const seenUrls = new Set<string>();
@@ -128,7 +129,7 @@ export default async (request: Request, _context: Context): Promise<Response> =>
     }
   } else {
     console.error(
-      "sitemap: SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY not set in Netlify env (Functions scope)",
+      "sitemap: SUPABASE_URL or SUPABASE_ANON_KEY not set in Netlify env (Functions scope)",
     );
   }
 
