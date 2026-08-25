@@ -296,6 +296,11 @@ Deno.serve(async (req: Request) => {
                 .update({
                   payment_status: "succeeded",
                   payment_provider: "openpay",
+                  // Se escribia en booking_optional_services pero no aqui, asi que
+                  // bookings.payment_method quedaba NULL y la pantalla de exito no
+                  // tenia de donde sacar la etiqueta. Mismo valor que escriben los
+                  // webhooks de MercadoPago, PayPal y Conekta.
+                  payment_method: "openpay",
                   user_payment: newUserPayment,
                   paid_at: new Date().toISOString(),
                   status: "confirmed",
