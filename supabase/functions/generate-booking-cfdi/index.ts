@@ -328,7 +328,7 @@ Deno.serve(async (req: Request) => {
       .from("bookings")
       .select(`
         id, total_price, deposit_amount, service_charge, user_id, tour_id, booking_code,
-        discount_amount, service_charge_discount,
+        discount_amount, service_charge_discount, points_used, toursred_cash_used, payment_method,
         travel_insurance_included, travel_insurance_cost,
         membership_purchased, membership_cost, membership_plan,
         tours (name, agency_id)
@@ -476,6 +476,45 @@ Deno.serve(async (req: Request) => {
       const optionalsTotal = paidOptionals.reduce((sum: number, opt: any) => sum + (opt.total_paid || opt.subtotal), 0);
       exactTotal = Math.round((exactTotal + optionalsTotal) * 100) / 100;
     }
+
+    // ToursRed Points: lealtad, no entra dinero. Es un DESCUENTO que baja la base
+    // gravable, repartido entre los conceptos mas abajo para que las partidas sigan
+    // sumando el total. 100 pts = $1 MXN, igual que deduct_points_for_booking.
+    // Antes no se restaba: el CFDI facturaba de mas (F-63 timbro 5,664.45 contra
+    // 5,206.84 realmente cobrados).
+    //
+    // ToursRed Cash NO va aqui: es dinero prepagado del viajero, o sea una FORMA DE
+    // PAGO (monedero electronico, clave SAT 05), no un descuento. Se factura el monto
+    // completo; descontarlo negaria el comprobante por dinero que si desembolso.
+    const saldoAplicadoBruto = isCheckinCharge ? 0 : Math.min(
+      exactTotal,
+      Math.round((Number((booking as any).points_used || 0) / 100) * 100) / 100
+    );
+    if (saldoAplicadoBruto > 0) {
+      exactTotal = Math.round((exactTotal - saldoAplicadoBruto) * 100) / 100;
+    }
+
+    // Forma de pago SAT. Regla 2.7.1.29 RMF: en PUE con varias formas de pago se
+    // registra aquella con la que se liquido la CANTIDAD MAYOR de la operacion, no un
+    // codigo generico como 99. Se comparan las dos porciones del total facturable:
+    //   - monedero electronico (05): lo cubierto con ToursRed Cash
+    //   - procesador externo: el resto, con la clave que ya resolvio la rama de arriba
+    //     (04/03/01 segun el webhook, 17 en cobros de check-in, 03 por defecto)
+    // Los puntos NO entran: salieron como descuento, no son forma de pago.
+    // El desglose se deriva de exactTotal para que sea consistente con lo facturado.
+    const formaProcesador = effectivePaymentForm;
+    const cashAplicado = isCheckinCharge
+      ? 0
+      : Math.min(Number((booking as any).toursred_cash_used || 0), exactTotal);
+    const montoProcesador = Math.round((exactTotal - cashAplicado) * 100) / 100;
+    if (cashAplicado > montoProcesador) {
+      effectivePaymentForm = "05";
+    }
+    console.log(
+      `CFDI forma de pago: monedero=${cashAplicado.toFixed(2)} procesador=${montoProcesador.toFixed(2)} ` +
+      `(${formaProcesador}) => ${effectivePaymentForm}`
+    );
+
     const iva = Math.round(exactTotal * 16 / 116 * 100) / 100;
     const subtotal = Math.round((exactTotal - iva) * 100) / 100;
     const total = exactTotal;
@@ -637,8 +676,34 @@ Deno.serve(async (req: Request) => {
       payment_form: effectivePaymentForm,
     };
 
-    // Descuento total consolidado (con IVA incluido)
-    const descuentoTotal = Math.round((descuentoTour + descuentoServicio) * 1.16 * 100) / 100;
+    // Repartir el saldo (puntos + ToursRed Cash) proporcionalmente entre las partidas.
+    // Proporcional y con tope por partida para que ninguna quede en negativo y la suma
+    // de conceptos siga cuadrando contra el total ya ajustado arriba.
+    if (saldoAplicadoBruto > 0) {
+      const saldoNeto = Math.round((saldoAplicadoBruto / 1.16) * 1000000) / 1000000;
+      const baseNeta = conceptos.reduce(
+        (acc, c) => acc + (c.valor_unitario - (c.descuento ?? 0)), 0);
+      if (baseNeta > 0) {
+        let repartido = 0;
+        conceptos.forEach((c, i) => {
+          const disponible = c.valor_unitario - (c.descuento ?? 0);
+          const teorico = i === conceptos.length - 1
+            ? saldoNeto - repartido
+            : (saldoNeto * disponible) / baseNeta;
+          const aplicado = Math.max(0, Math.min(
+            Math.round(teorico * 1000000) / 1000000, disponible));
+          if (aplicado > 0) {
+            c.descuento = Math.round(((c.descuento ?? 0) + aplicado) * 1000000) / 1000000;
+            repartido += aplicado;
+          }
+        });
+      }
+    }
+
+    // Descuento total consolidado (con IVA incluido). Se deriva de los conceptos para
+    // que incluya tambien el saldo repartido arriba, no solo los descuentos por codigo.
+    const descuentoTotal = Math.round(
+      conceptos.reduce((acc, c) => acc + (c.descuento ?? 0), 0) * 1.16 * 100) / 100;
 
     // Create pending CFDI record atomically via RPC (prevents duplicate stamping)
     const { data: claimResult, error: claimError } = await supabase.rpc("claim_cfdi_stamping_slot", {

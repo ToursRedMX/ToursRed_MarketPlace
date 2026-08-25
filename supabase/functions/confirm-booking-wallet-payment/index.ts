@@ -82,6 +82,51 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // El pago 100% con saldo nunca disparaba CFDI ni contabilidad: esta funcion no
+    // tenia una sola referencia a ninguno de los dos, a diferencia de los webhooks de
+    // Stripe, Openpay, Conekta, MercadoPago y PayPal. Resultado: reservas confirmadas
+    // y con asiento, pero sin comprobante fiscal (p.ej. TRG-0DS33SAOP81).
+    //
+    // Se emite por el monto completo con forma de pago SAT 05 (monedero electronico):
+    // el ToursRed Cash es dinero prepagado del viajero, no un descuento.
+    //
+    // Fire-and-forget con el mismo patron que los otros webhooks: un fallo aqui no debe
+    // tumbar la confirmacion del pago, que ya quedo asentada de forma atomica en el RPC.
+    if ((rpcResult as { success?: boolean })?.success) {
+      try {
+        const { data: cfdiSettings } = await supabase
+          .from("platform_settings")
+          .select("pac_provider")
+          .maybeSingle();
+
+        if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
+          EdgeRuntime.waitUntil(
+            fetch(`${supabaseUrl}/functions/v1/generate-booking-cfdi`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({ booking_id: p_booking_id, payment_form: "05" }),
+            }).catch((e) => console.error("Error triggering booking CFDI (wallet):", e))
+          );
+        }
+      } catch (e) {
+        console.error("Error resolving CFDI settings (wallet):", e);
+      }
+
+      EdgeRuntime.waitUntil(
+        fetch(`${supabaseUrl}/functions/v1/sync-booking-to-accounting`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({ booking_id: p_booking_id }),
+        }).catch((e) => console.error("Error syncing booking to accounting (wallet):", e))
+      );
+    }
+
     return new Response(JSON.stringify(rpcResult), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

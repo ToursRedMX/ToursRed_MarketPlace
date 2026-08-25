@@ -304,6 +304,39 @@ Deno.serve(async (req: Request) => {
 
               console.log(`Booking ${bookingId} confirmed (Openpay) — total paid: ${totalPaid}/${requiredAmount}`);
 
+              // Marcar como pagados los extras que venian en el pago inicial. Openpay
+              // solo lo hacia para extras comprados por separado (chargeContext ===
+              // "optional_service"), asi que los del checkout quedaban con paid_at NULL:
+              // el CFDI los excluia y calculate_booking_financial_breakdown dejaba a la
+              // agencia sin cobrar optional_services_agency_net.
+              //
+              // A diferencia de Stripe y PayPal, aqui NO se recalcula service_charge ni
+              // se vuelve a llamar apply_membership_service_fee_exemption: esa RPC muta
+              // memberships, y create_booking_atomic ya aplico la exencion y guardo el
+              // service_charge neto al crear la reserva. Repetirlo consumiria dos veces
+              // el tope mensual del socio.
+              //
+              // Va ANTES de disparar el CFDI: generate-booking-cfdi filtra los extras por
+              // paid_at IS NOT NULL, asi que si se marcan despues quedan fuera del
+              // comprobante.
+              try {
+                const { error: optErr } = await supabase
+                  .from("booking_optional_services")
+                  .update({
+                    paid_at: new Date().toISOString(),
+                    payment_method: "openpay",
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("booking_id", bookingId)
+                  .eq("is_cancelled", false)
+                  .is("paid_at", null);
+                if (optErr) {
+                  console.error("Error marcando extras pagados (Openpay):", optErr);
+                }
+              } catch (e) {
+                console.error("Error marcando extras pagados (Openpay):", e);
+              }
+
               const cfdiSettingsRes = await supabase
                 .from("platform_settings")
                 .select("pac_provider")
