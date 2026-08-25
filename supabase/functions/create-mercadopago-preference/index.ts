@@ -137,11 +137,14 @@ Deno.serve(async (req: Request) => {
     } else if (bookingId) {
       const { data: booking } = await supabase
         .from("bookings")
-        .select("deposit_amount, payment_status")
+        .select("amount_due_now, deposit_amount, payment_status")
         .eq("id", bookingId)
         .maybeSingle();
       if (booking) {
-        const depositAmount = Number(booking.deposit_amount || 0);
+        // Ver nota en create-openpay-checkout: el techo es el exigible, no el anticipo.
+        const depositAmount = booking.amount_due_now != null
+          ? Number(booking.amount_due_now)
+          : Number(booking.deposit_amount || 0);
         if (booking.payment_status === "succeeded") {
           return new Response(JSON.stringify({ error: "La reserva ya esta pagada" }), {
             status: 400,

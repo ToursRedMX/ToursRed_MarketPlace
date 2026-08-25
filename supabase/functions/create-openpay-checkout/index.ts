@@ -109,7 +109,7 @@ Deno.serve(async (req: Request) => {
     if (context === "booking") {
       const { data: booking, error: bookingErr } = await supabase
         .from("bookings")
-        .select("deposit_amount, user_id")
+        .select("amount_due_now, deposit_amount, user_id")
         .eq("id", bookingId)
         .maybeSingle();
 
@@ -135,7 +135,13 @@ Deno.serve(async (req: Request) => {
         .eq("status", "succeeded");
 
       const alreadyPaid = (alreadySucceeded || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
-      const remainingBalance = Number(booking.deposit_amount) - alreadyPaid;
+      // amount_due_now es el exigible del primer cobro que calculo create_booking_atomic
+      // (anticipo + cargo por servicio + extras + seguro + membresia - puntos - wallet).
+      // deposit_amount es solo el anticipo del tour y deja fuera cargos y extras.
+      const dueNow = booking.amount_due_now != null
+        ? Number(booking.amount_due_now)
+        : Number(booking.deposit_amount);
+      const remainingBalance = dueNow - alreadyPaid;
 
       if (remainingBalance <= 0) {
         return new Response(

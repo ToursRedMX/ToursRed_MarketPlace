@@ -346,12 +346,17 @@ FwIDAQAB
 
         const { data: booking } = await supabase
           .from("bookings")
-          .select("deposit_amount, total_price, user_payment, payment_status, status")
+          .select("amount_due_now, deposit_amount, total_price, user_payment, payment_status, status")
           .eq("id", bookingId)
           .maybeSingle();
 
         if (booking) {
-          const requiredAmount = Number(booking.deposit_amount) || Number(booking.total_price) || 0;
+          // Confirmar contra el exigible real. Con deposit_amount se confirmaba la
+          // reserva cobrando de menos (quedaban fuera cargo por servicio y extras).
+          const requiredAmount = Number(booking.amount_due_now)
+            || Number(booking.deposit_amount)
+            || Number(booking.total_price)
+            || 0;
           const newUserPayment = Math.max(0, Number(booking.user_payment || 0) - Number(tx.amount));
 
           if (totalPaid >= requiredAmount) {

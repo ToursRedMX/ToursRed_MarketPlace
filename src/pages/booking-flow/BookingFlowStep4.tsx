@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, AlertCircle, Tag, Award, Wallet, Crown, Shield,
-  Loader2, CreditCard, Check, X, Sparkles, ExternalLink,
+  Loader2, CreditCard, Check, X, Sparkles, ExternalLink, Info,
 } from 'lucide-react';
 import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
@@ -59,6 +59,11 @@ const BookingFlowStep4: React.FC = () => {
   const [createError, setCreateError] = useState('');
   const [remainingExemption, setRemainingExemption] = useState(0);
   const [monthlyExemptionLimit, setMonthlyExemptionLimit] = useState(500);
+  // El servidor topa puntos y wallet; si difiere de lo que calculo el cliente,
+  // se lo avisamos al usuario en vez de cambiarle el monto en silencio.
+  const [adjustedByServer, setAdjustedByServer] = useState<
+    { points: number; cash: number; amount: number } | null
+  >(null);
 
   useEffect(() => {
     if (!tour || !user) return;
@@ -220,14 +225,61 @@ const BookingFlowStep4: React.FC = () => {
 
   const discountAmount = flow.discountAmount || 0;
 
-  // ── PASE 1 (tentativo): ¿el wallet cubriria el 100% si el cargo por servicio fuera $0?
-  // Rompe la dependencia circular SC -> subtotal -> walletDiscount -> isFullWallet -> SC.
+  // Anticipo efectivo. Mismo criterio que create_booking_atomic:
+  //   full_upfront                  -> 100%
+  //   payment_plan + installments   -> suma de las parcialidades YA VENCIDAS,
+  //                                    incluidas las de specific_date ya pasada
+  //   resto (standard, free_form)   -> % generico configurado por la agencia
+  const effectiveDepositPct = useMemo(() => {
+    if (!tour) return 50;
+    if (tour.payment_option === 'full_upfront') return 100;
+
+    const genericPct = tour.deposit_percentage || 50;
+    if (tour.payment_option !== 'payment_plan') return genericPct;
+    if ((tour.payment_plan_mode || 'installments') !== 'installments') return genericPct;
+
+    const defs = tour.installment_definitions;
+    if (!Array.isArray(defs) || defs.length === 0) return genericPct;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const departureSrc = flow.selectedDate || tour.start_date;
+    const departure = departureSrc ? new Date(departureSrc + 'T00:00:00') : null;
+
+    let pct = 0;
+    for (const def of defs) {
+      let due: Date | null = null;
+      if (def.days_after_booking != null) {
+        due = new Date(today);
+        due.setDate(due.getDate() + Number(def.days_after_booking));
+      } else if (def.days_before_departure != null && departure) {
+        due = new Date(departure);
+        due.setDate(due.getDate() - Number(def.days_before_departure));
+      } else if (def.specific_date) {
+        due = new Date(def.specific_date + 'T00:00:00');
+      }
+      if (due && due.getTime() <= today.getTime()) {
+        pct += Number(def.pct_of_total) || 0;
+      }
+    }
+    return pct > 0 ? Math.min(100, pct) : genericPct;
+  }, [tour, flow.selectedDate]);
+
+  const tourPriceAfterDiscount = Math.max(0, baseTourPrice - discountAmount);
+
+  // El anticipo vive sobre el precio BRUTO del tour, no sobre el neto de wallet.
+  const depositAmount = Math.round(tourPriceAfterDiscount * (effectiveDepositPct / 100) * 100) / 100;
+
+  // ── PASE 1 (tentativo): monto EXIGIBLE AHORA sin cargos por servicio.
+  // Puntos y wallet se topan contra el anticipo, NO contra el tour completo:
+  // el viajero cubre lo que debe hoy, no la reserva entera.
+  // Tambien rompe la circularidad SC -> exigible -> wallet -> SC.
   const netBeforeCharges = Math.max(
     0,
-    baseTourPrice + extrasSubtotal + insuranceCost + membershipCost - discountAmount
+    depositAmount + extrasSubtotal + insuranceCost + membershipCost
   );
 
-  // Tope del 50%: los puntos nunca cubren mas de la mitad del monto.
+  // Tope del 50%: los puntos nunca cubren mas de la mitad del monto exigible.
   const maxPointsAllowed = Math.floor(netBeforeCharges * POINTS_PER_MXN * MAX_POINTS_COVERAGE);
   const pointsApplied = usePoints
     ? Math.min(flow.pointsUsed, pointsBalance, maxPointsAllowed)
@@ -240,7 +292,7 @@ const BookingFlowStep4: React.FC = () => {
     tentativeCashNeeded - Math.min(walletBalance, tentativeCashNeeded)
   );
 
-  // Exencion de cargo por servicio al pagar 100% con ToursRed Cash.
+  // Exencion de cargo por servicio al cubrir el 100% del exigible con ToursRed Cash.
   const isFullWalletPayment = useWallet
     && tentativeCashNeeded > 0
     && totalTravelers > 0
@@ -251,35 +303,38 @@ const BookingFlowStep4: React.FC = () => {
   const effectiveDepositServiceCharge = isFullWalletPayment ? 0 : depositServiceCharge;
   const effectiveExtrasServiceCharge = isFullWalletPayment ? 0 : extrasServiceCharge;
 
-  const subtotalBeforeDiscount = baseTourPrice + extrasSubtotal + effectiveExtrasServiceCharge + insuranceCost + effectiveDepositServiceCharge + membershipCost;
-
+  // Tope duro del wallet: el exigible ahora. No se permite abonar de mas.
   const walletDiscount = useWallet
     ? Math.min(
         flow.toursredCashUsed,
         walletBalance,
-        Math.max(0, subtotalBeforeDiscount - discountAmount - pointsDiscount)
+        Math.max(0, netBeforeCharges - pointsDiscount)
       )
     : 0;
 
-  const grandTotal = Math.max(0, subtotalBeforeDiscount - discountAmount - pointsDiscount - walletDiscount);
+  // Exigible ahora CON cargos por servicio.
+  const dueNow = depositAmount + effectiveDepositServiceCharge + extrasSubtotal
+    + effectiveExtrasServiceCharge + insuranceCost + membershipCost;
 
-  const depositAmount = useMemo(() => {
-    if (!tour) return grandTotal;
-    const pct = tour.deposit_percentage || 50;
-    return Math.round(grandTotal * (pct / 100) * 100) / 100;
-  }, [tour, grandTotal]);
+  // Valor total de la reserva (referencia para el desglose).
+  const subtotalBeforeDiscount = tourPriceAfterDiscount + extrasSubtotal
+    + effectiveExtrasServiceCharge + insuranceCost + effectiveDepositServiceCharge + membershipCost;
+
+  const grandTotal = Math.max(0, subtotalBeforeDiscount - pointsDiscount - walletDiscount);
 
   const rawAmountToPay = flow.payNowMode === 'partial' && !isFullWalletPayment
-    ? Math.min(flow.partialPaymentAmount, depositAmount)
-    : depositAmount;
+    ? Math.min(flow.partialPaymentAmount, Math.max(0, dueNow - pointsDiscount - walletDiscount))
+    : Math.max(0, dueNow - pointsDiscount - walletDiscount);
 
   // Residuo por debajo del minimo del procesador -> $0.
-  const amountToPay = rawAmountToPay > 0 && rawAmountToPay < MIN_PROCESSOR_AMOUNT ? 0 : rawAmountToPay;
+  const amountToPay = rawAmountToPay > 0 && rawAmountToPay < MIN_PROCESSOR_AMOUNT
+    ? 0
+    : Math.round(rawAmountToPay * 100) / 100;
 
   // Unica fuente de verdad para el gating del selector de procesador.
   const isWalletOnlyPayment = amountToPay === 0 && (walletDiscount > 0 || pointsDiscount > 0);
 
-  // ToursRed Cash benefit: wallet covers 100% of the total
+  // Beneficio ToursRed Cash: el saldo alcanza para cubrir todo el exigible.
   const wouldQualifyForWalletBenefit = !useWallet
     && walletBalance > 0
     && totalTravelers > 0
@@ -439,6 +494,23 @@ const BookingFlowStep4: React.FC = () => {
 
       const bookingId = bookingResult.booking_id;
 
+      // El servidor recalcula todos los montos y topa puntos (50% y saldo) y wallet
+      // en silencio. A partir de aqui manda lo que devolvio el RPC, no lo que
+      // calculo el cliente: si difieren, el cliente estaba equivocado.
+      const srvPointsApplied = Number(bookingResult.points_applied ?? pointsApplied);
+      const srvCashApplied = Number(bookingResult.toursred_cash_applied ?? walletDiscount);
+      const srvAmountToCharge = Number(bookingResult.amount_to_charge ?? amountToPay);
+      const srvIsFullWallet = Boolean(bookingResult.is_full_wallet ?? isFullWalletPayment);
+
+      if (srvPointsApplied !== pointsApplied || srvCashApplied !== walletDiscount) {
+        setAdjustedByServer({
+          points: srvPointsApplied,
+          cash: srvCashApplied,
+          amount: srvAmountToCharge,
+        });
+        updateFlow({ pointsUsed: srvPointsApplied, toursredCashUsed: srvCashApplied });
+      }
+
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
@@ -458,7 +530,7 @@ const BookingFlowStep4: React.FC = () => {
         // non-critical
       }
 
-      const isWalletOnly = isWalletOnlyPayment;
+      const isWalletOnly = srvIsFullWallet || srvAmountToCharge === 0;
 
       if (isWalletOnly) {
         const idempotencyKey = `${bookingId}-${Date.now()}`;
@@ -474,8 +546,8 @@ const BookingFlowStep4: React.FC = () => {
             },
             body: JSON.stringify({
               p_booking_id: bookingId,
-              p_points_to_use: pointsApplied,
-              p_cash_to_use: walletDiscount,
+              p_points_to_use: srvPointsApplied,
+              p_cash_to_use: srvCashApplied,
               p_idempotency_key: idempotencyKey,
             }),
           }
@@ -502,7 +574,7 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, customerEmail: user.email, amount: amountToPay, description: `Deposito para ${tour.name}`, addMembership: flow.addMembership, membershipPlan: flow.membershipPlan, toursRedCashUsed: walletDiscount }),
+            body: JSON.stringify({ bookingId, customerEmail: user.email, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, addMembership: flow.addMembership, membershipPlan: flow.membershipPlan, toursRedCashUsed: srvCashApplied }),
           }
         );
         if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.error || 'Error al crear la sesion de pago'); }
@@ -519,7 +591,7 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}` }),
+            body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}` }),
           }
         );
         const mpResult = await resp.json();
@@ -537,7 +609,7 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}` }),
+            body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}` }),
           }
         );
         if (!resp.ok) throw new Error('Error al crear la orden de PayPal');
@@ -556,7 +628,7 @@ const BookingFlowStep4: React.FC = () => {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
             body: JSON.stringify({
               booking_id: bookingId,
-              amount: amountToPay,
+              amount: srvAmountToCharge,
               description: `Deposito para ${tour.name}`,
               payment_method_type: flow.conektaMethod,
               context: 'booking_deposit',
@@ -582,7 +654,7 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, amount: amountToPay, description: `Deposito para ${tour.name}`, context: 'booking', method: flow.openpayMethod }),
+            body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, context: 'booking', method: flow.openpayMethod }),
           }
         );
         if (!resp.ok) throw new Error('Error al crear el cargo de Openpay');
@@ -625,6 +697,22 @@ const BookingFlowStep4: React.FC = () => {
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             {createError}
+          </div>
+        )}
+
+        {adjustedByServer && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-sm flex items-start gap-2">
+            <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
+            <div>
+              <p className="font-semibold">Ajustamos el uso de tu saldo</p>
+              <p className="text-xs mt-0.5">
+                Se aplicaron {adjustedByServer.points.toLocaleString()} puntos
+                {' '}({formatCurrencyMXN(adjustedByServer.points / POINTS_PER_MXN)}) y
+                {' '}{formatCurrencyMXN(adjustedByServer.cash)} de ToursRed Cash.
+                {' '}Los puntos cubren como máximo el 50% del total.
+                {' '}Monto a pagar: <strong>{formatCurrencyMXN(adjustedByServer.amount)}</strong>.
+              </p>
+            </div>
           </div>
         )}
 
@@ -934,7 +1022,7 @@ const BookingFlowStep4: React.FC = () => {
                 onChange={(e) => {
                   setUseWallet(e.target.checked);
                   if (e.target.checked) {
-                    const maxWallet = Math.min(walletBalance, subtotalBeforeDiscount - discountAmount - pointsDiscount);
+                    const maxWallet = Math.min(walletBalance, Math.max(0, netBeforeCharges - pointsDiscount));
                     updateFlow({ toursredCashUsed: maxWallet });
                   } else {
                     updateFlow({ toursredCashUsed: 0 });
@@ -945,7 +1033,9 @@ const BookingFlowStep4: React.FC = () => {
               <Wallet className="w-4 h-4 text-teal-600" />
               <div className="flex-1">
                 <span className="text-sm font-medium text-gray-800">Usar ToursRed Cash (Saldo: {formatCurrencyMXN(walletBalance)})</span>
-                <p className="text-xs text-gray-500">Saldo disponible en tu billetera</p>
+                <p className="text-xs text-gray-500">
+                  Se aplica hasta cubrir lo que debes hoy ({formatCurrencyMXN(netBeforeCharges)}); el resto del tour se paga después.
+                </p>
               </div>
             </label>
             {/* Recargar button: always visible when wallet exists, as a secondary option */}
@@ -987,7 +1077,7 @@ const BookingFlowStep4: React.FC = () => {
         )}
 
         {/* Partial payment option */}
-        {depositAmount > 500 && !isWalletOnlyPayment && (
+        {dueNow > 500 && !isWalletOnlyPayment && (
           <div className="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -1022,7 +1112,7 @@ const BookingFlowStep4: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500 text-sm"
                 />
                 <p className="mt-2 text-xs text-gray-500">
-                  Quedará un saldo de {formatCurrencyMXN(depositAmount - amountToPay)} por pagar. Podrás completarlo después desde 'Mis Reservas' con cualquier método de pago.
+                  Quedará un saldo de {formatCurrencyMXN(Math.max(0, dueNow - pointsDiscount - walletDiscount - amountToPay))} por pagar. Podrás completarlo después desde 'Mis Reservas' con cualquier método de pago.
                 </p>
               </div>
             )}

@@ -132,7 +132,7 @@ Deno.serve(async (req: Request) => {
     } else {
       const { data: booking, error: bookingErr } = await supabase
         .from("bookings")
-        .select("deposit_amount, payment_status")
+        .select("amount_due_now, deposit_amount, payment_status")
         .eq("id", bookingId)
         .maybeSingle();
       if (bookingErr || !booking) {
@@ -152,7 +152,11 @@ Deno.serve(async (req: Request) => {
         .eq("status", "succeeded")
         .eq("payment_processor", "paypal");
       const alreadyPaid = (existingPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-      const remainingBalance = Math.max(0, Number(booking.deposit_amount) - alreadyPaid);
+      // Ver nota en create-openpay-checkout: el techo es el exigible, no el anticipo.
+      const dueNow = booking.amount_due_now != null
+        ? Number(booking.amount_due_now)
+        : Number(booking.deposit_amount);
+      const remainingBalance = Math.max(0, dueNow - alreadyPaid);
       if (remainingBalance <= 0) {
         return new Response(JSON.stringify({ error: "Esta reserva ya está pagada en su totalidad" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
