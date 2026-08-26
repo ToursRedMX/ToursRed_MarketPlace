@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,6 +37,26 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // --- Autorizacion ---
+    // Esta funcion corre con verify_jwt = false (config.toml) y no tenia ningun
+    // guard: bastaba la llave publicable del front —o ni eso— para disparar
+    // correos a los clientes en bucle. No filtra datos a terceros, porque el
+    // destinatario se resuelve del propio CFDI y no del request, pero si permite
+    // usar la plataforma como maquina de spam contra tus propios usuarios.
+    //
+    // Sin rama de dueno: reenviar un comprobante es operacion administrativa.
+    // Los 10 llamadores internos usan service role, verificado uno por uno
+    // (generate-booking-cfdi:932, -booking-installment:533,
+    // -cancellation-commission:500, -commission:385, credit-note:359,
+    // -membership:483, -optional-service:357, -post-booking-insurance:329,
+    // -supplement:387 y substitute-cfdi-for-partial-cancellation:520), todos via
+    // EdgeRuntime.waitUntil, asi que el disparo automatico al timbrar no se
+    // afecta. Ninguna pantalla del front la invoca.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: `el envio por correo del CFDI ${cfdi_invoice_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     const { data: cfdi, error: cfdiError } = await supabase
       .from("cfdi_invoices")
