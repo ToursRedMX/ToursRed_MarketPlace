@@ -12,6 +12,7 @@ import ReviewForm from '../../components/ReviewForm';
 import { useFormPersistence } from '../../hooks/useFormPersistence';
 import { usePreventUnload } from '../../hooks/usePreventUnload';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
+import { paymentLabel } from '../../utils/paymentLabels';
 import { validateAllTravelers } from '../../utils/birthDateValidation';
 import PaymentProviderSelector from '../../components/PaymentProviderSelector';
 
@@ -1668,18 +1669,17 @@ const TravelerBookings: React.FC = () => {
     }
   };
 
-  const getPaymentMethodLabel = (method: string | null | undefined): string => {
-    if (!method) return 'N/A';
-
-    const labels: Record<string, string> = {
-      'card': 'Tarjeta',
-      'oxxo': 'OXXO',
-      'customer_balance': 'Transferencia Bancaria',
-      'toursred_cash': 'ToursRed Cash',
-    };
-
-    return labels[method] || method;
-  };
+  // Antes leia solo booking.payment_method con un mapa local calibrado para
+  // Stripe ('oxxo', 'customer_balance'). Ese campo esta NULL en 16 de 32
+  // reservas (11 de Conekta y 5 de Openpay), asi que todas esas mostraban "N/A"
+  // pese a tener payment_provider poblado. Ahora se resuelve con el modulo
+  // compartido, que cae a payment_provider antes de rendirse.
+  const getPaymentMethodLabel = (booking: any): string =>
+    paymentLabel({
+      paymentMethod: booking?.payment_method,
+      paymentProvider: booking?.payment_provider,
+      fallback: 'N/A',
+    });
 
   const getStatusBadge = (status: string, paymentStatus?: string, approvalStatus?: string, isNoShow?: boolean) => {
     let statusText = '';
@@ -2453,7 +2453,7 @@ const TravelerBookings: React.FC = () => {
                       <DollarSign className="h-4 w-4 text-gray-400 mr-2" />
                       <div>
                         <div className="text-sm text-gray-500">Método de Pago</div>
-                        <div className="font-medium">{getPaymentMethodLabel((booking as any).payment_method)}</div>
+                        <div className="font-medium">{getPaymentMethodLabel(booking)}</div>
                       </div>
                     </div>
                   </div>
@@ -2603,7 +2603,7 @@ const TravelerBookings: React.FC = () => {
                       )}
                       <div>
                         <div className="text-gray-500">Método de Pago:</div>
-                        <div className="font-medium">{getPaymentMethodLabel((booking as any).payment_method)}</div>
+                        <div className="font-medium">{getPaymentMethodLabel(booking)}</div>
                       </div>
                       <div>
                         <div className="text-gray-500">Saldo Restante:</div>

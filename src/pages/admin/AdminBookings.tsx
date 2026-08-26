@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { paymentLabel } from '../../utils/paymentLabels';
 import { useAuth } from '../../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ interface BookingRow {
   status: string;
   payment_status: string;
   payment_method: string | null;
+  payment_provider: string | null;
   total_price: number;
   deposit_amount: number | null;
   user_payment: number;
@@ -313,7 +315,7 @@ function AdminBookings() {
         .select(`
           id, booking_code, user_id, tour_id, agency_id,
           booking_date, created_at, updated_at, status, payment_status,
-          payment_method, total_price, deposit_amount, user_payment,
+          payment_method, payment_provider, total_price, deposit_amount, user_payment,
           service_charge, platform_revenue, commission_amount,
           travelers_count, count_adultos, count_ninos, count_infantes,
           count_adultos_mayores, count_mascotas,
@@ -977,7 +979,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
           <Section title="Estado de Pago" icon={<CreditCard className="h-4 w-4" />}>
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               <Field label="Estado pago" value={<span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ps.cls}`}>{ps.label}</span>} />
-              <Field label="Metodo de pago" value={b.payment_method || '—'} />
+              <Field label="Metodo de pago" value={paymentLabel({ paymentMethod: b.payment_method, paymentProvider: b.payment_provider })} />
               <Field label="Fecha de pago" value={fmtDateTime(b.paid_at)} />
               <Field label="Email confirmacion enviado" value={b.confirmation_email_sent ? <span className="text-green-700">Si</span> : <span className="text-gray-400">No</span>} />
               <div className="col-span-2">

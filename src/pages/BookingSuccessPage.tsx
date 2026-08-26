@@ -7,41 +7,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
-
-// Son dos cosas distintas y la pantalla las mezclaba:
-//   - el PROCESADOR vive en bookings.payment_provider (poblado en todas las
-//     reservas) y en payment_transactions.payment_processor;
-//   - el INSTRUMENTO vive en payment_transactions.payment_method_type, y llega
-//     mezclado: unos valores en ingles ('card', 'spei', 'cash', 'bnpl') y otros
-//     ya en español ('Tarjeta', 'Transferencia Bancaria'), segun que webhook
-//     los escribio.
-// Openpay nunca aparece como payment_method_type porque es un procesador, no un
-// instrumento; por eso no bastaba con agregarlo al mapa de metodos.
-const PROCESSOR_LABELS: Record<string, string> = {
-  stripe: 'Stripe',
-  openpay: 'Openpay',
-  conekta: 'Conekta',
-  mercadopago: 'Mercado Pago',
-  paypal: 'PayPal',
-};
-
-const METHOD_LABELS: Record<string, string> = {
-  card: 'Tarjeta de crédito/débito',
-  Tarjeta: 'Tarjeta de crédito/débito',
-  spei: 'Transferencia bancaria (SPEI)',
-  'Transferencia Bancaria': 'Transferencia bancaria',
-  cash: 'Efectivo',
-  bnpl: 'Pago a plazos',
-  split: 'Pago mixto',
-  toursred_cash: 'ToursRed Cash',
-  toursred_points: 'Puntos ToursRed',
-  toursred_points_cash: 'Puntos ToursRed + ToursRed Cash',
-};
-
-const processorLabel = (processor?: string | null): string => {
-  if (!processor) return '';
-  return PROCESSOR_LABELS[processor] ?? processor.charAt(0).toUpperCase() + processor.slice(1);
-};
+import { paymentLabel, processorLabel } from '../utils/paymentLabels';
 
 const BookingSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -142,15 +108,16 @@ const BookingSuccessPage: React.FC = () => {
         .limit(1)
         .maybeSingle();
 
-      // Se arma "instrumento · procesador" con lo que haya. El procesador cae de
-      // vuelta a bookings.payment_provider, que sigue poblado aunque la reserva
-      // no tenga transaccion registrada (pagos 100% con monedero, por ejemplo).
-      const rawMethod = paymentTransaction?.payment_method_type;
-      const instrument = rawMethod ? (METHOD_LABELS[rawMethod] ?? rawMethod) : '';
-      const processor = processorLabel(
-        paymentTransaction?.payment_processor ?? bookingData.payment_provider
-      );
-      setPaymentMethod([instrument, processor].filter(Boolean).join(' · '));
+      // El procesador cae de vuelta a bookings.payment_provider, que sigue
+      // poblado aunque la reserva no tenga transaccion registrada (pagos 100%
+      // con monedero, por ejemplo).
+      setPaymentMethod(paymentLabel({
+        methodType: paymentTransaction?.payment_method_type,
+        processor: paymentTransaction?.payment_processor,
+        paymentMethod: bookingData.payment_method,
+        paymentProvider: bookingData.payment_provider,
+        fallback: '',
+      }));
 
 
     } catch (err: any) {
@@ -355,7 +322,7 @@ const BookingSuccessPage: React.FC = () => {
                     <div>
                       <div className="text-sm text-gray-500">Método de Pago</div>
                       <div className="font-medium">
-                        {paymentMethod || processorLabel(booking.payment_provider) || booking.payment_method || '—'}
+                        {paymentMethod || processorLabel(booking.payment_provider) || '—'}
                       </div>
                     </div>
                   </div>
