@@ -1717,6 +1717,53 @@ Deno.serve(async (req) => {
               console.error('Error processing membership exemption:', membershipError);
             }
 
+            // Marcar como pagados los extras que venian en el pago inicial.
+            //
+            // Esta rama (payment_intent.succeeded) confirmaba la reserva pero NUNCA
+            // tocaba booking_optional_services, a diferencia de
+            // checkout.session.completed. Los extras quedaban con paid_at NULL para
+            // siempre, y eso tiene dos consecuencias reales:
+            //   - generate-booking-cfdi filtra por paid_at IS NOT NULL, asi que los
+            //     dejaba fuera del comprobante.
+            //   - calculate_booking_financial_breakdown dejaba a la agencia sin cobrar
+            //     optional_services_agency_net.
+            // Es el mismo sintoma que openpay-webhook:312 ya documentaba para su caso.
+            //
+            // Igual que en las demas rutas, aqui NO se recalcula service_charge ni se
+            // llama apply_membership_service_fee_exemption: create_booking_atomic:348 ya
+            // aplico la exencion sobre el cargo de los extras y guardo el neto.
+            // Repetirlo consumiria dos veces el tope mensual del socio.
+            try {
+              const { data: unpaidOptionals } = await supabase
+                .from('booking_optional_services')
+                .select('id, subtotal, total_paid')
+                .eq('booking_id', bookingId)
+                .eq('is_cancelled', false)
+                .is('paid_at', null);
+
+              if (unpaidOptionals && unpaidOptionals.length > 0) {
+                for (const opt of unpaidOptionals) {
+                  if ((opt.total_paid || opt.subtotal) <= 0) continue;
+
+                  const { error: optUpdateError } = await supabase
+                    .from('booking_optional_services')
+                    .update({
+                      paid_at: new Date().toISOString(),
+                      payment_method: 'stripe',
+                      total_paid: opt.total_paid || opt.subtotal,
+                    })
+                    .eq('id', opt.id);
+
+                  if (optUpdateError) {
+                    console.error(`Error marking optional ${opt.id} as paid (payment_intent):`, optUpdateError.message);
+                  }
+                }
+                console.log(`Processed ${unpaidOptionals.length} optional services for booking ${bookingId} (payment_intent)`);
+              }
+            } catch (optError) {
+              console.error('Error processing optional services (payment_intent):', optError);
+            }
+
             // Send confirmation email - check if already sent to prevent duplicates
             try {
               const { data: bookingCheck } = await supabase
