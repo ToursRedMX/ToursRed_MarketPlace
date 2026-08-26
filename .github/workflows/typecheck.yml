@@ -15,9 +15,12 @@ permissions:
   contents: read
 
 env:
-  # Linea base medida el 26-ago-2026 sobre main. Actualizar al bajarla.
-  BASELINE_TOTAL: 501
-  BASELINE_CRASH: 32
+  # Linea base sobre main. Actualizar al bajarla.
+  # 26-ago-2026: 501/32 al medir -> 461/0 tras cerrar el paso 2.
+  # Con la base de crash en 0 este contador es un centinela real: cualquier
+  # TS2304/18047/18048 nuevo se nota contra cero, no contra "ya habia 32".
+  BASELINE_TOTAL: 461
+  BASELINE_CRASH: 0
 
 jobs:
   typecheck:
@@ -69,9 +72,9 @@ jobs:
             echo "|---|---|---|"
             echo "| **Total** | ${TOTAL} en ${FILES} archivos | ${BASELINE_TOTAL} |"
             echo "| Declarado y no usado (TS6133/6196/6192) | ${UNUSED} | 239 |"
-            echo "| Propiedad inexistente (TS2339) | ${PROP} | 124 |"
+            echo "| Propiedad inexistente (TS2339) | ${PROP} | 120 |"
             echo "| **Posible crash (TS2304/18047/18048)** | **${CRASH}** | ${BASELINE_CRASH} |"
-            echo "| Identificador inexistente (TS2304) | ${NOTDEF} | 1 |"
+            echo "| Identificador inexistente (TS2304) | ${NOTDEF} | 0 |"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 

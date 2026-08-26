@@ -190,7 +190,41 @@ archivos y 0 con `ANON_KEY`.
 > deliberado. **Conviene averiguar cómo se generó antes de que se repita** — si
 > la misma herramienta vuelve a correr sobre `main`, deshará todo esto.
 
-## ⏸️ E — Typecheck en el pipeline (medido, no iniciado)
+## ✅ E — Typecheck en el pipeline (pasos 1 y 2 cerrados el 26-ago, tarde)
+
+**Estado: pasos 1 y 2 cerrados. Queda el paso 3, sin fecha.**
+
+| | 25-ago | 26-ago tarde |
+|---|---|---|
+| Total | 501 en 126 archivos | **461** |
+| **Clase crash** | **32 en 14 archivos** | **0** |
+| `TS2304` | 1 | 0 |
+| Declarado y no usado | 239 | 239 |
+| `TS2339` | 124 | 120 |
+
+Cuatro commits: `e656edd` (paso 1), `3d1dc65`, `bbed573`, `9a26ad6` (paso 2).
+
+El workflow `.github/workflows/typecheck.yml` corre en push a `main` y en cada
+PR, en modo informativo, y publica el desglose por clase en el resumen del job.
+Su línea base quedó en **461 / 0**. Con la base de crash en cero el contador es
+un centinela real: un `TS2304/18047/18048` nuevo se nota contra cero, no contra
+"ya había 32".
+
+Dos cosas que costó descubrir y conviene no repetir:
+
+- El step tiene `set +e` a propósito. Actions corre `run:` con `bash -e`, así que
+  sin eso el exit 2 de `tsc` aborta el step y el check sale **rojo y bloqueante**,
+  que es lo contrario del modo informativo.
+- Los 11 `data is possibly null` de auth **no eran crashes**: eran el contrato de
+  `signUp`/`signIn`, que devuelven `data: null` solo en el `catch` y por tanto
+  siempre junto a un `error`. Se arregló con una unión discriminada. La rama de
+  fallo **no puede llevar `error: any`** — se intentó primero así y no cambió
+  absolutamente nada (481 antes y después), porque `any` incluye null y no
+  discrimina. Tiene que ser un tipo de objeto.
+
+Texto original de la medición, conservado porque explica el punto ciego:
+
+### E — Typecheck en el pipeline (medido el 25-ago)
 
 **El punto ciego:** `npm run build` (Vite) **no ejecuta `tsc`**. Y
 `tsc -p tsconfig.json` **tampoco sirve**: ese archivo es solo referencias
@@ -219,12 +253,38 @@ Está en posición de tipo, y los tipos se borran al compilar.
 
 Tres pasos, en orden de valor:
 
-1. **Meter `tsc --noEmit -p tsconfig.app.json` al pipeline en modo informativo.**
-   Barato, y desde ese momento ningún `TS2304` nuevo pasa desapercibido. Es lo
-   único urgente.
-2. **Atacar los 32 de clase crash** en 14 archivos.
-3. **El resto**, limpieza de fondo sin fecha. Los más cargados:
+1. ✅ **Meter `tsc --noEmit -p tsconfig.app.json` al pipeline en modo
+   informativo.** Hecho el 26-ago (`e656edd`).
+2. ✅ **Atacar los 32 de clase crash** en 14 archivos. Hecho el 26-ago, en 0.
+3. ⏸️ **El resto**, limpieza de fondo sin fecha. Los más cargados:
    `BookingSuccessPage` (45), `AgencyTours` (39), `TravelerBookings` (27).
+
+## 🟡 Salido del trabajo de la pieza E (26-ago, tarde) — nada de esto se tocó
+
+Tres cosas que aparecieron al leer código por otro motivo. Ninguna es de la
+pieza E y ninguna se arregló.
+
+1. **Las dos features de contabilidad arregladas no se han ejercitado.**
+   `AccountingPage:567` y `:593` mandaban `Authorization: Bearer undefined` por
+   un `session.session?.access_token` sobre una `session` ya desestructurada, así
+   que **"Generar pólizas" y "Exportar SAT XML" nunca funcionaron**: las dos
+   Edge Functions hacen `getUser(token)` y devolvían 401 siempre. Corregido en
+   `3d1dc65`, pero **solo verificado leyendo el código** — falta apretar ambos
+   botones en sandbox. Es independiente del bug de `full_name` que tuvo la
+   contabilidad 11 días sin asientos; aquel se arregló backfilleando y este
+   seguía vivo.
+
+2. **`support-create-ticket` no valida a quien lo llama.** Tiene
+   `verify_jwt = false` en `config.toml`, corre con service role, **ignora por
+   completo el header de autorización** y toma `user_id` **del body**. Mismo
+   patrón que los cuatro huecos de CFDI de esta misma sesión. Las dos pantallas
+   de soporte le mandaban `Bearer undefined` y funcionaban igual, que es como se
+   destapó.
+
+3. **`AgencySignupPage` importa `TurnstileWidget` y no lo usa** (`:6`, `TS6133`),
+   y tampoco usa el `profileData` que desestructura (`:110`). Esa pantalla **no
+   valida Turnstile** mientras `SignupPage` sí. Puede ser deliberado o un olvido;
+   no se investigó.
 
 ## ⏸️ F — `executive_commissions` guarda la URL privada del PAC como único id
 
@@ -325,6 +385,9 @@ Para que nadie lo dé por hecho leyendo lo de arriba:
   publicable), pero su camino de timbrado no se ha ejecutado desde el deploy. Se
   ejercitarán solas conforme entren pagos; un fallo aparecería como
   `cfdi_invoices.status = 'error'`.
+- **Las dos features de contabilidad arregladas hoy** (`Generar pólizas` y
+  `Exportar SAT XML`) están verificadas solo por lectura de código, no
+  ejercitadas. Ver punto 1 de la sección amarilla de la pieza E.
 - **El contenido de los 9 correos reenviados** se confirmó en uno solo (F-65).
   Los 3 de agencia usan `recipient_type: "agency"`, ruta que nunca se había
   ejecutado antes de hoy.
