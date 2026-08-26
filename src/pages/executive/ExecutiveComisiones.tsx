@@ -16,6 +16,8 @@ interface Commission {
   status: string;
   period_month: number | null;
   period_year: number | null;
+  pac_invoice_id: string | null;
+  cfdi_source: 'pac' | 'manual' | null;
   cfdi_xml_url: string | null;
   cfdi_pdf_url: string | null;
   cfdi_uuid_fiscal: string | null;
@@ -236,7 +238,7 @@ export default function ExecutiveComisiones() {
       const idsToUpdate = selectedIds.length > 0 ? selectedIds : [cfdiModal.id];
       for (const id of idsToUpdate) {
         await supabase.from('executive_commissions').update({
-          status: 'invoiced', cfdi_xml_url: urlData.publicUrl || xmlPath,
+          status: 'invoiced', cfdi_source: 'manual', cfdi_xml_url: urlData.publicUrl || xmlPath,
           cfdi_total: parsed.total, cfdi_uuid_fiscal: parsed.uuid,
           cfdi_uploaded_at: new Date().toISOString(),
         }).eq('id', id);
@@ -256,7 +258,11 @@ export default function ExecutiveComisiones() {
       if (!session) return;
       const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/download-executive-cfdi?commission_id=${commissionId}&file_type=${fileType}`;
       const res = await fetch(proxyUrl, { headers: { Authorization: `Bearer ${session.access_token}` } });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const motivo = await res.json().then(j => j?.error).catch(() => null);
+        setMessage({ type: 'error', text: `No se pudo abrir el comprobante: ${motivo ?? 'intenta de nuevo en unos momentos'}` });
+        return;
+      }
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
       if (fileType === 'pdf') {
@@ -268,7 +274,9 @@ export default function ExecutiveComisiones() {
         a.click();
       }
       setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
-    } catch { /* silenciar error */ }
+    } catch {
+      setMessage({ type: 'error', text: 'No se pudo abrir el comprobante: revisa tu conexion e intenta de nuevo' });
+    }
   };
 
   const pendingCommissions = commissions.filter(c => c.status === 'pending');
@@ -406,12 +414,12 @@ export default function ExecutiveComisiones() {
                         {comm.status === 'rejected' && comm.rejection_reason && <p className="text-xs text-red-500 mt-0.5">{comm.rejection_reason}</p>}
                       </td>
                       <td className="px-4 py-3">
-                        {comm.cfdi_xml_url ? (
+                        {(comm.pac_invoice_id || comm.cfdi_xml_url) ? (
                           <div className="flex items-center gap-1">
                             <button onClick={() => openExecutiveFile(comm.id, 'xml', comm.cfdi_uuid_fiscal)} className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Descargar XML"><ExternalLink className="h-3.5 w-3.5" /></button>
                             <button onClick={() => openExecutiveFile(comm.id, 'xml', comm.cfdi_uuid_fiscal)} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Descargar XML"><Download className="h-3.5 w-3.5" /></button>
-                            <button onClick={() => setCfdiViewerUrl(comm.cfdi_xml_url)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Ver representación gráfica"><FileText className="h-3.5 w-3.5" /></button>
-                            {comm.cfdi_pdf_url && <button onClick={() => openExecutiveFile(comm.id, 'pdf')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Ver PDF"><Receipt className="h-3.5 w-3.5" /></button>}
+                            {comm.cfdi_source !== 'pac' && comm.cfdi_xml_url && <button onClick={() => setCfdiViewerUrl(comm.cfdi_xml_url)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Ver representación gráfica"><FileText className="h-3.5 w-3.5" /></button>}
+                            {(comm.pac_invoice_id || comm.cfdi_pdf_url) && <button onClick={() => openExecutiveFile(comm.id, 'pdf')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Ver PDF"><Receipt className="h-3.5 w-3.5" /></button>}
                           </div>
                         ) : comm.status === 'pending' ? (
                           <div className="flex items-center gap-1">

@@ -208,10 +208,13 @@ Deno.serve(async (req: Request) => {
 
     const now = new Date().toISOString();
     for (const comm of commissions) {
+      // No se guardan xml_url/pdf_url: son la API PRIVADA de FacturAPI y exigen la
+      // API key del ejecutivo, asi que no sirven como enlace. pac_invoice_id es la
+      // unica via real, y download-executive-cfdi las reconstruye a partir de el.
       await supabase.from("executive_commissions").update({
         status: "invoiced",
-        cfdi_xml_url: cfdiResult.xml_url,
-        cfdi_pdf_url: cfdiResult.pdf_url,
+        pac_invoice_id: cfdiResult.pac_invoice_id,
+        cfdi_source: "pac",
         cfdi_uuid_fiscal: cfdiResult.uuid_fiscal,
         cfdi_total: totalAmount,
         cfdi_uploaded_at: now,

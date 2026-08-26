@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: commission } = await supabaseAdmin
       .from("executive_commissions")
-      .select("id, executive_id, cfdi_xml_url, cfdi_pdf_url")
+      .select("id, executive_id, pac_invoice_id, cfdi_source, cfdi_xml_url, cfdi_pdf_url")
       .eq("id", commissionId)
       .maybeSingle();
 
@@ -91,39 +91,67 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (!exec.facturapi_api_key_encrypted) {
-      return new Response(JSON.stringify({ error: "El ejecutivo no tiene FacturAPI configurado" }), {
-        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Extract FacturAPI invoice ID from stored URL
     const storedUrl = fileType === "pdf" ? commission.cfdi_pdf_url : commission.cfdi_xml_url;
-    if (!storedUrl) {
-      return new Response(JSON.stringify({ error: "URL de archivo no disponible" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
-    // URL format: https://www.facturapi.io/v2/invoices/{id}/xml or /pdf
-    const match = storedUrl.match(/\/invoices\/([^\/]+)\//);
-    if (!match) {
-      return new Response(JSON.stringify({ error: "No se pudo extraer el ID de la factura" }), {
-        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const invoiceId = match[1];
-    const facturApiUrl = `https://www.facturapi.io/v2/invoices/${invoiceId}/${fileType}`;
+    // Un CFDI subido a mano vive en Supabase Storage, no en el PAC. Se sirve desde
+    // ahi: ese ejecutivo normalmente NO tiene FacturAPI configurado, y exigirselo
+    // era lo que devolvia 422 en su propia descarga.
+    const isManual = commission.cfdi_source === "manual" ||
+      (!commission.pac_invoice_id && !!storedUrl && !storedUrl.includes("facturapi.io"));
 
-    const fileRes = await fetch(facturApiUrl, {
-      headers: { Authorization: `Bearer ${exec.facturapi_api_key_encrypted}` },
-    });
+    let fileRes: Response;
 
-    if (!fileRes.ok) {
-      const errText = await fileRes.text();
-      return new Response(JSON.stringify({ error: `FacturAPI error ${fileRes.status}`, detail: errText }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (isManual) {
+      if (fileType === "pdf") {
+        return new Response(
+          JSON.stringify({ error: "Este CFDI se subio manualmente y solo tiene XML, no PDF" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (!storedUrl) {
+        return new Response(JSON.stringify({ error: "El archivo del CFDI no esta disponible" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      fileRes = await fetch(storedUrl);
+      if (!fileRes.ok) {
+        return new Response(
+          JSON.stringify({ error: "No se pudo leer el archivo almacenado del CFDI" }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else {
+      if (!exec.facturapi_api_key_encrypted) {
+        return new Response(JSON.stringify({ error: "El ejecutivo no tiene FacturAPI configurado" }), {
+          status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // pac_invoice_id es la via normal. El regex queda SOLO como respaldo para
+      // filas viejas anteriores a la migracion, que no tienen la columna poblada.
+      const invoiceId = commission.pac_invoice_id ??
+        storedUrl?.match(/\/invoices\/([^\/]+)\//)?.[1];
+
+      if (!invoiceId) {
+        return new Response(JSON.stringify({ error: "Este CFDI no tiene id de factura registrado" }), {
+          status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const facturApiUrl = `https://www.facturapi.io/v2/invoices/${invoiceId}/${fileType}`;
+      fileRes = await fetch(facturApiUrl, {
+        headers: { Authorization: `Bearer ${exec.facturapi_api_key_encrypted}` },
       });
+
+      if (!fileRes.ok) {
+        // El detalle del PAC se queda en el log: puede traer datos del emisor y el
+        // front lo mostraria tal cual al usuario.
+        console.error(`FacturAPI ${fileRes.status} al descargar ${fileType} de ${commissionId}:`, await fileRes.text());
+        return new Response(JSON.stringify({ error: "El PAC no devolvio el comprobante" }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const contentType = fileType === "pdf" ? "application/pdf" : "application/xml";
