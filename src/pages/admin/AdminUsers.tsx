@@ -683,25 +683,25 @@ const AdminUsers: React.FC = () => {
                           />
                           <PermissionCheckbox
                             label="Ver Registro de Auditoría"
-                            checked={user.permissions.canViewAuditLog ?? false}
+                            checked={user.permissions?.canViewAuditLog ?? false}
                             onChange={() => {}}
                             disabled
                           />
                           <PermissionCheckbox
                             label="Ver Datos Sensibles (Auditoría)"
-                            checked={user.permissions.canViewAuditSensitiveData ?? false}
+                            checked={user.permissions?.canViewAuditSensitiveData ?? false}
                             onChange={() => {}}
                             disabled
                           />
                           <PermissionCheckbox
                             label="Exportar Auditoría"
-                            checked={user.permissions.canExportAuditLog ?? false}
+                            checked={user.permissions?.canExportAuditLog ?? false}
                             onChange={() => {}}
                             disabled
                           />
                           <PermissionCheckbox
                             label="Cancelar Reservas"
-                            checked={user.permissions.canCancelBookings ?? false}
+                            checked={user.permissions?.canCancelBookings ?? false}
                             onChange={() => {}}
                             disabled
                           />

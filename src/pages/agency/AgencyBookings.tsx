@@ -1494,7 +1494,7 @@ const AgencyBookings: React.FC = () => {
 
                               {isPendingApproval && (
                                 <div className="pt-1 space-y-2">
-                                  {supplementAction?.supplementId === bs.id && supplementAction.type === 'reject' ? (
+                                  {supplementAction && supplementAction.supplementId === bs.id && supplementAction.type === 'reject' ? (
                                     <div className="space-y-2">
                                       <textarea
                                         value={supplementAction.rejectionNote}
