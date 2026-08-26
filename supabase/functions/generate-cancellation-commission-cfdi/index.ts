@@ -1,11 +1,22 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 interface CfdiConcepto {
   clave_prod_serv: string;
@@ -36,8 +47,6 @@ interface CfdiResult {
   uuid_fiscal: string;
   folio: string;
   serie: string;
-  xml_url: string;
-  pdf_url: string;
   stamped_at: string;
 }
 
@@ -97,8 +106,6 @@ async function facturapiStamp(
     uuid_fiscal: data.uuid,
     folio: data.folio_number?.toString() ?? "",
     serie: data.series ?? request.serie,
-    xml_url: `${baseUrl}/invoices/${data.id}/xml`,
-    pdf_url: `${baseUrl}/invoices/${data.id}/pdf`,
     stamped_at: data.created_at ?? new Date().toISOString(),
   };
 }
@@ -179,8 +186,6 @@ async function zohoBooksStamp(
     uuid_fiscal: inv.invoice_id,
     folio: inv.invoice_number ?? "",
     serie: request.serie,
-    xml_url: `${baseUrl}/invoices/${inv.invoice_id}?organization_id=${orgId}&accept=xml`,
-    pdf_url: `${baseUrl}/invoices/${inv.invoice_id}?organization_id=${orgId}&accept=pdf`,
     stamped_at: inv.created_time ?? new Date().toISOString(),
   };
 }
@@ -205,6 +210,43 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Load booking for booking_code and tour name. Se carga antes que nada
+    // porque el guard necesita saber de quien es la reserva.
+    const { data: booking } = await supabase
+      .from("bookings")
+      .select("booking_code, user_id, tour_id, tours(name)")
+      .eq("id", booking_id)
+      .maybeSingle();
+
+    if (!booking) {
+      return new Response(
+        JSON.stringify({ error: "Booking not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // --- Autorizacion ---
+    // El receptor es el viajero (se le retiene el cargo por servicio), asi que
+    // el dueno de la reserva puede pedirlo. Los importes salen de
+    // booking_cancellations, no del body.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      ownerUserId: booking.user_id ?? null,
+      resource: `la comision de cancelacion de la reserva ${booking_id}`,
+    });
+    if (!auth.allowed) return auth.response;
+
+    // Sustituir un comprobante ya timbrado es operacion fiscal: solo admin.
+    // Mismo criterio que generate-booking-cfdi.
+    if (replaces_cfdi_invoice_id && !auth.caller.isAdmin) {
+      console.warn(
+        `Sustitucion CFDI denegada: usuario ${auth.caller.userId} no es admin (reserva ${booking_id})`
+      );
+      return new Response(
+        JSON.stringify({ error: "Solo un administrador puede sustituir un CFDI timbrado" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Idempotency: check if a replacement CFDI already exists for this cancellation
     const { data: existing } = await supabase
       .from("cfdi_invoices")
@@ -224,7 +266,7 @@ Deno.serve(async (req: Request) => {
     // Load the cancellation record to get the exact amounts
     const { data: cancellation, error: cancellationError } = await supabase
       .from("booking_cancellations")
-      .select("original_service_charge, service_charge_refunded_amount, refund_amount_to_traveler, total_principal_paid")
+      .select("booking_id, original_service_charge, service_charge_refunded_amount, refund_amount_to_traveler, total_principal_paid")
       .eq("id", cancellation_id)
       .maybeSingle();
 
@@ -233,6 +275,52 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "Cancellation record not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // La cancelacion tiene que ser DE ESTA reserva. Sin esto se pueden cruzar
+    // dos reservas: los importes saldrian de una cancelacion ajena y el
+    // receptor del comprobante seria el viajero de la otra.
+    if (cancellation.booking_id !== booking_id) {
+      console.warn(
+        `CFDI de cancelacion denegado: la cancelacion ${cancellation_id} pertenece a la reserva ${cancellation.booking_id}, no a ${booking_id}`
+      );
+      return new Response(
+        JSON.stringify({ error: "La cancelacion no pertenece a esta reserva" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // El CFDI a sustituir debe estar timbrado y pertenecer A ESTA reserva. Sin
+    // la segunda validacion se podria relacionar un sustituto contra el
+    // comprobante de otro cliente, que ante el SAT es dificil de deshacer.
+    if (replaces_cfdi_invoice_id) {
+      const { data: orig } = await supabase
+        .from("cfdi_invoices")
+        .select("id, status, booking_id, uuid_fiscal")
+        .eq("id", replaces_cfdi_invoice_id)
+        .maybeSingle();
+
+      if (!orig) {
+        return new Response(
+          JSON.stringify({ error: "CFDI a sustituir no encontrado" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (orig.status !== "stamped" || !orig.uuid_fiscal) {
+        return new Response(
+          JSON.stringify({ error: `Solo se puede sustituir un CFDI timbrado (estado actual: ${orig.status})` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (orig.booking_id !== booking_id) {
+        console.warn(
+          `Sustitucion CFDI denegada: el CFDI ${orig.id} pertenece a la reserva ${orig.booking_id}, no a ${booking_id}`
+        );
+        return new Response(
+          JSON.stringify({ error: "El CFDI a sustituir no pertenece a esta reserva" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Calculate the retained service charge using the explicit field
@@ -245,20 +333,6 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ success: true, message: "No service charge retained — no replacement CFDI needed" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Load booking for booking_code and tour name
-    const { data: booking } = await supabase
-      .from("bookings")
-      .select("booking_code, user_id, tour_id, tours(name)")
-      .eq("id", booking_id)
-      .maybeSingle();
-
-    if (!booking) {
-      return new Response(
-        JSON.stringify({ error: "Booking not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -415,8 +489,6 @@ Deno.serve(async (req: Request) => {
         uuid_fiscal: cfdiResult.uuid_fiscal,
         folio: cfdiResult.folio,
         serie: cfdiResult.serie,
-        xml_url: cfdiResult.xml_url,
-        pdf_url: cfdiResult.pdf_url,
         stamped_at: cfdiResult.stamped_at,
         status: "stamped",
         error_message: null,
@@ -440,6 +512,15 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

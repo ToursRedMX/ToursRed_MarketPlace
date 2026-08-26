@@ -2,6 +2,16 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@22.3.0";
 import { isConfigured as isOpenpayConfigured, getDashboardUrl, getMerchantId, createOrReuseCustomer as createOrReuseOpenpayCustomer, createSpeiCharge, createCashCharge, createCardCheckoutCharge } from "../_shared/openpay.ts";
+import * as Sentry from "npm:@sentry/deno@9";
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -467,6 +477,16 @@ Deno.serve(async (req: Request) => {
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    console.error("Error in create-featured-slot-checkout:", err);
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

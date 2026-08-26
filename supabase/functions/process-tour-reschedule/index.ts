@@ -1,11 +1,21 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -360,39 +370,26 @@ Deno.serve(async (req: Request) => {
 </html>
         `;
 
-        const emailData = {
-          personalizations: [
-            {
-              to: [{ email: tour.agency.contact_email, name: agencyName }],
-              subject: subject,
-            },
-          ],
-          from: {
-            email: emailSettings.from_email,
-            name: emailSettings.from_name || "ToursRed",
-          },
-          content: [
-            {
-              type: "text/html",
-              value: htmlContent,
-            },
-          ],
-        };
-
-        const emailResponse = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${emailSettings.smtp_api_key}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(emailData),
+          body: JSON.stringify({
+            api_key: emailSettings.smtp_api_key,
+            to: [tour.agency.contact_email],
+            sender: emailSettings.contact_email,
+            subject: subject,
+            html_body: htmlContent,
+          }),
         });
 
-        if (emailResponse.ok) {
+        const emailResult = await emailResponse.json();
+
+        if (emailResponse.ok && !emailResult.data?.error) {
           console.log("✅ Email de confirmación enviado a la agencia");
         } else {
-          const errorText = await emailResponse.text();
-          console.error("❌ Error enviando email a agencia:", errorText);
+          console.error("❌ Error enviando email a agencia:", emailResult);
         }
       }
     } catch (emailErr: any) {
@@ -421,6 +418,15 @@ Deno.serve(async (req: Request) => {
 
   } catch (error: any) {
     console.error("Error in process-tour-reschedule:", error);
+    if (sentryDsn) {
+      Sentry.captureException(error, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
 
     return new Response(
       JSON.stringify({

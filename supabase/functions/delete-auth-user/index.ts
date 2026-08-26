@@ -1,12 +1,22 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -44,8 +54,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // AAL2 (MFA) check — blocks the action if MFA is required but not completed
-    const aal2 = await checkAal2Required(supabase);
+    // AAL2 (MFA) check — must use a client authenticated with the CALLER's own JWT,
+    // not the service-role client: requires_aal2_check()/has_aal2() read auth.uid()/
+    // auth.jwt(), which resolve to NULL under a service-role session and silently
+    // no-op the check.
+    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const aal2 = await checkAal2Required(userClient);
     if (!aal2.allowed) {
       return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores");
     }
@@ -75,6 +91,15 @@ Deno.serve(async (req: Request) => {
     );
   } catch (err: any) {
     console.error("delete-auth-user error:", err);
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({ error: err.message || "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

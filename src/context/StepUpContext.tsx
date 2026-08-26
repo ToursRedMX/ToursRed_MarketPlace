@@ -47,7 +47,7 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
-          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ code }),
       });

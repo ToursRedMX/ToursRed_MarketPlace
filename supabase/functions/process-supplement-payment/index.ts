@@ -1,12 +1,23 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@22.3.0";
+import { enforceStepUp } from "../_shared/stepUpCheck.ts";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -55,6 +66,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Step-up auth: traveler is spending their own wallet/points directly (self-service).
+    // Only enforce for wallet/points methods — card/redirect processors already require
+    // the traveler to authenticate with their bank/card issuer.
+    if (payment_method === "toursred_cash" || payment_method === "points") {
+      const stepUpBlock = await enforceStepUp(userClient, supabaseServiceKey, supabaseUrl, user.id);
+      if (stepUpBlock) return stepUpBlock;
+    }
+
     // Load supplement request with full context
     const { data: suppReq } = await supabase
       .from("booking_supplements")
@@ -85,9 +104,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (!["pending_payment", "approved"].includes(suppReq.status)) {
+    if (["pending_payment", "approved"].includes(suppReq.status) === false) {
       if (suppReq.status === "paid") {
-        // If paid but no CFDI yet, trigger generation now (handles constraint-fix backfill scenario)
         const { data: existingCfdi } = await supabase
           .from("cfdi_invoices")
           .select("id")
@@ -124,7 +142,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Check expiry for approved supplements
     if (suppReq.status === "approved" && suppReq.expires_at && new Date(suppReq.expires_at) < new Date()) {
       await supabase.from("booking_supplements").update({
         status: "cancelled",
@@ -137,7 +154,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Platform settings
     const { data: platformSettings } = await supabase
       .from("platform_settings")
       .select("service_charge_percentage, supplement_commission_percentage, mercadopago_access_token, paypal_client_id, paypal_client_secret, paypal_sandbox")
@@ -168,10 +184,7 @@ Deno.serve(async (req: Request) => {
 
     const supplementName = (suppReq.tour_supplements as any)?.name ?? "Suplemento";
 
-    // Finalize payment: update membership, award points, mark as paid, trigger CFDI
     const finalizePayment = async (method: string, intentId: string | null) => {
-      // Exemption already consumed atomically by apply_membership_service_fee_exemption RPC above
-
       let pointsEarned = 0;
       const { data: activeMembership } = await supabase
         .from("memberships")
@@ -226,7 +239,6 @@ Deno.serve(async (req: Request) => {
         updated_at: new Date().toISOString(),
       }).eq("id", booking_supplement_id);
 
-      // Record in payment_transactions for refund tracking (skip for points/cash internal methods)
       if (method === "stripe" && intentId) {
         const { data: existingSuppTx } = await supabase
           .from("payment_transactions")
@@ -309,7 +321,6 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Trigger CFDI generation synchronously (catch errors so payment isn't affected)
       const { data: cfdiSettings } = await supabase
         .from("platform_settings")
         .select("pac_provider")
@@ -333,9 +344,6 @@ Deno.serve(async (req: Request) => {
       return pointsEarned;
     };
 
-    // ===================== PAYMENT ROUTING =====================
-
-    // 1. ToursRed Cash
     if (payment_method === "toursred_cash") {
       const { data: wallet } = await supabase
         .from("toursred_cash_wallets")
@@ -376,7 +384,6 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 2. ToursRed Points (1 punto = $0.01 MXN → 100 puntos = $1 MXN)
     if (payment_method === "points") {
       const pointsNeeded = Math.ceil(totalToPay * 100);
       const { data: pWallet } = await supabase
@@ -414,7 +421,6 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 3. Stripe — create Checkout Session (hosted by Stripe, same as booking flow)
     if (payment_method === "stripe") {
       const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
       if (!stripeKey) {
@@ -455,7 +461,6 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 4. MercadoPago (Brick direct charge, redirect verification, or Checkout Pro redirect)
     if (payment_method === "mercadopago") {
       const mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || platformSettings?.mercadopago_access_token;
       if (!mpAccessToken) {
@@ -467,7 +472,6 @@ Deno.serve(async (req: Request) => {
       const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
       const notificationUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`;
 
-      // Path (a): No form data and no payment_id → create Checkout Pro preference for redirect flow
       if (!mp_form_data && !mercadopago_payment_id) {
         const preferencePayload = {
           items: [{
@@ -506,7 +510,6 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Path (c): mercadopago_payment_id present → verify against MP API before confirming
       if (mercadopago_payment_id) {
         const verifyResponse = await fetch(`https://api.mercadopago.com/v1/payments/${mercadopago_payment_id}`, {
           headers: { Authorization: `Bearer ${mpAccessToken}` },
@@ -537,7 +540,6 @@ Deno.serve(async (req: Request) => {
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      // Path (b): mp_form_data present → direct Brick charge with server-calculated amount
       const mpPayload = {
         ...mp_form_data,
         transaction_amount: totalToPay,
@@ -571,7 +573,6 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 5. PayPal — capture existing order
     if (payment_method === "paypal") {
       if (!paypal_order_id) {
         return new Response(JSON.stringify({ error: "paypal_order_id es requerido para PayPal" }), {
@@ -623,7 +624,6 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 6. Openpay — redirect to Openpay checkout
     if (payment_method === "openpay") {
       const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
       const opResponse = await fetch(`${supabaseUrl}/functions/v1/create-openpay-checkout`, {
@@ -652,7 +652,6 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 7. Conekta
     if (payment_method === "conekta") {
       if (!conekta_method || !["card", "cash", "spei", "bnpl"].includes(conekta_method)) {
         return new Response(JSON.stringify({ error: "conekta_method es requerido y debe ser card, cash, spei o bnpl" }), {
@@ -763,6 +762,15 @@ Deno.serve(async (req: Request) => {
     });
 
   } catch (err) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

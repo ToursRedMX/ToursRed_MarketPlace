@@ -5,10 +5,11 @@ import {
   CheckCircle, Clock, XCircle, AlertTriangle, RefreshCw,
   Users, Star, Coins, Shield, FileText, ArrowLeftRight,
   Phone, Mail, Package, Percent, Hash, Tag, Info, Plus,
-  TrendingUp, BarChart2, Activity, Upload, Ban, Loader2
+  TrendingUp, BarChart2, Activity, Upload, Ban, Loader2, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { paymentLabel } from '../../utils/paymentLabels';
 import { useAuth } from '../../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ interface BookingRow {
   status: string;
   payment_status: string;
   payment_method: string | null;
+  payment_provider: string | null;
   total_price: number;
   deposit_amount: number | null;
   user_payment: number;
@@ -274,7 +276,6 @@ function AdminBookings() {
 
   // Detail modal
   const [selected, setSelected] = useState<BookingRow | null>(null);
-  const [selectedRealTotalPaid, setSelectedRealTotalPaid] = useState(0);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const { permissions, isSuperAdmin } = useAuth();
   const canCancel = isSuperAdmin || permissions?.canCancelBookings;
@@ -313,7 +314,7 @@ function AdminBookings() {
         .select(`
           id, booking_code, user_id, tour_id, agency_id,
           booking_date, created_at, updated_at, status, payment_status,
-          payment_method, total_price, deposit_amount, user_payment,
+          payment_method, payment_provider, total_price, deposit_amount, user_payment,
           service_charge, platform_revenue, commission_amount,
           travelers_count, count_adultos, count_ninos, count_infantes,
           count_adultos_mayores, count_mascotas,
@@ -738,7 +739,7 @@ function AdminBookings() {
 
       {/* Detail modal */}
       {selected && (
-        <DetailModal booking={selected} onClose={() => setSelected(null)} />
+        <DetailModal booking={selected} onClose={() => setSelected(null)} onRefresh={load} />
       )}
     </div>
   );
@@ -746,7 +747,7 @@ function AdminBookings() {
 
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 
-const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ booking: b, onClose }) => {
+const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void; onRefresh: () => void }> = ({ booking: b, onClose, onRefresh }) => {
   const ps = PAYMENT_STATUS_MAP[b.payment_status] ?? { label: b.payment_status, cls: 'bg-gray-100 text-gray-600' };
   const bs = BOOKING_STATUS_MAP[b.status] ?? { label: b.status, cls: 'bg-gray-100 text-gray-600' };
   const ap = b.approval_status ? (APPROVAL_MAP[b.approval_status] ?? { label: b.approval_status, cls: 'bg-gray-100 text-gray-600' }) : null;
@@ -758,6 +759,29 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
   const { permissions, isSuperAdmin } = useAuth();
   const canCancel = isSuperAdmin || permissions?.canCancelBookings;
   const [adminCancellationData, setAdminCancellationData] = useState<any>(null);
+
+  // El tile "Total pagado" referenciaba selectedRealTotalPaid, un estado declarado
+  // en AdminBookings (:279) y por lo tanto fuera del scope de ESTE componente:
+  // abrir el detalle de una reserva SIN plan de pagos tronaba con ReferenceError
+  // (25 de 32 reservas). Ademas ese estado nunca se asignaba, asi que el numero
+  // nunca fue real. Se calcula aqui con el mismo RPC que usa BookingSuccessPage.
+  // null = aun cargando, para no mostrar un $0.00 que parezca un dato.
+  const [realTotalPaid, setRealTotalPaid] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .rpc('get_booking_total_paid', { p_booking_id: b.id })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error('Error cargando total pagado:', error);
+          return;
+        }
+        setRealTotalPaid(Number(data) || 0);
+      });
+    return () => { cancelled = true; };
+  }, [b.id]);
 
   useEffect(() => {
     if (b.cancellation_type === 'admin_cancelled' && b.admin_cancellation_id) {
@@ -947,7 +971,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
                     if (b.payment_plan?.installments?.length) {
                       return b.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0);
                     }
-                    return Number(selectedRealTotalPaid ?? 0);
+                    return realTotalPaid;
                   })(), highlight: b.has_payment_plan },
                   { label: 'Cargo por servicio', val: Number(b.service_charge) },
                   { label: 'Ingreso plataforma', val: Number(b.platform_revenue ?? 0) },
@@ -955,7 +979,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
                 ].map(({ label, val, highlight }) => (
                   <div key={label} className={`rounded-lg p-3 ${highlight ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
                     <div className={`text-base font-bold ${highlight ? 'text-blue-700' : 'text-gray-900'}`}>
-                      {formatCurrencyMXN(val)}
+                      {val === null ? '—' : formatCurrencyMXN(val)}
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">{label}</div>
                   </div>
@@ -977,7 +1001,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
           <Section title="Estado de Pago" icon={<CreditCard className="h-4 w-4" />}>
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               <Field label="Estado pago" value={<span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ps.cls}`}>{ps.label}</span>} />
-              <Field label="Metodo de pago" value={b.payment_method || '—'} />
+              <Field label="Metodo de pago" value={paymentLabel({ paymentMethod: b.payment_method, paymentProvider: b.payment_provider })} />
               <Field label="Fecha de pago" value={fmtDateTime(b.paid_at)} />
               <Field label="Email confirmacion enviado" value={b.confirmation_email_sent ? <span className="text-green-700">Si</span> : <span className="text-gray-400">No</span>} />
               <div className="col-span-2">
@@ -1353,7 +1377,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
           onClose={() => setShowCancelModal(false)}
           onSuccess={() => {
             setShowCancelModal(false);
-            load();
+            onRefresh();
             onClose();
           }}
         />
@@ -1398,17 +1422,29 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
   const [manualRefundTxId, setManualRefundTxId] = useState<string | null>(null);
   const [manualRefundMethod, setManualRefundMethod] = useState<'toursred_cash' | 'bank_transfer'>('toursred_cash');
 
+  const insuranceCost = booking.travel_insurance_included ? Number(booking.travel_insurance_cost || 0) : 0;
+  const totalPaidByTraveler = booking.payment_plan?.installments?.length
+    ? booking.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0)
+    : realTotalPaid;
+  const optionalServicesRefundable = booking.optional_services
+    ? booking.optional_services
+        .filter(os => !os.is_cancelled && Number(os.total_paid || 0) > 0)
+        .reduce((s, os) => s + Number(os.total_paid || 0), 0)
+    : 0;
+  const supplementsRefundable = booking.supplements
+    ? booking.supplements
+        .filter(sp => sp.status === 'paid' && Number(sp.total_paid || 0) > 0)
+        .reduce((s, sp) => s + Number(sp.total_paid || 0), 0)
+    : 0;
+
+  // Prellenar con el MISMO calculo base que muestra la etiqueta "Sugerido".
+  // Antes era solo pagado + seguro, mientras la etiqueta ya sumaba opcionales y
+  // suplementos: quien aceptaba el valor prellenado reembolsaba de menos.
+  // No se incluye el cargo por servicio: arranca desmarcado y el checkbox lo
+  // suma o resta por su cuenta, asi que sumarlo aqui lo contaria dos veces.
   useEffect(() => {
-    // Suggest refund amount based on total actually paid by traveler
-    const insurance = booking.travel_insurance_included ? Number(booking.travel_insurance_cost || 0) : 0;
-    let totalPaid: number;
-    if (booking.payment_plan?.installments?.length) {
-      totalPaid = booking.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0);
-    } else {
-      totalPaid = realTotalPaid;
-    }
-    setRefundAmount(totalPaid + insurance);
-  }, [booking, realTotalPaid]);
+    setRefundAmount(totalPaidByTraveler + insuranceCost + optionalServicesRefundable + supplementsRefundable);
+  }, [totalPaidByTraveler, insuranceCost, optionalServicesRefundable, supplementsRefundable]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1749,20 +1785,6 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
     setError(null);
   };
 
-  const insuranceCost = booking.travel_insurance_included ? Number(booking.travel_insurance_cost || 0) : 0;
-  const totalPaidByTraveler = booking.payment_plan?.installments?.length
-    ? booking.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0)
-    : realTotalPaid;
-  const optionalServicesRefundable = booking.optional_services
-    ? booking.optional_services
-        .filter(os => !os.is_cancelled && Number(os.total_paid || 0) > 0)
-        .reduce((s, os) => s + Number(os.total_paid || 0), 0)
-    : 0;
-  const supplementsRefundable = booking.supplements
-    ? booking.supplements
-        .filter(sp => sp.status === 'paid' && Number(sp.total_paid || 0) > 0)
-        .reduce((s, sp) => s + Number(sp.total_paid || 0), 0)
-    : 0;
   const serviceChargeAmount = Number(booking.service_charge || 0)
     + (booking.payment_plan?.installments?.reduce((s: number, i: any) => s + Number(i.service_charge || 0), 0) || 0);
   const suggestedAmount = totalPaidByTraveler + insuranceCost + optionalServicesRefundable + supplementsRefundable + (refundServiceCharge ? serviceChargeAmount : 0);

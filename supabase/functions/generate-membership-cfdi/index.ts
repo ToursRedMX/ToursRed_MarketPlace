@@ -1,11 +1,22 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 interface CfdiReceptor {
   rfc: string;
@@ -39,8 +50,6 @@ interface CfdiResult {
   uuid_fiscal: string;
   folio: string;
   serie: string;
-  xml_url: string;
-  pdf_url: string;
   stamped_at: string;
 }
 
@@ -103,8 +112,6 @@ async function facturapiStamp(apiKey: string, organizationId: string, request: C
     uuid_fiscal: data.uuid,
     folio: data.folio_number?.toString() ?? "",
     serie: data.series ?? request.serie,
-    xml_url: `${baseUrl}/invoices/${data.id}/xml`,
-    pdf_url: `${baseUrl}/invoices/${data.id}/pdf`,
     stamped_at: data.created_at ?? new Date().toISOString(),
   };
 }
@@ -196,8 +203,6 @@ async function zohoBooksStamp(
     uuid_fiscal: inv.invoice_id,
     folio: inv.invoice_number ?? "",
     serie: request.serie,
-    xml_url: `${baseUrl}/invoices/${inv.invoice_id}?organization_id=${orgId}&accept=xml`,
-    pdf_url: `${baseUrl}/invoices/${inv.invoice_id}?organization_id=${orgId}&accept=pdf`,
     stamped_at: inv.created_time ?? new Date().toISOString(),
   };
 }
@@ -221,6 +226,16 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // --- Autorizacion ---
+    // Sin rama de dueno a proposito: stripe_amount_paid llega por el body y
+    // alimenta el calculo del descuento aplicado, asi que el socio podria
+    // timbrarse un importe que no pago. El unico llamador es stripe-webhook,
+    // con service role.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: `la membresia ${membership_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Idempotencia: evitar CFDI duplicado para el mismo periodo de Stripe
     if (stripe_invoice_id) {
@@ -457,8 +472,6 @@ Deno.serve(async (req: Request) => {
         uuid_fiscal: cfdiResult.uuid_fiscal,
         folio: cfdiResult.folio,
         serie: cfdiResult.serie,
-        xml_url: cfdiResult.xml_url,
-        pdf_url: cfdiResult.pdf_url,
         stamped_at: cfdiResult.stamped_at,
         status: "stamped",
         error_message: null,
@@ -477,12 +490,19 @@ Deno.serve(async (req: Request) => {
         success: true,
         cfdi_id: cfdiRecord.id,
         uuid_fiscal: cfdiResult.uuid_fiscal,
-        xml_url: cfdiResult.xml_url,
-        pdf_url: cfdiResult.pdf_url,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

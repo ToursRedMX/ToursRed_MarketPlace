@@ -11,6 +11,16 @@ import {
   createSpeiCharge,
   createCashCharge,
 } from "../_shared/openpay.ts";
+import * as Sentry from "npm:@sentry/deno@9";
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -99,7 +109,7 @@ Deno.serve(async (req: Request) => {
     if (context === "booking") {
       const { data: booking, error: bookingErr } = await supabase
         .from("bookings")
-        .select("deposit_amount, user_id")
+        .select("amount_due_now, deposit_amount, user_id")
         .eq("id", bookingId)
         .maybeSingle();
 
@@ -125,7 +135,13 @@ Deno.serve(async (req: Request) => {
         .eq("status", "succeeded");
 
       const alreadyPaid = (alreadySucceeded || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
-      const remainingBalance = Number(booking.deposit_amount) - alreadyPaid;
+      // amount_due_now es el exigible del primer cobro que calculo create_booking_atomic
+      // (anticipo + cargo por servicio + extras + seguro + membresia - puntos - wallet).
+      // deposit_amount es solo el anticipo del tour y deja fuera cargos y extras.
+      const dueNow = booking.amount_due_now != null
+        ? Number(booking.amount_due_now)
+        : Number(booking.deposit_amount);
+      const remainingBalance = dueNow - alreadyPaid;
 
       if (remainingBalance <= 0) {
         return new Response(
@@ -402,6 +418,15 @@ Deno.serve(async (req: Request) => {
     );
   } catch (err) {
     console.error("Error in create-openpay-checkout:", err);
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({ error: err.message || "Error interno del servidor" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

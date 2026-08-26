@@ -1,6 +1,16 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import { isConfigured, getCharge, getChargeMerchant } from "../_shared/openpay.ts";
+import * as Sentry from "npm:@sentry/deno@9";
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -267,12 +277,17 @@ Deno.serve(async (req: Request) => {
 
           const { data: booking } = await supabase
             .from("bookings")
-            .select("deposit_amount, total_price, user_payment, payment_status, status")
+            .select("amount_due_now, deposit_amount, total_price, user_payment, payment_status, status")
             .eq("id", bookingId)
             .maybeSingle();
 
           if (booking) {
-            const requiredAmount = Number(booking.deposit_amount) || Number(booking.total_price) || 0;
+            // Confirmar contra el exigible real. Con deposit_amount se confirmaba la
+            // reserva cobrando de menos (quedaban fuera cargo por servicio y extras).
+            const requiredAmount = Number(booking.amount_due_now)
+              || Number(booking.deposit_amount)
+              || Number(booking.total_price)
+              || 0;
             const newUserPayment = Math.max(0, Number(booking.user_payment || 0) - chargeAmount);
 
             if (totalPaid >= requiredAmount) {
@@ -281,6 +296,11 @@ Deno.serve(async (req: Request) => {
                 .update({
                   payment_status: "succeeded",
                   payment_provider: "openpay",
+                  // Se escribia en booking_optional_services pero no aqui, asi que
+                  // bookings.payment_method quedaba NULL y la pantalla de exito no
+                  // tenia de donde sacar la etiqueta. Mismo valor que escriben los
+                  // webhooks de MercadoPago, PayPal y Conekta.
+                  payment_method: "openpay",
                   user_payment: newUserPayment,
                   paid_at: new Date().toISOString(),
                   status: "confirmed",
@@ -288,6 +308,39 @@ Deno.serve(async (req: Request) => {
                 .eq("id", bookingId);
 
               console.log(`Booking ${bookingId} confirmed (Openpay) — total paid: ${totalPaid}/${requiredAmount}`);
+
+              // Marcar como pagados los extras que venian en el pago inicial. Openpay
+              // solo lo hacia para extras comprados por separado (chargeContext ===
+              // "optional_service"), asi que los del checkout quedaban con paid_at NULL:
+              // el CFDI los excluia y calculate_booking_financial_breakdown dejaba a la
+              // agencia sin cobrar optional_services_agency_net.
+              //
+              // A diferencia de Stripe y PayPal, aqui NO se recalcula service_charge ni
+              // se vuelve a llamar apply_membership_service_fee_exemption: esa RPC muta
+              // memberships, y create_booking_atomic ya aplico la exencion y guardo el
+              // service_charge neto al crear la reserva. Repetirlo consumiria dos veces
+              // el tope mensual del socio.
+              //
+              // Va ANTES de disparar el CFDI: generate-booking-cfdi filtra los extras por
+              // paid_at IS NOT NULL, asi que si se marcan despues quedan fuera del
+              // comprobante.
+              try {
+                const { error: optErr } = await supabase
+                  .from("booking_optional_services")
+                  .update({
+                    paid_at: new Date().toISOString(),
+                    payment_method: "openpay",
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("booking_id", bookingId)
+                  .eq("is_cancelled", false)
+                  .is("paid_at", null);
+                if (optErr) {
+                  console.error("Error marcando extras pagados (Openpay):", optErr);
+                }
+              } catch (e) {
+                console.error("Error marcando extras pagados (Openpay):", e);
+              }
 
               const cfdiSettingsRes = await supabase
                 .from("platform_settings")
@@ -807,6 +860,15 @@ Deno.serve(async (req: Request) => {
     return new Response("OK", { status: 200, headers: corsHeaders });
   } catch (err) {
     console.error("Unexpected error processing charge.succeeded:", err);
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     if (webhookEventId) {
       await supabase.from("openpay_webhook_events").update({
         processing_status: "error",

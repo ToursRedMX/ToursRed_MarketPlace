@@ -1,11 +1,22 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 // =============================================
 // PAC-AGNOSTIC TYPES (same pattern as generate-booking-cfdi)
@@ -50,8 +61,6 @@ interface CfdiResult {
   uuid_fiscal: string;
   folio: string;
   serie: string;
-  xml_url: string;
-  pdf_url: string;
   stamped_at: string;
 }
 
@@ -107,8 +116,6 @@ async function facturapiStamp(apiKey: string, orgId: string, request: CfdiReques
     uuid_fiscal: data.uuid,
     folio: data.folio_number?.toString() ?? "",
     serie: data.series ?? request.serie,
-    xml_url: `${baseUrl}/invoices/${data.id}/xml`,
-    pdf_url: `${baseUrl}/invoices/${data.id}/pdf`,
     stamped_at: data.created_at ?? new Date().toISOString(),
   };
 }
@@ -169,8 +176,6 @@ async function zohoBooksStamp(supabaseClient: ReturnType<typeof createClient>, o
     uuid_fiscal: inv.invoice_id,
     folio: inv.invoice_number ?? "",
     serie: request.serie,
-    xml_url: `${baseUrl}/invoices/${inv.invoice_id}?organization_id=${orgId}&accept=xml`,
-    pdf_url: `${baseUrl}/invoices/${inv.invoice_id}?organization_id=${orgId}&accept=pdf`,
     stamped_at: inv.created_time ?? new Date().toISOString(),
   };
 }
@@ -252,6 +257,16 @@ Deno.serve(async (req: Request) => {
     const plan = (installment.booking_payment_plans as any);
     const booking = plan.bookings as any;
     const tour = booking.tours as any;
+
+    // --- Autorizacion ---
+    // Los importes se leen de la parcialidad, no del body, asi que el dueno de
+    // la reserva puede pedir el CFDI de su propia parcialidad sin poder alterar
+    // el monto.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      ownerUserId: booking?.user_id ?? null,
+      resource: `la parcialidad ${installment_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Load platform settings
     const { data: settings } = await supabase
@@ -503,8 +518,6 @@ Deno.serve(async (req: Request) => {
       uuid_fiscal: cfdiResult.uuid_fiscal,
       folio: cfdiResult.folio,
       serie: cfdiResult.serie,
-      xml_url: cfdiResult.xml_url,
-      pdf_url: cfdiResult.pdf_url,
       stamped_at: cfdiResult.stamped_at,
       status: "stamped",
       error_message: null,
@@ -526,11 +539,18 @@ Deno.serve(async (req: Request) => {
       success: true,
       cfdi_id: cfdiRecord.id,
       uuid_fiscal: cfdiResult.uuid_fiscal,
-      xml_url: cfdiResult.xml_url,
-      pdf_url: cfdiResult.pdf_url,
     }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (err) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

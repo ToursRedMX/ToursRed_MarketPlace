@@ -1,11 +1,22 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -26,6 +37,26 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // --- Autorizacion ---
+    // Esta funcion corre con verify_jwt = false (config.toml) y no tenia ningun
+    // guard: bastaba la llave publicable del front —o ni eso— para disparar
+    // correos a los clientes en bucle. No filtra datos a terceros, porque el
+    // destinatario se resuelve del propio CFDI y no del request, pero si permite
+    // usar la plataforma como maquina de spam contra tus propios usuarios.
+    //
+    // Sin rama de dueno: reenviar un comprobante es operacion administrativa.
+    // Los 10 llamadores internos usan service role, verificado uno por uno
+    // (generate-booking-cfdi:932, -booking-installment:533,
+    // -cancellation-commission:500, -commission:385, credit-note:359,
+    // -membership:483, -optional-service:357, -post-booking-insurance:329,
+    // -supplement:387 y substitute-cfdi-for-partial-cancellation:520), todos via
+    // EdgeRuntime.waitUntil, asi que el disparo automatico al timbrar no se
+    // afecta. Ninguna pantalla del front la invoca.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: `el envio por correo del CFDI ${cfdi_invoice_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     const { data: cfdi, error: cfdiError } = await supabase
       .from("cfdi_invoices")
@@ -123,12 +154,77 @@ Deno.serve(async (req: Request) => {
     const senderEmail = emailSettings.contact_email || "noreply@toursred.com";
     const logoHtml = `<span style="font-size:20px;font-weight:700;color:#0e7490;">ToursRed</span>`;
 
-    const xmlLink = cfdi.xml_url
-      ? `<a href="${cfdi.xml_url}" style="display:inline-block;background:#0e7490;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;margin:4px;">Descargar XML</a>`
-      : "";
-    const pdfLink = cfdi.pdf_url
-      ? `<a href="${cfdi.pdf_url}" style="display:inline-block;background:#0f766e;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;margin:4px;">Descargar PDF</a>`
-      : "";
+    // Antes se enlazaba cfdi.xml_url / cfdi.pdf_url, que apuntan a la API PRIVADA
+    // de FacturAPI (https://www.facturapi.io/v2/invoices/{id}/pdf). Esa URL exige
+    // Authorization con la API key secreta, asi que el boton del correo daba 401
+    // para el destinatario: los 33 CFDIs timbrados quedaron con el enlace roto.
+    //
+    // Ahora el comprobante viaja ADJUNTO. Se descarga aqui, del lado del servidor,
+    // con las credenciales del PAC — mismo procedimiento que download-cfdi:127 —
+    // y nunca salen del backend. Ademas evita depender de que el destinatario
+    // tenga sesion abierta, cosa que un enlace de correo no puede asumir.
+    const { data: pacSettings } = await supabase
+      .from("platform_settings")
+      .select("pac_organization_id")
+      .maybeSingle();
+    const { data: pacSecrets } = await supabase
+      .from("platform_secrets")
+      .select("pac_api_key_encrypted")
+      .maybeSingle();
+    const pacApiKey = pacSecrets?.pac_api_key_encrypted || null;
+
+    const attachments: Array<{ filename: string; fileblob: string; mimetype: string }> = [];
+
+    if (pacApiKey && cfdi.pac_invoice_id) {
+      const pacHeaders: Record<string, string> = { Authorization: `Bearer ${pacApiKey}` };
+      if (pacSettings?.pac_organization_id) {
+        pacHeaders["X-Organization-Id"] = pacSettings.pac_organization_id;
+      }
+
+      for (const kind of [
+        { ext: "pdf", mimetype: "application/pdf" },
+        { ext: "xml", mimetype: "application/xml" },
+      ]) {
+        try {
+          const fileRes = await fetch(
+            `https://www.facturapi.io/v2/invoices/${cfdi.pac_invoice_id}/${kind.ext}`,
+            { headers: pacHeaders }
+          );
+          if (!fileRes.ok) {
+            console.error(`No se pudo descargar el ${kind.ext} del CFDI ${cfdi.id}: ${fileRes.status}`);
+            continue;
+          }
+          const bytes = new Uint8Array(await fileRes.arrayBuffer());
+          let binary = "";
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          attachments.push({
+            filename: `factura-${folioDisplay}.${kind.ext}`,
+            fileblob: btoa(binary),
+            mimetype: kind.mimetype,
+          });
+        } catch (e) {
+          // Un adjunto que falla no debe impedir el envio: el correo sale igual
+          // y el destinatario siempre tiene el boton a su listado de facturas.
+          console.error(`Error adjuntando ${kind.ext} del CFDI ${cfdi.id}:`, e);
+        }
+      }
+    } else {
+      console.error(`CFDI ${cfdi.id} sin pac_api_key o sin pac_invoice_id: se envia sin adjuntos`);
+    }
+
+    // El listado de facturas NO es el mismo para todos. TravelerInvoices filtra
+    // por los 7 tipos del viajero y no incluye 'commission', asi que mandar a una
+    // agencia a /traveler/invoices seria inutil (ademas de que la ruta exige rol
+    // TRAVELER). AgencyCfdiList filtra solo por agency_id y si muestra comisiones.
+    const appUrl = Deno.env.get("APP_URL") || "https://toursredmx.netlify.app";
+    const invoicesPath = recipient_type === "agency" ? "/agency/invoices" : "/traveler/invoices";
+    const invoicesLink =
+      `<a href="${appUrl}${invoicesPath}" style="display:inline-block;background:#0e7490;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;margin:4px;">Ver todas mis facturas</a>`;
+
+    const attachmentNote = attachments.length > 0
+      ? `<p style="color:#4b5563;font-size:14px;margin:0 0 8px;">Tu comprobante viene adjunto a este correo en formato PDF y XML.</p>`
+      : `<p style="color:#4b5563;font-size:14px;margin:0 0 8px;">Puedes descargar tu comprobante desde tu listado de facturas.</p>`;
+
 
     const emailHtml = `<!DOCTYPE html>
 <html lang="es">
@@ -189,9 +285,9 @@ Deno.serve(async (req: Request) => {
             </table>
 
             <div style="text-align:center;margin:24px 0;">
-              <p style="color:#374151;font-size:14px;font-weight:600;margin-bottom:12px;">Descarga tu comprobante:</p>
-              ${xmlLink}
-              ${pdfLink}
+              <p style="color:#374151;font-size:14px;font-weight:600;margin-bottom:12px;">Tu comprobante fiscal</p>
+              ${attachmentNote}
+              ${invoicesLink}
             </div>
 
             <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:24px;">
@@ -217,6 +313,7 @@ Deno.serve(async (req: Request) => {
       sender: senderEmail,
       subject: `Tu factura electronica ToursRed - ${invoiceTypeLabel} (${folioDisplay})`,
       html_body: emailHtml,
+      ...(attachments.length > 0 ? { attachments } : {}),
     };
 
     const sendRes = await fetch("https://api.smtp2go.com/v3/email/send", {
@@ -227,11 +324,34 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify(emailPayload),
     });
 
-    if (!sendRes.ok) {
-      const errText = await sendRes.text();
-      console.error("smtp2go send error:", errText);
+    // SMTP2GO responde HTTP 200 aunque el envio falle: el resultado real va en el
+    // cuerpo (data.succeeded / data.failed / data.failures). Antes solo se miraba
+    // sendRes.ok, asi que la funcion devolvia success:true y marcaba
+    // email_sent = true para correos que nunca salieron.
+    const sendBody = await sendRes.text();
+    let sendJson: any = null;
+    try { sendJson = JSON.parse(sendBody); } catch { /* respuesta no-JSON */ }
+
+    const succeeded = Number(sendJson?.data?.succeeded ?? 0);
+    const failed = Number(sendJson?.data?.failed ?? 0);
+    const failures = sendJson?.data?.failures ?? sendJson?.data?.error ?? null;
+
+    if (!sendRes.ok || succeeded < 1) {
+      console.error(
+        `smtp2go no envio el CFDI ${cfdi_invoice_id} a ${recipientEmail}: ` +
+          `http=${sendRes.status} succeeded=${succeeded} failed=${failed} ` +
+          `failures=${JSON.stringify(failures)} body=${sendBody.slice(0, 500)}`
+      );
       return new Response(
-        JSON.stringify({ success: false, message: "Email send failed", detail: errText }),
+        JSON.stringify({
+          success: false,
+          message: "Email send failed",
+          http: sendRes.status,
+          succeeded,
+          failed,
+          failures,
+          detail: sendBody.slice(0, 500),
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -246,6 +366,15 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

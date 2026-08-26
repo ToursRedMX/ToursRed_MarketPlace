@@ -12,6 +12,7 @@ import ReviewForm from '../../components/ReviewForm';
 import { useFormPersistence } from '../../hooks/useFormPersistence';
 import { usePreventUnload } from '../../hooks/usePreventUnload';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
+import { paymentLabel } from '../../utils/paymentLabels';
 import { validateAllTravelers } from '../../utils/birthDateValidation';
 import PaymentProviderSelector from '../../components/PaymentProviderSelector';
 
@@ -1399,18 +1400,30 @@ const TravelerBookings: React.FC = () => {
 
       // Si el monto es 0 o menor, confirmar directamente
       if (amountToCharge <= 0) {
-        const { data: rpcResult, error: rpcError } = await supabase.rpc(
-          'confirm_booking_paid_with_wallet',
+        const walletRes = await fetchWithStepUp(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-booking-wallet-payment`,
           {
-            p_booking_id: booking.id,
-            p_points_to_use: 0,
-            p_cash_to_use: toursRedCashToUse,
-            p_idempotency_key: `${booking.id}_charge_booking`
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+            body: JSON.stringify({
+              p_booking_id: booking.id,
+              p_points_to_use: 0,
+              p_cash_to_use: toursRedCashToUse,
+              p_idempotency_key: `${booking.id}_charge_booking`,
+            }),
           }
         );
+        const rpcResult = await walletRes.json();
 
-        if (rpcError || !rpcResult || rpcResult.success !== true) {
-          const errMsg = rpcError?.message || rpcResult?.error || 'Error desconocido';
+        if (!walletRes.ok || !rpcResult || rpcResult.success !== true) {
+          if (rpcResult?.code === 'MFA_NOT_CONFIGURED' || rpcResult?.code === 'STEP_UP_REQUIRED') {
+            return;
+          }
+          const errMsg = rpcResult?.error || 'Error desconocido';
           throw new Error(`Error al procesar el pago: ${errMsg}`);
         }
 
@@ -1656,18 +1669,17 @@ const TravelerBookings: React.FC = () => {
     }
   };
 
-  const getPaymentMethodLabel = (method: string | null | undefined): string => {
-    if (!method) return 'N/A';
-
-    const labels: Record<string, string> = {
-      'card': 'Tarjeta',
-      'oxxo': 'OXXO',
-      'customer_balance': 'Transferencia Bancaria',
-      'toursred_cash': 'ToursRed Cash',
-    };
-
-    return labels[method] || method;
-  };
+  // Antes leia solo booking.payment_method con un mapa local calibrado para
+  // Stripe ('oxxo', 'customer_balance'). Ese campo esta NULL en 16 de 32
+  // reservas (11 de Conekta y 5 de Openpay), asi que todas esas mostraban "N/A"
+  // pese a tener payment_provider poblado. Ahora se resuelve con el modulo
+  // compartido, que cae a payment_provider antes de rendirse.
+  const getPaymentMethodLabel = (booking: any): string =>
+    paymentLabel({
+      paymentMethod: booking?.payment_method,
+      paymentProvider: booking?.payment_provider,
+      fallback: 'N/A',
+    });
 
   const getStatusBadge = (status: string, paymentStatus?: string, approvalStatus?: string, isNoShow?: boolean) => {
     let statusText = '';
@@ -1829,7 +1841,7 @@ const TravelerBookings: React.FC = () => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             bookingId: booking.id,
@@ -1855,7 +1867,7 @@ const TravelerBookings: React.FC = () => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             bookingId: bookingSupplement.id,
@@ -1876,7 +1888,7 @@ const TravelerBookings: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
-          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({
           booking_supplement_id: bookingSupplement.id,
@@ -2055,7 +2067,7 @@ const TravelerBookings: React.FC = () => {
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session?.access_token}`,
-        'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
       };
 
       const isStandaloneInsurance = type === 'insurance' &&
@@ -2134,7 +2146,7 @@ const TravelerBookings: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
-          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ booking_id: booking.id, tour_supplement_id: supplement.id, quantity }),
       });
@@ -2160,7 +2172,7 @@ const TravelerBookings: React.FC = () => {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session?.access_token}`,
-              'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             },
             body: JSON.stringify({
               bookingId: booking.id,
@@ -2186,7 +2198,7 @@ const TravelerBookings: React.FC = () => {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session?.access_token}`,
-              'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             },
             body: JSON.stringify({
               bookingId: data.booking_supplement_id,
@@ -2208,7 +2220,7 @@ const TravelerBookings: React.FC = () => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             booking_supplement_id: data.booking_supplement_id,
@@ -2441,7 +2453,7 @@ const TravelerBookings: React.FC = () => {
                       <DollarSign className="h-4 w-4 text-gray-400 mr-2" />
                       <div>
                         <div className="text-sm text-gray-500">Método de Pago</div>
-                        <div className="font-medium">{getPaymentMethodLabel((booking as any).payment_method)}</div>
+                        <div className="font-medium">{getPaymentMethodLabel(booking)}</div>
                       </div>
                     </div>
                   </div>
@@ -2591,7 +2603,7 @@ const TravelerBookings: React.FC = () => {
                       )}
                       <div>
                         <div className="text-gray-500">Método de Pago:</div>
-                        <div className="font-medium">{getPaymentMethodLabel((booking as any).payment_method)}</div>
+                        <div className="font-medium">{getPaymentMethodLabel(booking)}</div>
                       </div>
                       <div>
                         <div className="text-gray-500">Saldo Restante:</div>

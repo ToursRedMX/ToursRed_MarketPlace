@@ -1,11 +1,22 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -20,6 +31,22 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const cfdiId: string | undefined = body?.cfdi_id;
+
+    // --- Autorizacion ---
+    // No tenia ningun guard: creaba el cliente de service role y seguia. Con
+    // verify_jwt = true la llave publicable del front pasaba, asi que cualquiera
+    // podia disparar retimbrado ante el SAT. Reinvoca generate-booking-cfdi,
+    // generate-commission-cfdi y generate-featured-slot-cfdi CON SERVICE ROLE,
+    // es decir saltandose los guards que esas funciones ya tienen. Acotado a
+    // CFDIs en error con retry_count < 3, pero consume folios del PAC, emite
+    // comprobantes fiscales reales y quema el presupuesto de reintentos.
+    //
+    // Sin rama de dueno: reintentar el timbrado es operacion administrativa. El
+    // unico llamador es AdminCfdi.tsx:147, pantalla restringida a admin.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: cfdiId ? `el reintento del CFDI ${cfdiId}` : "el reintento masivo de CFDIs en error",
+    });
+    if (!auth.allowed) return auth.response;
 
     let query = supabase
       .from("cfdi_invoices")
@@ -79,6 +106,15 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -5,7 +5,7 @@ import { formatCurrency } from '../utils/formatCurrency';
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -1141,7 +1141,7 @@ export const getUserBookings = async (userId: string) => {
 
 const BOOKING_SELECT_FIELDS = `
   id, booking_code, user_id, tour_id, agency_id, booking_date, status, payment_status,
-  payment_method, total_price, deposit_amount, user_payment, service_charge, travelers_count,
+  payment_method, payment_provider, total_price, deposit_amount, user_payment, service_charge, travelers_count,
   approval_status, approval_notes, approved_at, is_no_show, no_show_marked_at,
   toursred_cash_used, points_used, points_earned, has_pending_reschedule, reschedule_response,
   reschedule_responded_at, has_pending_slot_reschedule, slot_reschedule_response,

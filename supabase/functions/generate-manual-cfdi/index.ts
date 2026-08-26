@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,7 +9,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// ─── Interfaces ──────────────────────────────────────────────────────────────
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 interface CfdiConcepto {
   clave_prod_serv: string;
@@ -33,7 +42,6 @@ interface CfdiRequest {
   conceptos: CfdiConcepto[];
   payment_form?: string;
   payment_method?: string;
-  // Complemento de pago (tipo P)
   payment_complement?: {
     related_uuid: string;
     num_parcialidad: number;
@@ -48,8 +56,6 @@ interface CfdiResult {
   uuid_fiscal: string;
   folio: string;
   serie: string;
-  xml_url: string;
-  pdf_url: string;
   stamped_at: string;
 }
 
@@ -62,7 +68,6 @@ interface RequestBody {
   accounting_account_code?: string;
   source_notes?: string;
   recipient_id?: string;
-  // Solo para tipo P
   payment_complement?: {
     related_uuid: string;
     num_parcialidad: number;
@@ -71,8 +76,6 @@ interface RequestBody {
     imp_saldo_insoluto: number;
   };
 }
-
-// ─── FacturAPI Adapter ────────────────────────────────────────────────────────
 
 async function facturapiStamp(
   apiKey: string,
@@ -93,14 +96,12 @@ async function facturapiStamp(
 
   const paymentMethod = request.payment_method ?? "PUE";
 
-  // Para tipo P (complemento de pago) FacturAPI usa un endpoint diferente
   if (request.tipo_de_comprobante === "P" && request.payment_complement) {
     const pc = request.payment_complement;
     const payBody: Record<string, unknown> = {
       type: "P",
       customer,
       use: request.receptor.uso_cfdi,
-      // El complemento de pago en FacturAPI v2 usa "related_documents"
       payment: {
         form: request.payment_form ?? "03",
         related_documents: [
@@ -139,13 +140,10 @@ async function facturapiStamp(
       uuid_fiscal: data.uuid,
       folio: data.folio_number?.toString() ?? "",
       serie: data.series ?? request.serie,
-      xml_url: `${baseUrl}/invoices/${data.id}/xml`,
-      pdf_url: `${baseUrl}/invoices/${data.id}/pdf`,
       stamped_at: data.created_at ?? new Date().toISOString(),
     };
   }
 
-  // Tipos I y E — factura normal o nota de crédito
   const body: Record<string, unknown> = {
     type: request.tipo_de_comprobante,
     payment_form: request.payment_form ?? "03",
@@ -189,13 +187,9 @@ async function facturapiStamp(
     uuid_fiscal: data.uuid,
     folio: data.folio_number?.toString() ?? "",
     serie: data.series ?? request.serie,
-    xml_url: `${baseUrl}/invoices/${data.id}/xml`,
-    pdf_url: `${baseUrl}/invoices/${data.id}/pdf`,
     stamped_at: data.created_at ?? new Date().toISOString(),
   };
 }
-
-// ─── Main handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -207,7 +201,6 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify caller is admin or super_admin
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "No autorizado" }), {
@@ -239,9 +232,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // AAL2 (MFA) check — issuing a manual CFDI is a fiscal document action.
+    // Reuses the existing userClient (already authenticated with the caller's
+    // own JWT), not the service-role client.
+    const aal2 = await checkAal2Required(userClient);
+    if (!aal2.allowed) {
+      return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores");
+    }
+
     const body: RequestBody = await req.json();
 
-    // Validaciones básicas
     if (!body.cfdi_type || !["I", "E", "P"].includes(body.cfdi_type)) {
       return new Response(JSON.stringify({ error: "cfdi_type debe ser I, E o P" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -263,7 +263,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Cargar configuracion del PAC
     const { data: settings } = await supabase
       .from("platform_settings")
       .select("pac_provider, pac_organization_id, cfdi_serie_booking, pac_sandbox_mode")
@@ -281,7 +280,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Calcular totales para el registro
     const paymentMethod = body.payment_method ?? "PUE";
     let subtotal = 0;
     let ivaAmount = 0;
@@ -294,14 +292,13 @@ Deno.serve(async (req: Request) => {
       }
     } else if (body.cfdi_type === "P" && body.payment_complement) {
       subtotal = body.payment_complement.imp_pagado;
-      ivaAmount = 0; // El complemento de pago no lleva IVA propio
+      ivaAmount = 0;
     }
 
     const total = Math.round((subtotal + ivaAmount) * 100) / 100;
     subtotal = Math.round(subtotal * 100) / 100;
     ivaAmount = Math.round(ivaAmount * 100) / 100;
 
-    // Determinar serie según tipo
     const serie = settings.cfdi_serie_booking ?? "A";
 
     const cfdiRequest: CfdiRequest = {
@@ -314,7 +311,6 @@ Deno.serve(async (req: Request) => {
       payment_complement: body.payment_complement,
     };
 
-    // Crear registro pendiente
     const { data: cfdiRecord, error: insertErr } = await supabase
       .from("cfdi_invoices")
       .insert({
@@ -343,7 +339,6 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Error al crear registro CFDI: ${insertErr?.message}`);
     }
 
-    // Timbrar con PAC
     let cfdiResult: CfdiResult;
     try {
       if (settings.pac_provider !== "facturapi") {
@@ -366,7 +361,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Actualizar con datos del timbrado
     await supabase
       .from("cfdi_invoices")
       .update({
@@ -374,22 +368,18 @@ Deno.serve(async (req: Request) => {
         uuid_fiscal: cfdiResult.uuid_fiscal,
         folio: cfdiResult.folio,
         serie: cfdiResult.serie,
-        xml_url: cfdiResult.xml_url,
-        pdf_url: cfdiResult.pdf_url,
         stamped_at: cfdiResult.stamped_at,
         status: "stamped",
         error_message: null,
       })
       .eq("id", cfdiRecord.id);
 
-    // Generar asiento contable automáticamente
     EdgeRuntime.waitUntil(
       supabase.rpc("create_accounting_entry_for_manual_cfdi", {
         p_cfdi_invoice_id: cfdiRecord.id,
       }).then(({ error }) => { if (error) console.error("Error asiento contable:", error); })
     );
 
-    // Guardar o actualizar receptor en directorio si se solicitó
     if (body.recipient_id) {
       EdgeRuntime.waitUntil(
         supabase
@@ -406,12 +396,19 @@ Deno.serve(async (req: Request) => {
         cfdi_id: cfdiRecord.id,
         uuid_fiscal: cfdiResult.uuid_fiscal,
         folio: cfdiResult.folio,
-        xml_url: cfdiResult.xml_url,
-        pdf_url: cfdiResult.pdf_url,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

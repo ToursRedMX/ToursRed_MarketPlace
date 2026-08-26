@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,13 +9,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
+
 interface CfdiResult {
   pac_invoice_id: string;
   uuid_fiscal: string;
   folio: string;
   serie: string;
-  xml_url: string;
-  pdf_url: string;
   stamped_at: string;
 }
 
@@ -45,8 +54,6 @@ async function facturapiStamp(
     uuid_fiscal: data.uuid,
     folio: data.folio_number?.toString() ?? "",
     serie: data.series ?? "",
-    xml_url: `https://www.facturapi.io/v2/invoices/${data.id}/xml`,
-    pdf_url: `https://www.facturapi.io/v2/invoices/${data.id}/pdf`,
     stamped_at: data.created_at ?? new Date().toISOString(),
   };
 }
@@ -122,8 +129,6 @@ async function zohoBooksStamp(
     uuid_fiscal: inv.invoice_id,
     folio: inv.invoice_number ?? "",
     serie,
-    xml_url: `${baseUrl}/invoices/${inv.invoice_id}?organization_id=${orgId}&accept=xml`,
-    pdf_url: `${baseUrl}/invoices/${inv.invoice_id}?organization_id=${orgId}&accept=pdf`,
     stamped_at: inv.created_time ?? new Date().toISOString(),
   };
 }
@@ -168,6 +173,16 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // --- Autorizacion ---
+    // Sin rama de dueno a proposito. Los dos llamadores son retry-failed-cfdi
+    // (service role) y AdminPayouts.tsx, pantalla restringida a admin. Una
+    // agencia no emite el CFDI de su propia comision: lo emite la plataforma
+    // al procesar el pago.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: `la comision del payout ${payout_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Check if CFDI already exists for this payout
     const { data: existing } = await supabase
@@ -360,8 +375,6 @@ Deno.serve(async (req: Request) => {
         uuid_fiscal: cfdiResult.uuid_fiscal,
         folio: cfdiResult.folio,
         serie: cfdiResult.serie,
-        xml_url: cfdiResult.xml_url,
-        pdf_url: cfdiResult.pdf_url,
         stamped_at: cfdiResult.stamped_at,
         status: "stamped",
         error_message: null,
@@ -379,12 +392,19 @@ Deno.serve(async (req: Request) => {
         success: true,
         cfdi_id: cfdiRecord.id,
         uuid_fiscal: cfdiResult.uuid_fiscal,
-        xml_url: cfdiResult.xml_url,
-        pdf_url: cfdiResult.pdf_url,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

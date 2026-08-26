@@ -1,11 +1,21 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 interface ApproveBookingRequest {
   booking_id: string;
@@ -202,8 +212,6 @@ Deno.serve(async (req: Request) => {
 
         if (walletError) {
           console.error("Error al descontar cash del monedero:", walletError);
-          // No fallar aqui — la reserva ya está confirmada, revertir seria peor
-          // El error queda en logs para revision manual si ocurre
         }
       }
 
@@ -219,12 +227,10 @@ Deno.serve(async (req: Request) => {
 
         if (pointsError) {
           console.error("Error al descontar puntos:", pointsError);
-          // Igual: no fallar, loguear para revision
         }
       }
 
       // Aplicar exención de membresía via RPC centralizado (atómico, FOR UPDATE)
-      // Skip for 100% wallet payments — service charge is already $0
       if (!autoConfirm && !booking.used_membership_benefit) {
         const { data: platformSettings } = await supabase
           .from("platform_settings")
@@ -259,38 +265,35 @@ Deno.serve(async (req: Request) => {
           .is('paid_at', null);
 
         if (unpaidOptionals && unpaidOptionals.length > 0) {
-          const svcChargeRate = 5;
           const paymentMethod = pointsValue > 0 && cashUsed > 0
             ? "toursred_points_and_cash"
             : cashUsed > 0
               ? "toursred_cash"
               : "toursred_points";
 
+          // Cuando NO es autoConfirm, aqui se recalculaba service_charge y se volvia a
+          // llamar apply_membership_service_fee_exemption: esa RPC muta memberships, y
+          // create_booking_atomic ya aplico la exencion sobre el cargo de los extras
+          // (linea 348 de esa funcion) y guardo el service_charge neto al crear la
+          // reserva. Repetirlo consumia dos veces el tope mensual del socio.
+          //
+          // El guard de :234 (!booking.used_membership_benefit) protegia el cargo BASE,
+          // pero este bucle quedaba fuera de el: !autoConfirm no significa "ya exentado",
+          // solo "no cubierto del todo con monedero". Mismo criterio que
+          // openpay-webhook:317, que ya lo evitaba a proposito.
+          //
+          // El caso autoConfirm SI sigue escribiendo cero: ahi la reserva se cubrio por
+          // completo con monedero o puntos y no hay cargo por servicio que cobrar.
           for (const opt of unpaidOptionals) {
             if ((opt.total_paid || opt.subtotal) <= 0) continue;
-            const grossSvcCharge = autoConfirm ? 0 : Math.round((opt.subtotal * svcChargeRate / 100) * 100) / 100;
-            let optExemptionUsed = 0;
-            if (!autoConfirm) {
-              try {
-                const { data: optExemptResult } = await supabase
-                  .rpc('apply_membership_service_fee_exemption', {
-                    p_user_id: booking.user_id,
-                    p_gross_service_charge: grossSvcCharge,
-                  });
-                optExemptionUsed = parseFloat(optExemptResult?.exemption_applied ?? '0');
-              } catch (e) {
-                console.error(`Error applying exemption for optional ${opt.id} (approve-booking):`, e);
-              }
-            }
 
             await supabase
               .from('booking_optional_services')
               .update({
                 paid_at: now,
                 payment_method: paymentMethod,
-                service_charge: grossSvcCharge - optExemptionUsed,
-                membership_exemption_used: optExemptionUsed,
                 total_paid: opt.total_paid || opt.subtotal,
+                ...(autoConfirm ? { service_charge: 0, membership_exemption_used: 0 } : {}),
               })
               .eq('id', opt.id);
           }
@@ -351,6 +354,15 @@ Deno.serve(async (req: Request) => {
 
   } catch (error: any) {
     console.error("Error en approve-booking:", error);
+    if (sentryDsn) {
+      Sentry.captureException(error, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({ success: false, error: error.message || "Error interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

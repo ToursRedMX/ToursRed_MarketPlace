@@ -1,11 +1,21 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 function pemToArrayBuffer(pem: string): ArrayBuffer {
   // Strip PEM headers/footers and whitespace, decode base64 to ArrayBuffer
@@ -215,7 +225,7 @@ FwIDAQAB
     const chargeContext: string = tx.charge_context || "booking_deposit";
     const chargeReferenceId: string | null = tx.charge_reference_id;
 
-    // ─── order.paid ──────────────────────────────────────────────
+    // ─── order.paid ─────────────────────────────────────────────────
     // Only confirm on the actual order.paid event, not on orderStatus fallback —
     // Conekta sends order.created, order.pending_payment, and order.paid in rapid
     // succession, and querying the live order status may already return "paid" by
@@ -336,12 +346,17 @@ FwIDAQAB
 
         const { data: booking } = await supabase
           .from("bookings")
-          .select("deposit_amount, total_price, user_payment, payment_status, status")
+          .select("amount_due_now, deposit_amount, total_price, user_payment, payment_status, status")
           .eq("id", bookingId)
           .maybeSingle();
 
         if (booking) {
-          const requiredAmount = Number(booking.deposit_amount) || Number(booking.total_price) || 0;
+          // Confirmar contra el exigible real. Con deposit_amount se confirmaba la
+          // reserva cobrando de menos (quedaban fuera cargo por servicio y extras).
+          const requiredAmount = Number(booking.amount_due_now)
+            || Number(booking.deposit_amount)
+            || Number(booking.total_price)
+            || 0;
           const newUserPayment = Math.max(0, Number(booking.user_payment || 0) - Number(tx.amount));
 
           if (totalPaid >= requiredAmount) {
@@ -697,7 +712,7 @@ FwIDAQAB
       }
     }
 
-    // ─── order.expired ───────────────────────────────────────────
+    // ─── order.expired ─────────────────────────────────────────
     if (eventType === "order.expired") {
       // Atomic gate: only transition to "failed" if not already in a final state.
       const { data: expiredClaim } = await supabase
@@ -745,7 +760,7 @@ FwIDAQAB
       }
     }
 
-    // ─── order.declined ──────────────────────────────────────────
+    // ─── order.declined ─────────────────────────────────────────────
     if (eventType === "order.declined") {
       // Atomic gate: only transition to "failed" if not already in a final state.
       const { data: declinedClaim } = await supabase
@@ -800,6 +815,15 @@ FwIDAQAB
     return jsonResponse({ received: true });
   } catch (err: any) {
     console.error("Error in conekta-webhook:", err);
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return jsonResponse({ error: err.message || "Internal server error" }, 500);
   }
 });

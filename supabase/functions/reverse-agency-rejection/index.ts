@@ -1,5 +1,16 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
+import * as Sentry from "npm:@sentry/deno@9";
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +36,17 @@ Deno.serve(async (req: Request) => {
     const { data: adminUser } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
     if (adminUser?.role !== "admin") return new Response(JSON.stringify({ error: "Acceso denegado" }), { status: 403, headers: corsHeaders });
 
+    // AAL2 (MFA) check — unbans a user and removes them from the fraud blocklist.
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const aal2 = await checkAal2Required(userClient);
+    if (!aal2.allowed) {
+      return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores");
+    }
+
     const body = await req.json();
     const { agency_id, reversal_reason } = body;
 
@@ -43,7 +65,6 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "La agencia no está en estado rechazado" }), { status: 409, headers: corsHeaders });
     }
 
-    // Restore agency to pending_documents so they can re-submit
     await supabase.from("agencies").update({
       onboarding_status:  "pending_documents",
       is_approved:        false,
@@ -56,16 +77,13 @@ Deno.serve(async (req: Request) => {
       reversal_reason,
     }).eq("id", agency_id);
 
-    // Unban the auth user
     await supabase.auth.admin.updateUserById(agency.user_id, { ban_duration: "none" });
 
-    // Remove from blocklist
     await supabase
       .from("fraud_blocklist")
       .delete()
       .eq("agency_id", agency_id);
 
-    // Notify agency
     await supabase.from("notifications").insert({
       user_id: agency.user_id,
       type:    "agency_rejection_reversed",
@@ -79,6 +97,15 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err) {
     console.error("Unexpected error:", err);
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(JSON.stringify({ error: "Error interno del servidor" }), { status: 500, headers: corsHeaders });
   }
 });

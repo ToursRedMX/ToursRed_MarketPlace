@@ -1,11 +1,21 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 // =============================================
 // BILLING PROVIDER INTERFACE (PAC-agnostic)
@@ -52,6 +62,8 @@ interface CfdiRequest {
   receptor: CfdiReceptor;
   conceptos: CfdiConcepto[];
   payment_form?: string;
+  /** CFDIs relacionados. relationship "04" = sustitucion de los CFDI previos. */
+  related_documents?: Array<{ relationship: string; cfdi_uuids: string[] }>;
 }
 
 interface CfdiResult {
@@ -59,8 +71,6 @@ interface CfdiResult {
   uuid_fiscal: string;
   folio: string;
   serie: string;
-  xml_url: string;
-  pdf_url: string;
   stamped_at: string;
 }
 
@@ -92,6 +102,18 @@ async function facturapiStamp(
     type: request.tipo_de_comprobante,
     payment_form: request.payment_form ?? "03",
     payment_method: "PUE",
+    // FacturAPI espera `documents`, no `cfdi_uuids`, que es el nombre interno.
+    // Sin esta traduccion responde 400 unknown_field y no timbra. Mismo mapeo
+    // que hacen substitute-cfdi-for-partial-cancellation:114 y
+    // generate-credit-note-for-item-cancellation:112.
+    ...(request.related_documents && request.related_documents.length > 0
+      ? {
+          related_documents: request.related_documents.map((rd) => ({
+            relationship: rd.relationship,
+            documents: rd.cfdi_uuids,
+          })),
+        }
+      : {}),
     customer,
     use: request.receptor.uso_cfdi,
     items: request.conceptos.map((c) => ({
@@ -144,8 +166,6 @@ async function facturapiStamp(
     uuid_fiscal: data.uuid,
     folio: data.folio_number?.toString() ?? "",
     serie: data.series ?? request.serie,
-    xml_url: `${baseUrl}/invoices/${data.id}/xml`,
-    pdf_url: `${baseUrl}/invoices/${data.id}/pdf`,
     stamped_at: data.created_at ?? new Date().toISOString(),
   };
 }
@@ -261,8 +281,6 @@ async function zohoBooksStamp(
     uuid_fiscal: inv.invoice_id,
     folio: inv.invoice_number ?? "",
     serie: request.serie,
-    xml_url: `${baseUrl}/invoices/${inv.invoice_id}?organization_id=${orgId}&accept=xml`,
-    pdf_url: `${baseUrl}/invoices/${inv.invoice_id}?organization_id=${orgId}&accept=pdf`,
     stamped_at: inv.created_time ?? new Date().toISOString(),
   };
 }
@@ -303,7 +321,8 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { booking_id, checkin_charge_id, payment_form } = await req.json();
+    const { booking_id, checkin_charge_id, payment_form, replaces_cfdi_invoice_id } = await req.json();
+    const isSubstitution = !!replaces_cfdi_invoice_id;
     if (!booking_id) {
       return new Response(JSON.stringify({ error: "booking_id is required" }), {
         status: 400,
@@ -318,7 +337,7 @@ Deno.serve(async (req: Request) => {
       .from("bookings")
       .select(`
         id, total_price, deposit_amount, service_charge, user_id, tour_id, booking_code,
-        discount_amount, service_charge_discount,
+        discount_amount, service_charge_discount, points_used, toursred_cash_used, payment_method,
         travel_insurance_included, travel_insurance_cost,
         membership_purchased, membership_cost, membership_plan,
         tours (name, agency_id)
@@ -331,6 +350,95 @@ Deno.serve(async (req: Request) => {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // --- Autorizacion ---
+    // Esta funcion timbra ante el SAT usando el service role internamente, y hasta
+    // ahora no validaba quien la llamaba. Como verify_jwt acepta la llave publicable
+    // del front (es un JWT firmado del proyecto), cualquiera que la extraiga del
+    // bundle podia timbrar CFDIs de reservas ajenas pasando un booking_id.
+    //
+    // Los 10 llamadores internos (webhooks de Stripe, Openpay, Conekta, MercadoPago,
+    // PayPal, approve-booking, retry-failed-cfdi, etc.) usan el SERVICE ROLE KEY como
+    // bearer, asi que se dejan pasar por esa via. Cualquier otro llamador tiene que
+    // ser el dueno de la reserva o un admin, igual que en create-openpay-checkout.
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const bearer = authHeader.replace("Bearer ", "").trim();
+    const isServiceRole = bearer.length > 0 &&
+      bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!isServiceRole) {
+      const { data: { user: caller }, error: callerErr } = await supabase.auth.getUser(bearer);
+      if (callerErr || !caller) {
+        return new Response(JSON.stringify({ error: "No autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: callerProfile } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", caller.id)
+        .maybeSingle();
+
+      const isAdmin = callerProfile?.role === "admin" || callerProfile?.role === "super_admin";
+
+      // Sustituir un comprobante ya timbrado es operacion fiscal: solo admin.
+      // El dueno de la reserva puede pedir su CFDI normal, pero no reemplazarlo.
+      if (isSubstitution && !isAdmin) {
+        console.warn(
+          `Sustitucion CFDI denegada: usuario ${caller.id} no es admin (reserva ${booking_id})`
+        );
+        return new Response(
+          JSON.stringify({ error: "Solo un administrador puede sustituir un CFDI timbrado" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!isAdmin && booking.user_id !== caller.id) {
+        console.warn(
+          `CFDI denegado: usuario ${caller.id} intento timbrar la reserva ${booking_id} (dueno ${booking.user_id})`
+        );
+        return new Response(JSON.stringify({ error: "No tienes permiso sobre esta reserva" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // --- Sustitucion: validar el CFDI original ---
+    // Debe estar timbrado y pertenecer A ESTA reserva. Sin esto se podria relacionar
+    // un sustituto contra el comprobante de otro cliente.
+    let originalCfdi: { id: string; uuid_fiscal: string; invoice_type: string } | null = null;
+    if (isSubstitution) {
+      const { data: orig, error: origErr } = await supabase
+        .from("cfdi_invoices")
+        .select("id, uuid_fiscal, status, booking_id, invoice_type")
+        .eq("id", replaces_cfdi_invoice_id)
+        .maybeSingle();
+
+      if (origErr || !orig) {
+        return new Response(JSON.stringify({ error: "CFDI a sustituir no encontrado" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (orig.status !== "stamped" || !orig.uuid_fiscal) {
+        return new Response(
+          JSON.stringify({ error: `Solo se puede sustituir un CFDI timbrado (estado actual: ${orig.status})` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (orig.booking_id !== booking.id) {
+        console.warn(
+          `Sustitucion CFDI denegada: el CFDI ${orig.id} pertenece a la reserva ${orig.booking_id}, no a ${booking.id}`
+        );
+        return new Response(
+          JSON.stringify({ error: "El CFDI a sustituir no pertenece a esta reserva" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      originalCfdi = { id: orig.id, uuid_fiscal: orig.uuid_fiscal, invoice_type: orig.invoice_type };
     }
 
     const tourData = booking.tours as { name: string; agency_id: string } | null;
@@ -388,6 +496,12 @@ Deno.serve(async (req: Request) => {
     let invoiceType: string;
     let effectivePaymentForm: string;
     let exactTotal: number; // monto exacto cobrado al cliente (IVA incluido)
+    // FIX (bug crítico detectado 2026-08-20): estas dos variables se referencian
+    // más abajo (en p_tour_amount) FUERA de los bloques if/else donde antes
+    // estaban declaradas con const, causando ReferenceError en el 100% de las
+    // llamadas desde finales de julio. Se elevan a este scope con let.
+    let amountCharged: number | undefined;
+    let depositAmount: number | undefined;
 
     if (isCheckinCharge) {
       // Cargar montos desde wallet_checkin_charges
@@ -404,7 +518,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const amountCharged = Number(checkinCharge.amount_charged);
+      amountCharged = Number(checkinCharge.amount_charged);
       const netServiceCharge = Number(checkinCharge.service_charge_applied) - Number(checkinCharge.membership_exemption_used);
 
       // r6: 6 decimales para valor_unitario en FacturAPI (evita error de centavo en XML)
@@ -421,7 +535,7 @@ Deno.serve(async (req: Request) => {
       effectivePaymentForm = payment_form || "17";
     } else {
       // Montos de la reserva original
-      const depositAmount = Number((booking as any).deposit_amount || booking.total_price);
+      depositAmount = Number((booking as any).deposit_amount || booking.total_price);
       const serviceCharge = Number((booking as any).service_charge || 0);
       const discountAmountRaw = Number((booking as any).discount_amount || 0);
       const serviceChargeDiscountRaw = Number((booking as any).service_charge_discount || 0);
@@ -460,6 +574,45 @@ Deno.serve(async (req: Request) => {
       const optionalsTotal = paidOptionals.reduce((sum: number, opt: any) => sum + (opt.total_paid || opt.subtotal), 0);
       exactTotal = Math.round((exactTotal + optionalsTotal) * 100) / 100;
     }
+
+    // ToursRed Points: lealtad, no entra dinero. Es un DESCUENTO que baja la base
+    // gravable, repartido entre los conceptos mas abajo para que las partidas sigan
+    // sumando el total. 100 pts = $1 MXN, igual que deduct_points_for_booking.
+    // Antes no se restaba: el CFDI facturaba de mas (F-63 timbro 5,664.45 contra
+    // 5,206.84 realmente cobrados).
+    //
+    // ToursRed Cash NO va aqui: es dinero prepagado del viajero, o sea una FORMA DE
+    // PAGO (monedero electronico, clave SAT 05), no un descuento. Se factura el monto
+    // completo; descontarlo negaria el comprobante por dinero que si desembolso.
+    const saldoAplicadoBruto = isCheckinCharge ? 0 : Math.min(
+      exactTotal,
+      Math.round((Number((booking as any).points_used || 0) / 100) * 100) / 100
+    );
+    if (saldoAplicadoBruto > 0) {
+      exactTotal = Math.round((exactTotal - saldoAplicadoBruto) * 100) / 100;
+    }
+
+    // Forma de pago SAT. Regla 2.7.1.29 RMF: en PUE con varias formas de pago se
+    // registra aquella con la que se liquido la CANTIDAD MAYOR de la operacion, no un
+    // codigo generico como 99. Se comparan las dos porciones del total facturable:
+    //   - monedero electronico (05): lo cubierto con ToursRed Cash
+    //   - procesador externo: el resto, con la clave que ya resolvio la rama de arriba
+    //     (04/03/01 segun el webhook, 17 en cobros de check-in, 03 por defecto)
+    // Los puntos NO entran: salieron como descuento, no son forma de pago.
+    // El desglose se deriva de exactTotal para que sea consistente con lo facturado.
+    const formaProcesador = effectivePaymentForm;
+    const cashAplicado = isCheckinCharge
+      ? 0
+      : Math.min(Number((booking as any).toursred_cash_used || 0), exactTotal);
+    const montoProcesador = Math.round((exactTotal - cashAplicado) * 100) / 100;
+    if (cashAplicado > montoProcesador) {
+      effectivePaymentForm = "05";
+    }
+    console.log(
+      `CFDI forma de pago: monedero=${cashAplicado.toFixed(2)} procesador=${montoProcesador.toFixed(2)} ` +
+      `(${formaProcesador}) => ${effectivePaymentForm}`
+    );
+
     const iva = Math.round(exactTotal * 16 / 116 * 100) / 100;
     const subtotal = Math.round((exactTotal - iva) * 100) / 100;
     const total = exactTotal;
@@ -619,10 +772,83 @@ Deno.serve(async (req: Request) => {
       },
       conceptos,
       payment_form: effectivePaymentForm,
+      ...(originalCfdi
+        ? { related_documents: [{ relationship: "04", cfdi_uuids: [originalCfdi.uuid_fiscal] }] }
+        : {}),
     };
 
-    // Descuento total consolidado (con IVA incluido)
-    const descuentoTotal = Math.round((descuentoTour + descuentoServicio) * 1.16 * 100) / 100;
+    // Repartir el saldo (puntos + ToursRed Cash) proporcionalmente entre las partidas.
+    // Proporcional y con tope por partida para que ninguna quede en negativo y la suma
+    // de conceptos siga cuadrando contra el total ya ajustado arriba.
+    if (saldoAplicadoBruto > 0) {
+      const saldoNeto = Math.round((saldoAplicadoBruto / 1.16) * 1000000) / 1000000;
+      const baseNeta = conceptos.reduce(
+        (acc, c) => acc + (c.valor_unitario - (c.descuento ?? 0)), 0);
+      if (baseNeta > 0) {
+        let repartido = 0;
+        conceptos.forEach((c, i) => {
+          const disponible = c.valor_unitario - (c.descuento ?? 0);
+          const teorico = i === conceptos.length - 1
+            ? saldoNeto - repartido
+            : (saldoNeto * disponible) / baseNeta;
+          const aplicado = Math.max(0, Math.min(
+            Math.round(teorico * 1000000) / 1000000, disponible));
+          if (aplicado > 0) {
+            c.descuento = Math.round(((c.descuento ?? 0) + aplicado) * 1000000) / 1000000;
+            repartido += aplicado;
+          }
+        });
+      }
+    }
+
+    // Descuento total consolidado (con IVA incluido). Se deriva de los conceptos para
+    // que incluya tambien el saldo repartido arriba, no solo los descuentos por codigo.
+    const descuentoTotal = Math.round(
+      conceptos.reduce((acc, c) => acc + (c.descuento ?? 0), 0) * 1.16 * 100) / 100;
+
+    // Sustitucion: se omite claim_cfdi_stamping_slot a proposito. Ese RPC rechaza con
+    // already_exists si la reserva ya tiene un CFDI stamped, que es justamente el caso
+    // aqui: el original sigue vivo porque el motivo 01 del SAT exige el UUID del
+    // sustituto para poder cancelarlo. Se inserta directo con la relacion, igual que
+    // hace substitute-cfdi-for-partial-cancellation.
+    let cfdiRecord: { id: string; retry_count: number };
+    if (isSubstitution) {
+      const { data: subRecord, error: subError } = await supabase
+        .from("cfdi_invoices")
+        .insert({
+          invoice_type: invoiceType,
+          booking_id: booking.id,
+          agency_id: agencyData?.id || null,
+          related_cfdi_invoice_id: originalCfdi!.id,
+          tipo_relacion: "04",
+          pac_provider: settings.pac_provider,
+          serie: settings.cfdi_serie_booking || "A",
+          receptor_rfc: receptorRfc,
+          receptor_razon_social: receptorNombre,
+          receptor_regimen_fiscal: receptorRegimen,
+          receptor_uso_cfdi: receptorUsoCfdi,
+          receptor_codigo_postal: receptorCP,
+          cfdi_type: "I",
+          subtotal,
+          iva_amount: iva,
+          total,
+          currency: "MXN",
+          status: "pending",
+          discount_amount: descuentoTotal > 0 ? descuentoTotal : null,
+          tour_amount: isCheckinCharge ? amountCharged : depositAmount,
+        })
+        .select("id")
+        .single();
+
+      if (subError || !subRecord) {
+        throw new Error(`Failed to create substitution CFDI record: ${subError?.message}`);
+      }
+      cfdiRecord = { id: subRecord.id, retry_count: 0 };
+      console.log(
+        `CFDI sustituto ${subRecord.id} creado para la reserva ${booking.id}, ` +
+        `relacion 04 -> ${originalCfdi!.uuid_fiscal} (total ${total})`
+      );
+    } else {
 
     // Create pending CFDI record atomically via RPC (prevents duplicate stamping)
     const { data: claimResult, error: claimError } = await supabase.rpc("claim_cfdi_stamping_slot", {
@@ -655,7 +881,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const cfdiRecord = { id: claimResult.cfdi_id, retry_count: 0 };
+    cfdiRecord = { id: claimResult.cfdi_id, retry_count: 0 };
+    }
 
     // Stamp with PAC
     let cfdiResult: CfdiResult;
@@ -694,8 +921,6 @@ Deno.serve(async (req: Request) => {
         uuid_fiscal: cfdiResult.uuid_fiscal,
         folio: cfdiResult.folio,
         serie: cfdiResult.serie,
-        xml_url: cfdiResult.xml_url,
-        pdf_url: cfdiResult.pdf_url,
         stamped_at: cfdiResult.stamped_at,
         status: "stamped",
         error_message: null,
@@ -714,12 +939,19 @@ Deno.serve(async (req: Request) => {
         success: true,
         cfdi_id: cfdiRecord.id,
         uuid_fiscal: cfdiResult.uuid_fiscal,
-        xml_url: cfdiResult.xml_url,
-        pdf_url: cfdiResult.pdf_url,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

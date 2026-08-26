@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import Stripe from "npm:stripe@22.3.0";
+import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,6 +46,15 @@ async function getStripeProcessorFee(stripe: any, paymentIntentId: string): Prom
     console.error('Error fetching Stripe processor fee:', e.message);
   }
   return null;
+}
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
 }
 
 Deno.serve(async (req) => {
@@ -1142,35 +1152,25 @@ Deno.serve(async (req) => {
                 .eq('is_cancelled', false)
                 .is('paid_at', null);
 
+              // A diferencia de lo que hacia antes, aqui NO se recalcula service_charge ni se
+              // vuelve a llamar apply_membership_service_fee_exemption: esa RPC muta memberships,
+              // y create_booking_atomic ya aplico la exencion sobre el cargo de los extras
+              // (linea 348 de esa funcion) y guardo el service_charge neto al crear la reserva.
+              // Repetirlo consumia dos veces el tope mensual del socio.
+              //
+              // El guard de :1121 (!booking.used_membership_benefit) protegia el cargo BASE,
+              // pero este bucle quedaba fuera de el. Mismo criterio que openpay-webhook:317,
+              // que ya lo evitaba a proposito y dejo documentado que Stripe y PayPal si lo
+              // hacian. Aqui solo se marcan como pagados los extras del pago inicial.
               if (unpaidOptionals && unpaidOptionals.length > 0) {
-                const { data: settings } = await supabase
-                  .from('platform_settings')
-                  .select('service_charge_percentage')
-                  .maybeSingle();
-                const svcChargeRate = settings?.service_charge_percentage || 5;
-
                 for (const opt of unpaidOptionals) {
                   if ((opt.total_paid || opt.subtotal) <= 0) continue;
-                  const grossSvcCharge = Math.round((opt.subtotal * svcChargeRate / 100) * 100) / 100;
-                  let exemptionUsed = 0;
-                  try {
-                    const { data: exemptResult } = await supabase
-                      .rpc('apply_membership_service_fee_exemption', {
-                        p_user_id: booking.user_id,
-                        p_gross_service_charge: grossSvcCharge,
-                      });
-                    exemptionUsed = parseFloat(exemptResult?.exemption_applied ?? '0');
-                  } catch (e) {
-                    console.error(`Error applying exemption for optional ${opt.id}:`, e);
-                  }
 
                   const { error: optUpdateError } = await supabase
                     .from('booking_optional_services')
                     .update({
                       paid_at: new Date().toISOString(),
                       payment_method: 'stripe',
-                      service_charge: grossSvcCharge - exemptionUsed,
-                      membership_exemption_used: exemptionUsed,
                       total_paid: opt.total_paid || opt.subtotal,
                     })
                     .eq('id', opt.id);
@@ -1715,6 +1715,53 @@ Deno.serve(async (req) => {
               }
             } catch (membershipError) {
               console.error('Error processing membership exemption:', membershipError);
+            }
+
+            // Marcar como pagados los extras que venian en el pago inicial.
+            //
+            // Esta rama (payment_intent.succeeded) confirmaba la reserva pero NUNCA
+            // tocaba booking_optional_services, a diferencia de
+            // checkout.session.completed. Los extras quedaban con paid_at NULL para
+            // siempre, y eso tiene dos consecuencias reales:
+            //   - generate-booking-cfdi filtra por paid_at IS NOT NULL, asi que los
+            //     dejaba fuera del comprobante.
+            //   - calculate_booking_financial_breakdown dejaba a la agencia sin cobrar
+            //     optional_services_agency_net.
+            // Es el mismo sintoma que openpay-webhook:312 ya documentaba para su caso.
+            //
+            // Igual que en las demas rutas, aqui NO se recalcula service_charge ni se
+            // llama apply_membership_service_fee_exemption: create_booking_atomic:348 ya
+            // aplico la exencion sobre el cargo de los extras y guardo el neto.
+            // Repetirlo consumiria dos veces el tope mensual del socio.
+            try {
+              const { data: unpaidOptionals } = await supabase
+                .from('booking_optional_services')
+                .select('id, subtotal, total_paid')
+                .eq('booking_id', bookingId)
+                .eq('is_cancelled', false)
+                .is('paid_at', null);
+
+              if (unpaidOptionals && unpaidOptionals.length > 0) {
+                for (const opt of unpaidOptionals) {
+                  if ((opt.total_paid || opt.subtotal) <= 0) continue;
+
+                  const { error: optUpdateError } = await supabase
+                    .from('booking_optional_services')
+                    .update({
+                      paid_at: new Date().toISOString(),
+                      payment_method: 'stripe',
+                      total_paid: opt.total_paid || opt.subtotal,
+                    })
+                    .eq('id', opt.id);
+
+                  if (optUpdateError) {
+                    console.error(`Error marking optional ${opt.id} as paid (payment_intent):`, optUpdateError.message);
+                  }
+                }
+                console.log(`Processed ${unpaidOptionals.length} optional services for booking ${bookingId} (payment_intent)`);
+              }
+            } catch (optError) {
+              console.error('Error processing optional services (payment_intent):', optError);
             }
 
             // Send confirmation email - check if already sent to prevent duplicates
@@ -2612,6 +2659,15 @@ Deno.serve(async (req) => {
     );
   } catch (error) {
     console.error('Webhook error:', error);
+    if (sentryDsn) {
+      Sentry.captureException(error, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(
       JSON.stringify({
         success: false,

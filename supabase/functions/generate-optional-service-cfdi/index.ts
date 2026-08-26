@@ -1,11 +1,22 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    tracesSampleRate: 0.1,
+  });
+}
 
 interface CfdiConcepto {
   clave_prod_serv: string;
@@ -31,7 +42,7 @@ interface CfdiRequest {
 
 interface CfdiResult {
   pac_invoice_id: string; uuid_fiscal: string; folio: string;
-  serie: string; xml_url: string; pdf_url: string; stamped_at: string;
+  serie: string; stamped_at: string;
 }
 
 const r6 = (n: number) => Math.round(n * 1_000_000) / 1_000_000;
@@ -84,8 +95,6 @@ async function facturapiStamp(apiKey: string, organizationId: string, request: C
     uuid_fiscal: data.uuid,
     folio: data.folio_number?.toString() ?? "",
     serie: data.series ?? request.serie,
-    xml_url: `${baseUrl}/invoices/${data.id}/xml`,
-    pdf_url: `${baseUrl}/invoices/${data.id}/pdf`,
     stamped_at: data.created_at ?? new Date().toISOString(),
   };
 }
@@ -107,6 +116,17 @@ Deno.serve(async (req: Request) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // --- Autorizacion ---
+    // Sin rama de dueno a proposito: service_charge y total_paid llegan por el
+    // body y determinan lo que se factura. Dejar entrar al dueno de la reserva
+    // cerraria el hueco de timbrar reservas ajenas pero abriria el de timbrarse
+    // importes inventados sobre la propia. Ningun llamador actual la invoca con
+    // JWT de usuario (todos usan service role).
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: `el extra ${booking_optional_service_id}`,
+    });
+    if (!auth.allowed) return auth.response;
 
     // Idempotency
     const { data: existingCfdi } = await supabase
@@ -328,8 +348,6 @@ Deno.serve(async (req: Request) => {
       uuid_fiscal: cfdiResult.uuid_fiscal,
       folio: cfdiResult.folio,
       serie: cfdiResult.serie,
-      xml_url: cfdiResult.xml_url,
-      pdf_url: cfdiResult.pdf_url,
       stamped_at: cfdiResult.stamped_at,
       status: "stamped",
       error_message: null,
@@ -344,11 +362,18 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({
       success: true, cfdi_id: cfdiRecord.id,
       uuid_fiscal: cfdiResult.uuid_fiscal,
-      xml_url: cfdiResult.xml_url,
-      pdf_url: cfdiResult.pdf_url,
     }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (err) {
+    if (sentryDsn) {
+      Sentry.captureException(err, {
+        tags: {
+          execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+          region: Deno.env.get("SB_REGION") || "unknown",
+        },
+      });
+      await Sentry.flush(2000);
+    }
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

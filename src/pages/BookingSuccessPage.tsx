@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
+import { paymentLabel, processorLabel } from '../utils/paymentLabels';
 
 const BookingSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -101,21 +102,22 @@ const BookingSuccessPage: React.FC = () => {
       // Get payment method from payment_transactions
       const { data: paymentTransaction } = await supabase
         .from('payment_transactions')
-        .select('payment_method_type')
+        .select('payment_method_type, payment_processor')
         .eq('booking_id', bookingId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (paymentTransaction?.payment_method_type) {
-        const methodMap: Record<string, string> = {
-          'card': 'Tarjeta de Crédito/Débito',
-          'toursred_cash': 'ToursRed Cash',
-          'toursred_points_cash': 'Puntos ToursRed + ToursRed Cash',
-          'stripe': 'Stripe'
-        };
-        setPaymentMethod(methodMap[paymentTransaction.payment_method_type] || paymentTransaction.payment_method_type);
-      }
+      // El procesador cae de vuelta a bookings.payment_provider, que sigue
+      // poblado aunque la reserva no tenga transaccion registrada (pagos 100%
+      // con monedero, por ejemplo).
+      setPaymentMethod(paymentLabel({
+        methodType: paymentTransaction?.payment_method_type,
+        processor: paymentTransaction?.payment_processor,
+        paymentMethod: bookingData.payment_method,
+        paymentProvider: bookingData.payment_provider,
+        fallback: '',
+      }));
 
 
     } catch (err: any) {
@@ -173,6 +175,11 @@ const BookingSuccessPage: React.FC = () => {
       </div>
     );
   }
+
+  // Sufijo para el desglose de pagos mixtos. Antes decia "Stripe" fijo, asi que
+  // una reserva pagada con Openpay o Conekta mostraba el procesador equivocado.
+  const processorName = processorLabel(booking.payment_provider);
+  const processorSuffix = processorName ? ` ${processorName}` : '';
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -314,7 +321,9 @@ const BookingSuccessPage: React.FC = () => {
                     <CreditCard className="h-5 w-5 text-gray-400 mr-3 mt-1" />
                     <div>
                       <div className="text-sm text-gray-500">Método de Pago</div>
-                      <div className="font-medium">{paymentMethod || booking.payment_method || 'Tarjeta'}</div>
+                      <div className="font-medium">
+                        {paymentMethod || processorLabel(booking.payment_provider) || '—'}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -519,15 +528,15 @@ const BookingSuccessPage: React.FC = () => {
                       <div className="text-xs text-gray-500 mt-1 text-right">
                         {Number(booking.points_used) > 0 && Number(booking.toursred_cash_used) > 0 ? (
                           <>
-                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Number(booking.toursred_cash_used))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, realTotalPaid - ((booking.points_used || 0) / 100) - Number(booking.toursred_cash_used || 0)))} Stripe)
+                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Number(booking.toursred_cash_used))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, realTotalPaid - ((booking.points_used || 0) / 100) - Number(booking.toursred_cash_used || 0)))}{processorSuffix})
                           </>
                         ) : Number(booking.points_used) > 0 ? (
                           <>
-                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Math.max(0, realTotalPaid - (booking.points_used / 100)))} Stripe)
+                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Math.max(0, realTotalPaid - (booking.points_used / 100)))}{processorSuffix})
                           </>
                         ) : (
                           <>
-                            ({formatCurrencyMXN(Number(booking.toursred_cash_used || 0))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, realTotalPaid - Number(booking.toursred_cash_used || 0)))} Stripe)
+                            ({formatCurrencyMXN(Number(booking.toursred_cash_used || 0))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, realTotalPaid - Number(booking.toursred_cash_used || 0)))}{processorSuffix})
                           </>
                         )}
                       </div>
