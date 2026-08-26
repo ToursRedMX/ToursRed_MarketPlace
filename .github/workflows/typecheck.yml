@@ -1,0 +1,96 @@
+name: Typecheck (informative)
+
+# Modo informativo a proposito: reporta y nunca bloquea.
+# Vite no ejecuta tsc, y `tsc -p tsconfig.json` devuelve 0 siempre
+# porque ese archivo es solo referencias ("files": []).
+# El unico invocador util es tsconfig.app.json.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Linea base medida el 26-ago-2026 sobre main. Actualizar al bajarla.
+  BASELINE_TOTAL: 501
+  BASELINE_CRASH: 32
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tsc (never blocks)
+        run: |
+          # bash corre con -e: sin set +e, tsc saliendo != 0 aborta el step
+          # y el check saldria rojo, que es justo lo que no queremos.
+          set +e
+          npx tsc --noEmit -p tsconfig.app.json > typecheck.log 2>&1
+          CODE=$?
+          set -e
+          echo "tsc exit code: ${CODE}"
+          exit 0
+
+      - name: Summarize by error class
+        run: |
+          # Solo cuentan las lineas de error reales: tsc parte los mensajes
+          # largos en lineas de continuacion indentadas que tambien traen "(".
+          TOTAL=$(grep -cE 'error TS[0-9]+:' typecheck.log || true)
+          FILES=$(grep -E '^[^ ].*\([0-9]+,[0-9]+\): error TS' typecheck.log \
+            | sed -E 's/\([0-9]+,[0-9]+\): error TS.*//' \
+            | sort -u | wc -l | tr -d ' ')
+          UNUSED=$(grep -cE 'error TS(6133|6196|6192):' typecheck.log || true)
+          CRASH=$(grep -cE 'error TS(2304|18047|18048):' typecheck.log || true)
+          NOTDEF=$(grep -cE 'error TS2304:' typecheck.log || true)
+          PROP=$(grep -cE 'error TS2339:' typecheck.log || true)
+
+          {
+            echo "## Typecheck (informativo, no bloquea)"
+            echo ""
+            echo "\`tsc --noEmit -p tsconfig.app.json\`"
+            echo ""
+            echo "| Clase | Errores | Base 26-ago |"
+            echo "|---|---|---|"
+            echo "| **Total** | ${TOTAL} en ${FILES} archivos | ${BASELINE_TOTAL} |"
+            echo "| Declarado y no usado (TS6133/6196/6192) | ${UNUSED} | 239 |"
+            echo "| Propiedad inexistente (TS2339) | ${PROP} | 124 |"
+            echo "| **Posible crash (TS2304/18047/18048)** | **${CRASH}** | ${BASELINE_CRASH} |"
+            echo "| Identificador inexistente (TS2304) | ${NOTDEF} | 1 |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${TOTAL}" -gt "${BASELINE_TOTAL}" ]; then
+            echo "> :warning: Subio ${TOTAL} vs base ${BASELINE_TOTAL}." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ "${CRASH}" -gt "${BASELINE_CRASH}" ]; then
+            echo "> :rotating_light: Clase crash subio a ${CRASH} (base ${BASELINE_CRASH})." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo ""
+          echo "=== TS2304 / TS18047 / TS18048 ==="
+          grep -E 'error TS(2304|18047|18048):' typecheck.log || echo "(ninguno)"
+
+      - name: Upload typecheck log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: toursred-typecheck
+          path: typecheck.log
+          retention-days: 30
