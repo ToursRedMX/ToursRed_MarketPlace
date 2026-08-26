@@ -88,7 +88,55 @@ replaces_cfdi_invoice_id: 5a6b4db2-bb5b-43be-a1b1-2f72b9e745d3
 payment_form: "04"
 ```
 
-## ⏸️ C — Idempotencia de exención de membresía (diseñado, no implementado)
+## ✅ RESUELTO (26-ago) — C: doble consumo de la exención de membresía
+
+**El diagnóstico original de esta pieza estaba invertido.** Decía que el cargo
+BASE se exentaba dos veces (`create_booking_atomic` + `stripe-webhook:1121`) y
+que PayPal/MercadoPago/approve-booking "quedan igual por ahora". Al verificar
+los 18 sitios (no 10) uno por uno:
+
+- `stripe-webhook:1121` y `:1705` y `approve-booking:244` exentan el cargo base
+  y **ya estaban guardados** por `!booking.used_membership_benefit`, bandera que
+  `create_booking_atomic:604` escribe al aplicar la exención. **No duplicaban.**
+- Los que duplicaban eran los **bucles de extras**, que quedaban fuera de ese
+  guard: `stripe-webhook:1168`, `capture-paypal-order:269`,
+  `mercadopago-webhook:722` y `approve-booking:282`. Este último estaba guardado
+  solo por `!autoConfirm`, que significa "no cubierto del todo con monedero", no
+  "ya exentado".
+- `openpay-webhook:317` ya lo evitaba **a propósito**, con un comentario que
+  nombraba a Stripe y PayPal como los que sí lo hacían. Nunca se propagó.
+- `conekta-webhook` nunca llamó la RPC.
+
+Arreglado replicando el precedente de Openpay: los 4 bucles dejan de llamar la
+RPC y solo marcan `paid_at`, usando el `service_charge` neto que
+`create_booking_atomic:348` ya calculó. Sin tabla nueva y sin tocar
+`create_booking_atomic` por cuarta vez.
+
+Cuantificado en ROLLBACK contra la BD real: base(100) → 100.00,
+extras(5) → 105.00, duplicado(5) → **110.00**.
+
+**No hizo falta backfill ni reset del contador:** `membership_exemption_used`
+estaba en 0.00 en todos los extras de ambos socios (son dos, no uno), porque
+cuando los bucles corrieron el tope ya estaba agotado y la RPC devolvía 0. El
+bug era real en código pero no llegó a corromper datos.
+
+## ⏸️ A — Libro mayor de exenciones (defensa en profundidad, no urgente)
+
+Era el diseño original de la pieza C y sigue siendo válido como mejora, pero ya
+no es necesario para el bug: la opción C lo resolvió tocando mucho menos.
+
+Tabla `membership_exemption_consumptions` con `UNIQUE(booking_id, scope)` y
+parámetros opcionales `p_booking_id` / `p_scope` en la RPC (firma aditiva). Haría
+imposible el doble consumo por construcción, en vez de depender de que cada
+llamador recuerde no repetir — que es exactamente cómo nació este bug.
+
+Obstáculo conocido: en `create_booking_atomic` la exención se aplica en las
+líneas 344/348 y el `INSERT INTO bookings` ocurre en la 529 (`RETURNING id` en la
+607), así que no hay `booking_id` todavía. Habría que generar el UUID por
+adelantado con `gen_random_uuid()`. Es la cuarta modificación a esa función:
+merece sesión dedicada.
+
+## ⏸️ C-viejo — texto original (conservado como referencia)
 
 Bug: `apply_membership_service_fee_exemption` se llama dos veces para la misma
 reserva en pagos con Stripe/PayPal/MercadoPago (una vez en `create_booking_atomic`,

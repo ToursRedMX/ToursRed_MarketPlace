@@ -706,35 +706,23 @@ Deno.serve(async (req: Request) => {
             .eq('is_cancelled', false)
             .is('paid_at', null);
 
+          // A diferencia de lo que hacia antes, aqui NO se recalcula service_charge ni se
+          // vuelve a llamar apply_membership_service_fee_exemption: esa RPC muta memberships,
+          // y create_booking_atomic ya aplico la exencion sobre el cargo de los extras
+          // (linea 348 de esa funcion) y guardo el service_charge neto al crear la reserva.
+          // Repetirlo consumia dos veces el tope mensual del socio.
+          //
+          // Mismo criterio que openpay-webhook:317, que ya lo evitaba a proposito y dejo
+          // documentado que Stripe y PayPal si lo hacian. Aqui solo se marcan como pagados
+          // los extras que venian en el pago inicial, sin recalcular importes.
           if (unpaidOptionals && unpaidOptionals.length > 0) {
-            const { data: settings } = await supabase
-              .from('platform_settings')
-              .select('service_charge_percentage')
-              .maybeSingle();
-            const svcChargeRate = settings?.service_charge_percentage || 5;
-
             for (const opt of unpaidOptionals) {
               if ((opt.total_paid || opt.subtotal) <= 0) continue;
-              const grossSvcCharge = Math.round((opt.subtotal * svcChargeRate / 100) * 100) / 100;
-              let exemptionUsed = 0;
-              try {
-                const { data: exemptResult } = await supabase
-                  .rpc('apply_membership_service_fee_exemption', {
-                    p_user_id: booking.user_id,
-                    p_gross_service_charge: grossSvcCharge,
-                  });
-                exemptionUsed = parseFloat(exemptResult?.exemption_applied ?? '0');
-              } catch (e) {
-                console.error(`Error applying exemption for optional ${opt.id} (MP):`, e);
-              }
-
               await supabase
                 .from('booking_optional_services')
                 .update({
                   paid_at: new Date().toISOString(),
                   payment_method: 'mercadopago',
-                  service_charge: grossSvcCharge - exemptionUsed,
-                  membership_exemption_used: exemptionUsed,
                   total_paid: opt.total_paid || opt.subtotal,
                 })
                 .eq('id', opt.id);
