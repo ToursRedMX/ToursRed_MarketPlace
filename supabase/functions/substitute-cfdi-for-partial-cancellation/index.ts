@@ -55,8 +55,6 @@ interface CfdiResult {
   uuid_fiscal: string;
   folio: string;
   serie: string;
-  xml_url: string;
-  pdf_url: string;
   stamped_at: string;
 }
 
@@ -141,8 +139,6 @@ async function facturapiStamp(
     uuid_fiscal: data.uuid,
     folio: data.folio_number?.toString() ?? "",
     serie: data.series ?? request.serie,
-    xml_url: `${baseUrl}/invoices/${data.id}/xml`,
-    pdf_url: `${baseUrl}/invoices/${data.id}/pdf`,
     stamped_at: data.created_at ?? new Date().toISOString(),
   };
 }
@@ -501,8 +497,6 @@ Deno.serve(async (req: Request) => {
           uuid_fiscal: cfdiResult.uuid_fiscal,
           folio: cfdiResult.folio,
           serie: cfdiResult.serie,
-          xml_url: cfdiResult.xml_url,
-          pdf_url: cfdiResult.pdf_url,
           stamped_at: cfdiResult.stamped_at,
           status: "stamped",
           error_message: null,

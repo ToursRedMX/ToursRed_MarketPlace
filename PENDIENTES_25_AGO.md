@@ -111,6 +111,47 @@ resetear el contador del socio actual recalculándolo desde
 Es la pieza más delicada — toca `create_booking_atomic` una cuarta vez.
 Dejar para una sesión dedicada, con calma.
 
+## ⏸️ F — `executive_commissions` guarda la URL privada del PAC como único id
+
+Salió al hacer la búsqueda global del paso 2 del arreglo de correos, y **casi
+rompo el flujo de ejecutivos** por no haberla hecho antes: iba a anular
+`cfdi_xml_url` / `cfdi_pdf_url` en esa tabla, como se hizo en `cfdi_invoices`.
+
+**Por qué ahí NO se puede.** `executive_commissions` no tiene `pac_invoice_id`
+—sus únicas columnas de CFDI son `cfdi_xml_url`, `cfdi_pdf_url`, `cfdi_total`,
+`cfdi_uuid_fiscal`, `cfdi_uploaded_at`— y `download-executive-cfdi:108-116`
+**extrae el id de la factura parseando la URL guardada**:
+
+```js
+const storedUrl = fileType === "pdf" ? commission.cfdi_pdf_url : commission.cfdi_xml_url;
+const match = storedUrl.match(/\/invoices\/([^\/]+)\//);
+const invoiceId = match[1];
+```
+
+Es decir: en esa tabla la URL no es un campo vestigial, es el **único lugar**
+donde vive el id de Facturapi. Anularla deja esa función en 404 para todos los
+CFDIs de ejecutivos. Lo contrario de `cfdi_invoices`, donde `pac_invoice_id`
+existe y `download-cfdi:127` deriva de él.
+
+**Segundo motivo, independiente:** `ExecutiveComisiones.tsx:239` guarda ahí una
+**URL pública de Supabase Storage** cuando el ejecutivo sube su CFDI a mano, y
+`:413` la renderiza directo. La columna tiene dos semánticas distintas y una de
+ellas funciona bien.
+
+**El arreglo, cuando se haga:**
+1. Migración: agregar `pac_invoice_id` a `executive_commissions`.
+2. Backfill: extraer el id de las URLs existentes con el mismo regex, para no
+   perder los que ya están.
+3. `generate-executive-commission-cfdi`: escribir `pac_invoice_id` y dejar de
+   guardar la URL privada.
+4. `download-executive-cfdi`: derivar de `pac_invoice_id`, igual que
+   `download-cfdi` con la tabla de reservas.
+5. Distinguir el caso de subida manual: ahí la URL de Storage es legítima y debe
+   seguir funcionando. Probablemente convenga separarla en su propia columna en
+   vez de mezclar dos significados en una.
+
+Requiere migración y merece revisión con calma. No es de la rama de hoy.
+
 ## ⏸️ E — Typecheck en el pipeline (medido el 25-ago, no iniciado)
 
 **El punto ciego:** `npm run build` (Vite) **no ejecuta `tsc`**, así que un
