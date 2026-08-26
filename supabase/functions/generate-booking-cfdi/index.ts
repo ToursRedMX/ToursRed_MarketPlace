@@ -104,8 +104,17 @@ async function facturapiStamp(
     type: request.tipo_de_comprobante,
     payment_form: request.payment_form ?? "03",
     payment_method: "PUE",
+    // FacturAPI espera `documents`, no `cfdi_uuids`, que es el nombre interno.
+    // Sin esta traduccion responde 400 unknown_field y no timbra. Mismo mapeo
+    // que hacen substitute-cfdi-for-partial-cancellation:114 y
+    // generate-credit-note-for-item-cancellation:112.
     ...(request.related_documents && request.related_documents.length > 0
-      ? { related_documents: request.related_documents }
+      ? {
+          related_documents: request.related_documents.map((rd) => ({
+            relationship: rd.relationship,
+            documents: rd.cfdi_uuids,
+          })),
+        }
       : {}),
     customer,
     use: request.receptor.uso_cfdi,

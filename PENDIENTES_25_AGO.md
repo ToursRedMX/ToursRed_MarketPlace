@@ -56,9 +56,28 @@ llamadores de cada una antes de escribir el guard, no asumir que son iguales.
 | Paso | Estado |
 |---|---|
 | Capacidad desplegada (parámetro `replaces_cfdi_invoice_id`, solo admin) | ✅ commit 424b2ad |
-| Paso 1 — emitir F-65 (sustituto, $5,206.84, reserva TRG-OQ13VAWCIKL) | ⏸️ requiere Bearer token de admin o service role key |
+| Paso 1 — emitir F-65 (sustituto, $5,206.84, reserva TRG-OQ13VAWCIKL) | ✅ 26-ago 02:37 — `uuid 10B069FE-FAB2-41F0-9657-5ADAD9524C9A`, `tipo_relacion 04` |
 | Paso 2 — revisar PDF del sustituto | pendiente (Axel) |
 | Paso 3 — cancelar F-63 motivo 01 + UUID del sustituto | pendiente |
+
+**Al ejecutar el Paso 1 por primera vez salieron dos bugs de la capacidad del
+25-ago, que estaba desplegada pero nunca se había ejercitado:**
+
+1. `uq_cfdi_booking` (índice único a nivel de tabla) rechazaba el sustituto. El
+   diseño del 25-ago solo contempló saltarse `claim_cfdi_stamping_slot`, pero la
+   protección anti-duplicado también vivía en un índice. Resuelto partiéndolo en
+   dos índices parciales disjuntos por `related_cfdi_invoice_id IS NULL/NOT NULL`
+   (migración `20260826011500`).
+2. FacturAPI respondía `400 unknown_field` en `related_documents.0.cfdi_uuids`:
+   `cfdi_uuids` es el nombre interno y el PAC espera `documents`. El código del
+   25-ago pasaba el objeto sin traducir. `substitute-cfdi-for-partial-cancellation:114`
+   y `generate-credit-note-for-item-cancellation:112` sí hacen ese mapeo.
+
+Notas para cuando esto se haga en producción (hoy fue contra sandbox):
+- El `payment_form: "04"` (tarjeta de crédito) **no está respaldado por datos**:
+  el único `payment_transactions` de la reserva trae `payment_method_type = NULL`
+  y solo consta que el procesador fue Openpay. Confirmar con Openpay antes.
+- La serie final la asigna el PAC, no `platform_settings.cfdi_serie_booking`.
 
 F-63 sigue `stamped` por $5,664.45 contra $5,206.84 realmente cobrados.
 Comando listo, guardado en la sesión anterior — pedirle a Claude Code que lo
@@ -91,6 +110,48 @@ resetear el contador del socio actual recalculándolo desde
 
 Es la pieza más delicada — toca `create_booking_atomic` una cuarta vez.
 Dejar para una sesión dedicada, con calma.
+
+## ⏸️ E — Typecheck en el pipeline (medido el 25-ago, no iniciado)
+
+**El punto ciego:** `npm run build` (Vite) **no ejecuta `tsc`**, así que un
+identificador inexistente pasa el build sin ruido. Y `tsc -p tsconfig.json`
+**tampoco sirve**: ese archivo es solo referencias (`"files": []`) y devuelve
+exit 0 siempre. Hay que usar **`tsc --noEmit -p tsconfig.app.json`**.
+
+Así sobrevivieron meses tres identificadores fuera de scope en `AdminBookings`
+(`selectedRealTotalPaid` desde el 30-jul, `load` y `AlertCircle` desde el
+22-jul), que tronaban en rutas poco visitadas. Se descubrieron abriendo la
+pantalla, no revisando código.
+
+**Medición del 25-ago: 501 errores en 126 archivos.** Por clase de riesgo:
+
+| Clase | Errores | Riesgo en runtime |
+|---|---|---|
+| Declarado y no usado (`TS6133/6196/6192`) | **239** (48%) | Ninguno |
+| Propiedad inexistente (`TS2339`) | 124 | Huecos de tipado sobre respuestas de Supabase |
+| Tipos incompatibles (`TS2345/2322/…`) | 106 | Caso por caso |
+| **Posible crash** (`TS2304/18047/18048`) | **32** en 14 archivos | Real |
+
+Los 239 de "no usado" vienen de `noUnusedLocals` y `noUnusedParameters`.
+Apagarlos baja de 501 a 262 sin arreglar nada — es un atajo válido para tener
+un checker utilizable, pero no es limpieza.
+
+**El incendio ya está apagado:** queda **un solo `TS2304`**, y no es un crash —
+`AdminSettings.tsx:182`, `useState<PlatformSecrets>` con el tipo sin importar.
+Está en posición de tipo, y los tipos se borran al compilar. Los tres que sí
+estaban en posición de valor eran los de `AdminBookings`, ya corregidos.
+
+Tres pasos independientes, en orden de valor:
+
+1. **Meter `tsc --noEmit -p tsconfig.app.json` al pipeline en modo informativo**
+   — que corra y reporte sin bloquear. Barato, y desde ese momento ningún
+   `TS2304` nuevo pasa desapercibido. Es lo único urgente de esta pieza.
+2. **Atacar los 32 de clase crash** en 14 archivos. Acotado y con valor real.
+3. **El resto**, limpieza de fondo sin fecha. Los archivos más cargados son
+   `BookingSuccessPage` (45), `AgencyTours` (39), `TravelerBookings` (27).
+
+No es trabajo de una sesión: son días, y toca archivos que ya se movieron el
+25-ago.
 
 ## ✅ RESUELTO (25-ago, noche) — columnas de dinero sin escala
 
