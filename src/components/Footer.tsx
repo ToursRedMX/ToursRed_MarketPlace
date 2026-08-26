@@ -121,6 +121,7 @@ const Footer: React.FC = () => {
                   Preferencias de Cookies
                 </button>
               </li>
+              <li><a href="https://status.toursred.com.mx" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors text-sm">Estado de los Servicios</a></li>
             </ul>
           </div>
 
