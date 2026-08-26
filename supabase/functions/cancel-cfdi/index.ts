@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -176,6 +177,32 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // --- Autorizacion ---
+    // Esta funcion cancelaba ante el SAT sin validar al llamador: el bloque de
+    // abajo solo extraia el user id para registrarlo en requested_by, y si no
+    // venia Authorization seguia igual con requestedBy = null. Como verify_jwt
+    // acepta la llave publicable del front, cualquiera podia cancelar el CFDI
+    // timbrado de cualquier cliente pasando solo su cfdi_invoice_id.
+    //
+    // Es mas grave que el hueco de las funciones de emision que se cerro el
+    // 25-ago: emitir de mas se corrige con una sustitucion, pero cancelar el
+    // comprobante de otro cliente ante el SAT no se deshace.
+    //
+    // Sin rama de dueno, mismo criterio que la sustitucion en
+    // generate-cancellation-commission-cfdi: cancelar es operacion fiscal, no
+    // del dueno de la reserva. Los 9 llamadores internos (admin-cancel-booking,
+    // admin-finalize-cancellation, cancel-individual-supplement,
+    // cancel-optional-service, process-agency-booking-cancellation,
+    // process-payment-plan-tour-deadline, process-tour-cancellation,
+    // process-traveler-cancellation y substitute-cfdi-for-partial-cancellation)
+    // usan service role, verificado uno por uno. Las dos pantallas que la
+    // invocan (AdminCfdi.tsx:167 y AdminCfdiManual.tsx:757) estan restringidas
+    // a admin.
+    const auth = await authorizeCfdiRequest(supabase, req, {
+      resource: `la cancelacion del CFDI ${cfdi_invoice_id} (motivo ${motivo})`,
+    });
+    if (!auth.allowed) return auth.response;
+
     const { data: cfdi, error: cfdiError } = await supabase
       .from("cfdi_invoices")
       .select("id, pac_provider, pac_invoice_id, status")
@@ -214,15 +241,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get requesting user
-    const authHeader = req.headers.get("Authorization");
-    let requestedBy: string | null = null;
-    if (authHeader) {
-      const { data: userData } = await supabase.auth.getUser(
-        authHeader.replace("Bearer ", "")
-      );
-      requestedBy = userData?.user?.id ?? null;
-    }
+    // El guard ya resolvio quien llama; null cuando es el service role.
+    const requestedBy: string | null = auth.caller.userId;
 
     // Create cancellation request record
     const { data: cancellationRecord, error: cancellationError } = await supabase
