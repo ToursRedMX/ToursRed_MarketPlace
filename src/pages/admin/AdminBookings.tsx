@@ -5,7 +5,7 @@ import {
   CheckCircle, Clock, XCircle, AlertTriangle, RefreshCw,
   Users, Star, Coins, Shield, FileText, ArrowLeftRight,
   Phone, Mail, Package, Percent, Hash, Tag, Info, Plus,
-  TrendingUp, BarChart2, Activity, Upload, Ban, Loader2
+  TrendingUp, BarChart2, Activity, Upload, Ban, Loader2, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
@@ -276,7 +276,6 @@ function AdminBookings() {
 
   // Detail modal
   const [selected, setSelected] = useState<BookingRow | null>(null);
-  const [selectedRealTotalPaid, setSelectedRealTotalPaid] = useState(0);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const { permissions, isSuperAdmin } = useAuth();
   const canCancel = isSuperAdmin || permissions?.canCancelBookings;
@@ -740,7 +739,7 @@ function AdminBookings() {
 
       {/* Detail modal */}
       {selected && (
-        <DetailModal booking={selected} onClose={() => setSelected(null)} />
+        <DetailModal booking={selected} onClose={() => setSelected(null)} onRefresh={load} />
       )}
     </div>
   );
@@ -748,7 +747,7 @@ function AdminBookings() {
 
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 
-const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ booking: b, onClose }) => {
+const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void; onRefresh: () => void }> = ({ booking: b, onClose, onRefresh }) => {
   const ps = PAYMENT_STATUS_MAP[b.payment_status] ?? { label: b.payment_status, cls: 'bg-gray-100 text-gray-600' };
   const bs = BOOKING_STATUS_MAP[b.status] ?? { label: b.status, cls: 'bg-gray-100 text-gray-600' };
   const ap = b.approval_status ? (APPROVAL_MAP[b.approval_status] ?? { label: b.approval_status, cls: 'bg-gray-100 text-gray-600' }) : null;
@@ -760,6 +759,29 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
   const { permissions, isSuperAdmin } = useAuth();
   const canCancel = isSuperAdmin || permissions?.canCancelBookings;
   const [adminCancellationData, setAdminCancellationData] = useState<any>(null);
+
+  // El tile "Total pagado" referenciaba selectedRealTotalPaid, un estado declarado
+  // en AdminBookings (:279) y por lo tanto fuera del scope de ESTE componente:
+  // abrir el detalle de una reserva SIN plan de pagos tronaba con ReferenceError
+  // (25 de 32 reservas). Ademas ese estado nunca se asignaba, asi que el numero
+  // nunca fue real. Se calcula aqui con el mismo RPC que usa BookingSuccessPage.
+  // null = aun cargando, para no mostrar un $0.00 que parezca un dato.
+  const [realTotalPaid, setRealTotalPaid] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .rpc('get_booking_total_paid', { p_booking_id: b.id })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error('Error cargando total pagado:', error);
+          return;
+        }
+        setRealTotalPaid(Number(data) || 0);
+      });
+    return () => { cancelled = true; };
+  }, [b.id]);
 
   useEffect(() => {
     if (b.cancellation_type === 'admin_cancelled' && b.admin_cancellation_id) {
@@ -949,7 +971,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
                     if (b.payment_plan?.installments?.length) {
                       return b.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0);
                     }
-                    return Number(selectedRealTotalPaid ?? 0);
+                    return realTotalPaid;
                   })(), highlight: b.has_payment_plan },
                   { label: 'Cargo por servicio', val: Number(b.service_charge) },
                   { label: 'Ingreso plataforma', val: Number(b.platform_revenue ?? 0) },
@@ -957,7 +979,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
                 ].map(({ label, val, highlight }) => (
                   <div key={label} className={`rounded-lg p-3 ${highlight ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
                     <div className={`text-base font-bold ${highlight ? 'text-blue-700' : 'text-gray-900'}`}>
-                      {formatCurrencyMXN(val)}
+                      {val === null ? '—' : formatCurrencyMXN(val)}
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">{label}</div>
                   </div>
@@ -1355,7 +1377,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void }> = ({ b
           onClose={() => setShowCancelModal(false)}
           onSuccess={() => {
             setShowCancelModal(false);
-            load();
+            onRefresh();
             onClose();
           }}
         />
