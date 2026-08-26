@@ -712,9 +712,9 @@ export default function AgencyDiscountCodes() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase"
                       placeholder="VERANO2024"
                       required
-                      disabled={editingCode?.times_used > 0}
+                      disabled={(editingCode?.times_used ?? 0) > 0}
                     />
-                    {editingCode?.times_used > 0 && (
+                    {(editingCode?.times_used ?? 0) > 0 && (
                       <p className="text-xs text-orange-600 mt-1">No se puede modificar un código que ya ha sido usado</p>
                     )}
                   </div>

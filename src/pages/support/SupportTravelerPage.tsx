@@ -65,7 +65,8 @@ const SupportTravelerPage: React.FC = () => {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session.session?.access_token;
+      if (!session) throw new Error('Tu sesión expiró. Vuelve a iniciar sesión.');
+      const token = session.access_token;
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
       const formData = new FormData();

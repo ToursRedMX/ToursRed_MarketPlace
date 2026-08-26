@@ -14,6 +14,14 @@ interface EmailSettings {
   smtp_api_key: string;
 }
 
+interface PlatformSecrets {
+  mercadopago_access_token: string;
+  paypal_client_secret: string;
+  pac_api_key_encrypted: string;
+  zoho_client_secret: string;
+  odoo_api_key_encrypted: string;
+}
+
 interface PlatformSettings {
   id: string;
   service_charge_percentage: number;

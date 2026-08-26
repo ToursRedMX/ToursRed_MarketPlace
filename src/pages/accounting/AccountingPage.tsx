@@ -564,7 +564,8 @@ const AccountingPage: React.FC = () => {
     setGenerating(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session.session?.access_token;
+      if (!session) throw new Error('Tu sesión expiró. Vuelve a iniciar sesión.');
+      const token = session.access_token;
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-accounting-entries`;
       const res = await fetch(url, {
         method: 'POST',
@@ -590,7 +591,8 @@ const AccountingPage: React.FC = () => {
     setExporting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session.session?.access_token;
+      if (!session) throw new Error('Tu sesión expiró. Vuelve a iniciar sesión.');
+      const token = session.access_token;
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-sat-xml?year=${year}&month=${month}`;
       const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
       if (!res.ok) {

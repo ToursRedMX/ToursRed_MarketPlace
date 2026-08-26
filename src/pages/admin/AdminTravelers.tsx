@@ -120,8 +120,8 @@ export default function AdminTravelers() {
           const totalBookings = bookingsData?.length || 0;
           const totalSpent = bookingsData?.reduce((sum, b) => sum + Number(b.total_price || 0), 0) || 0;
           const totalServiceCharges = bookingsData?.reduce((sum, b) => sum + Number(b.service_charge || 0), 0) || 0;
-          const lastBookingDate = bookingsData?.length > 0
-            ? bookingsData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at
+          const lastBookingDate = bookingsData && bookingsData.length > 0
+            ? [...bookingsData].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at
             : null;
 
           const { data: membershipData } = await supabase

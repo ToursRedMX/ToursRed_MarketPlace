@@ -388,9 +388,11 @@ export default function AgencyStaff() {
             await supabase.from('agency_staff_permissions').insert({ staff_id: staffId, ...dbPerms });
           }
         } else {
-          const { data: ns } = await supabase.from('agency_staff')
+          const { data: ns, error: nsError } = await supabase.from('agency_staff')
             .insert({ agency_id: agencyId, user_id: foundUser.id, title, is_active: true })
             .select('id').single();
+          if (nsError) throw nsError;
+          if (!ns) throw new Error('No se pudo crear el registro del coordinador.');
           staffId = ns.id;
           await supabase.from('agency_staff_permissions').insert({ staff_id: staffId, ...dbPerms });
         }
