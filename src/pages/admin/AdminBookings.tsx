@@ -1422,17 +1422,29 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
   const [manualRefundTxId, setManualRefundTxId] = useState<string | null>(null);
   const [manualRefundMethod, setManualRefundMethod] = useState<'toursred_cash' | 'bank_transfer'>('toursred_cash');
 
+  const insuranceCost = booking.travel_insurance_included ? Number(booking.travel_insurance_cost || 0) : 0;
+  const totalPaidByTraveler = booking.payment_plan?.installments?.length
+    ? booking.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0)
+    : realTotalPaid;
+  const optionalServicesRefundable = booking.optional_services
+    ? booking.optional_services
+        .filter(os => !os.is_cancelled && Number(os.total_paid || 0) > 0)
+        .reduce((s, os) => s + Number(os.total_paid || 0), 0)
+    : 0;
+  const supplementsRefundable = booking.supplements
+    ? booking.supplements
+        .filter(sp => sp.status === 'paid' && Number(sp.total_paid || 0) > 0)
+        .reduce((s, sp) => s + Number(sp.total_paid || 0), 0)
+    : 0;
+
+  // Prellenar con el MISMO calculo base que muestra la etiqueta "Sugerido".
+  // Antes era solo pagado + seguro, mientras la etiqueta ya sumaba opcionales y
+  // suplementos: quien aceptaba el valor prellenado reembolsaba de menos.
+  // No se incluye el cargo por servicio: arranca desmarcado y el checkbox lo
+  // suma o resta por su cuenta, asi que sumarlo aqui lo contaria dos veces.
   useEffect(() => {
-    // Suggest refund amount based on total actually paid by traveler
-    const insurance = booking.travel_insurance_included ? Number(booking.travel_insurance_cost || 0) : 0;
-    let totalPaid: number;
-    if (booking.payment_plan?.installments?.length) {
-      totalPaid = booking.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0);
-    } else {
-      totalPaid = realTotalPaid;
-    }
-    setRefundAmount(totalPaid + insurance);
-  }, [booking, realTotalPaid]);
+    setRefundAmount(totalPaidByTraveler + insuranceCost + optionalServicesRefundable + supplementsRefundable);
+  }, [totalPaidByTraveler, insuranceCost, optionalServicesRefundable, supplementsRefundable]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1773,20 +1785,6 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
     setError(null);
   };
 
-  const insuranceCost = booking.travel_insurance_included ? Number(booking.travel_insurance_cost || 0) : 0;
-  const totalPaidByTraveler = booking.payment_plan?.installments?.length
-    ? booking.payment_plan.installments.reduce((s, i) => s + Number(i.amount_paid || 0), 0)
-    : realTotalPaid;
-  const optionalServicesRefundable = booking.optional_services
-    ? booking.optional_services
-        .filter(os => !os.is_cancelled && Number(os.total_paid || 0) > 0)
-        .reduce((s, os) => s + Number(os.total_paid || 0), 0)
-    : 0;
-  const supplementsRefundable = booking.supplements
-    ? booking.supplements
-        .filter(sp => sp.status === 'paid' && Number(sp.total_paid || 0) > 0)
-        .reduce((s, sp) => s + Number(sp.total_paid || 0), 0)
-    : 0;
   const serviceChargeAmount = Number(booking.service_charge || 0)
     + (booking.payment_plan?.installments?.reduce((s: number, i: any) => s + Number(i.service_charge || 0), 0) || 0);
   const suggestedAmount = totalPaidByTraveler + insuranceCost + optionalServicesRefundable + supplementsRefundable + (refundServiceCharge ? serviceChargeAmount : 0);
