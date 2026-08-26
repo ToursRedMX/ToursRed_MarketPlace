@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import { format, parse } from 'date-fns';
 import { Tour, Booking, Destination, DestinationImage, ImageUploadData } from '../types';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -41,13 +42,33 @@ export const parseDateFromDB = (dateString: string | null | undefined): Date => 
 };
 
 // Auth functions
+
+// `data` es null exactamente cuando `error` no lo es: la unica salida que
+// devuelve data: null es el catch, que siempre trae el error capturado.
+// Sin declararlo como union discriminada TS infiere los dos campos por
+// separado, asi que `if (error) throw` no estrecha `data` y todo uso
+// posterior queda como "possibly null".
+type AuthPayload = { user: User | null; session: Session | null };
+
+// AuthFailure tiene que ser un tipo de objeto, no `any`: `any` incluye null,
+// asi que como discriminante no descarta nada y `if (error) throw` no estrecha.
+type AuthFailure = Error | { message: string; code?: string };
+
+type SignUpResult =
+  | { data: AuthPayload; error: null; profileData: any; isExistingUser: boolean }
+  | { data: null; error: AuthFailure; profileData: null; isExistingUser: false };
+
+type SignInResult =
+  | { data: AuthPayload; error: null }
+  | { data: null; error: AuthFailure };
+
 export const signUp = async (
   email: string,
   password: string,
   role: UserRole,
   profileData: Record<string, any> = {},
   captchaToken?: string
-) => {
+): Promise<SignUpResult> => {
   try {
     console.log('🔐 Registrando usuario con email:', email, 'y rol:', role);
 
@@ -182,7 +203,7 @@ export const signUp = async (
   }
 };
 
-export const signIn = async (email: string, password: string, captchaToken?: string) => {
+export const signIn = async (email: string, password: string, captchaToken?: string): Promise<SignInResult> => {
   try {
     console.log('🔐 Iniciando sesión con email:', email);
 
