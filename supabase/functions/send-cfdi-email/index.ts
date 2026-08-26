@@ -303,11 +303,34 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify(emailPayload),
     });
 
-    if (!sendRes.ok) {
-      const errText = await sendRes.text();
-      console.error("smtp2go send error:", errText);
+    // SMTP2GO responde HTTP 200 aunque el envio falle: el resultado real va en el
+    // cuerpo (data.succeeded / data.failed / data.failures). Antes solo se miraba
+    // sendRes.ok, asi que la funcion devolvia success:true y marcaba
+    // email_sent = true para correos que nunca salieron.
+    const sendBody = await sendRes.text();
+    let sendJson: any = null;
+    try { sendJson = JSON.parse(sendBody); } catch { /* respuesta no-JSON */ }
+
+    const succeeded = Number(sendJson?.data?.succeeded ?? 0);
+    const failed = Number(sendJson?.data?.failed ?? 0);
+    const failures = sendJson?.data?.failures ?? sendJson?.data?.error ?? null;
+
+    if (!sendRes.ok || succeeded < 1) {
+      console.error(
+        `smtp2go no envio el CFDI ${cfdi_invoice_id} a ${recipientEmail}: ` +
+          `http=${sendRes.status} succeeded=${succeeded} failed=${failed} ` +
+          `failures=${JSON.stringify(failures)} body=${sendBody.slice(0, 500)}`
+      );
       return new Response(
-        JSON.stringify({ success: false, message: "Email send failed", detail: errText }),
+        JSON.stringify({
+          success: false,
+          message: "Email send failed",
+          http: sendRes.status,
+          succeeded,
+          failed,
+          failures,
+          detail: sendBody.slice(0, 500),
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
