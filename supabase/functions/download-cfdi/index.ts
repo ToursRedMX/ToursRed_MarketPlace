@@ -63,7 +63,7 @@ Deno.serve(async (req: Request) => {
 
     const [userRowRes, cfdiRes] = await Promise.all([
       supabaseAdmin.from("users").select("role").eq("id", user.id).maybeSingle(),
-      supabaseAdmin.from("cfdi_invoices").select("id, pac_invoice_id, pac_provider, invoice_type, booking_id, agency_id").eq("id", cfdiId).maybeSingle(),
+      supabaseAdmin.from("cfdi_invoices").select("id, pac_invoice_id, pac_provider, invoice_type, booking_id, agency_id, membership_id").eq("id", cfdiId).maybeSingle(),
     ]);
 
     if (!cfdiRes.data) {
@@ -97,6 +97,16 @@ Deno.serve(async (req: Request) => {
         .eq("id", cfdi.booking_id)
         .maybeSingle();
       hasAccess = booking?.user_id === user.id;
+    } else if (isTraveler && cfdi.membership_id) {
+      // Los CFDI de membresia no tienen booking_id, asi que caian fuera de la
+      // rama de arriba y el socio recibia 403 al descargar SU PROPIA factura,
+      // pese a que TravelerInvoices.tsx:98 la lista y le ofrece el boton.
+      const { data: membership } = await supabaseAdmin
+        .from("memberships")
+        .select("user_id")
+        .eq("id", cfdi.membership_id)
+        .maybeSingle();
+      hasAccess = membership?.user_id === user.id;
     }
 
     if (!hasAccess) {
