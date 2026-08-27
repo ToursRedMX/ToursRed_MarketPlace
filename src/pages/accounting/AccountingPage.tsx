@@ -657,11 +657,11 @@ const AccountingPage: React.FC = () => {
               <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                 <Calendar className="w-4 h-4 text-gray-500" />
                 <select value={month} onChange={e => setMonth(Number(e.target.value))}
-                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium">
+                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium rounded focus:ring-2 focus:ring-sky-500">
                   {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
                 </select>
                 <select value={year} onChange={e => setYear(Number(e.target.value))}
-                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium">
+                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium rounded focus:ring-2 focus:ring-sky-500">
                   {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
@@ -1276,11 +1276,11 @@ const AccountingPage: React.FC = () => {
               <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                 <Calendar className="w-4 h-4 text-gray-500" />
                 <select value={month} onChange={e => setMonth(Number(e.target.value))}
-                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium">
+                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium rounded focus:ring-2 focus:ring-sky-500">
                   {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
                 </select>
                 <select value={year} onChange={e => setYear(Number(e.target.value))}
-                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium">
+                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium rounded focus:ring-2 focus:ring-sky-500">
                   {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
@@ -1292,11 +1292,11 @@ const AccountingPage: React.FC = () => {
               {showCompare && (
                 <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
                   <select value={compareMonth} onChange={e => setCompareMonth(Number(e.target.value))}
-                    className="text-sm bg-transparent border-none outline-hidden text-gray-700">
+                    className="text-sm bg-transparent border-none outline-hidden text-gray-700 rounded focus:ring-2 focus:ring-sky-500">
                     {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
                   </select>
                   <select value={compareYear} onChange={e => setCompareYear(Number(e.target.value))}
-                    className="text-sm bg-transparent border-none outline-hidden text-gray-700">
+                    className="text-sm bg-transparent border-none outline-hidden text-gray-700 rounded focus:ring-2 focus:ring-sky-500">
                     {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
@@ -1399,11 +1399,11 @@ const AccountingPage: React.FC = () => {
               {showCompare && (
                 <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
                   <select value={compareMonth} onChange={e => setCompareMonth(Number(e.target.value))}
-                    className="text-sm bg-transparent border-none outline-hidden text-gray-700">
+                    className="text-sm bg-transparent border-none outline-hidden text-gray-700 rounded focus:ring-2 focus:ring-sky-500">
                     {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
                   </select>
                   <select value={compareYear} onChange={e => setCompareYear(Number(e.target.value))}
-                    className="text-sm bg-transparent border-none outline-hidden text-gray-700">
+                    className="text-sm bg-transparent border-none outline-hidden text-gray-700 rounded focus:ring-2 focus:ring-sky-500">
                     {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
