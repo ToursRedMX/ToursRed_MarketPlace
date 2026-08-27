@@ -20,7 +20,7 @@
     "@tiptap/extension-placeholder": "^3.30.2",
     "@tiptap/pm": "^3.30.2",
     "@tiptap/react": "^3.30.2",
-    "@tiptap/starter-kit": "^3.30.2",
+    "@tiptap/starter-kit": "^3.30.3",
     "@types/qrcode": "^1.5.6",
     "date-fns": "^4.4.0",
     "jspdf": "^4.2.1",
