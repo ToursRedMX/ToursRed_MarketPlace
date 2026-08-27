@@ -41,7 +41,7 @@ const DeparturePointSelector: React.FC<DeparturePointSelectorProps> = ({
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

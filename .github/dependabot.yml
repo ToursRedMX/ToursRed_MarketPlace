@@ -5,6 +5,17 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      # react y react-dom comparten peer dependency: subir uno sin el otro
+      # produce un PR que ni siquiera instala (npm ci falla con ERESOLVE).
+      # Asi quedaron los PR #7 y #6 tres dias en rojo sin poder mergearse.
+      # Agrupados, cada salto de mayor llega en un solo PR coherente.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
