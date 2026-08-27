@@ -1,0 +1,262 @@
+# Pendientes al cierre — 27 de agosto 2026
+
+> Este archivo contiene **solo lo que sigue activo**. Las sesiones del 25 y 26 de
+> agosto quedaron **completas, verificadas y en producción**: contabilidad,
+> payouts a agencias, la familia de CFDI, la pieza F de `executive_commissions`,
+> el guard de `support-create-ticket`, la pieza E de typecheck, la pieza G de
+> Turnstile, React 19, TipTap 3.30.5 y la realineación del registro de
+> migraciones. El detalle histórico de todo eso está en
+> [`PENDIENTES_26_AGO.md`](./PENDIENTES_26_AGO.md), que queda cerrado y no se
+> sigue ampliando.
+
+---
+
+## 🔵 I — Actualizaciones de dependencias mayores
+
+Diagnosticadas a fondo el 27-ago con spikes reales (ramas aparte, medidas y
+borradas). **El orden importa y ya está decidido: I.3 primero, luego I.1.**
+
+### I.3 — TypeScript 6.0.3 · **hacer primero** · < 1 hora
+
+**Es el mejor retorno pendiente: 1 hora contra las 6-9 de Tailwind.**
+
+Objetivo: `typescript@6.0.3` + `typescript-eslint@8.68.0`.
+
+Dos datos que hay que tener claros antes de empezar:
+
+- **`typescript@6.1.0` no existe.** La última 6.x estable es `6.0.3`. El `<6.1.0`
+  que aparece en el peer de typescript-eslint es el **tope superior del rango**,
+  no una versión publicada.
+- **`typescript-eslint@8.68.1` no existe estable.** Solo alphas. La última
+  estable es `8.68.0`.
+
+Pero el rango `>=4.8.4 <6.1.0` **sí incluye 6.0.3**, así que TypeScript 6 está
+soportado hoy sin esperar a nadie.
+
+**Resultado del spike:**
+
+| Prueba | TS 7.0.2 | **TS 6.0.3** |
+|---|---|---|
+| `npm install` | 8 avisos `ERESOLVE overriding peer` | **limpio, sin un solo warning** |
+| `npm run lint` | **falla**: `typescript-eslint does not support TS 7.0` | **corre normal** |
+| `tsc` | 459 (3 de clase crash) | **460 / 0** |
+| `npm run build` | verde | verde |
+
+Con `"types": ["node"]` en `tsconfig.app.json`, el conjunto de errores es
+**exactamente el de `main`** — no solo el total:
+
+```
+nuevos vs main:        0
+desaparecen vs main:   0
+idénticos:           460
+```
+
+**El único cambio son 3 errores**, todos iguales:
+
+```
+src/components/DeparturePointSelector.tsx(44,30): TS2503: Cannot find namespace 'NodeJS'
+src/components/ProtectedRoute.tsx(18,35):         TS2503: Cannot find namespace 'NodeJS'
+src/hooks/useFormPersistence.ts(20,35):           TS2503: Cannot find namespace 'NodeJS'
+```
+
+Causa: en TS 6+ la opción `types` pasa a `[]` por defecto. Se arregla con
+`"types": ["node"]` (verificado). Alternativa más limpia: cambiar
+`NodeJS.Timeout` por `ReturnType<typeof setTimeout>` en esos 3 sitios.
+
+**Por qué conviene:** es el camino que recomienda el propio equipo de TypeScript
+—migrar a 6, resolver deprecaciones, y solo entonces ir a 7— porque **TS 7
+convierte en error lo que 6 deja deprecado**. Ya está verificado que no tenemos
+ninguna deprecación pendiente: nada de `es5`, `moduleResolution classic/node`,
+`outFile` ni `baseUrl`; `strict` ya está en `true`.
+
+**Ojo:** el PR **#4** de Dependabot **no sirve** para esto — apunta a 7.0.2. Hace
+falta una rama propia a 6.0.3, y el #4 sigue abierto y bloqueado igual.
+
+### I.1 — Tailwind 3.4.19 → 4.3.3 (PR #5) · sesión propia · 6-9 horas
+
+**El grueso no es código: son 3-4 horas de mirar pantallas.**
+
+**Lo que bloquea el build** (15 min, ya probado):
+
+1. El plugin de PostCSS se mudó: `tailwindcss` → `@tailwindcss/postcss`.
+2. `@tailwind base/components/utilities` → `@import "tailwindcss";`.
+
+**El config NO hay que migrarlo.** Con una línea
+—`@config "../tailwind.config.js"`— sobrevive todo el tema, verificado
+comparando el CSS generado: las 6 paletas custom (60 tonos), la fuente Inter y
+las animaciones con sus keyframes. `plugins` está vacío. Migrar a `@theme` es
+opcional.
+
+**Lo que cambia de aspecto en silencio** (medido tokenizando los 21,143
+atributos `className`):
+
+| Clase v3 | Qué pasa en v4 | Usos |
+|---|---|---|
+| `space-x-*` / `space-y-*` | selector `:not([hidden])~:not([hidden])` → `:where(>:not(:last-child))` | **799** |
+| `outline-none` | ya no dibuja outline transparente; ahora `outline-style:none` | **324** |
+| `shadow-sm` | pasa a valer lo que valía `shadow`: sombra más grande | **233** |
+| `border` sin color | hereda `currentColor` en vez de `gray-200` | **179** |
+| `bg-opacity-*`, `ring-opacity-*` | **eliminadas, dejan de aplicar** | **51** |
+| `backdrop-blur-sm` | 4px → 8px | **35** |
+| `rounded-sm` | .125rem → .25rem | **6** |
+
+**`outline-none` con 324 usos es el que más cuidado merece: es accesibilidad.**
+Puede dejar campos sin indicador de foco visible.
+
+**Lo que NO se rompe**, contra lo que se supone: `flex-shrink-0` (566 usos)
+sigue funcionando, `rounded` sigue en `.25rem` (273 usos), y los `!important` de
+Tailwind son **0** reales.
+
+**Medición del CSS:** 124,453 → 149,374 bytes (+20%). De 919 clases comparables,
+787 difieren en texto **pero casi todas son indirección de variables con el
+mismo valor computado** (`gap:1rem` → `gap:calc(var(--spacing)*4)`). Clases que
+desaparecen de verdad: **4**.
+
+**Plan:** PostCSS + `@import` + `@config` (15 min) → `npx @tailwindcss/upgrade` y
+revisar su diff (1 h) → los 7 patrones de reemplazo (1-2 h) → **revisión visual
+pantalla por pantalla (3-4 h)** → ajustes (1-2 h).
+
+No hay `tsc` que avise ni error de consola: una sombra más grande o un `space-x`
+desalineado **no rompen nada, solo se ven mal**.
+
+### I.2 — TypeScript 7.0.2 (PR #4) · **bloqueado, no mergear**
+
+```
+$ npm run lint
+Error: typescript-eslint does not support TS 7.0.
+```
+
+No es una advertencia de peer: es un **rechazo explícito en runtime**. Y no hay
+salida — instalado (8.67.0), último (8.68.0) y **canary** (8.68.1-alpha.5) tienen
+todos el mismo tope `>=4.8.4 <6.1.0`. No existe ninguna 9.x.
+
+Lo demás está listo: `tsc` da 459 (456 con `types: ["node"]`), 390 errores
+idénticos y un churn simétrico que es reformateo de diagnósticos, no errores
+nuevos.
+
+**Acción:** dejar el #4 abierto, **no mergearlo**, y revisar cada pocas semanas
+si sale una `typescript-eslint` que levante el tope. Cuando pase: menos de 2
+horas.
+
+---
+
+## 🔴 H — El check verde de `deploy-preview` no valida que la app arranque
+
+**Sigue vivo y sin resolver.** Es el hallazgo con más alcance de la sesión.
+
+El check `netlify/toursredmx/deploy-preview` solo verifica que el **build
+compile**. Los previews de los PR #20 y #21 estuvieron **en verde** mientras la
+app moría al inicializar con `Uncaught Error: supabaseKey is required` — porque
+`VITE_SUPABASE_PUBLISHABLE_KEY` no llegaba a los previews.
+
+Es el mismo patrón que documentó la pieza E: allí era Vite compilando sin
+ejecutar `tsc`; aquí es Netlify empaquetando sin abrir la página.
+
+**Lo que faltaría:** un smoke test post-deploy que cargue la home del preview y
+falle si la consola tiene errores. Sin eso, "preview en verde" seguirá sin
+querer decir "la app funciona".
+
+*(Las otras dos capas de la pieza H —la variable de entorno de Netlify y el
+allowlist de hostnames de Turnstile— ya quedaron resueltas. El detalle de cómo
+se diagnosticaron está en el histórico.)*
+
+---
+
+## 🟠 Dos decisiones que hay que tomar
+
+### 1. Los 2,472 errores de lint que nadie ejecuta
+
+```
+$ npm run lint
+✖ 2561 problems (2472 errors, 89 warnings)
+```
+
+`npm run lint` reporta 2,472 errores en `main` **y ningún workflow lo ejecuta** —
+verificado sobre los 11 de `.github/workflows/`. La regla que más dispara es
+`@typescript-eslint/no-explicit-any`, coherente con los 120 `TS2339` que se
+arrastran sobre respuestas de Supabase sin tipar.
+
+**Recomendación: meterlo al pipeline en modo informativo, con 2,472 / 89 como
+línea base — y no intentar arreglar los 2,472.**
+
+El argumento es el mismo que funcionó con `tsc` en la pieza E: el valor no está
+en limpiar el pasado, sino en que **un error nuevo se note contra una base
+conocida**. Hoy `eslint.config.js` tiene reglas activas que no protegen nada.
+
+Lo más barato es agregar un step al workflow `typecheck.yml` que ya existe,
+reutilizando su patrón: `set +e`, conteo por regla, publicación en
+`GITHUB_STEP_SUMMARY` y comparación contra la base. Media hora de trabajo.
+
+La alternativa honesta, si no se quiere el ruido, es **decir explícitamente que
+el lint es decorativo** y quitarlo de `package.json`. Lo que no conviene es
+dejarlo como está: configurado, activo y sin ejecutar.
+
+### 2. `SECRETS_SCAN_ENABLED = "false"` en `netlify.toml`
+
+Es lo que hizo que el fallo de la variable de entorno pasara **silencioso**: con
+el escaneo activo, Netlify habría avisado de que una variable esperada no estaba
+disponible en el contexto del build.
+
+**Recomendación: reactivarlo, pero en su propio PR y verificando el preview
+antes de mergear.**
+
+El riesgo real de encenderlo es que el escáner marque como filtración las
+variables `VITE_*` que **son públicas por diseño** —la llave publicable y la URL
+de Supabase viven en el bundle del navegador— y tumbe el build por falsos
+positivos. Eso se resuelve declarándolas con `SECRETS_SCAN_OMIT_KEYS`, en vez de
+apagar el escaneo entero.
+
+Nota conceptual que conviene no perder: **la llave publicable no es un secreto**
+(lo que protege los datos es la RLS), pero un `SERVICE_ROLE_KEY` sí lo es y
+**nunca debe ir en una variable `VITE_*`**, porque todas acaban en el bundle.
+
+---
+
+## 🟢 Datos de prueba por limpiar antes del UAT
+
+Cuatro tickets de soporte creados el 27-ago al verificar el guard de
+`support-create-ticket`. **Los cuatro llevan "PRUEBA" en la descripción.**
+
+| Folio | Qué es |
+|---|---|
+| `REG-0000001` | general anónimo, sin `user_id` |
+| `RES-0000001` | viajero, enviado desde la pantalla real |
+| `RES-0000002` | viajero, enviado vía API |
+| `PAAG-0000001` | agencia, enviado desde la pantalla real |
+
+Ya restaurados y sin pendiente: la fila temporal de `executive_commissions` con
+`cfdi_source='manual'` fue borrada, las URLs de la fila `80ce9e54` quedaron
+restauradas, y el `email_verified` de `axelalvarez@outlook.com` volvió a `true`
+(verificado: 0 usuarios sin verificar).
+
+En el histórico hay más datos de prueba de las sesiones del 25 y 26 de agosto,
+también para limpiar antes del UAT.
+
+---
+
+## Estado de los PRs abiertos
+
+| PR | Qué | Acción |
+|---|---|---|
+| **#5** | `tailwindcss` 3.4.19 → 4.3.3 | Diagnosticado. Ver I.1. Sesión propia |
+| **#4** | `typescript` 5.9.3 → 7.0.2 | **Bloqueado.** Ver I.2. No mergear |
+
+---
+
+## Avisos operativos
+
+- **No correr `supabase db push`** sin revisar antes: el registro quedó alineado
+  el 27-ago (PR #19), pero hay **753 versiones aplicadas en la BD sin archivo en
+  el repo** (histórico del proyecto + las 9 de `routesred`). El repo nunca tuvo
+  el historial completo.
+- **`main` está protegida**: requiere PR. Falta marcar *"Do not allow bypassing
+  the above settings"* — hoy `enforce_admins` está en `false`, así que un admin
+  (o Bolt actuando con esa cuenta) todavía puede saltarse la regla.
+- **RoutesRed** (esquema `routesred`, 14 tablas + `user_platforms`) está en la BD
+  de sandbox sin archivos en el repo. Identificado, aislado y sin riesgo para
+  ToursRed. Se documenta si se retoma.
+
+---
+
+*Para retomar: leer este archivo. El detalle histórico de lo ya cerrado está en
+[`PENDIENTES_26_AGO.md`](./PENDIENTES_26_AGO.md), que no se sigue ampliando.*
