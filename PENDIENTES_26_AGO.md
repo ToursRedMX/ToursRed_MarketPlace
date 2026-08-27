@@ -282,9 +282,83 @@ pieza E y ninguna se arregló.
    destapó.
 
 3. **`AgencySignupPage` importa `TurnstileWidget` y no lo usa** (`:6`, `TS6133`),
-   y tampoco usa el `profileData` que desestructura (`:110`). Esa pantalla **no
-   valida Turnstile** mientras `SignupPage` sí. Puede ser deliberado o un olvido;
-   no se investigó.
+   y tampoco usa el `profileData` que desestructura (`:110`). ~~Esa pantalla no
+   valida Turnstile mientras `SignupPage` sí.~~ **Ese diagnóstico resultó
+   incorrecto al investigarlo — ver la pieza G abajo.**
+
+## ⏸️ G — Turnstile: activarlo de verdad antes del lanzamiento
+
+**El hallazgo original estaba mal y conviene decirlo claro.** Se anotó que
+`AgencySignupPage` "no valida Turnstile". Sí lo hace: mantiene el token (`:24`),
+lo pasa a `signUp` (`:110`) y le pasa las props al hijo que renderiza el widget:
+
+```jsx
+turnstileToken={turnstileEnabled ? turnstileToken : ''}
+onTurnstileToken={turnstileEnabled ? setTurnstileToken : undefined}
+```
+
+El widget vive en `AgencySignupFormBody:668`. El `TS6133` es un import que sobró
+cuando el formulario se extrajo a ese componente: basura, no un hueco.
+
+### El bug real: una condición contradictoria
+
+`AgencySignupFormBody:675`:
+
+```js
+disabled={... || (!!turnstileToken && !turnstileToken)}
+```
+
+`(!!turnstileToken && !turnstileToken)` es **siempre falso**. La intención era
+`(turnstileEnabled && !turnstileToken)`, como en `SignupPage:992` y
+`LoginPage:323`. Efecto: en el registro de agencias el botón **nunca se bloquea**
+por falta de token; en viajero y login sí.
+
+### Pero hoy nada de esto valida nada, y no solo en agencias
+
+Quien verifica el token no es una función propia: el token viaja a
+`supabase.auth.signUp({ options: { captchaToken } })` (`lib/supabase.ts:107-113`)
+y lo valida **GoTrue**, según la configuración de CAPTCHA del proyecto. Agencias
+y viajeros usan **el mismo backend**.
+
+Verificado el 26-ago con tres sondas no destructivas contra sandbox:
+
+| Sonda | Resultado |
+|---|---|
+| `POST /auth/v1/signup` sin `captcha_token` | pasa de largo (falla por contraseña) |
+| `POST /auth/v1/signup` con token **inválido** | pasa de largo (falla por contraseña) |
+| `POST /auth/v1/token` con token inválido vs. sin token | idénticos: `invalid_credentials` |
+
+Un proyecto con CAPTCHA activo rechaza un token inválido en ambos endpoints.
+Además **`platform_settings.turnstile_auth_enabled = false`**, así que el widget
+**no se renderiza en ninguna pantalla** y `turnstileToken` sale vacío siempre.
+
+**Está apagado para las tres pantallas — viajero, agencia y login — no solo para
+agencias.** Arreglar el front sin activar lo de arriba no cambia nada.
+
+### Atenuante de negocio, que invierte la prioridad
+
+`agencies.is_approved` tiene default **`false`**, con `approved_at` / `approved_by`:
+una agencia registrada por un bot **no puede operar** hasta que un admin la
+apruebe. Un viajero registrado por un bot sí puede usar la plataforma de
+inmediato. El anti-bot importa **más** en el registro de viajeros que en el de
+agencias — lo contrario de lo que sugería la nota original.
+
+### Los cuatro pasos, en este orden
+
+1. **Activar CAPTCHA en GoTrue** (dashboard de Supabase, con la secret key de
+   Turnstile). **Decisión de Axel**, toca configuración del proyecto. Sin esto,
+   todo lo demás es decorado.
+2. **`turnstile_auth_enabled = true`** en `platform_settings`, para que el widget
+   se muestre.
+3. **Arreglar `AgencySignupFormBody:675`.** Una línea, pero sin efecto observable
+   antes de (1) y (2).
+4. **Borrar el import muerto** de `AgencySignupPage:6`. Limpieza trivial; cabe en
+   el paso 3 de la pieza E.
+
+Deliberadamente **no** se metió al PR #15: agregar el widget sin CAPTCHA del lado
+del servidor habría sido un cambio cosmético presentado como anti-bot.
+
+Para antes del lanzamiento (21-sep-2026).
 
 ## ⏸️ F — `executive_commissions` guarda la URL privada del PAC como único id
 
