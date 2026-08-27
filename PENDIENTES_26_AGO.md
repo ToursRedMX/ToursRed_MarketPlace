@@ -286,7 +286,33 @@ pieza E y ninguna se arregló.
    valida Turnstile mientras `SignupPage` sí.~~ **Ese diagnóstico resultó
    incorrecto al investigarlo — ver la pieza G abajo.**
 
-## ⏸️ G — Turnstile: activarlo de verdad antes del lanzamiento
+## ✅ G — Turnstile: activado y funcionando (cerrada el 27-ago)
+
+**Los cuatro pasos hechos.** Axel activo CAPTCHA en GoTrue y puso
+`turnstile_auth_enabled = true` (estaba apagado por limitaciones de Bolt, que ya
+no aplican). El fix de la condicion y el import muerto entraron en el PR #20.
+
+Verificado con las mismas sondas que antes pasaban de largo:
+
+    signup sin captcha_token   -> 400 captcha_failed (no captcha_token found)
+    signup con token invalido  -> 400 captcha_failed (invalid-input-response)
+    login  sin captcha_token   -> 400 captcha_failed (no captcha_token found)
+
+GoTrue rechaza **antes** de validar credenciales, lo que confirma
+retroactivamente que las sondas del 26-ago (que llegaban a `weak_password`) si
+indicaban captcha apagado.
+
+En las tres pantallas el widget monta (300x71) y emite token de 773 caracteres.
+
+**Un limite que quedo documentado:** no se pudo probar "enviar sin resolver el
+desafio" porque Cloudflare **auto-resuelve** para visitantes de bajo riesgo — no
+existe el estado "sin resolver" desde un navegador normal. El respaldo real es el
+servidor, que si esta probado. Para forzar ese estado habria que poner la site key
+en modo *always challenge* desde Cloudflare.
+
+Texto original de la pieza, conservado por el diagnostico:
+
+### G — diagnostico original (26-ago)
 
 **El hallazgo original estaba mal y conviene decirlo claro.** Se anotó que
 `AgencySignupPage` "no valida Turnstile". Sí lo hace: mantiene el token (`:24`),
@@ -360,7 +386,83 @@ del servidor habría sido un cambio cosmético presentado como anti-bot.
 
 Para antes del lanzamiento (21-sep-2026).
 
-## ⏸️ F — `executive_commissions` guarda la URL privada del PAC como único id
+## 🔴 H — Infraestructura: tres capas que bloqueaban los deploy previews
+
+Salieron al intentar verificar React 19 a mano en el preview del PR #21. Ninguna
+tiene que ver con el codigo del PR: **son configuracion, y llevaban rotas desde
+siempre sin que nadie lo notara.**
+
+### 1. La variable de entorno no llegaba a los previews (RESUELTO)
+
+El preview arrancaba con `Uncaught Error: supabaseKey is required` y la app **no
+inicializaba**. Las variables `VITE_*` se inlinean en el bundle en tiempo de
+build, asi que se puede leer que recibio cada deploy:
+
+| Deploy | PUBLISHABLE_KEY | SUPABASE_URL | SENTRY_DSN |
+|---|---|---|---|
+| produccion | presente (12) | presente | presente |
+| preview #21 | **AUSENTE** | presente | presente |
+| preview #20 | **AUSENTE** | presente | presente |
+
+El detalle que identifico el problema: la URL y el DSN **si** llegaban; solo
+faltaba la llave. Si fuera un scope de contexto general, faltarian las tres.
+Estaba marcada como variable sensible en Netlify, y Netlify no expone valores
+secretos a los Deploy Previews.
+
+Resuelto por Axel. Nota conceptual que conviene no perder: **la llave publicable
+esta disenada para ser publica** — vive en el bundle de produccion, que cualquiera
+descarga. Lo que protege los datos es la RLS. Marcarla como secreta no daba
+seguridad y rompia todos los previews. Distinto seria un SERVICE_ROLE_KEY, que
+NUNCA debe ir en una variable `VITE_*`.
+
+### 2. El allowlist de dominios de Turnstile no cubria los previews (RESUELTO)
+
+Con la app ya arrancando, el widget fallaba con
+`[Cloudflare Turnstile] Error: 110200` = *domain not allowed*. Misma site key en
+ambos bundles, funcionando en produccion: lo unico distinto era el hostname.
+
+Resuelto agregando el hostname del preview en Cloudflare -> Turnstile ->
+Settings -> Hostnames. Aplica al instante, sin redesplegar.
+
+**Cuidado con la solucion comoda:** Turnstile hace coincidencia por sufijo y no
+admite comodines. Poner `netlify.app` a secas cubriria los previews, pero tambien
+**cualquier sitio de cualquier persona alojado en Netlify**, que podria usar la
+site key. Alternativa limpia si esto se vuelve molesto: un segundo widget solo
+para previews, con su propia key, y sacar la constante hardcodeada de
+`TurnstileWidget.tsx:3` a una variable de entorno.
+
+### 3. El check verde de `deploy-preview` nunca significo que la app arrancara
+
+**Este es el hallazgo que importa a futuro y sigue vigente.** El check
+`netlify/toursredmx/deploy-preview` solo verifica que el **build compile**. Los
+previews del #20 y del #21 salieron en verde mientras la app moria al inicializar
+con `supabaseKey is required`.
+
+Es el mismo patron que documenta la pieza E: un check verde que no significa lo
+que parece. Alli era Vite compilando sin ejecutar tsc; aqui es Netlify empaquetando
+sin abrir la pagina.
+
+Ademas **`SECRETS_SCAN_ENABLED = "false"` en `netlify.toml`** es lo que hizo que
+el fallo pasara silencioso: con el escaneo activo Netlify habria avisado. No se
+toco porque quitarlo puede tumbar builds por falsos positivos, pero merece una
+decision consciente.
+
+**Lo que faltaria, cuando haya tiempo:** un smoke test post-deploy que cargue la
+home del preview y falle si la consola tiene errores. Sin eso, "preview en verde"
+seguira sin querer decir "la app funciona".
+
+## ✅ F — `executive_commissions`: resuelta (PR #12, mergeada el 27-ago)
+
+`pac_invoice_id` + `cfdi_source` agregados, backfill hecho (1 fila), y
+`download-executive-cfdi` ya no parsea la URL. La rama manual **estaba rota**
+—devolvia 422 en silencio— y quedo arreglada. Verificado con descargas reales:
+PAC xml 200/5,274 bytes, PAC pdf 200/113,803, manual xml 200/18,173, manual pdf
+404 con mensaje claro. Y con las URLs anuladas a proposito, el PAC sigue
+resolviendo por `pac_invoice_id`: mismos bytes.
+
+Texto original del diagnostico:
+
+### F — diagnostico original (26-ago)
 
 Salió al hacer la búsqueda global del arreglo de correos, y **casi rompe el flujo
 de ejecutivos**: se iba a anular `cfdi_xml_url` / `cfdi_pdf_url` en esa tabla,
@@ -398,7 +500,41 @@ de él.
 
 Requiere migración y merece revisión con calma.
 
-## 🔴 Dependabot — 4 PRs abiertos, los 4 con checks en rojo
+## 🟡 Dependabot — 2 resueltos el 27-ago, 2 pendientes
+
+**#7 y #6 cerrados sin mergear**, reemplazados por el **PR #21**, que sube
+`react` y `react-dom` a **19.2.8 juntos** con sus `@types`. Ya en `main` y
+desplegado en produccion.
+
+Por que estaban bloqueados: cada uno subia la mitad del par y `npm ci` fallaba
+con `Conflicting peer dependency` antes de compilar. **Causa raiz:**
+`.github/dependabot.yml` no tenia bloque `groups:`. Se agrego uno que junta
+react + react-dom + sus tipos, asi que la proxima mayor llegara en un solo PR.
+
+Verificacion del salto a React 19:
+- Ninguna API eliminada se usa en `src/` (ReactDOM.render, findDOMNode,
+  defaultProps, propTypes, string refs, useFormState...). Ya usaba `createRoot`.
+- Los 12 paquetes que consumen React aceptan 19 (peers verificados).
+- Dos cambios de codigo, migraciones canonicas:
+  `useRef<T>()` -> `useRef<T | undefined>(undefined)`, y el callback de ref de
+  VerifyEmailPage, que **devolvia el elemento** — React 19 lo habria tomado como
+  funcion de limpieza.
+- tsc: 460, **conjunto identico** a main. Build verde. 54 rutas montadas sin un
+  solo error ni warning. Los 4 casos de VerifyEmailPage probados en el componente
+  real (foco adelante, Backspace atras, pegado, pegado con basura).
+- `vendor` crecio de 549,520 a 599,760 bytes (+49.8 kB, +14 kB en gzip).
+
+**Sin verificar todavia:** TipTap, Mapbox y React Query bajo React 19 requieren
+interaccion manual. El proyecto no tiene tests automatizados.
+
+### Los 2 que siguen abiertos
+
+| PR | Cambio | Nota |
+|---|---|---|
+| **#5** | `tailwindcss` 3.4.19 -> **4.3.3** | Salto de mayor. Tailwind 4 cambia la configuracion por completo |
+| **#4** | `typescript` 5.9.3 -> **7.0.2** | Dos mayores de golpe. Con la base de tsc ahora en 460 y el workflow vigilando, ya hay con que medirlo |
+
+### Texto original (26-ago)
 
 Ninguno revisado. **Los 4 fallan los mismos 4 checks de Netlify**
 (`deploy-preview`, `Header rules`, `Pages changed`, `Redirect rules`), o sea el
@@ -421,6 +557,19 @@ y hoy el build verde de Vite demostró no significar nada.
 > del PR #9, así que estos PRs seguirán llegando.
 
 ## 🟢 Datos de prueba generados hoy (limpiar antes de UAT, no antes)
+
+**Agregados el 27-ago** (todos con "PRUEBA" en la descripcion):
+
+- **4 tickets de soporte** del guard de `support-create-ticket`:
+  `REG-0000001` (general anonimo), `RES-0000001` (viajero, desde pantalla),
+  `RES-0000002` (viajero, via API), `PAAG-0000001` (agencia, desde pantalla).
+- La fila temporal de `executive_commissions` con `cfdi_source='manual'` **ya fue
+  borrada**, y las URLs de la fila `80ce9e54` quedaron restauradas.
+- `users.email_verified` de `axelalvarez@outlook.com` se puso en `false` unos
+  minutos para poder llegar a `VerifyEmailPage` y probar el ref callback de
+  React 19. **Restaurado a `true`**; verificado: 0 usuarios sin verificar.
+
+### Lo del 26-ago
 
 - **`memberships.service_fee_exemption_used` del socio `axelalvarez@outlook.com`
   quedó en 52.50**, no en los 500.00 originales. Se reseteó tres veces para poder
@@ -462,6 +611,18 @@ Para que nadie lo dé por hecho leyendo lo de arriba:
 - **Las dos features de contabilidad arregladas hoy** (`Generar pólizas` y
   `Exportar SAT XML`) están verificadas solo por lectura de código, no
   ejercitadas. Ver punto 1 de la sección amarilla de la pieza E.
+- **React 19 en runtime, para TipTap, Mapbox y React Query.** El salto esta
+  verificado por compilacion (tsc identico a main), por montaje (54 rutas sin un
+  solo error ni warning) y en el unico archivo con cambio de semantica
+  (VerifyEmailPage, 4 casos en el componente real). Pero el proyecto no tiene
+  tests, y esos tres componentes de terceros solo se ejercitan interactuando:
+  editar texto enriquecido, arrastrar el mapa, y el refetch al volver a la
+  pestana. **Ya esta en produccion.**
+- **El selector de punto de salida** (`DeparturePointSelector`) se probo por
+  reproduccion del patron del debounce, no en el componente real: solo se usa en
+  `AgencyTours.tsx` y hacia falta sesion de agencia. El cambio ahi es puramente
+  de tipos (`useRef<T>()` -> `useRef<T|undefined>(undefined)`, emite JS
+  equivalente), asi que el riesgo es minimo.
 - **El contenido de los 9 correos reenviados** se confirmó en uno solo (F-65).
   Los 3 de agencia usan `recipient_type: "agency"`, ruta que nunca se había
   ejecutado antes de hoy.
