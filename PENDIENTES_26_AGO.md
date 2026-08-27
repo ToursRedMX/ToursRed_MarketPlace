@@ -532,7 +532,7 @@ interaccion manual. El proyecto no tiene tests automatizados.
 | PR | Cambio | Nota |
 |---|---|---|
 | **#5** | `tailwindcss` 3.4.19 -> **4.3.3** | **Diagnosticado, ver pieza I.1.** 6-9 h, el grueso es revision visual. Sesion propia |
-| **#4** | `typescript` 5.9.3 -> **7.0.2** | **BLOQUEADO, ver pieza I.2.** typescript-eslint no soporta TS 7 en ninguna version, ni canary. No mergear |
+| **#4** | `typescript` 5.9.3 -> **7.0.2** | **BLOQUEADO, ver pieza I.2.** typescript-eslint no soporta TS 7 en ninguna version, ni canary. No mergear. **Alternativa viable hoy: TS 6.0.3, ver pieza I.3** |
 
 ### Texto original (26-ago)
 
@@ -556,7 +556,7 @@ y hoy el build verde de Vite demostró no significar nada.
 > Nota: `d4f3fe2` había borrado `.github/dependabot.yml`. Se conservó en el merge
 > del PR #9, así que estos PRs seguirán llegando.
 
-## 🔵 I — Tailwind 4 y TypeScript 7: diagnosticados, listos para ejecutar
+## 🔵 I — Tailwind 4, TypeScript 7 y TypeScript 6: diagnosticados, listos para ejecutar
 
 Investigacion del 27-ago. **Nada aplicado.** Los dos spikes se corrieron en ramas
 aparte, se midieron y se borraron; el arbol quedo limpio y con las versiones
@@ -640,8 +640,9 @@ desalineado **no rompen nada, solo se ven mal**.
 
 ### I.2 — TypeScript 5.9.3 -> 7.0.2 (PR #4)
 
-**Veredicto: BLOQUEADO por el ecosistema, no por nuestro codigo. No se puede
-hacer hoy ni manana. Esperar a que typescript-eslint soporte TS 7.**
+**Veredicto: BLOQUEADO por el ecosistema, no por nuestro codigo. Esperar a que
+typescript-eslint soporte TS 7. PERO hay un paso intermedio que si se puede dar
+hoy: TypeScript 6.0.3 — ver pieza I.3.**
 
 #### El bloqueo
 
@@ -717,6 +718,90 @@ Es exactamente el punto ciego que documenta la pieza E: el build no valida tipos
 
 **Accion recomendada hoy: dejar el PR #4 abierto y NO mergearlo.** Revisar cada
 pocas semanas si salio una typescript-eslint que levante el tope de `<6.1.0`.
+
+---
+
+### I.3 — TypeScript 6.0.3: el paso intermedio que SI se puede dar hoy
+
+**Veredicto: menos de 1 hora, bajo riesgo, y va ANTES que Tailwind 4 en la fila
+(1 h contra 6-9 h). Queda para otra sesion, no se preparo la rama.**
+
+Surgio al preguntarse si se podia subir a "typescript 6.1.0 y typescript-eslint
+8.68.1". Dos correcciones de dato primero:
+
+- **`typescript@6.1.0` NO existe.** La ultima 6.x estable es **`6.0.3`** (solo hay
+  6.0.2 y 6.0.3). El `<6.1.0` del peer de typescript-eslint es el TOPE SUPERIOR
+  del rango, no una version publicada.
+- **`typescript-eslint@8.68.1` NO existe estable.** Solo alphas
+  (`8.68.1-alpha.0` … `alpha.5`). La ultima estable es **`8.68.0`**.
+
+**Pero el rango `>=4.8.4 <6.1.0` SI incluye 6.0.3.** Es decir: TypeScript 6 esta
+soportado hoy, sin esperar a nadie.
+
+#### Spike medido (rama aparte, ya borrada)
+
+| Prueba | TS 7.0.2 | **TS 6.0.3** |
+|---|---|---|
+| `npm install` | 8 avisos `ERESOLVE overriding peer` | **limpio, sin un solo warning** |
+| `npm run lint` | **falla**: `typescript-eslint does not support TS 7.0` | **corre normal** |
+| `tsc` | 459 (3 de clase crash) | **460 / 0** con una linea de config |
+| `npm run build` | verde | verde |
+
+Con `"types": ["node"]` en `tsconfig.app.json`, el conjunto de errores es
+**exactamente el de main**, no solo el total:
+
+    nuevos vs main:        0
+    desaparecen vs main:   0
+    identicos:           460
+
+Son los mismos 460 errores, uno por uno.
+
+#### Lo unico que cambia: 3 errores, una linea
+
+    src/components/DeparturePointSelector.tsx(44,30): TS2503: Cannot find namespace 'NodeJS'
+    src/components/ProtectedRoute.tsx(18,35):         TS2503: Cannot find namespace 'NodeJS'
+    src/hooks/useFormPersistence.ts(20,35):           TS2503: Cannot find namespace 'NodeJS'
+
+Causa: en TS 6+ la opcion `types` pasa a `[]` por defecto. Se arregla agregando
+`"types": ["node"]` (verificado: los 3 desaparecen). Alternativa mas limpia:
+cambiar `NodeJS.Timeout` por `ReturnType<typeof setTimeout>` en esos 3 sitios.
+
+#### Por que conviene
+
+- Es el camino que recomienda el propio equipo de TypeScript: migrar a 6,
+  resolver deprecaciones, y solo entonces ir a 7 — porque **TS 7 convierte en
+  ERROR lo que 6 deja como deprecado**.
+- Ya se verifico que **no tenemos ninguna deprecacion pendiente**: nada de `es5`,
+  `moduleResolution classic/node`, `outFile`, `baseUrl`; `strict` ya en true.
+- Cuando typescript-eslint soporte TS 7, el salto restante sera trivial.
+
+#### Lo que hay que tener claro
+
+- **El PR #4 de Dependabot NO sirve para esto**: apunta a 7.0.2. Hay que abrir una
+  rama propia a 6.0.3, y el #4 sigue abierto y bloqueado igual.
+- No aporta ninguna capacidad nueva al proyecto hoy. El beneficio es de
+  posicionamiento, no de funcionalidad.
+
+#### HALLAZGO APARTE: el lint no lo corre nadie
+
+Al medir la base para poder interpretar los numeros del spike:
+
+    main  (TS 5.9.3 + typescript-eslint 8.67.0):  2561 problems (2472 errors, 89 warnings)
+    spike (TS 6.0.3 + typescript-eslint 8.68.0):  2561 problems (2472 errors, 89 warnings)
+
+Identicos, asi que TS 6 no empeora el lint en nada. **Pero `npm run lint` reporta
+2,472 errores en main hoy, y NINGUN workflow lo ejecuta** — verificado sobre los
+11 de `.github/workflows/`.
+
+Es el mismo patron de la pieza E pero con ESLint: una herramienta configurada,
+con reglas activas, que nadie corre. La regla que mas dispara es
+`@typescript-eslint/no-explicit-any`, coherente con los 120 TS2339 que se
+arrastran sobre respuestas de Supabase sin tipar.
+
+Queda como pieza aparte por decidir: o se mete el lint al pipeline en modo
+informativo (igual que se hizo con tsc en la pieza E, y entonces esos 2,472 son
+la linea base), o se acepta que el `eslint.config.js` es decorativo y se dice
+explicitamente.
 
 ---
 
