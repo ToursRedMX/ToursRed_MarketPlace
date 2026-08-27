@@ -15,6 +15,8 @@ interface Commission {
   period_month: number | null;
   period_year: number | null;
   status: string;
+  pac_invoice_id: string | null;
+  cfdi_source: 'pac' | 'manual' | null;
   cfdi_xml_url: string | null;
   cfdi_uuid_fiscal: string | null;
   cfdi_total: number | null;
@@ -71,7 +73,7 @@ export default function AdminEjecutivosComisiones() {
         .select(`
           id, executive_id, agency_id, commission_type, amount,
           period_month, period_year, status,
-          cfdi_xml_url, cfdi_uuid_fiscal, cfdi_total, cfdi_uploaded_at,
+          pac_invoice_id, cfdi_source, cfdi_xml_url, cfdi_uuid_fiscal, cfdi_total, cfdi_uploaded_at,
           payment_reference, paid_at,
           rejection_reason, notes, created_at,
           account_executives(first_name, last_name, email),
@@ -173,7 +175,11 @@ export default function AdminEjecutivosComisiones() {
       if (!session) return;
       const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/download-executive-cfdi?commission_id=${commissionId}&file_type=${fileType}`;
       const res = await fetch(proxyUrl, { headers: { Authorization: `Bearer ${session.access_token}` } });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const motivo = await res.json().then(j => j?.error).catch(() => null);
+        setMessage({ type: 'error', text: `No se pudo abrir el comprobante: ${motivo ?? 'intenta de nuevo en unos momentos'}` });
+        return;
+      }
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
       if (fileType === 'pdf') {
@@ -186,7 +192,7 @@ export default function AdminEjecutivosComisiones() {
       }
       setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
     } catch {
-      // silenciar error de descarga
+      setMessage({ type: 'error', text: 'No se pudo abrir el comprobante: revisa tu conexion e intenta de nuevo' });
     }
   };
 
@@ -401,7 +407,7 @@ export default function AdminEjecutivosComisiones() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {comm.cfdi_xml_url ? (
+                        {(comm.pac_invoice_id || comm.cfdi_xml_url) ? (
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => openExecutiveFile(comm.id, 'xml', comm.cfdi_uuid_fiscal)}
@@ -410,13 +416,15 @@ export default function AdminEjecutivosComisiones() {
                             >
                               <Download className="h-3.5 w-3.5" />
                             </button>
-                            <button
-                              onClick={() => openExecutiveFile(comm.id, 'pdf', comm.cfdi_uuid_fiscal)}
-                              className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Ver/Descargar PDF"
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                            </button>
+                            {comm.cfdi_source !== 'manual' && (
+                              <button
+                                onClick={() => openExecutiveFile(comm.id, 'pdf', comm.cfdi_uuid_fiscal)}
+                                className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Ver/Descargar PDF"
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
                         ) : (
                           <span className="text-xs text-gray-300">Sin CFDI</span>
