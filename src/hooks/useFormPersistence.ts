@@ -17,7 +17,7 @@ export const useFormPersistence = <T extends Record<string, any>>(
   options: FormPersistenceOptions
 ) => {
   const { key, expirationHours = 24 } = options;
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRestoringRef = useRef(false);
   const lastSavedRef = useRef<string>('');
 
