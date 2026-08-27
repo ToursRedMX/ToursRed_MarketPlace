@@ -17,9 +17,12 @@ permissions:
 env:
   # Linea base sobre main. Actualizar al bajarla.
   # 26-ago-2026: 501/32 al medir -> 461/0 tras cerrar el paso 2.
+  # 27-ago-2026: medido 460/0 sobre main. La base decia 461, uno de mas, asi
+  # que un error nuevo podia colarse sin disparar el aviso (dispara con >).
+  # 460 vale con TS 5.9.3 y con 6.0.3: el bump de la pieza I.3 no mueve el total.
   # Con la base de crash en 0 este contador es un centinela real: cualquier
   # TS2304/18047/18048 nuevo se nota contra cero, no contra "ya habia 32".
-  BASELINE_TOTAL: 461
+  BASELINE_TOTAL: 460
   BASELINE_CRASH: 0
 
 jobs:
