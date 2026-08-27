@@ -29,7 +29,7 @@ const AgencyPendingApproval: React.FC = () => {
       <main className="flex-1 flex items-center justify-center px-4 py-16">
         <div className="max-w-lg w-full">
           {/* Status card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
             {/* Top accent */}
             <div className="h-1.5 bg-gradient-to-r from-amber-400 to-amber-500" />
 

@@ -128,7 +128,7 @@ export default function ReviewForm({
               onClick={() => setRating(star)}
               onMouseEnter={() => setHoveredRating(star)}
               onMouseLeave={() => setHoveredRating(0)}
-              className="focus:outline-none transition-transform hover:scale-110"
+              className="focus:outline-hidden transition-transform hover:scale-110"
             >
               <Star
                 className={`w-8 h-8 ${

@@ -42,7 +42,7 @@ const ReviewItem: React.FC<{ review: Review }> = ({ review }) => {
         </div>
       )}
       
-      <div className="mt-3 flex space-x-4">
+      <div className="mt-3 flex gap-x-4">
         <button className="flex items-center text-sm text-gray-500 hover:text-gray-700">
           <ThumbsUp className="h-4 w-4 mr-1" />
           <span>Útil</span>

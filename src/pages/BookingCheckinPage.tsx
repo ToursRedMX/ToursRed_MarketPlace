@@ -481,7 +481,7 @@ export default function BookingCheckinPage() {
             )}
 
             {/* Tour Info */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-5">
+            <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden mb-5">
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
                 <h2 className="text-white font-semibold text-lg">{details.booking.tour.name}</h2>
                 <div className="flex items-center gap-1 text-blue-100 text-sm mt-1">
@@ -532,7 +532,7 @@ export default function BookingCheckinPage() {
             </div>
 
             {/* Viajero Principal */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-5">
+            <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5 mb-5">
               <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                 <Users className="w-4 h-4 text-blue-600" />
                 Viajero Principal
@@ -546,12 +546,12 @@ export default function BookingCheckinPage() {
 
             {/* Lista de viajeros */}
             {details.travelers.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-5">
+              <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5 mb-5">
                 <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                   <Users className="w-4 h-4 text-blue-600" />
                   Lista de Viajeros ({details.travelers.length})
                 </h3>
-                <div className="space-y-2">
+                <div className="flex flex-col gap-y-2">
                   {details.travelers.map((t) => (
                     <div key={t.id} className={`flex items-center justify-between p-3 rounded-lg ${t.is_no_show ? 'bg-red-50 border border-red-100' : 'bg-gray-50'}`}>
                       <div>
@@ -569,7 +569,7 @@ export default function BookingCheckinPage() {
 
             {/* Asientos */}
             {details.booking.selected_seats && details.booking.selected_seats.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm border border-blue-100 p-5 mb-5">
+              <div className="bg-white rounded-2xl shadow-xs border border-blue-100 p-5 mb-5">
                 <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                   <Bus className="w-4 h-4 text-blue-600" />
                   Asientos Asignados
@@ -577,7 +577,7 @@ export default function BookingCheckinPage() {
                 <p className="text-xs text-gray-500 mb-3">Verifica que los viajeros ocupen los siguientes lugares en el vehículo.</p>
                 <div className="flex flex-wrap gap-2">
                   {[...details.booking.selected_seats].sort((a, b) => a - b).map((seat) => (
-                    <div key={seat} className="w-11 h-11 bg-blue-600 text-white font-bold text-base rounded-xl flex items-center justify-center shadow-sm">
+                    <div key={seat} className="w-11 h-11 bg-blue-600 text-white font-bold text-base rounded-xl flex items-center justify-center shadow-xs">
                       {seat}
                     </div>
                   ))}
@@ -587,7 +587,7 @@ export default function BookingCheckinPage() {
 
             {/* Confirmar check-in */}
             {details.can_checkin && !confirmed && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-5">
+              <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5 mb-5">
                 <h3 className="font-semibold text-gray-800 mb-1">Confirmar Asistencia</h3>
                 <p className="text-gray-500 text-sm mb-4">Selecciona el tipo de check-in para esta reserva.</p>
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -615,7 +615,7 @@ export default function BookingCheckinPage() {
 
             {/* Cobro con ToursRed Cash */}
             {canUseWalletCharge && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-5">
+              <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden mb-5">
                 <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-5 py-4 flex items-center gap-3">
                   <Wallet className="w-5 h-5 text-white" />
                   <div>
@@ -757,7 +757,7 @@ export default function BookingCheckinPage() {
                   {wallet.step === 'otp' && (
                     <div className="space-y-4">
                       {/* Resumen del cobro */}
-                      <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+                      <div className="bg-gray-50 rounded-xl p-4 flex flex-col gap-y-2 text-sm">
                         <div className="flex justify-between text-gray-700">
                           <span>Monto del tour</span>
                           <span className="font-medium">{formatCurrency(walletAmountNum)}</span>
@@ -851,7 +851,7 @@ export default function BookingCheckinPage() {
                       <p className="text-gray-500 text-sm mb-4">
                         Se descontaron <strong>{formatCurrency(wallet.totalToDeduct)}</strong> del monedero del viajero.
                       </p>
-                      <div className="bg-gray-50 rounded-xl p-4 text-sm text-left space-y-2 mb-4">
+                      <div className="bg-gray-50 rounded-xl p-4 text-sm text-left flex flex-col gap-y-2 mb-4">
                         <div className="flex justify-between text-gray-700">
                           <span>Cobrado con ToursRed Cash</span>
                           <span className="font-medium">{formatCurrency(walletAmountNum)}</span>
@@ -914,7 +914,7 @@ export default function BookingCheckinPage() {
               <h3 className="text-lg font-bold text-gray-900">Check-in Parcial</h3>
               <p className="text-gray-500 text-sm mt-1">Selecciona los viajeros que <strong>NO</strong> se presentaron.</p>
             </div>
-            <div className="p-6 space-y-2">
+            <div className="p-6 flex flex-col gap-y-2">
               {details.travelers.map((t) => (
                 <label key={t.id} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-colors ${selectedNoShow.has(t.id) ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-transparent hover:border-gray-200'}`}>
                   <input

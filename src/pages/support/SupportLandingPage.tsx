@@ -82,7 +82,7 @@ const SupportLandingPage: React.FC = () => {
             <button
               key={opt.title}
               onClick={opt.action}
-              className={`text-left rounded-2xl border-2 bg-gradient-to-br ${opt.bgGradient} ${opt.borderColor} p-6 shadow-sm hover:shadow-md transition-all duration-200 group`}
+              className={`text-left rounded-2xl border-2 bg-gradient-to-br ${opt.bgGradient} ${opt.borderColor} p-6 shadow-xs hover:shadow-md transition-all duration-200 group`}
             >
               <div className="mb-4">{opt.icon}</div>
               <h2 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-primary-700 transition-colors">
@@ -106,7 +106,7 @@ const SupportLandingPage: React.FC = () => {
             <Shield className="h-6 w-6 text-primary-500 flex-shrink-0 mt-0.5" />
             <div>
               <h3 className="font-semibold text-gray-800 mb-1">Como funciona</h3>
-              <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+              <ul className="text-sm text-gray-600 flex flex-col gap-y-1 list-disc list-inside">
                 <li>Llena el formulario con una descripcion clara de tu problema.</li>
                 <li>Recibes un folio de seguimiento por correo electronico.</li>
                 <li>Un agente de soporte atendara tu caso segun la prioridad.</li>

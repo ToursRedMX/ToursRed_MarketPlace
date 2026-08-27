@@ -484,15 +484,15 @@ const TravelerDashboard: React.FC = () => {
             </Link>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-4">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
+            <div className="bg-white/10 backdrop-blur-xs rounded-lg p-3">
               <p className="text-sm text-blue-100 mb-1">Sin cargo por servicio</p>
               <p className="font-semibold">Hasta $500/mes</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
+            <div className="bg-white/10 backdrop-blur-xs rounded-lg p-3">
               <p className="text-sm text-blue-100 mb-1">Soporte</p>
               <p className="font-semibold">Prioritario</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
+            <div className="bg-white/10 backdrop-blur-xs rounded-lg p-3">
               <p className="text-sm text-blue-100 mb-1">Ofertas</p>
               <p className="font-semibold">Exclusivas</p>
             </div>
@@ -504,7 +504,7 @@ const TravelerDashboard: React.FC = () => {
       <div className="mb-8 bg-gradient-to-br from-accent-500 via-accent-600 to-orange-600 rounded-xl shadow-lg p-6 text-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="bg-white/20 backdrop-blur-sm rounded-full p-3">
+            <div className="bg-white/20 backdrop-blur-xs rounded-full p-3">
               <Wallet className="h-8 w-8" />
             </div>
             <div>
@@ -527,7 +527,7 @@ const TravelerDashboard: React.FC = () => {
             Ver Movimientos
           </Link>
         </div>
-        <div className="mt-3 bg-white/10 backdrop-blur-sm rounded-lg p-3 text-xs text-accent-100">
+        <div className="mt-3 bg-white/10 backdrop-blur-xs rounded-lg p-3 text-xs text-accent-100">
           <p>Usa tu saldo ToursRed Cash para pagar tus próximas reservas o recibe reembolsos y bonificaciones directamente aquí.</p>
         </div>
       </div>
@@ -541,7 +541,7 @@ const TravelerDashboard: React.FC = () => {
         }`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="bg-white/20 backdrop-blur-sm rounded-full p-3">
+              <div className="bg-white/20 backdrop-blur-xs rounded-full p-3">
                 <Award className="h-8 w-8" />
               </div>
               <div>
@@ -588,7 +588,7 @@ const TravelerDashboard: React.FC = () => {
               Ver Historial de Puntos
             </Link>
           </div>
-          <div className="mt-3 bg-white/10 backdrop-blur-sm rounded-lg p-3 text-xs text-amber-100">
+          <div className="mt-3 bg-white/10 backdrop-blur-xs rounded-lg p-3 text-xs text-amber-100">
             <p>Gana 1 punto por cada peso gastado. Usa hasta el 50% del total de tu reserva con puntos. Tus puntos nunca expiran.</p>
           </div>
         </div>
@@ -598,7 +598,7 @@ const TravelerDashboard: React.FC = () => {
         <div className="mb-8 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="bg-white/20 backdrop-blur-sm rounded-full p-3">
+              <div className="bg-white/20 backdrop-blur-xs rounded-full p-3">
                 <Gift className="h-8 w-8" />
               </div>
               <div>
@@ -616,7 +616,7 @@ const TravelerDashboard: React.FC = () => {
           </div>
 
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+            <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4">
               <p className="text-blue-100 text-sm mb-2">Tu código de referido</p>
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold font-mono tracking-wider flex-1">{referralCode}</span>
@@ -634,7 +634,7 @@ const TravelerDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+            <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4">
               <p className="text-blue-100 text-sm mb-2">Tu progreso</p>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-2xl font-bold">{referralStats.completed}/{referralStats.max}</span>
@@ -800,7 +800,7 @@ const TravelerDashboard: React.FC = () => {
       </div>
 
       {showCancelModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Cancelar Membresía</h3>
             <p className="text-gray-700 mb-6">
@@ -827,7 +827,7 @@ const TravelerDashboard: React.FC = () => {
       )}
 
       {showUpgradeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <Crown className="h-8 w-8 text-yellow-500" />
@@ -835,7 +835,7 @@ const TravelerDashboard: React.FC = () => {
             </div>
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
               <p className="font-semibold text-yellow-900 mb-2">Ahorra $98 MXN al año</p>
-              <ul className="text-sm text-yellow-800 space-y-1">
+              <ul className="text-sm text-yellow-800 flex flex-col gap-y-1">
                 <li>✓ Paga $490 en lugar de $588</li>
                 <li>✓ Equivale a solo $40.83/mes</li>
                 <li>✓ Todos los beneficios ToursRed+</li>

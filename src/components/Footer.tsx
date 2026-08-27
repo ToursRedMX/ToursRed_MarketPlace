@@ -62,7 +62,7 @@ const Footer: React.FC = () => {
             <p className="text-gray-400 text-sm mb-4">
               Descubre destinos extraordinarios y experiencias inolvidables con nuestros socios de viaje de confianza.
             </p>
-            <div className="flex space-x-3">
+            <div className="flex gap-x-3">
               <a href="https://www.facebook.com/ToursRedMX" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">
                 <SiFacebook className="h-5 w-5" size={20} />
               </a>
@@ -86,7 +86,7 @@ const Footer: React.FC = () => {
           {/* Col 2: Enlaces Rápidos */}
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-wide mb-4 text-white">Enlaces Rápidos</h3>
-            <ul className="space-y-2">
+            <ul className="flex flex-col gap-y-2">
               <li><Link to="/" className="text-gray-400 hover:text-white transition-colors text-sm">Inicio</Link></li>
               <li><Link to="/tours" className="text-gray-400 hover:text-white transition-colors text-sm">Tours</Link></li>
               <li><Link to="/about" className="text-gray-400 hover:text-white transition-colors text-sm">Nosotros</Link></li>
@@ -97,7 +97,7 @@ const Footer: React.FC = () => {
           {/* Col 3: Para Viajeros */}
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-wide mb-4 text-white">Para Viajeros</h3>
-            <ul className="space-y-2">
+            <ul className="flex flex-col gap-y-2">
               <li><Link to="/login" className="text-gray-400 hover:text-white transition-colors text-sm">Iniciar Sesión</Link></li>
               <li><Link to="/signup" className="text-gray-400 hover:text-white transition-colors text-sm">Registrarse</Link></li>
               <li><Link to="/gift-cards" className="text-gray-400 hover:text-white transition-colors text-sm">Tarjetas de Regalo</Link></li>
@@ -109,7 +109,7 @@ const Footer: React.FC = () => {
           {/* Col 4: Aviso Legal */}
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-wide mb-4 text-white">Aviso Legal</h3>
-            <ul className="space-y-2">
+            <ul className="flex flex-col gap-y-2">
               <li><Link to="/aviso-privacidad" className="text-gray-400 hover:text-white transition-colors text-sm">Aviso de Privacidad</Link></li>
               <li><Link to="/terminos-servicio" className="text-gray-400 hover:text-white transition-colors text-sm">Términos de Servicio</Link></li>
               <li><Link to="/politica-cookies" className="text-gray-400 hover:text-white transition-colors text-sm">Política de Cookies</Link></li>
@@ -128,7 +128,7 @@ const Footer: React.FC = () => {
           {/* Col 5: Contáctanos */}
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-wide mb-4 text-white">Contáctanos</h3>
-            <ul className="space-y-2 mb-4">
+            <ul className="flex flex-col gap-y-2 mb-4">
               <li className="flex items-center">
                 <Mail className="h-4 w-4 text-gray-400 mr-2 shrink-0" />
                 <a href="mailto:contacto@toursred.com" className="text-gray-400 hover:text-white transition-colors text-sm">

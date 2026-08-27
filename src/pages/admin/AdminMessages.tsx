@@ -201,7 +201,7 @@ const AdminMessages: React.FC = () => {
         </div>
 
         {/* Filters */}
-        <div className="p-4 border-b border-gray-200 space-y-3">
+        <div className="p-4 border-b border-gray-200 flex flex-col gap-y-3">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -210,17 +210,17 @@ const AdminMessages: React.FC = () => {
               placeholder="Buscar conversaciones..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
             />
           </div>
 
           {/* Type Filter */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-x-2">
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value as any)}
-              className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="all">Todos los tipos</option>
               <option value="booking">Reservas</option>
@@ -230,11 +230,11 @@ const AdminMessages: React.FC = () => {
           </div>
 
           {/* Status Filter */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-x-2">
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="all">Todos los estados</option>
               <option value="active">Activas</option>
@@ -303,7 +303,7 @@ const AdminMessages: React.FC = () => {
                   )}
 
                   <div className="flex items-center justify-between text-xs text-gray-500">
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center gap-x-3">
                       <span className="flex items-center">
                         <MessageCircle className="h-3 w-3 mr-1" />
                         {conversation.message_count}
@@ -316,7 +316,7 @@ const AdminMessages: React.FC = () => {
                     <span>{formatDate(conversation.last_message_at)}</span>
                   </div>
 
-                  <div className="flex space-x-2 mt-2">
+                  <div className="flex gap-x-2 mt-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

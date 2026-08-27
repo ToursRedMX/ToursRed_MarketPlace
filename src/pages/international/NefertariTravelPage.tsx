@@ -136,7 +136,7 @@ const NefertariTravelPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="container-custom py-6">
         <nav className="flex mb-6" aria-label="Breadcrumb">
-          <ol className="inline-flex items-center space-x-1 md:space-x-3">
+          <ol className="inline-flex items-center gap-x-1 md:gap-x-3">
             <li className="inline-flex items-center">
               <Link to="/" className="text-gray-500 hover:text-primary-600">
                 Inicio
@@ -169,8 +169,8 @@ const NefertariTravelPage: React.FC = () => {
             Explora destinos fascinantes alrededor del mundo con experiencias unicas y servicio personalizado
           </p>
 
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6 border border-white/20">
-            <div className="flex items-start space-x-3">
+          <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4 mb-6 border border-white/20">
+            <div className="flex items-start gap-x-3">
               <Info className="h-6 w-6 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-semibold mb-2">Como funciona?</p>
@@ -182,7 +182,7 @@ const NefertariTravelPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-amber-400 text-gray-900 rounded-lg p-4 flex items-start space-x-3">
+          <div className="bg-amber-400 text-gray-900 rounded-lg p-4 flex items-start gap-x-3">
             <AlertCircle className="h-6 w-6 flex-shrink-0 mt-0.5" />
             <p className="text-sm font-medium">
               Este es un catalogo informativo. Para reservar, primero debes solicitar una cotizacion y nuestro equipo te guiara en el proceso de compra.
@@ -193,7 +193,7 @@ const NefertariTravelPage: React.FC = () => {
         <div className="flex justify-center my-6">
           <button
             onClick={handleBackToCatalog}
-            className="inline-flex items-center space-x-2 px-6 py-3 border-2 border-gray-300 rounded-full text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all font-medium shadow-sm"
+            className="inline-flex items-center gap-x-2 px-6 py-3 border-2 border-gray-300 rounded-full text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all font-medium shadow-xs"
           >
             <RotateCcw className="h-4 w-4" />
             <span>Volver al Catalogo</span>
@@ -240,9 +240,9 @@ const NefertariTravelPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-gray-100 border border-gray-300 rounded-lg shadow-sm p-6 mt-8">
+        <div className="bg-gray-100 border border-gray-300 rounded-lg shadow-xs p-6 mt-8">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Aviso Legal</h3>
-          <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+          <div className="flex flex-col gap-y-3 text-sm text-gray-700 leading-relaxed">
             <p>
               Los paquetes y servicios turisticos internacionales ofrecidos en esta seccion son prestados, operados y administrados directamente por <span className="font-semibold">Nefertari Travel</span>, quien actua como proveedor final del servicio.
             </p>
@@ -257,7 +257,7 @@ const NefertariTravelPage: React.FC = () => {
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="fixed bottom-6 right-6 bg-amber-600 hover:bg-amber-700 text-white px-6 py-4 rounded-full shadow-lg flex items-center space-x-2 transition-transform hover:scale-105 z-40"
+          className="fixed bottom-6 right-6 bg-amber-600 hover:bg-amber-700 text-white px-6 py-4 rounded-full shadow-lg flex items-center gap-x-2 transition-transform hover:scale-105 z-40"
         >
           <MessageSquare className="h-5 w-5" />
           <span className="font-semibold">Solicitar Cotizacion</span>
@@ -265,7 +265,7 @@ const NefertariTravelPage: React.FC = () => {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">Solicitar Cotizacion</h2>
@@ -402,7 +402,7 @@ const NefertariTravelPage: React.FC = () => {
                 />
               </div>
 
-              <div className="mt-6 flex justify-end space-x-4">
+              <div className="mt-6 flex justify-end gap-x-4">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
@@ -413,7 +413,7 @@ const NefertariTravelPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  className="px-6 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-x-2"
                   disabled={isLoading}
                 >
                   {isLoading ? (

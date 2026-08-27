@@ -204,7 +204,7 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
           {/* Info box */}
           <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 flex gap-3">
             <Info className="w-4 h-4 text-sky-600 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-sky-800 space-y-1">
+            <div className="text-xs text-sky-800 flex flex-col gap-y-1">
               <p className="font-semibold">¿Como llenar la apertura?</p>
               <p>Registra los saldos con los que inicia el ejercicio. Las cuentas de <strong>Activo (deudoras)</strong> van en <strong>Cargo</strong>. Las cuentas de <strong>Pasivo y Capital (acreedoras)</strong> van en <strong>Abono</strong>. La ecuacion contable debe cumplirse: <strong>Activo = Pasivo + Capital</strong>.</p>
               <p>Para registrar la <strong>Utilidad o Perdida del ejercicio anterior</strong>, usa la cuenta <strong>303 — Utilidad / Perdida del ejercicio</strong>.</p>
@@ -227,7 +227,7 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
               />
             </div>
             <div>
@@ -236,7 +236,7 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
                 type="text"
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
               />
             </div>
           </div>
@@ -266,7 +266,7 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
               <div className="col-span-5 sm:col-span-2 text-xs font-semibold text-gray-400 uppercase text-right">Abono</div>
             </div>
 
-            <div className="space-y-2">
+            <div className="flex flex-col gap-y-2">
               {lines.map((l) => {
                 const acc = accounts.find(a => a.code === l.account_code);
                 const isDeudora = acc?.nature === 'deudora';
@@ -281,7 +281,7 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
                       <select
                         value={l.account_code}
                         onChange={e => handleAccountChange(l.id, e.target.value)}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-sky-400 bg-white"
+                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 bg-white"
                       >
                         <option value="">-- Cuenta --</option>
                         <optgroup label="ACTIVO (Cargo)">
@@ -307,7 +307,7 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
                         value={l.description}
                         onChange={e => updateLine(l.id, 'description', e.target.value)}
                         placeholder="Descripcion de la partida"
-                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-sky-400 bg-white"
+                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 bg-white"
                       />
                     </div>
                     <div className="col-span-5 sm:col-span-2">
@@ -319,7 +319,7 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
                         onChange={e => updateLine(l.id, 'debit', e.target.value)}
                         placeholder="Cargo"
                         disabled={!!l.credit && parseFloat(l.credit) > 0}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-sky-400 bg-white text-right disabled:bg-gray-50 disabled:text-gray-400"
+                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 bg-white text-right disabled:bg-gray-50 disabled:text-gray-400"
                       />
                     </div>
                     <div className="col-span-5 sm:col-span-2">
@@ -331,7 +331,7 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
                         onChange={e => updateLine(l.id, 'credit', e.target.value)}
                         placeholder="Abono"
                         disabled={!!l.debit && parseFloat(l.debit) > 0}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-sky-400 bg-white text-right disabled:bg-gray-50 disabled:text-gray-400"
+                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 bg-white text-right disabled:bg-gray-50 disabled:text-gray-400"
                       />
                     </div>
                     <div className="col-span-2 sm:col-span-0 flex justify-end">

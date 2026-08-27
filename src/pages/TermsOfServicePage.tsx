@@ -59,7 +59,7 @@ export default function TermsOfServicePage() {
             <div className="w-10 h-10 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : terms ? (
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl shadow-xs overflow-hidden">
             <div className="bg-gray-50 border-b border-gray-200 px-8 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <Scale className="h-4 w-4 text-green-600" />
@@ -73,14 +73,14 @@ export default function TermsOfServicePage() {
               className="p-8 prose prose-sm sm:prose max-w-none text-gray-700"
               dangerouslySetInnerHTML={{ __html: terms.content }}
             />
-            <div className="border-t px-8 py-6">
+            <div className="border-t border-gray-200 px-8 py-6">
               <p className="text-sm text-gray-500 text-center">
                 Al utilizar ToursRed, usted reconoce que ha leído, entendido y aceptado estos Términos y Condiciones de Servicio (Versión {terms.version_number}).
               </p>
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm p-8">
+          <div className="bg-white rounded-xl shadow-xs p-8">
             <p className="text-gray-500 text-center">No hay términos y condiciones publicados actualmente.</p>
           </div>
         )}

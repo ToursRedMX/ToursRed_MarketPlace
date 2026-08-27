@@ -168,7 +168,7 @@ const TravelerSupportTickets: React.FC = () => {
             {filtered.map(ticket => (
               <div
                 key={ticket.id}
-                className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-sm transition-shadow cursor-pointer"
+                className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-xs transition-shadow cursor-pointer"
                 onClick={() => openTicket(ticket)}
               >
                 <div className="flex items-start justify-between gap-3">

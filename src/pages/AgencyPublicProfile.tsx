@@ -301,7 +301,7 @@ const AgencyPublicProfile: React.FC = () => {
         {/* Tabs */}
         <div className="mb-6">
           <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
+            <nav className="-mb-px flex gap-x-8">
               <button
                 onClick={() => setActiveTab('tours')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${

@@ -235,7 +235,7 @@ const BookingFlowStep1: React.FC = () => {
   );
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
       <div className="p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">{tour.name}</h1>
         <p className="text-sm text-gray-500 mb-6">Paso 1 de 4 — Datos del tour</p>
@@ -301,7 +301,7 @@ const BookingFlowStep1: React.FC = () => {
             />
             {isTransferCustomTime ? (
               selectedDate && (
-                <div className="space-y-2">
+                <div className="flex flex-col gap-y-2">
                   <label className="block text-xs font-semibold text-gray-600">
                     A que hora necesitas el traslado? <span className="text-red-500">*</span>
                   </label>
@@ -398,14 +398,14 @@ const BookingFlowStep1: React.FC = () => {
                       : getSelectorLabel()}
                   </span>
                 </div>
-                <div className="p-4 space-y-4">
+                <div className="p-4 flex flex-col gap-y-4">
                     {tour.admite_adultos !== false && (
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-medium text-gray-900">Adultos</div>
                           <div className="text-xs text-gray-500">13-59 anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'adulto'))}/persona</div>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center gap-x-3">
                           <button type="button" onClick={() => handleCountChange('adultos', -1)} disabled={travelerCounts.adultos === 0} className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-primary-600 disabled:opacity-30 disabled:cursor-not-allowed">
                             <Minus className="w-4 h-4" />
                           </button>
@@ -422,7 +422,7 @@ const BookingFlowStep1: React.FC = () => {
                           <div className="text-sm font-medium text-gray-900">Ninos</div>
                           <div className="text-xs text-gray-500">3-12 anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'nino'))}/persona</div>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center gap-x-3">
                           <button type="button" onClick={() => handleCountChange('ninos', -1)} disabled={travelerCounts.ninos === 0} className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-primary-600 disabled:opacity-30 disabled:cursor-not-allowed">
                             <Minus className="w-4 h-4" />
                           </button>
@@ -439,7 +439,7 @@ const BookingFlowStep1: React.FC = () => {
                           <div className="text-sm font-medium text-gray-900">Infantes</div>
                           <div className="text-xs text-gray-500">0-2 anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'infante'))}/persona</div>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center gap-x-3">
                           <button type="button" onClick={() => handleCountChange('infantes', -1)} disabled={travelerCounts.infantes === 0} className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-primary-600 disabled:opacity-30 disabled:cursor-not-allowed">
                             <Minus className="w-4 h-4" />
                           </button>
@@ -456,7 +456,7 @@ const BookingFlowStep1: React.FC = () => {
                           <div className="text-sm font-medium text-gray-900">Adultos Mayores</div>
                           <div className="text-xs text-gray-500">60+ anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'adulto_mayor'))}/persona</div>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center gap-x-3">
                           <button type="button" onClick={() => handleCountChange('adultos_mayores', -1)} disabled={travelerCounts.adultos_mayores === 0} className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-primary-600 disabled:opacity-30 disabled:cursor-not-allowed">
                             <Minus className="w-4 h-4" />
                           </button>
@@ -473,7 +473,7 @@ const BookingFlowStep1: React.FC = () => {
                           <div className="text-sm font-medium text-gray-900">Mascotas</div>
                           <div className="text-xs text-gray-500">{formatCurrencyMXN(getPrecioPorCategoria(tour, 'mascota'))}/mascota</div>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center gap-x-3">
                           <button type="button" onClick={() => handleCountChange('mascotas', -1)} disabled={travelerCounts.mascotas === 0} className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-primary-600 disabled:opacity-30 disabled:cursor-not-allowed">
                             <Minus className="w-4 h-4" />
                           </button>
@@ -496,7 +496,7 @@ const BookingFlowStep1: React.FC = () => {
               <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-amber-800">Este tour tiene restricciones</p>
-                <ul className="text-sm text-amber-700 mt-1 space-y-0.5">
+                <ul className="text-sm text-amber-700 mt-1 flex flex-col gap-y-0.5">
                   {tour.restriction_pregnant && <li>- No apto para personas embarazadas</li>}
                   {tour.restriction_disability && <li>- No apto para personas con discapacidad motriz</li>}
                   {tour.restriction_physical && <li>- Requiere condicion fisica adecuada</li>}

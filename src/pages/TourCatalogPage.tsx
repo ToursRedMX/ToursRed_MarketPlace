@@ -264,10 +264,10 @@ const TourCatalogPage: React.FC = () => {
       />
 
       {/* Page header */}
-      <div className="bg-white border-b border-gray-100 shadow-sm">
+      <div className="bg-white border-b border-gray-100 shadow-xs">
         <div className="container-custom py-5">
           <nav className="flex mb-3" aria-label="Breadcrumb">
-            <ol className="inline-flex items-center space-x-1 text-sm">
+            <ol className="inline-flex items-center gap-x-1 text-sm">
               <li><Link to="/" className="text-gray-400 hover:text-primary-600 transition-colors">Inicio</Link></li>
               <li><ChevronRight className="h-3.5 w-3.5 text-gray-300 mx-1" /></li>
               <li><span className="text-gray-700">Tours</span></li>
@@ -310,7 +310,7 @@ const TourCatalogPage: React.FC = () => {
 
         {/* Active filter pills */}
         {activeFilterPills.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 mb-5 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 mb-5 p-3 bg-white rounded-xl border border-gray-100 shadow-xs">
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Filtros activos:</span>
             {activeFilterPills.map((pill) => (
               <span key={pill.key} className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full border border-primary-100">
@@ -332,12 +332,12 @@ const TourCatalogPage: React.FC = () => {
               <SearchBox initialFilters={initialFilters} />
 
               {popularDestinations.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <MapPin className="w-4 h-4 text-primary-600" />
                     <h3 className="font-semibold text-gray-900 text-sm">Destinos Populares</h3>
                   </div>
-                  <div className="space-y-0.5">
+                  <div className="flex flex-col gap-y-0.5">
                     {popularDestinations.map((destination) => (
                       <a key={destination.id} href={`/tours?destination=${encodeURIComponent(destination.name)}`}
                         className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-colors group ${initialFilters.destination === destination.name ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-700 hover:bg-gray-50 hover:text-primary-600'}`}>
@@ -350,12 +350,12 @@ const TourCatalogPage: React.FC = () => {
               )}
 
               {popularDeparturePoints.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Building2 className="w-4 h-4 text-primary-600" />
                     <h3 className="font-semibold text-gray-900 text-sm">Puntos de Partida</h3>
                   </div>
-                  <div className="space-y-0.5">
+                  <div className="flex flex-col gap-y-0.5">
                     {popularDeparturePoints.map((point) => (
                       <a key={point.id} href={`/tours?departurePoint=${encodeURIComponent(point.name)}`}
                         className="flex items-center justify-between px-3 py-2 rounded-xl text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 transition-colors group">
@@ -379,7 +379,7 @@ const TourCatalogPage: React.FC = () => {
             <div className="flex items-center gap-3 mb-5 flex-wrap">
               <button
                 onClick={() => setDrawerOpen(true)}
-                className="lg:hidden flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:border-primary-300 transition-colors shadow-sm relative flex-shrink-0"
+                className="lg:hidden flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:border-primary-300 transition-colors shadow-xs relative flex-shrink-0"
               >
                 <SlidersHorizontal className="w-4 h-4" />
                 Filtros
@@ -404,7 +404,7 @@ const TourCatalogPage: React.FC = () => {
                 )}
               </p>
 
-              <select className="text-xs font-medium text-gray-700 border border-gray-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent transition shadow-sm flex-shrink-0">
+              <select className="text-xs font-medium text-gray-700 border border-gray-200 rounded-xl px-3 py-2.5 bg-white focus:outline-hidden focus:ring-2 focus:ring-primary-400 focus:border-transparent transition shadow-xs flex-shrink-0">
                 <option value="recommended">Recomendados</option>
                 <option value="price-low">Precio: Menor a Mayor</option>
                 <option value="price-high">Precio: Mayor a Menor</option>
@@ -472,7 +472,7 @@ const TourCatalogPage: React.FC = () => {
             {isLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="bg-white rounded-2xl overflow-hidden shadow-sm animate-pulse">
+                  <div key={i} className="bg-white rounded-2xl overflow-hidden shadow-xs animate-pulse">
                     <div className="aspect-[4/3] bg-gray-200" />
                     <div className="p-4 space-y-3">
                       <div className="h-4 bg-gray-200 rounded w-3/4" />
@@ -581,7 +581,7 @@ const TourCatalogPage: React.FC = () => {
       {/* Mobile filter drawer */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setDrawerOpen(false)} />
           <div className="absolute inset-x-0 bottom-0 max-h-[92vh] bg-slate-50 rounded-t-3xl shadow-2xl flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-gray-100 flex-shrink-0 rounded-t-3xl">
               <div className="flex items-center gap-2">

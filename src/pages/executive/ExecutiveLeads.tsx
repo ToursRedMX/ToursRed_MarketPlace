@@ -567,7 +567,7 @@ export default function ExecutiveLeads() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Buscar por nombre, email o contacto..."
-          className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -713,7 +713,7 @@ export default function ExecutiveLeads() {
                   <select
                     value={form.status}
                     onChange={e => setForm(f => ({ ...f, status: e.target.value as LeadStatus }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   >
                     {Object.entries(STATUS_CONFIG).filter(([key]) => key !== 'aprobado').map(([key, cfg]) => (
                       <option key={key} value={key}>{cfg.label}</option>
@@ -743,7 +743,7 @@ export default function ExecutiveLeads() {
                     <input
                       value={form.agency_name}
                       onChange={e => setForm(f => ({ ...f, agency_name: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                       placeholder="Ej. Viajes Sol y Mar"
                     />
                   </div>
@@ -757,7 +757,7 @@ export default function ExecutiveLeads() {
                           setForm(f => ({ ...f, rfc: val }));
                           handleFieldChange('rfc', val);
                         }}
-                        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldStatus.rfc === 'error' ? 'border-red-400 focus:ring-red-500' : fieldStatus.rfc === 'ok' ? 'border-green-400 focus:ring-green-500' : 'border-gray-300 focus:ring-blue-500'} ${fieldStatus.rfc === 'ok' ? 'pr-9' : ''}`}
+                        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 ${fieldStatus.rfc === 'error' ? 'border-red-400 focus:ring-red-500' : fieldStatus.rfc === 'ok' ? 'border-green-400 focus:ring-green-500' : 'border-gray-300 focus:ring-blue-500'} ${fieldStatus.rfc === 'ok' ? 'pr-9' : ''}`}
                         placeholder="XAXX010101000"
                       />
                       {fieldStatus.rfc === 'checking' && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 animate-spin" />}
@@ -770,7 +770,7 @@ export default function ExecutiveLeads() {
                     <input
                       value={form.razon_social || ''}
                       onChange={e => setForm(f => ({ ...f, razon_social: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -778,7 +778,7 @@ export default function ExecutiveLeads() {
                     <input
                       value={form.website || ''}
                       onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -786,7 +786,7 @@ export default function ExecutiveLeads() {
                     <input
                       value={form.rnt || ''}
                       onChange={e => setForm(f => ({ ...f, rnt: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -801,7 +801,7 @@ export default function ExecutiveLeads() {
                     <input
                       value={form.contact_first_name}
                       onChange={e => setForm(f => ({ ...f, contact_first_name: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -809,7 +809,7 @@ export default function ExecutiveLeads() {
                     <input
                       value={form.contact_last_name}
                       onChange={e => setForm(f => ({ ...f, contact_last_name: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
@@ -823,7 +823,7 @@ export default function ExecutiveLeads() {
                           handleFieldChange('email', e.target.value);
                         }}
                         disabled={!!editingLead?.converted_agency_id}
-                        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldStatus.email === 'error' ? 'border-red-400 focus:ring-red-500' : fieldStatus.email === 'ok' ? 'border-green-400 focus:ring-green-500' : 'border-gray-300 focus:ring-blue-500'} ${fieldStatus.email === 'ok' ? 'pr-9' : ''} ${editingLead?.converted_agency_id ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 ${fieldStatus.email === 'error' ? 'border-red-400 focus:ring-red-500' : fieldStatus.email === 'ok' ? 'border-green-400 focus:ring-green-500' : 'border-gray-300 focus:ring-blue-500'} ${fieldStatus.email === 'ok' ? 'pr-9' : ''} ${editingLead?.converted_agency_id ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                       />
                       {editingLead?.converted_agency_id && (
                         <p className="mt-1 text-xs text-amber-600 flex items-center gap-1">
@@ -841,7 +841,7 @@ export default function ExecutiveLeads() {
                     <input
                       value={form.contact_phone || ''}
                       onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -854,32 +854,32 @@ export default function ExecutiveLeads() {
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Calle</label>
                     <input value={form.street || ''} onChange={e => setForm(f => ({ ...f, street: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Número ext.</label>
                     <input value={form.exterior_number || ''} onChange={e => setForm(f => ({ ...f, exterior_number: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Colonia</label>
                     <input value={form.colony || ''} onChange={e => setForm(f => ({ ...f, colony: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Ciudad</label>
                     <input value={form.city || ''} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Estado</label>
                     <input value={form.state || ''} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">CP</label>
                     <input value={form.postal_code || ''} onChange={e => setForm(f => ({ ...f, postal_code: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                   </div>
                 </div>
               </div>
@@ -892,7 +892,7 @@ export default function ExecutiveLeads() {
                     type="date"
                     value={form.next_contact_date || ''}
                     onChange={e => setForm(f => ({ ...f, next_contact_date: e.target.value || null }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
@@ -900,7 +900,7 @@ export default function ExecutiveLeads() {
                   <input
                     value={form.source || ''}
                     onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     placeholder="Ej. Referido, Expo, LinkedIn"
                   />
                 </div>
@@ -910,7 +910,7 @@ export default function ExecutiveLeads() {
                     rows={3}
                     value={form.notes || ''}
                     onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
                   />
                 </div>
               </div>
@@ -954,7 +954,7 @@ export default function ExecutiveLeads() {
                   <select
                     value={convertPersonaType}
                     onChange={e => setConvertPersonaType(e.target.value as 'persona_fisica' | 'persona_moral')}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="persona_fisica">Persona Física</option>
                     <option value="persona_moral">Persona Moral</option>
@@ -969,7 +969,7 @@ export default function ExecutiveLeads() {
                     type="text"
                     value={convertRepresentante}
                     onChange={e => setConvertRepresentante(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     placeholder={convertPersonaType === 'persona_moral' ? 'Nombre completo del representante legal' : 'Nombre completo del titular de la agencia'}
                   />
                   <p className="text-[11px] text-gray-400 mt-1">Requerido para generar el contrato de colaboración</p>
@@ -984,7 +984,7 @@ export default function ExecutiveLeads() {
                         type="text"
                         value={convertRegimenFiscal}
                         onChange={e => setConvertRegimenFiscal(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                         placeholder="Ej: 601"
                       />
                     </div>
@@ -994,7 +994,7 @@ export default function ExecutiveLeads() {
                         type="text"
                         value={convertBanco}
                         onChange={e => setConvertBanco(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                         placeholder="Nombre del banco"
                       />
                     </div>
@@ -1004,7 +1004,7 @@ export default function ExecutiveLeads() {
                         type="text"
                         value={convertCuentaClabe}
                         onChange={e => setConvertCuentaClabe(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                         placeholder="18 dígitos"
                         maxLength={18}
                       />
@@ -1015,7 +1015,7 @@ export default function ExecutiveLeads() {
                         type="text"
                         value={convertTitularCuenta}
                         onChange={e => setConvertTitularCuenta(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                         placeholder="Nombre del titular"
                       />
                     </div>
@@ -1066,7 +1066,7 @@ export default function ExecutiveLeads() {
                 value={newNote}
                 onChange={e => setNewNote(e.target.value)}
                 placeholder="Escribe una nota de seguimiento..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
             <div className="px-6 pb-6 flex justify-end gap-3">
@@ -1108,7 +1108,7 @@ export default function ExecutiveLeads() {
                 type="email"
                 value={fixEmailValue}
                 onChange={e => setFixEmailValue(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                 placeholder="nuevo@correo.com"
               />
             </div>
@@ -1141,7 +1141,7 @@ export default function ExecutiveLeads() {
       {/* Resend Credentials Modal */}
       {resendLead && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 flex flex-col gap-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Send className="h-5 w-5 text-green-600" /> Reenviar credenciales

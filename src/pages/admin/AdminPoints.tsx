@@ -354,7 +354,7 @@ const AdminPoints: React.FC = () => {
             <h4 className="text-sm font-semibold text-blue-900 mb-1">
               Información del Sistema
             </h4>
-            <ul className="text-sm text-blue-800 space-y-1">
+            <ul className="text-sm text-blue-800 flex flex-col gap-y-1">
               <li>• Los puntos se otorgan automáticamente cuando una reserva se completa</li>
               <li>• 1 punto = $0.01 MXN (100 puntos = $1 MXN)</li>
               <li>• Los puntos NUNCA expiran (beneficio ToursRed+)</li>
@@ -366,7 +366,7 @@ const AdminPoints: React.FC = () => {
       </div>
 
       {showAdjustModal && selectedWallet && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-900">

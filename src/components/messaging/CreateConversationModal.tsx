@@ -228,8 +228,8 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+    <div className="fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border border-gray-200 w-full max-w-2xl shadow-lg rounded-md bg-white">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium text-gray-900 flex items-center">
             <MessageCircle className="h-5 w-5 mr-2" />
@@ -337,7 +337,7 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
                 placeholder="Buscar usuarios..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
@@ -389,7 +389,7 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end space-x-4 mt-6">
+        <div className="flex justify-end gap-x-4 mt-6">
           <button
             onClick={onClose}
             className="btn btn-outline"

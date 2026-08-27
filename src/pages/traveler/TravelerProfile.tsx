@@ -733,7 +733,7 @@ const TravelerProfile: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="space-y-3 border-t pt-3">
+                  <div className="space-y-3 border-t border-gray-200 pt-3">
                     <h4 className="text-sm font-semibold text-gray-900">Contacto de Emergencia</h4>
                     <p className="text-xs text-gray-500">Persona a contactar en caso de emergencia durante el viaje. Este contacto se cargará automáticamente en tus reservas. Es opcional.</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -764,7 +764,7 @@ const TravelerProfile: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-3 border-t pt-3">
+                  <div className="space-y-3 border-t border-gray-200 pt-3">
                     <h4 className="text-sm font-semibold text-gray-900">Domicilio</h4>
 
                     <div>
@@ -880,7 +880,7 @@ const TravelerProfile: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-3 border-t pt-3">
+                  <div className="space-y-3 border-t border-gray-200 pt-3">
                     <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                       <FileText className="h-4 w-4 text-primary-600" />
                       Datos Fiscales (para CFDI)
@@ -1024,7 +1024,7 @@ const TravelerProfile: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex justify-end space-x-4 pt-4">
+                  <div className="flex justify-end gap-x-4 pt-4">
                     <button
                       onClick={handleCancel}
                       className="btn btn-outline"
@@ -1203,7 +1203,7 @@ const TravelerProfile: React.FC = () => {
                         <MapPin className="h-4 w-4 text-gray-400 mr-2 mt-0.5" />
                         <div className="flex-1">
                           {profile.street || profile.city || profile.state ? (
-                            <div className="space-y-1">
+                            <div className="flex flex-col gap-y-1">
                               {profile.street && (
                                 <div>
                                   <span className="font-medium">{profile.street}</span>
@@ -1227,7 +1227,7 @@ const TravelerProfile: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="md:col-span-2 border-t pt-4">
+                    <div className="md:col-span-2 border-t border-gray-200 pt-4">
                       <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4 text-primary-600" />
                         Datos Fiscales
@@ -1331,7 +1331,7 @@ const TravelerProfile: React.FC = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
                 Estadísticas de Viaje
               </h2>
-              <div className="space-y-4">
+              <div className="flex flex-col gap-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <MapPin className="h-5 w-5 text-primary-600 mr-3" />
@@ -1365,7 +1365,7 @@ const TravelerProfile: React.FC = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
                 Información de Cuenta
               </h2>
-              <div className="space-y-3">
+              <div className="flex flex-col gap-y-3">
                 <div className="flex items-center">
                   <Mail className="h-4 w-4 text-gray-400 mr-3" />
                   <div>
@@ -1427,7 +1427,7 @@ const TravelerProfile: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
             <div>
               <h3 className="font-medium text-gray-700 mb-2">Privacidad y Seguridad</h3>
-              <ul className="space-y-1 text-gray-600">
+              <ul className="flex flex-col gap-y-1 text-gray-600">
                 <li>• Tus datos están protegidos con encriptación SSL</li>
                 <li>• Solo tú y las agencias con las que reserves pueden ver tu información</li>
                 <li>• Puedes actualizar tu información en cualquier momento</li>
@@ -1435,7 +1435,7 @@ const TravelerProfile: React.FC = () => {
             </div>
             <div>
               <h3 className="font-medium text-gray-700 mb-2">Beneficios de Completar tu Perfil</h3>
-              <ul className="space-y-1 text-gray-600">
+              <ul className="flex flex-col gap-y-1 text-gray-600">
                 <li>• Proceso de reserva más rápido</li>
                 <li>• Recomendaciones personalizadas</li>
                 <li>• Comunicación directa con agencias</li>

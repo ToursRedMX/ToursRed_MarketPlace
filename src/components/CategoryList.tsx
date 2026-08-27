@@ -32,7 +32,7 @@ const CategoryList: React.FC = () => {
         <Link
           key={category.id}
           to={`/tours?category=${category.slug}`}
-          className="flex flex-col items-center justify-center p-4 bg-blue-100 rounded-lg shadow-sm hover:shadow-md transition-shadow group"
+          className="flex flex-col items-center justify-center p-4 bg-blue-100 rounded-lg shadow-xs hover:shadow-md transition-shadow group"
         >
           <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center mb-2 text-primary-600 group-hover:bg-primary-100 transition-colors">
             {iconMap[category.slug] || <Tag className="h-6 w-6" />}

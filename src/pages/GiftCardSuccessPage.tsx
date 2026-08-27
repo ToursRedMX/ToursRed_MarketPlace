@@ -163,7 +163,7 @@ export default function GiftCardSuccessPage() {
             {/* Show gift card code if payment is confirmed */}
             {isPaymentConfirmed && giftCard ? (
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 mb-8 border-2 border-amber-200">
-                <div className="flex items-center space-x-4 mb-4">
+                <div className="flex items-center gap-x-4 mb-4">
                   <div className="flex-shrink-0">
                     <Gift className="w-12 h-12 text-amber-600" />
                   </div>
@@ -205,7 +205,7 @@ export default function GiftCardSuccessPage() {
               </div>
             ) : (
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mb-8">
-                <div className="flex items-start space-x-3">
+                <div className="flex items-start gap-x-3">
                   <AlertCircle className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" />
                   <div>
                     <h2 className="text-lg font-bold text-gray-900 mb-1">
@@ -224,7 +224,7 @@ export default function GiftCardSuccessPage() {
             {isPaymentConfirmed && giftCard && (
               <div className="mb-6">
                 {emailResent ? (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center space-x-3">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-x-3">
                     <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
                     <p className="text-sm text-green-800">
                       El correo ha sido reenviado exitosamente a {giftCard.recipient_email || giftCard.purchaser_email}
@@ -253,7 +253,7 @@ export default function GiftCardSuccessPage() {
             )}
 
             <div className="space-y-6 mb-8">
-              <div className="flex items-start space-x-4">
+              <div className="flex items-start gap-x-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                   <Mail className="w-5 h-5 text-green-600" />
                 </div>
@@ -267,7 +267,7 @@ export default function GiftCardSuccessPage() {
                 </div>
               </div>
 
-              <div className="flex items-start space-x-4">
+              <div className="flex items-start gap-x-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                   <Download className="w-5 h-5 text-green-600" />
                 </div>
@@ -281,7 +281,7 @@ export default function GiftCardSuccessPage() {
                 </div>
               </div>
 
-              <div className="flex items-start space-x-4">
+              <div className="flex items-start gap-x-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                   <Gift className="w-5 h-5 text-green-600" />
                 </div>
@@ -300,7 +300,7 @@ export default function GiftCardSuccessPage() {
               <h3 className="font-semibold text-blue-900 mb-3">
                 Como se canjea la tarjeta?
               </h3>
-              <ol className="space-y-2 text-sm text-blue-800">
+              <ol className="flex flex-col gap-y-2 text-sm text-blue-800">
                 <li className="flex items-start">
                   <span className="font-semibold mr-2 flex-shrink-0">1.</span>
                   <span>El destinatario debe crear una cuenta en ToursRed (si no tiene una)</span>

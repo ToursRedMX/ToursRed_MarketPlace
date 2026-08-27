@@ -28,7 +28,7 @@ export default function CookiePolicyPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-white rounded-xl shadow-sm p-8 space-y-8">
+        <div className="bg-white rounded-xl shadow-xs p-8 space-y-8">
           <section>
             <h2 className="text-2xl font-bold text-gray-900 mb-4">¿Qué son las cookies?</h2>
             <p className="text-gray-700 leading-relaxed">
@@ -166,7 +166,7 @@ export default function CookiePolicyPage() {
             <div className="bg-gray-50 rounded-lg p-6 space-y-3">
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Instrucciones por navegador:</h3>
-                <ul className="space-y-2">
+                <ul className="flex flex-col gap-y-2">
                   <li>
                     <a
                       href="https://support.google.com/chrome/answer/95647"
@@ -221,7 +221,7 @@ export default function CookiePolicyPage() {
             <p className="text-gray-700 mb-3">
               Los servicios de terceros que utilizamos tienen sus propias políticas de privacidad:
             </p>
-            <div className="space-y-2">
+            <div className="flex flex-col gap-y-2">
               <a
                 href="https://policies.google.com/privacy"
                 target="_blank"
@@ -274,7 +274,7 @@ export default function CookiePolicyPage() {
             </div>
           </section>
 
-          <div className="border-t pt-6 mt-8">
+          <div className="border-t border-gray-200 pt-6 mt-8">
             <p className="text-sm text-gray-600 text-center">
               Si tiene alguna pregunta sobre nuestra Política de Cookies, puede contactarnos en{' '}
               <a href="mailto:contacto@toursred.com" className="text-blue-600 hover:text-blue-700 underline">

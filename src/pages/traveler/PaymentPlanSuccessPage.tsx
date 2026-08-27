@@ -171,7 +171,7 @@ const PaymentPlanSuccessPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-4 space-y-2 text-sm">
+            <div className="border-t border-gray-100 pt-4 flex flex-col gap-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Monto del abono:</span>
                 <span className="font-medium">{formatCurrencyMXN(Number(lastTx.amount))}</span>
@@ -218,10 +218,10 @@ const PaymentPlanSuccessPage: React.FC = () => {
         )}
 
         {/* Plan progress */}
-        <div className="bg-white rounded-xl shadow-md p-6 space-y-4">
+        <div className="bg-white rounded-xl shadow-md p-6 flex flex-col gap-y-4">
           <p className="font-bold text-gray-900 text-lg">Resumen del Plan</p>
 
-          <div className="space-y-3">
+          <div className="flex flex-col gap-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Total del plan:</span>
               <span className="font-medium">{formatCurrencyMXN(Number(plan.total_plan_amount))}</span>
@@ -259,7 +259,7 @@ const PaymentPlanSuccessPage: React.FC = () => {
         <div className="flex justify-center gap-4">
           <Link
             to="/traveler/bookings"
-            className="inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-8 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-8 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-xs"
           >
             Ver Mis Reservas
             <ArrowRight className="w-4 h-4" />

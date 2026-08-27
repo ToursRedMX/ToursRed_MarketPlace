@@ -239,7 +239,7 @@ export default function AdminEjecutivosConfig() {
                   step="0.01"
                   value={amountApproval}
                   onChange={e => setAmountApproval(e.target.value)}
-                  className="w-full pl-7 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-7 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">MXN</span>
               </div>
@@ -258,7 +258,7 @@ export default function AdminEjecutivosConfig() {
                   step="0.01"
                   value={amountFirstBooking}
                   onChange={e => setAmountFirstBooking(e.target.value)}
-                  className="w-full pl-7 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-7 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">MXN</span>
               </div>
@@ -277,7 +277,7 @@ export default function AdminEjecutivosConfig() {
                   step="0.01"
                   value={revenuePct}
                   onChange={e => setRevenuePct(e.target.value)}
-                  className="w-full pr-8 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pr-8 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
               </div>
@@ -295,7 +295,7 @@ export default function AdminEjecutivosConfig() {
                   max="24"
                   value={periodMonths}
                   onChange={e => setPeriodMonths(e.target.value)}
-                  className="w-full pr-16 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pr-16 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">meses</span>
               </div>
@@ -408,7 +408,7 @@ export default function AdminEjecutivosConfig() {
                   value={bonusName}
                   onChange={e => setBonusName(e.target.value)}
                   placeholder="Ej: Bono arranque Q1"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                 />
               </div>
               <div className="sm:col-span-2">
@@ -417,7 +417,7 @@ export default function AdminEjecutivosConfig() {
                   value={bonusDesc}
                   onChange={e => setBonusDesc(e.target.value)}
                   placeholder="Descripción para el ejecutivo..."
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                 />
               </div>
               <div>
@@ -425,7 +425,7 @@ export default function AdminEjecutivosConfig() {
                 <select
                   value={bonusCondition}
                   onChange={e => setBonusCondition(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                 >
                   {Object.entries(CONDITION_LABELS).map(([k, v]) => (
                     <option key={k} value={k}>{v}</option>
@@ -442,7 +442,7 @@ export default function AdminEjecutivosConfig() {
                   value={bonusThreshold}
                   onChange={e => setBonusThreshold(e.target.value)}
                   placeholder={bonusCondition === 'revenue_generated' ? '50000' : '5'}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                 />
               </div>
               <div>
@@ -455,7 +455,7 @@ export default function AdminEjecutivosConfig() {
                     value={bonusAmount}
                     onChange={e => setBonusAmount(e.target.value)}
                     placeholder="500"
-                    className="w-full pl-7 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
               </div>

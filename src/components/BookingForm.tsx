@@ -1659,7 +1659,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
           />
           {isTransferCustomTime ? (
             selectedSlotDate && (
-              <div className="space-y-2">
+              <div className="flex flex-col gap-y-2">
                 <label className="block text-xs font-semibold text-gray-600">
                   ¿A qué hora necesitas el traslado? <span className="text-red-500">*</span>
                 </label>
@@ -1761,7 +1761,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
             <button
               type="button"
               onClick={() => setShowTravelerSelector(!showTravelerSelector)}
-              className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <div className="flex items-center">
                 <Users className="h-5 w-5 text-gray-400 mr-2" />
@@ -1773,14 +1773,14 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
             </button>
 
             {showTravelerSelector && (
-              <div className="absolute z-10 mt-2 w-full bg-white border border-gray-300 rounded-md shadow-lg p-4 space-y-4">
+              <div className="absolute z-10 mt-2 w-full bg-white border border-gray-300 rounded-md shadow-lg p-4 flex flex-col gap-y-4">
                 {tour.admite_adultos !== false && (
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-medium text-gray-900">Adultos</div>
                       <div className="text-xs text-gray-500">13-59 años &middot; {formatCurrencyMXN(getPrecioPorCategoria('adulto'))}/persona</div>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center gap-x-3">
                       <button
                         type="button"
                         onClick={() => handleCountChange('adultos', -1)}
@@ -1807,7 +1807,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                       <div className="text-sm font-medium text-gray-900">Niños</div>
                       <div className="text-xs text-gray-500">3-12 años &middot; {formatCurrencyMXN(getPrecioPorCategoria('nino'))}/persona</div>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center gap-x-3">
                       <button
                         type="button"
                         onClick={() => handleCountChange('ninos', -1)}
@@ -1834,7 +1834,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                       <div className="text-sm font-medium text-gray-900">Infantes</div>
                       <div className="text-xs text-gray-500">0-2 años &middot; {formatCurrencyMXN(getPrecioPorCategoria('infante'))}/persona</div>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center gap-x-3">
                       <button
                         type="button"
                         onClick={() => handleCountChange('infantes', -1)}
@@ -1861,7 +1861,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                       <div className="text-sm font-medium text-gray-900">Adultos Mayores</div>
                       <div className="text-xs text-gray-500">60+ con INAPAM &middot; {formatCurrencyMXN(getPrecioPorCategoria('adulto_mayor'))}/persona</div>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center gap-x-3">
                       <button
                         type="button"
                         onClick={() => handleCountChange('adultos_mayores', -1)}
@@ -1883,12 +1883,12 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                 )}
 
                 {tour.pet_friendly && (
-                  <div className="flex items-center justify-between border-t pt-3">
+                  <div className="flex items-center justify-between border-t border-gray-200 pt-3">
                     <div>
                       <div className="text-sm font-medium text-gray-900">Mascotas</div>
                       <div className="text-xs text-gray-500">Perro o gato &middot; {getPrecioPorCategoria('mascota') > 0 ? formatCurrencyMXN(getPrecioPorCategoria('mascota')) : 'Gratis'}</div>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center gap-x-3">
                       <button
                         type="button"
                         onClick={() => handleCountChange('mascotas', -1)}
@@ -1909,7 +1909,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                   </div>
                 )}
 
-                <div className="border-t pt-3">
+                <div className="border-t border-gray-200 pt-3">
                   <button
                     type="button"
                     onClick={() => setShowTravelerSelector(false)}
@@ -1967,7 +1967,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
             <span className="text-sm font-semibold text-gray-700">Tipo de traslado</span>
           </div>
           <div className="space-y-2">
-            <label className="flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all hover:border-teal-300 hover:bg-teal-50"
+            <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 cursor-pointer transition-all hover:border-teal-300 hover:bg-teal-50"
               style={{ borderColor: pickupType === 'meeting_point' ? '#0d9488' : '#e5e7eb', background: pickupType === 'meeting_point' ? '#f0fdfa' : undefined }}>
               <input
                 type="radio"
@@ -1982,7 +1982,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                 <p className="text-xs text-gray-500 mt-0.5">Llego por mi cuenta al punto indicado</p>
               </div>
             </label>
-            <label className="flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all hover:border-teal-300 hover:bg-teal-50"
+            <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 cursor-pointer transition-all hover:border-teal-300 hover:bg-teal-50"
               style={{ borderColor: pickupType === 'pickup' ? '#0d9488' : '#e5e7eb', background: pickupType === 'pickup' ? '#f0fdfa' : undefined }}>
               <input
                 type="radio"
@@ -2014,7 +2014,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                   type="text"
                   value={pickupHotelAddress}
                   onChange={e => setPickupHotelAddress(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                   placeholder="Ej: Hotel Barceló, Zona Hotelera"
                 />
               </div>
@@ -2026,7 +2026,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                   <select
                     value={selectedPickupZone}
                     onChange={e => setSelectedPickupZone(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                   >
                     <option value="free">{tour.pickup_free_zone ? `Sin costo (${tour.pickup_free_zone})` : 'Sin costo adicional'}</option>
                     {pickupZones.map((zone: any, idx: number) => (
@@ -2052,7 +2052,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
           <select
             value={selectedLanguage}
             onChange={e => setSelectedLanguage(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Idioma por defecto (sin costo extra)</option>
             {tourLanguages.map((lang: any, idx: number) => (
@@ -2067,12 +2067,12 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
       {/* Restricciones del tour — solo receptivo */}
       {hasRestrictions && (
         <div className="mb-4">
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 space-y-3">
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 flex flex-col gap-y-3">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
               <span className="text-sm font-semibold text-amber-800">Restricciones del Tour</span>
             </div>
-            <div className="space-y-1.5">
+            <div className="flex flex-col gap-y-1.5">
               {tour.restriction_pregnant && (
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">!</span>
@@ -2150,7 +2150,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
               <ShoppingBag className="h-4 w-4 text-amber-600" />
               <span className="text-sm font-semibold text-gray-800">Servicios Adicionales</span>
             </div>
-            <div className="space-y-3">
+            <div className="flex flex-col gap-y-3">
               {optionalServices.map(svc => {
                 const qty = optionalServiceQuantities[svc.id] || 0;
                 const isSoldOut = svc.available_capacity !== null && svc.available_capacity !== undefined && svc.available_capacity === 0;
@@ -2201,7 +2201,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                       </div>
 
                       {!isSoldOut && (
-                        <div className="flex items-center space-x-2 flex-shrink-0">
+                        <div className="flex items-center gap-x-2 flex-shrink-0">
                           <button
                             type="button"
                             onClick={() => handleOptionalServiceChange(svc.id, -1, svc)}
@@ -2241,7 +2241,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
           <>
             {/* Modal de advertencia al querer desmarcar el seguro */}
             {showInsuranceWarning && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
                 <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
                   <div className="bg-gradient-to-r from-slate-700 to-slate-900 px-6 py-5 text-white">
                     <div className="flex items-center gap-3 mb-2">
@@ -2302,7 +2302,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
 
             {/* Modal de cobertura completa */}
             {showInsuranceCoverage && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowInsuranceCoverage(false)}>
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs" onClick={() => setShowInsuranceCoverage(false)}>
                 <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                   {/* Header */}
                   <div className="bg-gradient-to-r from-blue-900 to-blue-800 px-6 py-5 text-white flex items-center justify-between">
@@ -2360,7 +2360,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                         ))}
                       </tbody>
                     </table>
-                    <div className="mt-4 space-y-1 text-xs text-gray-500 border-t border-gray-200 pt-3">
+                    <div className="mt-4 flex flex-col gap-y-1 text-xs text-gray-500 border-t border-gray-200 pt-3">
                       <p>* Incluido dentro del límite de asistencia médica</p>
                       <p>** Ámbito nacional: a más de 25 km del lugar de residencia</p>
                     </div>
@@ -2400,7 +2400,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                         }
                       }}
                     />
-                    <div className="w-10 h-5 bg-white/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-5 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-white/50" />
+                    <div className="w-10 h-5 bg-white/30 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-5 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-white/50" />
                   </label>
                 </div>
               </div>
@@ -2704,7 +2704,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
                   </div>
                 </div>
 
-                <div className="bg-white rounded-md p-3 border border-amber-200 space-y-2">
+                <div className="bg-white rounded-md p-3 border border-amber-200 flex flex-col gap-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-700">Descuento con puntos:</span>
                     <span className="font-bold text-amber-600">
@@ -2893,7 +2893,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
         )}
 
         {totalTravelers > 0 && (
-          <div className="mb-4 bg-gray-50 p-4 rounded-md space-y-2">
+          <div className="mb-4 bg-gray-50 p-4 rounded-md flex flex-col gap-y-2">
             <h4 className="text-sm font-semibold text-gray-900">Desglose de Costos</h4>
 
             {isPrivateTransfer && (tour as any).transfer_pricing_mode === 'per_vehicle' ? (
@@ -2941,7 +2941,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
             )}
 
             {promoResult.isActive && promoDiscountAmount > 0 && (
-              <div className="flex justify-between text-sm text-rose-600 border-t pt-2 mt-1">
+              <div className="flex justify-between text-sm text-rose-600 border-t border-gray-200 pt-2 mt-1">
                 <span className="flex items-center gap-1">
                   <Tag className="h-3 w-3" />
                   {promoResult.label}:
@@ -2951,7 +2951,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
             )}
 
             {optionalServicesSubtotal > 0 && (
-              <div className="border-t pt-2 mt-1 space-y-1">
+              <div className="border-t border-gray-200 pt-2 mt-1 flex flex-col gap-y-1">
                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Servicios Adicionales</div>
                 {optionalServices
                   .filter(svc => (optionalServiceQuantities[svc.id] || 0) > 0)
@@ -2974,7 +2974,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
             )}
 
             {receptivoExtrasSubtotal > 0 && (
-              <div className="border-t pt-2 mt-1 space-y-1">
+              <div className="border-t border-gray-200 pt-2 mt-1 flex flex-col gap-y-1">
                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Extras Receptivo</div>
                 {pickupExtraCost > 0 && selectedZoneData && (
                   <div className="flex justify-between text-sm">
@@ -2998,7 +2998,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
             )}
 
             {extrasServiceChargeTotal > 0 && (
-              <div className="border-t pt-2 mt-1">
+              <div className="border-t border-gray-200 pt-2 mt-1">
                 <div className="flex justify-between text-sm text-orange-600">
                   <span>Cargo por Servicio extras ({serviceChargePercentage}%):</span>
                   <span className="font-medium">+{formatCurrencyMXN(extrasServiceChargeTotal)}</span>
@@ -3006,7 +3006,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
               </div>
             )}
 
-            <div className="border-t pt-2 mt-2">
+            <div className="border-t border-gray-200 pt-2 mt-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Precio Total del Tour:</span>
                 <span className={`font-semibold ${appliedDiscount && appliedDiscount.discount_applies_to === 'total_price' ? 'line-through text-gray-400' : ''}`}>
@@ -3240,7 +3240,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
               )}
             </div>
 
-            <div className="border-t pt-2 flex justify-between">
+            <div className="border-t border-gray-200 pt-2 flex justify-between">
               <span className="font-bold text-gray-900">Total a Pagar Ahora:</span>
               <span className="font-bold text-primary-600 text-lg">{formatCurrencyMXN(effectivePayAmount)}</span>
             </div>

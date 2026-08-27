@@ -424,7 +424,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
 
           {/* Pay full balance button */}
           {!agencyView && plan.status === 'active' && plan.pending_balance > 0 && (
-            <div className="pt-2 border-t border-gray-100 space-y-3">
+            <div className="pt-2 border-t border-gray-100 flex flex-col gap-y-3">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <p className="text-sm font-semibold text-gray-700">Liquidar saldo total</p>

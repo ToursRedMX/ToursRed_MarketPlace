@@ -120,7 +120,7 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ tourId, agencyId, dat
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
         <div>
           <h4 className="font-semibold text-gray-800 text-sm capitalize">{formattedDate}</h4>
@@ -205,7 +205,7 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ tourId, agencyId, dat
                         <input
                           type="number" min="1" value={newCapacity}
                           onChange={e => setNewCapacity(e.target.value)}
-                          className="w-16 border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-500"
+                          className="w-16 border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-hidden focus:ring-1 focus:ring-red-500"
                           autoFocus
                         />
                         <button onClick={() => handleUpdateCapacity(slot.id)} disabled={isUpdatingThis}
@@ -239,11 +239,11 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ tourId, agencyId, dat
                 </div>
 
                 {isCanceling && (
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 flex flex-col gap-y-2">
                     <input
                       type="text" value={cancelReason} placeholder="Motivo de cancelación *"
                       onChange={e => setCancelReason(e.target.value)}
-                      className="w-full border border-red-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full border border-red-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     />
                     <div className="flex gap-2">
                       <button

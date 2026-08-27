@@ -148,7 +148,7 @@ const SupportTravelerPage: React.FC = () => {
       </div>
 
       <div className="container-custom py-8 max-w-2xl">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-6">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

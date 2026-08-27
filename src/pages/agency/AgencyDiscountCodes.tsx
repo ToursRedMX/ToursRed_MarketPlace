@@ -692,7 +692,7 @@ export default function AgencyDiscountCodes() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">
@@ -911,7 +911,7 @@ export default function AgencyDiscountCodes() {
                   <p className="text-xs text-gray-500 mt-1">Número máximo de veces que se puede usar</p>
                 </div>
 
-                <div className="space-y-4">
+                <div className="flex flex-col gap-y-4">
                   <label className="flex items-center gap-3">
                     <input
                       type="checkbox"
@@ -962,7 +962,7 @@ export default function AgencyDiscountCodes() {
       )}
 
       {showDetailModal && selectedCode && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">

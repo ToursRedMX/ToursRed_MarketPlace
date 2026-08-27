@@ -200,7 +200,7 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full my-8">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -312,7 +312,7 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
                 </p>
               </div>
 
-              <div className="space-y-3 mb-6">
+              <div className="flex flex-col gap-y-3 mb-6">
                 <SpeiField
                   label="Monto a transferir"
                   value={formatCurrencyMXN(topupData.amount)}

@@ -77,7 +77,7 @@ export const SecurityTogglesSection: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-6">
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
           <Shield className="w-5 h-5 text-indigo-600" />

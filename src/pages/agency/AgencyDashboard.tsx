@@ -298,7 +298,7 @@ const AgencyDashboard: React.FC = () => {
               <h3 className="font-medium text-blue-900 mb-2">Sistema de Pagos y Comisiones</h3>
               <div className="text-sm text-blue-800 space-y-2">
                 <p><strong>Como funciona:</strong></p>
-                <ul className="list-disc list-inside space-y-1 ml-4">
+                <ul className="list-disc list-inside flex flex-col gap-y-1 ml-4">
                   <li>Los viajeros pagan un deposito + un cargo por servicio de la plataforma</li>
                   <li>La plataforma retiene el porcentaje de comision acordado por contrato</li>
                   <li>El pago a tu agencia se realiza automaticamente 3 dias despues de finalizar el tour</li>
@@ -369,7 +369,7 @@ const AgencyDashboard: React.FC = () => {
           </h2>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <h3 className="font-medium text-yellow-900 mb-2">Como funciona el pago a tu agencia</h3>
-            <div className="text-sm text-yellow-800 space-y-2">
+            <div className="text-sm text-yellow-800 flex flex-col gap-y-2">
               <p>
                 Los pagos se realizan de forma <strong>automatica 3 dias despues de finalizar cada tour</strong>.
               </p>
@@ -382,7 +382,7 @@ const AgencyDashboard: React.FC = () => {
       )}
 
       {/* Promocion Tours Destacados */}
-      <div className="mb-8 rounded-2xl overflow-hidden shadow-sm border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50">
+      <div className="mb-8 rounded-2xl overflow-hidden shadow-xs border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50">
         {/* Header del banner */}
         <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -477,7 +477,7 @@ const AgencyDashboard: React.FC = () => {
             {preventaStats.map((ps) => (
               <div
                 key={ps.tourId}
-                className={`bg-white rounded-xl shadow-sm border-2 p-5 ${
+                className={`bg-white rounded-xl shadow-xs border-2 p-5 ${
                   ps.beneficioAgotado ? 'border-gray-200' : 'border-amber-200'
                 }`}
               >
@@ -570,7 +570,7 @@ const AgencyDashboard: React.FC = () => {
         {stats.recentActivity.length > 0 ? (
           <div className="space-y-4">
             {stats.recentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+              <div key={activity.id} className="flex items-start gap-x-3 p-3 bg-gray-50 rounded-lg">
                 <div className="flex-shrink-0">
                   <Calendar className="h-5 w-5 text-gray-400" />
                 </div>
@@ -583,7 +583,7 @@ const AgencyDashboard: React.FC = () => {
                     <span className="font-medium">{activity.tours?.name}</span>
                     {' '}para {activity.travelers_count} {activity.travelers_count === 1 ? 'viajero' : 'viajeros'}
                   </div>
-                  <div className="flex items-center mt-1 space-x-2">
+                  <div className="flex items-center mt-1 gap-x-2">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(activity.status)}`}>
                       {getStatusText(activity.status)}
                     </span>

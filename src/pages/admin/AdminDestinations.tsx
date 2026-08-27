@@ -385,16 +385,16 @@ const AdminDestinations: React.FC = () => {
                 placeholder="Buscar por nombre, descripción, país o región..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-x-2">
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="border border-gray-300 rounded-md px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="all">Todos los estados</option>
               <option value="active">Solo activos</option>
@@ -562,7 +562,7 @@ const AdminDestinations: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex justify-end space-x-4">
+            <div className="flex justify-end gap-x-4">
               <button
                 type="button"
                 onClick={handleCancel}
@@ -625,7 +625,7 @@ const AdminDestinations: React.FC = () => {
                 <div className="absolute top-2 left-2">
                   {getStatusBadge(destination.is_active)}
                 </div>
-                <div className="absolute top-2 right-2 flex space-x-2">
+                <div className="absolute top-2 right-2 flex gap-x-2">
                   <button
                     onClick={() => handleEdit(destination)}
                     className="bg-white/80 hover:bg-white rounded-full p-2 text-gray-700"
@@ -658,7 +658,7 @@ const AdminDestinations: React.FC = () => {
               {/* Información del Destino */}
               <div className="p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center gap-x-3">
                     <span className="text-sm text-gray-500 flex items-center">
                       <Globe className="h-4 w-4 mr-1" />
                       {getTourCount(destination)} tours
@@ -680,7 +680,7 @@ const AdminDestinations: React.FC = () => {
                 )}
 
                 {/* Información Detallada */}
-                <div className="space-y-2 text-xs text-gray-500 mb-4">
+                <div className="flex flex-col gap-y-2 text-xs text-gray-500 mb-4">
                   {destination.best_time_to_visit && (
                     <div className="flex items-center">
                       <Clock className="h-3 w-3 mr-2" />
@@ -708,14 +708,14 @@ const AdminDestinations: React.FC = () => {
                 </div>
 
                 {/* Galería de Imágenes */}
-                <div className="border-t pt-4">
+                <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-sm font-medium mb-2 flex items-center">
                     <Image className="h-4 w-4 mr-2" />
                     Galería ({destination.destination_images?.length || 0})
                   </h4>
                   
                   {/* Add Image Form */}
-                  <div className="space-y-2 mb-3">
+                  <div className="flex flex-col gap-y-2 mb-3">
                     <ImageUploader
                       onImageSelect={(url) => setNewImageUrl(url)}
                       maxSizeMB={3}
@@ -725,7 +725,7 @@ const AdminDestinations: React.FC = () => {
                     />
                     
                     {newImageUrl && (
-                      <div className="flex space-x-2">
+                      <div className="flex gap-x-2">
                         <input
                           type="text"
                           value={newImageCaption}

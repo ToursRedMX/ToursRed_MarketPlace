@@ -187,11 +187,11 @@ export default function ExecutiveAgencyProfile() {
         </div>
 
         {/* Datos fiscales */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-y-3">
           <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
             <FileText className="w-4 h-4 text-gray-400" /> Datos fiscales
           </h2>
-          <div className="space-y-2 text-sm">
+          <div className="flex flex-col gap-y-2 text-sm">
             {agency.persona_type && (
               <div>
                 <p className="text-gray-400 text-xs">Tipo de persona</p>
@@ -234,11 +234,11 @@ export default function ExecutiveAgencyProfile() {
         </div>
 
         {/* Direccion */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-y-3">
           <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
             <MapPin className="w-4 h-4 text-gray-400" /> Dirección
           </h2>
-          <div className="text-sm text-gray-900 space-y-1">
+          <div className="text-sm text-gray-900 flex flex-col gap-y-1">
             {agency.street && <p>{agency.street} {agency.exterior_number}{agency.interior_number ? `, Int. ${agency.interior_number}` : ''}</p>}
             {agency.colony && <p>{agency.colony}</p>}
             {(agency.city || agency.state) && <p>{[agency.city, agency.state].filter(Boolean).join(', ')}</p>}
@@ -249,11 +249,11 @@ export default function ExecutiveAgencyProfile() {
         </div>
 
         {/* Datos bancarios */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-y-3">
           <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
             <Building2 className="w-4 h-4 text-gray-400" /> Datos bancarios
           </h2>
-          <div className="space-y-2 text-sm">
+          <div className="flex flex-col gap-y-2 text-sm">
             {agency.banco && (
               <div>
                 <p className="text-gray-400 text-xs">Banco</p>

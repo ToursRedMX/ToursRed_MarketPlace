@@ -116,13 +116,13 @@ const AgencySlotCalendar: React.FC<AgencySlotCalendarProps> = ({ tourId, agencyI
               <div>
                 <label className="block text-xs font-medium text-amber-700 mb-1">Desde</label>
                 <input type="date" value={genStart} onChange={e => setGenStart(e.target.value)}
-                  className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                  className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-white"
                   required />
               </div>
               <div>
                 <label className="block text-xs font-medium text-amber-700 mb-1">Hasta</label>
                 <input type="date" value={genEnd} min={genStart} onChange={e => setGenEnd(e.target.value)}
-                  className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                  className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-white"
                   required />
               </div>
             </div>
@@ -193,7 +193,7 @@ const AgencySlotCalendar: React.FC<AgencySlotCalendarProps> = ({ tourId, agencyI
                   }`}>
                     {date.getDate()}
                   </p>
-                  <div className="space-y-0.5">
+                  <div className="flex flex-col gap-y-0.5">
                     {slots.slice(0, 2).map(slot => (
                       <div key={slot.id}
                         className={`text-[9px] leading-tight px-1 py-0.5 rounded font-medium truncate ${getSlotStatusColor(slot)}`}>
@@ -211,10 +211,10 @@ const AgencySlotCalendar: React.FC<AgencySlotCalendarProps> = ({ tourId, agencyI
         </div>
 
         <div className="px-3 pb-3 flex items-center gap-4 text-xs text-gray-400">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-green-200" />Disponible</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-100" />Pocos cupos</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-100" />Lleno</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-orange-100" />Bloqueado</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-green-200" />Disponible</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-yellow-100" />Pocos cupos</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-red-100" />Lleno</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-orange-100" />Bloqueado</span>
         </div>
       </div>
 

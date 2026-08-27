@@ -874,7 +874,7 @@ const AgencyFinancials: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="ml-11 space-y-1">
+                    <div className="ml-11 flex flex-col gap-y-1">
                       <p className="text-sm text-gray-600">
                         <span className="font-medium">Método:</span> {getPaymentMethodLabel(payment.payment_method)}
                       </p>

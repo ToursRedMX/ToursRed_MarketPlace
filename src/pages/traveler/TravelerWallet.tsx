@@ -317,13 +317,13 @@ const TravelerWallet: React.FC = () => {
               </p>
               <p className="text-accent-100 mt-2">{wallet.currency}</p>
             </div>
-            <div className="bg-white/20 backdrop-blur-sm rounded-full p-4">
+            <div className="bg-white/20 backdrop-blur-xs rounded-full p-4">
               <Wallet className="h-12 w-12" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 mt-6">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+            <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="h-5 w-5 text-green-300" />
                 <p className="text-sm text-accent-100">Total Recibido</p>
@@ -332,7 +332,7 @@ const TravelerWallet: React.FC = () => {
                 {formatCurrencyMXN(totalCredits)}
               </p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+            <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingDown className="h-5 w-5 text-red-300" />
                 <p className="text-sm text-accent-100">Total Utilizado</p>
@@ -396,7 +396,7 @@ const TravelerWallet: React.FC = () => {
 
         {/* Redeem Modal */}
         {showRedeemModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-bold text-gray-900">Canjear Tarjeta de Regalo</h3>
@@ -558,7 +558,7 @@ const TravelerWallet: React.FC = () => {
                     className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-center gap-4 flex-1">
-                      <div className="bg-white rounded-full p-2 shadow-sm">
+                      <div className="bg-white rounded-full p-2 shadow-xs">
                         {getTransactionIcon(transaction.type)}
                       </div>
                       <div className="flex-1">

@@ -157,7 +157,7 @@ const OpenPayTopupHistory: React.FC = () => {
                 className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
               >
                 <div className="flex items-center gap-3 flex-1">
-                  <div className="bg-white rounded-full p-2 shadow-sm">
+                  <div className="bg-white rounded-full p-2 shadow-xs">
                     {topup.payment_method_type === 'spei' ? (
                       <Building2 className="h-5 w-5 text-accent-600" />
                     ) : (

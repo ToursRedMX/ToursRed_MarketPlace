@@ -380,7 +380,7 @@ export default function AdminTravelers() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4 mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-white rounded-lg shadow-xs p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <Users className="h-8 w-8 text-blue-600" />
@@ -392,7 +392,7 @@ export default function AdminTravelers() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-white rounded-lg shadow-xs p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <Shield className="h-8 w-8 text-green-600" />
@@ -404,7 +404,7 @@ export default function AdminTravelers() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-white rounded-lg shadow-xs p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <ShieldOff className="h-8 w-8 text-red-600" />
@@ -416,7 +416,7 @@ export default function AdminTravelers() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-white rounded-lg shadow-xs p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <ShoppingBag className="h-8 w-8 text-orange-600" />
@@ -428,7 +428,7 @@ export default function AdminTravelers() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-white rounded-lg shadow-xs p-6">
             <div className="text-2xl font-bold text-gray-900 mb-2">{formatCurrency(summaryStats.totalRevenue)}</div>
             <div className="flex items-center text-sm text-gray-500">
               <DollarSign className="h-4 w-4 mr-1 text-green-600" />
@@ -436,7 +436,7 @@ export default function AdminTravelers() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-white rounded-lg shadow-xs p-6">
             <div className="text-2xl font-bold text-gray-900 mb-2">{formatCurrency(summaryStats.totalServiceCharges)}</div>
             <div className="flex items-center text-sm text-gray-500">
               <CreditCard className="h-4 w-4 mr-1 text-purple-600" />
@@ -444,7 +444,7 @@ export default function AdminTravelers() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-white rounded-lg shadow-xs p-6">
             <div className="text-2xl font-bold text-gray-900 mb-2">{formatCurrency(summaryStats.totalWalletBalance)}</div>
             <div className="flex items-center text-sm text-gray-500">
               <Wallet className="h-4 w-4 mr-1 text-accent-600" />
@@ -452,7 +452,7 @@ export default function AdminTravelers() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-white rounded-lg shadow-xs p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <Crown className="h-8 w-8 text-yellow-600" />
@@ -475,7 +475,7 @@ export default function AdminTravelers() {
           />
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="bg-white rounded-lg shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -690,7 +690,7 @@ export default function AdminTravelers() {
       </div>
 
       {showEditModal && selectedTraveler && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
               <div className="flex items-center gap-3">
@@ -929,7 +929,7 @@ export default function AdminTravelers() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <button
                   onClick={handleOpenBookingHistory}
-                  className="bg-blue-50 rounded-lg p-4 text-left hover:bg-blue-100 transition-colors group ring-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="bg-blue-50 rounded-lg p-4 text-left hover:bg-blue-100 transition-colors group ring-0 focus:outline-hidden focus:ring-2 focus:ring-blue-400"
                   title="Ver historial de reservas"
                 >
                   <div className="flex items-center justify-between">
@@ -968,7 +968,7 @@ export default function AdminTravelers() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <h4 className="font-semibold text-gray-900 text-lg border-b pb-2">
+                  <h4 className="font-semibold text-gray-900 text-lg border-b border-gray-200 pb-2">
                     Información de Contacto
                   </h4>
 
@@ -995,7 +995,7 @@ export default function AdminTravelers() {
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-500">Dirección</p>
                       {selectedTraveler.street || selectedTraveler.city || selectedTraveler.state ? (
-                        <div className="text-gray-900 space-y-1">
+                        <div className="text-gray-900 flex flex-col gap-y-1">
                           {selectedTraveler.street && (
                             <div>
                               <span className="font-medium">{selectedTraveler.street}</span>
@@ -1032,7 +1032,7 @@ export default function AdminTravelers() {
                 </div>
 
                 <div className="space-y-4">
-                  <h4 className="font-semibold text-gray-900 text-lg border-b pb-2">
+                  <h4 className="font-semibold text-gray-900 text-lg border-b border-gray-200 pb-2">
                     Información Adicional
                   </h4>
 
@@ -1177,7 +1177,7 @@ export default function AdminTravelers() {
                 </div>
               )}
 
-              <div className="mt-8 flex justify-end space-x-3">
+              <div className="mt-8 flex justify-end gap-x-3">
                 <button
                   onClick={() => toggleActiveStatus(selectedTraveler.id, selectedTraveler.is_active)}
                   className={`px-4 py-2 rounded-lg font-medium ${

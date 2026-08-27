@@ -981,7 +981,7 @@ const TravelersInfoPage: React.FC = () => {
                 <p className="text-sm text-gray-600 mb-3">
                   Transfiere <strong>{formatCurrencyMXN(sc.amount)}</strong> usando los siguientes datos:
                 </p>
-                <div className="space-y-3">
+                <div className="flex flex-col gap-y-3">
                   {sc.clabe && (
                     <div className="flex items-center justify-between bg-gray-50 rounded-md px-3 py-2">
                       <div>
@@ -1024,7 +1024,7 @@ const TravelersInfoPage: React.FC = () => {
                 <p className="text-sm text-gray-600 mb-3">
                   Paga <strong>{formatCurrencyMXN(sc.amount)}</strong> en cualquier tienda participante:
                 </p>
-                <div className="space-y-3">
+                <div className="flex flex-col gap-y-3">
                   {sc.reference && (
                     <div className="flex items-center justify-between bg-gray-50 rounded-md px-3 py-2">
                       <div>
@@ -1267,7 +1267,7 @@ const TravelersInfoPage: React.FC = () => {
                             if (companion) selectFrequentCompanion(index, companion);
                           }
                         }}
-                        className="text-sm border border-gray-300 rounded-md px-3 py-1 hover:border-primary-500 focus:border-primary-500 focus:outline-none"
+                        className="text-sm border border-gray-300 rounded-md px-3 py-1 hover:border-primary-500 focus:border-primary-500 focus:outline-hidden"
                         value=""
                       >
                         <option value="">Usar datos guardados</option>

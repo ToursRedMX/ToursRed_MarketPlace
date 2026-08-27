@@ -313,11 +313,11 @@ export default function ExecutivePerfil() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Nombre *</label>
-              <input value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nombre" />
+              <input value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="Nombre" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Apellido *</label>
-              <input value={lastName} onChange={e => setLastName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Apellido" />
+              <input value={lastName} onChange={e => setLastName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="Apellido" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Correo electrónico</label>
@@ -326,7 +326,7 @@ export default function ExecutivePerfil() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5"><span className="flex items-center gap-1"><Phone className="h-3 w-3" /> Teléfono</span></label>
-              <input value={phone} onChange={e => setPhone(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="+52 55 0000 0000" />
+              <input value={phone} onChange={e => setPhone(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="+52 55 0000 0000" />
             </div>
           </div>
           <div className="flex justify-end">
@@ -351,26 +351,26 @@ export default function ExecutivePerfil() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Nombre o razón social fiscal</label>
-              <input value={taxName} onChange={e => setTaxName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="JUAN PÉREZ GARCÍA" />
+              <input value={taxName} onChange={e => setTaxName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500" placeholder="JUAN PÉREZ GARCÍA" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">RFC</label>
-              <input value={taxRfc} onChange={e => setTaxRfc(e.target.value.toUpperCase())} maxLength={13} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase" placeholder="XXXX000000XXX" />
+              <input value={taxRfc} onChange={e => setTaxRfc(e.target.value.toUpperCase())} maxLength={13} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-amber-500 uppercase" placeholder="XXXX000000XXX" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Código postal fiscal</label>
-              <input value={taxZip} onChange={e => setTaxZip(e.target.value.replace(/\D/g, '').slice(0, 5))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="00000" maxLength={5} />
+              <input value={taxZip} onChange={e => setTaxZip(e.target.value.replace(/\D/g, '').slice(0, 5))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500" placeholder="00000" maxLength={5} />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Régimen fiscal</label>
-              <select value={taxRegimenFiscal} onChange={e => setTaxRegimenFiscal(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+              <select value={taxRegimenFiscal} onChange={e => setTaxRegimenFiscal(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500">
                 <option value="">Seleccionar régimen...</option>
                 {REGIMENES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Domicilio fiscal</label>
-              <input value={taxAddress} onChange={e => setTaxAddress(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Calle, Número, Colonia, Ciudad, Estado" />
+              <input value={taxAddress} onChange={e => setTaxAddress(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500" placeholder="Calle, Número, Colonia, Ciudad, Estado" />
             </div>
             <div className="sm:col-span-2">
               <label className="flex items-start gap-3 cursor-pointer group">
@@ -404,9 +404,9 @@ export default function ExecutivePerfil() {
           )}
         </div>
         <div className="p-6 space-y-5">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col gap-y-3">
             <p className="text-sm font-medium text-blue-900">Cómo configurar tu cuenta FacturAPI</p>
-            <ol className="text-sm text-blue-800 space-y-1.5 list-decimal list-inside">
+            <ol className="text-sm text-blue-800 flex flex-col gap-y-1.5 list-decimal list-inside">
               <li>Crea una cuenta gratuita en FacturAPI y registra tu RFC como organización emisora</li>
               <li>Sube tu CSD (Certificado de Sello Digital) directamente en el portal de FacturAPI</li>
               <li>Copia tu <strong>API Key</strong> de FacturAPI</li>
@@ -440,7 +440,7 @@ export default function ExecutivePerfil() {
                   type={showApiKey ? 'text' : 'password'}
                   value={facturApiKey}
                   onChange={e => setFacturApiKey(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg pl-3 pr-10 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full border border-gray-200 rounded-lg pl-3 pr-10 py-2.5 text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                   placeholder={profile.facturapi_configured ? '••••••••••••••••••• (introduce para actualizar)' : 'sk_live_...'}
                 />
                 <button type="button" onClick={() => setShowApiKey(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -473,23 +473,23 @@ export default function ExecutivePerfil() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Nombre del titular de la cuenta</label>
-              <input value={bankBeneficiary} onChange={e => setBankBeneficiary(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Nombre exacto como aparece en la cuenta bancaria" />
+              <input value={bankBeneficiary} onChange={e => setBankBeneficiary(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-green-500" placeholder="Nombre exacto como aparece en la cuenta bancaria" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Banco</label>
-              <select value={bankName} onChange={e => setBankName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+              <select value={bankName} onChange={e => setBankName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-green-500">
                 <option value="">Seleccionar banco...</option>
                 {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Número de cuenta</label>
-              <input value={bankAccountNumber} onChange={e => setBankAccountNumber(e.target.value.replace(/\D/g, ''))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="0000000000" maxLength={20} />
+              <input value={bankAccountNumber} onChange={e => setBankAccountNumber(e.target.value.replace(/\D/g, ''))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-green-500" placeholder="0000000000" maxLength={20} />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">CLABE interbancaria (18 dígitos)</label>
               <div className="relative">
-                <input value={bankClabe} onChange={e => setBankClabe(e.target.value.replace(/\D/g, '').slice(0, 18))} type={showClabe ? 'text' : 'password'} className="w-full border border-gray-200 rounded-lg pl-3 pr-10 py-2.5 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="000000000000000000" maxLength={18} />
+                <input value={bankClabe} onChange={e => setBankClabe(e.target.value.replace(/\D/g, '').slice(0, 18))} type={showClabe ? 'text' : 'password'} className="w-full border border-gray-200 rounded-lg pl-3 pr-10 py-2.5 text-sm font-mono tracking-widest focus:outline-hidden focus:ring-2 focus:ring-green-500" placeholder="000000000000000000" maxLength={18} />
                 <button type="button" onClick={() => setShowClabe(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   {showClabe ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -517,7 +517,7 @@ export default function ExecutivePerfil() {
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Nueva contraseña</label>
               <div className="relative">
-                <input type={showNewPw ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full border border-gray-200 rounded-lg pl-3 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" placeholder="Mínimo 8 caracteres" />
+                <input type={showNewPw ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full border border-gray-200 rounded-lg pl-3 pr-10 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-400" placeholder="Mínimo 8 caracteres" />
                 <button type="button" onClick={() => setShowNewPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -525,7 +525,7 @@ export default function ExecutivePerfil() {
             </div>
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Confirmar nueva contraseña</label>
-              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" placeholder="Repite la nueva contraseña" />
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-400" placeholder="Repite la nueva contraseña" />
             </div>
           </div>
           <div className="flex justify-end">

@@ -365,17 +365,17 @@ const AdminReviews: React.FC = () => {
                 placeholder="Buscar por usuario, tour, agencia o comentario..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-x-4">
+            <div className="flex items-center gap-x-2">
               <Filter className="h-4 w-4 text-gray-400" />
               <select
                 value={ratingFilter}
                 onChange={(e) => setRatingFilter(e.target.value as any)}
-                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">Todas las calificaciones</option>
                 <option value="5">5 estrellas</option>
@@ -385,11 +385,11 @@ const AdminReviews: React.FC = () => {
                 <option value="1">1 estrella</option>
               </select>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-x-2">
               <select
                 value={visibilityFilter}
                 onChange={(e) => setVisibilityFilter(e.target.value as any)}
-                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">Todas</option>
                 <option value="visible">Solo visibles</option>
@@ -421,7 +421,7 @@ const AdminReviews: React.FC = () => {
               <div className="p-6">
                 {/* Header */}
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-start space-x-4">
+                  <div className="flex items-start gap-x-4">
                     {/* Tour Image */}
                     <div className="flex-shrink-0">
                       <img
@@ -433,7 +433,7 @@ const AdminReviews: React.FC = () => {
 
                     {/* Review Info */}
                     <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
+                      <div className="flex items-center gap-x-2 mb-2">
                         <h3 className="text-lg font-semibold text-gray-900">
                           {review.tour_name || 'Sin nombre'}
                         </h3>
@@ -441,7 +441,7 @@ const AdminReviews: React.FC = () => {
                         {getVisibilityBadge(review.is_visible)}
                       </div>
 
-                      <div className="flex items-center space-x-4 text-sm text-gray-600 mb-2">
+                      <div className="flex items-center gap-x-4 text-sm text-gray-600 mb-2">
                         <div className="flex items-center">
                           <MapPin className="h-4 w-4 mr-1" />
                           <span>{review.tour_destination || 'Destino no especificado'}</span>
@@ -452,7 +452,7 @@ const AdminReviews: React.FC = () => {
                         </div>
                       </div>
                       
-                      <div className="flex items-center space-x-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-x-4 text-sm text-gray-600">
                         <div className="flex items-center">
                           <User className="h-4 w-4 mr-1" />
                           <span>{getUserDisplayName(review)}</span>
@@ -466,7 +466,7 @@ const AdminReviews: React.FC = () => {
                   </div>
                   
                   {/* Actions */}
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center gap-x-2">
                     <button
                       onClick={() => handleToggleVisibility(review.id, review.is_visible, review.review_type)}
                       disabled={isUpdating === review.id}
@@ -499,7 +499,7 @@ const AdminReviews: React.FC = () => {
 
                 {/* Rating and Comment */}
                 <div className="mb-4">
-                  <div className="flex items-center space-x-2 mb-3">
+                  <div className="flex items-center gap-x-2 mb-3">
                     <div className="flex">{renderStars(review.rating)}</div>
                     <span className={`font-semibold ${getRatingColor(review.rating)}`}>
                       {review.rating}/5
@@ -529,7 +529,7 @@ const AdminReviews: React.FC = () => {
                     <p className="text-blue-800 text-sm whitespace-pre-wrap">{review.reply}</p>
                   </div>
                 ) : (
-                  <div className="border-t pt-4">
+                  <div className="border-t border-gray-200 pt-4">
                     {isReplying === review.id ? (
                       <div className="space-y-3">
                         <div className="flex items-center text-sm text-gray-600 mb-2">
@@ -540,10 +540,10 @@ const AdminReviews: React.FC = () => {
                           value={replyText}
                           onChange={(e) => setReplyText(e.target.value)}
                           placeholder="Escribe una respuesta profesional a esta reseña..."
-                          className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                          className="w-full p-3 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           rows={3}
                         />
-                        <div className="flex justify-end space-x-2">
+                        <div className="flex justify-end gap-x-2">
                           <button
                             onClick={() => {
                               setIsReplying(null);
@@ -590,9 +590,9 @@ const AdminReviews: React.FC = () => {
                 )}
 
                 {/* Review Metadata */}
-                <div className="border-t pt-4 mt-4">
+                <div className="border-t border-gray-200 pt-4 mt-4">
                   <div className="flex items-center justify-between text-xs text-gray-500">
-                    <div className="flex items-center space-x-4">
+                    <div className="flex items-center gap-x-4">
                       <span>ID: {review.id.slice(0, 8)}...</span>
                       <span>
                         {review.review_type === 'traveler'
@@ -603,7 +603,7 @@ const AdminReviews: React.FC = () => {
                         <span>Actualizado: {format(new Date(review.updated_at), 'dd/MM/yyyy HH:mm')}</span>
                       )}
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-x-2">
                       {review.rating <= 2 && (
                         <span className="flex items-center text-orange-600">
                           <Flag className="h-3 w-3 mr-1" />
@@ -621,8 +621,8 @@ const AdminReviews: React.FC = () => {
 
       {/* Modal de Detalles (opcional para futuras mejoras) */}
       {selectedReview && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+        <div className="fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border border-gray-200 w-full max-w-2xl shadow-lg rounded-md bg-white">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-gray-900">Detalles de la Reseña</h3>
               <button 

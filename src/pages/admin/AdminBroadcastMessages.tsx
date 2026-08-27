@@ -190,7 +190,7 @@ const AdminBroadcastMessages: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           {/* Compose panel */}
           <div className="lg:col-span-3 space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-6">
               <h2 className="text-base font-bold text-gray-800 mb-5">Redactar mensaje</h2>
 
               {/* Audience */}
@@ -252,7 +252,7 @@ const AdminBroadcastMessages: React.FC = () => {
                   onChange={(e) => setSubject(e.target.value)}
                   maxLength={150}
                   placeholder="Ej: Mantenimiento programado el viernes 20"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
                 <p className="text-xs text-gray-400 mt-1 text-right">{subject.length}/150</p>
               </div>
@@ -304,7 +304,7 @@ const AdminBroadcastMessages: React.FC = () => {
 
           {/* Preview panel */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5">
               <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                 <Eye className="h-4 w-4 text-gray-400" />
                 Vista previa de notificación
@@ -321,7 +321,7 @@ const AdminBroadcastMessages: React.FC = () => {
 
             <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4 text-sm text-blue-800">
               <p className="font-semibold mb-1">Consejos</p>
-              <ul className="space-y-1 text-xs text-blue-700 list-disc list-inside">
+              <ul className="flex flex-col gap-y-1 text-xs text-blue-700 list-disc list-inside">
                 <li>Usa un asunto claro y descriptivo.</li>
                 <li>Para mantenimientos, indica hora y duración.</li>
                 <li>Para promociones, incluye fechas de vigencia.</li>
@@ -347,7 +347,7 @@ const AdminBroadcastMessages: React.FC = () => {
           ) : (
             <div className="space-y-3">
               {history.map((msg) => (
-                <div key={msg.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div key={msg.id} className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
                   <div
                     className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
                     onClick={() => setExpandedId(expandedId === msg.id ? null : msg.id)}

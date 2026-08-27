@@ -545,7 +545,7 @@ const TourDetailPage: React.FC = () => {
               <ChevronRight className="h-6 w-6" />
             </button>
             
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-x-2">
               {galleryImages.map((_, index) => (
                 <button
                   key={index}
@@ -706,7 +706,7 @@ const TourDetailPage: React.FC = () => {
                         </Link>
                       )}
                     </h3>
-                    <ul className="space-y-2">
+                    <ul className="flex flex-col gap-y-2">
                       {getIncludedItems().map((item, index) => (
                         <li key={index} className="flex items-start">
                           <span className="text-success-500 mr-2">✓</span>
@@ -726,7 +726,7 @@ const TourDetailPage: React.FC = () => {
                         </Link>
                       )}
                     </h3>
-                    <ul className="space-y-2">
+                    <ul className="flex flex-col gap-y-2">
                       {getExcludedItems().map((item, index) => (
                         <li key={index} className="flex items-start">
                           <span className="text-error-500 mr-2">✗</span>
@@ -803,7 +803,7 @@ const TourDetailPage: React.FC = () => {
                           <Car className="h-5 w-5 text-teal-600" />
                           Recogida en Hotel (Pick Up)
                         </h3>
-                        <div className="space-y-3">
+                        <div className="flex flex-col gap-y-3">
                           {tour.pickup_free_zone && (
                             <div className="flex items-start gap-3 p-4 bg-teal-50 border border-teal-200 rounded-lg">
                               <div className="flex-shrink-0 w-6 h-6 bg-teal-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
@@ -816,7 +816,7 @@ const TourDetailPage: React.FC = () => {
                             </div>
                           )}
                           {Array.isArray(tour.pickup_zones) && tour.pickup_zones.length > 0 && (
-                            <div className="space-y-2">
+                            <div className="flex flex-col gap-y-2">
                               <p className="text-sm font-medium text-gray-700">Zonas con costo adicional:</p>
                               {tour.pickup_zones.map((zone: any, idx: number) => (
                                 <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
@@ -1062,14 +1062,14 @@ const TourDetailPage: React.FC = () => {
                 )}
                 
                 {activeTab === 'itinerary' && (
-                  <div className="space-y-6">
+                  <div className="flex flex-col gap-y-6">
                     {tour.itinerary ? (
                       <div className="whitespace-pre-line">{tour.itinerary}</div>
                     ) : (
-                      <div className="space-y-3">
-                        <div className="space-y-3">
+                      <div className="flex flex-col gap-y-3">
+                        <div className="flex flex-col gap-y-3">
                           <h3 className="text-lg font-semibold">Día 1: Llegada y Bienvenida</h3>
-                          <div className="ml-6 space-y-2">
+                          <div className="ml-6 flex flex-col gap-y-2">
                             <p>
                               Llegada al punto de encuentro y conoce a tu guía turístico y compañeros de viaje. 
                               Traslado al alojamiento y disfruta de una cena de bienvenida.
@@ -1082,9 +1082,9 @@ const TourDetailPage: React.FC = () => {
                           </div>
                         </div>
                         
-                        <div className="space-y-3">
+                        <div className="flex flex-col gap-y-3">
                           <h3 className="text-lg font-semibold">Días 2-{Math.max(2, calculateDuration() - 1)}: Exploración</h3>
-                          <div className="ml-6 space-y-2">
+                          <div className="ml-6 flex flex-col gap-y-2">
                             <p>
                               Días completos explorando las principales atracciones con guías locales expertos.
                               Experimenta la belleza natural y los aspectos culturales destacados del destino.
@@ -1098,9 +1098,9 @@ const TourDetailPage: React.FC = () => {
                         </div>
                         
                         {calculateDuration() > 1 && (
-                          <div className="space-y-3">
+                          <div className="flex flex-col gap-y-3">
                             <h3 className="text-lg font-semibold">Día {calculateDuration()}: Relajación y Partida</h3>
-                            <div className="ml-6 space-y-2">
+                            <div className="ml-6 flex flex-col gap-y-2">
                               <p>
                                 Día final para disfrutar el destino a tu propio ritmo.
                                 Cena de despedida y preparación para la partida.
@@ -1345,7 +1345,7 @@ const TourDetailPage: React.FC = () => {
 
             {/* Cancellation policy for receptivo tours */}
             {!isOwner && tour.tour_type === 'receptivo' && !tour.cancellation_not_allowed && tour.agencies?.is_active !== false && (
-              <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
+              <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-xs">
                 <h3 className="text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
                   <svg className="h-5 w-5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -1394,7 +1394,7 @@ const TourDetailPage: React.FC = () => {
                   <div className="text-3xl font-bold text-primary-600">{formatCurrencyMXN(tour.price)}</div>
                   <div className="text-sm text-gray-500 mt-1">por persona</div>
                 </div>
-                <div className="space-y-2 mb-4">
+                <div className="flex flex-col gap-y-2 mb-4">
                   {tour.tour_type === 'receptivo' ? (
                     <>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -1487,7 +1487,7 @@ const TourDetailPage: React.FC = () => {
                 {tour.agencies?.description || 'Información de la agencia no disponible.'}
               </p>
 
-              <div className="mt-6 space-y-2">
+              <div className="mt-6 flex flex-col gap-y-2">
                 <Link
                   to={`/agencies/${tour.agency_id}`}
                   className="flex items-center text-primary-600 hover:text-primary-700"

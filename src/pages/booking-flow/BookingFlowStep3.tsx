@@ -397,7 +397,7 @@ const BookingFlowStep3: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
       <div className="p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Asientos, extras y membresia</h1>
         <p className="text-sm text-gray-500 mb-6">Paso 3 de 4 — Personaliza tu reserva</p>
@@ -571,7 +571,7 @@ const BookingFlowStep3: React.FC = () => {
         {!isLoadingOptionalServices && optionalServices.length > 0 && (
           <div className="mb-6">
             <div className="text-sm font-semibold text-gray-700 mb-3">Servicios opcionales</div>
-            <div className="space-y-3">
+            <div className="flex flex-col gap-y-3">
               {optionalServices.map((svc) => {
                 const qty = optionalServiceQuantities[svc.id] || 0;
                 const capInfo = serviceCapacities.find(c => c.serviceId === svc.id);
@@ -587,7 +587,7 @@ const BookingFlowStep3: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3 flex-shrink-0">
+                    <div className="flex items-center gap-x-3 flex-shrink-0">
                       <button
                         type="button"
                         onClick={() => handleOptionalServiceChange(svc.id, -1)}
@@ -706,7 +706,7 @@ const BookingFlowStep3: React.FC = () => {
                 <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                 <span className="text-sm font-semibold text-amber-800">Restricciones del Tour</span>
               </div>
-              <div className="space-y-1.5">
+              <div className="flex flex-col gap-y-1.5">
                 {tour.restriction_pregnant && <p className="text-xs text-amber-800">- No apto para mujeres embarazadas</p>}
                 {tour.restriction_disability && <p className="text-xs text-amber-800">- No apto para personas con discapacidad motriz</p>}
                 {tour.restriction_physical && <p className="text-xs text-amber-800">- Requiere condicion fisica adecuada</p>}

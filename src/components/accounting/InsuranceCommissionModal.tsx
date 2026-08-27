@@ -72,7 +72,7 @@ const InsuranceCommissionModal: React.FC<Props> = ({ onClose, onSaved }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
@@ -111,7 +111,7 @@ const InsuranceCommissionModal: React.FC<Props> = ({ onClose, onSaved }) => {
               type="text"
               value={form.provider_name}
               onChange={e => set('provider_name', e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
               required
             />
           </div>
@@ -123,7 +123,7 @@ const InsuranceCommissionModal: React.FC<Props> = ({ onClose, onSaved }) => {
                 type="date"
                 value={form.period_start}
                 onChange={e => set('period_start', e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                 required
               />
             </div>
@@ -133,7 +133,7 @@ const InsuranceCommissionModal: React.FC<Props> = ({ onClose, onSaved }) => {
                 type="date"
                 value={form.period_end}
                 onChange={e => set('period_end', e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                 required
               />
             </div>
@@ -149,7 +149,7 @@ const InsuranceCommissionModal: React.FC<Props> = ({ onClose, onSaved }) => {
                 value={form.amount}
                 onChange={e => set('amount', e.target.value)}
                 placeholder="0.00"
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                 required
               />
             </div>
@@ -159,7 +159,7 @@ const InsuranceCommissionModal: React.FC<Props> = ({ onClose, onSaved }) => {
                 type="date"
                 value={form.receipt_date}
                 onChange={e => set('receipt_date', e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
               />
             </div>
           </div>
@@ -171,7 +171,7 @@ const InsuranceCommissionModal: React.FC<Props> = ({ onClose, onSaved }) => {
               value={form.invoice_reference}
               onChange={e => set('invoice_reference', e.target.value)}
               placeholder="Número de factura o referencia"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
             />
           </div>
 
@@ -182,7 +182,7 @@ const InsuranceCommissionModal: React.FC<Props> = ({ onClose, onSaved }) => {
               value={form.cfdi_uuid}
               onChange={e => set('cfdi_uuid', e.target.value)}
               placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono"
             />
           </div>
 
@@ -193,7 +193,7 @@ const InsuranceCommissionModal: React.FC<Props> = ({ onClose, onSaved }) => {
               onChange={e => set('notes', e.target.value)}
               rows={2}
               placeholder="Observaciones adicionales..."
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500 resize-none"
             />
           </div>
 

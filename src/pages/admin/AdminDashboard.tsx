@@ -294,7 +294,7 @@ const AdminDashboard: React.FC = () => {
           {stats.recentActivity.length > 0 ? (
             <div className="space-y-4">
               {stats.recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-start space-x-3">
+                <div key={activity.id} className="flex items-start gap-x-3">
                   <div className="flex-shrink-0">
                     <Calendar className="h-5 w-5 text-gray-400" />
                   </div>
@@ -308,7 +308,7 @@ const AdminDashboard: React.FC = () => {
                       {' '}con{' '}
                       <span className="font-medium">{activity.agencies?.name}</span>
                     </div>
-                    <div className="flex items-center mt-1 space-x-2">
+                    <div className="flex items-center mt-1 gap-x-2">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(activity.status)}`}>
                         {getStatusText(activity.status)}
                       </span>
@@ -330,7 +330,7 @@ const AdminDashboard: React.FC = () => {
 
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Resumen del Sistema</h2>
-          <div className="space-y-4">
+          <div className="flex flex-col gap-y-4">
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Tasa de agencias activas</span>
               <span className="text-sm font-medium">
@@ -417,7 +417,7 @@ const AdminDashboard: React.FC = () => {
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Link
           to="/admin/tour-metrics"
-          className="flex items-center justify-between w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl p-5 hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm group"
+          className="flex items-center justify-between w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl p-5 hover:from-blue-700 hover:to-blue-800 transition-all shadow-xs group"
         >
           <div className="flex items-center gap-4">
             <div className="p-2.5 bg-white/20 rounded-lg">
@@ -433,7 +433,7 @@ const AdminDashboard: React.FC = () => {
 
         <Link
           to="/admin/reporte-maestro"
-          className="flex items-center justify-between w-full bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-xl p-5 hover:from-emerald-700 hover:to-teal-800 transition-all shadow-sm group"
+          className="flex items-center justify-between w-full bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-xl p-5 hover:from-emerald-700 hover:to-teal-800 transition-all shadow-xs group"
         >
           <div className="flex items-center gap-4">
             <div className="p-2.5 bg-white/20 rounded-lg">

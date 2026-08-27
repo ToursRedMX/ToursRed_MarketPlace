@@ -972,7 +972,7 @@ const AgencyBookings: React.FC = () => {
 
       {/* Tabs */}
       <div className="mb-6 border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
+        <nav className="-mb-px flex gap-x-8">
           <button
             onClick={() => setActiveTab('bookings')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -1078,7 +1078,7 @@ const AgencyBookings: React.FC = () => {
 
           {/* Sub-tabs: Activas / Pasadas / Canceladas */}
           <div className="mb-4 border-b border-gray-200">
-            <nav className="-mb-px flex space-x-6">
+            <nav className="-mb-px flex gap-x-6">
               <button
                 onClick={() => setBookingTab('activas')}
                 className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${bookingTab === 'activas' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
@@ -1111,17 +1111,17 @@ const AgencyBookings: React.FC = () => {
                 placeholder="Buscar por tour, destino, cliente o ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
           {bookingTab !== 'canceladas' && (
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-x-2">
               <Filter className="h-4 w-4 text-gray-400" />
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">Todos los estados</option>
                 <option value="pending">Pendientes</option>
@@ -1159,7 +1159,7 @@ const AgencyBookings: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-y-4">
           {filteredBookings.map((booking) => (
             <div key={booking.id} className="bg-white rounded-lg shadow-md overflow-hidden">
               <div className="flex flex-col lg:flex-row">
@@ -1426,7 +1426,7 @@ const AgencyBookings: React.FC = () => {
                   {bookingOptionalServices[booking.id] && bookingOptionalServices[booking.id].length > 0 && (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
                       <h4 className="text-sm font-semibold text-amber-800 mb-2">Servicios Adicionales Contratados</h4>
-                      <div className="space-y-1.5">
+                      <div className="flex flex-col gap-y-1.5">
                         {bookingOptionalServices[booking.id].map((bos: any) => (
                           <div key={bos.id} className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
@@ -1456,7 +1456,7 @@ const AgencyBookings: React.FC = () => {
                         <Tag className="w-4 h-4" />
                         Suplementos Adicionales
                       </h4>
-                      <div className="space-y-3">
+                      <div className="flex flex-col gap-y-3">
                         {bookingSupplements[booking.id].map((bs: any) => {
                           const statusConfig: Record<string, { label: string; color: string }> = {
                             pending_approval: { label: 'Pendiente aprobacion', color: 'bg-amber-100 text-amber-700' },
@@ -1470,7 +1470,7 @@ const AgencyBookings: React.FC = () => {
                           const isPendingApproval = bs.status === 'pending_approval';
 
                           return (
-                            <div key={bs.id} className="bg-white border border-teal-100 rounded-lg p-3 space-y-2">
+                            <div key={bs.id} className="bg-white border border-teal-100 rounded-lg p-3 flex flex-col gap-y-2">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-sm font-medium text-gray-800">
@@ -1493,9 +1493,9 @@ const AgencyBookings: React.FC = () => {
                               )}
 
                               {isPendingApproval && (
-                                <div className="pt-1 space-y-2">
+                                <div className="pt-1 flex flex-col gap-y-2">
                                   {supplementAction && supplementAction.supplementId === bs.id && supplementAction.type === 'reject' ? (
-                                    <div className="space-y-2">
+                                    <div className="flex flex-col gap-y-2">
                                       <textarea
                                         value={supplementAction.rejectionNote}
                                         onChange={(e) => setSupplementAction(prev => prev ? { ...prev, rejectionNote: e.target.value } : null)}
@@ -1549,7 +1549,7 @@ const AgencyBookings: React.FC = () => {
                   )}
 
                   {/* Actions */}
-                  <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+                  <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
                     <Link
                       to={`/tours/${booking.tour_id}`}
                       className="btn btn-outline flex items-center justify-center"
@@ -1944,7 +1944,7 @@ const AgencyBookings: React.FC = () => {
               <select
                 value={selectedTourForReport}
                 onChange={(e) => setSelectedTourForReport(e.target.value)}
-                className="flex-1 border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="flex-1 border border-gray-300 rounded-md px-4 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">-- Selecciona un tour --</option>
                 {availableTours.map((tour) => (
@@ -2073,7 +2073,7 @@ const AgencyBookings: React.FC = () => {
                         </td>
                         <td className="px-4 py-4">
                           {booking.travelers.length > 0 ? (
-                            <div className="space-y-1">
+                            <div className="flex flex-col gap-y-1">
                               {booking.travelers.map((traveler: any) => (
                                 <div key={traveler.id} className="text-sm">
                                   <span className="font-medium">{traveler.nombre}</span>
@@ -2117,7 +2117,7 @@ const AgencyBookings: React.FC = () => {
 
       {/* Contact Modal */}
       {contactModal.open && contactModal.booking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
@@ -2214,7 +2214,7 @@ const AgencyBookings: React.FC = () => {
 
       {/* Travelers Modal */}
       {travelersModal.open && travelersModal.booking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
@@ -2363,7 +2363,7 @@ const AgencyBookings: React.FC = () => {
 
       {/* Review Modal */}
       {reviewModal.open && reviewModal.booking && agencyId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
@@ -2400,7 +2400,7 @@ const AgencyBookings: React.FC = () => {
 
       {/* Cancel Booking Modal */}
       {cancelBookingModal.open && cancelBookingModal.booking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
@@ -2424,7 +2424,7 @@ const AgencyBookings: React.FC = () => {
 
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <h3 className="font-semibold mb-3">Información de la Reserva</h3>
-                <div className="space-y-2 text-sm">
+                <div className="flex flex-col gap-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Código de reserva:</span>
                     <span className="font-semibold">{cancelBookingModal.booking.booking_code}</span>
@@ -2451,7 +2451,7 @@ const AgencyBookings: React.FC = () => {
                   <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                   <div className="text-sm text-yellow-800">
                     <p className="font-semibold mb-1">Importante: Política de Cancelación por Agencia</p>
-                    <ul className="list-disc list-inside space-y-1 ml-2">
+                    <ul className="list-disc list-inside flex flex-col gap-y-1 ml-2">
                       <li>El viajero recibirá un <strong>reembolso del 100%</strong> en su ToursRed Cash</li>
                       <li>Los cargos por servicio NO son reembolsables (ya cobrados por Stripe)</li>
                       <li>Tu agencia <strong>NO recibirá comisión</strong> por esta reserva</li>
@@ -2488,7 +2488,7 @@ const AgencyBookings: React.FC = () => {
                   value={cancelBookingModal.reason}
                   onChange={(e) => handleCancelBookingReasonChange(e.target.value)}
                   placeholder="Explica el motivo de la cancelación. Por ejemplo: sobrecupo, problema logístico, situación especial con el viajero, etc."
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none"
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:outline-hidden focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none"
                   rows={5}
                   disabled={cancelBookingModal.isSubmitting}
                 />

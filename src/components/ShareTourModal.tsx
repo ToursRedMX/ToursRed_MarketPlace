@@ -56,7 +56,7 @@ export default function ShareTourModal({ isOpen, onClose, tourId, tourName, tour
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4">
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+          className="fixed inset-0 bg-black/50 transition-opacity"
           onClick={onClose}
         />
 
@@ -86,7 +86,7 @@ export default function ShareTourModal({ isOpen, onClose, tourId, tourName, tour
             </div>
           )}
 
-          <div className="space-y-3">
+          <div className="flex flex-col gap-y-3">
             <button
               onClick={handleCopyLink}
               className="w-full flex items-center gap-4 p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-left"

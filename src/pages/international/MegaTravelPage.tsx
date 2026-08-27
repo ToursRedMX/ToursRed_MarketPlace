@@ -172,7 +172,7 @@ const MegaTravelPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="container-custom py-6">
         <nav className="flex mb-6" aria-label="Breadcrumb">
-          <ol className="inline-flex items-center space-x-1 md:space-x-3">
+          <ol className="inline-flex items-center gap-x-1 md:gap-x-3">
             <li className="inline-flex items-center">
               <Link to="/" className="text-gray-500 hover:text-primary-600">
                 Inicio
@@ -205,8 +205,8 @@ const MegaTravelPage: React.FC = () => {
             Explora más de 100 destinos alrededor del mundo con nuestro aliado de confianza
           </p>
 
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6 border border-white/20">
-            <div className="flex items-start space-x-3">
+          <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4 mb-6 border border-white/20">
+            <div className="flex items-start gap-x-3">
               <Info className="h-6 w-6 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-semibold mb-2">¿Cómo funciona?</p>
@@ -218,7 +218,7 @@ const MegaTravelPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-accent-500 text-gray-900 rounded-lg p-4 flex items-start space-x-3">
+          <div className="bg-accent-500 text-gray-900 rounded-lg p-4 flex items-start gap-x-3">
             <AlertCircle className="h-6 w-6 flex-shrink-0 mt-0.5" />
             <p className="text-sm font-medium">
               Este es un catálogo informativo. Para reservar, primero debes solicitar una cotización y nuestro equipo te guiará en el proceso de compra.
@@ -229,7 +229,7 @@ const MegaTravelPage: React.FC = () => {
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="border-b border-gray-200">
             <div className="overflow-x-auto">
-              <nav className="flex space-x-2 p-4 min-w-max" aria-label="Tabs">
+              <nav className="flex gap-x-2 p-4 min-w-max" aria-label="Tabs">
                 {destinations.map((dest) => (
                   <button
                     key={dest.id}
@@ -288,7 +288,7 @@ const MegaTravelPage: React.FC = () => {
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="fixed bottom-6 right-6 bg-accent-500 hover:bg-accent-600 text-white px-6 py-4 rounded-full shadow-lg flex items-center space-x-2 transition-transform hover:scale-105 z-40"
+          className="fixed bottom-6 right-6 bg-accent-500 hover:bg-accent-600 text-white px-6 py-4 rounded-full shadow-lg flex items-center gap-x-2 transition-transform hover:scale-105 z-40"
         >
           <MessageSquare className="h-5 w-5" />
           <span className="font-semibold">Solicitar Cotización</span>
@@ -296,7 +296,7 @@ const MegaTravelPage: React.FC = () => {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">Solicitar Cotización</h2>
@@ -460,7 +460,7 @@ const MegaTravelPage: React.FC = () => {
                 />
               </div>
 
-              <div className="mt-6 flex justify-end space-x-4">
+              <div className="mt-6 flex justify-end gap-x-4">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
@@ -471,7 +471,7 @@ const MegaTravelPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-x-2"
                   disabled={isLoading}
                 >
                   {isLoading ? (

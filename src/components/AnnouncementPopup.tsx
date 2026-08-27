@@ -86,7 +86,7 @@ const AnnouncementPopup: React.FC = () => {
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" />
 
       {/* Modal */}
       <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-auto overflow-hidden animate-[fadeInScale_0.2s_ease-out]">

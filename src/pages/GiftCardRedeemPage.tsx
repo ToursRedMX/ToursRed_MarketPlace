@@ -145,7 +145,7 @@ export default function GiftCardRedeemPage() {
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <div className="flex items-start space-x-3">
+                <div className="flex items-start gap-x-3">
                   <Wallet className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-sm text-blue-900 font-medium mb-1">
@@ -197,7 +197,7 @@ export default function GiftCardRedeemPage() {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           <div className="p-8">
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-x-3">
                 <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <p className="text-red-800">{error}</p>
               </div>
@@ -224,7 +224,7 @@ export default function GiftCardRedeemPage() {
               <button
                 onClick={handleValidate}
                 disabled={isValidating || code.replace(/-/g, '').length !== 16}
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white py-4 rounded-xl font-bold text-lg hover:from-amber-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white py-4 rounded-xl font-bold text-lg hover:from-amber-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-x-2"
               >
                 {isValidating ? (
                   <>
@@ -240,11 +240,11 @@ export default function GiftCardRedeemPage() {
             {validationResult && (
               <div className="space-y-4">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-                  <div className="flex items-center space-x-3 mb-4">
+                  <div className="flex items-center gap-x-3 mb-4">
                     <Check className="w-6 h-6 text-green-600" />
                     <p className="font-semibold text-green-900">¡Código Válido!</p>
                   </div>
-                  <div className="space-y-2">
+                  <div className="flex flex-col gap-y-2">
                     <div className="flex justify-between">
                       <span className="text-gray-700">Monto:</span>
                       <span className="font-bold text-2xl text-green-700">
@@ -278,7 +278,7 @@ export default function GiftCardRedeemPage() {
                 <button
                   onClick={handleRedeem}
                   disabled={isRedeeming}
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-x-2"
                 >
                   {isRedeeming ? (
                     <>

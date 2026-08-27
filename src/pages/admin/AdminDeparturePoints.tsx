@@ -287,7 +287,7 @@ const AdminDeparturePoints: React.FC = () => {
         <button
           onClick={handleAddNew}
           disabled={isAddingNew}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed mt-4 md:mt-0"
+          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed mt-4 md:mt-0"
         >
           <Plus className="w-5 h-5 mr-2" />
           Nuevo Punto
@@ -320,7 +320,7 @@ const AdminDeparturePoints: React.FC = () => {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="ej. Monumento a la Revolución"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
@@ -333,7 +333,7 @@ const AdminDeparturePoints: React.FC = () => {
                 value={formData.city}
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                 placeholder="ej. Ciudad de México"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
@@ -346,7 +346,7 @@ const AdminDeparturePoints: React.FC = () => {
                 value={formData.municipality}
                 onChange={(e) => setFormData({ ...formData, municipality: e.target.value })}
                 placeholder="ej. Cuauhtémoc"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
@@ -359,7 +359,7 @@ const AdminDeparturePoints: React.FC = () => {
                 value={formData.google_maps_url}
                 onChange={(e) => setFormData({ ...formData, google_maps_url: e.target.value })}
                 placeholder="https://maps.app.goo.gl/..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
@@ -377,17 +377,17 @@ const AdminDeparturePoints: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-4 flex justify-end space-x-3">
+          <div className="mt-4 flex justify-end gap-x-3">
             <button
               onClick={handleCancelEdit}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             >
               <X className="h-4 w-4 inline mr-1" />
               Cancelar
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             >
               <Save className="h-4 w-4 inline mr-1" />
               Guardar
@@ -543,7 +543,7 @@ const AdminDeparturePoints: React.FC = () => {
                                 type="text"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500"
                               />
                             </div>
 
@@ -555,7 +555,7 @@ const AdminDeparturePoints: React.FC = () => {
                                 type="text"
                                 value={formData.city}
                                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500"
                               />
                             </div>
 
@@ -567,7 +567,7 @@ const AdminDeparturePoints: React.FC = () => {
                                 type="text"
                                 value={formData.municipality}
                                 onChange={(e) => setFormData({ ...formData, municipality: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500"
                               />
                             </div>
 
@@ -579,7 +579,7 @@ const AdminDeparturePoints: React.FC = () => {
                                 type="url"
                                 value={formData.google_maps_url}
                                 onChange={(e) => setFormData({ ...formData, google_maps_url: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500"
                               />
                             </div>
 
@@ -597,7 +597,7 @@ const AdminDeparturePoints: React.FC = () => {
                             </div>
                           </div>
 
-                          <div className="mt-4 flex justify-end space-x-3">
+                          <div className="mt-4 flex justify-end gap-x-3">
                             <button
                               onClick={handleCancelEdit}
                               className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
@@ -607,7 +607,7 @@ const AdminDeparturePoints: React.FC = () => {
                             </button>
                             <button
                               onClick={handleSave}
-                              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
+                              className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
                             >
                               <Save className="h-4 w-4 inline mr-1" />
                               Guardar Cambios
@@ -706,7 +706,7 @@ const AdminDeparturePoints: React.FC = () => {
       )}
 
       {viewingPointId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">Tours que usan este punto</h2>
@@ -723,7 +723,7 @@ const AdminDeparturePoints: React.FC = () => {
                   Este punto no está siendo usado por ningún tour
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="flex flex-col gap-y-3">
                   {toursUsingPoint.map((tour) => (
                     <div key={tour.tour_id} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex items-start gap-3">

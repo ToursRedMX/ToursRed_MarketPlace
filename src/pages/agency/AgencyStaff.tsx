@@ -494,7 +494,7 @@ export default function AgencyStaff() {
 
         {/* Invitaciones pendientes */}
         {pendingInvitations.length > 0 && (
-          <div className="bg-white rounded-xl border border-amber-200 shadow-sm mb-6">
+          <div className="bg-white rounded-xl border border-amber-200 shadow-xs mb-6">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-amber-100 bg-amber-50 rounded-t-xl">
               <Mail className="w-4 h-4 text-amber-600" />
               <h2 className="text-sm font-semibold text-amber-800">Invitaciones pendientes</h2>
@@ -542,15 +542,15 @@ export default function AgencyStaff() {
           </div>
         )}
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs mb-6">
           <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-gray-100">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input type="text" placeholder="Buscar coordinador..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500" />
             </div>
             <select value={filterActive} onChange={e => setFilterActive(e.target.value as any)}
-              className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500 bg-white">
               <option value="all">Todos</option>
               <option value="active">Activos</option>
               <option value="inactive">Inactivos</option>
@@ -673,7 +673,7 @@ export default function AgencyStaff() {
                     <input type="email" value={emailSearch}
                       onChange={e => { setEmailSearch(e.target.value); setFoundUser(null); setUserSearchError(''); setUserNotFound(false); }}
                       placeholder="correo@ejemplo.com"
-                      className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                       onKeyDown={e => e.key === 'Enter' && handleSearchUser()} />
                     <button onClick={handleSearchUser} disabled={searchingUser || !emailSearch.trim()}
                       className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors flex items-center gap-1">
@@ -710,7 +710,7 @@ export default function AgencyStaff() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cargo / Titulo</label>
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)}
                   placeholder="ej. Coordinador, Guia, Supervisor..."
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500" />
               </div>
 
               <div>

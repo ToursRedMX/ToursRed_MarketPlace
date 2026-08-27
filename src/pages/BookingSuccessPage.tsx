@@ -205,7 +205,7 @@ const BookingSuccessPage: React.FC = () => {
               alt={tour.name}
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-black bg-opacity-40 flex items-end">
+            <div className="absolute inset-0 bg-black/40 flex items-end">
               <div className="p-6 text-white">
                 <h2 className="text-2xl font-bold mb-2">{tour.name}</h2>
                 <div className="flex items-center">
@@ -331,7 +331,7 @@ const BookingSuccessPage: React.FC = () => {
 
               <div>
                 <h3 className="text-lg font-semibold mb-4">Desglose de Costos</h3>
-                <div className="space-y-2 text-sm">
+                <div className="flex flex-col gap-y-2 text-sm">
                   {/* Desglose por categoría de viajeros */}
                   {booking.adults_count > 0 && (
                     <div className="flex justify-between">
@@ -379,7 +379,7 @@ const BookingSuccessPage: React.FC = () => {
                   ))}
 
                   {optionalServices.filter(opt => opt.service_kind === 'optional_service').length > 0 && (
-                    <div className="flex justify-between border-t pt-2 mt-2">
+                    <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
                       <span className="text-gray-700 font-semibold">Servicios Adicionales:</span>
                       <span className="font-medium"></span>
                     </div>
@@ -407,7 +407,7 @@ const BookingSuccessPage: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="flex justify-between border-t pt-2 mt-2">
+                  <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
                     <span className="text-gray-700 font-medium">Precio Total del Tour:</span>
                     <span className="font-bold">{formatCurrencyMXN(booking.total_price ?? 0)}</span>
                   </div>

@@ -241,7 +241,7 @@ const SupplementSuccessPage: React.FC = () => {
         <div className="flex justify-center">
           <Link
             to="/traveler/bookings"
-            className="inline-flex items-center gap-2 bg-teal-600 text-white font-semibold px-8 py-3 rounded-xl hover:bg-teal-700 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 bg-teal-600 text-white font-semibold px-8 py-3 rounded-xl hover:bg-teal-700 transition-colors shadow-xs"
           >
             Ver Mis Reservas
             <ArrowRight className="w-4 h-4" />

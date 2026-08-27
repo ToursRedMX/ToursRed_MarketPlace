@@ -187,7 +187,7 @@ const AdminNewsletter: React.FC = () => {
 
         {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                 <Users className="h-5 w-5 text-blue-600" />
@@ -198,7 +198,7 @@ const AdminNewsletter: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
                 <UserCheck className="h-5 w-5 text-green-600" />
@@ -209,7 +209,7 @@ const AdminNewsletter: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
                 <UserMinus className="h-5 w-5 text-gray-500" />
@@ -223,7 +223,7 @@ const AdminNewsletter: React.FC = () => {
         </div>
 
         {/* Subscribers table */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden mb-8">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="text-base font-bold text-gray-800 mb-3">Suscriptores</h2>
             <div className="flex gap-3 flex-wrap">
@@ -345,7 +345,7 @@ const AdminNewsletter: React.FC = () => {
         </div>
 
         {/* Broadcast history */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5">
           <h2 className="text-lg font-bold text-gray-800 mb-4">Historial de envios</h2>
 
           {loadingBroadcasts ? (
@@ -423,7 +423,7 @@ const AdminNewsletter: React.FC = () => {
                   onChange={e => setSendSubject(e.target.value)}
                   maxLength={150}
                   placeholder="Ej: Nuevas ofertas de viaje para este mes"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
                 <p className="text-xs text-gray-400 mt-1 text-right">{sendSubject.length}/150</p>
               </div>

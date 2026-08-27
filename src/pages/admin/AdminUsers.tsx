@@ -382,7 +382,7 @@ const AdminUsers: React.FC = () => {
     onChange: (checked: boolean) => void;
     disabled?: boolean;
   }) => (
-    <label className="flex items-center space-x-2 cursor-pointer">
+    <label className="flex items-center gap-x-2 cursor-pointer">
       <input
         type="checkbox"
         checked={checked}
@@ -709,7 +709,7 @@ const AdminUsers: React.FC = () => {
                       )}
                     </div>
                     {editingPermissions === user.id && (
-                      <div className="mt-4 flex justify-end space-x-2">
+                      <div className="mt-4 flex justify-end gap-x-2">
                         <button
                           onClick={cancelEditPermissions}
                           className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
@@ -738,7 +738,7 @@ const AdminUsers: React.FC = () => {
         )}
 
         {showCreateModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
@@ -925,7 +925,7 @@ const AdminUsers: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex justify-end space-x-2">
+                <div className="flex justify-end gap-x-2">
                   <button
                     onClick={() => setShowCreateModal(false)}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"

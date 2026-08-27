@@ -335,14 +335,14 @@ const MessageThread: React.FC<MessageThreadProps> = ({
                           }`}
                         >
                           {editingMessageId === message.id ? (
-                            <div className="space-y-2">
+                            <div className="flex flex-col gap-y-2">
                               <textarea
                                 value={editContent}
                                 onChange={(e) => setEditContent(e.target.value)}
                                 className="w-full p-2 border border-gray-300 rounded text-gray-900 text-sm"
                                 rows={2}
                               />
-                              <div className="flex space-x-2">
+                              <div className="flex gap-x-2">
                                 <button
                                   onClick={saveEdit}
                                   className="text-xs bg-green-600 text-white px-2 py-1 rounded"
@@ -371,7 +371,7 @@ const MessageThread: React.FC<MessageThreadProps> = ({
 
                         {isOwnMessage && editingMessageId !== message.id && (
                           <div className="absolute top-0 right-0 -mr-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="flex space-x-1">
+                            <div className="flex gap-x-1">
                               <button
                                 onClick={() => startEdit(message)}
                                 className="p-1 text-gray-400 hover:text-gray-600"
@@ -406,13 +406,13 @@ const MessageThread: React.FC<MessageThreadProps> = ({
 
       {/* Message Input */}
       <div className="p-4 border-t border-gray-200 bg-white">
-        <div className="flex space-x-2">
+        <div className="flex gap-x-2">
           <textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Escribe tu mensaje..."
-            className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
+            className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
             rows={1}
             disabled={isSending}
           />

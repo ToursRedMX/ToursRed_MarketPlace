@@ -71,7 +71,7 @@ const InsuranceSettlementModal: React.FC<Props> = ({ onClose, onSaved, suggested
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
@@ -110,7 +110,7 @@ const InsuranceSettlementModal: React.FC<Props> = ({ onClose, onSaved, suggested
               type="text"
               value={form.provider_name}
               onChange={e => set('provider_name', e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               required
             />
           </div>
@@ -122,7 +122,7 @@ const InsuranceSettlementModal: React.FC<Props> = ({ onClose, onSaved, suggested
                 type="date"
                 value={form.period_start}
                 onChange={e => set('period_start', e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
@@ -132,7 +132,7 @@ const InsuranceSettlementModal: React.FC<Props> = ({ onClose, onSaved, suggested
                 type="date"
                 value={form.period_end}
                 onChange={e => set('period_end', e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
@@ -148,7 +148,7 @@ const InsuranceSettlementModal: React.FC<Props> = ({ onClose, onSaved, suggested
                 value={form.amount}
                 onChange={e => set('amount', e.target.value)}
                 placeholder="0.00"
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
@@ -158,7 +158,7 @@ const InsuranceSettlementModal: React.FC<Props> = ({ onClose, onSaved, suggested
                 type="date"
                 value={form.payment_date}
                 onChange={e => set('payment_date', e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -170,7 +170,7 @@ const InsuranceSettlementModal: React.FC<Props> = ({ onClose, onSaved, suggested
               value={form.reference}
               onChange={e => set('reference', e.target.value)}
               placeholder="Número de transferencia, folio, etc."
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -181,7 +181,7 @@ const InsuranceSettlementModal: React.FC<Props> = ({ onClose, onSaved, suggested
               onChange={e => set('notes', e.target.value)}
               rows={2}
               placeholder="Observaciones adicionales..."
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
             />
           </div>
 

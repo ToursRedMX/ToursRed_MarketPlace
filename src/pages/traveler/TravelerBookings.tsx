@@ -2517,7 +2517,7 @@ const TravelerBookings: React.FC = () => {
                       <h4 className="font-medium mb-2 flex items-center gap-2 text-amber-800">
                         <span>Servicios Adicionales Contratados</span>
                       </h4>
-                      <div className="space-y-2">
+                      <div className="flex flex-col gap-y-2">
                         {bookingOptionalServices[booking.id].map((bos: any) => (
                           <div key={bos.id} className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
@@ -2560,7 +2560,7 @@ const TravelerBookings: React.FC = () => {
                         {[...(booking as any).selected_seats].sort((a: number, b: number) => a - b).map((seat: number) => (
                           <span
                             key={seat}
-                            className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-600 text-white text-sm font-bold shadow-sm"
+                            className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-600 text-white text-sm font-bold shadow-xs"
                           >
                             {seat}
                           </span>
@@ -3057,7 +3057,7 @@ const TravelerBookings: React.FC = () => {
               <div
                 key={booking.id}
                 id={`booking-${booking.id}`}
-                className={`bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden opacity-80 transition-all duration-700 ${highlightedBookingId === booking.id ? 'ring-4 ring-blue-400 ring-offset-2' : ''}`}
+                className={`bg-white rounded-lg shadow-xs border border-gray-100 overflow-hidden opacity-80 transition-all duration-700 ${highlightedBookingId === booking.id ? 'ring-4 ring-blue-400 ring-offset-2' : ''}`}
               >
                 <div className="flex flex-col lg:flex-row">
                   <div className="lg:w-1/4">
@@ -3139,7 +3139,7 @@ const TravelerBookings: React.FC = () => {
               <div
                 key={booking.id}
                 id={`booking-${booking.id}`}
-                className={`bg-white rounded-lg shadow-sm border border-red-50 overflow-hidden opacity-70 transition-all duration-700 ${highlightedBookingId === booking.id ? 'ring-4 ring-blue-400 ring-offset-2' : ''}`}
+                className={`bg-white rounded-lg shadow-xs border border-red-50 overflow-hidden opacity-70 transition-all duration-700 ${highlightedBookingId === booking.id ? 'ring-4 ring-blue-400 ring-offset-2' : ''}`}
               >
                 <div className="flex flex-col lg:flex-row">
                   <div className="lg:w-1/4">
@@ -3185,7 +3185,7 @@ const TravelerBookings: React.FC = () => {
 
       {/* Travelers Modal */}
       {travelersModal.open && travelersModal.booking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
@@ -3332,7 +3332,7 @@ const TravelerBookings: React.FC = () => {
 
       {/* Review Modal */}
       {reviewModal.open && reviewModal.booking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
@@ -3366,7 +3366,7 @@ const TravelerBookings: React.FC = () => {
 
       {/* Cancellation Modal */}
       {cancellationModal.open && cancellationModal.booking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               {!cancellationModal.success ? (
@@ -3651,7 +3651,7 @@ const TravelerBookings: React.FC = () => {
 
       {/* Partial Cancellation Modal */}
       {partialCancellationModal.open && partialCancellationModal.booking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               {!partialCancellationModal.success ? (
@@ -3683,7 +3683,7 @@ const TravelerBookings: React.FC = () => {
                     </div>
                   ) : (
                     <>
-                      <div className="space-y-2 mb-5">
+                      <div className="flex flex-col gap-y-2 mb-5">
                         {partialCancellationModal.travelers.map((traveler) => {
                           const isSelected = partialCancellationModal.selectedIds.has(traveler.id);
                           const categoryLabels: Record<string, string> = {
@@ -3779,7 +3779,7 @@ const TravelerBookings: React.FC = () => {
                               {partialCancellationModal.policy.daysBeforeTour} día(s) antes
                             </span>
                           </div>
-                          <div className="space-y-1 text-sm mb-2">
+                          <div className="flex flex-col gap-y-1 text-sm mb-2">
                             <div className="flex justify-between">
                               <span className="text-gray-600">Anticipo de viajeros cancelados:</span>
                               <span className="font-medium">${formatCurrencyMXN(Number(partialCancellationModal.policy.originalPartialAmount))}</span>
@@ -3905,7 +3905,7 @@ const TravelerBookings: React.FC = () => {
 
       {/* Payment Modal with ToursRed Cash */}
       {paymentModal.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-start mb-6">
@@ -3923,7 +3923,7 @@ const TravelerBookings: React.FC = () => {
                 {/* Booking Details */}
                 <div className="bg-gray-50 rounded-lg p-4">
                   <h3 className="font-semibold text-gray-900 mb-2">{paymentModal.booking?.tours?.name}</h3>
-                  <div className="text-sm text-gray-600 space-y-1">
+                  <div className="text-sm text-gray-600 flex flex-col gap-y-1">
                     <p>Fecha del Tour: {paymentModal.booking?.booking_date && formatDate(paymentModal.booking.booking_date)}</p>
                     <p>Viajeros: {paymentModal.booking?.travelers_count}</p>
                   </div>
@@ -3953,7 +3953,7 @@ const TravelerBookings: React.FC = () => {
                 })()}
 
                 {/* Payment Summary */}
-                <div className="space-y-3">
+                <div className="flex flex-col gap-y-3">
                   {(() => {
                     const discountAmount = paymentModal.booking?.discount_amount || 0;
                     const userPayment = paymentModal.booking?.user_payment || paymentModal.booking?.deposit_amount || 0;
@@ -4008,7 +4008,7 @@ const TravelerBookings: React.FC = () => {
 
                     return (
                       <>
-                        <div className="border-t pt-3">
+                        <div className="border-t border-gray-200 pt-3">
                           <div className="flex justify-between items-center mb-2">
                             <span className="text-sm font-medium text-gray-700">Tu Saldo ToursRed Cash:</span>
                             <span className="text-lg font-bold text-green-600">{formatCurrencyMXN(paymentModal.walletBalance)}</span>
@@ -4067,7 +4067,7 @@ const TravelerBookings: React.FC = () => {
                     );
                   })()}
 
-                  <div className="border-t pt-3">
+                  <div className="border-t border-gray-200 pt-3">
                     <div className="flex justify-between text-lg font-bold">
                       <span>Total a Pagar{paymentModal.toursRedCashToUse > 0 ? ` con ${paymentModal.selectedProvider === 'mercadopago' ? 'MercadoPago' : paymentModal.selectedProvider === 'paypal' ? 'PayPal' : paymentModal.selectedProvider === 'conekta' ? 'Conekta' : paymentModal.selectedProvider === 'openpay' ? 'Openpay' : 'Stripe'}` : ''}:</span>
                       <span className="text-primary-600">
@@ -4126,7 +4126,7 @@ const TravelerBookings: React.FC = () => {
       )}
 
       {paymentValidationError.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <div className="flex items-start mb-4">
               <AlertCircle className="h-6 w-6 text-red-600 mr-3 flex-shrink-0 mt-0.5" />
@@ -4159,7 +4159,7 @@ const TravelerBookings: React.FC = () => {
 
       {/* Reschedule Modal */}
       {rescheduleModal.open && rescheduleModal.booking && rescheduleModal.rescheduleInfo && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               {!rescheduleModal.success ? (
@@ -4370,7 +4370,7 @@ const TravelerBookings: React.FC = () => {
 
       {/* Modal de Cambio de Horario (Slot Reschedule) */}
       {slotRescheduleModal.open && slotRescheduleModal.booking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             {slotRescheduleModal.success ? (
               <div className="text-center py-8">
@@ -4411,7 +4411,7 @@ const TravelerBookings: React.FC = () => {
                 </div>
 
                 {slotRescheduleModal.slotRescheduleInfo && (
-                  <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-2">
+                  <div className="bg-gray-50 rounded-lg p-4 mb-4 flex flex-col gap-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Horario anterior:</span>
                       <span className="font-medium text-gray-700 line-through">

@@ -381,7 +381,7 @@ const TourRow: React.FC<{
   const isActive = !tour.end_date || tour.end_date >= TODAY;
 
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow transition-shadow">
+    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-xs hover:shadow transition-shadow">
       {/* ── Header row ── */}
       <button
         onClick={onToggle}
@@ -745,7 +745,7 @@ const AdminTourMetrics: React.FC = () => {
               onClick={() => { setActiveTab(tab.key); setExpandedId(null); }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === tab.key
-                  ? 'bg-white text-gray-900 shadow-sm'
+                  ? 'bg-white text-gray-900 shadow-xs'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -766,13 +766,13 @@ const AdminTourMetrics: React.FC = () => {
               placeholder="Buscar tour, agencia, destino..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <select
             value={filterType}
             onChange={e => setFilterType(e.target.value as typeof filterType)}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Todos los tipos</option>
             <option value="excursion">Excursion</option>
@@ -793,7 +793,7 @@ const AdminTourMetrics: React.FC = () => {
             {search && <p className="text-sm mt-1">Intenta con otra busqueda</p>}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-y-3">
             {filtered.map(tour => (
               <TourRow
                 key={tour.id}

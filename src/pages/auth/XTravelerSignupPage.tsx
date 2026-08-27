@@ -207,7 +207,7 @@ const XTravelerSignupPage: React.FC = () => {
     }
   };
 
-  const inputClass = "appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm";
+  const inputClass = "appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm";
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -237,7 +237,7 @@ const XTravelerSignupPage: React.FC = () => {
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de viajero</label>
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center gap-x-4">
                 <label className="flex items-center cursor-pointer">
                   <input type="radio" checked={!isForeignTraveler} onChange={() => setIsForeignTraveler(false)} className="h-4 w-4 text-primary-600" />
                   <span className="ml-2 text-sm font-medium text-gray-700">Viajero Nacional</span>
@@ -326,7 +326,7 @@ const XTravelerSignupPage: React.FC = () => {
               <input name="phoneNumber" type="tel" value={formData.phoneNumber} onChange={handleInputChange} placeholder="+52 55 1234 5678" required className={`mt-1 ${inputClass}`} />
             </div>
 
-            <div className="border-t pt-4 space-y-3">
+            <div className="border-t border-gray-200 pt-4 flex flex-col gap-y-3">
               <h3 className="text-sm font-medium text-gray-900">Domicilio</h3>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Calle</label>
@@ -368,7 +368,7 @@ const XTravelerSignupPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="border-t pt-4 space-y-4">
+            <div className="border-t border-gray-200 pt-4 space-y-4">
               <div>
                 <p className="text-sm text-gray-600 mb-3">Asigna una contraseña para poder iniciar sesión también con tu correo y contraseña.</p>
                 <label className="block text-sm font-medium text-gray-700">Contraseña</label>
@@ -412,7 +412,7 @@ const XTravelerSignupPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading || !termsAccepted}
-              className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Completando registro...' : 'Crear cuenta de Viajero'}
             </button>

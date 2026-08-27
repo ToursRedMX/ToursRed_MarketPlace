@@ -174,14 +174,14 @@ const AgencyScheduleManager: React.FC<AgencyScheduleManagerProps> = ({ tourId, a
               <label className="block text-xs font-medium text-gray-600 mb-1">Hora de salida *</label>
               <input type="time" value={form.departure_time}
                 onChange={e => setForm(prev => ({ ...prev, departure_time: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Etiqueta (opcional)</label>
               <input type="text" value={form.label} placeholder="Salida matutina"
                 onChange={e => setForm(prev => ({ ...prev, label: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500" />
             </div>
           </div>
 
@@ -190,13 +190,13 @@ const AgencyScheduleManager: React.FC<AgencyScheduleManagerProps> = ({ tourId, a
               <label className="block text-xs font-medium text-gray-600 mb-1">Cupos (sobreescribe default)</label>
               <input type="number" min="1" value={form.slot_capacity} placeholder="Deja vacío para usar el default"
                 onChange={e => setForm(prev => ({ ...prev, slot_capacity: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Orden de visualización</label>
               <input type="number" min="0" value={form.display_order}
                 onChange={e => setForm(prev => ({ ...prev, display_order: parseInt(e.target.value) || 0 }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500" />
             </div>
           </div>
 
@@ -205,14 +205,14 @@ const AgencyScheduleManager: React.FC<AgencyScheduleManagerProps> = ({ tourId, a
               <label className="block text-xs font-medium text-gray-600 mb-1">Válido desde *</label>
               <input type="date" value={form.valid_from}
                 onChange={e => setForm(prev => ({ ...prev, valid_from: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Válido hasta (opcional)</label>
               <input type="date" value={form.valid_until}
                 onChange={e => setForm(prev => ({ ...prev, valid_until: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500" />
             </div>
           </div>
 

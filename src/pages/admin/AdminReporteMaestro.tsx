@@ -566,7 +566,7 @@ const AdminReporteMaestro: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-sm">
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-xs">
         <div className="flex items-center gap-2 mb-4 text-gray-700 font-medium text-sm">
           <Filter size={15} />
           Filtros
@@ -578,7 +578,7 @@ const AdminReporteMaestro: React.FC = () => {
               type="date"
               value={filters.desde}
               onChange={(e) => setFilters((f) => ({ ...f, desde: e.target.value, categoria: 'todas' }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
@@ -587,7 +587,7 @@ const AdminReporteMaestro: React.FC = () => {
               type="date"
               value={filters.hasta}
               onChange={(e) => setFilters((f) => ({ ...f, hasta: e.target.value, categoria: 'todas' }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
@@ -601,7 +601,7 @@ const AdminReporteMaestro: React.FC = () => {
                   categoria: 'todas',
                 }))
               }
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             >
               <option value="todos">Todos</option>
               <option value="ingreso">Solo Ingresos</option>
@@ -613,7 +613,7 @@ const AdminReporteMaestro: React.FC = () => {
             <select
               value={filters.categoria}
               onChange={(e) => setFilters((f) => ({ ...f, categoria: e.target.value as Filters['categoria'] }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             >
               <option value="todas">Todas</option>
               {categoriasDisponibles.map((cat) => (
@@ -630,7 +630,7 @@ const AdminReporteMaestro: React.FC = () => {
                 placeholder="Descripcion, referencia..."
                 value={filters.busqueda}
                 onChange={(e) => setFilters((f) => ({ ...f, busqueda: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -639,7 +639,7 @@ const AdminReporteMaestro: React.FC = () => {
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Total Ingresos</p>
@@ -650,7 +650,7 @@ const AdminReporteMaestro: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Total Egresos</p>
@@ -661,7 +661,7 @@ const AdminReporteMaestro: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className={`bg-white rounded-xl border p-5 shadow-sm ${resultado >= 0 ? 'border-gray-200' : 'border-red-100'}`}>
+        <div className={`bg-white rounded-xl border p-5 shadow-xs ${resultado >= 0 ? 'border-gray-200' : 'border-red-100'}`}>
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Resultado Neto</p>
@@ -674,7 +674,7 @@ const AdminReporteMaestro: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Movimientos</p>
@@ -695,7 +695,7 @@ const AdminReporteMaestro: React.FC = () => {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <span className="text-sm font-medium text-gray-700">
             {filtered.length} {filtered.length === 1 ? 'movimiento' : 'movimientos'}

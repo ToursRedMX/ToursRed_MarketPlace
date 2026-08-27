@@ -241,16 +241,16 @@ const NotificationsPage: React.FC = () => {
                   placeholder="Buscar notificaciones..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-x-2">
               <Filter className="h-4 w-4 text-gray-400" />
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">Todas</option>
                 <option value="booking_pending_approval">Reservas Pendientes</option>
@@ -316,7 +316,7 @@ const NotificationsPage: React.FC = () => {
                             {getTypeLabel(notification.type)} • {formatDate(notification.created_at)}
                           </p>
                         </div>
-                        <div className="flex space-x-2 ml-4">
+                        <div className="flex gap-x-2 ml-4">
                           {!notification.is_read && (
                             <button
                               onClick={() => markAsRead(notification.id)}
@@ -375,7 +375,7 @@ const NotificationsPage: React.FC = () => {
       {detailNotification && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 py-8">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setDetailNotification(null)} />
+            <div className="fixed inset-0 bg-black/50" onClick={() => setDetailNotification(null)} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto">
               <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
                 <div className="flex items-center gap-3">
@@ -400,7 +400,7 @@ const NotificationsPage: React.FC = () => {
               </div>
 
               {(detailNotification.data?.tour_name || detailNotification.data?.booking_code) && (
-                <div className="mx-6 mt-5 bg-blue-50 rounded-xl px-4 py-3 space-y-0.5">
+                <div className="mx-6 mt-5 bg-blue-50 rounded-xl px-4 py-3 flex flex-col gap-y-0.5">
                   {detailNotification.data?.tour_name && (
                     <p className="text-sm font-semibold text-blue-800">{detailNotification.data.tour_name as string}</p>
                   )}

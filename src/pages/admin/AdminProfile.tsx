@@ -243,7 +243,7 @@ const AdminProfile: React.FC = () => {
                 </div>
 
                 {isEditing && (
-                  <div className="flex justify-end space-x-4 mt-6">
+                  <div className="flex justify-end gap-x-4 mt-6">
                     <button
                       onClick={handleCancel}
                       className="btn btn-outline"
@@ -264,22 +264,22 @@ const AdminProfile: React.FC = () => {
               </div>
 
               {/* Seguridad - Cambiar Contraseña */}
-              <div className="border-t pt-6">
+              <div className="border-t border-gray-200 pt-6">
                 <ChangePasswordSection />
               </div>
 
               {/* Seguridad - MFA TOTP */}
-              <div className="border-t pt-6">
+              <div className="border-t border-gray-200 pt-6">
                 <MfaSettingsSection />
               </div>
 
               {/* Seguridad - Passkeys */}
-              <div className="border-t pt-6">
+              <div className="border-t border-gray-200 pt-6">
                 <PasskeySettingsSection />
               </div>
 
               {/* System Information */}
-              <div className="border-t pt-6">
+              <div className="border-t border-gray-200 pt-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Información del Sistema</h2>
                 <div className="bg-primary-50 rounded-lg p-4">
                   <div className="flex items-start">
@@ -290,7 +290,7 @@ const AdminProfile: React.FC = () => {
                         Tienes acceso completo al sistema, incluyendo la gestión de usuarios, 
                         agencias, tours y configuraciones del sistema.
                       </p>
-                      <ul className="text-sm text-primary-600 mt-2 space-y-1">
+                      <ul className="text-sm text-primary-600 mt-2 flex flex-col gap-y-1">
                         <li>• Gestión de usuarios y roles</li>
                         <li>• Supervisión de agencias</li>
                         <li>• Moderación de reseñas</li>

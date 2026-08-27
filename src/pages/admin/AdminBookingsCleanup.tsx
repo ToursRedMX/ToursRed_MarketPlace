@@ -266,7 +266,7 @@ const AdminBookingsCleanup: React.FC = () => {
             <p>
               <span className="font-semibold">Se detectan tres tipos de reservas basura:</span>
             </p>
-            <ul className="list-disc list-inside space-y-0.5 text-amber-700">
+            <ul className="list-disc list-inside flex flex-col gap-y-0.5 text-amber-700">
               <li>
                 <code className="bg-amber-100 px-1 rounded">payment_status = pending</code> con mas de{' '}
                 <span className="font-semibold">{threshold} dias</span> — nunca iniciaron el pago
@@ -605,7 +605,7 @@ const AdminBookingsCleanup: React.FC = () => {
                 value={confirmText}
                 onChange={e => setConfirmText(e.target.value)}
                 placeholder="CONFIRMAR"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 autoFocus
               />
             </div>

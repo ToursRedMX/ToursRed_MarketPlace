@@ -235,7 +235,7 @@ const BookingFlowStep2: React.FC = () => {
   if (!tour) return null;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
       <div className="p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Datos de los viajeros</h1>
         <p className="text-sm text-gray-500 mb-6">Paso 2 de 4 — Informacion de cada viajero</p>

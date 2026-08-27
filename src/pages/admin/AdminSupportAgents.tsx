@@ -183,7 +183,7 @@ const AdminSupportAgents: React.FC = () => {
         {/* Role descriptions */}
         <div className="mt-6 bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Descripcion de roles</h3>
-          <div className="space-y-2">
+          <div className="flex flex-col gap-y-2">
             {ROLE_OPTIONS.map(role => (
               <div key={role.value} className="flex items-center gap-3">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[role.value]}`}>{role.label}</span>

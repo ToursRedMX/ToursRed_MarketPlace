@@ -56,7 +56,7 @@ const FacebookIcon = () => (
 );
 
 const EmailIcon = () => (
-  <div className="w-5 h-5 flex-shrink-0 bg-gray-600 rounded-sm flex items-center justify-center">
+  <div className="w-5 h-5 flex-shrink-0 bg-gray-600 rounded-xs flex items-center justify-center">
     <svg viewBox="0 0 20 20" fill="white" className="w-3.5 h-3.5">
       <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
       <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
@@ -214,7 +214,7 @@ const LinkedAccountsSection: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div className="flex items-center justify-center py-8">
           <Loader className="h-6 w-6 text-gray-400 animate-spin" />
         </div>
@@ -223,7 +223,7 @@ const LinkedAccountsSection: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <div className="flex items-center mb-6">
         <Link2 className="h-6 w-6 text-gray-700 mr-3" />
         <div>
@@ -248,7 +248,7 @@ const LinkedAccountsSection: React.FC = () => {
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="flex flex-col gap-y-3">
         {visibleProviders.map((provider) => {
           const linked = isLinked(provider.key);
           const linkedEmail = getIdentityEmail(provider.key);
