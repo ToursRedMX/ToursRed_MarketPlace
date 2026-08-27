@@ -59,7 +59,7 @@ sólo tiene alphas, y el peer `>=4.8.4 <6.1.0` admite 6.0.3 sin overrides.
 **Ojo con el `tsc` de esta rama:** sigue saliendo con código 2 y el lint con 1.
 Es la línea base preexistente de `main`, no una falla nueva.
 
-### I.1 — Tailwind 3.4.19 → 4.3.3 · **EN REVISIÓN VISUAL** · rama `chore/tailwind-4`
+### ✅ I.1 — Tailwind 4.3.3 · **CÓDIGO COMPLETO** · PR #41 listo para mergear
 
 **El grueso no es código: son 3-4 horas de mirar pantallas.**
 
@@ -110,8 +110,19 @@ desalineado **no rompen nada, solo se ven mal**.
 
 #### ✅ Estado de la ejecución (27-ago)
 
-Código migrado y verificado; **falta la revisión visual**. El PR #5 de Dependabot
-queda **obsoleto**: esta rama hace el trabajo completo, no sólo el bump.
+**Revisión visual completa hecha el 27-ago sobre el preview del PR #41.**
+Detectó **una** regresión, ya corregida (ver más abajo). El resto, conforme.
+
+El **PR #5** de Dependabot quedó **cerrado por obsoleto**: sólo subía la versión
+y ni siquiera compilaba por sí solo.
+
+El PR #41 trae **tres commits deliberadamente separados**:
+
+| Commit | Qué es |
+|---|---|
+| `d178b6c` | La migración a Tailwind 4 |
+| `073bc83` | `fix(nav)`: la lupa del header apuntaba a `/search`, que no existe (404). **Bug preexistente**, también en producción; la búsqueda vive en `/tours` |
+| `194c8eb` | `fix(css)`: fondo por defecto de los controles de texto (la regresión de la revisión visual) |
 
 **Estructural:** `tailwindcss` 4.3.3 + `@tailwindcss/postcss`, `@import
 "tailwindcss"` + `@config`, `autoprefixer` quitado (redundante en v4), y
@@ -140,58 +151,46 @@ Comprobaciones que evitaron falsos supuestos: `shadow` pelado (79 usos), `md`,
 el patrón `border` no eran 1,630 casos sino **61**: el resto ya llevaba el color
 al lado.
 
-#### ⚠️ Lo que queda pendiente de criterio humano
+#### 🔴 Hallazgo de la revisión visual — v4 volvió transparentes TODOS los controles de formulario
 
-**1. 402 contenedores `space-y-*` sin migrar a `gap`.**
+**La única regresión que encontró la revisión visual.** El input del boletín en
+el Footer se veía azul en vez de blanco, con el placeholder casi ilegible.
 
-v4 cambió `space-*` de dos formas a la vez: la especificidad cae de (0,3,0) a
-**cero** (`:where()`), y el margen pasa de `margin-top` a `margin-bottom`. El
-efecto es que **cualquier hijo con margen propio ahora gana**.
+```css
+/* v3 — transparente SÓLO en botones */
+button, input:where([type=button]), input:where([type=reset]), input:where([type=submit])
+  { background-color: #0000 }
 
-De 790 contenedores, **425 cambian de espaciado**: 159 se aprietan, 140 más se
-aprietan (v3 ganaba, v4 pierde) y 126 se abren.
+/* v4 — transparente en TODOS */
+button, input, select, optgroup, textarea { background-color: #0000; ... }
+```
 
-Se migraron los seguros: **165** que ya eran `flex`/`grid` (cambio directo a
-`gap`) y **232** `block` limpios (a `flex flex-col` + `gap-y`). Quedan:
+Ese input **nunca tuvo clase de fondo**: se apoyaba en el blanco por defecto del
+navegador. El Footer es `bg-blue-900`, de ahí el azul.
 
-- **384** con margen propio en algún hijo. Convertirlos a flex **tampoco**
-  reproduce v3, porque los items de un flex **no colapsan márgenes**: con
-  `space-y-3` + hijo `mb-1`, v3 da 0.75rem, v4 sin tocar da 0.25rem y
-  `flex`+`gap` daría 1rem. Para que dé 0.75 hay que **decidir por cada hijo si
-  su margen sobra**. No es mecánico.
-- **16** con texto o expresión suelta como hijo directo: al volverse flex, cada
-  trozo se convierte en item independiente. Revisión manual.
+Mismo mecanismo que el patrón #5 (`border` sin color): v4 quita un valor por
+defecto del que dependía código escrito para v3. **Alcance: 674 controles sin
+clase `bg-*` en 108 archivos** — la mayoría sobre fondos claros, donde no se
+nota.
 
-**Mientras no se resuelvan, esos 402 mantienen el comportamiento de v4** (se
-aprietan o se abren según el caso). Es lo más visible de la revisión.
+Corregido en `194c8eb` con una regla en `@layer base` (las utilidades siguen
+ganando, así que un `bg-transparent` intencional se respeta).
 
-**2. 10 campos sin indicador de foco (accesibilidad).**
+**Verificado en Chrome comparando `getComputedStyle` contra el CSS real de v3**,
+no razonando sobre el orden de capas. 12 de 13 tipos idénticos. Esa comparación
+encontró dos errores propios que el razonamiento no habría detectado:
 
-De 330 usos de `outline-none`, **320 tienen indicador alternativo**
-(`focus:ring` 575 tokens, `focus:outline` 284, `focus:border` 107, `peer-focus`
-25). **10 no tienen ninguno**:
+- Un fallback `background-color: Field` que **Lightning CSS colapsaba**, dejando
+  sólo `field`: los navegadores anteriores a 2023 se quedaban sin fondo.
+- `range` estaba **mal excluido** — en v3 computaba blanco. Ya entra.
 
-| Archivo | Casos |
-|---|---|
-| `src/pages/accounting/AccountingPage.tsx` | 8 (campos editables en línea) |
-| `src/components/accounting/AccountCatalogModal.tsx:261` | 1 |
-| `src/pages/agency/AgencyProfile.tsx:972` | 1 |
+Única diferencia que queda: `type="color"` (v3 daba el gris del navegador, v4 lo
+deja transparente). **La app no lo usa** (0 casos).
 
-**Ya era así en v3** — no lo introduce esta migración. `outline-hidden` les
-devuelve el contorno en modo de contraste forzado, que es la última pista para
-quien navega con teclado. **Añadirles un `focus:ring` es una mejora real y
-pendiente**, pero es un cambio visible y no pertenece a esta pieza.
+---
 
-**3. Dos limpiezas menores, ninguna de esta migración.**
 
-- **`src/pages/MaintenancePage.tsx:19`**: `className="h-16 rounded-x1 shadow-2x1"`
-  usa el **dígito 1** en vez de la letra **l**. Esas clases no existen ni en v3
-  ni en v4, así que hoy no aplican nada. No se corrigió a propósito: haría que
-  esa página gane sombra y redondeo durante la revisión visual y lo leeríamos
-  como efecto de Tailwind 4.
-- **`.btn-accent` está muerta** (0 usos). v3 la purgaba, v4 la emite igual.
-
-#### 🔴 Hallazgos de la ejecución (rama `chore/tailwind-4`, 27-ago)
+#### 🔴 Hallazgos 1 y 2 — comportamientos de v4 que el diagnóstico no capturó
 
 Dos comportamientos reales de v4 que **el diagnóstico no capturó** y que pesan
 igual que los 7 patrones. Ninguno da error: los dos son silenciosos.
@@ -284,6 +283,64 @@ nuevos.
 **Acción:** dejar el #4 abierto, **no mergearlo**, y revisar cada pocas semanas
 si sale una `typescript-eslint` que levante el tope. Cuando pase: menos de 2
 horas.
+
+## 🟣 Piezas propias que salieron de la migración de Tailwind
+
+Las cuatro salieron de ejecutar la migración de Tailwind, pero **ninguna
+pertenece a esa pieza** y ninguna se tocó en el PR #41. Todas necesitan criterio
+humano, no medición de CSS.
+
+Las dos primeras son trabajo real; las dos últimas son limpiezas de minutos.
+
+**1. 402 contenedores `space-y-*` sin migrar a `gap`.**
+
+v4 cambió `space-*` de dos formas a la vez: la especificidad cae de (0,3,0) a
+**cero** (`:where()`), y el margen pasa de `margin-top` a `margin-bottom`. El
+efecto es que **cualquier hijo con margen propio ahora gana**.
+
+De 790 contenedores, **425 cambian de espaciado**: 159 se aprietan, 140 más se
+aprietan (v3 ganaba, v4 pierde) y 126 se abren.
+
+Se migraron los seguros: **165** que ya eran `flex`/`grid` (cambio directo a
+`gap`) y **232** `block` limpios (a `flex flex-col` + `gap-y`). Quedan:
+
+- **384** con margen propio en algún hijo. Convertirlos a flex **tampoco**
+  reproduce v3, porque los items de un flex **no colapsan márgenes**: con
+  `space-y-3` + hijo `mb-1`, v3 da 0.75rem, v4 sin tocar da 0.25rem y
+  `flex`+`gap` daría 1rem. Para que dé 0.75 hay que **decidir por cada hijo si
+  su margen sobra**. No es mecánico.
+- **16** con texto o expresión suelta como hijo directo: al volverse flex, cada
+  trozo se convierte en item independiente. Revisión manual.
+
+**Mientras no se resuelvan, esos 402 mantienen el comportamiento de v4** (se
+aprietan o se abren según el caso). Es lo más visible de la revisión.
+
+**2. 10 campos sin indicador de foco (accesibilidad).**
+
+De 330 usos de `outline-none`, **320 tienen indicador alternativo**
+(`focus:ring` 575 tokens, `focus:outline` 284, `focus:border` 107, `peer-focus`
+25). **10 no tienen ninguno**:
+
+| Archivo | Casos |
+|---|---|
+| `src/pages/accounting/AccountingPage.tsx` | 8 (campos editables en línea) |
+| `src/components/accounting/AccountCatalogModal.tsx:261` | 1 |
+| `src/pages/agency/AgencyProfile.tsx:972` | 1 |
+
+**Ya era así en v3** — no lo introduce esta migración. `outline-hidden` les
+devuelve el contorno en modo de contraste forzado, que es la última pista para
+quien navega con teclado. **Añadirles un `focus:ring` es una mejora real y
+pendiente**, pero es un cambio visible y no pertenece a esta pieza.
+
+**3 y 4. Dos limpiezas menores, de minutos.**
+
+- **`src/pages/MaintenancePage.tsx:19`**: `className="h-16 rounded-x1 shadow-2x1"`
+  usa el **dígito 1** en vez de la letra **l**. Esas clases no existen ni en v3
+  ni en v4, así que hoy no aplican nada. No se corrigió a propósito: haría que
+  esa página gane sombra y redondeo durante la revisión visual y lo leeríamos
+  como efecto de Tailwind 4.
+- **`.btn-accent` está muerta** (0 usos). v3 la purgaba, v4 la emite igual.
+---
 
 ---
 
@@ -385,9 +442,12 @@ también para limpiar antes del UAT.
 
 | PR | Qué | Acción |
 |---|---|---|
-| **#39** | `typescript` 5.9.3 → 6.0.3 (pieza I.3) | **Listo para revisión.** Verificado 460/0/0/460 |
-| **#5** | `tailwindcss` 3.4.19 → 4.3.3 | Diagnosticado. Ver I.1. **Siguiente pieza** |
+| **#41** | Tailwind 4.3.3 (pieza I.1) + 2 fixes | **Abierto, listo para mergear.** Revisión visual hecha, checks en verde |
 | **#4** | `typescript` 5.9.3 → 7.0.2 | **Bloqueado.** Ver I.2. No mergear |
+
+**Cerrados el 27-ago:** #39 (TypeScript 6.0.3, mergeado), #40 (baseline de
+typecheck, mergeado) y **#5** (Tailwind, cerrado por obsoleto — el #41 hace el
+trabajo completo y el #5 ni siquiera compilaba por sí solo).
 
 ---
 
@@ -405,6 +465,11 @@ también para limpiar antes del UAT.
   ToursRed. Se documenta si se retoma.
 
 ---
+
+*Estado al cierre del 27-ago: **I.3 (TypeScript 6.0.3) cerrada y mergeada**;
+**I.1 (Tailwind 4) con el código completo en el PR #41, listo para mergear**;
+I.2 (TypeScript 7) sigue bloqueada. Lo que queda de Tailwind son las cuatro
+piezas propias de la sección 🟣.*
 
 *Para retomar: leer este archivo. El detalle histórico de lo ya cerrado está en
 [`PENDIENTES_26_AGO.md`](./PENDIENTES_26_AGO.md), que no se sigue ampliando.*
