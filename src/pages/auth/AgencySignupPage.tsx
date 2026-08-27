@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { signUp, supabase } from '../../lib/supabase';
 import { UserRole } from '../../lib/supabase';
 import { useFieldAvailability } from '../../hooks/useFieldAvailability';
-import TurnstileWidget from '../../components/TurnstileWidget';
 import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
 import AgencySignupFormBody, {
   AgencyFormData,
