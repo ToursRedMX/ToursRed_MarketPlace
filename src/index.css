@@ -39,6 +39,27 @@
   a {
     @apply text-primary-600 hover:text-primary-700 transition-colors;
   }
+
+  /* Compat v3 — fondo por defecto de los controles de texto.
+     El preflight de v4 volvio transparentes TODOS los controles
+     (button, input, select, optgroup, textarea); el de v3 solo los
+     botones. Los controles de texto sin clase bg-* se apoyaban en el
+     blanco por defecto del navegador y quedaron transparentes: sobre
+     fondos oscuros se ve el contenedor a traves (p.ej. el input del
+     boletin en el Footer, que es bg-blue-900).
+     Va en @layer base a proposito: las utilidades pesan mas, asi que
+     cualquier bg-* explicito -incluido un bg-transparent intencional-
+     sigue ganando sobre esta regla.
+     Checkbox, radio, color y file quedan fuera: en v3 tampoco eran
+     blancos (color da el gris propio del navegador, file y los dos
+     controles marcables quedan transparentes). range SI entra: en v3
+     computaba blanco. Verificado en navegador contra el CSS de v3.
+     */
+  input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='color']):not([type='file']),
+  textarea,
+  select {
+    background-color: #fff; /* v3 usaba el blanco por defecto del navegador */
+  }
 }
 
 @layer components {
