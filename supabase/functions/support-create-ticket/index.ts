@@ -50,6 +50,59 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // ── Identidad del solicitante ───────────────────────────────────────────
+    //
+    // verify_jwt = false es DELIBERADO: el Centro de Soporte tiene tres modos y
+    // el General existe justamente para quien no puede iniciar sesion (problemas
+    // de acceso o contrasena). Por eso el guard se implementa aqui a mano.
+    //
+    // Regla: user_id SIEMPRE sale de la sesion, NUNCA del body. Antes se escribia
+    // `user_id: user_id ?? null` tal como llegaba, y como la politica RLS de
+    // support_tickets es `auth.uid() = user_id`, ese campo decide quien puede leer
+    // el ticket: cualquiera podia crear uno a nombre de una cuenta real, con su
+    // propio nombre y correo de contacto, y meterle una notificacion a la victima.
+
+    // La llave publicable NO es una sesion: SupportGeneralPage la manda solo para
+    // atravesar el gateway. Se descarta explicitamente antes de intentar validarla,
+    // igual que el formato nuevo `sb_publishable_...` que usa hoy el front.
+    const publishableKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    const esJwtDeUsuario = bearer.length > 0 &&
+      bearer !== publishableKey &&
+      !bearer.startsWith("sb_publishable_") &&
+      bearer.split(".").length === 3;
+
+    let sessionUserId: string | null = null;
+    if (esJwtDeUsuario) {
+      const { data: { user: sessionUser } } = await supabase.auth.getUser(bearer);
+      sessionUserId = sessionUser?.id ?? null;
+    }
+
+    // traveler y agency solo existen detras de login: la UI no muestra esos
+    // formularios sin sesion, asi que un request sin ella se salto el frontend.
+    if ((tipo === "traveler" || tipo === "agency") && !sessionUserId) {
+      return new Response(
+        JSON.stringify({ error: "Debes iniciar sesion para enviar este tipo de ticket" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Un user_id en el body que no sea el de la sesion es un intento de
+    // suplantacion. Se rechaza en vez de ignorarse, para que quede rastro.
+    if (user_id && user_id !== sessionUserId) {
+      console.error(
+        `support-create-ticket: user_id del body (${user_id}) no coincide con la sesion (${sessionUserId ?? "ninguna"}). Rechazado.`
+      );
+      return new Response(
+        JSON.stringify({ error: "No autorizado" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Un ticket general es anonimo siempre, aunque quien lo mande tenga sesion.
+    // De aqui en adelante solo se usa ticketUserId; el user_id del body se ignora.
+    const ticketUserId = tipo === "general" ? null : sessionUserId;
+
     // Get subcategory to validate and get category_id + priority
     const { data: subcategory, error: subError } = await supabase
       .from("support_subcategories")
@@ -82,7 +135,7 @@ Deno.serve(async (req: Request) => {
         subcategory_id,
         prioridad: subcategory.prioridad_default,
         status: "sin_atender",
-        user_id: user_id ?? null,
+        user_id: ticketUserId,
         solicitante_nombre,
         solicitante_email,
         descripcion,
@@ -126,16 +179,16 @@ Deno.serve(async (req: Request) => {
             nombre_archivo: file.name,
             mime_type: file.type,
             tamano_bytes: file.size,
-            subido_por_id: user_id ?? null,
+            subido_por_id: ticketUserId,
           });
         }
       }
     }
 
     // Create in-app notification for registered users
-    if (user_id) {
+    if (ticketUserId) {
       await supabase.from("notifications").insert({
-        user_id,
+        user_id: ticketUserId,
         type: "support_ticket_created",
         title: `Ticket creado: ${folioData}`,
         message: `Tu solicitud de soporte fue registrada con el folio ${folioData}`,
