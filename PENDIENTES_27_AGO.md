@@ -225,7 +225,8 @@ también para limpiar antes del UAT.
 
 | PR | Qué | Acción |
 |---|---|---|
-| **#5** | `tailwindcss` 3.4.19 → 4.3.3 | Diagnosticado. Ver I.1. Sesión propia |
+| **#39** | `typescript` 5.9.3 → 6.0.3 (pieza I.3) | **Listo para revisión.** Verificado 460/0/0/460 |
+| **#5** | `tailwindcss` 3.4.19 → 4.3.3 | Diagnosticado. Ver I.1. **Siguiente pieza** |
 | **#4** | `typescript` 5.9.3 → 7.0.2 | **Bloqueado.** Ver I.2. No mergear |
 
 ---
