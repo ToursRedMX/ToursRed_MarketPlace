@@ -6,7 +6,7 @@
 --
 --     const match = storedUrl.match(/\/invoices\/([^\/]+)\//);
 --
--- Por eso la migracion 20260826040000 anulo las URLs privadas en cfdi_invoices pero
+-- Por eso la migracion 20260826033731 anulo las URLs privadas en cfdi_invoices pero
 -- dejo intacta esta tabla: aqui la URL no era vestigial, era load-bearing.
 --
 -- La columna cfdi_xml_url ademas carga DOS semanticas incompatibles:
