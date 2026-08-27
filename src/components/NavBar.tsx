@@ -474,7 +474,7 @@ const NavBar: React.FC = () => {
           </div>
 
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
-            <Link to="/search" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <Link to="/tours" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
               <Search className="h-6 w-6" />
             </Link>
 
@@ -683,7 +683,7 @@ const NavBar: React.FC = () => {
           </div>
 
           <div className="flex items-center sm:hidden">
-            <Link to="/search" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mr-2">
+            <Link to="/tours" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mr-2">
               <Search className="h-6 w-6" />
             </Link>
             {user && (
