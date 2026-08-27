@@ -181,12 +181,12 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
             <p className="text-sm text-gray-600">Subiendo imagen...</p>
           </div>
         ) : preview ? (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-y-3">
             <div className="relative inline-block">
               <img
                 src={preview}
                 alt="Vista previa"
-                className="max-h-32 max-w-full rounded-lg shadow-sm"
+                className="max-h-32 max-w-full rounded-lg shadow-xs"
               />
               <button
                 type="button"
@@ -207,7 +207,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-y-2">
             <Upload className="h-8 w-8 text-gray-400 mx-auto" />
             <div>
               <p className="text-sm font-medium text-gray-700">{placeholder}</p>
@@ -225,7 +225,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       {/* Error Message */}
       {error && (
-        <div className="flex items-start space-x-2 p-3 bg-red-50 border border-red-200 rounded-md">
+        <div className="flex items-start gap-x-2 p-3 bg-red-50 border border-red-200 rounded-md">
           <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-red-800">Error al cargar imagen</p>
@@ -235,9 +235,9 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
       )}
 
       {/* Tips */}
-      <div className="text-xs text-gray-500 space-y-1">
+      <div className="text-xs text-gray-500 flex flex-col gap-y-1">
         <p><strong>Consejos:</strong></p>
-        <ul className="list-disc list-inside space-y-1 ml-2">
+        <ul className="list-disc list-inside flex flex-col gap-y-1 ml-2">
           <li>Usa imágenes de alta calidad para mejor presentación</li>
           <li>Formatos recomendados: JPEG para fotos, PNG para gráficos</li>
           <li>Comprime las imágenes antes de subirlas para mejor rendimiento</li>

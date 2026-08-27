@@ -253,7 +253,7 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
         </div>
 
         {user && user.role === 'traveler' && canReview && !hasReviewed && (
-          <div className="border-t pt-6">
+          <div className="border-t border-gray-200 pt-6">
             {!showReviewForm ? (
               <button
                 onClick={() => setShowReviewForm(true)}
@@ -294,7 +294,7 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
                   />
                 </div>
 
-                <div className="flex space-x-3">
+                <div className="flex gap-x-3">
                   <button
                     type="submit"
                     disabled={isSubmitting}
@@ -321,7 +321,7 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
         )}
 
         {user && user.role === 'traveler' && hasReviewed && (
-          <div className="border-t pt-6">
+          <div className="border-t border-gray-200 pt-6">
             <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded">
               Ya has dejado una reseña para esta agencia
             </div>
@@ -329,7 +329,7 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
         )}
 
         {!user && (
-          <div className="border-t pt-6">
+          <div className="border-t border-gray-200 pt-6">
             <div className="bg-gray-50 border border-gray-200 text-gray-700 px-4 py-3 rounded text-center">
               <a href="/login" className="text-blue-600 hover:text-blue-700 font-medium">
                 Inicia sesión
@@ -345,7 +345,7 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
           reviews.filter(review => review.traveler).map((review) => (
             <div key={review.id} className="bg-white rounded-lg shadow p-6">
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-start space-x-3">
+                <div className="flex items-start gap-x-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                     <User className="h-5 w-5 text-blue-600" />
                   </div>

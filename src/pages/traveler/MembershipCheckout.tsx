@@ -363,7 +363,7 @@ export default function MembershipCheckout() {
                       }}
                       onKeyDown={(e) => e.key === 'Enter' && handleApplyCode()}
                       placeholder="Ingresa tu codigo"
-                      className="flex-1 border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-gray-400"
+                      className="flex-1 border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden transition-all placeholder:text-gray-400"
                     />
                     <button
                       onClick={handleApplyCode}
@@ -384,7 +384,7 @@ export default function MembershipCheckout() {
               )}
             </div>
 
-            <div className="border-t border-gray-100 pt-5 space-y-3">
+            <div className="border-t border-gray-100 pt-5 flex flex-col gap-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">{planLabel}</span>
                 <span className="text-gray-900">{formatCurrencyMXN(planPrice)} MXN</span>
@@ -437,7 +437,7 @@ export default function MembershipCheckout() {
               )}
             </button>
 
-            <div className="text-center space-y-1">
+            <div className="text-center flex flex-col gap-y-1">
               <p className="text-xs text-gray-400">
                 {isFreeMonthApplied
                   ? `Se registrara tu metodo de pago. Tu primer cobro de $${planPrice.toFixed(0)} MXN sera el ${formatDate(firstChargeDate)}.`

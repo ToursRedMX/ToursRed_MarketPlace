@@ -266,7 +266,7 @@ const ReceptorSelector: React.FC<{
             onChange={e => { setQuery(e.target.value); setShowDropdown(true); }}
             onFocus={() => setShowDropdown(true)}
             placeholder="Nombre o RFC..."
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
         </div>
         {showDropdown && filtered.length > 0 && (
@@ -294,7 +294,7 @@ const ReceptorSelector: React.FC<{
             value={receptor.rfc}
             onChange={e => onChange({ ...receptor, rfc: e.target.value.toUpperCase() })}
             placeholder="RFC123456789"
-            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono ${
+            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-mono ${
               receptor.rfc && !rfcValid(receptor.rfc) ? 'border-red-300 bg-red-50' : 'border-gray-200'
             }`}
           />
@@ -309,7 +309,7 @@ const ReceptorSelector: React.FC<{
             value={receptor.nombre}
             onChange={e => onChange({ ...receptor, nombre: e.target.value })}
             placeholder="EMPRESA SA DE CV"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <div>
@@ -320,7 +320,7 @@ const ReceptorSelector: React.FC<{
             onChange={e => onChange({ ...receptor, domicilio_fiscal_receptor: e.target.value })}
             placeholder="06600"
             maxLength={5}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <div>
@@ -328,7 +328,7 @@ const ReceptorSelector: React.FC<{
           <select
             value={receptor.regimen_fiscal_receptor}
             onChange={e => onChange({ ...receptor, regimen_fiscal_receptor: e.target.value })}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           >
             {REGIMENES_FISCALES.map(r => (
               <option key={r.code} value={r.code}>{r.label}</option>
@@ -340,7 +340,7 @@ const ReceptorSelector: React.FC<{
           <select
             value={receptor.uso_cfdi}
             onChange={e => onChange({ ...receptor, uso_cfdi: e.target.value })}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           >
             {USOS_CFDI.map(u => (
               <option key={u.code} value={u.code}>{u.label}</option>
@@ -411,7 +411,7 @@ const ConceptosTable: React.FC<{
   const totals = calcTotals(conceptos);
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-y-3">
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
@@ -438,7 +438,7 @@ const ConceptosTable: React.FC<{
                       value={c.descripcion}
                       onChange={e => update(c.id, 'descripcion', e.target.value)}
                       placeholder="Descripcion del concepto"
-                      className="w-full min-w-[180px] px-2 py-1 text-sm border border-transparent group-hover:border-gray-200 rounded focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-300"
+                      className="w-full min-w-[180px] px-2 py-1 text-sm border border-transparent group-hover:border-gray-200 rounded focus:outline-hidden focus:border-blue-300 focus:ring-1 focus:ring-blue-300"
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -451,13 +451,13 @@ const ConceptosTable: React.FC<{
                         onBlur={e => handleCustomBlur(c.id, e.target.value)}
                         placeholder="Ej: 84111500"
                         maxLength={12}
-                        className="w-full min-w-[130px] px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 font-mono bg-blue-50"
+                        className="w-full min-w-[130px] px-2 py-1 text-xs border border-blue-300 rounded focus:outline-hidden focus:ring-1 focus:ring-blue-400 font-mono bg-blue-50"
                       />
                     ) : (
                       <select
                         value={allClaves.find(k => k.code === c.clave_prod_serv) ? c.clave_prod_serv : CUSTOM_MARKER}
                         onChange={e => handleClaveSelect(c.id, e.target.value)}
-                        className="w-full min-w-[160px] px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-300"
+                        className="w-full min-w-[160px] px-2 py-1 text-xs border border-gray-200 rounded focus:outline-hidden focus:ring-1 focus:ring-blue-300"
                       >
                         {allClaves.map(k => (
                           <option key={k.code} value={k.code}>{k.label}</option>
@@ -470,7 +470,7 @@ const ConceptosTable: React.FC<{
                     <select
                       value={c.clave_unidad}
                       onChange={e => update(c.id, 'clave_unidad', e.target.value)}
-                      className="px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-300"
+                      className="px-2 py-1 text-xs border border-gray-200 rounded focus:outline-hidden focus:ring-1 focus:ring-blue-300"
                     >
                       {CLAVES_UNIDAD.map(u => (
                         <option key={u.code} value={u.code}>{u.code}</option>
@@ -483,7 +483,7 @@ const ConceptosTable: React.FC<{
                       min={1}
                       value={c.cantidad}
                       onChange={e => update(c.id, 'cantidad', parseFloat(e.target.value) || 1)}
-                      className="w-16 text-center px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-300"
+                      className="w-16 text-center px-2 py-1 text-sm border border-gray-200 rounded focus:outline-hidden focus:ring-1 focus:ring-blue-300"
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -493,7 +493,7 @@ const ConceptosTable: React.FC<{
                       step="0.01"
                       value={c.valor_unitario}
                       onChange={e => update(c.id, 'valor_unitario', parseFloat(e.target.value) || 0)}
-                      className="w-28 text-right px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-300"
+                      className="w-28 text-right px-2 py-1 text-sm border border-gray-200 rounded focus:outline-hidden focus:ring-1 focus:ring-blue-300"
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -503,7 +503,7 @@ const ConceptosTable: React.FC<{
                       step="0.01"
                       value={c.descuento}
                       onChange={e => update(c.id, 'descuento', parseFloat(e.target.value) || 0)}
-                      className="w-24 text-right px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-300"
+                      className="w-24 text-right px-2 py-1 text-sm border border-gray-200 rounded focus:outline-hidden focus:ring-1 focus:ring-blue-300"
                     />
                   </td>
                   <td className="px-3 py-2 text-right text-sm text-gray-700 whitespace-nowrap font-medium">
@@ -794,7 +794,7 @@ const AdminCfdiManual: React.FC = () => {
         )}
 
         {/* ── Formulario ── */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
 
           {/* Panel A: tipo de comprobante */}
           <div className="p-6 border-b border-gray-100">
@@ -843,7 +843,7 @@ const AdminCfdiManual: React.FC = () => {
                     onChange={e => { setPpdSearch(e.target.value); setPpdShowDropdown(true); }}
                     onFocus={() => setPpdShowDropdown(true)}
                     placeholder="Buscar por RFC del receptor..."
-                    className="w-full pl-9 pr-4 py-2 text-sm border border-emerald-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full pl-9 pr-4 py-2 text-sm border border-emerald-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-400"
                   />
                   {ppdShowDropdown && ppdList.length > 0 && (
                     <div className="absolute z-20 mt-1 w-full bg-white rounded-xl shadow-lg border border-gray-200 max-h-48 overflow-y-auto">
@@ -887,19 +887,19 @@ const AdminCfdiManual: React.FC = () => {
                         <label className="text-xs text-gray-500">Num. Parcialidad</label>
                         <input type="number" min={1} value={parcialidad}
                           onChange={e => setParcialidad(parseInt(e.target.value) || 1)}
-                          className="w-full mt-1 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                          className="w-full mt-1 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-hidden focus:ring-1 focus:ring-emerald-400" />
                       </div>
                       <div>
                         <label className="text-xs text-gray-500">Saldo Anterior</label>
                         <input type="number" min={0} step="0.01" value={saldoAnterior}
                           onChange={e => setSaldoAnterior(parseFloat(e.target.value) || 0)}
-                          className="w-full mt-1 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                          className="w-full mt-1 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-hidden focus:ring-1 focus:ring-emerald-400" />
                       </div>
                       <div>
                         <label className="text-xs text-gray-500">Importe Pagado</label>
                         <input type="number" min={0} step="0.01" value={importePagado}
                           onChange={e => setImportePagado(parseFloat(e.target.value) || 0)}
-                          className="w-full mt-1 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                          className="w-full mt-1 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-hidden focus:ring-1 focus:ring-emerald-400" />
                       </div>
                     </div>
                     <div className="flex justify-between pt-1">
@@ -928,7 +928,7 @@ const AdminCfdiManual: React.FC = () => {
                     value={saveRecipientName}
                     onChange={e => setSaveRecipientName(e.target.value)}
                     placeholder="Ej: Mega Travel"
-                    className="flex-1 px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    className="flex-1 px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-400"
                   />
                   <button onClick={handleSaveRecipient}
                     className="px-4 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
@@ -964,7 +964,7 @@ const AdminCfdiManual: React.FC = () => {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Forma de Pago</label>
                 <select value={paymentForm} onChange={e => setPaymentForm(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                   {FORMAS_PAGO.map(f => (
                     <option key={f.code} value={f.code}>{f.label}</option>
                   ))}
@@ -974,7 +974,7 @@ const AdminCfdiManual: React.FC = () => {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Metodo de Pago</label>
                   <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as 'PUE' | 'PPD')}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                     <option value="PUE">PUE - Pago en una sola exhibicion</option>
                     <option value="PPD">PPD - Pago en parcialidades o diferido</option>
                   </select>
@@ -986,7 +986,7 @@ const AdminCfdiManual: React.FC = () => {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Cuenta Contable Destino</label>
                 <select value={accountCode} onChange={e => setAccountCode(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                   <optgroup label="Ingresos">
                     {accounts.filter(a => a.account_type === 'ingreso').map(a => (
                       <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
@@ -1013,7 +1013,7 @@ const AdminCfdiManual: React.FC = () => {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Nota Interna (no aparece en el CFDI)</label>
                 <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
                   placeholder="Ej: Comision enero 2026 — Mega Travel"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
           </div>
@@ -1030,7 +1030,7 @@ const AdminCfdiManual: React.FC = () => {
             </button>
 
             {showPreview && isFormValid() && (
-              <div className="mb-6 p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-3 text-sm">
+              <div className="mb-6 p-5 bg-gray-50 rounded-xl border border-gray-200 flex flex-col gap-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Tipo</span>
                   <span className="font-semibold text-gray-900">{TIPO_CONFIG[cfdiType].label} ({cfdiType})</span>
@@ -1092,7 +1092,7 @@ const AdminCfdiManual: React.FC = () => {
         </div>
 
         {/* ── Historial ── */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Historial de CFDIs Manuales</h2>

@@ -616,7 +616,7 @@ const AdminTicketDetail: React.FC = () => {
             )}
 
             {/* Ticket metadata */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2 text-xs text-gray-500">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-y-2 text-xs text-gray-500">
               <div className="flex justify-between">
                 <span>Creado</span>
                 <span>{new Date(ticket.created_at).toLocaleString('es-MX')}</span>

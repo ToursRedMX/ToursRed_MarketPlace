@@ -126,14 +126,14 @@ const AgencyBlackoutManager: React.FC<AgencyBlackoutManagerProps> = ({ tourId, a
               <label className="block text-xs font-medium text-gray-600 mb-1">Fecha inicio *</label>
               <input type="date" value={form.blackout_start}
                 onChange={e => setForm(prev => ({ ...prev, blackout_start: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Fecha fin *</label>
               <input type="date" value={form.blackout_end} min={form.blackout_start}
                 onChange={e => setForm(prev => ({ ...prev, blackout_end: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
               />
             </div>
           </div>
@@ -142,7 +142,7 @@ const AgencyBlackoutManager: React.FC<AgencyBlackoutManagerProps> = ({ tourId, a
             <label className="block text-xs font-medium text-gray-600 mb-1">Motivo (opcional)</label>
             <input type="text" value={form.reason} placeholder="Feriado, mantenimiento, temporada baja..."
               onChange={e => setForm(prev => ({ ...prev, reason: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500" />
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -166,7 +166,7 @@ const AgencyBlackoutManager: React.FC<AgencyBlackoutManagerProps> = ({ tourId, a
       ) : blackouts.length === 0 ? (
         <p className="text-center text-gray-400 text-sm py-8">No hay fechas bloqueadas.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-y-2">
           {blackouts.map(b => (
             <div key={b.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl">
               <div className="flex items-center gap-3">

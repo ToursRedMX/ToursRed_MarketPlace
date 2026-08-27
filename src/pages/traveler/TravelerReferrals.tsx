@@ -315,7 +315,7 @@ const TravelerReferralsPage: React.FC = () => {
 
               {referralCode && (
                 <>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 mb-6">
+                  <div className="bg-white/10 backdrop-blur-xs rounded-lg p-6 mb-6">
                     <div className="text-center">
                       <p className="text-blue-100 text-sm mb-2">Tu código único</p>
                       <div className="text-5xl font-bold tracking-wider mb-4 font-mono">
@@ -349,7 +349,7 @@ const TravelerReferralsPage: React.FC = () => {
                   )}
 
                   {!isEditingCode && !referralCode.code_changed_at && (
-                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6">
+                    <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4 mb-6">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <Pencil className="w-4 h-4 text-blue-200" />
@@ -369,7 +369,7 @@ const TravelerReferralsPage: React.FC = () => {
                   )}
 
                   {!isEditingCode && referralCode.code_changed_at && (
-                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6">
+                    <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4 mb-6">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-green-300 shrink-0" />
                         <p className="text-sm text-blue-100">
@@ -380,7 +380,7 @@ const TravelerReferralsPage: React.FC = () => {
                   )}
 
                   {isEditingCode && (
-                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6">
+                    <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4 mb-6">
                       <div className="flex items-center justify-between mb-3">
                         <label className="text-sm font-medium text-blue-100">
                           Nuevo código de referido
@@ -401,7 +401,7 @@ const TravelerReferralsPage: React.FC = () => {
                         autoCapitalize="none"
                         autoCorrect="off"
                         spellCheck={false}
-                        className="w-full bg-white/90 text-gray-900 rounded-lg px-4 py-2.5 font-mono text-lg mb-2 focus:outline-none focus:ring-2 focus:ring-white"
+                        className="w-full bg-white/90 text-gray-900 rounded-lg px-4 py-2.5 font-mono text-lg mb-2 focus:outline-hidden focus:ring-2 focus:ring-white"
                       />
                       <div className="flex items-center gap-2 mb-3 min-h-[20px]">
                         {isCheckingCode && (
@@ -516,12 +516,12 @@ const TravelerReferralsPage: React.FC = () => {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+            <div className="bg-white rounded-xl shadow-xs p-6 border border-gray-200">
               <div className="flex items-center gap-3 mb-4">
                 <Award className="w-6 h-6 text-blue-600" />
                 <h3 className="font-semibold text-gray-900">Recompensas</h3>
               </div>
-              <div className="space-y-3">
+              <div className="flex flex-col gap-y-3">
                 <div className="flex items-center gap-3 text-sm">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                   <span className="text-gray-600">
@@ -537,12 +537,12 @@ const TravelerReferralsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+            <div className="bg-white rounded-xl shadow-xs p-6 border border-gray-200">
               <div className="flex items-center gap-3 mb-4">
                 <TrendingUp className="w-6 h-6 text-green-600" />
                 <h3 className="font-semibold text-gray-900">Tus Estadísticas</h3>
               </div>
-              <div className="space-y-3">
+              <div className="flex flex-col gap-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600 text-sm">Total Referidos</span>
                   <span className="font-semibold text-gray-900">{stats?.total_referrals || 0}</span>
@@ -565,7 +565,7 @@ const TravelerReferralsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl shadow-sm p-6 border border-amber-200">
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl shadow-xs p-6 border border-amber-200">
               <div className="flex items-center gap-3 mb-3">
                 <HelpCircle className="w-6 h-6 text-amber-600" />
                 <h3 className="font-semibold text-gray-900">Importante</h3>
@@ -577,7 +577,7 @@ const TravelerReferralsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="bg-white rounded-xl shadow-xs border border-gray-200">
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center gap-3">
               <Users className="w-6 h-6 text-gray-700" />

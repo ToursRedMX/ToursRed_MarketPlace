@@ -280,7 +280,7 @@ const AdminInternationalInquiries: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               {stats.topDestinations.map((dest, index) => (
                 <div key={dest.destination} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center gap-x-2">
                     <span className="flex items-center justify-center w-6 h-6 bg-primary-100 text-primary-600 rounded-full text-sm font-bold">
                       {index + 1}
                     </span>
@@ -295,7 +295,7 @@ const AdminInternationalInquiries: React.FC = () => {
 
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b border-gray-200">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-y-4 md:gap-y-0">
               <div className="flex-1 max-w-lg">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -309,8 +309,8 @@ const AdminInternationalInquiries: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-x-4">
+                <div className="flex items-center gap-x-2">
                   <Filter className="h-5 w-5 text-gray-400" />
                   <select
                     value={statusFilter}
@@ -438,7 +438,7 @@ const AdminInternationalInquiries: React.FC = () => {
       </div>
 
       {isModalOpen && selectedInquiry && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">Detalles de Cotización</h2>
@@ -461,14 +461,14 @@ const AdminInternationalInquiries: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-2">Información del Viajero</h3>
                   <div className="space-y-3">
-                    <div className="flex items-start space-x-2">
+                    <div className="flex items-start gap-x-2">
                       <Users className="h-5 w-5 text-gray-400 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-500">Nombre</p>
                         <p className="font-medium">{selectedInquiry.name}</p>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-2">
+                    <div className="flex items-start gap-x-2">
                       <Mail className="h-5 w-5 text-gray-400 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-500">Email</p>
@@ -477,7 +477,7 @@ const AdminInternationalInquiries: React.FC = () => {
                         </a>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-2">
+                    <div className="flex items-start gap-x-2">
                       <Phone className="h-5 w-5 text-gray-400 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-500">Teléfono</p>
@@ -492,7 +492,7 @@ const AdminInternationalInquiries: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-2">Detalles del Viaje</h3>
                   <div className="space-y-3">
-                    <div className="flex items-start space-x-2">
+                    <div className="flex items-start gap-x-2">
                       <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-500">{getDestinationLabel(selectedInquiry)}</p>
@@ -500,7 +500,7 @@ const AdminInternationalInquiries: React.FC = () => {
                       </div>
                     </div>
                     {selectedInquiry.tour_code && (
-                      <div className="flex items-start space-x-2">
+                      <div className="flex items-start gap-x-2">
                         <Hash className="h-5 w-5 text-accent-500 mt-0.5" />
                         <div>
                           <p className="text-sm text-gray-500">Código de Viaje</p>
@@ -508,7 +508,7 @@ const AdminInternationalInquiries: React.FC = () => {
                         </div>
                       </div>
                     )}
-                    <div className="flex items-start space-x-2">
+                    <div className="flex items-start gap-x-2">
                       <Calendar className="h-5 w-5 text-gray-400 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-500">Fecha Aproximada</p>
@@ -519,14 +519,14 @@ const AdminInternationalInquiries: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-2">
+                    <div className="flex items-start gap-x-2">
                       <Users className="h-5 w-5 text-gray-400 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-500">Número de Personas</p>
                         <p className="font-medium">{selectedInquiry.num_people}</p>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-2">
+                    <div className="flex items-start gap-x-2">
                       <ExternalLink className="h-5 w-5 text-gray-400 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-500">Fuente</p>
@@ -555,7 +555,7 @@ const AdminInternationalInquiries: React.FC = () => {
                 </p>
               </div>
 
-              <div className="mt-6 flex justify-end space-x-4">
+              <div className="mt-6 flex justify-end gap-x-4">
                 <button
                   onClick={() => setIsModalOpen(false)}
                   className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
@@ -564,7 +564,7 @@ const AdminInternationalInquiries: React.FC = () => {
                 </button>
                 <a
                   href={`mailto:${selectedInquiry.email}?subject=Re: Cotización ${selectedInquiry.destination}`}
-                  className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 inline-flex items-center space-x-2"
+                  className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 inline-flex items-center gap-x-2"
                 >
                   <Mail className="h-5 w-5" />
                   <span>Responder al Viajero</span>

@@ -334,7 +334,7 @@ export default function ExecutiveComisiones() {
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
           <h3 className="font-semibold text-blue-900 mb-1">Tienes comisiones pendientes de cobrar</h3>
           <p className="text-sm text-blue-700 mb-4">Total pendiente: <strong>{formatCurrencyMXN(totals.pending)}</strong> — Selecciona las comisiones que quieres cobrar.</p>
-          <div className="space-y-2">
+          <div className="flex flex-col gap-y-2">
             {pendingCommissions.map(c => (
               <label key={c.id} className="flex items-center gap-3 bg-white rounded-lg px-4 py-3 cursor-pointer hover:bg-blue-50 transition-colors border border-blue-100">
                 <input type="checkbox" checked={selectedIds.includes(c.id)} onChange={() => toggleSelect(c.id)} className="rounded text-blue-600" />
@@ -452,13 +452,13 @@ export default function ExecutiveComisiones() {
                   <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center shrink-0"><CheckCircle className="h-5 w-5 text-green-600" /></div>
                   <div><h2 className="text-lg font-semibold text-gray-900">CFDI generado exitosamente</h2><p className="text-sm text-gray-500">Tu factura ha sido timbrada ante el SAT</p></div>
                 </div>
-                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-2 mb-4">
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 flex flex-col gap-y-2 mb-4">
                   <div className="flex justify-between text-sm"><span className="text-gray-500">UUID Fiscal</span><span className="font-mono text-xs text-gray-700 truncate max-w-xs">{generatedResult.uuid_fiscal}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-gray-500">Folio</span><span className="text-gray-700">{generatedResult.serie}{generatedResult.folio}</span></div>
                 </div>
                 <div className="bg-blue-50 rounded-xl border border-blue-100 p-4 mb-5">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Desglose fiscal</p>
-                  <div className="space-y-2">
+                  <div className="flex flex-col gap-y-2">
                     <div className="flex justify-between text-sm"><span className="text-gray-600">Subtotal</span><span className="text-gray-900">{formatCurrencyMXN(generatedResult.amounts.subtotal)}</span></div>
                     <div className="flex justify-between text-sm"><span className="text-gray-600">IVA (16%)</span><span className="text-gray-900">+ {formatCurrencyMXN(generatedResult.amounts.iva)}</span></div>
                     {generatedResult.amounts.isr_retenido > 0 && <div className="flex justify-between text-sm"><span className="text-gray-600">ISR retenido (10%)</span><span className="text-red-600">- {formatCurrencyMXN(generatedResult.amounts.isr_retenido)}</span></div>}

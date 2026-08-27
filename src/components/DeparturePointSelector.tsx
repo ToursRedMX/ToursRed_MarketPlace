@@ -202,7 +202,7 @@ const DeparturePointSelector: React.FC<DeparturePointSelectorProps> = ({
         {showSuggestions && suggestions.length > 0 && (
           <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
             <div className="py-1">
-              <div className="px-3 py-2 text-xs text-gray-500 border-b bg-gray-50">
+              <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-200 bg-gray-50">
                 Puntos de salida existentes
               </div>
               {suggestions.map((suggestion, index) => (
@@ -329,7 +329,7 @@ const DeparturePointSelector: React.FC<DeparturePointSelectorProps> = ({
                       );
                       onPointsChange(updated);
                     }}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
 
@@ -347,7 +347,7 @@ const DeparturePointSelector: React.FC<DeparturePointSelectorProps> = ({
                       onPointsChange(updated);
                     }}
                     placeholder="Ej: Junto al Starbucks"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
               </div>

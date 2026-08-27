@@ -219,7 +219,7 @@ export default function AdminEjecutivos() {
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar ejecutivo..." className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar ejecutivo..." className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -297,30 +297,30 @@ export default function AdminEjecutivos() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Nombre *</label>
-                    <input value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Apellido</label>
-                    <input value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Email *</label>
-                  <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} disabled={!!editingExec} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" />
+                  <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} disabled={!!editingExec} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" />
                 </div>
                 {!editingExec && (
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Contraseña temporal *</label>
-                    <input type="text" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Mínimo 6 caracteres" />
+                    <input type="text" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="Mínimo 6 caracteres" />
                   </div>
                 )}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Teléfono</label>
-                  <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Notas internas</label>
-                  <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                  <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none" />
                 </div>
               </div>
             )}
@@ -346,7 +346,7 @@ export default function AdminEjecutivos() {
                       type={showAdminApiKey ? 'text' : 'password'}
                       value={facturApiKey}
                       onChange={e => setFacturApiKey(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg pl-3 pr-10 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      className="w-full border border-gray-300 rounded-lg pl-3 pr-10 py-2 text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                       placeholder={editingExec.facturapi_configured ? '••••••••• (introduce para actualizar)' : 'sk_live_...'}
                     />
                     <button type="button" onClick={() => setShowAdminApiKey(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -356,7 +356,7 @@ export default function AdminEjecutivos() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Organization ID (opcional)</label>
-                  <input value={facturOrgId} onChange={e => setFacturOrgId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="Requerido si hay múltiples organizaciones" />
+                  <input value={facturOrgId} onChange={e => setFacturOrgId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-violet-500" placeholder="Requerido si hay múltiples organizaciones" />
                 </div>
                 <p className="text-xs text-gray-400">El API Key se guarda de forma segura y nunca se muestra de nuevo.</p>
               </div>
@@ -390,7 +390,7 @@ export default function AdminEjecutivos() {
             <div className="p-6 space-y-5">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-2">Ejecutivo destino *</label>
-                <select value={reassignTarget} onChange={e => setReassignTarget(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select value={reassignTarget} onChange={e => setReassignTarget(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                   <option value="">Seleccionar ejecutivo...</option>
                   {otherExecs.map(e => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
                 </select>

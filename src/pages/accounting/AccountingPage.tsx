@@ -657,11 +657,11 @@ const AccountingPage: React.FC = () => {
               <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                 <Calendar className="w-4 h-4 text-gray-500" />
                 <select value={month} onChange={e => setMonth(Number(e.target.value))}
-                  className="text-sm bg-transparent border-none outline-none text-gray-700 font-medium">
+                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium">
                   {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
                 </select>
                 <select value={year} onChange={e => setYear(Number(e.target.value))}
-                  className="text-sm bg-transparent border-none outline-none text-gray-700 font-medium">
+                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium">
                   {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
@@ -793,7 +793,7 @@ const AccountingPage: React.FC = () => {
                   {/* Balance brief */}
                   <div className="bg-white rounded-xl border border-gray-200 p-5">
                     <h3 className="font-semibold text-gray-800 mb-4">Posicion patrimonial</h3>
-                    <div className="space-y-3">
+                    <div className="flex flex-col gap-y-3">
                       <BsLine label="Total Activos" value={fmt(totalAssets)} positive />
                       <BsLine label="Total Pasivos" value={fmt(totalLiabilities)} />
                       <BsLine label="Capital Contable" value={fmt(totalCapital + netResult)} positive />
@@ -960,7 +960,7 @@ const AccountingPage: React.FC = () => {
 
         {/* ── LIBRO DIARIO ── */}
         {activeTab === 'libro_diario' && (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-y-4">
             {/* Filter + totals header */}
             <div className="flex flex-wrap gap-3 items-center justify-between">
               <div className="flex gap-2">
@@ -1097,10 +1097,10 @@ const AccountingPage: React.FC = () => {
                     value={ledgerSearch}
                     onChange={e => setLedgerSearch(e.target.value)}
                     placeholder="Buscar cuenta..."
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg mb-3 outline-none focus:border-sky-400"
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg mb-3 outline-hidden focus:border-sky-400"
                   />
                   {(loadingBalances || loadingReports) ? <LoadingSpinner /> : (
-                    <div className="space-y-1 max-h-[520px] overflow-y-auto">
+                    <div className="flex flex-col gap-y-1 max-h-[520px] overflow-y-auto">
                       {accountBalances
                         .filter(a => a.period_debit !== 0 || a.period_credit !== 0)
                         .filter(a => ledgerSearch === '' || a.code.includes(ledgerSearch) || a.name.toLowerCase().includes(ledgerSearch.toLowerCase()))
@@ -1270,17 +1270,17 @@ const AccountingPage: React.FC = () => {
 
         {/* ── BALANCE SHEET ── */}
         {activeTab === 'balance_sheet' && (
-          <div className="space-y-6">
+          <div className="flex flex-col gap-y-6">
             {/* Period selector + Compare toggle */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                 <Calendar className="w-4 h-4 text-gray-500" />
                 <select value={month} onChange={e => setMonth(Number(e.target.value))}
-                  className="text-sm bg-transparent border-none outline-none text-gray-700 font-medium">
+                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium">
                   {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
                 </select>
                 <select value={year} onChange={e => setYear(Number(e.target.value))}
-                  className="text-sm bg-transparent border-none outline-none text-gray-700 font-medium">
+                  className="text-sm bg-transparent border-none outline-hidden text-gray-700 font-medium">
                   {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
@@ -1292,11 +1292,11 @@ const AccountingPage: React.FC = () => {
               {showCompare && (
                 <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
                   <select value={compareMonth} onChange={e => setCompareMonth(Number(e.target.value))}
-                    className="text-sm bg-transparent border-none outline-none text-gray-700">
+                    className="text-sm bg-transparent border-none outline-hidden text-gray-700">
                     {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
                   </select>
                   <select value={compareYear} onChange={e => setCompareYear(Number(e.target.value))}
-                    className="text-sm bg-transparent border-none outline-none text-gray-700">
+                    className="text-sm bg-transparent border-none outline-hidden text-gray-700">
                     {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
@@ -1399,11 +1399,11 @@ const AccountingPage: React.FC = () => {
               {showCompare && (
                 <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
                   <select value={compareMonth} onChange={e => setCompareMonth(Number(e.target.value))}
-                    className="text-sm bg-transparent border-none outline-none text-gray-700">
+                    className="text-sm bg-transparent border-none outline-hidden text-gray-700">
                     {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
                   </select>
                   <select value={compareYear} onChange={e => setCompareYear(Number(e.target.value))}
-                    className="text-sm bg-transparent border-none outline-none text-gray-700">
+                    className="text-sm bg-transparent border-none outline-hidden text-gray-700">
                     {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
@@ -1492,7 +1492,7 @@ const AccountingPage: React.FC = () => {
 
         {/* ── MANUAL ENTRIES ── */}
         {activeTab === 'manual' && (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-y-4">
             {/* Toolbar */}
             <div className="flex flex-wrap gap-3 items-center justify-between">
               <div className="flex flex-wrap gap-2">
@@ -1906,7 +1906,7 @@ const AccountingPage: React.FC = () => {
 
         {/* ── CATALOG ── */}
         {activeTab === 'catalog' && (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-y-4">
             {/* Toolbar */}
             <div className="flex flex-wrap items-center gap-3">
               {/* Search */}
@@ -1914,13 +1914,13 @@ const AccountingPage: React.FC = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input value={searchAccounts} onChange={e => setSearchAccounts(e.target.value)}
                   placeholder="Buscar por codigo o nombre..."
-                  className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100" />
+                  className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100" />
               </div>
               {/* Type filter */}
               <select
                 value={catalogTypeFilter}
                 onChange={e => setCatalogTypeFilter(e.target.value)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-sky-400 bg-white text-gray-700"
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 outline-hidden focus:border-sky-400 bg-white text-gray-700"
               >
                 <option value="all">Todos los tipos</option>
                 <option value="activo">Activo</option>
@@ -1942,7 +1942,7 @@ const AccountingPage: React.FC = () => {
               <div className="ml-auto">
                 <button
                   onClick={() => setCatalogModal({ open: true, account: null })}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-700 transition-colors shadow-sm"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-700 transition-colors shadow-xs"
                 >
                   <Plus className="w-4 h-4" />
                   Nueva cuenta
@@ -2040,7 +2040,7 @@ const AccountingPage: React.FC = () => {
 
         {/* ── DELETE ACCOUNT CONFIRM ── */}
         {deleteConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">

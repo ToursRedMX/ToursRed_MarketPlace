@@ -573,7 +573,7 @@ const AdminSettings: React.FC = () => {
 
       {message.type && (
         <div
-          className={`mb-6 p-4 rounded-md flex items-start space-x-3 ${
+          className={`mb-6 p-4 rounded-md flex items-start gap-x-3 ${
             message.type === 'success'
               ? 'bg-green-50 text-green-800 border border-green-200'
               : 'bg-red-50 text-red-800 border border-red-200'
@@ -590,7 +590,7 @@ const AdminSettings: React.FC = () => {
 
       <form onSubmit={handleSave} className="space-y-6">
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <DollarSign className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">
               Configuración de Comisiones y Cargos
@@ -602,7 +602,7 @@ const AdminSettings: React.FC = () => {
               <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
               <div className="text-sm text-blue-800">
                 <p className="font-medium mb-2">Información importante sobre los porcentajes:</p>
-                <ul className="space-y-1 text-xs">
+                <ul className="flex flex-col gap-y-1 text-xs">
                   <li>• <strong>Cargo por Servicio:</strong> Se cobra al viajero adicional al anticipo del tour</li>
                   <li>• <strong>Comisión de Agencia:</strong> Se descuenta del anticipo pagado por el viajero antes de transferir a la agencia</li>
                   <li>• Estos porcentajes se aplican automáticamente a todas las nuevas reservas</li>
@@ -677,7 +677,7 @@ const AdminSettings: React.FC = () => {
 
         {/* Comision de Suplementos */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Tag className="w-6 h-6 text-teal-600" />
             <h2 className="text-xl font-semibold text-gray-900">Comision de Suplementos Adicionales</h2>
           </div>
@@ -748,7 +748,7 @@ const AdminSettings: React.FC = () => {
 
         {/* Seguro de Viaje */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Shield className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">Seguro de Viaje</h2>
           </div>
@@ -781,7 +781,7 @@ const AdminSettings: React.FC = () => {
               </label>
             </div>
             {!platformSettings.travel_insurance_enabled && (
-              <div className="mt-3 flex items-start space-x-2 bg-amber-100 border border-amber-300 rounded-md p-3">
+              <div className="mt-3 flex items-start gap-x-2 bg-amber-100 border border-amber-300 rounded-md p-3">
                 <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-amber-800">
                   El seguro de viaje no se ofrece en nuevas reservas hasta que se vuelva a activar este interruptor.
@@ -905,7 +905,7 @@ const AdminSettings: React.FC = () => {
 
           <div>
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Ejemplos de costo total al viajero</p>
-            <div className="space-y-1 text-sm text-gray-700">
+            <div className="flex flex-col gap-y-1 text-sm text-gray-700">
               <div className="flex justify-between">
                 <span>1 día × 1 viajero:</span>
                 <span className="font-medium">{formatCurrency(platformSettings.travel_insurance_price_per_day_per_traveler)}</span>
@@ -927,7 +927,7 @@ const AdminSettings: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <CreditCard className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">
               Configuración de Stripe - Membresías ToursRed+
@@ -947,7 +947,7 @@ const AdminSettings: React.FC = () => {
                   </li>
                   <li>
                     Para obtener el Price ID:
-                    <ul className="list-disc ml-4 mt-1 space-y-1 font-normal">
+                    <ul className="list-disc ml-4 mt-1 flex flex-col gap-y-1 font-normal">
                       <li>Haz clic en tu producto</li>
                       <li>En la tabla "Tarifas", haz clic en el precio (ej: 49.00 MXN)</li>
                       <li>Copia el <strong>API ID</strong> o <strong>Price ID</strong> que empieza con "price_"</li>
@@ -1011,7 +1011,7 @@ const AdminSettings: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Crown className="w-6 h-6 text-amber-600" />
             <h2 className="text-xl font-semibold text-gray-900">
               Precios de Membresías ToursRed+
@@ -1023,7 +1023,7 @@ const AdminSettings: React.FC = () => {
               <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 mr-2 flex-shrink-0" />
               <div className="text-sm text-amber-800">
                 <p className="font-medium mb-2">Información importante:</p>
-                <ul className="space-y-1 text-xs">
+                <ul className="flex flex-col gap-y-1 text-xs">
                   <li>• Los precios se mostrarán en todas las páginas de membresía y correos electrónicos</li>
                   <li>• Asegúrate de que estos precios coincidan con los productos en Stripe</li>
                   <li>• Los cambios se reflejarán inmediatamente después de guardar</li>
@@ -1106,7 +1106,7 @@ const AdminSettings: React.FC = () => {
 
           <div className="mt-4 bg-blue-50 border border-blue-200 rounded-md p-4">
             <h4 className="text-sm font-semibold text-blue-900 mb-2">Vista Previa del Ahorro:</h4>
-            <div className="text-sm text-blue-800 space-y-1">
+            <div className="text-sm text-blue-800 flex flex-col gap-y-1">
               <p>• Plan Mensual x 12 meses = ${formatCurrency(platformSettings.membership_monthly_price * 12)} MXN</p>
               <p>• Plan Anual = ${formatCurrency(platformSettings.membership_annual_price)} MXN</p>
               <p className="font-semibold text-green-700">
@@ -1119,7 +1119,7 @@ const AdminSettings: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Gift className="w-6 h-6 text-blue-600" />
             <h2 className="text-xl font-semibold text-gray-900">
               Programa de Referidos
@@ -1131,7 +1131,7 @@ const AdminSettings: React.FC = () => {
               <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
               <div className="text-sm text-blue-800">
                 <p className="font-medium mb-2">Configuración del programa de referidos:</p>
-                <ul className="space-y-1 text-xs">
+                <ul className="flex flex-col gap-y-1 text-xs">
                   <li>• Los usuarios pueden invitar amigos usando su código de referido único</li>
                   <li>• Ambos usuarios ganan puntos cuando el referido completa su primera reserva</li>
                   <li>• Los puntos solo se pueden usar con membresía activa</li>
@@ -1213,7 +1213,7 @@ const AdminSettings: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Globe className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">
               Proveedores de Pago Adicionales
@@ -1225,7 +1225,7 @@ const AdminSettings: React.FC = () => {
               <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
               <div className="text-sm text-blue-800">
                 <p className="font-medium mb-1">Informacion importante:</p>
-                <ul className="space-y-1 text-xs">
+                <ul className="flex flex-col gap-y-1 text-xs">
                   <li>• Stripe es el proveedor principal y el unico disponible para membresias (requiere cobro recurrente)</li>
                   <li>• Puedes desactivar Stripe por contexto: reservas, tarjetas de regalo o membresias de forma independiente</li>
                   <li>• MercadoPago, PayPal y Conekta aplican solo para reservas, tarjetas de regalo y mensualidades de plan de pago</li>
@@ -1401,7 +1401,7 @@ const AdminSettings: React.FC = () => {
                       <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
                       <div className="text-xs text-blue-800">
                         <p className="font-medium mb-1">Configuracion de Conekta:</p>
-                        <ul className="space-y-1">
+                        <ul className="flex flex-col gap-y-1">
                           <li>• Conekta usa Hosted Checkout: las llaves se configuran como secrets de Supabase Edge Functions (CONEKTA_PRIVATE_KEY y CONEKTA_WEBHOOK_SIGNING_KEY)</li>
                           <li>• No se requiere clave publica en el frontend</li>
                           <li>• Metodos disponibles: tarjeta, efectivo (OXXO), SPEI, y BNPL (Aplazo, Creditea, Coppel Pay)</li>
@@ -1445,7 +1445,7 @@ const AdminSettings: React.FC = () => {
                       <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
                       <div className="text-xs text-blue-800">
                         <p className="font-medium mb-1">Configuracion de Openpay:</p>
-                        <ul className="space-y-1">
+                        <ul className="flex flex-col gap-y-1">
                           <li>• La <strong>llave publica</strong> se configura aqui abajo; la llave privada y el Merchant ID se configuran como secrets de Supabase Edge Functions (OPENPAY_MERCHANT_ID y OPENPAY_PRIVATE_KEY)</li>
                           <li>• Metodos disponibles: tarjeta de credito/debito, SPEI, efectivo</li>
                         </ul>
@@ -1505,7 +1505,7 @@ const AdminSettings: React.FC = () => {
                 ].map(({ provider, label, note }) => (
                   <div key={provider} className="bg-white border border-gray-200 rounded-lg p-3">
                     <p className="text-sm font-medium text-gray-900 mb-2">{label}</p>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-y-2">
                       <div>
                         <label className="text-xs text-gray-500">Porcentaje (%)</label>
                         <input
@@ -1599,7 +1599,7 @@ const AdminSettings: React.FC = () => {
                     <p className="text-sm font-medium text-gray-900">Stripe para nuevas membresias</p>
                     <p className="text-xs text-gray-500 mt-0.5">Permite contratar nuevas suscripciones de membresia</p>
                     {!platformSettings.stripe_memberships_enabled && (
-                      <div className="mt-2 space-y-1.5">
+                      <div className="mt-2 flex flex-col gap-y-1.5">
                         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                           Desactivado — la pagina de compra mostrara un aviso de mantenimiento temporal
                         </p>
@@ -1627,7 +1627,7 @@ const AdminSettings: React.FC = () => {
 
         {/* Gift Card Amounts Configuration */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Gift className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">
               Montos de Tarjetas de Regalo
@@ -1707,7 +1707,7 @@ const AdminSettings: React.FC = () => {
               </div>
             </div>
 
-            <div className="border-t pt-4">
+            <div className="border-t border-gray-200 pt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Monto máximo permitido (MXN)
               </label>
@@ -1730,7 +1730,7 @@ const AdminSettings: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Mail className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">
               Configuración de Email
@@ -1758,7 +1758,7 @@ const AdminSettings: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Server className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">
               Configuración SMTP
@@ -1853,7 +1853,7 @@ const AdminSettings: React.FC = () => {
 
         {/* PAC / CFDI Configuration */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-2">
+          <div className="flex items-center gap-x-3 mb-2">
             <FileText className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">Configuración CFDI / PAC</h2>
           </div>
@@ -1887,7 +1887,7 @@ const AdminSettings: React.FC = () => {
                   onChange={(e) => setPlatformSettings(prev => ({ ...prev, pac_sandbox_mode: e.target.checked }))}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
               </label>
               <div>
                 <div className="text-sm font-medium text-gray-700">Modo Sandbox</div>
@@ -1956,7 +1956,7 @@ const AdminSettings: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-6 border-t pt-6">
+          <div className="mt-6 border-t border-gray-200 pt-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
               <Shield className="h-4 w-4 text-primary-500" />
               Datos del Emisor (ToursRed)
@@ -2025,7 +2025,7 @@ const AdminSettings: React.FC = () => {
 
         {/* Accounting Integration */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-2">
+          <div className="flex items-center gap-x-3 mb-2">
             <BookOpen className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">Integracion Contable</h2>
           </div>
@@ -2061,7 +2061,7 @@ const AdminSettings: React.FC = () => {
                   disabled={platformSettings.accounting_provider === 'none' || platformSettings.accounting_provider === 'internal'}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600 peer-disabled:opacity-50"></div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600 peer-disabled:opacity-50"></div>
               </label>
               <div>
                 <div className="text-sm font-medium text-gray-700">Sincronizacion en Tiempo Real</div>
@@ -2114,7 +2114,7 @@ const AdminSettings: React.FC = () => {
 
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-emerald-800">
                 <p className="font-semibold mb-2">Que genera automaticamente el ERP interno:</p>
-                <ul className="text-xs space-y-1 list-disc ml-4">
+                <ul className="text-xs flex flex-col gap-y-1 list-disc ml-4">
                   <li>Reservas con pago confirmado → Poliza de ingreso (Anticipo recibido en cuenta 102 Bancos / 208 Anticipos de clientes)</li>
                   <li>Tours completados → Poliza de devengamiento (comision propia 401 + CxP Agencias 201)</li>
                   <li>Pagos a agencias → Poliza de egreso (cancela el pasivo 201 y acredita 102 Bancos)</li>
@@ -2199,7 +2199,7 @@ const AdminSettings: React.FC = () => {
                       onChange={(e) => setPlatformSettings(prev => ({ ...prev, zoho_sandbox_mode: e.target.checked }))}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                   </label>
                   <div>
                     <div className="text-sm font-medium text-gray-700">Modo Sandbox (Organizacion de Pruebas)</div>
@@ -2255,7 +2255,7 @@ const AdminSettings: React.FC = () => {
                   <div className="space-y-3">
                     <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-xs text-blue-800">
                       <p className="font-semibold mb-1">Pasos para conectar Zoho Books:</p>
-                      <ol className="list-decimal ml-4 space-y-1">
+                      <ol className="list-decimal ml-4 flex flex-col gap-y-1">
                         <li>Ve a <a href="https://api-console.zoho.com" target="_blank" rel="noopener noreferrer" className="underline font-medium inline-flex items-center gap-0.5">api-console.zoho.com <ExternalLink className="w-3 h-3" /></a></li>
                         <li>Selecciona tu app y haz clic en "Self Client"</li>
                         <li>En "Scope" escribe: <span className="font-mono bg-blue-100 px-1 rounded">ZohoBooks.fullaccess.all</span></li>
@@ -2304,7 +2304,7 @@ const AdminSettings: React.FC = () => {
 
               <div className="bg-blue-50 border border-blue-200 rounded-md p-4 text-sm text-blue-800">
                 <p className="font-semibold mb-1">Que se sincroniza automaticamente:</p>
-                <ul className="text-xs space-y-1 list-disc ml-4">
+                <ul className="text-xs flex flex-col gap-y-1 list-disc ml-4">
                   <li>Agencias aprobadas → Contactos (Proveedor) en Zoho Books</li>
                   <li>Viajeros con datos fiscales → Contactos (Cliente) en Zoho Books</li>
                   <li>Reservas confirmadas → Facturas de ingreso en Zoho Books</li>
@@ -2389,7 +2389,7 @@ const AdminSettings: React.FC = () => {
 
               <div className="bg-blue-50 border border-blue-200 rounded-md p-4 text-sm text-blue-800">
                 <p className="font-semibold mb-1">Que se sincroniza automaticamente con Odoo:</p>
-                <ul className="text-xs space-y-1 list-disc ml-4">
+                <ul className="text-xs flex flex-col gap-y-1 list-disc ml-4">
                   <li>Agencias aprobadas → Contactos (Proveedor) en Odoo</li>
                   <li>Viajeros con datos fiscales → Contactos (Cliente) en Odoo</li>
                   <li>Reservas confirmadas → Asientos contables de ingreso (account.move)</li>
@@ -2490,7 +2490,7 @@ const AdminSettings: React.FC = () => {
               />
               <div className="mt-3 bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-700">
                 <p className="font-semibold mb-1">Dimensiones recomendadas:</p>
-                <ul className="space-y-0.5 list-disc ml-4">
+                <ul className="flex flex-col gap-y-0.5 list-disc ml-4">
                   <li>Minimo: <strong>1920 × 1080 px</strong> (Full HD)</li>
                   <li>Optimo: <strong>2560 × 1440 px</strong> para pantallas retina</li>
                   <li>Formato: JPG calidad 80-85% · Peso maximo: 3 MB</li>
@@ -2517,7 +2517,7 @@ const AdminSettings: React.FC = () => {
 
         {/* ── URL de la Plataforma ─────────────────────────────────── */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Globe className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">URL de la Plataforma</h2>
           </div>
@@ -2534,7 +2534,7 @@ const AdminSettings: React.FC = () => {
               onChange={(e) =>
                 setPlatformSettings((prev) => ({ ...prev, platform_url: e.target.value }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="https://www.toursred.com.mx"
             />
             <p className="text-xs text-gray-500 mt-1">
@@ -2545,7 +2545,7 @@ const AdminSettings: React.FC = () => {
 
         {/* ── Modo Mantenimiento ─────────────────────────────────── */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Wrench className="w-6 h-6 text-amber-500" />
             <h2 className="text-xl font-semibold text-gray-900">Modo Mantenimiento</h2>
           </div>
@@ -2577,7 +2577,7 @@ const AdminSettings: React.FC = () => {
                   maintenance_enabled_at: !prev.maintenance_mode ? new Date().toISOString() : null,
                 }))
               }
-              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-hidden ${
                 platformSettings.maintenance_mode ? 'bg-amber-500' : 'bg-gray-300'
               }`}
             >
@@ -2608,7 +2608,7 @@ const AdminSettings: React.FC = () => {
               onChange={(e) =>
                 setPlatformSettings((prev) => ({ ...prev, maintenance_message: e.target.value }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
               placeholder="Estamos realizando tareas de mantenimiento. Estaremos de vuelta muy pronto."
             />
           </div>
@@ -2616,7 +2616,7 @@ const AdminSettings: React.FC = () => {
 
         {/* ── Anuncio / Aviso Importante ─────────────────────────── */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-4">
+          <div className="flex items-center gap-x-3 mb-4">
             <Megaphone className="w-6 h-6 text-red-500" />
             <h2 className="text-xl font-semibold text-gray-900">Anuncio / Aviso Importante</h2>
           </div>
@@ -2646,7 +2646,7 @@ const AdminSettings: React.FC = () => {
                   announcement_activated_at: !prev.announcement_active ? new Date().toISOString() : prev.announcement_activated_at,
                 }))
               }
-              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-hidden ${
                 platformSettings.announcement_active ? 'bg-red-500' : 'bg-gray-300'
               }`}
             >
@@ -2667,7 +2667,7 @@ const AdminSettings: React.FC = () => {
                 onChange={(e) =>
                   setPlatformSettings((prev) => ({ ...prev, announcement_title: e.target.value }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 placeholder="Ej: Mantenimiento programado el viernes 28"
               />
             </div>
@@ -2679,7 +2679,7 @@ const AdminSettings: React.FC = () => {
                 onChange={(e) =>
                   setPlatformSettings((prev) => ({ ...prev, announcement_message: e.target.value }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
                 placeholder="Ej: El próximo viernes 28 de junio de 12:00 a 14:00 hrs realizaremos una ventana de mantenimiento. Durante ese periodo el sitio no estará disponible."
               />
             </div>
@@ -2691,7 +2691,7 @@ const AdminSettings: React.FC = () => {
                 onChange={(e) =>
                   setPlatformSettings((prev) => ({ ...prev, announcement_cta_text: e.target.value }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 placeholder="Aceptar"
               />
               <p className="text-xs text-gray-400 mt-1">Texto que aparecerá en el botón para cerrar el popup.</p>
@@ -2701,7 +2701,7 @@ const AdminSettings: React.FC = () => {
 
         {/* ── Proveedores OAuth ─────────────────────────────────────────── */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-3 mb-2">
+          <div className="flex items-center gap-x-3 mb-2">
             <Link className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">Proveedores OAuth</h2>
           </div>
@@ -2773,7 +2773,7 @@ const AdminSettings: React.FC = () => {
                           onChange={handlePlatformChange}
                           className="sr-only peer"
                         />
-                        <div className="w-10 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                        <div className="w-10 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                       </label>
                     </td>
                     <td className="py-3 px-4 text-center">
@@ -2785,7 +2785,7 @@ const AdminSettings: React.FC = () => {
                           onChange={handlePlatformChange}
                           className="sr-only peer"
                         />
-                        <div className="w-10 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                        <div className="w-10 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                       </label>
                     </td>
                   </tr>
@@ -2812,7 +2812,7 @@ const AdminSettings: React.FC = () => {
                 onChange={handlePlatformChange}
                 className="sr-only peer"
               />
-              <div className="w-10 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              <div className="w-10 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
           </div>
         </div>
@@ -2824,7 +2824,7 @@ const AdminSettings: React.FC = () => {
           <button
             type="submit"
             disabled={isSaving}
-            className="bg-primary-600 text-white px-6 py-2 rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
+            className="bg-primary-600 text-white px-6 py-2 rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-x-2"
           >
             {isSaving ? (
               <>

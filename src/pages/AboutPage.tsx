@@ -63,7 +63,7 @@ const AboutPage: React.FC = () => {
         <div className="container mx-auto px-4">
           <h2 className="text-4xl font-bold text-center text-gray-900 mb-8">¿Qué es ToursRed?</h2>
 
-          <div className="max-w-4xl mx-auto space-y-6 text-lg text-gray-700 leading-relaxed">
+          <div className="max-w-4xl mx-auto flex flex-col gap-y-6 text-lg text-gray-700 leading-relaxed">
             <p>
               <span className="text-blue-600 font-semibold">ToursRed</span> es una plataforma mexicana que conecta viajeros con agencias locales para descubrir y reservar experiencias auténticas en todo México.
             </p>

@@ -132,7 +132,7 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
   if (stage === 'no_amendment') {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 max-w-md w-full p-8 text-center">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 max-w-md w-full p-8 text-center">
           <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Sin enmiendas pendientes</h2>
           <p className="text-gray-500 text-sm mb-6">No tienes ninguna enmienda contractual pendiente de firma.</p>
@@ -147,7 +147,7 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
   if (stage === 'signed') {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 max-w-md w-full p-8 text-center">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 max-w-md w-full p-8 text-center">
           <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Enmienda firmada exitosamente</h2>
           <p className="text-gray-500 text-sm mb-2">
@@ -171,7 +171,7 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
               }}
               disabled={!signedUrl}
               className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition-all ${
-                signedUrl ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                signedUrl ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-xs' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               }`}
             >
               <FileText className="w-4 h-4" />
@@ -188,7 +188,7 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 max-w-2xl w-full overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-100 max-w-2xl w-full overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white">
           <div className="flex items-center gap-3 mb-2">
@@ -244,7 +244,7 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
 
           {/* OTP flow */}
           {stage === 'intro' && (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-y-4">
               <p className="text-sm text-gray-600">
                 Para confirmar la firma de esta enmienda, te enviaremos un código de verificación de 6 dígitos
                 a tu correo registrado.

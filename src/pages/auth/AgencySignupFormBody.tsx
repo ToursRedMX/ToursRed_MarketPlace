@@ -99,7 +99,7 @@ interface Props {
 }
 
 const inputClass =
-  'appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm';
+  'appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm';
 
 const AgencySignupFormBody: React.FC<Props> = ({
   formData,
@@ -484,7 +484,7 @@ const AgencySignupFormBody: React.FC<Props> = ({
             {/* ── Domicilio de la Agencia ──────────────────────────────── */}
             <div className="border-b border-gray-200 pb-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Domicilio de la Agencia</h3>
-              <div className="space-y-4">
+              <div className="flex flex-col gap-y-4">
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Calle *</label>
@@ -624,7 +624,7 @@ const AgencySignupFormBody: React.FC<Props> = ({
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
                 <div className="ml-3 text-sm text-blue-700">
-                  <ul className="list-disc list-inside space-y-1">
+                  <ul className="list-disc list-inside flex flex-col gap-y-1">
                     <li><strong>Nombre Comercial:</strong> Es como se conoce tu agencia (ej: "Viajes Aventura")</li>
                     <li><strong>Razón Social:</strong> Es el nombre legal para facturación fiscal</li>
                     <li><strong>RFC:</strong> Necesario para emitir facturas y recibir pagos</li>
@@ -673,7 +673,7 @@ const AgencySignupFormBody: React.FC<Props> = ({
             <button
               type="submit"
               disabled={isLoading || !termsAccepted || identifierUnavailable || (!!onTurnstileToken && !turnstileToken)}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Procesando...' : label}
             </button>
@@ -690,7 +690,7 @@ const AgencySignupFormBody: React.FC<Props> = ({
               </div>
               <div className="mt-6">
                 <Link to="/signup"
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                   Registrarse como viajero
                 </Link>
               </div>

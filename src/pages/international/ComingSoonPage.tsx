@@ -61,7 +61,7 @@ const ComingSoonPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50">
       <div className="container-custom py-6">
         <nav className="flex mb-8" aria-label="Breadcrumb">
-          <ol className="inline-flex items-center space-x-1 md:space-x-3">
+          <ol className="inline-flex items-center gap-x-1 md:gap-x-3">
             <li className="inline-flex items-center">
               <Link to="/" className="text-gray-500 hover:text-primary-600">
                 Inicio
@@ -194,7 +194,7 @@ const ComingSoonPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full bg-primary-600 text-white py-3 px-6 rounded-md hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 font-semibold"
+                    className="w-full bg-primary-600 text-white py-3 px-6 rounded-md hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-x-2 font-semibold"
                   >
                     {isLoading ? (
                       <>

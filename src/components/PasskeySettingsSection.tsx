@@ -90,7 +90,7 @@ export const PasskeySettingsSection: React.FC = () => {
 
   if (!passkeysEnabled) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-6">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
             <KeyRound className="w-5 h-5 text-slate-400" />
@@ -109,7 +109,7 @@ export const PasskeySettingsSection: React.FC = () => {
 
   if (!browserSupported) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-6">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
             <AlertTriangle className="w-5 h-5 text-amber-500" />
@@ -127,7 +127,7 @@ export const PasskeySettingsSection: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-6">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-lg bg-violet-50 flex items-center justify-center">
           <Fingerprint className="w-5 h-5 text-violet-600" />

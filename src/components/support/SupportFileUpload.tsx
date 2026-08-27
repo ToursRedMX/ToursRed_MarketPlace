@@ -85,7 +85,7 @@ const SupportFileUpload: React.FC<Props> = ({ files, onChange, disabled = false 
       </div>
 
       {files.length > 0 && (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-y-2">
           {files.map((f, idx) => (
             <div
               key={idx}

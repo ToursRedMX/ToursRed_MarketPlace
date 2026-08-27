@@ -324,7 +324,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                   type="date"
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
                 />
               </div>
               <div>
@@ -334,7 +334,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                   value={reference}
                   onChange={e => setReference(e.target.value)}
                   placeholder="Num. factura, recibo..."
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
                 />
               </div>
             </div>
@@ -350,7 +350,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                   kind === 'egreso' ? 'Ej: Renta oficina enero, Viaticos CDMX...' :
                   'Concepto del asiento contable'
                 }
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
               />
             </div>
 
@@ -368,7 +368,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                     value={cfdiUuid}
                     onChange={e => setCfdiUuid(e.target.value)}
                     placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    className="w-full pl-9 pr-3 py-2 text-sm font-mono border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
+                    className="w-full pl-9 pr-3 py-2 text-sm font-mono border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
                   />
                 </div>
               </div>
@@ -385,7 +385,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                     <select
                       value={accountCode}
                       onChange={e => setAccountCode(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
                     >
                       <option value="">-- Seleccionar --</option>
                       {(kind === 'ingreso' ? incomeAccounts : expenseAccounts).map(a => (
@@ -402,7 +402,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                       value={amount}
                       onChange={e => setAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
                     />
                   </div>
                 </div>
@@ -494,14 +494,14 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="flex flex-col gap-y-2">
                   {lines.map((l, idx) => (
                     <div key={l.id} className="grid grid-cols-12 gap-2 items-start bg-gray-50 rounded-lg p-3 border border-gray-100">
                       <div className="col-span-12 sm:col-span-4">
                         <select
                           value={l.account_code}
                           onChange={e => updateLine(l.id, 'account_code', e.target.value)}
-                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-sky-400 bg-white"
+                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 bg-white"
                         >
                           <option value="">-- Cuenta --</option>
                           {accounts.map(a => (
@@ -515,7 +515,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                           value={l.description}
                           onChange={e => updateLine(l.id, 'description', e.target.value)}
                           placeholder="Descripcion de la partida"
-                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-sky-400 bg-white"
+                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 bg-white"
                         />
                       </div>
                       <div className="col-span-5 sm:col-span-2">
@@ -526,7 +526,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                           value={l.debit}
                           onChange={e => updateLine(l.id, 'debit', e.target.value)}
                           placeholder="Cargo"
-                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-sky-400 bg-white text-right"
+                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 bg-white text-right"
                         />
                       </div>
                       <div className="col-span-5 sm:col-span-2">
@@ -537,7 +537,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                           value={l.credit}
                           onChange={e => updateLine(l.id, 'credit', e.target.value)}
                           placeholder="Abono"
-                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-sky-400 bg-white text-right"
+                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 bg-white text-right"
                         />
                       </div>
                       <div className="col-span-2 sm:col-span-1 flex justify-end">
@@ -558,7 +558,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                           value={l.cfdi_uuid}
                           onChange={e => updateLine(l.id, 'cfdi_uuid', e.target.value)}
                           placeholder="UUID CFDI (opcional)"
-                          className="w-full px-2 py-1.5 text-xs font-mono border border-gray-100 rounded-lg outline-none focus:border-sky-400 bg-white"
+                          className="w-full px-2 py-1.5 text-xs font-mono border border-gray-100 rounded-lg outline-hidden focus:border-sky-400 bg-white"
                         />
                       </div>
                     </div>

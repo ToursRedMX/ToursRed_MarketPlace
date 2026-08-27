@@ -220,7 +220,7 @@ const TourMassMessageModal: React.FC<TourMassMessageModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen px-4 py-8">
-        <div className="fixed inset-0 bg-black bg-opacity-50" />
+        <div className="fixed inset-0 bg-black/50" />
         <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-auto">
 
           {/* Header */}
@@ -300,7 +300,7 @@ const TourMassMessageModal: React.FC<TourMassMessageModalProps> = ({
                     <select
                       value={selectedTourId}
                       onChange={e => { setSelectedTourId(e.target.value); setScopeType('all'); setSelectedSlotId(''); }}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 pr-10 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 pr-10 appearance-none focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
                     >
                       <option value="">Selecciona un tour...</option>
                       {tours.map(t => (
@@ -357,7 +357,7 @@ const TourMassMessageModal: React.FC<TourMassMessageModalProps> = ({
                         <select
                           value={selectedSlotId}
                           onChange={e => setSelectedSlotId(e.target.value)}
-                          className="w-full border border-gray-300 rounded-lg px-4 py-2.5 pr-10 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
+                          className="w-full border border-gray-300 rounded-lg px-4 py-2.5 pr-10 appearance-none focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
                         >
                           <option value="">Selecciona una fecha...</option>
                           {slots.map(s => (
@@ -448,7 +448,7 @@ const TourMassMessageModal: React.FC<TourMassMessageModalProps> = ({
                       value={subject}
                       onChange={e => setSubject(e.target.value)}
                       placeholder="Ej: Informacion importante sobre tu tour"
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                       maxLength={120}
                     />
                     <p className="text-xs text-gray-400 mt-1 text-right">{subject.length}/120</p>
@@ -464,7 +464,7 @@ const TourMassMessageModal: React.FC<TourMassMessageModalProps> = ({
                     onChange={e => setMessageBody(e.target.value)}
                     placeholder="Escribe aqui tu mensaje para los asistentes...&#10;&#10;Puedes incluir:&#10;- Enlace al grupo de WhatsApp&#10;- Punto de encuentro&#10;- Que llevar / vestimenta&#10;- Cualquier cambio de ultima hora"
                     rows={7}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm resize-none"
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm resize-none"
                     maxLength={2000}
                   />
                   <p className="text-xs text-gray-400 mt-1 text-right">{messageBody.length}/2000</p>
@@ -487,9 +487,9 @@ const TourMassMessageModal: React.FC<TourMassMessageModalProps> = ({
 
             {/* STEP 3: CONFIRM */}
             {!sendResult && step === 'confirm' && (
-              <div className="space-y-5">
-                <div className="space-y-3">
-                  <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+              <div className="flex flex-col gap-y-5">
+                <div className="flex flex-col gap-y-3">
+                  <div className="bg-gray-50 rounded-xl p-4 flex flex-col gap-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-500">Tour:</span>
                       <span className="font-semibold text-gray-800">{selectedTour?.name}</span>

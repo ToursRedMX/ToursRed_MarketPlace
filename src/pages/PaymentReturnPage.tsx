@@ -550,7 +550,7 @@ export default function PaymentReturnPage() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Pago cancelado</h2>
             <p className="text-gray-500 mb-6">{message}</p>
-            <div className="space-y-3">
+            <div className="flex flex-col gap-y-3">
               {bookingId && (
                 <button
                   onClick={handleGoToBookings}
@@ -578,7 +578,7 @@ export default function PaymentReturnPage() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Error en el pago</h2>
             <p className="text-gray-500 mb-6">{message}</p>
-            <div className="space-y-3">
+            <div className="flex flex-col gap-y-3">
               {bookingId && (
                 <button
                   onClick={handleGoToBookings}

@@ -130,7 +130,7 @@ const ActiveSlotCard: React.FC<{ slot: FeaturedSlot }> = ({ slot }) => {
   const ctr = stats.impressions > 0 ? ((stats.clicks / stats.impressions) * 100).toFixed(1) : '0.0';
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-amber-200 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-xs border border-amber-200 overflow-hidden">
       {/* Tour image strip */}
       <div className="relative h-36 overflow-hidden">
         {tour?.image_url ? (
@@ -387,7 +387,7 @@ const AgencyFeaturedTours: React.FC = () => {
               { label: 'Clics Totales', value: totalClicks.toLocaleString(), icon: <MousePointerClick className="h-5 w-5 text-violet-500" />, color: 'text-violet-700' },
               { label: 'Reservas Generadas', value: totalBookings.toLocaleString(), icon: <ShoppingBag className="h-5 w-5 text-green-500" />, color: 'text-green-700' },
             ].map(kpi => (
-              <div key={kpi.label} className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col items-center text-center shadow-sm">
+              <div key={kpi.label} className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col items-center text-center shadow-xs">
                 {kpi.icon}
                 <div className={`text-2xl font-bold mt-2 ${kpi.color}`}>{kpi.value}</div>
                 <div className="text-xs text-gray-500 mt-1">{kpi.label}</div>
@@ -436,7 +436,7 @@ const AgencyFeaturedTours: React.FC = () => {
               Historial
               <span className="ml-1 text-sm font-normal text-gray-500">({historySlots.length})</span>
             </h2>
-            <div className="space-y-3">
+            <div className="flex flex-col gap-y-3">
               {historySlots.map(slot => (
                 <HistoryRow
                   key={slot.id}

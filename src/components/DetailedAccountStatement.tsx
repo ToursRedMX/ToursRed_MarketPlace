@@ -49,7 +49,7 @@ const DetailedAccountStatement: React.FC<DetailedAccountStatementProps> = ({ rec
   const totalPaid = records.filter(r => r.status === 'paid_out').reduce((sum, r) => sum + Number(r.agency_net_amount), 0);
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-y-4">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">

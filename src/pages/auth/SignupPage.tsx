@@ -450,7 +450,7 @@ const SignupPage: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Tipo de viajero
               </label>
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center gap-x-4">
                 <label className="flex items-center cursor-pointer">
                   <input
                     type="radio"
@@ -485,7 +485,7 @@ const SignupPage: React.FC = () => {
                   value={formData.firstName}
                   onChange={handleInputChange}
                   required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                 />
               </div>
             </div>
@@ -504,7 +504,7 @@ const SignupPage: React.FC = () => {
                     value={formData.apellidoPaterno}
                     onChange={handleInputChange}
                     required
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                   />
                 </div>
               </div>
@@ -521,7 +521,7 @@ const SignupPage: React.FC = () => {
                     type="text"
                     value={formData.apellidoMaterno}
                     onChange={handleInputChange}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                   />
                 </div>
               </div>
@@ -540,7 +540,7 @@ const SignupPage: React.FC = () => {
                   value={formData.dateOfBirth}
                   onChange={handleInputChange}
                   required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                 />
               </div>
             </div>
@@ -591,7 +591,7 @@ const SignupPage: React.FC = () => {
                     placeholder="Ej: ABCD123456HDFRRL09"
                     maxLength={18}
                     required
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm uppercase"
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm uppercase"
                   />
                   {!curpManuallyEdited.current && formData.curp.length > 0 && formData.curp.length < 18 && (
                     <p className="mt-1 text-xs text-blue-600">
@@ -632,7 +632,7 @@ const SignupPage: React.FC = () => {
                     onChange={handleInputChange}
                     placeholder="Ej: A12345678"
                     required
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm uppercase"
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm uppercase"
                   />
                   {passportAvailability.isChecking && (
                     <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
@@ -667,7 +667,7 @@ const SignupPage: React.FC = () => {
                   onChange={handleInputChange}
                   autoComplete="email"
                   required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                 />
                 {emailAvailability.isChecking && (
                   <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
@@ -701,13 +701,13 @@ const SignupPage: React.FC = () => {
                   onChange={handleInputChange}
                   placeholder="Ej: +52 55 1234 5678"
                   required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                 />
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="border-t pt-4">
+              <div className="border-t border-gray-200 pt-4">
                 <h3 className="text-sm font-medium text-gray-900 mb-3">Domicilio</h3>
 
                 <div className="space-y-3">
@@ -723,7 +723,7 @@ const SignupPage: React.FC = () => {
                       onChange={handleInputChange}
                       placeholder="Ej: Av. Insurgentes Sur"
                       required
-                      className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                      className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                     />
                   </div>
 
@@ -740,7 +740,7 @@ const SignupPage: React.FC = () => {
                         onChange={handleInputChange}
                         placeholder="Ej: 123"
                         required
-                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                       />
                     </div>
 
@@ -756,7 +756,7 @@ const SignupPage: React.FC = () => {
                         value={formData.interiorNumber}
                         onChange={handleInputChange}
                         placeholder="Ej: 4B"
-                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                       />
                     </div>
                   </div>
@@ -773,7 +773,7 @@ const SignupPage: React.FC = () => {
                       onChange={handleInputChange}
                       placeholder="Ej: Roma Norte"
                       required
-                      className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                      className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                     />
                   </div>
 
@@ -790,7 +790,7 @@ const SignupPage: React.FC = () => {
                         onChange={handleInputChange}
                         placeholder="Ej: Ciudad de México"
                         required
-                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                       />
                     </div>
 
@@ -806,7 +806,7 @@ const SignupPage: React.FC = () => {
                         onChange={handleInputChange}
                         placeholder="Ej: CDMX"
                         required
-                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                       />
                     </div>
                   </div>
@@ -825,7 +825,7 @@ const SignupPage: React.FC = () => {
                         placeholder="Ej: 06700"
                         required
                         maxLength={5}
-                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                       />
                     </div>
 
@@ -841,7 +841,7 @@ const SignupPage: React.FC = () => {
                         onChange={handleInputChange}
                         placeholder="México"
                         required
-                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                        className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                       />
                     </div>
                   </div>
@@ -862,7 +862,7 @@ const SignupPage: React.FC = () => {
                   onChange={(e) => setReferralCode(e.target.value.toLowerCase())}
                   placeholder="Ej: juan_perez"
                   maxLength={20}
-                  className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm lowercase"
+                  className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm lowercase"
                 />
                 {isValidatingReferral && (
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
@@ -906,7 +906,7 @@ const SignupPage: React.FC = () => {
                   onChange={handleInputChange}
                   autoComplete="new-password"
                   required
-                  className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                 />
                 <button
                   type="button"
@@ -935,7 +935,7 @@ const SignupPage: React.FC = () => {
                   onChange={handleInputChange}
                   autoComplete="new-password"
                   required
-                  className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                 />
                 <button
                   type="button"
@@ -990,7 +990,7 @@ const SignupPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading || !termsAccepted || identifierUnavailable || (turnstileEnabled && !turnstileToken)}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? 'Creando cuenta...' : 'Registrarse'}
               </button>
@@ -1010,7 +1010,7 @@ const SignupPage: React.FC = () => {
             <div className="mt-6">
               <Link
                 to="/agency-signup"
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
                 Registrarse como agencia
               </Link>

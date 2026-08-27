@@ -48,7 +48,7 @@ const OnboardingTermsStep: React.FC<Props> = ({ agencyId, onAccepted }) => {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
       <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-600" />
       <div className="p-8">
         <div className="flex items-center gap-3 mb-6">

@@ -43,7 +43,7 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({
         </p>
 
         {/* Contact */}
-        <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 backdrop-blur-sm">
+        <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 backdrop-blur-xs">
           <p className="text-slate-400 text-sm mb-4 font-medium uppercase tracking-wider">
             ¿Necesitas ayuda urgente?
           </p>

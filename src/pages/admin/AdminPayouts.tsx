@@ -867,7 +867,7 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="mb-6">
           <h3 className="text-2xl font-bold text-gray-900">Procesar Pago</h3>
@@ -1056,7 +1056,7 @@ const ProcessPenaltyModal: React.FC<ProcessPenaltyModalProps> = ({ isOpen, penal
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="mb-6">
           <h3 className="text-2xl font-bold text-gray-900">Pagar Penalización</h3>

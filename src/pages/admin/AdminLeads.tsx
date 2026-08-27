@@ -223,13 +223,13 @@ export default function AdminLeads() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por nombre, email o contacto..."
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <select
           value={execFilter}
           onChange={e => setExecFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white"
         >
           <option value="all">Todos los ejecutivos</option>
           {executives.map(e => (
@@ -369,7 +369,7 @@ export default function AdminLeads() {
                 value={newNote}
                 onChange={e => setNewNote(e.target.value)}
                 placeholder="Agregar nota..."
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 onKeyDown={e => { if (e.key === 'Enter') addFollowUpNote(showFollowUp); }}
               />
               <button
@@ -408,7 +408,7 @@ export default function AdminLeads() {
                 type="email"
                 value={fixEmailValue}
                 onChange={e => setFixEmailValue(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                 placeholder="nuevo@correo.com"
               />
             </div>
@@ -441,7 +441,7 @@ export default function AdminLeads() {
       {/* Resend Credentials Modal */}
       {resendLead && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 flex flex-col gap-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Send className="h-5 w-5 text-green-600" /> Reenviar credenciales

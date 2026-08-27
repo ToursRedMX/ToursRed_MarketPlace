@@ -257,7 +257,7 @@ const LoginPage: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                 />
               </div>
             </div>
@@ -275,7 +275,7 @@ const LoginPage: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                 />
                 <button
                   type="button"
@@ -321,7 +321,7 @@ const LoginPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading || (turnstileEnabled && !turnstileToken)}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
               >
                 {isLoading ? (
                   <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
@@ -363,7 +363,7 @@ const LoginPage: React.FC = () => {
                   }
                 }}
                 disabled={isPasskeyLoading}
-                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-blue-300 rounded-md shadow-sm bg-blue-50 text-sm font-medium text-blue-700 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-blue-300 rounded-md shadow-xs bg-blue-50 text-sm font-medium text-blue-700 hover:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
               >
                 {isPasskeyLoading ? (
                   <div className="w-5 h-5 border-t-2 border-b-2 border-blue-400 rounded-full animate-spin" />
@@ -392,7 +392,7 @@ const LoginPage: React.FC = () => {
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isGoogleLoading || isAzureLoading || isTwitterLoading || isFacebookLoading}
-                className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
+                className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
               >
                 {isGoogleLoading ? (
                   <div className="w-5 h-5 border-t-2 border-b-2 border-gray-400 rounded-full animate-spin" />
@@ -413,7 +413,7 @@ const LoginPage: React.FC = () => {
                 type="button"
                 onClick={handleAzureSignIn}
                 disabled={isAzureLoading || isGoogleLoading || isTwitterLoading || isFacebookLoading}
-                className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
+                className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
               >
                 {isAzureLoading ? (
                   <div className="w-5 h-5 border-t-2 border-b-2 border-gray-400 rounded-full animate-spin" />
@@ -435,7 +435,7 @@ const LoginPage: React.FC = () => {
                 type="button"
                 onClick={handleTwitterSignIn}
                 disabled={isTwitterLoading || isGoogleLoading || isAzureLoading || isFacebookLoading}
-                className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
+                className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
               >
                 {isTwitterLoading ? (
                   <div className="w-5 h-5 border-t-2 border-b-2 border-gray-400 rounded-full animate-spin" />
@@ -453,7 +453,7 @@ const LoginPage: React.FC = () => {
                 type="button"
                 onClick={handleFacebookSignIn}
                 disabled={isFacebookLoading || isGoogleLoading || isAzureLoading || isTwitterLoading}
-                className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
+                className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
               >
                 {isFacebookLoading ? (
                   <div className="w-5 h-5 border-t-2 border-b-2 border-gray-400 rounded-full animate-spin" />
@@ -473,13 +473,13 @@ const LoginPage: React.FC = () => {
           <div className="mt-4 grid grid-cols-2 gap-3">
             <Link
               to={redirectUrl ? `/agency-signup?redirect=${encodeURIComponent(redirectUrl)}` : "/agency-signup"}
-              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               ¿Eres una agencia?
             </Link>
             <Link
               to={redirectUrl ? `/signup?redirect=${encodeURIComponent(redirectUrl)}` : "/signup"}
-              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Registrarse como viajero
             </Link>

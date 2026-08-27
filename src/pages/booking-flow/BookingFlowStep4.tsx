@@ -657,7 +657,7 @@ const BookingFlowStep4: React.FC = () => {
   const paymentContext = flow.addMembership ? 'booking_with_membership' : 'booking';
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
       <div className="p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Resumen y pago</h1>
         <p className="text-sm text-gray-500 mb-6">Paso 4 de 4 — Revisa y paga tu reserva</p>
@@ -686,11 +686,11 @@ const BookingFlowStep4: React.FC = () => {
         )}
 
         {/* Cost breakdown */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-xl space-y-2">
+        <div className="mb-6 p-4 bg-gray-50 rounded-xl flex flex-col gap-y-2">
 
           {/* Traveler category breakdown */}
           {travelerCategoryBreakdown.length > 0 && (
-            <div className="space-y-1 pb-1">
+            <div className="flex flex-col gap-y-1 pb-1">
               {travelerCategoryBreakdown.map(({ cat, count, unitPrice, subtotal }) => (
                 <div key={cat} className="flex justify-between text-sm text-gray-500">
                   <span>
@@ -838,7 +838,7 @@ const BookingFlowStep4: React.FC = () => {
           )}
 
           {/* Grand total */}
-          <div className="border-t pt-2 flex justify-between">
+          <div className="border-t border-gray-200 pt-2 flex justify-between">
             <span className="font-bold text-gray-900">Total de la reserva</span>
             <span className="font-bold text-primary-600 text-lg">{formatCurrencyMXN(grandTotal)}</span>
           </div>

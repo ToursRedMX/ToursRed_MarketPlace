@@ -274,7 +274,7 @@ export default function AdminEjecutivosComisiones() {
               <select
                 value={genMonth}
                 onChange={e => setGenMonth(Number(e.target.value))}
-                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               >
                 {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].map((m, i) => (
                   <option key={i + 1} value={i + 1}>{m}</option>
@@ -286,7 +286,7 @@ export default function AdminEjecutivosComisiones() {
               <select
                 value={genYear}
                 onChange={e => setGenYear(Number(e.target.value))}
-                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               >
                 {[currentDate.getFullYear() - 1, currentDate.getFullYear(), currentDate.getFullYear() + 1].map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -354,7 +354,7 @@ export default function AdminEjecutivosComisiones() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Buscar ejecutivo, agencia..."
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -597,7 +597,7 @@ export default function AdminEjecutivosComisiones() {
                     onChange={e => setRejectionReason(e.target.value)}
                     rows={3}
                     placeholder="Ej: UUID inválido, monto incorrecto, tipo de CFDI erróneo..."
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
                   />
                 </>
               )}
@@ -615,7 +615,7 @@ export default function AdminEjecutivosComisiones() {
                       value={paymentRef}
                       onChange={e => setPaymentRef(e.target.value)}
                       placeholder="Ej: SPEI-XXXXXXXX"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </>

@@ -102,7 +102,7 @@ const ContactPage: React.FC = () => {
 
           {submitStatus.type && (
             <div
-              className={`mb-4 p-4 rounded-md flex items-start space-x-3 ${
+              className={`mb-4 p-4 rounded-md flex items-start gap-x-3 ${
                 submitStatus.type === 'success'
                   ? 'bg-green-50 text-green-800 border border-green-200'
                   : 'bg-red-50 text-red-800 border border-red-200'
@@ -127,7 +127,7 @@ const ContactPage: React.FC = () => {
                 onChange={handleChange}
                 required
                 disabled={isSubmitting}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-primary-500 focus:ring-primary-500 disabled:bg-gray-100"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-xs focus:border-primary-500 focus:ring-primary-500 disabled:bg-gray-100"
               />
             </div>
             <div>
@@ -139,7 +139,7 @@ const ContactPage: React.FC = () => {
                 onChange={handleChange}
                 required
                 disabled={isSubmitting}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-primary-500 focus:ring-primary-500 disabled:bg-gray-100"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-xs focus:border-primary-500 focus:ring-primary-500 disabled:bg-gray-100"
               />
             </div>
             <div>
@@ -151,7 +151,7 @@ const ContactPage: React.FC = () => {
                 onChange={handleChange}
                 required
                 disabled={isSubmitting}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-primary-500 focus:ring-primary-500 disabled:bg-gray-100"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-xs focus:border-primary-500 focus:ring-primary-500 disabled:bg-gray-100"
               ></textarea>
             </div>
             {turnstileEnabled && (
@@ -163,7 +163,7 @@ const ContactPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-primary-600 text-white py-2 px-4 rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              className="w-full bg-primary-600 text-white py-2 px-4 rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-x-2"
             >
               {isSubmitting ? (
                 <>
@@ -179,12 +179,12 @@ const ContactPage: React.FC = () => {
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">Información de Contacto</h2>
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3">
+            <div className="flex flex-col gap-y-4">
+              <div className="flex items-center gap-x-3">
                 <Mail className="w-5 h-5 text-primary-600" />
                 <span className="text-gray-600">contacto@toursred.com</span>
               </div>
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center gap-x-3">
                 <Phone className="w-5 h-5 text-primary-600" />
                 <a
                   href="https://wa.me/525547127668"
@@ -195,7 +195,7 @@ const ContactPage: React.FC = () => {
                   +52 55 47127668
                 </a>
               </div>
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center gap-x-3">
                 <MapPin className="w-5 h-5 text-primary-600" />
                 <span className="text-gray-600">Av. Homero 229-501, Polanco</span>
               </div>

@@ -167,7 +167,7 @@ const TourCard: React.FC<TourCardProps> = ({
         ref={cardRef as React.RefObject<HTMLAnchorElement>}
         to={`/tours/${tour.slug}`}
         onClick={handleFeaturedClick}
-        className={`group bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col transition-all hover:shadow-md hover:-translate-y-0.5 animate-fade-in ${
+        className={`group bg-white rounded-xl shadow-xs border overflow-hidden flex flex-col transition-all hover:shadow-md hover:-translate-y-0.5 animate-fade-in ${
           isFeaturedTour ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-100'
         } ${className}`}
       >
@@ -181,7 +181,7 @@ const TourCard: React.FC<TourCardProps> = ({
           {/* Badges */}
           <div className="absolute top-1.5 left-1.5 flex flex-col gap-1">
             {isFeaturedTour && (
-              <span className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded leading-none flex items-center gap-0.5 shadow-sm">
+              <span className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded leading-none flex items-center gap-0.5 shadow-xs">
                 <Sparkles className="w-2 h-2" />
                 Destacado
               </span>
@@ -248,7 +248,7 @@ const TourCard: React.FC<TourCardProps> = ({
   return (
     <div
       ref={cardRef as React.RefObject<HTMLDivElement>}
-      className={`bg-white rounded-2xl shadow-sm border overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 group animate-fade-in ${
+      className={`bg-white rounded-2xl shadow-xs border overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 group animate-fade-in ${
         isFeaturedTour ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-100'
       } ${className}`}
     >
@@ -261,7 +261,7 @@ const TourCard: React.FC<TourCardProps> = ({
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
         {isFeaturedTour && (
-          <div className="absolute top-2 left-2 bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1">
+          <div className="absolute top-2 left-2 bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-xs flex items-center gap-1">
             <Sparkles className="w-3 h-3" />
             Tour Destacado
           </div>
@@ -272,7 +272,7 @@ const TourCard: React.FC<TourCardProps> = ({
           </div>
         )}
         {tour.tour_type === 'receptivo' && (
-          <div className={`absolute ${(isFeaturedTour || tour.is_featured) ? 'top-9' : 'top-2'} left-2 flex items-center gap-1 bg-teal-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm`}>
+          <div className={`absolute ${(isFeaturedTour || tour.is_featured) ? 'top-9' : 'top-2'} left-2 flex items-center gap-1 bg-teal-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-xs`}>
             <RefreshCw className="w-2.5 h-2.5" />
             {tour.receptivo_modality === 'privado' ? 'Privado' : 'Receptivo'}
           </div>
@@ -308,7 +308,7 @@ const TourCard: React.FC<TourCardProps> = ({
           const badgesCount = ((isFeaturedTour || tour.is_featured) ? 1 : 0) + (tour.tour_type === 'receptivo' ? 1 : 0) + (activePromo ? 1 : 0);
           const topOffset = badgesCount === 0 ? 'top-2' : badgesCount === 1 ? 'top-9' : badgesCount === 2 ? 'top-16' : 'top-[5.75rem]';
           return (
-            <div className={`absolute left-2 ${topOffset} flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm`}>
+            <div className={`absolute left-2 ${topOffset} flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-xs`}>
               <Crown className="w-2.5 h-2.5" />
               Preventa
             </div>

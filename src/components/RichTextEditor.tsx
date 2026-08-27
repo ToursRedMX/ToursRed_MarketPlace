@@ -195,7 +195,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
         <EditorContent
           editor={editor}
-          className={`tiptap ${minHeight} max-h-[500px] overflow-y-auto p-4 text-sm prose prose-sm max-w-none focus:outline-none`}
+          className={`tiptap ${minHeight} max-h-[500px] overflow-y-auto p-4 text-sm prose prose-sm max-w-none focus:outline-hidden`}
         />
 
         {enableImages && (
@@ -228,7 +228,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 if (e.key === 'Escape') cancelLink();
               }}
               placeholder="https://ejemplo.com"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 mb-4"
             />
             <div className="flex gap-2 justify-end">
               <button

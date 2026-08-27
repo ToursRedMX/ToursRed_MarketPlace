@@ -125,7 +125,7 @@ const PreventasSection: React.FC = () => {
             const tieneDescuento = tour.preventa_precio_especial && tour.preventa_descuento_valor && precioBase < tour.price;
 
             return (
-              <div key={tour.id} className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-amber-100">
+              <div key={tour.id} className="group bg-white rounded-2xl shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden border border-amber-100">
                 {/* Image */}
                 <div className="relative h-44 overflow-hidden">
                   <img
@@ -222,7 +222,7 @@ const PreventasSection: React.FC = () => {
 
         {/* CTA for non-members */}
         {!hasMembership && (
-          <div className="mt-8 bg-white border border-amber-200 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+          <div className="mt-8 bg-white border border-amber-200 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xs">
             <div className="flex items-center gap-4 text-center md:text-left">
               <div className="flex-shrink-0 w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
                 <Crown className="w-6 h-6 text-amber-600" />

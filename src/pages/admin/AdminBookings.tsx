@@ -528,7 +528,7 @@ function AdminBookings() {
           </div>
           <button
             onClick={load}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 shadow-sm transition"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 shadow-xs transition"
           >
             <RefreshCw className="h-4 w-4" />
             Actualizar
@@ -538,7 +538,7 @@ function AdminBookings() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-8">
           {statCards.map(c => (
-            <div key={c.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <div key={c.label} className="bg-white rounded-xl shadow-xs border border-gray-100 p-4">
               <div className={`inline-flex p-2 rounded-lg ${c.bg} mb-2`}>
                 <span className={c.color}>{c.icon}</span>
               </div>
@@ -549,7 +549,7 @@ function AdminBookings() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div className="bg-white rounded-xl shadow-xs border border-gray-100 p-4 mb-6">
           <div className="flex flex-col lg:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -558,7 +558,7 @@ function AdminBookings() {
                 placeholder="Buscar por folio, viajero, tour, agencia..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               />
               {search && (
                 <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -569,7 +569,7 @@ function AdminBookings() {
             <select
               value={filterPayment}
               onChange={e => setFilterPayment(e.target.value)}
-              className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="">Pago: Todos</option>
               <option value="succeeded">Pagada</option>
@@ -581,7 +581,7 @@ function AdminBookings() {
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value)}
-              className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="">Estado: Todos</option>
               <option value="draft">Borrador</option>
@@ -595,7 +595,7 @@ function AdminBookings() {
             <select
               value={filterApproval}
               onChange={e => setFilterApproval(e.target.value)}
-              className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="">Aprobacion: Todas</option>
               <option value="pending">Pendiente</option>
@@ -619,7 +619,7 @@ function AdminBookings() {
         )}
 
         {/* Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 280px)', minHeight: 300 }}>
+        <div className="bg-white rounded-xl shadow-xs border border-gray-100 overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 280px)', minHeight: 300 }}>
           {loading ? (
             <div className="flex items-center justify-center py-24">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
@@ -1213,7 +1213,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void; onRefres
                 )}
               </div>
               {b.cancellation_type === 'admin_cancelled' && adminCancellationData && (
-                <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+                <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-y-3">
                   <h4 className="text-sm font-semibold text-gray-700">Detalle de Cancelacion Administrativa</h4>
                   <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                     <Field label="Motivo viajero" value={adminCancellationData.reason_for_traveler || '—'} />
@@ -1353,7 +1353,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void; onRefres
           {canCancel && b.status !== 'cancelled' && b.status !== 'cancellation_processing' && !b.cancelled_at ? (
             <button
               onClick={() => setShowCancelModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-sm transition"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-xs transition"
             >
               <Ban className="h-4 w-4" />
               Cancelar Reserva
@@ -1363,7 +1363,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void; onRefres
           )}
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 shadow-sm transition"
+            className="px-5 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 shadow-xs transition"
           >
             Cerrar
           </button>

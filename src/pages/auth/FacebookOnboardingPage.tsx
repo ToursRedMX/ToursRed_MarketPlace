@@ -44,7 +44,7 @@ const FacebookOnboardingPage: React.FC = () => {
           <p className="text-sm text-gray-500 mt-1">{user?.email}</p>
         </div>
 
-        <div className="bg-white shadow-sm rounded-xl px-6 py-8">
+        <div className="bg-white shadow-xs rounded-xl px-6 py-8">
           <h2 className="text-lg font-semibold text-gray-900 text-center mb-2">
             ¿Cómo quieres unirte a ToursRed?
           </h2>

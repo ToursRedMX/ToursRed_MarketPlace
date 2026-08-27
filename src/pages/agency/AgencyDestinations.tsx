@@ -360,7 +360,7 @@ const AgencyDestinations: React.FC = () => {
               />
             </div>
 
-            <div className="flex justify-end space-x-4">
+            <div className="flex justify-end gap-x-4">
               <button
                 type="button"
                 onClick={handleCancel}
@@ -394,7 +394,7 @@ const AgencyDestinations: React.FC = () => {
                 alt={destination.name}
                 className="w-full h-full object-cover"
               />
-              <div className="absolute top-2 right-2 flex space-x-2">
+              <div className="absolute top-2 right-2 flex gap-x-2">
                 <button
                   onClick={() => handleEdit(destination)}
                   className="bg-white/80 hover:bg-white rounded-full p-2 text-gray-700"
@@ -433,7 +433,7 @@ const AgencyDestinations: React.FC = () => {
               )}
 
               {/* Quick Info */}
-              <div className="space-y-2 text-xs text-gray-500">
+              <div className="flex flex-col gap-y-2 text-xs text-gray-500">
                 {destination.best_time_to_visit && (
                   <div className="flex items-center">
                     <Clock className="h-3 w-3 mr-2" />
@@ -455,14 +455,14 @@ const AgencyDestinations: React.FC = () => {
               </div>
 
               {/* Images Section */}
-              <div className="mt-4 border-t pt-4">
+              <div className="mt-4 border-t border-gray-200 pt-4">
                 <h4 className="text-sm font-medium mb-2 flex items-center">
                   <Image className="h-4 w-4 mr-2" />
                   Galería ({destination.destination_images?.length || 0})
                 </h4>
                 
                 {/* Add Image Form */}
-                <div className="space-y-2 mb-3">
+                <div className="flex flex-col gap-y-2 mb-3">
                   <ImageUploader
                     onImageSelect={(url) => setNewImageUrl(url)}
                     maxSizeMB={3}
@@ -472,7 +472,7 @@ const AgencyDestinations: React.FC = () => {
                   />
                   
                   {newImageUrl && (
-                    <div className="flex space-x-2">
+                    <div className="flex gap-x-2">
                       <input
                         type="text"
                         value={newImageCaption}

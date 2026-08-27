@@ -798,16 +798,16 @@ const AdminAgencies: React.FC = () => {
                 placeholder="Buscar por nombre, email, propietario..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-x-2">
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
-              className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="border border-gray-300 rounded-md px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="all">Todas las agencias</option>
               <option value="active">Solo activas</option>
@@ -933,7 +933,7 @@ const AdminAgencies: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-1">
+                      <div className="flex flex-col gap-y-1">
                         <div className="flex items-center text-sm text-gray-900">
                           <Mail className="h-3 w-3 mr-1 text-gray-400" />
                           {agency.contact_email}
@@ -973,7 +973,7 @@ const AdminAgencies: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-1">
+                      <div className="flex flex-col gap-y-1">
                         <div className="text-sm text-gray-900">
                           {agency.tour_count || 0} tours
                         </div>
@@ -1008,7 +1008,7 @@ const AdminAgencies: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center gap-x-2">
                         <button
                           onClick={() => openEditModal(agency)}
                           disabled={isUpdating === agency.id}
@@ -1067,9 +1067,9 @@ const AdminAgencies: React.FC = () => {
 
       {/* Modal de Editar Agencia */}
       {isEditingAgency && selectedAgency && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-start justify-center py-10 px-4">
+        <div className="fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full z-50 flex items-start justify-center py-10 px-4">
           <div className="relative w-full max-w-4xl shadow-lg rounded-md bg-white flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center p-5 border-b shrink-0">
+            <div className="flex justify-between items-center p-5 border-b border-gray-200 shrink-0">
               <h3 className="text-xl font-medium text-gray-900">
                 Editar Agencia: {selectedAgency.name}
               </h3>
@@ -1562,7 +1562,7 @@ const AdminAgencies: React.FC = () => {
                     <Calendar className="h-5 w-5 mr-2" />
                     Información del Sistema
                   </h4>
-                  <div className="space-y-3 text-sm">
+                  <div className="flex flex-col gap-y-3 text-sm">
                     <div>
                       <span className="font-medium text-gray-700">Fecha de Registro:</span>
                       <div className="text-gray-600">
@@ -1622,7 +1622,7 @@ const AdminAgencies: React.FC = () => {
                         {formatCurrencyMXN((selectedAgency.total_revenue || 0) * editForm.commission_rate)}
                       </span>
                     </div>
-                    <div className="border-t pt-2 mt-2">
+                    <div className="border-t border-gray-200 pt-2 mt-2">
                       <div className="flex justify-between text-base font-bold">
                         <span>Ingresos Netos de la Agencia:</span>
                         <span className="text-green-600">
@@ -1667,7 +1667,7 @@ const AdminAgencies: React.FC = () => {
                     
                     <div className="text-xs text-gray-600">
                       <p><strong>Ejemplo con tour de $10,000:</strong></p>
-                      <ul className="list-disc list-inside space-y-1 mt-1">
+                      <ul className="list-disc list-inside flex flex-col gap-y-1 mt-1">
                         <li>Comisión plataforma: {formatCurrencyMXN(10000 * editForm.commission_rate)}</li>
                         <li>Agencia recibe: {formatCurrencyMXN(10000 * (1 - editForm.commission_rate))}</li>
                       </ul>
@@ -1677,9 +1677,9 @@ const AdminAgencies: React.FC = () => {
                 </div>
 
                 {/* Estadísticas Rápidas */}
-                <div className="bg-white border rounded-lg p-4">
+                <div className="bg-white border border-gray-200 rounded-lg p-4">
                   <h4 className="font-semibold mb-3">Estadísticas</h4>
-                  <div className="space-y-3">
+                  <div className="flex flex-col gap-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Tours Publicados:</span>
                       <span className="font-medium">{selectedAgency.tour_count || 0}</span>
@@ -1706,7 +1706,7 @@ const AdminAgencies: React.FC = () => {
             </div>
 
             {/* Acciones */}
-            <div className="flex justify-end space-x-4 p-5 pt-4 border-t shrink-0">
+            <div className="flex justify-end gap-x-4 p-5 pt-4 border-t border-gray-200 shrink-0">
               <button
                 onClick={closeModals}
                 className="btn btn-outline"

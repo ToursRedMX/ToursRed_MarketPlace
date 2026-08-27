@@ -33,7 +33,7 @@ const OnboardingRejectedStep: React.FC<Props> = ({ agencyId, supportCategoryId }
   }, [agencyId]);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
       <div className="h-1.5 bg-gradient-to-r from-red-400 to-red-500" />
       <div className="p-8">
         <div className="flex justify-center mb-6">
@@ -73,7 +73,7 @@ const OnboardingRejectedStep: React.FC<Props> = ({ agencyId, supportCategoryId }
           </p>
         </div>
 
-        <div className="space-y-3">
+        <div className="flex flex-col gap-y-3">
           {supportCategoryId && (
             <a
               href={`/soporte?categoria=${supportCategoryId}&tipo=apelacion`}

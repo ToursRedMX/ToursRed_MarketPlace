@@ -174,7 +174,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
@@ -199,7 +199,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
               <button
                 type="button"
                 onClick={() => setShowParentDropdown(v => !v)}
-                className="w-full flex items-center justify-between px-3 py-2.5 text-sm border border-gray-200 rounded-lg hover:border-sky-300 focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 bg-white text-left"
+                className="w-full flex items-center justify-between px-3 py-2.5 text-sm border border-gray-200 rounded-lg hover:border-sky-300 focus:outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100 bg-white text-left"
               >
                 <span className={selectedParent ? 'text-gray-800' : 'text-gray-400'}>
                   {selectedParent ? `${selectedParent.code} — ${selectedParent.name}` : 'Seleccionar cuenta padre...'}
@@ -216,7 +216,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
                         value={parentSearch}
                         onChange={e => setParentSearch(e.target.value)}
                         placeholder="Buscar..."
-                        className="w-full pl-7 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-sky-400"
+                        className="w-full pl-7 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-hidden focus:border-sky-400"
                       />
                     </div>
                   </div>
@@ -258,7 +258,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
               onChange={e => { setCode(e.target.value); setCodeManuallyEdited(true); }}
               disabled={isEdit && account?.is_system}
               placeholder="Ej: 102.04"
-              className={`w-full px-3 py-2.5 text-sm border rounded-lg outline-none font-mono transition-colors
+              className={`w-full px-3 py-2.5 text-sm border rounded-lg outline-hidden font-mono transition-colors
                 ${codeTaken ? 'border-red-300 bg-red-50' : 'border-gray-200'}
                 focus:border-sky-400 focus:ring-1 focus:ring-sky-100
                 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed`}
@@ -280,7 +280,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="Ej: Cuenta bancaria BBVA"
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
+              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100"
             />
           </div>
 
@@ -293,7 +293,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
               <select
                 value={accountType}
                 onChange={e => setAccountType(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 bg-white"
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100 bg-white"
               >
                 {ACCOUNT_TYPES.map(t => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -307,7 +307,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
               <select
                 value={nature}
                 onChange={e => setNature(e.target.value as 'deudora' | 'acreedora')}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 bg-white"
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100 bg-white"
               >
                 <option value="deudora">Deudora</option>
                 <option value="acreedora">Acreedora</option>
@@ -324,7 +324,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
               value={satGroup}
               onChange={e => setSatGroup(e.target.value)}
               placeholder="Ej: 102-01"
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 font-mono"
+              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100 font-mono"
             />
           </div>
 
@@ -338,7 +338,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
               onChange={e => setDescription(e.target.value)}
               rows={2}
               placeholder="Describe el uso de esta cuenta..."
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 resize-none"
+              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100 resize-none"
             />
           </div>
 

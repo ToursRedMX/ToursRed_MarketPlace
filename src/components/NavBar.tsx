@@ -336,14 +336,14 @@ const NavBar: React.FC = () => {
   const isAdminPath = location.pathname.startsWith('/admin');
 
   return (
-    <nav className="bg-blue-50 shadow-sm sticky top-0 z-50">
+    <nav className="bg-blue-50 shadow-xs sticky top-0 z-50">
       <div className="container-custom">
         <div className="flex justify-between h-16">
           <div className="flex">
             <Link to="/" className="flex-shrink-0 flex items-center">
               <img src="/Logo_Transparente.jpg" alt="ToursRed Logo" loading="lazy" className="h-12 w-auto" />
             </Link>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+            <div className="hidden sm:ml-6 sm:flex sm:gap-x-8">
               <Link to="/" className="border-transparent text-gray-500 hover:border-primary-500 hover:text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                 Inicio
               </Link>
@@ -359,7 +359,7 @@ const NavBar: React.FC = () => {
                 </button>
 
                 {isToursDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                  <div className="absolute top-full left-0 mt-1 w-56 rounded-md shadow-lg bg-white ring-1 ring-black/5">
                     <div className="py-1" role="menu">
                       <Link
                         to="/tours"
@@ -420,7 +420,7 @@ const NavBar: React.FC = () => {
 
                   {isAdminMenuOpen && (
                     <div
-                      className="absolute top-full mt-1 rounded-xl shadow-2xl bg-white ring-1 ring-black ring-opacity-5 z-50 overflow-y-auto"
+                      className="absolute top-full mt-1 rounded-xl shadow-2xl bg-white ring-1 ring-black/5 z-50 overflow-y-auto"
                       style={{ width: 'min(720px, 95vw)', right: 'auto', left: '50%', transform: 'translateX(-50%)', maxHeight: 'calc(100vh - 5rem)' }}
                     >
                       <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50 sticky top-0 z-10">
@@ -444,7 +444,7 @@ const NavBar: React.FC = () => {
                               <span className="text-primary-500">{group.icon}</span>
                               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{group.title}</span>
                             </div>
-                            <div className="space-y-0.5">
+                            <div className="flex flex-col gap-y-0.5">
                               {group.items.map((item) => (
                                 <Link
                                   key={item.to}
@@ -474,16 +474,16 @@ const NavBar: React.FC = () => {
           </div>
 
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
-            <Link to="/search" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <Link to="/search" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
               <Search className="h-6 w-6" />
             </Link>
 
             {user && isEmailVerified && (
               <>
-                <div className="ml-3 p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <div className="ml-3 p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                   <NotificationBell />
                 </div>
-                <Link to="/messages" className="ml-3 p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <Link to="/messages" className="ml-3 p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                   <MessageCircle className="h-6 w-6" />
                 </Link>
               </>
@@ -493,7 +493,7 @@ const NavBar: React.FC = () => {
               <div className="ml-3 relative">
                 <button
                   onClick={toggleProfile}
-                  className="bg-blue-100 rounded-full flex text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  className="bg-blue-100 rounded-full flex text-sm focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                   id="user-menu-button"
                   aria-expanded="false"
                   aria-haspopup="true"
@@ -510,7 +510,7 @@ const NavBar: React.FC = () => {
 
                 {isProfileOpen && (
                   <div
-                    className="origin-top-right absolute right-0 mt-2 rounded-md shadow-lg py-1 bg-blue-50 ring-1 ring-black ring-opacity-5 focus:outline-none overflow-y-auto"
+                    className="origin-top-right absolute right-0 mt-2 rounded-md shadow-lg py-1 bg-blue-50 ring-1 ring-black/5 focus:outline-hidden overflow-y-auto"
                     style={{ minWidth: isAgencyStaff ? '230px' : '192px', maxHeight: 'calc(100vh - 5rem)' }}
                     role="menu"
                     aria-orientation="vertical"
@@ -671,7 +671,7 @@ const NavBar: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center gap-x-4">
                 <Link to="/login" className="text-gray-500 hover:text-gray-900 text-sm font-medium">
                   Iniciar sesion
                 </Link>
@@ -683,22 +683,22 @@ const NavBar: React.FC = () => {
           </div>
 
           <div className="flex items-center sm:hidden">
-            <Link to="/search" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mr-2">
+            <Link to="/search" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mr-2">
               <Search className="h-6 w-6" />
             </Link>
             {user && (
               <div className="flex items-center">
-                <Link to="/messages" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mr-2">
+                <Link to="/messages" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mr-2">
                   <MessageCircle className="h-6 w-6" />
                 </Link>
-                <div className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mr-2">
+                <div className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mr-2">
                   <NotificationBell />
                 </div>
               </div>
             )}
             <button
               onClick={toggleMenu}
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-primary-500"
               aria-expanded="false"
             >
               <span className="sr-only">Abrir menu principal</span>
@@ -714,7 +714,7 @@ const NavBar: React.FC = () => {
 
       {isMenuOpen && (
         <div className="sm:hidden max-h-[calc(100vh-4rem)] overflow-y-auto" id="mobile-menu">
-          <div className="pt-2 pb-3 space-y-1">
+          <div className="pt-2 pb-3 flex flex-col gap-y-1">
             <Link
               to="/"
               className="bg-primary-50 border-primary-500 text-primary-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
@@ -733,7 +733,7 @@ const NavBar: React.FC = () => {
               </button>
 
               {isMobileToursOpen && (
-                <div className="pl-8 pr-4 py-2 space-y-1 bg-blue-50">
+                <div className="pl-8 pr-4 py-2 flex flex-col gap-y-1 bg-blue-50">
                   <Link to="/tours" className="block py-2 text-sm text-gray-600 hover:text-gray-900" onClick={toggleMenu}>
                     Tours Nacionales
                   </Link>
@@ -783,7 +783,7 @@ const NavBar: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="mt-3 space-y-1">
+                <div className="mt-3 flex flex-col gap-y-1">
                   {isAdmin && isEmailVerified ? (
                     <>
                       {getAdminMenuGroups().map((group) => (
@@ -799,7 +799,7 @@ const NavBar: React.FC = () => {
                             <ChevronDown className={`h-4 w-4 transition-transform ${mobileExpandedGroup === group.title ? 'rotate-180' : ''}`} />
                           </button>
                           {mobileExpandedGroup === group.title && (
-                            <div className="bg-blue-50 pl-10 pr-4 py-1 space-y-0.5">
+                            <div className="bg-blue-50 pl-10 pr-4 py-1 flex flex-col gap-y-0.5">
                               {group.items.map((item) => (
                                 <Link
                                   key={item.to}
@@ -842,7 +842,7 @@ const NavBar: React.FC = () => {
                                 <ChevronDown className={`h-4 w-4 transition-transform flex-shrink-0 ${mobileExpandedGroup === info.agencyId ? 'rotate-180' : ''}`} />
                               </button>
                               {mobileExpandedGroup === info.agencyId && (
-                                <div className="bg-blue-50 pl-10 pr-4 py-1 space-y-0.5">
+                                <div className="bg-blue-50 pl-10 pr-4 py-1 flex flex-col gap-y-0.5">
                                   {getStaffMenuItems(info).map((item) => (
                                     <Link key={item.to} to={item.to} onClick={toggleMenu} className="block py-2 text-sm text-gray-600 hover:text-gray-900">
                                       {item.label}
@@ -923,7 +923,7 @@ const NavBar: React.FC = () => {
                 </div>
               </>
             ) : (
-              <div className="mt-3 space-y-1 px-4">
+              <div className="mt-3 flex flex-col gap-y-1 px-4">
                 <Link to="/login" className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-blue-100" onClick={toggleMenu}>
                   Iniciar sesion
                 </Link>

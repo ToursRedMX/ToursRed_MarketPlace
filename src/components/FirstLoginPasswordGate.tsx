@@ -108,7 +108,7 @@ export default function FirstLoginPasswordGate({ userId, onPasswordChanged }: Fi
                   type={showPassword ? 'text' : 'password'}
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   placeholder="Mínimo 8 caracteres"
                   autoFocus
                 />
@@ -129,7 +129,7 @@ export default function FirstLoginPasswordGate({ userId, onPasswordChanged }: Fi
                   type={showConfirm ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   placeholder="Repite la contraseña"
                 />
                 <button
@@ -145,7 +145,7 @@ export default function FirstLoginPasswordGate({ userId, onPasswordChanged }: Fi
             {/* Requirements */}
             <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Requisitos</p>
-              <ul className="text-xs text-gray-500 space-y-0.5">
+              <ul className="text-xs text-gray-500 flex flex-col gap-y-0.5">
                 <li className={newPassword.length >= 8 ? 'text-green-600' : ''}>• Mínimo 8 caracteres</li>
                 <li className={/[A-Z]/.test(newPassword) ? 'text-green-600' : ''}>• Al menos una mayúscula</li>
                 <li className={/[a-z]/.test(newPassword) ? 'text-green-600' : ''}>• Al menos una minúscula</li>

@@ -131,7 +131,7 @@ const BookingPendingPage: React.FC = () => {
               alt={tour.name}
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-black bg-opacity-40 flex items-end">
+            <div className="absolute inset-0 bg-black/40 flex items-end">
               <div className="p-6 text-white">
                 <h2 className="text-2xl font-bold mb-2">{tour.name}</h2>
                 <div className="flex items-center">
@@ -185,7 +185,7 @@ const BookingPendingPage: React.FC = () => {
 
               <div>
                 <h3 className="text-lg font-semibold mb-4">Información de Pago</h3>
-                <div className="space-y-2 text-sm">
+                <div className="flex flex-col gap-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Precio Total del Tour:</span>
                     <span className="font-medium">{formatCurrencyMXN(booking.total_price ?? 0)}</span>

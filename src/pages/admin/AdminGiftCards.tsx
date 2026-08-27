@@ -209,26 +209,26 @@ export default function AdminGiftCards() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-xs p-5 border border-gray-100">
             <p className="text-sm text-gray-500 mb-1">Total Vendidas</p>
             <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-xs p-5 border border-gray-100">
             <p className="text-sm text-gray-500 mb-1">Activas</p>
             <p className="text-2xl font-bold text-blue-600">{stats.active}</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-xs p-5 border border-gray-100">
             <p className="text-sm text-gray-500 mb-1">Canjeadas</p>
             <p className="text-2xl font-bold text-green-600">{stats.redeemed}</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-xs p-5 border border-gray-100">
             <p className="text-sm text-gray-500 mb-1">Monto Total</p>
             <p className="text-2xl font-bold text-amber-600">{formatCurrencyMXN(stats.totalAmount)}</p>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-6 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-xs p-4 mb-6 border border-gray-100">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -274,13 +274,13 @@ export default function AdminGiftCards() {
 
         {/* Table */}
         {filteredCards.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-12 border border-gray-100 text-center">
+          <div className="bg-white rounded-xl shadow-xs p-12 border border-gray-100 text-center">
             <Gift className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 text-lg">No se encontraron tarjetas de regalo</p>
             <p className="text-gray-400 text-sm mt-1">Ajusta los filtros o intenta otra busqueda</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-xs border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">

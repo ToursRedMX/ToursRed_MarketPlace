@@ -23,7 +23,7 @@ export default function PrivacyPolicyPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-white rounded-xl shadow-sm p-8 space-y-8">
+        <div className="bg-white rounded-xl shadow-xs p-8 space-y-8">
           <section>
             <h2 className="text-2xl font-bold text-gray-900 mb-4">1. Identidad del Responsable</h2>
             <p className="text-gray-700 leading-relaxed">
@@ -41,7 +41,7 @@ export default function PrivacyPolicyPage() {
             <div className="bg-blue-50 rounded-lg p-6 space-y-3">
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Datos de Identificación:</h3>
-                <ul className="list-disc list-inside text-gray-700 space-y-1 ml-4">
+                <ul className="list-disc list-inside text-gray-700 flex flex-col gap-y-1 ml-4">
                   <li>Nombre completo</li>
                   <li>Correo electrónico</li>
                   <li>Número de teléfono</li>
@@ -53,7 +53,7 @@ export default function PrivacyPolicyPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Datos de Agencias de Viajes:</h3>
-                <ul className="list-disc list-inside text-gray-700 space-y-1 ml-4">
+                <ul className="list-disc list-inside text-gray-700 flex flex-col gap-y-1 ml-4">
                   <li>Nombre de la agencia</li>
                   <li>RFC</li>
                   <li>Descripción y logo</li>
@@ -63,7 +63,7 @@ export default function PrivacyPolicyPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Datos de Navegación:</h3>
-                <ul className="list-disc list-inside text-gray-700 space-y-1 ml-4">
+                <ul className="list-disc list-inside text-gray-700 flex flex-col gap-y-1 ml-4">
                   <li>Dirección IP</li>
                   <li>Tipo de navegador</li>
                   <li>Páginas visitadas</li>
@@ -79,7 +79,7 @@ export default function PrivacyPolicyPage() {
             <div className="space-y-3">
               <div className="border-l-4 border-blue-600 pl-4">
                 <h3 className="font-semibold text-gray-900">Finalidades Primarias (necesarias):</h3>
-                <ul className="list-disc list-inside text-gray-700 space-y-1 mt-2">
+                <ul className="list-disc list-inside text-gray-700 flex flex-col gap-y-1 mt-2">
                   <li>Crear y administrar su cuenta de usuario</li>
                   <li>Procesar reservas y pagos de tours</li>
                   <li>Facilitar la comunicación entre viajeros y agencias</li>
@@ -89,7 +89,7 @@ export default function PrivacyPolicyPage() {
               </div>
               <div className="border-l-4 border-green-600 pl-4">
                 <h3 className="font-semibold text-gray-900">Finalidades Secundarias (opcionales):</h3>
-                <ul className="list-disc list-inside text-gray-700 space-y-1 mt-2">
+                <ul className="list-disc list-inside text-gray-700 flex flex-col gap-y-1 mt-2">
                   <li>Enviar comunicaciones promocionales y ofertas especiales</li>
                   <li>Realizar análisis estadísticos y mejoras del servicio</li>
                   <li>Personalizar su experiencia en la plataforma</li>
@@ -111,7 +111,7 @@ export default function PrivacyPolicyPage() {
                 <UserCheck className="h-6 w-6 text-blue-600 flex-shrink-0 mt-1" />
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">Cómo ejercer sus derechos ARCO:</h3>
-                  <ol className="list-decimal list-inside text-gray-700 space-y-2">
+                  <ol className="list-decimal list-inside text-gray-700 flex flex-col gap-y-2">
                     <li>Envíe un correo a <span className="font-medium text-blue-600">contacto@toursred.com</span></li>
                     <li>Incluya su nombre completo y correo electrónico registrado</li>
                     <li>Especifique claramente el derecho que desea ejercer</li>
@@ -188,7 +188,7 @@ export default function PrivacyPolicyPage() {
             </p>
           </section>
 
-          <div className="border-t pt-6 mt-8">
+          <div className="border-t border-gray-200 pt-6 mt-8">
             <p className="text-sm text-gray-600 text-center">
               Si tiene alguna duda sobre este Aviso de Privacidad, puede contactarnos en{' '}
               <a href="mailto:contacto@toursred.com" className="text-blue-600 hover:text-blue-700 underline">

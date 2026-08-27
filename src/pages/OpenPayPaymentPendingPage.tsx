@@ -398,7 +398,7 @@ const OpenPayPaymentPendingPage: React.FC = () => {
         )}
 
         {/* Tour summary */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden mb-6">
           {summary.imageUrl && (
             <div className="relative h-32">
               <img
@@ -422,7 +422,7 @@ const OpenPayPaymentPendingPage: React.FC = () => {
 
         {/* Payment instructions */}
         {transaction && (isSpei || isCash) ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
               {isSpei ? (
                 <Landmark className="w-5 h-5 text-blue-600" />
@@ -440,7 +440,7 @@ const OpenPayPaymentPendingPage: React.FC = () => {
                 : 'Acude a cualquiera de las tiendas afiliadas y proporciona la siguiente referencia:'}
             </p>
 
-            <div className="space-y-3">
+            <div className="flex flex-col gap-y-3">
               {/* SPEI data */}
               {isSpei && transaction.clabe && (
                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
@@ -514,7 +514,7 @@ const OpenPayPaymentPendingPage: React.FC = () => {
             ) : null}
           </div>
         ) : isTxPending ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-6 mb-6">
             <div className="flex items-start gap-3">
               <Mail className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
@@ -527,7 +527,7 @@ const OpenPayPaymentPendingPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-6 mb-6">
             <div className="flex items-start gap-3">
               <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
               <div>

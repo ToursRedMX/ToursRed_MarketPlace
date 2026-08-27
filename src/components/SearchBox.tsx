@@ -172,7 +172,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
     onClose?.();
   };
 
-  const inputBase = 'w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent transition placeholder-gray-400';
+  const inputBase = 'w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 bg-white focus:outline-hidden focus:ring-2 focus:ring-primary-400 focus:border-transparent transition placeholder-gray-400';
   const inputWithIcon = 'pl-10 ' + inputBase;
   const labelClass = 'block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5';
 
@@ -203,7 +203,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
         </div>
       </div>
 
-      <form onSubmit={handleSearch} className="p-5 space-y-5">
+      <form onSubmit={handleSearch} className="p-5 flex flex-col gap-y-5">
 
         {/* Busqueda por nombre */}
         <div>
@@ -317,7 +317,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
                 onClick={() => setTourType(opt.value)}
                 className={`py-2 px-2 rounded-xl text-xs font-semibold border transition-all ${
                   tourType === opt.value
-                    ? 'bg-primary-600 border-primary-600 text-white shadow-sm'
+                    ? 'bg-primary-600 border-primary-600 text-white shadow-xs'
                     : 'bg-white border-gray-200 text-gray-600 hover:border-primary-300 hover:text-primary-600'
                 }`}
               >
@@ -342,7 +342,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
                 onClick={() => setPetFriendly(opt.value)}
                 className={`py-2 px-2 rounded-xl text-xs font-semibold border transition-all ${
                   petFriendly === opt.value
-                    ? 'bg-primary-600 border-primary-600 text-white shadow-sm'
+                    ? 'bg-primary-600 border-primary-600 text-white shadow-xs'
                     : 'bg-white border-gray-200 text-gray-600 hover:border-primary-300 hover:text-primary-600'
                 }`}
               >
@@ -454,7 +454,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
         {/* Boton buscar */}
         <button
           type="submit"
-          className="w-full flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 active:bg-primary-800 text-white font-semibold py-3 px-4 rounded-xl transition-colors shadow-sm"
+          className="w-full flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 active:bg-primary-800 text-white font-semibold py-3 px-4 rounded-xl transition-colors shadow-xs"
         >
           <Search className="w-4 h-4" />
           Buscar Tours

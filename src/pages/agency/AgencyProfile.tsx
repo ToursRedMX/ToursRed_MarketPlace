@@ -564,7 +564,7 @@ const AgencyProfile: React.FC = () => {
         {/* Fila 1: Fiscal + Bancaria en columnas iguales */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
           {/* Información Fiscal */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+          <div className="bg-white rounded-lg shadow-xs border border-gray-100 p-6">
             <div className="flex items-center gap-2 mb-5">
               <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
                 <FileText className="h-4 w-4 text-blue-600" />
@@ -764,7 +764,7 @@ const AgencyProfile: React.FC = () => {
                     <MapPin className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Domicilio</div>
-                      <div className="text-sm text-gray-900 mt-0.5 space-y-0.5">
+                      <div className="text-sm text-gray-900 mt-0.5 flex flex-col gap-y-0.5">
                         {agency.street && (
                           <div>{agency.street}{agency.exterior_number && ` #${agency.exterior_number}`}{agency.interior_number && ` Int. ${agency.interior_number}`}</div>
                         )}
@@ -810,7 +810,7 @@ const AgencyProfile: React.FC = () => {
           </div>
 
           {/* Información Bancaria */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+          <div className="bg-white rounded-lg shadow-xs border border-gray-100 p-6">
             <div className="flex items-center gap-2 mb-5">
               <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center">
                 <Landmark className="h-4 w-4 text-emerald-600" />
@@ -897,7 +897,7 @@ const AgencyProfile: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
           {/* Información de la Agencia */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 h-full">
+            <div className="bg-white rounded-lg shadow-xs border border-gray-100 p-6 h-full">
               <div className="flex items-center gap-2 mb-5">
                 <div className="h-8 w-8 rounded-lg bg-primary-50 flex items-center justify-center">
                   <Building className="h-4 w-4 text-primary-600" />
@@ -969,7 +969,7 @@ const AgencyProfile: React.FC = () => {
                         value={editForm.custom_slug}
                         onChange={(e) => handleSlugChange(e.target.value)}
                         placeholder="mi-agencia"
-                        className="flex-1 px-3 py-2 text-sm outline-none bg-white"
+                        className="flex-1 px-3 py-2 text-sm outline-hidden bg-white"
                         maxLength={60}
                       />
                       {slugStatus === 'checking' && (
@@ -1063,7 +1063,7 @@ const AgencyProfile: React.FC = () => {
           {/* Columna derecha: Contacto + Propietario */}
           <div className="space-y-6">
             {/* Información de Contacto */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+            <div className="bg-white rounded-lg shadow-xs border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-5">
                 <div className="h-8 w-8 rounded-lg bg-violet-50 flex items-center justify-center">
                   <Mail className="h-4 w-4 text-violet-600" />
@@ -1149,7 +1149,7 @@ const AgencyProfile: React.FC = () => {
             </div>
 
             {/* Datos del Propietario */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+            <div className="bg-white rounded-lg shadow-xs border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-5">
                 <div className="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center">
                   <User className="h-4 w-4 text-amber-600" />
@@ -1224,7 +1224,7 @@ const AgencyProfile: React.FC = () => {
         </div>
 
         {executive && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="bg-white rounded-lg shadow-xs border border-gray-100 overflow-hidden mt-6">
             <div className="flex items-center gap-2 px-6 pt-6 pb-1">
               <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
                 <Briefcase className="h-4 w-4 text-blue-600" />
@@ -1265,7 +1265,7 @@ const AgencyProfile: React.FC = () => {
 
         {/* Fila 3: Seguridad + Cuentas Vinculadas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-lg shadow-xs border border-gray-100 overflow-hidden">
             <div className="flex items-center gap-2 px-6 pt-6 pb-1">
               <div className="h-8 w-8 rounded-lg bg-slate-50 flex items-center justify-center">
                 <Shield className="h-4 w-4 text-slate-600" />
@@ -1275,7 +1275,7 @@ const AgencyProfile: React.FC = () => {
             <ChangePasswordSection />
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-lg shadow-xs border border-gray-100 overflow-hidden">
             <div className="flex items-center gap-2 px-6 pt-6 pb-1">
               <div className="h-8 w-8 rounded-lg bg-slate-50 flex items-center justify-center">
                 <Link2 className="h-4 w-4 text-slate-600" />

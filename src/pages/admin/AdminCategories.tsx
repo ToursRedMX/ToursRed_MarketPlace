@@ -289,7 +289,7 @@ const AdminCategories: React.FC = () => {
             />
           </div>
 
-          <div className="flex justify-end space-x-3">
+          <div className="flex justify-end gap-x-3">
             <button
               onClick={handleCancel}
               className="btn btn-secondary flex items-center"
@@ -344,7 +344,7 @@ const AdminCategories: React.FC = () => {
                 categories.map((category, index) => (
                   <tr key={category.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center gap-x-2">
                         <span className="text-sm text-gray-900">{category.display_order}</span>
                         <div className="flex flex-col">
                           <button
@@ -387,7 +387,7 @@ const AdminCategories: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end space-x-2">
+                      <div className="flex items-center justify-end gap-x-2">
                         <button
                           onClick={() => handleEdit(category)}
                           className="text-primary-600 hover:text-primary-900"
@@ -429,7 +429,7 @@ const AdminCategories: React.FC = () => {
 
       <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="text-sm font-semibold text-blue-900 mb-2">Información</h3>
-        <ul className="text-sm text-blue-800 space-y-1">
+        <ul className="text-sm text-blue-800 flex flex-col gap-y-1">
           <li>• Las categorías activas aparecen en los formularios de creación de tours</li>
           <li>• Las categorías inactivas se ocultan pero no se eliminan</li>
           <li>• No puedes eliminar categorías que tienen tours asociados</li>

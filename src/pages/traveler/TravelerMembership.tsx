@@ -223,11 +223,11 @@ export default function TravelerMembership() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4">
                   <p className="text-yellow-100 text-sm mb-1">Inicio de membresía</p>
                   <p className="text-xl font-semibold">{formatDate(membership.start_date)}</p>
                 </div>
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <div className="bg-white/10 backdrop-blur-xs rounded-lg p-4">
                   <p className="text-yellow-100 text-sm mb-1">
                     {membership.cancel_at_period_end ? 'Expira el' : 'Próxima renovación'}
                   </p>
@@ -235,7 +235,7 @@ export default function TravelerMembership() {
                 </div>
               </div>
 
-              <div className="mt-6 bg-white/10 backdrop-blur-sm rounded-lg p-4">
+              <div className="mt-6 bg-white/10 backdrop-blur-xs rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-yellow-100 text-sm">Exención de cargo por servicio disponible este mes</p>
                   <p className="text-2xl font-bold">{formatCurrencyMXN(remainingExemption)} MXN</p>

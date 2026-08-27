@@ -232,7 +232,7 @@ const AdminCfdi: React.FC = () => {
         )}
 
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4 flex flex-wrap gap-3">
+        <div className="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-4 flex flex-wrap gap-3">
           <div className="flex-1 min-w-48 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
@@ -269,7 +269,7 @@ const AdminCfdi: React.FC = () => {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
           {isLoading ? (
             <div className="flex justify-center py-16">
               <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary-600" />

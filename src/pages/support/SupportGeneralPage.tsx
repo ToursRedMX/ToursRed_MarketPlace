@@ -193,7 +193,7 @@ const SupportGeneralPage: React.FC = () => {
             </div>
           </div>
         )}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-6">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>

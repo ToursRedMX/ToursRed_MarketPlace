@@ -448,13 +448,13 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
             }
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-y-2">
             <label className="block text-xs font-medium text-blue-700">Salida / Horario</label>
             <div className="relative">
               <select
                 value={selectedSlotId || ''}
                 onChange={e => setSelectedSlotId(e.target.value || null)}
-                className="w-full appearance-none bg-white border border-blue-300 rounded-xl px-4 py-2.5 pr-10 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                className="w-full appearance-none bg-white border border-blue-300 rounded-xl px-4 py-2.5 pr-10 text-sm text-gray-800 focus:outline-hidden focus:ring-2 focus:ring-blue-400 focus:border-transparent"
               >
                 <option value="">-- Elige una salida --</option>
                 {slots.map(slot => (
@@ -486,7 +486,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-gray-800">
           Gestion de Asientos
@@ -506,7 +506,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
       {renderSlotSelector()}
 
       {isReceptivo && !selectedSlotId ? (
-        <div className="flex flex-col items-center justify-center py-10 text-center text-gray-400 space-y-2">
+        <div className="flex flex-col items-center justify-center py-10 text-center text-gray-400 gap-y-2">
           <Calendar className="w-10 h-10 text-gray-300" />
           <p className="text-sm">Selecciona una salida para ver y gestionar los asientos</p>
         </div>
@@ -604,7 +604,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
 
       {blockModal.open && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Lock className="w-5 h-5 text-amber-600" />
@@ -616,7 +616,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
             </div>
 
             {isReceptivo && (
-              <div className="space-y-2">
+              <div className="flex flex-col gap-y-2">
                 {selectedSlot && !blockModal.blockAllSlots && (
                   <div className="flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
                     <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
@@ -666,7 +666,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
                 value={blockModal.note}
                 onChange={e => setBlockModal(prev => ({ ...prev, note: e.target.value }))}
                 placeholder="Ej: Juan Garcia - Venta directa"
-                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-400"
                 autoFocus
               />
             </div>

@@ -101,7 +101,7 @@ const PublishModal: React.FC<{
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               placeholder="Términos y Condiciones para Viajeros — ToursRed"
             />
           </div>
@@ -112,7 +112,7 @@ const PublishModal: React.FC<{
               value={changeSummary}
               onChange={e => setChangeSummary(e.target.value)}
               rows={2}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
               placeholder="Describe brevemente qué cambió en esta versión..."
             />
           </div>
@@ -186,7 +186,7 @@ const VersionCard: React.FC<{ version: TermsVersion; acceptanceCount: number }> 
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-200 p-4 space-y-3">
+        <div className="border-t border-gray-200 p-4 flex flex-col gap-y-3">
           {version.change_summary && (
             <div className="text-sm text-gray-600 bg-white rounded-lg px-4 py-3 border border-gray-200">
               <span className="font-medium text-gray-700">Resumen de cambios: </span>{version.change_summary}
@@ -349,7 +349,7 @@ const TermsManagementPage: React.FC = () => {
               onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === tab.key
-                  ? 'bg-white text-blue-700 shadow-sm'
+                  ? 'bg-white text-blue-700 shadow-xs'
                   : 'text-gray-600 hover:text-gray-800'
               }`}
             >
@@ -404,7 +404,7 @@ const TermsManagementPage: React.FC = () => {
                 {/* Version history */}
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Historial de versiones</h3>
-                  <div className="space-y-3">
+                  <div className="flex flex-col gap-y-3">
                     {(activeTab === 'traveler' ? versions.traveler : versions.agency).map(v => (
                       <VersionCard
                         key={v.id}
@@ -429,7 +429,7 @@ const TermsManagementPage: React.FC = () => {
                       <select
                         value={auditFilter.type}
                         onChange={e => { setAuditFilter(f => ({ ...f, type: e.target.value })); setAuditPage(0); }}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="all">Todos</option>
                         <option value="traveler">Viajeros</option>
@@ -445,7 +445,7 @@ const TermsManagementPage: React.FC = () => {
                           value={auditFilter.email}
                           onChange={e => { setAuditFilter(f => ({ ...f, email: e.target.value })); setAuditPage(0); }}
                           placeholder="Buscar por correo..."
-                          className="w-full pl-9 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full pl-9 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
                     </div>
@@ -455,7 +455,7 @@ const TermsManagementPage: React.FC = () => {
                         type="date"
                         value={auditFilter.from}
                         onChange={e => { setAuditFilter(f => ({ ...f, from: e.target.value })); setAuditPage(0); }}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                     <div>
@@ -464,7 +464,7 @@ const TermsManagementPage: React.FC = () => {
                         type="date"
                         value={auditFilter.to}
                         onChange={e => { setAuditFilter(f => ({ ...f, to: e.target.value })); setAuditPage(0); }}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                   </div>

@@ -150,26 +150,26 @@ const AdminTourMessages: React.FC = () => {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-xs p-4 border border-gray-100">
           <div className="text-2xl font-bold text-gray-900">{messages.length}</div>
           <div className="text-sm text-gray-500 mt-0.5">Total mensajes</div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-xs p-4 border border-gray-100">
           <div className="text-2xl font-bold text-green-600">{messages.filter(m => m.status === 'completed').length}</div>
           <div className="text-sm text-gray-500 mt-0.5">Completados</div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-xs p-4 border border-gray-100">
           <div className="text-2xl font-bold text-blue-600">{messages.reduce((s, m) => s + m.success_count, 0)}</div>
           <div className="text-sm text-gray-500 mt-0.5">Emails enviados</div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-xs p-4 border border-gray-100">
           <div className="text-2xl font-bold text-red-500">{messages.reduce((s, m) => s + m.error_count, 0)}</div>
           <div className="text-sm text-gray-500 mt-0.5">Errores de envio</div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm p-4 mb-6 border border-gray-100 flex flex-col md:flex-row gap-3">
+      <div className="bg-white rounded-xl shadow-xs p-4 mb-6 border border-gray-100 flex flex-col md:flex-row gap-3">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
@@ -177,7 +177,7 @@ const AdminTourMessages: React.FC = () => {
             placeholder="Buscar por asunto, mensaje, agencia o tour..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -186,7 +186,7 @@ const AdminTourMessages: React.FC = () => {
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as any)}
-              className="border border-gray-300 rounded-lg px-3 py-2 pr-8 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+              className="border border-gray-300 rounded-lg px-3 py-2 pr-8 text-sm appearance-none focus:outline-hidden focus:ring-2 focus:ring-primary-500 bg-white"
             >
               <option value="all">Todos los estados</option>
               <option value="completed">Enviados</option>
@@ -211,7 +211,7 @@ const AdminTourMessages: React.FC = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
         </div>
       ) : filteredMessages.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
+        <div className="bg-white rounded-xl shadow-xs p-12 text-center border border-gray-100">
           <Send className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <p className="text-lg font-medium text-gray-600">No se encontraron mensajes</p>
           <p className="text-sm text-gray-400 mt-1">
@@ -219,7 +219,7 @@ const AdminTourMessages: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+        <div className="bg-white rounded-xl shadow-xs border border-gray-100 overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -289,7 +289,7 @@ const AdminTourMessages: React.FC = () => {
       {selectedMessage && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-start justify-center min-h-screen px-4 py-8">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setSelectedMessage(null)} />
+            <div className="fixed inset-0 bg-black/50" onClick={() => setSelectedMessage(null)} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-auto mt-4">
               <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
                 <div className="flex items-center gap-3">
@@ -367,7 +367,7 @@ const AdminTourMessages: React.FC = () => {
                       <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary-600" />
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                    <div className="flex flex-col gap-y-2 max-h-64 overflow-y-auto">
                       {recipients.map(r => (
                         <div key={r.id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
                           <div>

@@ -179,7 +179,7 @@ const AgencyContractSection: React.FC<Props> = ({
             La agencia aún no ha subido documentos.
           </p>
         ) : (
-          <div className="space-y-2.5">
+          <div className="flex flex-col gap-y-2.5">
             {reviewableDocs.map(doc => {
               const approved    = isApproved(doc);
               const pending     = isPending(doc);
@@ -242,7 +242,7 @@ const AgencyContractSection: React.FC<Props> = ({
                           href={url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 border border-gray-300 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 border border-gray-300 px-3 py-1.5 rounded-lg transition-colors shadow-xs"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           Ver archivo
@@ -256,7 +256,7 @@ const AgencyContractSection: React.FC<Props> = ({
                         <button
                           onClick={() => handleApprove(doc)}
                           disabled={isBusy}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 px-3 py-1.5 rounded-lg transition-colors shadow-xs"
                         >
                           {isBusy
                             ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -269,7 +269,7 @@ const AgencyContractSection: React.FC<Props> = ({
                       <button
                         onClick={() => { setRejectingId(doc.id); setRejectReason(''); }}
                         disabled={isBusy}
-                        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-60 ${
+                        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-xs disabled:opacity-60 ${
                           approved
                             ? 'text-gray-600 bg-white hover:bg-gray-50 border border-gray-200'
                             : 'text-white bg-red-500 hover:bg-red-600'
@@ -289,7 +289,7 @@ const AgencyContractSection: React.FC<Props> = ({
                       <textarea
                         autoFocus
                         rows={2}
-                        className="w-full text-xs border border-red-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none bg-white"
+                        className="w-full text-xs border border-red-200 rounded-lg px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-red-300 resize-none bg-white"
                         placeholder="Describe el problema con este documento…"
                         value={rejectReason}
                         onChange={e => setRejectReason(e.target.value)}

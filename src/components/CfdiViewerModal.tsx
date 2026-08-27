@@ -725,7 +725,7 @@ export default function CfdiViewerModal({ xmlUrl, onClose }: Props) {
 
               {/* Totales e impuestos */}
               <div className="flex justify-end">
-                <div className="w-full sm:w-80 bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+                <div className="w-full sm:w-80 bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Subtotal</span>
                     <span className="text-gray-900 font-medium">{formatMXN(cfdi.subTotal)}</span>
@@ -834,7 +834,7 @@ export default function CfdiViewerModal({ xmlUrl, onClose }: Props) {
                   {/* QR del SAT */}
                   {cfdi.uuid && (
                     <div className="flex flex-col items-center shrink-0">
-                      <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                      <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-xs">
                         {qrDataUrl ? (
                           <img src={qrDataUrl} alt="QR SAT" width={120} height={120} />
                         ) : (

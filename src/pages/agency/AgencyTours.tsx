@@ -2685,7 +2685,7 @@ const AgencyTours: React.FC = () => {
             onClick={() => setTourListTab('activos')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
               tourListTab === 'activos'
-                ? 'bg-white text-gray-900 shadow-sm'
+                ? 'bg-white text-gray-900 shadow-xs'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -2703,7 +2703,7 @@ const AgencyTours: React.FC = () => {
             }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
               tourListTab === 'finalizados'
-                ? 'bg-white text-gray-900 shadow-sm'
+                ? 'bg-white text-gray-900 shadow-xs'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -2752,7 +2752,7 @@ const AgencyTours: React.FC = () => {
       {(isCreating || editingTour) && (
         <div className="mb-6 space-y-5">
           {/* Header del formulario */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+          <div className="bg-white rounded-xl shadow-xs border border-gray-200 p-5">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">
@@ -2783,7 +2783,7 @@ const AgencyTours: React.FC = () => {
           <div className="space-y-5">
 
             {/* SELECTOR TIPO DE TOUR */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <div className="bg-white rounded-xl shadow-xs border border-gray-200 p-5">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Tipo de Tour</h3>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -2911,7 +2911,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {/* SECCIÓN 1 — Información General */}
-            <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-xs border border-blue-100 overflow-hidden">
               <div className="bg-blue-600 px-5 py-3 flex items-center gap-2">
                 <div className="bg-white/20 rounded-lg p-1.5">
                   <FileText className="w-4 h-4 text-white" />
@@ -3040,7 +3040,7 @@ const AgencyTours: React.FC = () => {
                             onClick={() => handleCategoryToggle(cat.slug)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border-2 transition-all ${
                               isSelected
-                                ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                                ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
                                 : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'
                             }`}
                           >
@@ -3142,7 +3142,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {/* SECCIÓN 2 — Fechas y Destinos */}
-            <div className="bg-white rounded-xl shadow-sm border border-teal-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-xs border border-teal-100 overflow-hidden">
               <div className="bg-teal-600 px-5 py-3 flex items-center gap-2">
                 <div className="bg-white/20 rounded-lg p-1.5">
                   <Calendar className="w-4 h-4 text-white" />
@@ -3402,7 +3402,7 @@ const AgencyTours: React.FC = () => {
                               {pickupZones.length === 0 && (
                                 <p className="text-xs text-gray-400 italic">Sin zonas con costo adicional configuradas</p>
                               )}
-                              <div className="space-y-2">
+                              <div className="flex flex-col gap-y-2">
                                 {pickupZones.map((zone, idx) => (
                                   <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg p-2">
                                     <input
@@ -3611,7 +3611,7 @@ const AgencyTours: React.FC = () => {
                                   type="time"
                                   value={scheduleForm.departure_time}
                                   onChange={e => setScheduleForm(prev => ({ ...prev, departure_time: e.target.value }))}
-                                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                                 />
                               </div>
                               <div>
@@ -3621,7 +3621,7 @@ const AgencyTours: React.FC = () => {
                                   value={scheduleForm.label}
                                   placeholder={activityType === 'experience' ? 'Ej: Sesión matutina, Turno tarde' : 'Ej: Salida matutina, Turno tarde'}
                                   onChange={e => setScheduleForm(prev => ({ ...prev, label: e.target.value }))}
-                                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                                 />
                               </div>
                             </div>
@@ -3633,7 +3633,7 @@ const AgencyTours: React.FC = () => {
                                 value={scheduleForm.slot_capacity}
                                 placeholder="Deja vacío para usar los cupos por defecto del tour"
                                 onChange={e => setScheduleForm(prev => ({ ...prev, slot_capacity: e.target.value }))}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                               />
                               <p className="text-[11px] text-gray-400 mt-1">Útil si este horario tiene menos capacidad que el resto. Ej: el turno nocturno solo admite 10 personas.</p>
                             </div>
@@ -3781,7 +3781,7 @@ const AgencyTours: React.FC = () => {
                     {showSearchResults && searchResults.length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200">
                         <div className="py-1">
-                          <div className="px-3 py-2 text-xs text-gray-500 border-b bg-gray-50 rounded-t-lg">
+                          <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-200 bg-gray-50 rounded-t-lg">
                             Destinos existentes
                           </div>
                           {searchResults.map((result) => (
@@ -4087,7 +4087,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {/* SECCIÓN 3 — Itinerario e Imagen */}
-            <div className="bg-white rounded-xl shadow-sm border border-amber-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-xs border border-amber-100 overflow-hidden">
               <div className="bg-amber-500 px-5 py-3 flex items-center gap-2">
                 <div className="bg-white/20 rounded-lg p-1.5">
                   <Image className="w-4 h-4 text-white" />
@@ -4225,7 +4225,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {/* SECCIÓN 4 — Precios */}
-            <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-xs border border-green-100 overflow-hidden">
               <div className="bg-green-600 px-5 py-3 flex items-center gap-2">
                 <div className="bg-white/20 rounded-lg p-1.5">
                   <DollarSign className="w-4 h-4 text-white" />
@@ -4381,7 +4381,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {/* SECCIÓN 5 — Capacidad y Reservas */}
-            <div className="bg-white rounded-xl shadow-sm border border-rose-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-xs border border-rose-100 overflow-hidden">
               <div className="bg-rose-600 px-5 py-3 flex items-center gap-2">
                 <div className="bg-white/20 rounded-lg p-1.5">
                   <Settings className="w-4 h-4 text-white" />
@@ -4545,7 +4545,7 @@ const AgencyTours: React.FC = () => {
 
                       <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
                         <p className="text-xs font-semibold text-gray-600 mb-2">Resumen de política</p>
-                        <div className="space-y-1">
+                        <div className="flex flex-col gap-y-1">
                           <div className="flex items-center gap-2 text-xs text-gray-700">
                             <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
                             <span>{receptivoData.flexible_hours}+ horas antes: reembolso del {receptivoData.flexible_refund_percentage}%</span>
@@ -4716,14 +4716,14 @@ const AgencyTours: React.FC = () => {
 
                 {/* Idiomas disponibles — solo receptivo (no traslados ni entradas) */}
                 {tourType === 'receptivo' && activityType !== 'transport' && activityType !== 'ticket' && (
-                  <div className="space-y-3">
+                  <div className="flex flex-col gap-y-3">
                     <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                       <Globe className="w-4 h-4 text-teal-600" />
                       Idiomas Disponibles
                       <span className="text-xs font-normal text-gray-400">Opcional</span>
                     </h4>
                     <p className="text-xs text-gray-500">Si ofreces el tour en más de un idioma, agrégalos aquí. Puedes indicar si hay un costo adicional por guía en otro idioma. Si no agregas nada, se asume que el tour es solo en español.</p>
-                    <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                    <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-y-3">
                       {tourLanguages.length === 0 && (
                         <p className="text-xs text-gray-400 italic">No hay idiomas configurados. El tour se realiza solo en el idioma local.</p>
                       )}
@@ -4802,14 +4802,14 @@ const AgencyTours: React.FC = () => {
 
                 {/* Restricciones físicas — solo receptivo con actividad guiada o experiencia */}
                 {tourType === 'receptivo' && activityType !== 'transport' && activityType !== 'ticket' && (
-                  <div className="space-y-3">
+                  <div className="flex flex-col gap-y-3">
                     <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4 text-amber-500" />
                       Restricciones de Aptitud Física
                       <span className="text-xs font-normal text-gray-400">Opcional</span>
                     </h4>
                     <p className="text-xs text-gray-500">Activa las restricciones que apliquen. El viajero deberá aceptarlas antes de completar su reserva, y se mostrarán en la página del tour.</p>
-                    <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                    <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-y-3">
                       <div className={`rounded-lg border p-3 transition-all ${restrictionPregnant ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50'}`}>
                         <label className="flex items-center gap-3 cursor-pointer">
                           <input
@@ -4864,7 +4864,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {/* SECCIÓN 6 — Servicios Opcionales */}
-            <div className="bg-white rounded-xl shadow-sm border border-amber-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-xs border border-amber-100 overflow-hidden">
               <div className="bg-amber-600 px-5 py-3 flex items-center gap-2">
                 <div className="bg-white/20 rounded-lg p-1.5">
                   <ShoppingBag className="w-4 h-4 text-white" />
@@ -4996,7 +4996,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {/* SECCIÓN 7 — Suplementos Adicionales */}
-            <div className="bg-white rounded-xl shadow-sm border border-teal-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-xs border border-teal-100 overflow-hidden">
               <div className="bg-teal-600 px-5 py-3 flex items-center gap-2">
                 <div className="bg-white/20 rounded-lg p-1.5">
                   <Tag className="w-4 h-4 text-white" />
@@ -5153,7 +5153,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {/* SECCIÓN 8 — Promociones Grupales */}
-            <div className="bg-white rounded-xl shadow-sm border border-rose-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-xs border border-rose-100 overflow-hidden">
               <div className="bg-rose-600 px-5 py-3 flex items-center gap-2">
                 <div className="bg-white/20 rounded-lg p-1.5">
                   <Percent className="w-4 h-4 text-white" />
@@ -5183,7 +5183,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {tourType === 'receptivo' && editingTour && (
-              <div className="bg-white rounded-xl shadow-sm border border-teal-100 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-xs border border-teal-100 overflow-hidden">
                 <div className="bg-teal-600 px-5 py-3 flex items-center gap-2">
                   <div className="bg-white/20 rounded-lg p-1.5">
                     <Layers className="w-4 h-4 text-white" />
@@ -5227,7 +5227,7 @@ const AgencyTours: React.FC = () => {
                     {receptivoTab === 'info' && (
                       <div className="space-y-3 text-sm text-gray-600">
                         <p>Para que los viajeros puedan reservar este tour, asegúrate de:</p>
-                        <ol className="list-decimal list-inside space-y-2 text-gray-700">
+                        <ol className="list-decimal list-inside flex flex-col gap-y-2 text-gray-700">
                           <li>Tener al menos un <strong>Horario</strong> activo (puedes agregar o editar en la pestaña Horarios).</li>
                           <li>Opcionalmente bloquear fechas no disponibles en <strong>Bloqueos</strong>.</li>
                           <li>En <strong>Calendario</strong>, usar <em>Generar Slots</em> para crear o actualizar las salidas disponibles.</li>
@@ -5266,7 +5266,7 @@ const AgencyTours: React.FC = () => {
                       />
                     )}
                     {receptivoTab === 'asientos' && (editingTour as any)?.vehicle_map_type && (
-                      <div className="space-y-3">
+                      <div className="flex flex-col gap-y-3">
                         <p className="text-xs text-gray-500">Gestiona los asientos de este tour receptivo. Selecciona una fecha/slot especifico en el Calendario para ver la disponibilidad por salida, o ve el estado general aqui.</p>
                         <SeatMapManager
                           tourId={editingTour.id}
@@ -5283,7 +5283,7 @@ const AgencyTours: React.FC = () => {
             )}
 
             {tourType === 'excursion' && editingTour && (editingTour as any)?.vehicle_map_type && (
-              <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-xs border border-blue-100 overflow-hidden">
                 <div className="bg-blue-600 px-5 py-3 flex items-center gap-2">
                   <div className="bg-white/20 rounded-lg p-1.5">
                     <Bus className="w-4 h-4 text-white" />
@@ -5305,7 +5305,7 @@ const AgencyTours: React.FC = () => {
             )}
 
             {/* SECCIÓN PLAN DE PAGOS Y LIQUIDACIÓN */}
-            <div className={`bg-white rounded-xl shadow-sm border-2 overflow-hidden transition-all ${
+            <div className={`bg-white rounded-xl shadow-xs border-2 overflow-hidden transition-all ${
               paymentOptionsEnabled ? 'border-sky-400' : 'border-gray-200'
             }`}>
               <div className={`px-5 py-4 flex items-center justify-between ${
@@ -5430,7 +5430,7 @@ const AgencyTours: React.FC = () => {
 
                     {/* Parcialidades programadas */}
                     {formData.payment_plan_mode === 'installments' && (
-                      <div className="space-y-3">
+                      <div className="flex flex-col gap-y-3">
                         <div className="flex items-center justify-between">
                           <h4 className="text-sm font-semibold text-gray-700">Parcialidades</h4>
                           <button
@@ -5446,7 +5446,7 @@ const AgencyTours: React.FC = () => {
                         {(() => {
                           const depositPct = parseFloat(formData.deposit_percentage) || 0;
                           return (
-                            <div className="bg-sky-50 rounded-lg p-3 space-y-1 border border-sky-200">
+                            <div className="bg-sky-50 rounded-lg p-3 flex flex-col gap-y-1 border border-sky-200">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-semibold text-sky-600 w-5">1.</span>
                                 <span className="text-sm font-medium text-sky-800 flex-1">Anticipo (al reservar)</span>
@@ -5657,7 +5657,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {/* SECCIÓN PREVENTA EXCLUSIVA */}
-            <div className={`bg-white rounded-xl shadow-sm border-2 overflow-hidden transition-all ${
+            <div className={`bg-white rounded-xl shadow-xs border-2 overflow-hidden transition-all ${
               formData.preventa_activa ? 'border-amber-400' : 'border-gray-200'
             }`}>
               <div className={`px-5 py-4 flex items-center justify-between ${
@@ -5685,7 +5685,7 @@ const AgencyTours: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, preventa_activa: e.target.checked })}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-2 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                 </label>
               </div>
 
@@ -5746,7 +5746,7 @@ const AgencyTours: React.FC = () => {
                           onChange={(e) => setFormData({ ...formData, preventa_precio_especial: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-2 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
                       </label>
                     </div>
 
@@ -5822,7 +5822,7 @@ const AgencyTours: React.FC = () => {
               </div>
             )}
 
-            <div className="flex justify-end space-x-4">
+            <div className="flex justify-end gap-x-4">
               <button
                 type="button"
                 onClick={handleCancel}
@@ -5870,7 +5870,7 @@ const AgencyTours: React.FC = () => {
 
       {/* Modal de Duplicar Tour */}
       {duplicatingTour && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full">
             <h2 className="text-xl font-semibold mb-4">Duplicar Tour</h2>
 
@@ -5930,7 +5930,7 @@ const AgencyTours: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex justify-end gap-x-3 pt-4">
                 <button
                   type="button"
                   onClick={handleDuplicateCancel}
@@ -5954,7 +5954,7 @@ const AgencyTours: React.FC = () => {
 
       {/* Modal de Reagendar Tour */}
       {rescheduleModal.open && rescheduleModal.tour && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center mb-4">
               <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center mr-3">
@@ -5981,7 +5981,7 @@ const AgencyTours: React.FC = () => {
               <>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                   <h3 className="font-semibold text-blue-900 mb-2">{rescheduleModal.tour.name}</h3>
-                  <div className="text-sm text-blue-800 space-y-1">
+                  <div className="text-sm text-blue-800 flex flex-col gap-y-1">
                     <p>
                       <span className="font-medium">Fechas actuales:</span> {formatDate(rescheduleModal.tour.start_date)} - {formatDate(rescheduleModal.tour.end_date)}
                     </p>
@@ -6073,7 +6073,7 @@ const AgencyTours: React.FC = () => {
 
                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                         <h4 className="font-medium text-gray-900 mb-2">Política de Reagendamiento</h4>
-                        <ul className="text-sm text-gray-600 space-y-1">
+                        <ul className="text-sm text-gray-600 flex flex-col gap-y-1">
                           <li>• Los viajeros tendrán 4 días para responder</li>
                           <li>• Pueden aceptar las nuevas fechas sin costo adicional</li>
                           <li>• O solicitar un reembolso completo (100%)</li>
@@ -6081,7 +6081,7 @@ const AgencyTours: React.FC = () => {
                         </ul>
                       </div>
 
-                      <div className="flex justify-end space-x-3 pt-4 border-t">
+                      <div className="flex justify-end gap-x-3 pt-4 border-t border-gray-200">
                         <button
                           type="button"
                           onClick={handleCloseReschedule}
@@ -6119,7 +6119,7 @@ const AgencyTours: React.FC = () => {
 
       {/* Modal de Acciones para Tours Receptivos (por slot) */}
       {receptivoActionsModal.open && receptivoActionsModal.tour && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             {(() => {
               const { action, tour, slots, selectedSlot, isLoadingSlots, isSubmitting, error, success, reason, newSlotDate, newSlotTime, bookingsInSlot, bookingsCountInSlot } = receptivoActionsModal;
@@ -6283,7 +6283,7 @@ const AgencyTours: React.FC = () => {
                         </div>
                       )}
 
-                      <div className="flex justify-end gap-3 pt-3 border-t">
+                      <div className="flex justify-end gap-3 pt-3 border-t border-gray-200">
                         <button
                           type="button"
                           onClick={handleCloseReceptivoActions}
@@ -6329,7 +6329,7 @@ const AgencyTours: React.FC = () => {
 
       {/* Modal de Conflicto de Cupo */}
       {capacityConflictModal.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
             {capacityConflictModal.success ? (
               <div className="text-center py-8">
@@ -6459,7 +6459,7 @@ const AgencyTours: React.FC = () => {
                   </div>
                 )}
 
-                <div className="flex justify-end gap-3 pt-3 border-t">
+                <div className="flex justify-end gap-3 pt-3 border-t border-gray-200">
                   <button
                     type="button"
                     onClick={() => setCapacityConflictModal(prev => ({ ...prev, open: false }))}
@@ -6503,7 +6503,7 @@ const AgencyTours: React.FC = () => {
 
       {/* Modal de Cancelar Tour */}
       {cancelModal.open && cancelModal.tour && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center mb-4">
               <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center mr-3">
@@ -6530,7 +6530,7 @@ const AgencyTours: React.FC = () => {
               <>
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
                   <h3 className="font-semibold text-orange-900 mb-2">{cancelModal.tour.name}</h3>
-                  <div className="text-sm text-orange-800 space-y-1">
+                  <div className="text-sm text-orange-800 flex flex-col gap-y-1">
                     <p>
                       <span className="font-medium">Fechas:</span> {formatDate(cancelModal.tour.start_date)} - {formatDate(cancelModal.tour.end_date)}
                     </p>
@@ -6592,7 +6592,7 @@ const AgencyTours: React.FC = () => {
 
                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                         <h4 className="font-medium text-gray-900 mb-2">Política de Cancelación por Agencia</h4>
-                        <ul className="text-sm text-gray-600 space-y-1">
+                        <ul className="text-sm text-gray-600 flex flex-col gap-y-1">
                           <li>• Todos los viajeros con reservas activas serán notificados por correo electrónico</li>
                           <li>• Cada viajero recibirá un reembolso del 100% del anticipo en ToursRed Cash</li>
                           <li>• Los cargos por servicio NO son reembolsables (ya fueron cobrados por Stripe)</li>
@@ -6610,7 +6610,7 @@ const AgencyTours: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex justify-end space-x-3 pt-4 border-t">
+                      <div className="flex justify-end gap-x-3 pt-4 border-t border-gray-200">
                         <button
                           type="button"
                           onClick={handleCloseCancel}
@@ -6683,7 +6683,7 @@ const AgencyTours: React.FC = () => {
                 </div>
                 <div className="p-4">
                   <h3 className="text-lg font-semibold mb-2 line-clamp-1">{tour.name}</h3>
-                  <div className="space-y-2 mb-4">
+                  <div className="flex flex-col gap-y-2 mb-4">
                     <div className="flex items-center text-sm text-gray-600">
                       <MapPin className="h-4 w-4 mr-2" />
                       <span>{tour.destination}</span>
@@ -6764,7 +6764,7 @@ const AgencyTours: React.FC = () => {
               <div className="p-4">
                 <h3 className="text-lg font-semibold mb-2 line-clamp-1">{tour.name}</h3>
                 
-                <div className="space-y-2 mb-4">
+                <div className="flex flex-col gap-y-2 mb-4">
                   <div className="flex items-center text-sm text-gray-600">
                     <MapPin className="h-4 w-4 mr-2" />
                     <span>{tour.destination}</span>
@@ -6832,7 +6832,7 @@ const AgencyTours: React.FC = () => {
                 </p>
 
                 {/* Acciones — 2 filas */}
-                <div className="pt-3 border-t space-y-1.5">
+                <div className="pt-3 border-t border-gray-200 flex flex-col gap-y-1.5">
                   {/* Fila 1: ver · editar · asientos · destacar · duplicar */}
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-400">
@@ -7068,7 +7068,7 @@ const AgencyTours: React.FC = () => {
                         { id: 'spei', label: 'Transferencia SPEI' },
                         { id: 'bnpl', label: 'Compra ahora, paga despues (BNPL)' },
                       ] as const).map(m => (
-                        <label key={m.id} className="flex items-center gap-3 p-2 rounded-lg border cursor-pointer">
+                        <label key={m.id} className="flex items-center gap-3 p-2 rounded-lg border border-gray-200 cursor-pointer">
                           <input type="radio" name="conekta_method" value={m.id}
                             checked={featuredModal.conektaMethod === m.id}
                             onChange={() => setFeaturedModal(prev => ({ ...prev, conektaMethod: m.id }))}
@@ -7086,7 +7086,7 @@ const AgencyTours: React.FC = () => {
                         { id: 'spei', label: 'Transferencia SPEI' },
                         { id: 'cash', label: 'Efectivo (referencia de pago)' },
                       ] as const).map(m => (
-                        <label key={m.id} className="flex items-center gap-3 p-2 rounded-lg border cursor-pointer">
+                        <label key={m.id} className="flex items-center gap-3 p-2 rounded-lg border border-gray-200 cursor-pointer">
                           <input type="radio" name="openpay_method" value={m.id}
                             checked={featuredModal.openpayMethod === m.id}
                             onChange={() => setFeaturedModal(prev => ({ ...prev, openpayMethod: m.id }))}
@@ -7111,7 +7111,7 @@ const AgencyTours: React.FC = () => {
                     <button
                       onClick={handlePayFeaturedSlot}
                       disabled={featuredModal.isSubmitting}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all shadow-sm"
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all shadow-xs"
                     >
                       {featuredModal.isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
                       Pagar y destacar tour
@@ -7149,9 +7149,9 @@ const AgencyTours: React.FC = () => {
                   )}
 
                   {/* What is featured */}
-                  <div className="mb-4 p-3 bg-blue-50 rounded-xl text-xs text-blue-700 space-y-1">
+                  <div className="mb-4 p-3 bg-blue-50 rounded-xl text-xs text-blue-700 flex flex-col gap-y-1">
                     <p className="font-semibold text-blue-800 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> Que incluye destacar tu tour</p>
-                    <ul className="space-y-0.5 pl-5 list-disc">
+                    <ul className="flex flex-col gap-y-0.5 pl-5 list-disc">
                       <li>Aparece primero en la seccion "Tours Destacados" del inicio</li>
                       <li>Se muestra primero en busquedas que coincidan con tu tour</li>
                       <li>Badge dorado visible para todos los viajeros</li>
@@ -7165,7 +7165,7 @@ const AgencyTours: React.FC = () => {
                         <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-600 text-xs font-bold flex items-center justify-center">1</div>
                         <p className="text-sm font-semibold text-gray-700">Elige un plan:</p>
                       </div>
-                      <div className="space-y-2 mb-4">
+                      <div className="flex flex-col gap-y-2 mb-4">
                         {featuredModal.plans.map((plan: any) => (
                           <label
                             key={plan.id}
@@ -7228,7 +7228,7 @@ const AgencyTours: React.FC = () => {
                               value={featuredModal.couponCode}
                               onChange={e => setFeaturedModal(prev => ({ ...prev, couponCode: e.target.value.toUpperCase(), couponApplied: false, couponDiscount: 0, couponError: '' }))}
                               onKeyDown={e => { if (e.key === 'Enter') handleValidateCoupon(); }}
-                              className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 uppercase tracking-wider"
+                              className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-300 uppercase tracking-wider"
                               disabled={featuredModal.couponApplied}
                             />
                             {featuredModal.couponApplied ? (
@@ -7277,7 +7277,7 @@ const AgencyTours: React.FC = () => {
                         <button
                           onClick={handleActivateFeatured}
                           disabled={featuredModal.isSubmitting || !featuredModal.selectedPlanId}
-                          className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all shadow-sm"
+                          className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all shadow-xs"
                         >
                           {featuredModal.isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                           Continuar al pago

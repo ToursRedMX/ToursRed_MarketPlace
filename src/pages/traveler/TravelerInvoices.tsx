@@ -306,7 +306,7 @@ const TravelerInvoices: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-y-3">
           {filtered.map((inv) => {
             const s = STATUS_CONFIG[inv.status];
             const booking = inv.bookings as { booking_code: string | null; travel_insurance_included: boolean | null; travel_insurance_cost: number | null; tours?: { name: string } | null } | null;
@@ -327,7 +327,7 @@ const TravelerInvoices: React.FC = () => {
             return (
               <div
                 key={inv.id}
-                className="bg-white rounded-xl border border-gray-200 hover:border-primary-200 hover:shadow-sm transition-all p-4 flex items-center gap-4"
+                className="bg-white rounded-xl border border-gray-200 hover:border-primary-200 hover:shadow-xs transition-all p-4 flex items-center gap-4"
               >
                 <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
                   isMembership ? 'bg-amber-100' : isCheckin ? 'bg-teal-100' : isSupplement ? 'bg-purple-100' : isInsurance ? 'bg-emerald-100' : isOptional ? 'bg-orange-100' : isInstallment ? 'bg-sky-100' : 'bg-primary-100'

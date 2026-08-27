@@ -889,7 +889,7 @@ export default function AdminDiscountCodes() {
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">
@@ -1188,7 +1188,7 @@ export default function AdminDiscountCodes() {
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="flex flex-col gap-y-4">
                   <label className="flex items-center gap-3">
                     <input
                       type="checkbox"
@@ -1240,7 +1240,7 @@ export default function AdminDiscountCodes() {
 
       {/* Detail Modal */}
       {showDetailModal && selectedCode && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">

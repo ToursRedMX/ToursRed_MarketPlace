@@ -83,7 +83,7 @@ const OnboardingSignatureStep: React.FC<Props> = ({ agencyId, agencyEmail, onSig
 
   if (stage === 'signed') {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
         <div className="h-1.5 bg-gradient-to-r from-green-400 to-green-500" />
         <div className="p-8 text-center">
           <div className="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-6">
@@ -99,7 +99,7 @@ const OnboardingSignatureStep: React.FC<Props> = ({ agencyId, agencyEmail, onSig
               onClick={handleDownloadPdf}
               disabled={!signedUrl}
               className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition-all ${
-                signedUrl ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-sm' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                signedUrl ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-xs' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               }`}
             >
               <Download className="w-4 h-4" />
@@ -122,7 +122,7 @@ const OnboardingSignatureStep: React.FC<Props> = ({ agencyId, agencyEmail, onSig
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
       <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-600" />
       <div className="p-8">
         <div className="flex items-center gap-3 mb-6">
@@ -192,7 +192,7 @@ const OnboardingSignatureStep: React.FC<Props> = ({ agencyId, agencyEmail, onSig
               value={otp}
               onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="000000"
-              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-center text-2xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-4"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-center text-2xl font-mono tracking-widest focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-4"
             />
 
             {error && (

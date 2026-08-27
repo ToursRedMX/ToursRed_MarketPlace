@@ -609,7 +609,7 @@ export default function GiftCardsPage() {
             </div>
 
             <div className="mb-6">
-              <label className="flex items-center space-x-3 cursor-pointer">
+              <label className="flex items-center gap-x-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={isGift}
@@ -674,7 +674,7 @@ export default function GiftCardsPage() {
 
             <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-3">Resumen de Compra</h3>
-              <div className="space-y-2">
+              <div className="flex flex-col gap-y-2">
                 <div className="flex justify-between items-center text-lg">
                   <span className="text-gray-700">Monto de Tarjeta:</span>
                   <span className="text-2xl font-bold text-gray-900">
@@ -788,7 +788,7 @@ export default function GiftCardsPage() {
             <button
               type="submit"
               disabled={isProcessing || selectedAmount < 100 || selectedAmount > maxAmount}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white py-4 rounded-xl font-bold text-lg hover:from-amber-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white py-4 rounded-xl font-bold text-lg hover:from-amber-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-x-2"
             >
               {isProcessing ? (
                 <>

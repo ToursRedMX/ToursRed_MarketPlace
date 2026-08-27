@@ -233,7 +233,7 @@ const NotificationBell: React.FC = () => {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        className="relative p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
       >
         <span className="sr-only">Notificaciones</span>
         <Bell className="h-6 w-6" />
@@ -245,7 +245,7 @@ const NotificationBell: React.FC = () => {
       </button>
 
       {isOpen && (
-        <div className="origin-top-right absolute right-0 mt-2 w-80 md:w-96 rounded-md shadow-lg bg-blue-50 ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+        <div className="origin-top-right absolute right-0 mt-2 w-80 md:w-96 rounded-md shadow-lg bg-blue-50 ring-1 ring-black/5 focus:outline-hidden z-50">
           <div className="py-2">
             <div className="px-4 py-2 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-sm font-medium text-gray-900">Notificaciones</h3>
@@ -331,7 +331,7 @@ const NotificationBell: React.FC = () => {
       {detailNotification && (
         <div className="fixed inset-0 z-[100] overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 py-8">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setDetailNotification(null)} />
+            <div className="fixed inset-0 bg-black/50" onClick={() => setDetailNotification(null)} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto">
               <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
                 <div className="flex items-center gap-3">
@@ -356,7 +356,7 @@ const NotificationBell: React.FC = () => {
               </div>
 
               {(detailNotification.data?.tour_name || detailNotification.data?.booking_code) && (
-                <div className="mx-6 mt-5 bg-blue-50 rounded-xl px-4 py-3 space-y-0.5">
+                <div className="mx-6 mt-5 bg-blue-50 rounded-xl px-4 py-3 flex flex-col gap-y-0.5">
                   {detailNotification.data?.tour_name && (
                     <p className="text-sm font-semibold text-blue-800">{detailNotification.data.tour_name as string}</p>
                   )}

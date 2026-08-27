@@ -86,7 +86,7 @@ const MaintenanceAdminPage: React.FC = () => {
         </div>
 
         {/* Card */}
-        <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-8 shadow-2xl backdrop-blur-sm">
+        <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-8 shadow-2xl backdrop-blur-xs">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">
@@ -98,7 +98,7 @@ const MaintenanceAdminPage: React.FC = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoFocus
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
                 placeholder="admin@toursred.mx"
               />
             </div>
@@ -113,7 +113,7 @@ const MaintenanceAdminPage: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors pr-12"
+                  className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors pr-12"
                   placeholder="••••••••"
                 />
                 <button

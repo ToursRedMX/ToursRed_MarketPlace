@@ -232,7 +232,7 @@ const AdminAuditLog: React.FC = () => {
         )}
 
         {/* Filters */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 shadow-xs">
           <div className="flex items-center gap-2 mb-3">
             <Filter className="w-4 h-4 text-gray-500" />
             <span className="text-sm font-medium text-gray-700">Filtros</span>
@@ -353,7 +353,7 @@ const AdminAuditLog: React.FC = () => {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           {isLoading ? (
             <div className="py-16 flex flex-col items-center justify-center gap-3">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -418,7 +418,7 @@ const AdminAuditLog: React.FC = () => {
                                 <img
                                   src={`https://flagcdn.com/16x12/${entry.country_code.toLowerCase()}.png`}
                                   alt={entry.country_code}
-                                  className="w-4 h-3 object-cover rounded-sm flex-shrink-0"
+                                  className="w-4 h-3 object-cover rounded-xs flex-shrink-0"
                                   onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                 />
                               )}

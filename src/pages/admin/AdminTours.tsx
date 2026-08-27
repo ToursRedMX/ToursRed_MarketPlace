@@ -279,7 +279,7 @@ const AdminTours: React.FC = () => {
             placeholder="Buscar por tour, agencia o destino..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -288,7 +288,7 @@ const AdminTours: React.FC = () => {
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value as typeof filterType)}
-            className="pl-9 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
+            className="pl-9 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
           >
             <option value="all">Todos los tipos</option>
             <option value="excursion">Excursión</option>
@@ -302,7 +302,7 @@ const AdminTours: React.FC = () => {
           <select
             value={filterOverride}
             onChange={(e) => setFilterOverride(e.target.value as typeof filterOverride)}
-            className="pl-9 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
+            className="pl-9 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
           >
             <option value="all">Todos los overrides</option>
             <option value="with_override">Con override activo</option>
@@ -422,7 +422,7 @@ const AdminTours: React.FC = () => {
 
       {/* Modal de edición */}
       {editingTour && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh] my-auto">
             {/* Header */}
             <div className="flex items-start justify-between p-6 border-b border-slate-100 shrink-0">
@@ -469,7 +469,7 @@ const AdminTours: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setOverrideEnabled((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden ${
                     overrideEnabled ? 'bg-amber-500' : 'bg-slate-200'
                   }`}
                 >
@@ -510,7 +510,7 @@ const AdminTours: React.FC = () => {
                             setOverridePercent('');
                           }
                         }}
-                        className="w-full pr-10 pl-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-full pr-10 pl-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                       />
                       <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     </div>
@@ -553,7 +553,7 @@ const AdminTours: React.FC = () => {
                         value={overrideExpires}
                         min={new Date().toISOString().slice(0, 10)}
                         onChange={(e) => setOverrideExpires(e.target.value)}
-                        className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                     <p className="text-xs text-slate-400 mt-1">
@@ -571,7 +571,7 @@ const AdminTours: React.FC = () => {
                       value={overrideReason}
                       onChange={(e) => setOverrideReason(e.target.value)}
                       placeholder="Ej: Negociación especial por tour de larga duración, Promoción para incentivar reservas en temporada baja..."
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500 resize-none"
                     />
                     <p className="text-xs text-slate-400 mt-1">
                       Este motivo será visible para la agencia en su panel de tours.
