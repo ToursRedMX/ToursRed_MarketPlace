@@ -531,8 +531,8 @@ interaccion manual. El proyecto no tiene tests automatizados.
 
 | PR | Cambio | Nota |
 |---|---|---|
-| **#5** | `tailwindcss` 3.4.19 -> **4.3.3** | Salto de mayor. Tailwind 4 cambia la configuracion por completo |
-| **#4** | `typescript` 5.9.3 -> **7.0.2** | Dos mayores de golpe. Con la base de tsc ahora en 460 y el workflow vigilando, ya hay con que medirlo |
+| **#5** | `tailwindcss` 3.4.19 -> **4.3.3** | **Diagnosticado, ver pieza I.1.** 6-9 h, el grueso es revision visual. Sesion propia |
+| **#4** | `typescript` 5.9.3 -> **7.0.2** | **BLOQUEADO, ver pieza I.2.** typescript-eslint no soporta TS 7 en ninguna version, ni canary. No mergear |
 
 ### Texto original (26-ago)
 
@@ -555,6 +555,170 @@ y hoy el build verde de Vite demostró no significar nada.
 
 > Nota: `d4f3fe2` había borrado `.github/dependabot.yml`. Se conservó en el merge
 > del PR #9, así que estos PRs seguirán llegando.
+
+## 🔵 I — Tailwind 4 y TypeScript 7: diagnosticados, listos para ejecutar
+
+Investigacion del 27-ago. **Nada aplicado.** Los dos spikes se corrieron en ramas
+aparte, se midieron y se borraron; el arbol quedo limpio y con las versiones
+originales (tailwind 3.4.19, typescript 5.9.3).
+
+---
+
+### I.1 — Tailwind 3.4.19 -> 4.3.3 (PR #5)
+
+**Veredicto: media jornada (6-9 h), y el grueso NO es codigo, es mirar pantallas.
+Merece sesion propia.**
+
+#### Lo que bloquea el build (15 min, ya probado)
+
+1. El plugin de PostCSS se mudo: `tailwindcss` -> `@tailwindcss/postcss`. Sin eso
+   el build falla en seco.
+2. `@tailwind base/components/utilities` -> `@import "tailwindcss";`. Sin eso falla
+   con `Cannot apply unknown utility class 'font-sans'`.
+
+#### EL CONFIG NO HAY QUE MIGRARLO
+
+Hallazgo que reduce mucho el alcance. Con una linea:
+
+    @config "../tailwind.config.js";
+
+**todo el tema sobrevive intacto**, verificado comparando el CSS generado:
+las 6 paletas custom (primary/secondary/accent/success/warning/error, 60 tonos),
+la fuente Inter, y las animaciones fade-in/slide-up con sus keyframes. `plugins`
+esta vacio, asi que no hay plugins que rompan. Migrar a `@theme` es opcional.
+
+#### Lo que cambia de aspecto EN SILENCIO (el riesgo real)
+
+| Clase v3 | Que pasa en v4 | Usos |
+|---|---|---|
+| `shadow-sm` | pasa a valer lo que valia `shadow`: **sombra mas grande** | **233** |
+| `outline-none` | ya no dibuja outline transparente; ahora `outline-style:none` | **324** |
+| `space-x-*` / `space-y-*` | selector `:not([hidden])~:not([hidden])` -> `:where(>:not(:last-child))` | **799** |
+| `border` sin color | hereda `currentColor` en vez de `gray-200` | **179** |
+| `backdrop-blur-sm` | 4px -> 8px | **35** |
+| `rounded-sm` | .125rem -> .25rem (`--radius-sm`) | **6** |
+| `bg-opacity-*`, `ring-opacity-*` | **eliminadas, dejan de aplicar** | **51** |
+
+**`outline-none` con 324 usos es el que mas cuidado merece: es accesibilidad.**
+El cambio de semantica puede dejar campos sin indicador de foco visible.
+
+#### Lo que NO se rompe (contra lo que se supone)
+
+- **`flex-shrink-0` sigue funcionando**: 566 usos, declaracion generada identica.
+- **`rounded` sigue en .25rem**: 273 usos sin cambio.
+- **`!important` de Tailwind: 0 usos reales.** (Un primer conteo dio 650, pero
+  eran falsos positivos de JS: `!isOpen`, `!form`...)
+
+#### Medicion del CSS generado (spike real, no teoria)
+
+    CSS con Tailwind 3:  124,453 bytes    1,042 clases
+    CSS con Tailwind 4:  149,374 bytes    1,294 clases   (+20%)
+
+De las 919 clases comparables, 787 difieren en texto **pero casi todas son
+indireccion de variables con el mismo valor computado**:
+
+    gap-4   v3: gap:1rem           v4: gap:calc(var(--spacing)*4)   <- igual
+    py-2    v3: padding-top:.5rem  v4: padding-block:calc(...*2)    <- igual
+
+**Clases que desaparecen del CSS: 4 reales** (`bg-opacity-40/50/60`,
+`ring-opacity-5`).
+
+#### Plan para la sesion dedicada
+
+| Tarea | Esfuerzo |
+|---|---|
+| PostCSS + `@import` + `@config` | 15 min |
+| `npx @tailwindcss/upgrade` y revisar su diff | 1 h |
+| Los 7 patrones de reemplazo | 1-2 h |
+| **Revision visual pantalla por pantalla** | **3-4 h** |
+| Ajustes de lo que se vea mal | 1-2 h |
+
+No hay `tsc` que avise ni error de consola: una sombra mas grande o un `space-x`
+desalineado **no rompen nada, solo se ven mal**.
+
+---
+
+### I.2 — TypeScript 5.9.3 -> 7.0.2 (PR #4)
+
+**Veredicto: BLOQUEADO por el ecosistema, no por nuestro codigo. No se puede
+hacer hoy ni manana. Esperar a que typescript-eslint soporte TS 7.**
+
+#### El bloqueo
+
+    $ npm run lint
+    Error: typescript-eslint does not support TS 7.0.
+
+No es una advertencia de peer: es un rechazo explicito en tiempo de ejecucion.
+Y **no hay version que lo resuelva**:
+
+| Paquete | Version | peer typescript |
+|---|---|---|
+| typescript-eslint (instalado) | 8.67.0 | `>=4.8.4 <6.1.0` |
+| typescript-eslint (**ultima**) | 8.68.0 | `>=4.8.4 <6.1.0` |
+| typescript-eslint (**canary**) | 8.68.1-alpha.5 | `>=4.8.4 <6.1.0` |
+
+No existe ninguna 9.x. Mientras eso no cambie, subir TS 7 significa quedarse sin
+`npm run lint`.
+
+#### La sorpresa: tsc NO explota
+
+Contra lo que se anticipo el 26-ago ("va a empeorar antes de mejorar"):
+
+| | errores | clase crash |
+|---|---|---|
+| TS 5.9.3 (base) | 460 | 0 |
+| TS 7.0.2 tal cual | **459** | 3 |
+| TS 7.0.2 + `"types": ["node"]` | **456** | **0** |
+
+Del conjunto: **390 errores identicos, 69 nuevos, 70 que desaparecen**. El churn
+es simetrico por codigo (TS2345: 23 salen / 20 entran; TS6133: 19/10; TS2352:
+9/9; TS2367: 7/7), o sea **reformateo de diagnosticos del compilador nuevo, no
+errores nuevos de verdad**.
+
+#### Lo unico genuinamente nuevo: 3 errores, un arreglo de una linea
+
+    src/components/DeparturePointSelector.tsx(44,30): TS2503: Cannot find namespace 'NodeJS'
+    src/components/ProtectedRoute.tsx(18,35):         TS2503: Cannot find namespace 'NodeJS'
+    src/hooks/useFormPersistence.ts(20,35):           TS2503: Cannot find namespace 'NodeJS'
+
+Causa: **en TS 6+ la opcion `types` pasa a `[]` por defecto**, asi que ya no se
+auto-cargan los @types globales. Se arregla con `"types": ["node"]` en
+tsconfig.app.json (verificado: los 3 desaparecen). Alternativa mas limpia:
+cambiar `NodeJS.Timeout` por `ReturnType<typeof setTimeout>`.
+
+#### Impacto en configuracion, mas alla del codigo
+
+Revisado contra nuestro `tsconfig.app.json`. Lo que TS 6 deprecó/removio y que
+**NO nos afecta**: `target: es5` (usamos ES2020), `moduleResolution: classic/node`
+(usamos `bundler`), `outFile`, `baseUrl`, `module: amd/umd/systemjs`,
+`downlevelIteration`. `strict` ya esta en true, que pasa a ser el default.
+
+Lo que **si** nos afecta:
+- `types` -> `[]` por defecto (los 3 TS2503 de arriba).
+- `noUncheckedSideEffectImports` pasa a `true`: tenemos un import con efecto
+  secundario (`main.tsx:7  import './index.css'`). En el spike **no genero error**
+  —lo cubre la referencia a `vite/client` de `src/vite-env.d.ts`— pero conviene
+  vigilarlo.
+
+#### Y el build no se entera
+
+`npm run build` sale en verde con TS 7 instalado, **porque Vite no ejecuta tsc**.
+Es exactamente el punto ciego que documenta la pieza E: el build no valida tipos.
+
+#### Cuando se desbloquee
+
+| Tarea | Esfuerzo |
+|---|---|
+| Bump + `"types": ["node"]` | 15 min |
+| Verificar el conjunto de errores contra la base | 30 min |
+| Revisar que el lint vuelva a correr | 30 min |
+
+**Menos de 2 horas de trabajo real.** El unico costo es la espera.
+
+**Accion recomendada hoy: dejar el PR #4 abierto y NO mergearlo.** Revisar cada
+pocas semanas si salio una typescript-eslint que levante el tope de `<6.1.0`.
+
+---
 
 ## 🟢 Datos de prueba generados hoy (limpiar antes de UAT, no antes)
 
