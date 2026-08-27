@@ -1,5 +1,9 @@
 # Pendientes al cierre — 26 de agosto 2026
 
+> **ARCHIVO CERRADO — histórico.** Todo lo descrito aquí quedó completo,
+> verificado y en producción. **No se sigue ampliando.** Lo que continúa activo
+> está en [`PENDIENTES_27_AGO.md`](./PENDIENTES_27_AGO.md).
+
 > Contexto: continuación de la sesión del 25-ago. Arrancó retomando las piezas
 > que quedaron abiertas (etiqueta de método de pago, sustitución de F-63,
 > idempotencia de membresía) y terminó destapando cuatro huecos de autorización
