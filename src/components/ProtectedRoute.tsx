@@ -15,7 +15,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
   const { user, userRole, isLoading, isEmailVerified, isAgencyStaff, staffInfo, needsTermsAcceptance, markTermsAccepted, isOnboardingPending, isAgencyApproved } = useAuth();
   const location = useLocation();
   const [shouldRedirect, setShouldRedirect] = useState(false);
-  const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (redirectTimerRef.current) {

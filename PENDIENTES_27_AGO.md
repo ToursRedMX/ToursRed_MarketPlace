@@ -14,65 +14,52 @@
 ## 🔵 I — Actualizaciones de dependencias mayores
 
 Diagnosticadas a fondo el 27-ago con spikes reales (ramas aparte, medidas y
-borradas). **El orden importa y ya está decidido: I.3 primero, luego I.1.**
+borradas). **I.3 quedó cerrada. La siguiente pieza a retomar es I.1 (Tailwind
+4), que pide sesión propia.**
 
-### I.3 — TypeScript 6.0.3 · **hacer primero** · < 1 hora
+### ✅ I.3 — TypeScript 6.0.3 · **CERRADA** el 27-ago
 
-**Es el mejor retorno pendiente: 1 hora contra las 6-9 de Tailwind.**
+`typescript@5.9.3 → 6.0.3` + `typescript-eslint@8.67.0 → 8.68.0`, en la rama
+`chore/typescript-6.0.3`. Tomó menos de una hora, como estaba estimado.
 
-Objetivo: `typescript@6.0.3` + `typescript-eslint@8.68.0`.
-
-Dos datos que hay que tener claros antes de empezar:
-
-- **`typescript@6.1.0` no existe.** La última 6.x estable es `6.0.3`. El `<6.1.0`
-  que aparece en el peer de typescript-eslint es el **tope superior del rango**,
-  no una versión publicada.
-- **`typescript-eslint@8.68.1` no existe estable.** Solo alphas. La última
-  estable es `8.68.0`.
-
-Pero el rango `>=4.8.4 <6.1.0` **sí incluye 6.0.3**, así que TypeScript 6 está
-soportado hoy sin esperar a nadie.
-
-**Resultado del spike:**
-
-| Prueba | TS 7.0.2 | **TS 6.0.3** |
-|---|---|---|
-| `npm install` | 8 avisos `ERESOLVE overriding peer` | **limpio, sin un solo warning** |
-| `npm run lint` | **falla**: `typescript-eslint does not support TS 7.0` | **corre normal** |
-| `tsc` | 459 (3 de clase crash) | **460 / 0** |
-| `npm run build` | verde | verde |
-
-Con `"types": ["node"]` en `tsconfig.app.json`, el conjunto de errores es
-**exactamente el de `main`** — no solo el total:
+**Se aplicó la alternativa limpia, no `"types": ["node"]`.** Los 3 sitios de
+`NodeJS.Timeout` pasaron a `ReturnType<typeof setTimeout>`:
 
 ```
-nuevos vs main:        0
-desaparecen vs main:   0
-idénticos:           460
+src/components/DeparturePointSelector.tsx:44
+src/components/ProtectedRoute.tsx:18
+src/hooks/useFormPersistence.ts:20
 ```
 
-**El único cambio son 3 errores**, todos iguales:
+La razón de no usar `"types": ["node"]`: **`@types/node` no es dependencia
+directa** —sólo llega transitivamente vía `vite` y `@types/qrcode`—, así que esa
+vía habría exigido declararlo además en `devDependencies`. Y los 3 sitios son
+`useRef` en componentes de navegador, donde `setTimeout` devuelve `number`, no
+`NodeJS.Timeout`; cargar los tipos de Node en el tsconfig de la app también
+habría hecho aparecer `process`, `Buffer` y `__dirname` como disponibles en
+código que corre en el browser. `tsconfig.app.json` no se tocó.
 
-```
-src/components/DeparturePointSelector.tsx(44,30): TS2503: Cannot find namespace 'NodeJS'
-src/components/ProtectedRoute.tsx(18,35):         TS2503: Cannot find namespace 'NodeJS'
-src/hooks/useFormPersistence.ts(20,35):           TS2503: Cannot find namespace 'NodeJS'
-```
+**Verificación completa, toda contra la línea base de `main`:**
 
-Causa: en TS 6+ la opción `types` pasa a `[]` por defecto. Se arregla con
-`"types": ["node"]` (verificado). Alternativa más limpia: cambiar
-`NodeJS.Timeout` por `ReturnType<typeof setTimeout>` en esos 3 sitios.
+| Prueba | Resultado |
+|---|---|
+| `npm install` | limpio, **0 avisos** `ERESOLVE` |
+| `tsc` | **460 / 0 nuevos / 0 desaparecen / 460 idénticos** |
+| `npm run lint` | 2561 (2472 errors, 89 warnings) — **desglose por regla idéntico**, sin el rechazo `does not support TS` |
+| `npm run build` | verde, 7027 módulos, **hashes de bundle byte-idénticos a `main`** |
 
-**Por qué conviene:** es el camino que recomienda el propio equipo de TypeScript
-—migrar a 6, resolver deprecaciones, y solo entonces ir a 7— porque **TS 7
-convierte en error lo que 6 deja deprecado**. Ya está verificado que no tenemos
-ninguna deprecación pendiente: nada de `es5`, `moduleResolution classic/node`,
-`outFile` ni `baseUrl`; `strict` ya está en `true`.
+Los hashes idénticos (`index-zZvJIaHS.js`, `vendor-D2T7RTfA.js`,
+`index-CcSZvpd0.css`) son la prueba más fuerte: el cambio es puramente de tipos
+y no alteró una sola línea del runtime.
 
-**Ojo:** el PR **#4** de Dependabot **no sirve** para esto — apunta a 7.0.2. Hace
-falta una rama propia a 6.0.3, y el #4 sigue abierto y bloqueado igual.
+Confirmado además contra el registro npm el 27-ago: `6.0.3` es la última 6.x
+estable (publicada 2026-04-16), `6.1.0` no existe, `typescript-eslint@8.68.1`
+sólo tiene alphas, y el peer `>=4.8.4 <6.1.0` admite 6.0.3 sin overrides.
 
-### I.1 — Tailwind 3.4.19 → 4.3.3 (PR #5) · sesión propia · 6-9 horas
+**Ojo con el `tsc` de esta rama:** sigue saliendo con código 2 y el lint con 1.
+Es la línea base preexistente de `main`, no una falla nueva.
+
+### I.1 — Tailwind 3.4.19 → 4.3.3 (PR #5) · **siguiente pieza** · sesión propia · 6-9 horas
 
 **El grueso no es código: son 3-4 horas de mirar pantallas.**
 
