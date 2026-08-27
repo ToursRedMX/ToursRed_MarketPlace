@@ -775,13 +775,14 @@ Para que nadie lo dé por hecho leyendo lo de arriba:
 - **Las dos features de contabilidad arregladas hoy** (`Generar pólizas` y
   `Exportar SAT XML`) están verificadas solo por lectura de código, no
   ejercitadas. Ver punto 1 de la sección amarilla de la pieza E.
-- **React 19 en runtime, para TipTap, Mapbox y React Query.** El salto esta
-  verificado por compilacion (tsc identico a main), por montaje (54 rutas sin un
-  solo error ni warning) y en el unico archivo con cambio de semantica
-  (VerifyEmailPage, 4 casos en el componente real). Pero el proyecto no tiene
-  tests, y esos tres componentes de terceros solo se ejercitan interactuando:
-  editar texto enriquecido, arrastrar el mapa, y el refetch al volver a la
-  pestana. **Ya esta en produccion.**
+- **React 19 en runtime: TipTap VERIFICADO, Mapbox y React Query no.** El salto
+  esta verificado por compilacion (tsc identico a main), por montaje (54 rutas sin
+  un solo error ni warning) y en el unico archivo con cambio de semantica
+  (VerifyEmailPage, 4 casos en el componente real).
+  **TipTap se probo a mano en produccion el 27-ago, con React 19 y 3.30.5 encima:
+  funciona bien.** Quedan sin ejercitar Mapbox (arrastrar el mapa, autocompletado
+  de direcciones) y React Query (refetch al volver a la pestana). Ambos montan sin
+  errores, pero no se interactuo con ellos. Ya estan en produccion.
 - **El selector de punto de salida** (`DeparturePointSelector`) se probo por
   reproduccion del patron del debounce, no en el componente real: solo se usa en
   `AgencyTours.tsx` y hacia falta sesion de agencia. El cambio ahi es puramente
