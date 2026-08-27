@@ -16,6 +16,13 @@ updates:
           - "react-dom"
           - "@types/react"
           - "@types/react-dom"
+      # Los paquetes de TipTap declaran peers con version EXACTA entre si
+      # (@tiptap/react exige @tiptap/core "3.30.2", no un rango), asi que
+      # subir uno solo produce un arbol irresoluble. Asi fallaron 4 de los 5
+      # PRs del 27-ago. Agrupados, se mueven en bloque.
+      tiptap:
+        patterns:
+          - "@tiptap/*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
