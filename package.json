@@ -19,7 +19,7 @@
     "@tiptap/extension-link": "^3.30.2",
     "@tiptap/extension-placeholder": "^3.30.2",
     "@tiptap/pm": "^3.30.2",
-    "@tiptap/react": "^3.30.2",
+    "@tiptap/react": "^3.30.3",
     "@tiptap/starter-kit": "^3.30.2",
     "@types/qrcode": "^1.5.6",
     "date-fns": "^4.4.0",
