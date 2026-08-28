@@ -1680,7 +1680,7 @@ const AgencyBookings: React.FC = () => {
                               <strong>Cancelado el:</strong> {formatDate((booking as any).cancelled_at)}
                             </p>
                             {(booking as any).cancelled_by_agency_at && (
-                              <p className="text-orange-800 font-semibold mt-2">
+                              <p className="text-orange-800 font-semibold">
                                 ℹ️ Esta reserva fue cancelada por tu agencia. El viajero recibió un reembolso del 100% y no se pagará comisión.
                               </p>
                             )}

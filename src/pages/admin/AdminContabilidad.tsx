@@ -636,12 +636,12 @@ const AdminContabilidad: React.FC = () => {
                       </div>
                     </div>
                     {entry.error_message && (
-                      <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-red-700 font-mono break-all">
+                      <div className="p-2 bg-red-50 border border-red-200 rounded text-red-700 font-mono break-all">
                         {entry.error_message}
                       </div>
                     )}
                     {entry.payload_summary && (
-                      <div className="mt-2 p-2 bg-gray-100 rounded font-mono text-gray-600 break-all">
+                      <div className="p-2 bg-gray-100 rounded font-mono text-gray-600 break-all">
                         {JSON.stringify(entry.payload_summary)}
                       </div>
                     )}

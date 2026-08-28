@@ -532,7 +532,7 @@ const AdminReviews: React.FC = () => {
                   <div className="border-t border-gray-200 pt-4">
                     {isReplying === review.id ? (
                       <div className="space-y-3">
-                        <div className="flex items-center text-sm text-gray-600 mb-2">
+                        <div className="flex items-center text-sm text-gray-600">
                           <MessageSquare className="h-4 w-4 mr-2" />
                           <span>Agregar respuesta como administrador:</span>
                         </div>

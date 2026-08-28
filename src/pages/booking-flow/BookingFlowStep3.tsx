@@ -434,7 +434,7 @@ const BookingFlowStep3: React.FC = () => {
         {/* Seat Selection — Mode A: specific seats */}
         {hasSeatMap && (
           <div className="mb-6 space-y-3">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <Bus className="w-4 h-4 text-blue-600" />
               <span className="text-sm font-semibold text-gray-700">Selecciona tus asientos</span>
             </div>
@@ -483,7 +483,7 @@ const BookingFlowStep3: React.FC = () => {
         {/* Pickup selector */}
         {isReceptivo && tour.pickup_available && (
           <div className="mb-6 space-y-3">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <Car className="w-4 h-4 text-teal-600" />
               <span className="text-sm font-semibold text-gray-700">Tipo de traslado</span>
             </div>
@@ -548,7 +548,7 @@ const BookingFlowStep3: React.FC = () => {
         {/* Language selector */}
         {isReceptivo && tourLanguages.length > 0 && (
           <div className="mb-6 space-y-2">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <Globe className="w-4 h-4 text-blue-600" />
               <span className="text-sm font-semibold text-gray-700">Idioma del tour</span>
             </div>

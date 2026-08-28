@@ -1643,7 +1643,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
 
       {isReceptivo ? (
         <div className="mb-4 space-y-3">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2">
             <RefreshCw className="w-4 h-4 text-teal-600" />
             <span className="text-sm font-semibold text-gray-700">
               {isTransferCustomTime ? 'Selecciona la fecha del traslado' : 'Selecciona fecha y horario'}
@@ -1933,7 +1933,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
       {/* Mapa de asientos — cuando el tour tiene vehiculo configurado */}
       {hasSeatMap && (
         <div className="mb-4 space-y-3">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2">
             <Bus className="w-4 h-4 text-blue-600" />
             <span className="text-sm font-semibold text-gray-700">Selecciona tus asientos</span>
           </div>
@@ -1962,7 +1962,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
       {/* Pickup selector — solo receptivo */}
       {isReceptivo && tour.pickup_available && (
         <div className="mb-4 space-y-3">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2">
             <Car className="w-4 h-4 text-teal-600" />
             <span className="text-sm font-semibold text-gray-700">Tipo de traslado</span>
           </div>
@@ -2045,7 +2045,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
       {/* Selector de idioma — solo receptivo */}
       {isReceptivo && tourLanguages.length > 0 && (
         <div className="mb-4 space-y-2">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2">
             <Globe className="w-4 h-4 text-blue-600" />
             <span className="text-sm font-semibold text-gray-700">Idioma del tour</span>
           </div>
