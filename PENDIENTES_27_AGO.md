@@ -287,10 +287,11 @@ horas.
 ## 🟣 Piezas propias que salieron de la migración de Tailwind
 
 Las cuatro salieron de ejecutar la migración de Tailwind, pero **ninguna
-pertenece a esa pieza** y ninguna se tocó en el PR #41. Todas necesitan criterio
-humano, no medición de CSS.
+pertenece a esa pieza** y ninguna se tocó en el PR #41.
 
-Las dos primeras son trabajo real; las dos últimas son limpiezas de minutos.
+**Tres de las cuatro quedaron cerradas el 27-ago en el PR #42**
+(rama `chore/limpieza-menor`). Sigue abierta sólo la primera, que es la única
+que necesita criterio humano de verdad.
 
 **1. 402 contenedores `space-y-*` sin migrar a `gap`.**
 
@@ -315,31 +316,45 @@ Se migraron los seguros: **165** que ya eran `flex`/`grid` (cambio directo a
 **Mientras no se resuelvan, esos 402 mantienen el comportamiento de v4** (se
 aprietan o se abren según el caso). Es lo más visible de la revisión.
 
-**2. 10 campos sin indicador de foco (accesibilidad).**
+**2. ✅ CERRADA — campos sin indicador de foco (accesibilidad). Eran 8, no 10.**
 
-De 330 usos de `outline-none`, **320 tienen indicador alternativo**
-(`focus:ring` 575 tokens, `focus:outline` 284, `focus:border` 107, `peer-focus`
-25). **10 no tienen ninguno**:
+Al ir a arreglarlos, **dos de los "10" resultaron falsos positivos** de la
+auditoría del 27-ago, que sólo miraba el `className` del propio elemento:
 
-| Archivo | Casos |
-|---|---|
-| `src/pages/accounting/AccountingPage.tsx` | 8 (campos editables en línea) |
-| `src/components/accounting/AccountCatalogModal.tsx:261` | 1 |
-| `src/pages/agency/AgencyProfile.tsx:972` | 1 |
+- **`AccountCatalogModal.tsx:261` ya tenía foco.** Su `className` es un template
+  literal multilínea y sí incluye `focus:border-sky-400 focus:ring-1
+  focus:ring-sky-100`; la regex sólo capturó el tramo anterior a la interpolación.
+- **`AgencyProfile.tsx:967` lo hereda del padre.** El contenedor lleva
+  `focus-within:ring-2 focus-within:ring-blue-500`, así que al enfocar el input
+  el grupo entero dibuja el anillo. Ponerle uno propio lo habría duplicado.
 
-**Ya era así en v3** — no lo introduce esta migración. `outline-hidden` les
-devuelve el contorno en modo de contraste forzado, que es la última pista para
-quien navega con teclado. **Añadirles un `focus:ring` es una mejora real y
-pendiente**, pero es un cambio visible y no pertenece a esta pieza.
+Reauditado con un escáner que respeta llaves y template literals: de **274
+controles con `outline-hidden`**, 9 sin indicador propio y uno de ellos cubierto
+por el padre. **Reales: 8**, los ocho `<select>` de `AccountingPage.tsx`
+(selectores de mes/año, `border-none` dentro de un chip `bg-gray-50`).
 
-**3 y 4. Dos limpiezas menores, de minutos.**
+Arreglados con `rounded focus:ring-2 focus:ring-sky-500` — anillo, no borde,
+porque con `border-none` un foco de borde no se vería; y `sky` porque es la
+paleta que ya usa ese archivo. El anillo es `box-shadow`, así que no mueve el
+layout. Auditoría tras el arreglo: **0 descubiertos**.
 
-- **`src/pages/MaintenancePage.tsx:19`**: `className="h-16 rounded-x1 shadow-2x1"`
-  usa el **dígito 1** en vez de la letra **l**. Esas clases no existen ni en v3
-  ni en v4, así que hoy no aplican nada. No se corrigió a propósito: haría que
-  esa página gane sombra y redondeo durante la revisión visual y lo leeríamos
-  como efecto de Tailwind 4.
-- **`.btn-accent` está muerta** (0 usos). v3 la purgaba, v4 la emite igual.
+**3. ✅ CERRADA — typo en `MaintenancePage.tsx:19`.**
+
+`rounded-x1 shadow-2x1` usaba el **dígito 1** en vez de la letra **l**, así que
+esas clases no existían y no aplicaban nada. Corregido a `rounded-xl shadow-2xl`;
+el logo gana esquinas redondeadas y sombra. Único caso de este typo en la app.
+Se dejó fuera del PR #41 a propósito para no confundirlo con un efecto de
+Tailwind 4 durante la revisión visual.
+
+**4. ✅ CERRADA — `.btn-accent` muerta, eliminada de `index.css`.**
+
+Confirmado antes de borrar: aparecía sólo en su propia definición, con 0 usos en
+código y sin construcción por concatenación (`btn-${…}`). Sus hermanas siguen
+vivas — `btn-primary` (106 usos), `btn-outline` (70), `btn-secondary` (21).
+
+**Verificado de paso:** `BASELINE_TOTAL` del workflow `typecheck.yml` sigue
+correcto en **460** (con `BASELINE_CRASH: 0`), como quedó en el PR #40. No hizo
+falta tocarlo.
 ---
 
 ---
@@ -416,7 +431,10 @@ Nota conceptual que conviene no perder: **la llave publicable no es un secreto**
 
 ---
 
-## 🟢 Datos de prueba por limpiar antes del UAT
+## ⚪ Datos de prueba por limpiar — **N/A por ahora**
+
+**No se atiende como pieza suelta:** se resuelve con la depuración general del
+ambiente antes del UAT, no antes. Queda aquí sólo como inventario.
 
 Cuatro tickets de soporte creados el 27-ago al verificar el guard de
 `support-create-ticket`. **Los cuatro llevan "PRUEBA" en la descripción.**
@@ -442,7 +460,8 @@ también para limpiar antes del UAT.
 
 | PR | Qué | Acción |
 |---|---|---|
-| **#41** | Tailwind 4.3.3 (pieza I.1) + 2 fixes | **Abierto, listo para mergear.** Revisión visual hecha, checks en verde |
+| **#41** | Tailwind 4.3.3 (pieza I.1) + 2 fixes | **Listo para mergear.** Revisión visual hecha, checks en verde |
+| **#42** | Limpieza menor: typo, `.btn-accent`, 8 campos sin foco | **Listo para mergear, DESPUÉS del #41** (va basado en él) |
 | **#4** | `typescript` 5.9.3 → 7.0.2 | **Bloqueado.** Ver I.2. No mergear |
 
 **Cerrados el 27-ago:** #39 (TypeScript 6.0.3, mergeado), #40 (baseline de
