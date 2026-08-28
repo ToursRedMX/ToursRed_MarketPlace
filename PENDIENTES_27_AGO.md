@@ -658,9 +658,35 @@ propio, mergeado tras la revisión visual del preview — pieza 🟣 1).
   el 27-ago (PR #19), pero hay **753 versiones aplicadas en la BD sin archivo en
   el repo** (histórico del proyecto + las 9 de `routesred`). El repo nunca tuvo
   el historial completo.
-- **`main` está protegida**: requiere PR. Falta marcar *"Do not allow bypassing
-  the above settings"* — hoy `enforce_admins` está en `false`, así que un admin
-  (o Bolt actuando con esa cuenta) todavía puede saltarse la regla.
+- **`main` está protegida** — estado verificado por API el 28-ago:
+
+  | Ajuste | Estado |
+  |---|---|
+  | `enforce_admins` | ✅ `true` — **ya no es un pendiente**, se activó entre el 27 y el 28-ago |
+  | `required_status_checks` | ✅ `typecheck` y `netlify/toursredmx/deploy-preview`, configurados el 28-ago (`strict: false`) |
+  | `allow_force_pushes` / `allow_deletions` | ✅ `false` |
+  | `required_approving_review_count` | ⚠️ **0** — un PR lo puede mergear su propio autor |
+  | `required_conversation_resolution`, `required_signatures`, `required_linear_history` | `false` |
+
+  **Hasta el 28-ago no había ningún status check obligatorio**: `main` exigía un
+  PR, pero ese PR se podía mergear al instante y **con los checks en rojo**. Los
+  cinco merges de ese día (#43, #44, #46, #48, #49) esperaron a verde por
+  criterio, no porque GitHub lo impusiera. Ahora sí lo impone.
+
+  Queda deliberadamente en 0 el número de aprobaciones: con `enforce_admins` en
+  `true` y un equipo de una persona, exigir 1 bloquearía a Axel consigo mismo.
+  Es una decisión, no un descuido.
+
+  **Ojo con `strict: false`:** no obliga a que la rama esté al día con `main`
+  antes de mergear. Subirlo a `true` da más garantía pero exige actualizar cada
+  PR antes del merge.
+
+- **Hay otra fuente escribiendo en el repo.** El 28-ago aparecieron en `main`
+  los merges de los PR **#46, #47 y #48**, desde ramas con los mismos nombres
+  que las usadas en la sesión (`fix/space-y-margenes-v4`, `docs/pendientes-28-ago`),
+  que ya se habían mergeado como #43 y #44. El contenido final se verificó y es
+  el correcto, pero conviene saber que algo o alguien —probablemente Bolt con la
+  cuenta de Axel— recrea ramas y reabre PRs.
 - **RoutesRed** (esquema `routesred`, 14 tablas + `user_platforms`) está en la BD
   de sandbox sin archivos en el repo. Identificado, aislado y sin riesgo para
   ToursRed. Se documenta si se retoma.
