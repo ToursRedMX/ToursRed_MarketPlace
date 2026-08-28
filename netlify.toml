@@ -3,7 +3,10 @@ command = "npx vite build"
 publish = "dist"
 
 [build.environment]
-SECRETS_SCAN_ENABLED = "false"
+SECRETS_SCAN_ENABLED = "true"
+# Las VITE_* acaban en el bundle del navegador por diseno: que aparezcan en el
+# output es su funcion, no una fuga. Verificado uso por uso en src/ (28-ago).
+SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY,VITE_APP_URL,VITE_SENTRY_DSN,VITE_GA_MEASUREMENT_ID"
 NODE_VERSION = "24"
 
 [[edge_functions]]
