@@ -535,7 +535,7 @@ export default function ExecutiveComisiones() {
                     </div>
                     {validation.status === 'ok' && validation.parsed && (
                       <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 space-y-2">
-                        <div className="flex items-center gap-2 mb-1"><ShieldCheck className="h-4 w-4 text-green-600 shrink-0" /><span className="text-sm font-semibold text-green-800">CFDI válido</span></div>
+                        <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-green-600 shrink-0" /><span className="text-sm font-semibold text-green-800">CFDI válido</span></div>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-green-700">
                           <span className="text-green-500 font-medium">UUID</span><span className="font-mono truncate">{validation.parsed.uuid}</span>
                           <span className="text-green-500 font-medium">Monto</span><span>{formatCurrencyMXN(validation.parsed.total)}</span>
@@ -547,7 +547,7 @@ export default function ExecutiveComisiones() {
                     )}
                     {validation.status === 'error' && (
                       <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 space-y-1.5">
-                        <div className="flex items-center gap-2 mb-1"><ShieldAlert className="h-4 w-4 text-red-600 shrink-0" /><span className="text-sm font-semibold text-red-800">El CFDI no pasó la validación</span></div>
+                        <div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-red-600 shrink-0" /><span className="text-sm font-semibold text-red-800">El CFDI no pasó la validación</span></div>
                         {validation.errors.map((e, i) => <p key={i} className="text-xs text-red-700 flex items-start gap-1.5"><AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />{e}</p>)}
                         {validation.warnings.map((w, i) => <p key={i} className="text-xs text-amber-700 flex items-start gap-1.5"><AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />{w}</p>)}
                         {!executiveRfc && <a href="/executive/perfil" className="text-xs text-blue-600 underline block mt-1">Ir a Mi Perfil para agregar tu RFC</a>}

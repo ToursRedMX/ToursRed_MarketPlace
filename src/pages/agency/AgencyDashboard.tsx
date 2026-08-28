@@ -303,7 +303,7 @@ const AgencyDashboard: React.FC = () => {
                   <li>La plataforma retiene el porcentaje de comision acordado por contrato</li>
                   <li>El pago a tu agencia se realiza automaticamente 3 dias despues de finalizar el tour</li>
                 </ul>
-                <p className="mt-3">
+                <p>
                   Asegurate de tener tu <strong>cuenta bancaria configurada en tu perfil</strong> para recibir los pagos sin retrasos.
                 </p>
               </div>

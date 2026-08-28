@@ -534,7 +534,7 @@ const AdminTours: React.FC = () => {
                             − {formatCurrency(editingTour.price * parseFloat(overridePercent) / 100)}
                           </span>
                         </div>
-                        <div className="flex justify-between border-t border-amber-200 pt-1.5 mt-1.5 font-semibold text-amber-900">
+                        <div className="flex justify-between border-t border-amber-200 pt-1.5 font-semibold text-amber-900">
                           <span>La agencia recibe</span>
                           <span>{formatCurrency(editingTour.price * (1 - parseFloat(overridePercent) / 100))}</span>
                         </div>

@@ -137,7 +137,7 @@ const FeaturedSlotSuccessPage: React.FC = () => {
           ) : error ? null : slot ? (
             <>
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-500" />
                   <span className="font-semibold text-gray-800 text-sm">Detalles del destacado</span>
                 </div>

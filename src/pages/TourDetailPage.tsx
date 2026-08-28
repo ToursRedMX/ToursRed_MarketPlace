@@ -1044,7 +1044,7 @@ const TourDetailPage: React.FC = () => {
                               <span className="text-sm text-amber-800">No apto para personas con mala condición física</span>
                             </div>
                           )}
-                          <p className="text-xs text-amber-700 mt-3 pt-2 border-t border-amber-200">
+                          <p className="text-xs text-amber-700 pt-2 border-t border-amber-200">
                             Al hacer una reserva, deberás aceptar estas restricciones. Ni tú ni tus acompañantes deben pertenecer a estos grupos.
                           </p>
                         </div>

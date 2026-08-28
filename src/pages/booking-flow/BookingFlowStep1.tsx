@@ -285,7 +285,7 @@ const BookingFlowStep1: React.FC = () => {
         {/* Date / Slot Selection */}
         {isReceptivo ? (
           <div className="mb-6 space-y-3">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-teal-600" />
               <span className="text-sm font-semibold text-gray-700">
                 {isTransferCustomTime ? 'Selecciona la fecha del traslado' : 'Selecciona fecha y horario'}

@@ -329,7 +329,7 @@ export default function TestOpenPay3DSPage() {
 
         {/* Card form */}
         <form ref={formRef} id="openpay-test-form" onSubmit={handleSubmit} className="mb-6 rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-orange-500" />
             <h2 className="text-lg font-semibold text-gray-900">Datos de tarjeta de prueba</h2>
           </div>
@@ -406,7 +406,7 @@ export default function TestOpenPay3DSPage() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 mb-2">device_session_id capturado: <code className="font-mono text-gray-700">{debugDsid || '(sin capturar)'}</code></p>
+          <p className="text-xs text-gray-500">device_session_id capturado: <code className="font-mono text-gray-700">{debugDsid || '(sin capturar)'}</code></p>
 
           <button
             type="submit"

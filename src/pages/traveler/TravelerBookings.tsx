@@ -4816,7 +4816,7 @@ const TravelerBookings: React.FC = () => {
                       <p className="text-sm text-gray-500 text-center py-6">No hay suplementos disponibles para este tour.</p>
                     ) : (
                       <>
-                        <p className="text-xs text-gray-500 mb-1">Extras que puedes agregar a tu reserva actual.</p>
+                        <p className="text-xs text-gray-500">Extras que puedes agregar a tu reserva actual.</p>
                         {available.map((ts: any) => {
                           const activeCount = mySupplements.filter(
                             (bs: any) => bs.tour_supplement_id === ts.id && !['rejected', 'cancelled'].includes(bs.status)

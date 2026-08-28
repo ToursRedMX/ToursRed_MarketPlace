@@ -4889,7 +4889,7 @@ const AgencyTours: React.FC = () => {
 
                 {optionalServices.map((svc, index) => (
                   <div key={index} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Servicio {index + 1}</span>
                       <button
                         type="button"
@@ -5021,7 +5021,7 @@ const AgencyTours: React.FC = () => {
 
                 {supplements.map((sup, index) => (
                   <div key={index} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Suplemento {index + 1}</span>
                       <button
                         type="button"
@@ -5816,7 +5816,7 @@ const AgencyTours: React.FC = () => {
             </div>
 
             {error && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-start gap-3 text-sm">
+              <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-start gap-3 text-sm">
                 <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>

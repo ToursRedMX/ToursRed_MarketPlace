@@ -76,7 +76,7 @@ const OnboardingTermsStep: React.FC<Props> = ({ agencyId, onAccepted }) => {
               <p>La agencia es responsable de la atención al viajero, el cumplimiento del itinerario y la gestión de cancelaciones según su propia política.</p>
               <p>ToursRed actúa como intermediario tecnológico y no es responsable de incumplimientos por parte de la agencia.</p>
               <p>Al aceptar estos términos, la agencia confirma que los datos proporcionados son verídicos y que cuenta con las licencias y permisos necesarios para operar.</p>
-              <p className="mt-6 text-gray-400 text-xs">— Fin del documento. Puedes cerrar y revisarlo nuevamente cuando gustes. —</p>
+              <p className="text-gray-400 text-xs">— Fin del documento. Puedes cerrar y revisarlo nuevamente cuando gustes. —</p>
             </div>
           )}
         </div>
