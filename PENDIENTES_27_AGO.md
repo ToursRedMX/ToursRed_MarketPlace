@@ -14,8 +14,8 @@
 ## 🔵 I — Actualizaciones de dependencias mayores
 
 Diagnosticadas a fondo el 27-ago con spikes reales (ramas aparte, medidas y
-borradas). **I.3 quedó cerrada. La siguiente pieza a retomar es I.1 (Tailwind
-4), que pide sesión propia.**
+borradas). **I.1 e I.3 quedaron cerradas y mergeadas; I.2 sigue bloqueada.**
+La migración de Tailwind 4 está terminada (ver la sección 🟣).
 
 ### ✅ I.3 — TypeScript 6.0.3 · **CERRADA** el 27-ago
 
@@ -59,7 +59,7 @@ sólo tiene alphas, y el peer `>=4.8.4 <6.1.0` admite 6.0.3 sin overrides.
 **Ojo con el `tsc` de esta rama:** sigue saliendo con código 2 y el lint con 1.
 Es la línea base preexistente de `main`, no una falla nueva.
 
-### ✅ I.1 — Tailwind 4.3.3 · **CÓDIGO COMPLETO** · PR #41 listo para mergear
+### ✅ I.1 — Tailwind 4.3.3 · **CERRADA** el 27-ago (PR #41) · rematada el 28-ago (PR #43)
 
 **El grueso no es código: son 3-4 horas de mirar pantallas.**
 
@@ -137,7 +137,7 @@ El PR #41 trae **tres commits deliberadamente separados**:
 | `bg/ring-opacity-*` | sintaxis de barra (`bg-black/50`) | 51 | ✅ |
 | `shadow-sm` | `shadow-xs` | 248 | ✅ |
 | `border` sin color | `border-gray-200` explícito | 63 | ✅ |
-| `space-*` | `gap-*` | **397 de 799** | ⚠️ parcial |
+| `space-*` | `gap-*` en 397; los 402 restantes **no requerían migración** (ver 🟣 1) | 799 | ✅ cerrado el 28-ago |
 | `outline-none` | `outline-hidden` | 331 | ✅ |
 
 En cada paso: `typecheck` **460** (base intacta), `lint` **2561** (2472+89, sin
@@ -286,35 +286,94 @@ horas.
 
 ## 🟣 Piezas propias que salieron de la migración de Tailwind
 
-Las cuatro salieron de ejecutar la migración de Tailwind, pero **ninguna
+Las cinco salieron de ejecutar la migración de Tailwind, pero **ninguna
 pertenece a esa pieza** y ninguna se tocó en el PR #41.
 
-**Tres de las cuatro quedaron cerradas el 27-ago en el PR #42**
-(rama `chore/limpieza-menor`). Sigue abierta sólo la primera, que es la única
-que necesita criterio humano de verdad.
+**Tres quedaron cerradas el 27-ago en el PR #42** (rama `chore/limpieza-menor`)
+y **la primera quedó cerrada el 28-ago en el PR #43**.
 
-**1. 402 contenedores `space-y-*` sin migrar a `gap`.**
+**1. ✅ CERRADA el 28-ago — los 402 contenedores `space-y-*`. Eran 25, no 402.**
 
-v4 cambió `space-*` de dos formas a la vez: la especificidad cae de (0,3,0) a
-**cero** (`:where()`), y el margen pasa de `margin-top` a `margin-bottom`. El
-efecto es que **cualquier hijo con margen propio ahora gana**.
+v4 cambió `space-y` de dos formas a la vez: la especificidad cae de (0,3,0) a
+**cero** (`:where()`), y el margen pasa de `margin-top` en los hijos 2…n a
+`margin-bottom` en los 1…n-1. El efecto es que **un hijo con margen propio, que
+en v3 era invisible, ahora gana**.
 
-De 790 contenedores, **425 cambian de espaciado**: 159 se aprietan, 140 más se
-aprietan (v3 ganaba, v4 pierde) y 126 se abren.
+#### Los números del 27-ago estaban mal medidos
 
-Se migraron los seguros: **165** que ya eran `flex`/`grid` (cambio directo a
-`gap`) y **232** `block` limpios (a `flex flex-col` + `gap-y`). Quedan:
+El **384** contaba el margen en **todo el subárbol**. `space-y` sólo toca
+**hijos directos**. Remedido el 28-ago parseando JSX con la API de TypeScript
+—no con grep— y comparando además los valores numéricos:
 
-- **384** con margen propio en algún hijo. Convertirlos a flex **tampoco**
-  reproduce v3, porque los items de un flex **no colapsan márgenes**: con
-  `space-y-3` + hijo `mb-1`, v3 da 0.75rem, v4 sin tocar da 0.25rem y
-  `flex`+`gap` daría 1rem. Para que dé 0.75 hay que **decidir por cada hijo si
-  su margen sobra**. No es mecánico.
-- **16** con texto o expresión suelta como hijo directo: al volverse flex, cada
-  trozo se convierte en item independiente. Revisión manual.
+| | 27-ago | Real |
+|---|---|---|
+| Contenedores restantes | 402 | **402** ✅ |
+| Con margen propio en hijo directo | 384 | **48** |
+| …de los que **cambian de aspecto** | — | **25** |
+| Con contenido suelto | 16 | **0** |
+| Sin cambio alguno | — | **376** |
 
-**Mientras no se resuelvan, esos 402 mantienen el comportamiento de v4** (se
-aprietan o se abren según el caso). Es lo más visible de la revisión.
+Reproduje la medición vieja (margen en cualquier descendiente) y da **386**,
+prácticamente el 384 documentado: ahí estaba el error.
+
+**Los 376 no estaban pendientes: no había nada que hacer con ellos.** v3 pone
+`margin-top` en los hijos 2…n y v4 pone `margin-bottom` en los 1…n-1; sin
+márgenes propios que compitan, el espacio entre cada par es idéntico y ninguna
+de las dos versiones derrama margen fuera del contenedor.
+
+Del **48** con margen propio, sólo **25** cambian de verdad: un hijo con `mb-*`
+sólo aprieta si su valor **queda por debajo** del `space-y`, y uno con `mt-*`
+sólo abre si lo **supera**. Los otros 23 dan el mismo resultado en ambas
+versiones.
+
+#### El arreglo aplicado (PR #43, commit `1b79a64`)
+
+**Borrar el margen del hijo.** Al quitarlo, el `space-y` de v4 vuelve a aplicar
+y da exactamente el valor de v3.
+
+Convertir a `flex`+`gap` **no** servía, porque los items de un flex **no
+colapsan márgenes**:
+
+```
+space-y-3 + hijo mb-1  ->  v3 0.75rem | v4 hoy 0.25rem | flex+gap 1rem | tras borrar 0.75rem
+```
+
+- **17 se aprietan** — hijo con `mb-*` menor que el `space-y`. 13 son el mismo
+  patrón: `<div class="flex items-center gap-2 mb-1">` como primer hijo.
+- **8 se abren** — hijo con `mt-*` mayor que el `space-y`.
+
+27 ediciones en 17 archivos, concentradas en `BookingForm` (4),
+`BookingFlowStep3` (3) y `AgencyTours` (3).
+
+**Verificación:** reclasificación **401/402** reproducen v3 (antes 377); CSS
+generado **byte-idéntico** a `main` (147,524 B); `typecheck` **460**; `lint`
+**2561** (2472+89); build verde. Revisión visual confirmada en el preview.
+
+El CSS byte-idéntico es lo esperado y conviene no malinterpretarlo: las 8 clases
+retiradas siguen usadas en cientos de sitios (`mb-1` en 600, `mb-4` en 635), así
+que no cambia *qué* CSS existe, sólo *qué elementos lo llevan*. **Aquí el CSS no
+sirve de prueba** — la comprobación real es la reclasificación más la revisión
+visual.
+
+#### Lo que la investigación de componentes descartó
+
+Se leyeron **uno por uno los 11 componentes** que aparecen como hijo directo de
+un `space-y`, para no asumir dónde vive el margen. **10 no tienen margen propio**
+y sus contenedores quedaron confirmados como "sin cambio": `SearchBox`,
+`EmptyState`, `LoadingSpinner` (2 definiciones), `SeatMapPicker`,
+`SlotDetailPanel`, `SectionMessage`, `DaysProgress`, `AgencyContractSection`,
+`CfdiViewerModal` (es `fixed inset-0`, fuera de flujo) y `Link`.
+
+`SeatMapPicker` se revisó a fondo por ser el más complejo: **tres raíces, las
+tres un `<div>` simple** (cargando / error / principal), ninguna un Fragment
+—que habría metido varios hijos al `space-y` del padre—, sin `style` con margen,
+sin valores arbitrarios `m-[…]` y sin márgenes negativos. Sus únicos márgenes
+son horizontales y en elementos internos (`mx-auto`, `ml-3`), que no intervienen
+en `space-y`. **No es ambiguo.**
+
+Afinando el resolvedor para ramas `null` y para un IIFE, los **6 "opacos"
+bajaron a 0**: cinco resultaron sin cambio y el sexto destapó el único caso real
+que queda (ver pieza 5).
 
 **2. ✅ CERRADA — campos sin indicador de foco (accesibilidad). Eran 8, no 10.**
 
@@ -355,6 +414,29 @@ vivas — `btn-primary` (106 usos), `btn-outline` (70), `btn-secondary` (21).
 **Verificado de paso:** `BASELINE_TOTAL` del workflow `typecheck.yml` sigue
 correcto en **460** (con `BASELINE_CRASH: 0`), como quedó en el PR #40. No hizo
 falta tocarlo.
+
+**5. 🟡 ABIERTA — `PaymentProviderSelector`: margen dentro del componente.**
+
+Salió de cerrar la pieza 1. **Es un solo sitio**, y se dejó fuera del PR #43 a
+propósito: no es mecánico y no urge.
+
+`src/pages/traveler/TravelerBookings.tsx:3922` tiene `<PaymentProviderSelector>`
+como 2º hijo directo de un `space-y-6` (1.5rem). Sus **dos raíces llevan `mb-4`**
+(1rem) — el aviso de "sin proveedores" en `PaymentProviderSelector.tsx:185` y la
+raíz principal en `:200`. Como 1rem < 1.5rem, ese hueco **se aprieta** respecto
+a v3.
+
+**Por qué no se tocó:** el margen vive **dentro** del componente, no en el sitio
+de llamada, y el componente se usa en **6 lugares** (`BookingForm.tsx:3324`,
+`PaymentPlanCalendar.tsx:393` y `:442`, `BookingFlowStep4.tsx:1042`,
+`GiftCardsPage.tsx:776`, `TravelerBookings.tsx:3939`). Quitarle el `mb-4`
+arreglaría este sitio y **cambiaría el espaciado de los otros 5**, que hoy
+dependen de él.
+
+Salidas posibles, ninguna obvia: envolverlo en el sitio de llamada, aceptar una
+prop `className`, o subir el `space-y-6` del contenedor. **Pide criterio, no
+regla.** Es el único caso genuinamente ambiguo que quedó de los 402.
+
 ---
 
 ---
@@ -460,13 +542,18 @@ también para limpiar antes del UAT.
 
 | PR | Qué | Acción |
 |---|---|---|
-| **#41** | Tailwind 4.3.3 (pieza I.1) + 2 fixes | **Listo para mergear.** Revisión visual hecha, checks en verde |
-| **#42** | Limpieza menor: typo, `.btn-accent`, 8 campos sin foco | **Listo para mergear, DESPUÉS del #41** (va basado en él) |
 | **#4** | `typescript` 5.9.3 → 7.0.2 | **Bloqueado.** Ver I.2. No mergear |
 
+**Es el único que queda abierto.**
+
 **Cerrados el 27-ago:** #39 (TypeScript 6.0.3, mergeado), #40 (baseline de
-typecheck, mergeado) y **#5** (Tailwind, cerrado por obsoleto — el #41 hace el
-trabajo completo y el #5 ni siquiera compilaba por sí solo).
+typecheck, mergeado), **#41** (Tailwind 4.3.3 + 2 fixes, mergeado tras la
+revisión visual), **#42** (limpieza menor, mergeado después del #41) y **#5**
+(Tailwind, cerrado por obsoleto — el #41 hizo el trabajo completo y el #5 ni
+siquiera compilaba por sí solo).
+
+**Cerrado el 28-ago:** **#43** (espaciado de v3 en los 25 `space-y` con margen
+propio, mergeado tras la revisión visual del preview — pieza 🟣 1).
 
 ---
 
@@ -485,10 +572,15 @@ trabajo completo y el #5 ni siquiera compilaba por sí solo).
 
 ---
 
-*Estado al cierre del 27-ago: **I.3 (TypeScript 6.0.3) cerrada y mergeada**;
-**I.1 (Tailwind 4) con el código completo en el PR #41, listo para mergear**;
-I.2 (TypeScript 7) sigue bloqueada. Lo que queda de Tailwind son las cuatro
-piezas propias de la sección 🟣.*
+*Estado al cierre del 28-ago: **I.1 (Tailwind 4) cerrada y mergeada** (PR #41),
+igual que **I.3 (TypeScript 6.0.3)** (PR #39); I.2 (TypeScript 7) sigue
+bloqueada. De las piezas 🟣, **cuatro de cinco están cerradas**: sólo queda la
+5 (`PaymentProviderSelector`, un sitio, pide criterio). **La migración de
+Tailwind 4 está terminada.***
+
+*Lo que sigue abierto y con alcance real es **la pieza H**: el check verde de
+`deploy-preview` no valida que la app arranque. Es el siguiente hallazgo a
+atacar.*
 
 *Para retomar: leer este archivo. El detalle histórico de lo ya cerrado está en
 [`PENDIENTES_26_AGO.md`](./PENDIENTES_26_AGO.md), que no se sigue ampliando.*
