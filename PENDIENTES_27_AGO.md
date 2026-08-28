@@ -463,7 +463,9 @@ se diagnosticaron está en el histórico.)*
 
 ---
 
-## 🟠 Dos decisiones que hay que tomar
+## 🟠 Decisiones
+
+**La 2 (secrets scanning) quedo resuelta el 28-ago.** Sigue abierta solo la 1.
 
 ### 1. Los 2,472 errores de lint que nadie ejecuta
 
@@ -492,24 +494,117 @@ La alternativa honesta, si no se quiere el ruido, es **decir explícitamente que
 el lint es decorativo** y quitarlo de `package.json`. Lo que no conviene es
 dejarlo como está: configurado, activo y sin ejecutar.
 
-### 2. `SECRETS_SCAN_ENABLED = "false"` en `netlify.toml`
+### 2. ✅ RESUELTA el 28-ago — `SECRETS_SCAN_ENABLED`, activo pero **sin efecto real**
 
-Es lo que hizo que el fallo de la variable de entorno pasara **silencioso**: con
-el escaneo activo, Netlify habría avisado de que una variable esperada no estaba
-disponible en el contexto del build.
+`netlify.toml` pasó a `SECRETS_SCAN_ENABLED = "true"` con cinco exclusiones.
 
-**Recomendación: reactivarlo, pero en su propio PR y verificando el preview
-antes de mergear.**
+> [!WARNING]
+> **Está activo y NO protege nada hoy. Verificado con una prueba real, no
+> asumido.** No lo cuentes como un control que funciona.
 
-El riesgo real de encenderlo es que el escáner marque como filtración las
-variables `VITE_*` que **son públicas por diseño** —la llave publicable y la URL
-de Supabase viven en el bundle del navegador— y tumbe el build por falsos
-positivos. Eso se resuelve declarándolas con `SECRETS_SCAN_OMIT_KEYS`, en vez de
-apagar el escaneo entero.
+#### La prueba y su resultado
+
+Se creó en Netlify la variable `CANARY_SECRETS_SCAN_TEST` **marcada
+explícitamente como secreta** (`is_secret: true`), acotada al contexto
+`deploy-preview`. Se commiteó un archivo con ese mismo valor y se empujó a la
+rama del PR #49.
+
+| Paso | Resultado esperado | Resultado real |
+|---|---|---|
+| Build con el escaneo activo | **fallar** antes de publicar | **pasó** |
+| El valor en el sitio publicado | no debería existir | **HTTP 200, texto íntegro** |
+
+El valor de una variable marcada como secreta **se publicó en texto plano en un
+deploy-preview público** y el build no se inmutó. Canario y variable borrados
+tras la prueba.
+
+No se pudo separar si la causa es el **plan `Free`** —la doc dice que *smart
+detection* es de planes Personal/Pro/Enterprise— o que el escaneo no corra en
+contexto `deploy-preview`. Distinguirlo exigiría probar contra producción.
+
+#### Por qué se dejó activado igual
+
+Las cinco exclusiones son correctas y **no cuestan nada**. Si Netlify llega a
+habilitar el escaneo de verdad en este plan, la configuración ya queda lista sin
+trabajo adicional:
+
+```toml
+SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY,VITE_APP_URL,VITE_SENTRY_DSN,VITE_GA_MEASUREMENT_ID"
+```
+
+Las cinco se verificaron **uso por uso en `src/`**, no por convención de nombre:
+`VITE_SUPABASE_URL` (76 archivos, endpoint de las functions),
+`VITE_SUPABASE_PUBLISHABLE_KEY` (28, header `Apikey` desde el browser),
+`VITE_APP_URL` (5, URL canónica de SEO), `VITE_SENTRY_DSN` (1, DSN público de
+solo-escritura) y `VITE_GA_MEASUREMENT_ID` (1, measurement id de GA4). Las cinco
+acaban en el bundle **por diseño**.
+
+#### Correcciones a lo que decía este archivo
+
+- **El escaneo NO avisa de variables faltantes.** Detecta secretos *presentes* en
+  el output. La versión anterior de esta sección decía que habría avisado del
+  fallo de los PR #20 y #21; **es falso**, y ese incidente sigue necesitando el
+  smoke test de la pieza H.
+- **Nunca fue una decisión apagarlo.** `SECRETS_SCAN_ENABLED = "false"` venía del
+  commit inicial `02f142f` (volcado de scaffold, 1.034 archivos). Ni commit
+  propio, ni mensaje, ni diagnóstico detrás.
+
+#### Lo que sí protege: push protection de GitHub
+
+Demostrado el 28-ago por accidente. Un primer canario con formato `sk_live_…`
+**fue rechazado en el push**, señalando archivo y línea:
+
+```
+remote: - commit: 86c4e1c  path: public/canary-secrets-scan.txt:4
+! [remote rejected] (push declined due to repository rule violations)
+```
+
+La API del repo reporta `secret_scanning: disabled`, pero esos campos son de
+GitHub Advanced Security (repos privados); **en repos públicos como este,
+GitHub activa escaneo y push protection por defecto**. Cubre secretos que entran
+al repo. **No cubre** los que sólo aparecen en el output del build — y eso hoy
+no lo cubre nadie.
+
+#### Inventario de variables de Netlify (28-ago): 16, una sola marcada
+
+| Variable | ¿Secreta? | Nota |
+|---|---|---|
+| `SENTRY_AUTH_TOKEN` | **sí** | la única marcada; sólo en producción, **vacía en `deploy-preview`** |
+| `NETLIFY_PRERENDER_AUTH_TOKEN` | no | **token de 16 chars sin marcar** — lo creó la extensión de prerender |
+| `SUPABASE_ANON_KEY`, `VITE_SUPABASE_ANON_KEY` | no | el JWT `anon` legacy (`role=anon`, expira 2035) |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_*`, `VITE_SENTRY_DSN`, `VITE_APP_URL` | no | públicas por diseño |
+| `SENTRY_ORG`, `SENTRY_PROJECT`, `NODE_OPTIONS`, `NETLIFY_PRERENDER_*` | no | configuración, no secretos |
+
+Tres cosas que salen del inventario:
+
+1. **No existe ninguna variable de Stripe, FacturAPI ni SMTP2GO en Netlify.**
+   Viven en los secrets de las edge functions de Supabase.
+2. **`NETLIFY_PRERENDER_AUTH_TOKEN` es un token real sin marcar como secreto.**
+   Pendiente menor: marcarlo.
+3. **`SENTRY_AUTH_TOKEN` está vacía en `deploy-preview`.** Por eso el primer
+   build verde del PR #49 no significaba nada: no había un solo valor que
+   escanear en ese contexto.
+
+#### Pendientes menores que dejó esto
+
+- Marcar `NETLIFY_PRERENDER_AUTH_TOKEN` como secreta.
+- `VITE_SUPABASE_ANON_KEY` está puesta en producción y **no la usa ningún
+  archivo de la app** (0 usos): configuración muerta.
+- La clave `anon` sigue **hardcodeada** en dos migraciones archivadas
+  (`20260528055744_…` y `20260602040035_…`). Es pública por diseño y el repo es
+  público, así que no es una fuga; pero conviene limpiarla en vez de excluir los
+  695 archivos del archivo histórico con `SECRETS_SCAN_OMIT_PATHS`.
 
 Nota conceptual que conviene no perder: **la llave publicable no es un secreto**
 (lo que protege los datos es la RLS), pero un `SERVICE_ROLE_KEY` sí lo es y
 **nunca debe ir en una variable `VITE_*`**, porque todas acaban en el bundle.
+Ese es justamente el hueco que el escaneo de Netlify debería cubrir y hoy no
+cubre.
+
+> [!NOTE]
+> **Cómo comprobar rutas en este sitio:** el catch-all del SPA devuelve **200
+> con `index.html`** para cualquier ruta inexistente. El código HTTP por sí solo
+> no prueba que un archivo exista — hay que mirar el cuerpo de la respuesta.
 
 ---
 
