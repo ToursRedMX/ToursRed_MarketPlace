@@ -20,6 +20,11 @@ on:
         description: 'Nombre del workflow que fallo'
         required: true
         type: string
+      tipo:
+        description: 'Que fallo: Backup o Auditoria. Solo afecta al titulo.'
+        required: false
+        default: 'Backup'
+        type: string
 
 permissions:
   issues: write
@@ -33,9 +38,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW: ${{ inputs.workflow_name }}
+          TIPO: ${{ inputs.tipo }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          TITULO="Backup fallando: ${WORKFLOW}"
+          TITULO="${TIPO} fallando: ${WORKFLOW}"
 
           EXISTENTE=$(
             gh issue list \

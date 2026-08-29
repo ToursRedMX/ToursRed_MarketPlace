@@ -3,6 +3,12 @@ name: Audit Supabase Edge Functions
 on:
   workflow_dispatch:
 
+  # Semanal. Estaban solo en workflow_dispatch y su ultima ejecucion fue el
+  # 11-ago: 18 dias de deriva entre repo y produccion con la herramienta
+  # para detectarla ya escrita y sin ejecutar.
+  schedule:
+    - cron: '15 6 * * 1'
+
 jobs:
   audit-edge-functions:
     runs-on: ubuntu-latest
@@ -186,3 +192,16 @@ jobs:
             local-only-functions.txt
             remote-functions-raw.txt
           retention-days: 30
+
+  # Sin esto la auditoria vuelve a caducar: correr sola no sirve si su
+  # resultado no le llega a nadie.
+  avisar-si-falla:
+    needs: [audit-edge-functions]
+    if: failure()
+    uses: ./.github/workflows/notify-backup-failure.yml
+    permissions:
+      issues: write
+      contents: read
+    with:
+      tipo: 'Auditoria'
+      workflow_name: 'Auditoria de inventario de Edge Functions'
