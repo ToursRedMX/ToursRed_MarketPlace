@@ -3,6 +3,12 @@ name: Audit Supabase Edge Function JWT Config
 on:
   workflow_dispatch:
 
+  # Semanal. Estaban solo en workflow_dispatch y su ultima ejecucion fue el
+  # 11-ago: 18 dias de deriva entre repo y produccion con la herramienta
+  # para detectarla ya escrita y sin ejecutar.
+  schedule:
+    - cron: '45 6 * * 1'
+
 jobs:
   audit-edge-jwt:
     runs-on: ubuntu-latest
@@ -319,3 +325,16 @@ jobs:
             unexpected-local-false.txt
             generated-functions-config.toml
           retention-days: 30
+
+  # Sin esto la auditoria vuelve a caducar: correr sola no sirve si su
+  # resultado no le llega a nadie.
+  avisar-si-falla:
+    needs: [audit-edge-jwt]
+    if: failure()
+    uses: ./.github/workflows/notify-backup-failure.yml
+    permissions:
+      issues: write
+      contents: read
+    with:
+      tipo: 'Auditoria'
+      workflow_name: 'Auditoria de verify_jwt en Edge Functions'
