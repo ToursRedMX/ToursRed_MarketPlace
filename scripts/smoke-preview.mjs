@@ -39,8 +39,17 @@ const THIRD_PARTY = [
   'googletagmanager.com',
   'ingest.us.sentry.io',
   'ingest.sentry.io',
+  // Netlify inyecta su propio widget de feedback en los deploy previews.
+  // No es parte de la app y solo existe en previews, no en produccion.
+  'app.netlify.com',
 ];
 const isThirdParty = (text = '') => THIRD_PARTY.some((h) => text.includes(h));
+
+// Un preload de media abortado es comportamiento normal del navegador, no un
+// fallo de la app. Se acota a extensiones de media para no relajar el chequeo
+// en peticiones de JS o de API, donde un ERR_ABORTED si importa.
+const isAbortedMedia = (url = '', err = '') =>
+  err.includes('ERR_ABORTED') && /\.(mp4|webm|ogg|mp3|wav|mov)(\?|$)/i.test(url);
 
 const results = [];
 
@@ -70,8 +79,9 @@ for (const route of ROUTES) {
   page.on('requestfailed', (req) => {
     const u = req.url();
     if (/favicon|\.map$/.test(u)) return;
-    const msg = `[requestfailed] ${req.failure()?.errorText || 'error'} ${u}`;
-    (isThirdParty(u) ? warnings : errors).push(msg);
+    const errText = req.failure()?.errorText || 'error';
+    const msg = `[requestfailed] ${errText} ${u}`;
+    (isThirdParty(u) || isAbortedMedia(u, errText) ? warnings : errors).push(msg);
   });
 
   let status = null;
