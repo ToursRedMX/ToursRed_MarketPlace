@@ -863,10 +863,20 @@ jobs:
               "
           )
 
-          echo "Restored Cron Jobs: ${CRON_COUNT}"
+          # El invariante correcto no es un numero fijo, sino que la restauracion
+          # reproduzca exactamente lo que el backup contenia.
+          EXPECTED_COUNT=$(wc -l < dr-restore/logical/cron_jobs.tsv)
 
-          if [ "$CRON_COUNT" -ne 15 ]; then
-            echo "ERROR: Expected 15 Cron Jobs."
+          echo "Cron Jobs en el backup : ${EXPECTED_COUNT}"
+          echo "Cron Jobs restaurados  : ${CRON_COUNT}"
+
+          if [ "$EXPECTED_COUNT" -eq 0 ]; then
+            echo "ERROR: el inventario del backup esta vacio."
+            exit 1
+          fi
+
+          if [ "$CRON_COUNT" -ne "$EXPECTED_COUNT" ]; then
+            echo "ERROR: se restauraron ${CRON_COUNT} de ${EXPECTED_COUNT} cron jobs."
             exit 1
           fi
 
