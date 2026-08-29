@@ -1,0 +1,130 @@
+name: Smoke test post-deploy
+
+# Pieza H. El check `netlify/toursredmx/deploy-preview` solo verifica que el
+# build COMPILE. Los previews de los PR #20 y #21 estuvieron en verde mientras
+# la app moria al inicializar con `Uncaught Error: supabaseKey is required`.
+#
+# Esto abre la pagina de verdad y falla si la app no arranca.
+#
+# Netlify no publica GitHub Deployments (0 en el repo), solo commit statuses,
+# asi que no se puede usar el evento `deployment_status`: hay que esperar al
+# status `netlify/toursredmx/deploy-preview` y leer su target_url.
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL a probar (si se omite, se usa produccion)'
+        required: false
+        default: 'https://toursredmx.netlify.app'
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  NETLIFY_CONTEXT: netlify/toursredmx/deploy-preview
+  PLAYWRIGHT_VERSION: '1.56.0'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Esperar al deploy preview de Netlify
+        id: preview
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          echo "Esperando el status '${NETLIFY_CONTEXT}' en ${HEAD_SHA}"
+
+          DEADLINE=$(( $(date +%s) + 900 ))   # 15 minutos
+
+          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            PAYLOAD=$(
+              gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/status" \
+                --jq ".statuses[] | select(.context == \"${NETLIFY_CONTEXT}\") | .state + \"\t\" + .target_url" \
+                2>/dev/null | head -1
+            )
+
+            STATE="${PAYLOAD%%$'\t'*}"
+            URL="${PAYLOAD#*$'\t'}"
+
+            case "$STATE" in
+              success)
+                echo "Preview listo: ${URL}"
+                echo "url=${URL}" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              failure|error)
+                echo "::error::El build del preview fallo en Netlify. No hay nada que probar."
+                exit 1
+                ;;
+              *)
+                echo "  estado: ${STATE:-sin reportar aun}; reintentando en 15s"
+                sleep 15
+                ;;
+            esac
+          done
+
+          echo "::error::Timeout de 15 min esperando el preview de Netlify."
+          exit 1
+
+      - name: Resolver la URL a probar
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            URL="${{ steps.preview.outputs.url }}"
+          else
+            URL="${{ inputs.url }}"
+          fi
+
+          if [ -z "$URL" ]; then
+            echo "::error::No se pudo determinar la URL a probar."
+            exit 1
+          fi
+
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "Probando: ${URL}"
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Instalar Playwright
+        # Se instala aqui y no en package.json a proposito: es una dependencia
+        # solo de CI, y anadirla al repo cargaria ~300 MB a cada npm install
+        # local sin que nadie la use fuera de este workflow.
+        run: |
+          npm install --no-save "playwright@${PLAYWRIGHT_VERSION}"
+          npx playwright install --with-deps chromium
+
+      - name: Smoke test
+        env:
+          SMOKE_ROUTES: '/,/tours'
+        run: node scripts/smoke-preview.mjs "${{ steps.target.outputs.url }}"
+
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            echo "### Smoke test post-deploy"
+            echo ""
+            echo "URL probada: ${{ steps.target.outputs.url }}"
+            echo ""
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "La app arranca y renderiza en las rutas probadas."
+            else
+              echo "**La app NO arranca correctamente.** Ver el log del paso \`Smoke test\`."
+              echo ""
+              echo "Un preview en verde solo significa que el build compilo."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
