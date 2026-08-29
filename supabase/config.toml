@@ -236,3 +236,8 @@ verify_jwt = false
 # Validacion propia dentro de la funcion: service role o dueno de la reserva/admin (29-ago)
 [functions."send-booking-confirmation"]
 verify_jwt = false
+
+# Utilidad de pruebas que crea cargos 3DS reales. Exige JWT en plataforma
+# ADEMAS de la validacion de rol admin dentro del codigo (29-ago).
+[functions."test-openpay-3ds-charge"]
+verify_jwt = true
