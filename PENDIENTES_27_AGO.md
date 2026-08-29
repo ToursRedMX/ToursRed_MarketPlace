@@ -592,18 +592,129 @@ conteos de cron salieron consistentes en 17.
 
 ### Lo que dejó pendiente
 
-- **Otros umbrales que envejecen igual**, sin tocar: `169` edge functions (un
-  commit reciente habla de **171**, así que probablemente ya está roto), `11`
-  extensiones, `6` archivos remotos, `100/69` de flags JWT. Merecen una pasada
-  con el mismo criterio de consistencia.
+- ✅ **RESUELTO el 28-ago (PR #58) — nadie se enteró en 15 días.** Un workflow
+  programado que falla no avisaba a nadie. Ver el apartado siguiente.
 - **Orden verificar/subir.** Hoy cualquier fallo de verificación deja **cero**
   backup subido. Habría que decidir si ciertas comprobaciones deben correr
   *después* de subir, para que un chequeo quisquilloso no deje sin copia.
-- **Nadie se enteró en 15 días.** Un workflow programado que falla no avisa a
-  nadie. Es el mismo problema de fondo que la pieza H: **un fallo que no le
-  llega a una persona dura lo que tarde alguien en tropezarse con él**. Una
-  notificación en fallo de los workflows críticos de backup sería barata y
-  cerraría el círculo.
+- **Otros umbrales que envejecen igual** — ver la pieza **K**, que salió de
+  tirar de este hilo y resultó ser bastante más que un umbral.
+
+### ✅ El aviso en fallo (PR #58)
+
+`notify-backup-failure.yml`, workflow reutilizable, **abre una incidencia**
+etiquetada `backup-failure` cuando falla alguno de los **cuatro** backups
+programados (`backup-supabase`, `-logical`, `-storage`, `-hourly-data`).
+
+Los `test-*` y `audit-*` quedan fuera **a propósito**: son `workflow_dispatch`,
+así que cuando corren siempre hay alguien mirando.
+
+**Por qué una incidencia y no correo.** GitHub ya manda correo cuando falla un
+workflow programado, y es evidente que ese aviso no funcionó: 15 días. Una
+incidencia no depende de la configuración de notificaciones de nadie, es visible
+en el repo y se cierra cuando se arregla. Slack sería buena adición, pero
+necesita un webhook que hay que crear a mano.
+
+**Antispam:** si ya hay una incidencia abierta para ese workflow, no crea otra
+ni comenta. El backup horario fallaría 24 veces al día; sin esto el aviso sería
+ruido y acabaría ignorado, que es justo el problema que viene a resolver.
+
+Verificado con un workflow de prueba temporal, en sus **dos** comportamientos:
+primer fallo crea la incidencia; segundo fallo (re-run) **no duplica**. La
+prueba se borró y su incidencia quedó cerrada.
+
+*Detalle de implementación:* el cuerpo se arma con `printf`, no con heredoc —
+un heredoc a columna cero rompe el bloque YAML, y sin comillar ejecutaría los
+backticks del cuerpo.
+
+---
+
+## 🔴 K — Deriva entre el repo y las Edge Functions desplegadas · **ABIERTA**
+
+Salió el 28-ago al ir a arreglar el umbral `169` de
+`test-edge-functions-restore.yml`. **Es bastante más que un umbral caduco.**
+
+### Los umbrales, en efecto, están caducados
+
+| Chequeo | Espera | Real |
+|---|---|---|
+| Funciones locales (línea 69) | 169 | **172** |
+| Funciones en producción (línea 200) | 169 | **176** |
+| `verify_jwt = true` (línea 205) | 100 | **101** |
+| `verify_jwt = false` (línea 210) | 69 | **75** |
+
+`test-edge-functions-restore.yml` fallaría en su primer paso. Es la misma bomba
+que la de la pieza J, sin estallar sólo porque el workflow es manual.
+
+*Por qué el 169 estuvo bien un tiempo:* el 26-ago una operación masiva tocó
+exactamente **169** funciones, que era el conteo del repo entonces.
+
+### Hallazgo 1 — cuatro funciones desplegadas que ya no están en el repo
+
+```
+invalidate-agency-document      process-payment
+stripe-checkout                 test-pdfmake
+```
+
+Son **exactamente** las cuatro que se borraron del repo el **15-ago** en los
+commits de limpieza "fase0" (`ca47a82`, `9ec4104`, `b78ce48`, `ccc541b`,
+`531dd86`). Se quitaron del repositorio pero **nunca se retiraron de
+producción**: siguen `ACTIVE`, con `updated_at` del 24-ago.
+
+**Las cuatro tienen `verify_jwt = true`**, así que exigen un JWT válido y no
+están abiertas a internet. Pero siguen siendo invocables por cualquier usuario
+autenticado, y el mensaje del commit que borró `process-payment` la describía
+como *"creaba PaymentIntents reales de Stripe por cualquier monto"*. Conviene
+comprobar esa afirmación contra el código realmente desplegado antes de decidir.
+
+**Nada de esto se ha tocado**: retirar funciones de producción necesita
+autorización explícita.
+
+### Hallazgo 2 — siete funciones sin JWT que el repo no declara así
+
+Producción tiene **75** funciones con `verify_jwt = false`; `config.toml`
+declara **69**. Cruzando los nombres (no sólo los conteos):
+
+| Sin JWT en producción, no declarado en el repo |
+|---|
+| `generate-booking-cfdi` |
+| `process-payment-plan-tour-deadline` |
+| `process-supplement-payment` |
+| `process-traveler-cancellation` |
+| `send-booking-confirmation` |
+| `test-openpay-3ds-charge` |
+| `upload-email-logo` |
+
+Y una al revés: `stripe-checkout` está declarada sin JWT en el repo pero tiene
+JWT en producción (es una de las cuatro huérfanas del hallazgo 1).
+
+Algunas pueden necesitar ser públicas legítimamente —los webhooks lo son, y las
+invocadas por cron también suelen serlo— y varias hacen su propia validación
+interna. **Lo que el dato dice con certeza es que el repo no refleja la postura
+de autenticación real de producción**, así que una restauración desde el repo
+cambiaría el comportamiento de esas siete.
+
+### Por qué no se detectó antes
+
+`audit-edge-jwt.yml` **ya hace exactamente esta comparación** (remoto contra
+`config.toml`), y `audit-edge-functions.yml` compara el inventario. Las dos son
+`workflow_dispatch` y su última ejecución fue el **11-ago**. La deriva se
+acumuló 18 días con la herramienta para detectarla ya escrita y sin ejecutar.
+
+Es el mismo patrón de la sesión: **el chequeo existe, pero nada lo dispara ni
+avisa**.
+
+### Lo que hay que decidir
+
+1. **Retirar de producción las cuatro funciones huérfanas**, o devolverlas al
+   repo si alguna sigue haciendo falta. Toca producción: decisión de Axel.
+2. **Revisar las siete sin JWT** y, para las que deban seguir así, declararlo en
+   `config.toml` para que el repo sea fiel.
+3. **Sustituir los umbrales fijos por comprobaciones de consistencia**, con el
+   mismo criterio de la pieza J: repo contra producción, y la partición de JWT
+   derivada en vez de escrita a mano.
+4. **Programar las auditorías** (`audit-edge-jwt`, `audit-edge-functions`) o
+   engancharlas al aviso del PR #58. Sin eso, el punto 3 vuelve a caducar.
 
 ---
 
@@ -848,6 +959,8 @@ propio, mergeado tras la revisión visual del preview — pieza 🟣 1).
 | 🟣 5 — `PaymentProviderSelector` | 🟡 abierta, un sitio, pide criterio |
 | **H — smoke test post-deploy** | ✅ **cerrada (PR #56)** |
 | **J — backup lógico sin subir a B2** | ✅ **cerrada (PR #55)** |
+| **Aviso en fallo de los backups** | ✅ **cerrado (PR #58)** |
+| **K — deriva repo/Edge Functions desplegadas** | 🔴 **abierta** — 4 huérfanas en producción, 7 sin JWT no declaradas |
 | Decisión 1 — lint que nadie ejecuta | 🟠 abierta |
 | Decisión 2 — secrets scanning | ✅ resuelta (activa, sin efecto real) |
 
