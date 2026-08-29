@@ -11,7 +11,20 @@ name: Smoke test post-deploy
 # status `netlify/toursredmx/deploy-preview` y leer su target_url.
 
 on:
+  # Mismo filtro que el `ignore` de netlify.toml: si Netlify no construye
+  # preview, este workflow se quedaria 15 min esperando un status que no
+  # llega. Las dos listas deben mantenerse iguales.
   pull_request:
+    paths:
+      - 'src/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'netlify.toml'
+      - 'vite.config.ts'
+      - 'tailwind.config.js'
+      - 'scripts/smoke-preview.mjs'
+      - '.github/workflows/smoke-preview.yml'
   workflow_dispatch:
     inputs:
       url:
