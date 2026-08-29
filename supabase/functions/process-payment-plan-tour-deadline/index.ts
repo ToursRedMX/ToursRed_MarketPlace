@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
     // con la URL podia dispararla y provocar cancelaciones.
     //
     // NO se le pone JWT de usuario: la invoca el cron, que no tiene sesion.
-    // Tampoco hace falta un secreto compartido nuevo: el cron job YA manda el
+    // Tampoco hace falta un secreto compartido nuevo: el cron job manda el
     // service role key como bearer, sacado de Vault:
     //
     //   headers := jsonb_build_object(
@@ -64,9 +64,20 @@ Deno.serve(async (req: Request) => {
     //                                    FROM vault.decrypted_secrets
     //                                    WHERE name = 'service_role_key'))
     //
-    // Asi que basta con exigir ese bearer. Es el mismo patron que usan
-    // generate-booking-cfdi y las demas funciones invocadas por cron, y no
-    // requiere tocar el cron job ni crear otro secreto que mantener.
+    // ATENCION -- ESTA COMPARACION DEPENDE DE QUE VAULT Y ENTORNO COINCIDAN.
+    // El 29-ago esta misma validacion tumbo el cron con 401 durante una hora:
+    // el Vault guardaba el JWT legacy (219 chars, eyJ...) mientras la
+    // plataforma ya inyectaba SUPABASE_SERVICE_ROLE_KEY en formato nuevo
+    // (41 chars, sb_secret_...). Se alineo el Vault al valor actual.
+    //
+    // Si vuelve a aparecer un 401 aqui, lo primero que hay que comprobar es
+    // que sigan coincidiendo:
+    //   select length(decrypted_secret), left(decrypted_secret,10)
+    //   from vault.decrypted_secrets where name = 'service_role_key';
+    //
+    // Comprobar SIEMPRE reproduciendo la llamada del cron desde SQL con
+    // net.http_post y leyendo el status_code en net._http_response, en vez de
+    // esperar a que el cron lo descubra una hora despues.
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearer = authHeader.replace("Bearer ", "").trim();
 
