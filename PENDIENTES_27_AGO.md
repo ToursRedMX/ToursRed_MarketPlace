@@ -706,12 +706,16 @@ avisa**.
 
 ### Estado de los cuatro puntos
 
-1. **Cuatro funciones huérfanas** — 🟡 pendiente. Confirmado **cero uso** en
-   cinco ventanas de 24 h (24 al 29-ago) consultando `function_edge_logs` por
-   `request.pathname` exacto. Axel ejecuta los `functions delete`.
-   *Ojo con el comodín:* `%process-payment%` captura también
-   `process-payment-plan-tour-deadline`, que sí se usa 24 veces al día. Hay que
-   filtrar por igualdad exacta.
+1. **Cuatro funciones huérfanas** — ✅ **BORRADAS el 29-ago**
+   (`process-payment`, `stripe-checkout`, `invalidate-agency-document`,
+   `test-pdfmake`). Confirmado antes **cero uso** en cinco ventanas de 24 h
+   (24 al 29-ago) consultando `function_edge_logs` por `request.pathname`
+   exacto, y verificado después que producción bajó de 176 a 172.
+
+   *Ojo con el comodín, dos veces mordió:* `%process-payment%` captura también
+   `process-payment-plan-tour-deadline`, que sí se usa 24 veces al día; y
+   `grep -w process-payment` sobre la lista del CLI da falso positivo por el
+   guion. **Comparar por slug exacto sobre el JSON**, no con grep.
 2. **Las siete sin JWT** — ✅ diagnosticadas y cuatro cerradas (ver abajo).
 3. **Umbrales por consistencia** — ✅ hecho (PR #71), en modo reporte.
 4. **Auditorías programadas** — ✅ hecho (PR #71), semanales y enganchadas al
@@ -728,6 +732,54 @@ avisa**.
 | `process-payment-plan-tour-deadline` | **ninguna** | ✅ cerrada |
 | `send-booking-confirmation` | **ninguna** | ✅ cerrada |
 | `test-openpay-3ds-charge` | **ninguna** | ✅ cerrada + `verify_jwt = true` |
+
+### Estado final de la pieza K (29-ago)
+
+Repo y producción cuadran **en las dos dimensiones**, comparando por nombre y no
+sólo por conteo:
+
+| | Repo | Producción |
+|---|---|---|
+| Inventario de funciones | 172 | **172** |
+| Sin JWT (`verify_jwt = false`) | 74 | **74** |
+
+**Trampa que costó un despliegue de más:** quitar una función de la lista de
+`verify_jwt = false` en `config.toml` **no** la pone en `true`. El CLI conserva
+el valor que ya tenía en producción. `test-openpay-3ds-charge` se quedó en
+`false` pese a que el PR #79 decía lo contrario. Hay que declarar el bloque
+explícito:
+
+```toml
+[functions."test-openpay-3ds-charge"]
+verify_jwt = true
+```
+
+Verificado después: sin `Authorization` ahora corta **la plataforma**
+(`UNAUTHORIZED_NO_AUTH_HEADER`) antes de llegar al código, y la validación de rol
+admin sigue dentro como segunda capa.
+
+### Verificación de las tres funciones cerradas
+
+Cada una probada en **ambas direcciones**, no sólo en la buena:
+
+| Función | Sin auth | Clave publicable | Service role |
+|---|---|---|---|
+| `process-payment-plan-tour-deadline` | — | **401** | **200** `processed:4` |
+| `send-booking-confirmation` | **401** | **401** | **404** (pasó auth, no halló la reserva) |
+| `test-openpay-3ds-charge` | **401** | **401** | **400** (pasó auth, faltan parámetros) |
+
+Los **404** y **400** son los resultados que importan: prueban que el service
+role **atraviesa** la autorización y falla después por reglas de negocio. Un 401
+ahí habría significado romper los 7 webhooks internos y el cron.
+
+Las pruebas se diseñaron **sin efectos**: `booking_id` inexistente en vez de una
+reserva real, así que no se envió ningún correo a un cliente ni se creó ningún
+cargo.
+
+**Queda sin probar en vivo**, porque necesita un token de sesión de usuario real:
+que un usuario autenticado que **no** es dueño reciba 403 en
+`send-booking-confirmation`, y la distinción admin / no-admin en
+`test-openpay-3ds-charge`. Los caminos anónimo y publicable sí están verificados.
 
 ---
 
@@ -1066,7 +1118,7 @@ propio, mergeado tras la revisión visual del preview — pieza 🟣 1).
 | **H — smoke test post-deploy** | ✅ **cerrada (PR #56)** |
 | **J — backup lógico sin subir a B2** | ✅ **cerrada (PR #55)** |
 | **Aviso en fallo de los backups** | ✅ **cerrado (PR #58)** |
-| **K — deriva repo/Edge Functions desplegadas** | 🟡 casi cerrada — quedan las 4 huérfanas por borrar |
+| **K — deriva repo/Edge Functions desplegadas** | ✅ **cerrada** — 172=172 y 74=74, huérfanas borradas |
 | **K.1 — incidente del 401 en el cron** | ✅ resuelto — Vault alineado, `cleanup-incomplete-google-users` arreglada de paso |
 | **Aviso en fallo + auditorías semanales** | ✅ cerrados (PR #58, #71) |
 | Decisión 1 — lint que nadie ejecuta | 🟠 abierta |
