@@ -145,3 +145,15 @@ jobs:
         if: always()
         run: |
           rm -f ~/.config/rclone/rclone.conf
+
+  # Un workflow programado que falla no le llega a nadie: este backup estuvo
+  # roto en silencio y solo se descubrio por casualidad. Abre una incidencia.
+  avisar-si-falla:
+    needs: [storage-backup]
+    if: failure()
+    uses: ./.github/workflows/notify-backup-failure.yml
+    permissions:
+      issues: write
+      contents: read
+    with:
+      workflow_name: 'Backup Supabase Storage to Backblaze B2'

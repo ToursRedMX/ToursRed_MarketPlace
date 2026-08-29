@@ -325,3 +325,15 @@ jobs:
         if: always()
         run: |
           rm -rf logical-backup
+
+  # Un workflow programado que falla no le llega a nadie: este backup estuvo
+  # roto en silencio y solo se descubrio por casualidad. Abre una incidencia.
+  avisar-si-falla:
+    needs: [logical-backup]
+    if: failure()
+    uses: ./.github/workflows/notify-backup-failure.yml
+    permissions:
+      issues: write
+      contents: read
+    with:
+      workflow_name: 'Backup Supabase Logical to Backblaze B2'
