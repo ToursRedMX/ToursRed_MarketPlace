@@ -441,9 +441,9 @@ regla.** Es el único caso genuinamente ambiguo que quedó de los 402.
 
 ---
 
-## 🔴 H — El check verde de `deploy-preview` no valida que la app arranque
+## ✅ H — El check verde de `deploy-preview` no valida que la app arranque · **CERRADA el 28-ago (PR #56)**
 
-**Sigue vivo y sin resolver.** Es el hallazgo con más alcance de la sesión.
+Era el hallazgo con más alcance que quedaba abierto.
 
 El check `netlify/toursredmx/deploy-preview` solo verifica que el **build
 compile**. Los previews de los PR #20 y #21 estuvieron **en verde** mientras la
@@ -453,13 +453,157 @@ app moría al inicializar con `Uncaught Error: supabaseKey is required` — porq
 Es el mismo patrón que documentó la pieza E: allí era Vite compilando sin
 ejecutar `tsc`; aquí es Netlify empaquetando sin abrir la página.
 
-**Lo que faltaría:** un smoke test post-deploy que cargue la home del preview y
-falle si la consola tiene errores. Sin eso, "preview en verde" seguirá sin
-querer decir "la app funciona".
+### La solución
+
+`.github/workflows/smoke-preview.yml` + `scripts/smoke-preview.mjs`. Abre la
+página de verdad en Chromium (Playwright) y comprueba, en `/` y `/tours`:
+
+- excepciones no capturadas (`pageerror`)
+- `console.error` de primera parte
+- peticiones de red fallidas
+- **que `#root` monte contenido real** (mínimo 50 nodos)
+
+**La última es la que importa.** El catch-all del SPA devuelve **200 con
+`index.html` para cualquier ruta**, así que el código HTTP no prueba nada: un
+fallo de arranque da 200 con `#root` vacío.
+
+### Verificado en los dos sentidos, no solo en el bueno
+
+| Escenario | Esperado | Real |
+|---|---|---|
+| Producción | pasa | exit 0 — `/` 717 nodos, `/tours` 415 |
+| Build **sin** las env vars | **falla** | exit 1 |
+| Sin argumento | error de uso | exit 2 |
+
+El caso roto se reprodujo apartando `.env`, construyendo y sirviendo ese bundle:
+
+```
+FALLA  /
+        http 200 | nodos 0 | texto 0
+        ERROR: [pageerror] supabaseUrl is required.
+        ERROR: [render] #root tiene 0 nodos (minimo 50). La app no monto.
+```
+
+**HTTP 200 en ambas rutas** — exactamente el escenario de los PR #20 y #21.
+
+Los umbrales salieron de **medir la app real con el navegador** antes de
+escribir el chequeo (producción rinde 708 y 406 nodos), no de estimarlos.
+
+### La primera ejecución falló, y el fallo enseñó algo
+
+El smoke test suspendió su propio PR. La app estaba perfecta; lo que rompía
+eran tres vídeos abortados de `app.netlify.com/cdp/video/*`: **el widget de
+feedback que Netlify inyecta en sus propios deploy previews**. Solo existe en
+previews, así que calibrar contra producción no podía verlo.
+
+Corregido acotando: `app.netlify.com` entra como tercero, y un `ERR_ABORTED`
+sobre archivos de **media** pasa a aviso (abortar un preload de vídeo es
+comportamiento normal del navegador), limitado a extensiones de media para no
+relajar el chequeo en peticiones de JS o de API. Siguen apareciendo como
+**avisos visibles**, no como exclusiones silenciosas. Tras aflojar se
+**reverificó** que el caso roto sigue dando exit 1.
+
+### Decisiones abiertas
+
+- **No es check obligatorio todavía.** Conviene verlo pasar unas cuantas veces
+  antes de darle poder de bloquear un merge. Cuando haya confianza, se añade a
+  `required_status_checks` junto a `typecheck` y `deploy-preview`.
+- **No corre sobre `push` a `main`.** Los previews están cubiertos, pero un
+  merge a producción no dispara el smoke test: el 28-ago se lanzó a mano contra
+  producción (2 rutas OK). Añadirlo es una línea, con el matiz de que habría que
+  esperar al status de Netlify del deploy de producción igual que se hace con el
+  preview.
+- **Playwright se instala en CI, no en `package.json`** — cargaría ~300 MB a
+  cada `npm install` local. Contrapartida: la versión se fija en el workflow
+  (`1.56.0`), no en el lockfile.
 
 *(Las otras dos capas de la pieza H —la variable de entorno de Netlify y el
-allowlist de hostnames de Turnstile— ya quedaron resueltas. El detalle de cómo
-se diagnosticaron está en el histórico.)*
+allowlist de hostnames de Turnstile— ya quedaron resueltas el 27-ago. El detalle
+de cómo se diagnosticaron está en el histórico.)*
+
+---
+
+## ✅ J — El backup lógico llevaba 15 días sin subir nada a B2 · **CERRADA el 28-ago (PR #55)**
+
+Hallazgo nuevo del 28-ago, encontrado al revisar por qué fallaba un workflow
+programado.
+
+### Qué pasaba
+
+```
+Production Cron Jobs: 17
+ERROR: Expected 15 Cron Jobs in production.
+```
+
+`backup-supabase-logical.yml` exigía **exactamente 15** cron jobs. Producción
+tiene **17** (verificado por consulta directa: 17 jobs, todos activos y
+legítimos).
+
+**Lo grave no es el fallo, es dónde estaba:** el chequeo vive en la línea 159 y
+el upload a Backblaze en la **264**. El dump se generaba en el runner y se
+descartaba con la máquina.
+
+| Fecha | Evento |
+|---|---|
+| 11-ago | `870c42d` "Enhance backup workflow with cron job validation" introduce el umbral **15** |
+| 13-ago | **último backup lógico subido a B2** |
+| 14-ago | primer fallo — aparecen 2 cron jobs nuevos en producción |
+| 14 → 28-ago | **15 fallos consecutivos** |
+
+Los 2 jobs se añadieron directamente en la base, no vía migración del repo —
+consistente con las 753 versiones aplicadas sin archivo ya documentadas.
+
+### Exposición real: los datos sí estaban, el resto no
+
+`backup-supabase.yml` (diario) y `backup-supabase-hourly-data.yml` (horario)
+**sí** suben correctamente. Lo que llevaba 15 días sin copia externa es lo que
+sólo produce el logical:
+
+| Archivo | ¿Cubierto por otro backup? |
+|---|---|
+| `roles.sql` | **No** — el otro dump usa `--no-owner --no-acl` |
+| `history_schema.sql`, `history_data.sql` | **No** — historial de migraciones |
+| `cron_jobs.sql`, `cron_jobs.tsv` | **No** — los 17 cron jobs y su SQL de restauración |
+
+Había datos, pero **no lo necesario para reconstruir el proyecto entero**.
+Detalle irónico: lo que bloqueaba el backup era la verificación del inventario
+de cron, es decir, justo aquello cuyo respaldo faltaba.
+
+### El arreglo
+
+**No** se subió el umbral de 15 a 17: eso vuelve a romperse con el próximo cron
+job. Se sustituyó la igualdad contra un número fijo por **comprobaciones de
+consistencia**, que detectan el riesgo real (un export truncado) sin caducar:
+
+- `cron.job` no puede estar vacío
+- `cron_jobs.tsv` debe tener tantas filas como jobs hay en `cron.job`
+- `cron_jobs.sql` debe tener tantos schedules como filas el inventario
+
+`test-dr-restore.yml:868` tenía idéntico `-ne 15` y habría fallado igual en su
+próxima ejecución. Ahí el invariante correcto es que **la restauración
+reproduzca lo que el backup contenía**, así que compara contra el
+`cron_jobs.tsv` que el propio workflow ya descarga.
+
+**Verificado end-to-end**, no sólo por el verde del workflow: se lanzó a mano y
+se confirmaron los 7 archivos en Backblaze con fecha del 29-ago —
+`data.sql` (23.8 MB), `history_data.sql` (3.9 MB), `schema.sql` (1.3 MB),
+`cron_jobs.tsv`, `cron_jobs.sql`, `history_schema.sql` y `roles.sql`. Los cuatro
+conteos de cron salieron consistentes en 17.
+
+### Lo que dejó pendiente
+
+- **Otros umbrales que envejecen igual**, sin tocar: `169` edge functions (un
+  commit reciente habla de **171**, así que probablemente ya está roto), `11`
+  extensiones, `6` archivos remotos, `100/69` de flags JWT. Merecen una pasada
+  con el mismo criterio de consistencia.
+- **Orden verificar/subir.** Hoy cualquier fallo de verificación deja **cero**
+  backup subido. Habría que decidir si ciertas comprobaciones deben correr
+  *después* de subir, para que un chequeo quisquilloso no deje sin copia.
+- **Nadie se enteró en 15 días.** Un workflow programado que falla no avisa a
+  nadie. Es el mismo problema de fondo que la pieza H: **un fallo que no le
+  llega a una persona dura lo que tarde alguien en tropezarse con él**. Una
+  notificación en fallo de los workflows críticos de backup sería barata y
+  cerraría el círculo.
 
 ---
 
@@ -693,15 +837,48 @@ propio, mergeado tras la revisión visual del preview — pieza 🟣 1).
 
 ---
 
-*Estado al cierre del 28-ago: **I.1 (Tailwind 4) cerrada y mergeada** (PR #41),
-igual que **I.3 (TypeScript 6.0.3)** (PR #39); I.2 (TypeScript 7) sigue
-bloqueada. De las piezas 🟣, **cuatro de cinco están cerradas**: sólo queda la
-5 (`PaymentProviderSelector`, un sitio, pide criterio). **La migración de
-Tailwind 4 está terminada.***
+## Estado al cierre del 28-ago
 
-*Lo que sigue abierto y con alcance real es **la pieza H**: el check verde de
-`deploy-preview` no valida que la app arranque. Es el siguiente hallazgo a
-atacar.*
+| Pieza | Estado |
+|---|---|
+| I.1 — Tailwind 4 | ✅ cerrada (PR #41, rematada en #43) |
+| I.3 — TypeScript 6.0.3 | ✅ cerrada (PR #39) |
+| I.2 — TypeScript 7 | 🔴 bloqueada por `typescript-eslint` |
+| 🟣 1–4 — piezas propias de Tailwind | ✅ cerradas |
+| 🟣 5 — `PaymentProviderSelector` | 🟡 abierta, un sitio, pide criterio |
+| **H — smoke test post-deploy** | ✅ **cerrada (PR #56)** |
+| **J — backup lógico sin subir a B2** | ✅ **cerrada (PR #55)** |
+| Decisión 1 — lint que nadie ejecuta | 🟠 abierta |
+| Decisión 2 — secrets scanning | ✅ resuelta (activa, sin efecto real) |
+
+**La migración de Tailwind 4 está terminada** y **los dos hallazgos 🔴 quedaron
+cerrados**.
+
+### Lo que sigue, por orden de valor
+
+1. **Notificación en fallo de los workflows críticos.** Es la lección común de
+   las piezas H y J: un fallo que no le llega a una persona dura lo que tarde
+   alguien en tropezarse con él. El backup lógico estuvo 15 días roto en
+   silencio. Barato y cierra el círculo de las dos piezas.
+2. **Umbrales frágiles restantes** (`169` edge functions —probablemente ya
+   roto—, `11` extensiones, `6` archivos, `100/69` de flags JWT), con el mismo
+   criterio de consistencia que se aplicó en la pieza J.
+3. **Decisión 1**: el lint con 2.472 errores que ningún workflow ejecuta.
+4. **Pendientes menores** del diagnóstico de secrets scanning: marcar
+   `NETLIFY_PRERENDER_AUTH_TOKEN` como secreta, `VITE_SUPABASE_ANON_KEY` como
+   configuración muerta, y la clave `anon` hardcodeada en dos migraciones
+   archivadas.
+5. **Pieza 🟣 5**, un solo sitio.
+
+### Una nota de método que conviene no perder
+
+Las tres cifras que fallaron esta sesión —el **384** de `space-y`, el conteo de
+exclusiones de secrets scanning y el umbral **15** de cron jobs— venían de
+mediciones hechas sobre texto o de memoria. Las que aguantaron salieron de
+**parsear el AST, consultar la base o abrir el navegador**. Y tres veces un
+check en verde no significó lo que parecía: el preview que compilaba sin
+arrancar, el escaneo de secretos que no escanea, y el backup que "pasaba" sin
+subir nada.
 
 *Para retomar: leer este archivo. El detalle histórico de lo ya cerrado está en
 [`PENDIENTES_26_AGO.md`](./PENDIENTES_26_AGO.md), que no se sigue ampliando.*
