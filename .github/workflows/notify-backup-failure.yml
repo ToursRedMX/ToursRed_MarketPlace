@@ -1,0 +1,89 @@
+name: Avisar de fallo de backup
+
+# Un workflow programado que falla no le llega a nadie. El backup logico estuvo
+# 15 dias roto en silencio (13-ago a 28-ago) y solo se descubrio al revisar la
+# lista de runs por casualidad.
+#
+# GitHub manda correo cuando falla un workflow programado, pero es evidente que
+# ese aviso no funciono. Una incidencia en el repo no depende de la
+# configuracion de notificaciones de nadie, es visible y se puede cerrar cuando
+# se arregla.
+#
+# Antispam: si ya hay una incidencia abierta para ese workflow, no se crea otra
+# ni se comenta. El backup horario fallaria 24 veces al dia; una incidencia
+# basta. El historial de runs tiene el resto.
+
+on:
+  workflow_call:
+    inputs:
+      workflow_name:
+        description: 'Nombre del workflow que fallo'
+        required: true
+        type: string
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  abrir-incidencia:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Crear incidencia si no hay una abierta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW: ${{ inputs.workflow_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TITULO="Backup fallando: ${WORKFLOW}"
+
+          EXISTENTE=$(
+            gh issue list \
+              --repo "${GITHUB_REPOSITORY}" \
+              --state open \
+              --limit 100 \
+              --json number,title \
+              --jq ".[] | select(.title == \"${TITULO}\") | .number" \
+              2>/dev/null | head -1
+          )
+
+          if [ -n "$EXISTENTE" ]; then
+            echo "Ya hay una incidencia abierta (#${EXISTENTE}). No se crea otra."
+            echo "Incidencia ya abierta: #${EXISTENTE}" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # La etiqueta puede no existir todavia; se crea si hace falta.
+          gh label create backup-failure \
+            --repo "${GITHUB_REPOSITORY}" \
+            --color B60205 \
+            --description "Un workflow de respaldo esta fallando" \
+            2>/dev/null || true
+
+          # printf en vez de heredoc: el heredoc a columna cero rompe el bloque
+          # YAML, y sin comillas ejecutaria los backticks del cuerpo.
+          printf '%s\n' \
+            "El workflow **${WORKFLOW}** ha fallado." \
+            "" \
+            "- Ejecucion que lo detecto: ${RUN_URL}" \
+            "- Rama: ${GITHUB_REF_NAME}" \
+            "" \
+            "**Esta incidencia no se vuelve a crear mientras siga abierta**, asi que no" \
+            "refleja cuantas veces ha fallado desde entonces. El historial real esta en" \
+            "la pestana Actions, filtrando por ese workflow." \
+            "" \
+            "Cierrala cuando el backup vuelva a subir correctamente." \
+            "" \
+            "Conviene comprobar el resultado en Backblaze, no solo que el workflow salga" \
+            "en verde: el 28-ago el backup logico llevaba 15 dias ejecutandose sin subir" \
+            "un solo archivo, porque una verificacion fallaba antes del paso de upload." \
+            > cuerpo-incidencia.md
+
+          gh issue create \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${TITULO}" \
+            --label backup-failure \
+            --body-file cuerpo-incidencia.md
+
+          echo "Incidencia creada para ${WORKFLOW}."
+          echo "Incidencia creada: ${TITULO}" >> "$GITHUB_STEP_SUMMARY"
