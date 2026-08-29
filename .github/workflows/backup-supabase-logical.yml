@@ -156,8 +156,12 @@ jobs:
 
           echo "Production Cron Jobs: ${CRON_COUNT}"
 
-          if [ "$CRON_COUNT" -ne 15 ]; then
-            echo "ERROR: Expected 15 Cron Jobs in production."
+          # No se fija un numero: eso rompia el backup cada vez que se anadia un
+          # cron job (paso de 15 a 17 el 14-ago y dejo 15 dias sin subir nada a
+          # B2, porque este paso corre ANTES del upload). Lo que importa es que
+          # el export este completo, no cuantos jobs haya.
+          if [ "$CRON_COUNT" -eq 0 ]; then
+            echo "ERROR: cron.job esta vacio en produccion. Algo va mal."
             exit 1
           fi
 
@@ -165,8 +169,9 @@ jobs:
 
           echo "Cron inventory rows: ${FILE_COUNT}"
 
-          if [ "$FILE_COUNT" -ne 15 ]; then
-            echo "ERROR: cron_jobs.tsv does not contain exactly 15 rows."
+          if [ "$FILE_COUNT" -ne "$CRON_COUNT" ]; then
+            echo "ERROR: cron_jobs.tsv tiene ${FILE_COUNT} filas y cron.job tiene ${CRON_COUNT}."
+            echo "El export quedo truncado."
             exit 1
           fi
 
@@ -238,13 +243,15 @@ jobs:
           echo "Cron schedules in SQL: ${CRON_SQL_COUNT}"
           echo "Cron jobs in inventory: ${CRON_TSV_COUNT}"
 
-          if [ "$CRON_SQL_COUNT" -ne 15 ]; then
-            echo "ERROR: cron_jobs.sql does not contain 15 schedules."
+          # Consistencia entre los dos artefactos, sin fijar un numero.
+          if [ "$CRON_TSV_COUNT" -eq 0 ]; then
+            echo "ERROR: cron_jobs.tsv esta vacio."
             exit 1
           fi
 
-          if [ "$CRON_TSV_COUNT" -ne 15 ]; then
-            echo "ERROR: cron_jobs.tsv does not contain 15 jobs."
+          if [ "$CRON_SQL_COUNT" -ne "$CRON_TSV_COUNT" ]; then
+            echo "ERROR: cron_jobs.sql tiene ${CRON_SQL_COUNT} schedules y el inventario ${CRON_TSV_COUNT} jobs."
+            echo "El SQL de restauracion no reconstruiria todos los cron jobs."
             exit 1
           fi
 
