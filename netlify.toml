@@ -1,6 +1,10 @@
 [build]
 command = "npx vite build"
 publish = "dist"
+# Netlify construye en CADA push. Los PR que solo tocan supabase/ o
+# .github/ no cambian el sitio, asi que no hace falta gastar un build.
+# Exit 0 = saltar el build; distinto de 0 = construir.
+ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- src/ index.html package.json package-lock.json netlify.toml vite.config.ts tailwind.config.js"
 
 [build.environment]
 SECRETS_SCAN_ENABLED = "true"

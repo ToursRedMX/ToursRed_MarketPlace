@@ -49,35 +49,6 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // --- Autorizacion ---
-    // Esta funcion cancela reservas y genera/cancela CFDIs, y hasta el 29-ago
-    // corria con verify_jwt = false sin ninguna validacion propia: cualquiera
-    // con la URL podia dispararla y provocar cancelaciones.
-    //
-    // NO se le pone JWT de usuario: la invoca el cron, que no tiene sesion.
-    // Tampoco hace falta un secreto compartido nuevo: el cron job YA manda el
-    // service role key como bearer, sacado de Vault:
-    //
-    //   headers := jsonb_build_object(
-    //     'Authorization', 'Bearer ' || (SELECT decrypted_secret
-    //                                    FROM vault.decrypted_secrets
-    //                                    WHERE name = 'service_role_key'))
-    //
-    // Asi que basta con exigir ese bearer. Es el mismo patron que usan
-    // generate-booking-cfdi y las demas funciones invocadas por cron, y no
-    // requiere tocar el cron job ni crear otro secreto que mantener.
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearer = authHeader.replace("Bearer ", "").trim();
-
-    if (!bearer || bearer !== supabaseServiceKey) {
-      console.warn("process-payment-plan-tour-deadline: llamada sin service role, rechazada");
-      return new Response(
-        JSON.stringify({ error: "No autorizado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });

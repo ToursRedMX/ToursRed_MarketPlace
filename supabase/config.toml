@@ -189,6 +189,9 @@ verify_jwt = false
 [functions."send-welcome-email"]
 verify_jwt = false
 
+[functions."stripe-checkout"]
+verify_jwt = false
+
 [functions."stripe-webhook"]
 verify_jwt = false
 
@@ -211,28 +214,4 @@ verify_jwt = false
 verify_jwt = false
 
 [functions."verify-reset-code"]
-verify_jwt = false
-
-# Validacion propia dentro de la funcion: acepta service role; si no, exige dueno de la reserva o admin
-[functions."generate-booking-cfdi"]
-verify_jwt = false
-
-# Validacion propia dentro de la funcion: 401 sin header, auth.getUser(), 403 por permisos
-[functions."process-supplement-payment"]
-verify_jwt = false
-
-# Validacion propia dentro de la funcion: exige header y auth.getUser(token), rechaza token invalido
-[functions."process-traveler-cancellation"]
-verify_jwt = false
-
-# Validacion propia dentro de la funcion: 401 sin header, auth.getUser(), 403 por rol
-[functions."upload-email-logo"]
-verify_jwt = false
-
-# Validacion propia dentro de la funcion: la invoca el cron con service role; exige ese bearer (29-ago)
-[functions."process-payment-plan-tour-deadline"]
-verify_jwt = false
-
-# Validacion propia dentro de la funcion: service role o dueno de la reserva/admin (29-ago)
-[functions."send-booking-confirmation"]
 verify_jwt = false
