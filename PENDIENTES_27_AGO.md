@@ -704,17 +704,175 @@ acumuló 18 días con la herramienta para detectarla ya escrita y sin ejecutar.
 Es el mismo patrón de la sesión: **el chequeo existe, pero nada lo dispara ni
 avisa**.
 
-### Lo que hay que decidir
+### Estado de los cuatro puntos
 
-1. **Retirar de producción las cuatro funciones huérfanas**, o devolverlas al
-   repo si alguna sigue haciendo falta. Toca producción: decisión de Axel.
-2. **Revisar las siete sin JWT** y, para las que deban seguir así, declararlo en
-   `config.toml` para que el repo sea fiel.
-3. **Sustituir los umbrales fijos por comprobaciones de consistencia**, con el
-   mismo criterio de la pieza J: repo contra producción, y la partición de JWT
-   derivada en vez de escrita a mano.
-4. **Programar las auditorías** (`audit-edge-jwt`, `audit-edge-functions`) o
-   engancharlas al aviso del PR #58. Sin eso, el punto 3 vuelve a caducar.
+1. **Cuatro funciones huérfanas** — ✅ **BORRADAS el 29-ago**
+   (`process-payment`, `stripe-checkout`, `invalidate-agency-document`,
+   `test-pdfmake`). Confirmado antes **cero uso** en cinco ventanas de 24 h
+   (24 al 29-ago) consultando `function_edge_logs` por `request.pathname`
+   exacto, y verificado después que producción bajó de 176 a 172.
+
+   *Ojo con el comodín, dos veces mordió:* `%process-payment%` captura también
+   `process-payment-plan-tour-deadline`, que sí se usa 24 veces al día; y
+   `grep -w process-payment` sobre la lista del CLI da falso positivo por el
+   guion. **Comparar por slug exacto sobre el JSON**, no con grep.
+2. **Las siete sin JWT** — ✅ diagnosticadas y cuatro cerradas (ver abajo).
+3. **Umbrales por consistencia** — ✅ hecho (PR #71), en modo reporte.
+4. **Auditorías programadas** — ✅ hecho (PR #71), semanales y enganchadas al
+   notificador.
+
+### Diagnóstico de las siete sin JWT
+
+| Función | Validación interna | Resultado |
+|---|---|---|
+| `generate-booking-cfdi` | sí, deliberada | declarada en `config.toml` |
+| `process-supplement-payment` | sí | declarada |
+| `process-traveler-cancellation` | sí | declarada |
+| `upload-email-logo` | sí | declarada |
+| `process-payment-plan-tour-deadline` | **ninguna** | ✅ cerrada |
+| `send-booking-confirmation` | **ninguna** | ✅ cerrada |
+| `test-openpay-3ds-charge` | **ninguna** | ✅ cerrada + `verify_jwt = true` |
+
+### Estado final de la pieza K (29-ago)
+
+Repo y producción cuadran **en las dos dimensiones**, comparando por nombre y no
+sólo por conteo:
+
+| | Repo | Producción |
+|---|---|---|
+| Inventario de funciones | 172 | **172** |
+| Sin JWT (`verify_jwt = false`) | 74 | **74** |
+
+**Trampa que costó un despliegue de más:** quitar una función de la lista de
+`verify_jwt = false` en `config.toml` **no** la pone en `true`. El CLI conserva
+el valor que ya tenía en producción. `test-openpay-3ds-charge` se quedó en
+`false` pese a que el PR #79 decía lo contrario. Hay que declarar el bloque
+explícito:
+
+```toml
+[functions."test-openpay-3ds-charge"]
+verify_jwt = true
+```
+
+Verificado después: sin `Authorization` ahora corta **la plataforma**
+(`UNAUTHORIZED_NO_AUTH_HEADER`) antes de llegar al código, y la validación de rol
+admin sigue dentro como segunda capa.
+
+### Verificación de las tres funciones cerradas
+
+Cada una probada en **ambas direcciones**, no sólo en la buena:
+
+| Función | Sin auth | Clave publicable | Service role |
+|---|---|---|---|
+| `process-payment-plan-tour-deadline` | — | **401** | **200** `processed:4` |
+| `send-booking-confirmation` | **401** | **401** | **404** (pasó auth, no halló la reserva) |
+| `test-openpay-3ds-charge` | **401** | **401** | **400** (pasó auth, faltan parámetros) |
+
+Los **404** y **400** son los resultados que importan: prueban que el service
+role **atraviesa** la autorización y falla después por reglas de negocio. Un 401
+ahí habría significado romper los 7 webhooks internos y el cron.
+
+Las pruebas se diseñaron **sin efectos**: `booking_id` inexistente en vez de una
+reserva real, así que no se envió ningún correo a un cliente ni se creó ningún
+cargo.
+
+**Queda sin probar en vivo**, porque necesita un token de sesión de usuario real:
+que un usuario autenticado que **no** es dueño reciba 403 en
+`send-booking-confirmation`, y la distinción admin / no-admin en
+`test-openpay-3ds-charge`. Los caminos anónimo y publicable sí están verificados.
+
+---
+
+## 🔴 K.1 — INCIDENTE 29-ago: la validación de service role tumbó el cron
+
+**Lectura obligada antes de tocar cualquier validación de service role.**
+
+### Qué pasó
+
+Se desplegó `process-payment-plan-tour-deadline` con una validación que comparaba
+el bearer contra `Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")`. El cron de las
+**04:00 UTC recibió 401** y esa corrida se perdió — ni avisos de 20 días ni
+cancelaciones de 16. Se revirtió y se recuperó lanzando la llamada a mano.
+
+### La causa
+
+**El secreto del Vault estaba obsoleto.**
+
+| | Valor |
+|---|---|
+| `service_role_key` en Vault | 219 chars, **JWT legacy** (`eyJ…`) |
+| `SUPABASE_SERVICE_ROLE_KEY` en la función | 41 chars, **`sb_secret_`** (nuevo) |
+
+Supabase acepta ambos, así que todo *funcionaba* — pero no eran el mismo string,
+y la comparación por igualdad fallaba.
+
+**Evidencia independiente:** `cleanup-incomplete-google-users` usaba ya esa misma
+comparación y **llevaba fallando con 401 por su cuenta**, desde antes del
+incidente. Nadie se había enterado porque un cron que falla no avisa a nadie.
+
+### Tres diseños tumbados por medición
+
+Antes de dar con el bueno, se descartaron tres, cada uno con datos:
+
+1. **Comparar contra la variable de entorno** — falla: formatos distintos.
+2. **Leer el Vault desde la función** — `ERROR: Invalid schema: vault`. PostgREST
+   no expone ese esquema. Habría fallado igual.
+3. **Verificar privilegios usando el bearer como llave** — se probó con la clave
+   **publicable** y también daba `true`. Habría dejado pasar a cualquiera con la
+   clave del bundle: peor que no validar, porque aparenta validar.
+
+El tercero solo se cayó por correr el control con la publicable. Sin ese control
+se habría dado por bueno.
+
+Los tres se midieron con una **función sonda temporal** desplegada y borrada en
+minutos, que reportaba sólo booleanos, longitudes y formatos — nunca valores.
+Los deploys de Supabase no pasan por Netlify, así que probar sale gratis.
+
+### La solución
+
+**Alinear el Vault al valor actual** (29-ago):
+
+```sql
+select vault.update_secret(
+  (select id from vault.secrets where name = 'service_role_key'),
+  '<sb_secret_ actual, desde Project Settings → API Keys>');
+```
+
+Antes de hacerlo se comprobaron **los siete consumidores** de ese secreto —
+4 cron jobs y 3 funciones SQL (`process_expired_slot_reschedules`,
+`process_membership_renewal_reminders`)— y **los siete invocan funciones con
+`verify_jwt = false`**, así que el cambio de formato no rompe ninguna.
+
+Resultado: `cleanup-incomplete-google-users` pasó de **401 a 200 sin tocarle una
+línea de código**.
+
+### El método de verificación que sí funciona
+
+No esperar a que el cron lo descubra una hora después. Reproducir su llamada:
+
+```sql
+SELECT net.http_post(
+  url := 'https://<ref>.supabase.co/functions/v1/<funcion>',
+  headers := jsonb_build_object('Content-Type','application/json',
+    'Authorization', 'Bearer ' || (SELECT decrypted_secret
+      FROM vault.decrypted_secrets WHERE name = 'service_role_key')),
+  body := '{}'::jsonb) as request_id;
+
+select status_code, content from net._http_response where id = <request_id>;
+```
+
+El secreto no pasa por nadie y la respuesta llega en segundos. **Medir el
+alcance antes de disparar** si la función tiene efectos (para
+`cleanup-incomplete-google-users` se contaron primero los candidatos a borrar:
+eran 0).
+
+### La lección
+
+El diseño se presentó diciendo que salía "de leer el comando real del cron, no
+de suponer". Se leyó el comando, sí — pero **que el bearer del Vault y la
+variable de entorno fueran el mismo valor se supuso**, y era una consulta de una
+línea. Es el mismo patrón que esta sesión corrigió en el repo tres veces, esta
+vez con dinero y cancelaciones de por medio.
 
 ---
 
@@ -960,7 +1118,9 @@ propio, mergeado tras la revisión visual del preview — pieza 🟣 1).
 | **H — smoke test post-deploy** | ✅ **cerrada (PR #56)** |
 | **J — backup lógico sin subir a B2** | ✅ **cerrada (PR #55)** |
 | **Aviso en fallo de los backups** | ✅ **cerrado (PR #58)** |
-| **K — deriva repo/Edge Functions desplegadas** | 🔴 **abierta** — 4 huérfanas en producción, 7 sin JWT no declaradas |
+| **K — deriva repo/Edge Functions desplegadas** | ✅ **cerrada** — 172=172 y 74=74, huérfanas borradas |
+| **K.1 — incidente del 401 en el cron** | ✅ resuelto — Vault alineado, `cleanup-incomplete-google-users` arreglada de paso |
+| **Aviso en fallo + auditorías semanales** | ✅ cerrados (PR #58, #71) |
 | Decisión 1 — lint que nadie ejecuta | 🟠 abierta |
 | Decisión 2 — secrets scanning | ✅ resuelta (activa, sin efecto real) |
 
@@ -985,9 +1145,11 @@ cerrados**.
 
 ### Una nota de método que conviene no perder
 
-Las tres cifras que fallaron esta sesión —el **384** de `space-y`, el conteo de
-exclusiones de secrets scanning y el umbral **15** de cron jobs— venían de
-mediciones hechas sobre texto o de memoria. Las que aguantaron salieron de
+Las cifras que fallaron esta sesión —el **384** de `space-y`, el conteo de
+exclusiones de secrets scanning, el umbral **15** de cron jobs y **el secreto del
+Vault que se supuso igual a la variable de entorno**— venían de mediciones sobre
+texto, de memoria, o de una suposición no comprobada. La última tumbó un cron de
+producción durante una hora (ver K.1). Las que aguantaron salieron de
 **parsear el AST, consultar la base o abrir el navegador**. Y tres veces un
 check en verde no significó lo que parecía: el preview que compilaba sin
 arrancar, el escaneo de secretos que no escanea, y el backup que "pasaba" sin
