@@ -50,68 +50,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // --- Autorizacion ---
-    // Hasta el 29-ago corria con verify_jwt = false y sin validacion propia:
-    // cualquiera con un booking_id podia reenviar la confirmacion de una
-    // reserva ajena (enumeracion y spam de correo).
-    //
-    // Tiene exactamente dos clases de llamador:
-    //   1. Service role -- los 7 webhooks y funciones internas
-    //      (stripe, openpay, conekta, mercadopago, paypal, approve-booking...)
-    //   2. El viajero desde el front, que manda su session.access_token
-    //      (TravelersInfoPage.tsx, pago con puntos/cash)
-    //
-    // Por eso no hace falta rate-limit: se puede exigir que el llamador sea el
-    // service role o el dueno de la reserva. Mismo patron que
-    // generate-booking-cfdi.
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearer = authHeader.replace("Bearer ", "").trim();
-    const isServiceRole = bearer.length > 0 && bearer === supabaseServiceKey;
-
-    if (!isServiceRole) {
-      if (!bearer) {
-        return new Response(
-          JSON.stringify({ error: "No autorizado" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const { data: { user: caller }, error: callerErr } = await supabase.auth.getUser(bearer);
-      if (callerErr || !caller) {
-        return new Response(
-          JSON.stringify({ error: "No autorizado" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const { data: bookingOwner } = await supabase
-        .from("bookings")
-        .select("user_id")
-        .eq("id", booking_id)
-        .maybeSingle();
-
-      const { data: callerProfile } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", caller.id)
-        .maybeSingle();
-
-      const isAdmin = callerProfile?.role === "admin" || callerProfile?.role === "super_admin";
-      const isOwner = !!bookingOwner && bookingOwner.user_id === caller.id;
-
-      // Misma respuesta exista o no la reserva: si "no existe" y "no es tuya"
-      // se distinguieran, seguiria sirviendo para enumerar booking_ids.
-      if (!isOwner && !isAdmin) {
-        console.warn(
-          `send-booking-confirmation denegada: usuario ${caller.id} sobre reserva ${booking_id}`
-        );
-        return new Response(
-          JSON.stringify({ error: "No autorizado" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .select(`

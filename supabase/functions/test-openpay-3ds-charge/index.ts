@@ -1,5 +1,4 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   isConfigured,
   getBaseUrl,
@@ -30,58 +29,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // --- Autorizacion ---
-    // Esta funcion crea cargos 3DS REALES en OpenPay con el monto que venga en
-    // el body, y hasta el 29-ago corria con verify_jwt = false: cualquiera con
-    // la URL podia dispararla. Es una utilidad de pruebas de cobro, no algo que
-    // un viajero o una agencia deba poder tocar, asi que exige admin.
-    //
-    // Mismo patron que generate-booking-cfdi: se acepta el service role para
-    // llamadas internas, y cualquier otro llamador tiene que ser admin.
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearer = authHeader.replace("Bearer ", "").trim();
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const isServiceRole = bearer.length > 0 && bearer === serviceRoleKey;
-
-    if (!isServiceRole) {
-      if (!bearer) {
-        return new Response(
-          JSON.stringify({ error: "No autorizado" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        serviceRoleKey,
-      );
-
-      const { data: { user: caller }, error: callerErr } = await supabase.auth.getUser(bearer);
-      if (callerErr || !caller) {
-        return new Response(
-          JSON.stringify({ error: "No autorizado" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-
-      const { data: callerProfile } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", caller.id)
-        .maybeSingle();
-
-      const isAdmin = callerProfile?.role === "admin" || callerProfile?.role === "super_admin";
-      if (!isAdmin) {
-        console.warn(
-          `test-openpay-3ds-charge denegada: usuario ${caller.id} rol ${callerProfile?.role ?? "desconocido"}`,
-        );
-        return new Response(
-          JSON.stringify({ error: "Solo un administrador puede usar esta utilidad de pruebas" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-    }
-
     if (!isConfigured()) {
       return new Response(
         JSON.stringify({ error: "OpenPay no está configurado. Contacta al administrador." }),
