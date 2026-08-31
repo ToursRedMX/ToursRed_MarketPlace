@@ -30,7 +30,7 @@ const BASE = {
   'react-hooks/set-state-in-effect': 118,
   'react-hooks/immutability': 86,
   'react-hooks/exhaustive-deps': 85,
-  'react-hooks/static-components': 42,
+  'react-hooks/static-components': 29,
   'react-hooks/refs': 21,
   'no-useless-assignment': 16,
   'no-empty': 12,
@@ -47,9 +47,9 @@ const BASE = {
 // Corriendo local sin las env del workflow, se cae a la misma base para que
 // los deltas sigan teniendo sentido.
 const num = (name, fallback) => Number(process.env[name] ?? fallback);
-const BASELINE_ERRORS = num('BASELINE_ERRORS', 2471);
+const BASELINE_ERRORS = num('BASELINE_ERRORS', 2458);
 const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 89);
-const BASELINE_TOTAL = num('BASELINE_TOTAL', 2560);
+const BASELINE_TOTAL = num('BASELINE_TOTAL', 2547);
 const BASELINE_FILES = num('BASELINE_FILES', 324);
 
 const reportPath = process.argv[2] ?? 'eslint-report.json';
@@ -58,7 +58,7 @@ const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
 // `-f json` emite una entrada por archivo lintado, incluidos los limpios. Cero
 // entradas no es "el repo esta impecable": es que eslint no linteo nada (un
 // `ignores` que se comio todo, un glob roto). Sin este guardia el resumen
-// reportaria 0 problemas y un delta de -2560, o sea una mejora inventada.
+// reportaria 0 problemas y un delta de -2547, o sea una mejora inventada.
 const lintedFiles = report.length;
 
 let errors = 0;
