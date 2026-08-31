@@ -31,3 +31,8 @@ supabase/.temp/
 # Vite: archivos temporales de resolucion de config
 vite.config.ts.timestamp-*
 vite.config.js.timestamp-*
+
+# Reportes de lint (los genera scripts/summarize-lint.mjs y el workflow lint.yml)
+eslint-report.json
+eslint-report.txt
+eslint-stderr.log

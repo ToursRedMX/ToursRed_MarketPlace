@@ -259,6 +259,22 @@ const BookingFlowStep3: React.FC = () => {
     }
   }, [tour, flow.seatsHeld, flow.selectedSeats, hasSeatMap, totalTravelers, performSeatHold, performGenericHold]);
 
+  // Trigger seat hold when the selection in context is complete — doing this
+  // in a useEffect (rather than inside handleSeatSelect) ensures the context
+  // state is already committed before we attempt the hold, avoiding stale
+  // values and the "setState during render" React warning.
+  //
+  // Va ARRIBA del `if (!tour) return null` de abajo a proposito: estaba despues
+  // y eso lo hacia un hook condicional (react-hooks/rules-of-hooks). En los
+  // renders con `tour` null se llamaban menos hooks que en el resto, y eso es
+  // `Rendered fewer hooks than expected` — pantalla blanca, no un warning.
+  // El guardia de adentro (`hasSeatMap && ...`) ya cubre el caso sin tour.
+  useEffect(() => {
+    if (hasSeatMap && flow.selectedSeats.length > 0 && flow.selectedSeats.length === totalTravelers) {
+      performSeatHold(flow.selectedSeats);
+    }
+  }, [hasSeatMap, flow.selectedSeats, totalTravelers, performSeatHold]);
+
   if (!tour) return null;
 
   const handleOptionalServiceChange = (serviceId: string, delta: number) => {
@@ -275,16 +291,6 @@ const BookingFlowStep3: React.FC = () => {
   const handleSeatSelect = (seats: number[]) => {
     updateFlow({ selectedSeats: seats });
   };
-
-  // Trigger seat hold when the selection in context is complete — doing this
-  // in a useEffect (rather than inside handleSeatSelect) ensures the context
-  // state is already committed before we attempt the hold, avoiding stale
-  // values and the "setState during render" React warning.
-  useEffect(() => {
-    if (hasSeatMap && flow.selectedSeats.length > 0 && flow.selectedSeats.length === totalTravelers) {
-      performSeatHold(flow.selectedSeats);
-    }
-  }, [hasSeatMap, flow.selectedSeats, totalTravelers, performSeatHold]);
 
   const handleContinue = () => {
     if (hasSeatMap && flow.selectedSeats.length < totalTravelers) {

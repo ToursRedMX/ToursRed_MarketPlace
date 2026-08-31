@@ -1,0 +1,99 @@
+name: Lint (informative)
+
+# Modo informativo a proposito: reporta y nunca bloquea.
+# Hermano de typecheck.yml. Hasta el 31-ago-2026 ningun workflow ejecutaba
+# ESLint, asi que `npm run lint` era decorativo: 2,472 errores que nadie veia.
+#
+# Se lee el reporte en JSON, no la salida `stylish`. Motivo concreto: las reglas
+# del React Compiler (react-hooks/set-state-in-effect, /immutability, /refs,
+# /static-components, /purity, /preserve-manual-memoization) NO imprimen el
+# ruleId en stylish, asi que contar por "ultimo campo de la linea" atribuye 274
+# problemas a palabras sueltas del mensaje ("renders", "declared", "render").
+# El JSON si trae ruleId en todos.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Linea base sobre main, medida el 31-ago-2026 con `npm run lint`
+  # (eslint 10 / typescript-eslint 8.68.0). Actualizar al bajarla.
+  # El desglose por regla vive en BASE dentro del script de resumen.
+  #
+  # 2471 y no 2472: este mismo PR cierra el unico react-hooks/rules-of-hooks
+  # (BookingFlowStep3), asi que la base ya refleja main DESPUES del merge.
+  BASELINE_ERRORS: 2471
+  BASELINE_WARNINGS: 89
+  BASELINE_TOTAL: 2560
+  BASELINE_FILES: 324
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint (never blocks)
+        run: |
+          # bash corre con -e: sin set +e, eslint saliendo != 0 aborta el step
+          # y el check saldria rojo, que es justo lo que no queremos.
+          set +e
+          npx eslint . -f json -o eslint-report.json > eslint-stderr.log 2>&1
+          CODE=$?
+          set -e
+          echo "eslint exit code: ${CODE}"
+
+          # Si eslint revienta antes de escribir el reporte (config rota, OOM,
+          # un plugin que no carga) el resumen no debe inventar un cero limpio:
+          # se marca y el step de resumen lo dice en voz alta.
+          if [ ! -s eslint-report.json ]; then
+            echo "ESLINT_BROKEN=1" >> "$GITHUB_ENV"
+            echo "::warning::ESLint no produjo reporte JSON"
+            cat eslint-stderr.log
+          fi
+          exit 0
+
+      - name: Summarize by rule
+        run: |
+          if [ "${ESLINT_BROKEN:-0}" = "1" ]; then
+            {
+              echo "## Lint (informativo, no bloquea)"
+              echo ""
+              echo "> :rotating_light: ESLint no produjo reporte JSON."
+              echo "> El conteo de este run no es comparable con la base."
+              echo ""
+              echo '```'
+              tail -40 eslint-stderr.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          node scripts/summarize-lint.mjs
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: toursred-lint
+          path: |
+            eslint-report.json
+            eslint-report.txt
+            eslint-stderr.log
+          retention-days: 30
+          if-no-files-found: warn
