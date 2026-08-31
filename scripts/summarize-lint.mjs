@@ -39,15 +39,17 @@ const BASE = {
   'react-hooks/purity': 3,
   '@typescript-eslint/no-unused-expressions': 2,
   'prefer-const': 2,
-  'react-hooks/rules-of-hooks': 1,
+  // react-hooks/rules-of-hooks NO va aqui a proposito: quedo en 0 al cerrar el
+  // de BookingFlowStep3. Fuera de BASE, si reaparece se marca con el aviso de
+  // "reglas fuera de la base" ademas del delta, que es la senal que queremos.
 };
 
 // Corriendo local sin las env del workflow, se cae a la misma base para que
 // los deltas sigan teniendo sentido.
 const num = (name, fallback) => Number(process.env[name] ?? fallback);
-const BASELINE_ERRORS = num('BASELINE_ERRORS', 2472);
+const BASELINE_ERRORS = num('BASELINE_ERRORS', 2471);
 const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 89);
-const BASELINE_TOTAL = num('BASELINE_TOTAL', 2561);
+const BASELINE_TOTAL = num('BASELINE_TOTAL', 2560);
 const BASELINE_FILES = num('BASELINE_FILES', 324);
 
 const reportPath = process.argv[2] ?? 'eslint-report.json';
@@ -56,7 +58,7 @@ const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
 // `-f json` emite una entrada por archivo lintado, incluidos los limpios. Cero
 // entradas no es "el repo esta impecable": es que eslint no linteo nada (un
 // `ignores` que se comio todo, un glob roto). Sin este guardia el resumen
-// reportaria 0 problemas y un delta de -2561, o sea una mejora inventada.
+// reportaria 0 problemas y un delta de -2560, o sea una mejora inventada.
 const lintedFiles = report.length;
 
 let errors = 0;

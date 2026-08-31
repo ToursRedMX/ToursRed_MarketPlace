@@ -24,9 +24,12 @@ env:
   # Linea base sobre main, medida el 31-ago-2026 con `npm run lint`
   # (eslint 10 / typescript-eslint 8.68.0). Actualizar al bajarla.
   # El desglose por regla vive en BASE dentro del script de resumen.
-  BASELINE_ERRORS: 2472
+  #
+  # 2471 y no 2472: este mismo PR cierra el unico react-hooks/rules-of-hooks
+  # (BookingFlowStep3), asi que la base ya refleja main DESPUES del merge.
+  BASELINE_ERRORS: 2471
   BASELINE_WARNINGS: 89
-  BASELINE_TOTAL: 2561
+  BASELINE_TOTAL: 2560
   BASELINE_FILES: 324
 
 jobs:
