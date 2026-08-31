@@ -106,7 +106,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const [selectedSlot, setSelectedSlot] = useState<TourSlot | null>(null);
   const [selectedSeats, setSelectedSeats] = useState<number[]>([]);
   // Seat map only applies to shared transfers and non-private tours
-  const hasSeatMap = !!(tour as any).vehicle_map_type && !isPrivateTransfer;
+  const hasSeatMap = !!tour.vehicle_map_type && !isPrivateTransfer;
 
   const [pickupType, setPickupType] = useState<'meeting_point' | 'pickup'>('meeting_point');
   const [pickupHotelAddress, setPickupHotelAddress] = useState('');
