@@ -1,3 +1,4 @@
+import { calculateTaxBreakdown, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -29,6 +30,16 @@ interface CfdiConcepto {
   valor_unitario: number;
   descuento?: number;
   tercero?: CfdiTercero;
+  /**
+   * Concepto exento de IVA (Art. 15 fr. XIII LIVA). Vive en la interfaz
+   * PAC-agnostica, no en el adaptador: el codigo que arma conceptos no deberia
+   * saber que PAC esta configurado.
+   *
+   * OJO con valor_unitario: en un concepto GRAVADO es el NETO (bruto/1.16,
+   * porque tax_included es false). En uno EXENTO es el importe COMPLETO.
+   * Dividir un exento entre 1.16 desaparece dinero del CFDI.
+   */
+  exento?: boolean;
 }
 
 interface CfdiReceptor {
@@ -89,7 +100,9 @@ async function facturapiStamp(apiKey: string, orgId: string, request: CfdiReques
         unit_key: c.clave_unidad,
         price: c.valor_unitario,
         tax_included: false,
-        taxes: [{ type: "IVA", rate: 0.16 }],
+        taxes: c.exento
+          ? [{ type: "IVA", factor: "Exento", rate: 0 }]
+          : [{ type: "IVA", rate: 0.16 }],
       },
       quantity: c.cantidad,
       ...(c.descuento != null && c.descuento > 0 ? { discount: c.descuento } : {}),
@@ -239,7 +252,7 @@ Deno.serve(async (req: Request) => {
         booking_payment_plans!inner(
           id,
           bookings!inner(
-            id, user_id, booking_code, tour_id,
+            id, user_id, booking_code, tour_id, tax_treatment, exempt_ratio,
             tours!inner(id, name, agency_id)
           )
         )
@@ -413,15 +426,40 @@ Deno.serve(async (req: Request) => {
     const conceptos: CfdiConcepto[] = [];
 
     // Concepto 1 — Parcialidad (principal, CON tercero = agencia)
-    const principalBruto = r6(txnAmount / 1.16);
-    conceptos.push({
-      clave_prod_serv: "90121500",
-      cantidad: 1,
-      clave_unidad: "E48",
-      descripcion: `${installment.label}: ${tourName} (Reserva ${bookingCode}) - Parcialidad ${installment.installment_number}`,
-      valor_unitario: principalBruto,
-      tercero: terceroAgencia,
+    //
+    // El principal es una porcion del TOUR, asi que conserva su composicion
+    // fiscal: se lee el snapshot de la reserva, no la config viva del tour.
+    // La penalizacion y el cargo por servicio de mas abajo NO: son operaciones
+    // propias de ToursRed y van siempre al 16%.
+    const instTax = calculateTaxBreakdown({
+      grossAmount: txnAmount,
+      taxTreatment: ((booking.tax_treatment ?? "taxable_16") as TaxTreatment),
+      exemptRatio: Number(booking.exempt_ratio ?? 0),
+      decimals: 6,
     });
+    const principalDesc = `${installment.label}: ${tourName} (Reserva ${bookingCode}) - Parcialidad ${installment.installment_number}`;
+
+    if (instTax.taxableBase > 0) {
+      conceptos.push({
+        clave_prod_serv: "90121500",
+        cantidad: 1,
+        clave_unidad: "E48",
+        descripcion: principalDesc,
+        valor_unitario: instTax.taxableBase,
+        tercero: terceroAgencia,
+      });
+    }
+    if (instTax.exemptAmount > 0) {
+      conceptos.push({
+        clave_prod_serv: "90121500",
+        cantidad: 1,
+        clave_unidad: "E48",
+        descripcion: principalDesc,
+        valor_unitario: instTax.exemptAmount,
+        exento: true,
+        tercero: terceroAgencia,
+      });
+    }
 
     // Concepto 2 — Penalización por pago tardío (CON tercero = agencia), solo si hubo penalidad
     if (penaltyAmount > 0) {
