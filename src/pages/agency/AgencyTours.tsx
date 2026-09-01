@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { createTour, searchDestinations, supabase, updateTour, deleteTour, getAllDestinations, createDestination, getTourCategories, getFeaturedPlans, getAgencyFeaturedSlots, joinFeaturedWaitlist, checkSlugAvailable, updateTourSlug } from '../../lib/supabase';
@@ -19,6 +19,10 @@ interface OptionalService {
   max_capacity: string;
   is_refundable: boolean;
   is_active: boolean;
+  // Fiscalmente independiente del tour padre: un tour gravado puede tener un
+  // opcional exento ("Entrada a Six Flags") y viceversa.
+  tax_treatment: TaxTreatment;
+  exempt_ratio: number;
 }
 
 interface TourSupplement {
@@ -30,6 +34,9 @@ interface TourSupplement {
   requires_approval: boolean;
   is_cancellable: boolean;
   is_active: boolean;
+  // Fiscalmente independiente del tour padre y de los opcionales.
+  tax_treatment: TaxTreatment;
+  exempt_ratio: number;
 }
 
 interface ScheduleDraft {
@@ -55,6 +62,8 @@ interface TourLanguage {
 import { Tour, Destination, DeparturePoint, PaymentOption, PaymentPlanMode, InstallmentDefinition } from '../../types';
 import { format } from 'date-fns';
 import ImageUploader from '../../components/ImageUploader';
+import TaxTreatmentFields from '../../components/agency/TaxTreatmentFields';
+import type { TaxTreatment } from '../../utils/taxBreakdown';
 import DeparturePointSelector from '../../components/DeparturePointSelector';
 import DeparturePointForm from '../../components/DeparturePointForm';
 
@@ -325,6 +334,8 @@ const AgencyTours: React.FC = () => {
     available_spots: '',
     booking_deadline: '',
     booking_approval_type: 'automatic',
+    tax_treatment: 'taxable_16' as TaxTreatment,
+    exempt_ratio: 0,
     cancellation_not_allowed: false,
     name_changes_not_allowed: false,
     includes_insurance: false,
@@ -365,6 +376,13 @@ const AgencyTours: React.FC = () => {
   const [showCreateDepartureForm, setShowCreateDepartureForm] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [optionalServices, setOptionalServices] = useState<OptionalService[]>([]);
+  // Validez de cada captura fiscal 'mixta'. Clave: 'tour' | 'svc-<i>' | 'sup-<i>'.
+  // Si alguna esta en false se bloquea el guardado: el importe exento y el
+  // gravado no suman el precio de referencia.
+  const [taxValidity, setTaxValidity] = useState<Record<string, boolean>>({});
+  const setTaxValid = useCallback((key: string, valid: boolean) => {
+    setTaxValidity((prev) => (prev[key] === valid ? prev : { ...prev, [key]: valid }));
+  }, []);
   const [supplements, setSupplements] = useState<TourSupplement[]>([]);
   type VencimientoMode = 'dias_reserva' | 'dias_salida' | 'fecha_especifica';
   interface InstallmentDefDraft {
@@ -643,6 +661,8 @@ const AgencyTours: React.FC = () => {
       available_spots: '',
       booking_deadline: '',
       booking_approval_type: 'automatic',
+      tax_treatment: 'taxable_16' as TaxTreatment,
+      exempt_ratio: 0,
       pet_friendly: false,
       includes_insurance: false,
       precio_adulto: '',
@@ -808,6 +828,8 @@ const AgencyTours: React.FC = () => {
       name_changes_not_allowed: tour.name_changes_not_allowed || false,
       includes_insurance: tour.includes_insurance || false,
       pet_friendly: tour.pet_friendly || false,
+      tax_treatment: tour.tax_treatment ?? 'taxable_16',
+      exempt_ratio: Number(tour.exempt_ratio ?? 0),
       precio_adulto: tour.precio_adulto?.toString() || '',
       precio_nino: tour.precio_nino?.toString() || '',
       precio_infante: tour.precio_infante?.toString() || '',
@@ -931,6 +953,8 @@ const AgencyTours: React.FC = () => {
           max_capacity: s.max_capacity ? s.max_capacity.toString() : '',
           is_refundable: s.is_refundable,
           is_active: s.is_active,
+          tax_treatment: (s.tax_treatment ?? 'taxable_16') as TaxTreatment,
+          exempt_ratio: Number(s.exempt_ratio ?? 0),
         })));
       } else {
         setOptionalServices([]);
@@ -958,6 +982,8 @@ const AgencyTours: React.FC = () => {
           requires_approval: s.requires_approval,
           is_cancellable: s.is_cancellable,
           is_active: s.is_active,
+          tax_treatment: (s.tax_treatment ?? 'taxable_16') as TaxTreatment,
+          exempt_ratio: Number(s.exempt_ratio ?? 0),
         })));
       } else {
         setSupplements([]);
@@ -1887,6 +1913,8 @@ const AgencyTours: React.FC = () => {
       price_per_person: '',
       max_capacity: '',
       is_refundable: true,
+      tax_treatment: 'taxable_16',
+      exempt_ratio: 0,
       is_active: true,
     }]);
   };
@@ -1908,6 +1936,8 @@ const AgencyTours: React.FC = () => {
       price: '',
       max_capacity: '',
       requires_approval: false,
+      tax_treatment: 'taxable_16',
+      exempt_ratio: 0,
       is_cancellable: true,
       is_active: true,
     }]);
@@ -1945,6 +1975,20 @@ const AgencyTours: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    // Ninguna captura fiscal 'mixta' puede quedar sin cuadrar. El CHECK de la
+    // BD ya rechazaria un ratio incoherente, pero eso daria un error opaco de
+    // Postgres a media pantalla en vez de decir cual fila esta mal.
+    const invalidTax = Object.entries(taxValidity).filter(([, ok]) => !ok).map(([k]) => k);
+    if (invalidTax.length > 0) {
+      const donde = invalidTax.map((k) =>
+        k === 'tour' ? 'el tour'
+          : k.startsWith('svc-') ? `el servicio opcional #${Number(k.slice(4)) + 1}`
+            : `el suplemento #${Number(k.slice(4)) + 1}`,
+      ).join(', ');
+      setError(`Revisa el tratamiento fiscal de ${donde}: el importe exento y el gravado deben sumar exactamente el precio.`);
+      return;
+    }
+
     setIsSubmitting(true);
     setError('');
 
@@ -2052,6 +2096,8 @@ const AgencyTours: React.FC = () => {
         name_changes_not_allowed: formData.name_changes_not_allowed,
         includes_insurance: formData.includes_insurance,
         pet_friendly: formData.pet_friendly,
+        tax_treatment: formData.tax_treatment,
+        exempt_ratio: formData.exempt_ratio,
         precio_adulto: formData.precio_adulto ? parseFloat(formData.precio_adulto) : null,
         precio_nino: formData.precio_nino ? parseFloat(formData.precio_nino) : null,
         precio_infante: formData.precio_infante ? parseFloat(formData.precio_infante) : null,
@@ -2303,6 +2349,8 @@ const AgencyTours: React.FC = () => {
             max_capacity: svc.max_capacity ? parseInt(svc.max_capacity) : null,
             is_refundable: svc.is_refundable,
             is_active: svc.is_active,
+            tax_treatment: svc.tax_treatment,
+            exempt_ratio: svc.exempt_ratio,
             display_order: i + 1,
             updated_at: new Date().toISOString(),
           };
@@ -2321,6 +2369,8 @@ const AgencyTours: React.FC = () => {
           max_capacity: svc.max_capacity ? parseInt(svc.max_capacity) : null,
           is_refundable: svc.is_refundable,
           is_active: svc.is_active,
+          tax_treatment: svc.tax_treatment,
+          exempt_ratio: svc.exempt_ratio,
           display_order: i + 1,
         }));
         await supabase.from('tour_optional_services').insert(toInsert);
@@ -2353,6 +2403,8 @@ const AgencyTours: React.FC = () => {
             requires_approval: sup.requires_approval,
             is_cancellable: sup.is_cancellable,
             is_active: sup.is_active,
+            tax_treatment: sup.tax_treatment,
+            exempt_ratio: sup.exempt_ratio,
             display_order: i + 1,
             updated_at: new Date().toISOString(),
           };
@@ -2372,6 +2424,8 @@ const AgencyTours: React.FC = () => {
           requires_approval: sup.requires_approval,
           is_cancellable: sup.is_cancellable,
           is_active: sup.is_active,
+          tax_treatment: sup.tax_treatment,
+          exempt_ratio: sup.exempt_ratio,
           display_order: i + 1,
         }));
         await supabase.from('tour_supplements').insert(toInsertSup);
@@ -4274,6 +4328,16 @@ const AgencyTours: React.FC = () => {
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">%</span>
                     </div>
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <TaxTreatmentFields
+                        idPrefix="tour"
+                        value={{ taxTreatment: formData.tax_treatment, exemptRatio: formData.exempt_ratio }}
+                        referencePrice={parseFloat(formData.precio_adulto) || 0}
+                        referenceLabel="Precio adulto"
+                        onChange={(v) => setFormData((f) => ({ ...f, tax_treatment: v.taxTreatment, exempt_ratio: v.exemptRatio }))}
+                        onValidityChange={(ok) => setTaxValid('tour', ok)}
+                      />
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Mínimo 30% — Máximo 100%. Ej: <em>50</em> = el viajero paga la mitad al reservar y el resto antes de la salida.</p>
                   </div>
                 </div>
@@ -4958,6 +5022,21 @@ const AgencyTours: React.FC = () => {
                       </div>
                     </div>
 
+                    <div className="pt-2 border-t border-gray-100">
+                      <TaxTreatmentFields
+                        compact
+                        idPrefix={`svc-${index}`}
+                        value={{ taxTreatment: svc.tax_treatment, exemptRatio: svc.exempt_ratio }}
+                        referencePrice={parseFloat(svc.price_per_person) || 0}
+                        referenceLabel="Precio por persona"
+                        onChange={(v) => {
+                          updateOptionalService(index, 'tax_treatment', v.taxTreatment);
+                          updateOptionalService(index, 'exempt_ratio', v.exemptRatio);
+                        }}
+                        onValidityChange={(ok) => setTaxValid(`svc-${index}`, ok)}
+                      />
+                    </div>
+
                     <div className="flex flex-wrap gap-4 pt-1">
                       <label className="flex items-start gap-2 cursor-pointer">
                         <input
@@ -5125,6 +5204,21 @@ const AgencyTours: React.FC = () => {
                           </p>
                         </div>
                       )}
+
+                      <div className="pt-2 border-t border-gray-100">
+                        <TaxTreatmentFields
+                          compact
+                          idPrefix={`sup-${index}`}
+                          value={{ taxTreatment: sup.tax_treatment, exemptRatio: sup.exempt_ratio }}
+                          referencePrice={parseFloat(sup.price) || 0}
+                          referenceLabel="Precio del suplemento"
+                          onChange={(v) => {
+                            updateSupplement(index, 'tax_treatment', v.taxTreatment);
+                            updateSupplement(index, 'exempt_ratio', v.exemptRatio);
+                          }}
+                          onValidityChange={(ok) => setTaxValid(`sup-${index}`, ok)}
+                        />
+                      </div>
 
                       <div className="flex flex-wrap gap-4">
                         <label className="flex items-center gap-2 cursor-pointer">

@@ -1,3 +1,4 @@
+import { calculateTaxBreakdown, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -28,6 +29,17 @@ interface CfdiConcepto {
   valor_unitario: number;
   descuento?: number;
   tercero?: CfdiTercero;
+  /**
+   * Concepto exento de IVA (Art. 15 fr. XIII LIVA). Va en la interfaz
+   * PAC-agnostica, no en el adaptador: cada PAC lo expresa a su manera y el
+   * codigo que arma conceptos no deberia saber cual esta configurado.
+   *
+   * OJO con valor_unitario: en un concepto GRAVADO es el valor NETO (bruto/1.16,
+   * porque tax_included es false). En uno EXENTO no hay IVA que separar, asi
+   * que es el importe completo. Dividir un exento entre 1.16 desaparece dinero
+   * del CFDI.
+   */
+  exento?: boolean;
   impuestos?: {
     traslados?: Array<{
       base: number;
@@ -123,7 +135,11 @@ async function facturapiStamp(
         unit_key: c.clave_unidad,
         price: c.valor_unitario,
         tax_included: false,
-        taxes: [{ type: "IVA", rate: 0.16 }],
+        // Exento: factor "Exento" con tasa 0. FacturAPI emite el nodo Traslado
+        // con TipoFactor="Exento", que el SAT exige incluso cuando no hay IVA.
+        taxes: c.exento
+          ? [{ type: "IVA", factor: "Exento", rate: 0 }]
+          : [{ type: "IVA", rate: 0.16 }],
       },
       quantity: c.cantidad,
       ...(c.descuento != null && c.descuento > 0 ? { discount: c.descuento } : {}),
@@ -487,6 +503,10 @@ Deno.serve(async (req: Request) => {
     // -------------------------------------------------------
     // MONTOS: difieren según si es cobro de check-in o reserva
     // -------------------------------------------------------
+    // Bruto del tour (IVA incluido) antes de separar base e IVA. Se necesita
+    // aparte de precioTourBruto porque ese ya viene dividido entre 1.16 y el
+    // desglose fiscal tiene que partir del bruto, no del neto.
+    let grossTourAmount = 0;
     let precioTourBruto: number;
     let precioServicioBruto: number;
     let precioSeguroBruto: number;
@@ -524,6 +544,7 @@ Deno.serve(async (req: Request) => {
       // r6: 6 decimales para valor_unitario en FacturAPI (evita error de centavo en XML)
       const r6 = (n: number) => Math.round(n * 1000000) / 1000000;
 
+      grossTourAmount = amountCharged;
       precioTourBruto = r6(amountCharged / 1.16);
       precioServicioBruto = netServiceCharge > 0 ? r6(netServiceCharge / 1.16) : 0;
       precioSeguroBruto = 0;
@@ -547,6 +568,7 @@ Deno.serve(async (req: Request) => {
       const membershipIncluded = (booking as any).membership_purchased === true;
       const membershipCost = membershipIncluded ? Number((booking as any).membership_cost || 0) : 0;
 
+      grossTourAmount = depositAmount;
       precioTourBruto = r6b(depositAmount / 1.16);
       precioServicioBruto = serviceCharge > 0 ? r6b(serviceCharge / 1.16) : 0;
       precioSeguroBruto = insuranceCost > 0 ? r6b(insuranceCost / 1.16) : 0;
@@ -565,7 +587,7 @@ Deno.serve(async (req: Request) => {
     // Add paid optional services total to exactTotal and build concepts
     const { data: paidOptionals } = await supabase
       .from("booking_optional_services")
-      .select("service_kind, description, subtotal, total_paid")
+      .select("service_kind, description, subtotal, total_paid, tax_treatment, exempt_ratio")
       .eq("booking_id", booking.id)
       .eq("is_cancelled", false)
       .not("paid_at", "is", null);
@@ -692,8 +714,63 @@ Deno.serve(async (req: Request) => {
     const bookingRef = booking.booking_code || booking.id;
     const checkinLabel = isCheckinCharge ? " (cobro en check-in)" : "";
 
-    const conceptos: CfdiConcepto[] = [
-      {
+    // ── Desglose fiscal del componente TOUR ──────────────────────────────────
+    // Se lee el SNAPSHOT de la reserva, no la config viva del tour: si la
+    // agencia cambia el tratamiento despues, este CFDI no debe moverse.
+    // NULL = cobro anterior a la feature -> 16% implicito, que es exactamente
+    // como se comporto el sistema hasta ahora.
+    const bookingTax = booking as { tax_treatment?: TaxTreatment; exempt_ratio?: number | string };
+    const tourTreatment: TaxTreatment = bookingTax.tax_treatment ?? "taxable_16";
+    const tourExemptRatio = Number(bookingTax.exempt_ratio ?? 0);
+    const tourTax = calculateTaxBreakdown({
+      grossAmount: grossTourAmount,
+      taxTreatment: tourTreatment,
+      exemptRatio: tourExemptRatio,
+      decimals: 6,
+    });
+
+    const conceptos: CfdiConcepto[] = [];
+
+    // Parte gravada. valor_unitario NETO porque tax_included es false.
+    if (tourTax.taxableBase > 0) {
+      conceptos.push({
+        clave_prod_serv: "90121500",
+        cantidad: 1,
+        clave_unidad: "E48",
+        descripcion: `Servicio de viaje: ${tourName} (Reserva ${bookingRef})${checkinLabel}`,
+        valor_unitario: tourTax.taxableBase,
+        ...(descuentoTour > 0 ? { descuento: descuentoTour } : {}),
+        tercero: terceroAgencia,
+      });
+    }
+
+    // Parte exenta. valor_unitario COMPLETO: no hay IVA que separar.
+    //
+    // Descripcion neutral a proposito: la exencion corresponde a la operacion
+    // de la AGENCIA, no a ToursRed. Describirla como "servicio de intermediacion
+    // exento de ToursRed" atribuiria a ToursRed una exencion que no es suya.
+    //
+    // Y lleva `tercero` igual que la parte gravada: ACuentaTerceros es un
+    // mecanismo de atribucion de INGRESO a la agencia para efectos de ISR,
+    // independiente de si ese concepto causa IVA. Sin el nodo, ese ingreso
+    // quedaria sin atribuir: ni a la agencia (no lo ampara) ni a ToursRed
+    // (nunca lo declaro como propio).
+    if (tourTax.exemptAmount > 0) {
+      conceptos.push({
+        clave_prod_serv: "90121500",
+        cantidad: 1,
+        clave_unidad: "E48",
+        descripcion: `Anticipo por servicio turístico: ${tourName} (Reserva ${bookingRef})${checkinLabel}`,
+        valor_unitario: tourTax.exemptAmount,
+        exento: true,
+        tercero: terceroAgencia,
+      });
+    }
+
+    // Un tour de importe cero no deberia llegar aqui, pero si llegara, un CFDI
+    // sin conceptos revienta en el PAC con un error incomprensible.
+    if (conceptos.length === 0) {
+      conceptos.push({
         clave_prod_serv: "90121500",
         cantidad: 1,
         clave_unidad: "E48",
@@ -701,8 +778,8 @@ Deno.serve(async (req: Request) => {
         valor_unitario: precioTourBruto,
         ...(descuentoTour > 0 ? { descuento: descuentoTour } : {}),
         tercero: terceroAgencia,
-      },
-    ];
+      });
+    }
 
     if (precioServicioBruto > 0) {
       conceptos.push({
@@ -741,20 +818,44 @@ Deno.serve(async (req: Request) => {
       for (const opt of paidOptionals) {
         const optAmount = opt.total_paid || opt.subtotal;
         if (optAmount <= 0) continue;
-        const optBruto = Math.round((optAmount / 1.16) * 100) / 100;
         const claveProdServ = opt.service_kind === "pickup"
           ? "78111804"
           : opt.service_kind === "language"
             ? "90121702"
             : "90121500";
-        conceptos.push({
-          clave_prod_serv: claveProdServ,
-          cantidad: 1,
-          clave_unidad: "E48",
-          descripcion: opt.description || (opt.service_kind === "pickup" ? "Pick Up" : opt.service_kind === "language" ? "Idioma/Intérprete" : "Servicio opcional"),
-          valor_unitario: optBruto,
-          tercero: terceroAgencia,
+        const optDesc = opt.description || (opt.service_kind === "pickup" ? "Pick Up" : opt.service_kind === "language" ? "Idioma/Intérprete" : "Servicio opcional");
+
+        // Cada opcional usa SU PROPIO snapshot fiscal. No hereda nada del tour:
+        // un tour gravado puede llevar una "Entrada a Six Flags" exenta
+        // (Art. 15 fr. XIII LIVA) y ninguno contamina al otro.
+        const optTax = calculateTaxBreakdown({
+          grossAmount: optAmount,
+          taxTreatment: (opt.tax_treatment ?? "taxable_16") as TaxTreatment,
+          exemptRatio: Number(opt.exempt_ratio ?? 0),
+          decimals: 6,
         });
+
+        if (optTax.taxableBase > 0) {
+          conceptos.push({
+            clave_prod_serv: claveProdServ,
+            cantidad: 1,
+            clave_unidad: "E48",
+            descripcion: optDesc,
+            valor_unitario: optTax.taxableBase,
+            tercero: terceroAgencia,
+          });
+        }
+        if (optTax.exemptAmount > 0) {
+          conceptos.push({
+            clave_prod_serv: claveProdServ,
+            cantidad: 1,
+            clave_unidad: "E48",
+            descripcion: optDesc,
+            valor_unitario: optTax.exemptAmount,
+            exento: true,
+            tercero: terceroAgencia,
+          });
+        }
       }
     }
 
