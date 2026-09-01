@@ -25,11 +25,17 @@ env:
   # (eslint 10 / typescript-eslint 8.68.0). Actualizar al bajarla.
   # El desglose por regla vive en BASE dentro del script de resumen.
   #
-  # 2471 y no 2472: este mismo PR cierra el unico react-hooks/rules-of-hooks
-  # (BookingFlowStep3), asi que la base ya refleja main DESPUES del merge.
-  BASELINE_ERRORS: 2471
+  # Historial de bajadas (cada PR que baja la base la actualiza aqui):
+  #   31-ago  2472/2561  medicion inicial
+  #   31-ago  2471/2560  cierra el unico rules-of-hooks (BookingFlowStep3)
+  #   31-ago  2458/2547  saca PermissionCheckbox de AdminUsers (-13 static-components)
+  #   31-ago  2423/2512  #97 tipa vehicle_map_type (-4 any), #98 reloj de SLA
+  #                      (-2 purity), #99 saca Th/SortIcon/SectionMessage
+  #                      (-29 static-components). Medido sobre main en 4fa4c2d,
+  #                      no proyectado.
+  BASELINE_ERRORS: 2423
   BASELINE_WARNINGS: 89
-  BASELINE_TOTAL: 2560
+  BASELINE_TOTAL: 2512
   BASELINE_FILES: 324
 
 jobs:

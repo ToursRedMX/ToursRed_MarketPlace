@@ -14,6 +14,36 @@ interface StaffUser {
   permissions: AdminPermissions | null;
 }
 
+// Fuera de AdminUsers a proposito (react-hooks/static-components). Definido
+// dentro, era un tipo de componente NUEVO en cada render del padre, asi que
+// React desmontaba y volvia a montar el <input> en vez de actualizarlo: el
+// checkbox perdia el foco en cada cambio de permisos. No captura nada del
+// closure —todo entra por props— asi que sacarlo no cambia ningun sitio de uso.
+const PermissionCheckbox = ({
+  label,
+  checked,
+  onChange,
+  disabled = false
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+}) => (
+  <label className="flex items-center gap-x-2 cursor-pointer">
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      disabled={disabled}
+      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+    />
+    <span className={`text-sm ${disabled ? 'text-gray-400' : 'text-gray-700'}`}>
+      {label}
+    </span>
+  </label>
+);
+
 const AdminUsers: React.FC = () => {
   const { isSuperAdmin } = useAuth();
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
@@ -370,31 +400,6 @@ const AdminUsers: React.FC = () => {
       setLoading(false);
     }
   };
-
-  const PermissionCheckbox = ({
-    label,
-    checked,
-    onChange,
-    disabled = false
-  }: {
-    label: string;
-    checked: boolean;
-    onChange: (checked: boolean) => void;
-    disabled?: boolean;
-  }) => (
-    <label className="flex items-center gap-x-2 cursor-pointer">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        disabled={disabled}
-        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
-      />
-      <span className={`text-sm ${disabled ? 'text-gray-400' : 'text-gray-700'}`}>
-        {label}
-      </span>
-    </label>
-  );
 
   if (!isSuperAdmin) {
     return (
