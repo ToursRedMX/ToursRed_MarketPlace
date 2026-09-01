@@ -45,6 +45,9 @@ atribuye **274 de los 2,561** problemas a palabras sueltas del mensaje —
 | Errores | 2,472 | **2,423** |
 | Warnings | 89 | 89 |
 
+Los **2,512 / 2,423 / 89** son la **medición real sobre `main` en `4fa4c2d`**, con
+los cinco PRs dentro, no una proyección. Es la base que quedó en `lint.yml`.
+
 Desglose por familia (inicial → final):
 
 | Familia | Inicial | Final |
@@ -54,11 +57,21 @@ Desglose por familia (inicial → final):
 | `react-hooks/*` | 360 (14%) | **329** |
 | Resto | 207 (8%) | 193 |
 
-> ⚠️ **La base de `lint.yml` debe sincronizarse a `2423 / 89 / 2512` cuando los
-> PRs #96, #97, #98 y #99 estén todos mergeados.** Sólo #96 la mueve; los otros
-> tres la dejan intacta a propósito para no generar conflictos entre ramas
-> abiertas. Mientras tanto el summary marca un delta negativo, que no dispara
-> ningún aviso.
+La base de `lint.yml` quedó sincronizada en **`2423 / 89 / 2512`** tras el merge
+de #99, medida y no proyectada. `react-hooks/static-components` y
+`react-hooks/rules-of-hooks` salieron de `BASE` en `summarize-lint.mjs` porque
+quedaron en cero: fuera de la base, si alguna reaparece dispara el aviso de
+*"reglas fuera de la base"* además del delta, que es la señal que interesa.
+
+### Historial de bajadas
+
+| PR | Qué | Problemas |
+|---|---|---|
+| #95 | `lint.yml` + cierra el único `rules-of-hooks` | 2,561 → 2,560 |
+| #96 | `PermissionCheckbox` fuera de `AdminUsers` | 2,560 → 2,547 |
+| #97 | Tipa `vehicle_map_type`, quita 4 `as any` | 2,547 → 2,543 |
+| #98 | Reloj de SLA compartido (`purity` 3 → 1) | 2,543 → 2,541 |
+| #99 | `Th`, `SortIcon` ×2, `SectionMessage` fuera | 2,541 → **2,512** |
 
 ---
 
@@ -130,6 +143,26 @@ de las líneas 29-30 sobran.
 | #98 | SLA con reloj compartido en `AdminServiceDesk` y `TravelerSupportTickets` | `purity` 3 → 1 |
 
 `static-components` queda en **0** en todo el repo.
+
+### Revisión visual del PR #99 (31-ago)
+
+El cambio de #99 es remontaje de componentes en tablas: **se ve idéntico en el
+diff y se siente distinto en pantalla**, así que no se mergeó sólo con `tsc` y
+ESLint en verde. Revisado en el preview de Netlify:
+
+| Pantalla | Resultado |
+|---|---|
+| `/admin/bookings` | ✅ Ordenamiento correcto en ambas direcciones (probados FOLIO y TOTAL), alineación derecha respetada |
+| `/admin/service-desk` | ✅ PRIORIDAD ordena bien; el badge de SLA muestra valor |
+| `/executive/perfil` | ✅ El aviso "Información personal guardada" salió en la sección correcta y la ✕ cerró sin dejar hueco en el layout |
+| `/admin/bookings-cleanup` | ⚠️ **No verificado visualmente** |
+
+`/admin/bookings-cleanup` no se pudo probar: el sandbox está limpio en los tres
+umbrales (7 / 14 / 30 días), así que no hay filas con las que ejercitar el sort.
+Se mergeó igual porque es **el mismo componente `SortIcon`** ya confirmado en
+`/admin/service-desk`, con la misma forma de props. Queda anotado por si esa
+pantalla se comporta raro: es la única de las cuatro sin confirmación en
+pantalla.
 
 **Decisión de volumen del SLA (PR #98):** un solo timer por pantalla, no uno por
 fila. La alternativa —un `<SlaBadge>` con su propio `useEffect`+`setInterval`—
