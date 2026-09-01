@@ -34,6 +34,7 @@ export const MfaSettingsSection: React.FC = () => {
   const [factors, setFactors] = useState<MfaFactor[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEnrolling, setIsEnrolling] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
   const [totpSecret, setTotpSecret] = useState('');
   const [newFactorId, setNewFactorId] = useState('');
@@ -92,6 +93,26 @@ export const MfaSettingsSection: React.FC = () => {
     }
   }, [factors, loadRecoveryCodesRemaining]);
 
+  // Borra factores TOTP unverified que hayan quedado colgando de un intento
+  // anterior. Devuelve cuantos limpio.
+  //
+  // OJO con listFactors(): `data.totp` trae SOLO los verified —auth-js filtra
+  // por status al armarlo— y los unverified aparecen unicamente en `data.all`.
+  // Filtrar sobre `.totp`, que es lo que usa loadFactors(), no encontraria
+  // nunca un huerfano y esta limpieza no haria nada.
+  const cleanupOrphanFactors = useCallback(async (): Promise<number> => {
+    const { data } = await supabase.auth.mfa.listFactors();
+    const orphans = (data?.all ?? []).filter(
+      (f) => f.factor_type === 'totp' && f.status !== 'verified',
+    );
+    let removed = 0;
+    for (const orphan of orphans) {
+      const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId: orphan.id });
+      if (!unenrollError) removed++;
+    }
+    return removed;
+  }, []);
+
   const handleStartEnrollment = async () => {
     setError('');
     setSuccess('');
@@ -99,6 +120,16 @@ export const MfaSettingsSection: React.FC = () => {
     setQrUrl('');
     setVerifyCode('');
     try {
+      // Red de seguridad. enroll() crea el factor en el servidor de inmediato
+      // —asi es como Supabase genera el QR—, asi que un intento que muere sin
+      // pasar por "Cancelar" (pestana cerrada, conexion caida) deja un factor
+      // unverified huerfano. Como todos se crean con friendly_name vacio, el
+      // siguiente enroll() choca con el huerfano y Auth responde
+      //   A factor with the friendly name "" for this user already exists
+      // dejando al usuario bloqueado sin nada que pueda hacer al respecto.
+      // Se limpia antes de intentar crear el nuevo.
+      await cleanupOrphanFactors();
+
       const { data, error: enrollError } = await supabase.auth.mfa.enroll({
         factorType: 'totp',
         issuer: 'ToursRed',
@@ -108,10 +139,40 @@ export const MfaSettingsSection: React.FC = () => {
       setTotpSecret(data.totp.secret);
       setQrUrl(data.totp.qr_code);
     } catch (err: any) {
-      setError(err.message || 'Error al crear factor MFA');
+      // Si aun asi choca con un duplicado, la limpieza fallo (sin red, sesion
+      // expirada). El mensaje crudo de Auth no le dice nada al usuario.
+      const raw = err?.message || '';
+      setError(
+        /already exists/i.test(raw)
+          ? 'Quedo una configuracion de MFA a medias que no se pudo limpiar. Recarga la pagina e intentalo de nuevo.'
+          : raw || 'Error al crear factor MFA',
+      );
     } finally {
       setIsEnrolling(false);
     }
+  };
+
+  const handleCancelEnrollment = async () => {
+    const factorId = newFactorId;
+    setError('');
+    // Cancelar de verdad tiene que borrar el factor que enroll() ya creo en el
+    // servidor; si no, queda huerfano y bloquea el siguiente intento.
+    if (factorId) {
+      setIsCancelling(true);
+      try {
+        await supabase.auth.mfa.unenroll({ factorId });
+      } catch {
+        // Best-effort a proposito: si falla, cleanupOrphanFactors lo recoge en
+        // el proximo "Configurar MFA". No se atrapa al usuario en el modal por
+        // una llamada de red que fallo cuando lo que pidio fue justamente salir.
+      } finally {
+        setIsCancelling(false);
+      }
+    }
+    setQrUrl('');
+    setVerifyCode('');
+    setTotpSecret('');
+    setNewFactorId('');
   };
 
   const handleVerifyEnrollment = async () => {
@@ -137,6 +198,9 @@ export const MfaSettingsSection: React.FC = () => {
       setQrUrl('');
       setVerifyCode('');
       setTotpSecret('');
+      // El factor ya esta verified: dejar su id en newFactorId apuntaria a un
+      // factor activo, no a uno huerfano.
+      setNewFactorId('');
       await loadFactors();
 
       // Generar codigos de recuperacion automaticamente tras activar MFA
@@ -372,14 +436,15 @@ export const MfaSettingsSection: React.FC = () => {
               />
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setQrUrl(''); setVerifyCode(''); setTotpSecret(''); }}
-                  className="flex-1 py-2.5 px-4 border border-slate-300 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                  onClick={handleCancelEnrollment}
+                  disabled={isCancelling}
+                  className="flex-1 py-2.5 px-4 border border-slate-300 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
-                  Cancelar
+                  {isCancelling ? 'Cancelando...' : 'Cancelar'}
                 </button>
                 <button
                   onClick={handleVerifyEnrollment}
-                  disabled={verifyCode.length !== 6}
+                  disabled={verifyCode.length !== 6 || isCancelling}
                   className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white font-medium py-2.5 px-4 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                 >
                   <ShieldCheck className="w-4 h-4" /> Activar
