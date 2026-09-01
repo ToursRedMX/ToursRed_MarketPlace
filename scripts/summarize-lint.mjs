@@ -24,32 +24,32 @@ import path from 'node:path';
 // typescript-eslint 8.68.0. Mover junto con las BASELINE_* de lint.yml:
 // si una baja, se actualizan las dos.
 const BASE = {
-  '@typescript-eslint/no-explicit-any': 1672,
+  '@typescript-eslint/no-explicit-any': 1668,
   '@typescript-eslint/no-unused-vars': 322,
   'no-useless-escape': 171,
   'react-hooks/set-state-in-effect': 118,
   'react-hooks/immutability': 86,
   'react-hooks/exhaustive-deps': 85,
-  'react-hooks/static-components': 42,
   'react-hooks/refs': 21,
   'no-useless-assignment': 16,
   'no-empty': 12,
   'react-hooks/preserve-manual-memoization': 4,
   'react-refresh/only-export-components': 4,
-  'react-hooks/purity': 3,
+  'react-hooks/purity': 1,
   '@typescript-eslint/no-unused-expressions': 2,
   'prefer-const': 2,
-  // react-hooks/rules-of-hooks NO va aqui a proposito: quedo en 0 al cerrar el
-  // de BookingFlowStep3. Fuera de BASE, si reaparece se marca con el aviso de
-  // "reglas fuera de la base" ademas del delta, que es la senal que queremos.
+  // react-hooks/rules-of-hooks y react-hooks/static-components NO van aqui a
+  // proposito: los dos quedaron en 0. Fuera de BASE, si reaparecen se marcan
+  // con el aviso de "reglas fuera de la base" ademas del delta, que es la
+  // senal que queremos.
 };
 
 // Corriendo local sin las env del workflow, se cae a la misma base para que
 // los deltas sigan teniendo sentido.
 const num = (name, fallback) => Number(process.env[name] ?? fallback);
-const BASELINE_ERRORS = num('BASELINE_ERRORS', 2471);
+const BASELINE_ERRORS = num('BASELINE_ERRORS', 2423);
 const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 89);
-const BASELINE_TOTAL = num('BASELINE_TOTAL', 2560);
+const BASELINE_TOTAL = num('BASELINE_TOTAL', 2512);
 const BASELINE_FILES = num('BASELINE_FILES', 324);
 
 const reportPath = process.argv[2] ?? 'eslint-report.json';
@@ -58,7 +58,7 @@ const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
 // `-f json` emite una entrada por archivo lintado, incluidos los limpios. Cero
 // entradas no es "el repo esta impecable": es que eslint no linteo nada (un
 // `ignores` que se comio todo, un glob roto). Sin este guardia el resumen
-// reportaria 0 problemas y un delta de -2560, o sea una mejora inventada.
+// reportaria 0 problemas y un delta de -2512, o sea una mejora inventada.
 const lintedFiles = report.length;
 
 let errors = 0;
