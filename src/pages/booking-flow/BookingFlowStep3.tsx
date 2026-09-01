@@ -26,8 +26,13 @@ const BookingFlowStep3: React.FC = () => {
 
   const tour = flow.tour;
   const isReceptivo = tour?.tour_type === 'receptivo';
-  const isPrivateTransfer = isReceptivo && (tour as any).activity_type === 'transport' && (tour as any).receptivo_modality === 'privado';
-  const hasSeatMap = !!(tour as any).vehicle_map_type && !isPrivateTransfer;
+  const isPrivateTransfer = isReceptivo && tour?.activity_type === 'transport' && tour?.receptivo_modality === 'privado';
+  // `tour?.` y no `(tour as any).`: sin el optional chaining esta linea tiraba
+  // TypeError con tour null, 232 lineas ANTES del `if (!tour) return null` que
+  // se supone cubre ese caso — o sea que ese return null era codigo muerto para
+  // el escenario que deberia proteger. Ahora es consistente con las lineas
+  // 28/32/33, que siempre lo tuvieron.
+  const hasSeatMap = !!tour?.vehicle_map_type && !isPrivateTransfer;
   const hasRestrictions = isReceptivo && (tour.restriction_pregnant || tour.restriction_disability || tour.restriction_physical);
   const tourLanguages: any[] = Array.isArray(tour?.tour_languages) ? tour.tour_languages : [];
   const pickupZones: any[] = Array.isArray(tour?.pickup_zones) ? tour.pickup_zones : [];

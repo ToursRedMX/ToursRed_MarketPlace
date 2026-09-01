@@ -1,3 +1,5 @@
+import type { VehicleMapType } from './seats';
+
 export interface User {
   id: string;
   email: string;
@@ -210,6 +212,9 @@ export interface Tour {
   tour_type?: TourType;
   receptivo_modality?: ReceptivoModality;
   activity_type?: ActivityType;
+  // Existia en la BD y se leia con `(tour as any).vehicle_map_type` en cuatro
+  // lugares. VehicleMapType ya vivia en ./seats; solo faltaba declararlo aqui.
+  vehicle_map_type?: VehicleMapType | null;
   operating_days?: number[];
   operating_months?: number[];
   min_advance_booking_hours?: number;
