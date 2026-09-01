@@ -102,12 +102,23 @@ const TravelerSupportTickets: React.FC = () => {
   const isClosed = (t: SupportTicket) =>
     t.status === 'resuelto' || t.status === 'cancelado' || t.status === 'duplicado';
 
+  // Reloj compartido para el SLA, refrescado cada minuto. Mismo criterio que en
+  // AdminServiceDesk: UN timer por pantalla, no uno por ticket. Un <SlaBadge>
+  // con su propio interval crearia un intervalo por fila y un re-render por
+  // fila, para un resultado identico —todas leen el mismo reloj—. Y 60s en vez
+  // de 1s porque el texto va en horas o dias, nunca en segundos.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const slaRemaining = (ticket: SupportTicket) => {
     if (!ticket.subcategory) return null;
     const sla = (ticket.subcategory as any).sla_horas ?? 24;
     const created = new Date(ticket.created_at).getTime();
     const deadline = created + sla * 3600 * 1000;
-    const remaining = deadline - Date.now();
+    const remaining = deadline - now;
     if (remaining <= 0) return 'Vencido';
     const hours = Math.floor(remaining / 3600000);
     if (hours < 1) return '< 1 hora';

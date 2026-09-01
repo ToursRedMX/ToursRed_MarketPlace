@@ -113,11 +113,28 @@ const AdminServiceDesk: React.FC = () => {
       : <ArrowDown className="h-3.5 w-3.5 text-primary-500 ml-1 flex-shrink-0" />;
   };
 
+  // Reloj compartido para el SLA, refrescado cada minuto.
+  //
+  // UN solo timer por pantalla, no uno por fila. La alternativa —extraer un
+  // <SlaBadge> con su propio useEffect+interval— crearia hasta PAGE_SIZE (20)
+  // intervalos, cada uno disparando un re-render independiente, para un
+  // resultado identico: las 20 filas leen el mismo reloj. Asi es un timer, un
+  // re-render por minuto, y las 20 filas se refrescan juntas.
+  //
+  // 60s y no 1s a proposito: el badge muestra horas o dias, nunca segundos, asi
+  // que un tick por segundo serian 59 re-renders de mas por minuto sin cambiar
+  // un solo pixel.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const slaStatus = (ticket: any) => {
     const closed = ticket.status === 'resuelto' || ticket.status === 'cancelado' || ticket.status === 'duplicado';
     if (closed) return null;
     if (!ticket.sla_deadline) return null;
-    const remaining = new Date(ticket.sla_deadline).getTime() - Date.now();
+    const remaining = new Date(ticket.sla_deadline).getTime() - now;
     if (remaining <= 0) return <span className="text-xs text-red-600 font-medium">SLA vencido</span>;
     const hours = Math.floor(remaining / 3600000);
     if (hours < 2) return <span className="text-xs text-orange-600 font-medium">{hours}h</span>;
