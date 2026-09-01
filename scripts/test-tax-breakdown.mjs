@@ -275,6 +275,39 @@ section(15, 'Concepto por UNIDAD: cantidad no debe multiplicar dos veces');
   console.log(`   unit ${unitPrice} x ${quantity} → el CFDI ampara ${totalCobrado} en los tres tratamientos`);
 }
 
+// ── PARIDAD SQL ───────────────────────────────────────────────────────────────
+section('SQL', 'Los esperados del harness SQL coinciden con la canonica');
+{
+  // scripts/test-tax-snapshot-sql.sql lleva sus valores esperados HARDCODEADOS
+  // para no recalcularlos con la misma formula que pretende verificar. El
+  // riesgo de eso es que se desincronicen de la canonica sin que nadie lo note.
+  // Aqui se parsean y se comprueban, asi que el harness SQL no puede mentir.
+  const sqlPath = path.join(ROOT, 'scripts/test-tax-snapshot-sql.sql');
+  const sql = fs.readFileSync(sqlPath, 'utf8');
+  // Se lee el bloque compacto del resumen (el segundo VALUES del archivo).
+  const rowRe = /\((\d+),([\d.]+),'(taxable_16|exempt|mixed)'(?:::tax_treatment_enum)?,([\d.]+)(?:::numeric)?,([\d.]+),([\d.]+),([\d.]+),([\d.]+)\)/g;
+  const rows = [...sql.matchAll(rowRe)];
+  assert('SQL: se parsearon los casos del harness', rows.length >= 18, `solo ${rows.length}`);
+
+  let mismatches = 0;
+  const seen = new Set();
+  for (const m of rows) {
+    const [, n, gross, treatment, ratio, ee, eb, ei, et] = m;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    const r = calculateTaxBreakdown({
+      grossAmount: Number(gross), taxTreatment: treatment, exemptRatio: Number(ratio),
+    });
+    if (r.exemptAmount !== Number(ee) || r.taxableBase !== Number(eb)
+        || r.vatAmount !== Number(ei) || r.taxRate !== Number(et)) {
+      mismatches++;
+      failures.push(`SQL caso ${n}: canonica da ${r.exemptAmount}/${r.taxableBase}/${r.vatAmount}/${r.taxRate}, el .sql espera ${ee}/${eb}/${ei}/${et}`);
+    }
+  }
+  if (mismatches === 0) passed++; else failed += mismatches;
+  console.log(`   ${seen.size} casos del .sql verificados contra la canonica · ${mismatches} discrepancias`);
+}
+
 // ── PARIDAD ──────────────────────────────────────────────────────────────────
 section('P', 'Paridad entre la fuente canonica y la copia Deno');
 {
