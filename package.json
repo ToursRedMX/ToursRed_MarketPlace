@@ -14,7 +14,7 @@
     "@icons-pack/react-simple-icons": "^13.15.1",
     "@mapbox/search-js-react": "^1.6.0",
     "@sentry/react": "^10.72.0",
-    "@supabase/supabase-js": "^2.112.3",
+    "@supabase/supabase-js": "^2.112.4",
     "@tanstack/react-query": "^5.102.8",
     "@tiptap/extension-link": "^3.30.5",
     "@tiptap/extension-placeholder": "^3.30.5",
