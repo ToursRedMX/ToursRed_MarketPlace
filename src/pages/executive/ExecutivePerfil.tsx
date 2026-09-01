@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 
 interface ExecutiveProfile {
   id: string;
@@ -543,6 +544,9 @@ export default function ExecutivePerfil() {
           </div>
         </div>
       </div>
+
+      {/* Seguridad - Autenticacion en dos pasos */}
+      <MfaSettingsSection />
     </div>
   );
 }

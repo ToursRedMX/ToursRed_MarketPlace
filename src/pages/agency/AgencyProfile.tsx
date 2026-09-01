@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import ImageUploader from '../../components/ImageUploader';
 import ChangePasswordSection from '../../components/ChangePasswordSection';
+import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import LinkedAccountsSection from '../../components/LinkedAccountsSection';
 
 interface AgencyProfile {
@@ -1273,6 +1274,8 @@ const AgencyProfile: React.FC = () => {
               <h2 className="text-base font-semibold text-gray-900">Seguridad</h2>
             </div>
             <ChangePasswordSection />
+            {/* Seguridad - Autenticacion en dos pasos */}
+            <MfaSettingsSection />
           </div>
 
           <div className="bg-white rounded-lg shadow-xs border border-gray-100 overflow-hidden">
