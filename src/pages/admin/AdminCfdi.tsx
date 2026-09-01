@@ -42,6 +42,7 @@ interface CfdiInvoice {
   receptor_uso_cfdi: string | null;
   subtotal: number;
   iva_amount: number;
+  exempt_amount?: number;
   total: number;
   status: 'pending' | 'stamped' | 'cancelled' | 'error';
   xml_url: string | null;
@@ -364,7 +365,16 @@ const AdminCfdi: React.FC = () => {
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{formatCurrencyMXN(inv.subtotal)}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{formatCurrencyMXN(inv.iva_amount)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                          {formatCurrencyMXN(inv.iva_amount)}
+                          {/* El exento solo se muestra cuando existe: los CFDI
+                              gravados —la gran mayoria— conservan su formato. */}
+                          {(inv.exempt_amount ?? 0) > 0 && (
+                            <div className="text-xs text-amber-700">
+                              Exento {formatCurrencyMXN(inv.exempt_amount ?? 0)}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-sm font-semibold text-gray-900 whitespace-nowrap">{formatCurrencyMXN(inv.total)}</td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>

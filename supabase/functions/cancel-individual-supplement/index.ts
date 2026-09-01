@@ -60,6 +60,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, booking_id, tour_supplement_id, quantity, unit_price, service_charge,
         membership_exemption_used, total_paid, status, points_earned, cfdi_invoice_id,
+        tax_treatment, exempt_ratio,
         tour_supplements (id, name, is_cancellable)
       `)
       .eq("id", booking_supplement_id)
@@ -300,6 +301,13 @@ Deno.serve(async (req: Request) => {
                   related_cfdi_uuid: cfdiRow.uuid_fiscal,
                   item_type: "supplement",
                   tercero_agencia: terceroAgencia,
+                  // Composicion fiscal del SNAPSHOT del cobro original. Un
+                  // reembolso conserva proporcionalmente lo que se cobro: si el
+                  // suplemento se vendio 40% exento, la nota de credito devuelve
+                  // 40% exento de lo reembolsado. Sin esto, la nota trasladaria
+                  // IVA que nunca se cobro.
+                  tax_treatment: (supplement as { tax_treatment?: string }).tax_treatment ?? null,
+                  exempt_ratio: (supplement as { exempt_ratio?: number }).exempt_ratio ?? null,
                 },
               }).catch((err: any) => console.error("Credit note generation failed (no crítico):", err))
             );

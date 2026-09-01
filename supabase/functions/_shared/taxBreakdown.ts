@@ -139,3 +139,46 @@ export function treatmentForRatio(exemptRatio: number): TaxTreatment {
 }
 
 // ════════════════ FIN BLOQUE CANONICO (paridad con _shared) ═════════════════
+
+// ═══════════════ GUARDIA DE CUADRE (solo Deno, no va en la canonica) ════════
+
+/** Forma minima de un concepto para poder verificarlo. */
+export interface VerifiableConcepto {
+  cantidad: number;
+  valor_unitario: number;
+  descuento?: number;
+  exento?: boolean;
+}
+
+/**
+ * Verifica que los conceptos reconstruyan EXACTAMENTE el importe cobrado antes
+ * de mandar nada al PAC.
+ *
+ * Existe porque ninguna de las funciones de CFDI validaba esto, y por eso el
+ * bug de `cantidad` en suplementos y opcionales —el CFDI amparaba el doble de
+ * lo cobrado con quantity=2— sobrevivio sin que nada lo detectara. Un CFDI mal
+ * timbrado no se corrige: se cancela y se vuelve a emitir, con el viajero ya
+ * teniendo el comprobante equivocado.
+ *
+ * Reconstruye lo que hara el PAC:
+ *   gravado: (valor_unitario * cantidad - descuento) * 1.16
+ *   exento:   valor_unitario * cantidad - descuento
+ *
+ * Tolerancia de un centavo: los valores unitarios van a 6 decimales y el
+ * redondeo del PAC a 2 puede mover el ultimo centavo legitimamente.
+ */
+export function verifyConceptosTotal(
+  conceptos: VerifiableConcepto[],
+  expectedTotal: number,
+  tolerance = 0.01,
+): { ok: boolean; computed: number; expected: number; diff: number } {
+  let computed = 0;
+  for (const c of conceptos) {
+    const neto = c.valor_unitario * c.cantidad - (c.descuento ?? 0);
+    computed += c.exento ? neto : neto * (1 + VAT_RATE);
+  }
+  computed = Math.round(computed * 100) / 100;
+  const expected = Math.round(expectedTotal * 100) / 100;
+  const diff = Math.round((computed - expected) * 100) / 100;
+  return { ok: Math.abs(diff) <= tolerance, computed, expected, diff };
+}

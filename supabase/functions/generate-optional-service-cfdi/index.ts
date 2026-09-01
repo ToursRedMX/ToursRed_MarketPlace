@@ -1,4 +1,4 @@
-import { calculateTaxBreakdown, type TaxTreatment } from "../_shared/taxBreakdown.ts";
+import { calculateTaxBreakdown, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -334,6 +334,30 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // ── Guardia de cuadre ────────────────────────────────────────────────────
+    // Verifica que los conceptos reconstruyan lo cobrado ANTES de timbrar. El
+    // bug de `cantidad` en suplementos y opcionales (el CFDI amparaba el doble
+    // con quantity=2) sobrevivio precisamente porque nada comprobaba esto.
+    //
+    // NO BLOQUEA a proposito: un CFDI que no se timbra deja al viajero sin
+    // comprobante, y no hay datos en sandbox con los que comprobar que la
+    // reconstruccion cuadra en todos los caminos legitimos (descuentos por
+    // puntos repartidos entre conceptos, cortesias, saldos aplicados). Se
+    // reporta a Sentry con los numeros para poder decidir con evidencia si
+    // conviene endurecerlo.
+    {
+      const chk = verifyConceptosTotal(conceptos, exactTotal);
+      if (!chk.ok) {
+        console.error(
+          `[cfdi] descuadre de conceptos: reconstruido ${chk.computed} vs cobrado ${chk.expected} (diff ${chk.diff})`,
+        );
+        Sentry.captureMessage("CFDI: los conceptos no cuadran con el importe cobrado", {
+          level: "error",
+          extra: { ...chk, conceptos: conceptos.length, funcion: "generate-optional-service-cfdi" },
+        });
+      }
+    }
+
     const cfdiRequest: CfdiRequest = {
       tipo_de_comprobante: "I",
       serie,
@@ -365,6 +389,10 @@ Deno.serve(async (req: Request) => {
         receptor_codigo_postal: receptorCP,
         subtotal: subtotal_db,
         iva_amount: iva,
+        exempt_amount: Math.round(
+          conceptos.filter((c) => c.exento)
+            .reduce((s, c) => s + c.valor_unitario * c.cantidad - (c.descuento ?? 0), 0) * 100,
+        ) / 100,
         total: exactTotal,
         status: "pending",
       })
