@@ -50,6 +50,13 @@ function isDeletable(b: GarbageBooking): boolean {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// Fuera de AdminBookingsCleanup a proposito (react-hooks/static-components).
+// Recibe el estado de orden por props en vez de tomarlo del closure.
+const SortIcon = ({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) =>
+  sortField === field
+    ? sortDir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+    : <ChevronDown className="h-3 w-3 text-gray-300" />;
+
 const AdminBookingsCleanup: React.FC = () => {
   const [bookings, setBookings] = useState<GarbageBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,10 +129,7 @@ const AdminBookingsCleanup: React.FC = () => {
     else { setSortField(field); setSortDir('asc'); }
   };
 
-  const SortIcon = ({ field }: { field: SortField }) =>
-    sortField === field
-      ? sortDir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
-      : <ChevronDown className="h-3 w-3 text-gray-300" />;
+  const sortProps = { sortField, sortDir };
 
   // ─── Selection ─────────────────────────────────────────────────────────────
 
@@ -437,7 +441,7 @@ const AdminBookingsCleanup: React.FC = () => {
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Folio</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">
                       <button onClick={() => toggleSort('type')} className="flex items-center gap-1">
-                        Tipo <SortIcon field="type" />
+                        Tipo <SortIcon field="type" {...sortProps} />
                       </button>
                     </th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">
@@ -451,17 +455,17 @@ const AdminBookingsCleanup: React.FC = () => {
                     </th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">
                       <button onClick={() => toggleSort('created_at')} className="flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5" /> Fecha <SortIcon field="created_at" />
+                        <Calendar className="h-3.5 w-3.5" /> Fecha <SortIcon field="created_at" {...sortProps} />
                       </button>
                     </th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">
                       <button onClick={() => toggleSort('days_old')} className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> Dias <SortIcon field="days_old" />
+                        <Clock className="h-3.5 w-3.5" /> Dias <SortIcon field="days_old" {...sortProps} />
                       </button>
                     </th>
                     <th className="px-4 py-3 text-right font-semibold text-gray-600">
                       <button onClick={() => toggleSort('total_price')} className="flex items-center gap-1 ml-auto">
-                        Total <SortIcon field="total_price" />
+                        Total <SortIcon field="total_price" {...sortProps} />
                       </button>
                     </th>
                   </tr>

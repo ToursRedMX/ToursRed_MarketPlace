@@ -42,6 +42,21 @@ const REGIMENES = [
   { value: '621', label: '621 — Incorporación Fiscal' },
 ];
 
+type PerfilMessage = { type: 'success' | 'error'; text: string; section?: string } | null;
+
+// Fuera de ExecutivePerfil a proposito (react-hooks/static-components).
+// Definido dentro, era un tipo de componente nuevo en cada render y React
+// remontaba los 6 avisos en vez de actualizarlos. Recibe el mensaje y el
+// callback de cierre por props en vez de tomarlos del closure.
+const SectionMessage = ({ section, message, onDismiss }: { section: string; message: PerfilMessage; onDismiss: () => void }) =>
+  message?.section === section ? (
+    <div className={`rounded-lg px-4 py-3 text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+      {message.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
+      {message.text}
+      <button onClick={onDismiss} className="ml-auto"><X className="h-4 w-4" /></button>
+    </div>
+  ) : null;
+
 export default function ExecutivePerfil() {
   const { accountExecutiveInfo } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -257,14 +272,7 @@ export default function ExecutivePerfil() {
     return <div className="max-w-3xl mx-auto px-4 py-12 text-center text-gray-500">No se encontró el perfil del ejecutivo.</div>;
   }
 
-  const SectionMessage = ({ section }: { section: string }) =>
-    message?.section === section ? (
-      <div className={`rounded-lg px-4 py-3 text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-        {message.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
-        {message.text}
-        <button onClick={() => setMessage(null)} className="ml-auto"><X className="h-4 w-4" /></button>
-      </div>
-    ) : null;
+  const messageProps = { message, onDismiss: () => setMessage(null) };
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
@@ -299,7 +307,7 @@ export default function ExecutivePerfil() {
             <p className="text-xs text-gray-400 mt-1">Ejecutivo de Cuenta — ToursRed</p>
           </div>
         </div>
-        <SectionMessage section="photo" />
+        <SectionMessage section="photo" {...messageProps} />
       </div>
 
       {/* Información personal */}
@@ -309,7 +317,7 @@ export default function ExecutivePerfil() {
           <div><h2 className="font-semibold text-gray-900">Información personal</h2><p className="text-xs text-gray-400">Nombre y datos de contacto</p></div>
         </div>
         <div className="p-6 space-y-4">
-          <SectionMessage section="personal" />
+          <SectionMessage section="personal" {...messageProps} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Nombre *</label>
@@ -347,7 +355,7 @@ export default function ExecutivePerfil() {
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
             <p className="text-sm text-amber-800">Estos datos deben coincidir exactamente con tu constancia de situación fiscal del SAT.</p>
           </div>
-          <SectionMessage section="fiscal" />
+          <SectionMessage section="fiscal" {...messageProps} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Nombre o razón social fiscal</label>
@@ -417,7 +425,7 @@ export default function ExecutivePerfil() {
             </a>
           </div>
 
-          <SectionMessage section="facturapi" />
+          <SectionMessage section="facturapi" {...messageProps} />
 
           {profile.facturapi_configured && (
             <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center gap-3">
@@ -469,7 +477,7 @@ export default function ExecutivePerfil() {
           <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
             <p className="text-sm text-green-800">Verifica que la CLABE sea correcta. Los pagos se realizan por transferencia bancaria una vez que el administrador aprueba tu CFDI.</p>
           </div>
-          <SectionMessage section="bank" />
+          <SectionMessage section="bank" {...messageProps} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Nombre del titular de la cuenta</label>
@@ -512,7 +520,7 @@ export default function ExecutivePerfil() {
           <div><h2 className="font-semibold text-gray-900">Seguridad</h2><p className="text-xs text-gray-400">Cambiar contraseña de acceso</p></div>
         </div>
         <div className="p-6 space-y-4">
-          <SectionMessage section="password" />
+          <SectionMessage section="password" {...messageProps} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Nueva contraseña</label>

@@ -21,6 +21,17 @@ interface AgentOption {
   last_name: string;
 }
 
+// Fuera de AdminServiceDesk a proposito (react-hooks/static-components).
+// Definido dentro, era un tipo de componente nuevo en cada render y React
+// remontaba los 8 iconos en vez de actualizarlos. Recibe el estado de orden
+// por props en vez de tomarlo del closure.
+const SortIcon = ({ col, sortCol, sortDir }: { col: SortColumn; sortCol: SortColumn; sortDir: SortDir }) => {
+  if (sortCol !== col) return <ArrowUpDown className="h-3.5 w-3.5 text-gray-300 ml-1 flex-shrink-0" />;
+  return sortDir === 'asc'
+    ? <ArrowUp className="h-3.5 w-3.5 text-primary-500 ml-1 flex-shrink-0" />
+    : <ArrowDown className="h-3.5 w-3.5 text-primary-500 ml-1 flex-shrink-0" />;
+};
+
 const AdminServiceDesk: React.FC = () => {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -106,12 +117,7 @@ const AdminServiceDesk: React.FC = () => {
     setPage(0);
   };
 
-  const SortIcon = ({ col }: { col: SortColumn }) => {
-    if (sortCol !== col) return <ArrowUpDown className="h-3.5 w-3.5 text-gray-300 ml-1 flex-shrink-0" />;
-    return sortDir === 'asc'
-      ? <ArrowUp className="h-3.5 w-3.5 text-primary-500 ml-1 flex-shrink-0" />
-      : <ArrowDown className="h-3.5 w-3.5 text-primary-500 ml-1 flex-shrink-0" />;
-  };
+  const sortProps = { sortCol, sortDir };
 
   // Reloj compartido para el SLA, refrescado cada minuto.
   //
@@ -311,31 +317,31 @@ const AdminServiceDesk: React.FC = () => {
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('folio')}>
-                        <span className="flex items-center">Folio <SortIcon col="folio" /></span>
+                        <span className="flex items-center">Folio <SortIcon col="folio" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('tipo')}>
-                        <span className="flex items-center">Tipo <SortIcon col="tipo" /></span>
+                        <span className="flex items-center">Tipo <SortIcon col="tipo" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                         Subcategoria
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('prioridad')}>
-                        <span className="flex items-center">Prioridad <SortIcon col="prioridad" /></span>
+                        <span className="flex items-center">Prioridad <SortIcon col="prioridad" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('status')}>
-                        <span className="flex items-center">Estado <SortIcon col="status" /></span>
+                        <span className="flex items-center">Estado <SortIcon col="status" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('solicitante_nombre')}>
-                        <span className="flex items-center">Solicitante <SortIcon col="solicitante_nombre" /></span>
+                        <span className="flex items-center">Solicitante <SortIcon col="solicitante_nombre" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('agente_asignado_id')}>
-                        <span className="flex items-center">Asignado a <SortIcon col="agente_asignado_id" /></span>
+                        <span className="flex items-center">Asignado a <SortIcon col="agente_asignado_id" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('sla')}>
-                        <span className="flex items-center">SLA <SortIcon col="sla" /></span>
+                        <span className="flex items-center">SLA <SortIcon col="sla" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('created_at')}>
-                        <span className="flex items-center">Fecha <SortIcon col="created_at" /></span>
+                        <span className="flex items-center">Fecha <SortIcon col="created_at" {...sortProps} /></span>
                       </th>
                       <th className="px-4 py-3"></th>
                     </tr>
