@@ -232,8 +232,14 @@ Deno.serve(async (req: Request) => {
     // Desglose fiscal del SUPLEMENTO segun su propio snapshot, congelado al
     // cobrarse. Independiente del tour y de los servicios opcionales.
     // NULL = cobro anterior a la feature -> 16% implicito.
+    // BUG PREEXISTENTE CORREGIDO: el desglose del CONCEPTO se calcula sobre el
+    // precio UNITARIO, no sobre subtotal_supp (que ya es unit_price * quantity).
+    // Como el concepto lleva `cantidad: quantity`, FacturAPI vuelve a
+    // multiplicar: con quantity=2 el CFDI amparaba 400.00 habiendose cobrado
+    // 200.00. El desglose para la BD (mas abajo) SI va sobre el total, porque
+    // ahi se registra el importe completo del suplemento.
     const suppTaxCfdi = calculateTaxBreakdown({
-      grossAmount: subtotal_supp,
+      grossAmount: Number(suppReq.unit_price),
       taxTreatment: ((suppReq as { tax_treatment?: TaxTreatment }).tax_treatment ?? "taxable_16"),
       exemptRatio: Number((suppReq as { exempt_ratio?: number | string }).exempt_ratio ?? 0),
       decimals: 6,

@@ -220,8 +220,12 @@ Deno.serve(async (req: Request) => {
     const optGross = Number(bosRecord.subtotal);
     const optTreatment = ((bosRecord as { tax_treatment?: TaxTreatment }).tax_treatment ?? "taxable_16");
     const optRatio = Number((bosRecord as { exempt_ratio?: number | string }).exempt_ratio ?? 0);
+    // BUG PREEXISTENTE CORREGIDO: igual que en generate-supplement-cfdi. El
+    // desglose del CONCEPTO va sobre el precio UNITARIO; bosRecord.subtotal ya
+    // es price_per_person * quantity y el concepto lleva `cantidad: quantity`,
+    // asi que usar el total multiplicaba el CFDI por la cantidad.
     const optTaxCfdi = calculateTaxBreakdown({
-      grossAmount: optGross, taxTreatment: optTreatment, exemptRatio: optRatio, decimals: 6,
+      grossAmount: Number(bosRecord.unit_price), taxTreatment: optTreatment, exemptRatio: optRatio, decimals: 6,
     });
     const optTaxDb = calculateTaxBreakdown({
       grossAmount: optGross, taxTreatment: optTreatment, exemptRatio: optRatio,

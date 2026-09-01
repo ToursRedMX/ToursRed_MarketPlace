@@ -252,6 +252,29 @@ section(13, 'Tour mixto 30% + suplemento mixto 70% — proporciones aisladas');
   console.log(`   tour exento ${tour.exemptAmount} (ratio ${tour.exemptRatio}) · suplemento exento ${sup.exemptAmount} (ratio ${sup.exemptRatio})`);
 }
 
+// ── 15 (regresion) ────────────────────────────────────────────────────────────
+section(15, 'Concepto por UNIDAD: cantidad no debe multiplicar dos veces');
+{
+  // Regresion del bug preexistente en generate-supplement-cfdi y
+  // generate-optional-service-cfdi: el desglose del concepto se calculaba
+  // sobre unit_price * quantity mientras el concepto llevaba cantidad=quantity,
+  // asi que FacturAPI volvia a multiplicar. Con quantity=2 el CFDI amparaba
+  // 400.00 habiendose cobrado 200.00.
+  const unitPrice = 100, quantity = 2;
+  const totalCobrado = unitPrice * quantity;
+
+  for (const [nombre, ratio] of [['gravado', 0], ['exento', 1], ['mixto', 0.4]]) {
+    const treatment = treatmentForRatio(ratio);
+    const porUnidad = calculateTaxBreakdown({
+      grossAmount: unitPrice, taxTreatment: treatment, exemptRatio: ratio, decimals: 6,
+    });
+    // Lo que FacturAPI reconstruye: (base + exento) * cantidad + IVA * cantidad
+    const amparado = (porUnidad.exemptAmount + porUnidad.taxableBase + porUnidad.vatAmount) * quantity;
+    check(`15 ${nombre}: el CFDI ampara lo cobrado`, Math.round(amparado * 100) / 100, totalCobrado);
+  }
+  console.log(`   unit ${unitPrice} x ${quantity} → el CFDI ampara ${totalCobrado} en los tres tratamientos`);
+}
+
 // ── PARIDAD ──────────────────────────────────────────────────────────────────
 section('P', 'Paridad entre la fuente canonica y la copia Deno');
 {
