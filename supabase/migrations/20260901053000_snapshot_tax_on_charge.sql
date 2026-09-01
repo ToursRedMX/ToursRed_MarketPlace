@@ -15,6 +15,28 @@
 -- IDEMPOTENTE: solo escribe si el snapshot esta en NULL. Un cobro ya congelado
 -- nunca se recalcula, aunque la fila se actualice despues por otro motivo.
 --
+-- ── NUNCA BLOQUEA EL COBRO ──────────────────────────────────────────────────
+-- En Postgres una excepcion dentro de un trigger BEFORE aborta la sentencia
+-- completa: no hay aislamiento. Estos triggers viven en las mismas tablas que
+-- escriben los cinco webhooks de pago, asi que un fallo aqui —un overflow de
+-- numeric(12,2), un caso borde no contemplado— haria fallar el registro del
+-- pago sin haber tocado una linea de esos webhooks.
+--
+-- Por eso el calculo va dentro de un bloque EXCEPTION WHEN OTHERS que devuelve
+-- NEW sin tocar. Si el snapshot falla, las columnas quedan en NULL, que es
+-- exactamente el estado "cobro anterior a la feature" que los consumidores ya
+-- interpretan como 16% implicito. Degrada al comportamiento previo en vez de
+-- tumbar el cobro.
+--
+-- El costo es que un fallo es silencioso para el usuario. Se mitiga con
+-- RAISE WARNING (queda en el log de Postgres) y porque el estado es
+-- detectable: una fila pagada con tax_treatment NULL es exactamente la
+-- consulta de monitoreo que hay que vigilar.
+--
+-- Contrapartida asumida: un bloque EXCEPTION en plpgsql abre un subtransaction
+-- (savepoint) por fila. En estas tablas, con el volumen de un marketplace de
+-- tours, es despreciable frente al riesgo de bloquear un pago.
+--
 -- ── PARIDAD DE FORMULA ──────────────────────────────────────────────────────
 -- Esta es la TERCERA copia de la formula (canonica: src/utils/taxBreakdown.ts;
 -- Deno: supabase/functions/_shared/taxBreakdown.ts). Un trigger no puede
@@ -95,22 +117,30 @@ BEGIN
     RETURN NEW;  -- aun no se cobra
   END IF;
 
-  SELECT t.tax_treatment, t.exempt_ratio INTO v_tour
-  FROM public.tours t WHERE t.id = NEW.tour_id;
+  BEGIN
+    SELECT t.tax_treatment, t.exempt_ratio INTO v_tour
+    FROM public.tours t WHERE t.id = NEW.tour_id;
 
-  IF NOT FOUND THEN
-    RETURN NEW;
-  END IF;
+    IF NOT FOUND THEN
+      RETURN NEW;
+    END IF;
 
-  v_gross := COALESCE(NEW.deposit_amount, NEW.total_price, 0);
-  SELECT * INTO v_calc FROM public.compute_tax_snapshot(v_gross, v_tour.tax_treatment, v_tour.exempt_ratio);
+    v_gross := COALESCE(NEW.deposit_amount, NEW.total_price, 0);
+    SELECT * INTO v_calc FROM public.compute_tax_snapshot(v_gross, v_tour.tax_treatment, v_tour.exempt_ratio);
 
-  NEW.tax_treatment := v_tour.tax_treatment;
-  NEW.exempt_ratio  := v_tour.exempt_ratio;
-  NEW.exempt_amount := v_calc.exempt_amount;
-  NEW.taxable_base  := v_calc.taxable_base;
-  NEW.vat_amount    := v_calc.vat_amount;
-  NEW.tax_rate      := v_calc.tax_rate;
+    NEW.tax_treatment := v_tour.tax_treatment;
+    NEW.exempt_ratio  := v_tour.exempt_ratio;
+    NEW.exempt_amount := v_calc.exempt_amount;
+    NEW.taxable_base  := v_calc.taxable_base;
+    NEW.vat_amount    := v_calc.vat_amount;
+    NEW.tax_rate      := v_calc.tax_rate;
+  EXCEPTION WHEN OTHERS THEN
+    -- El cobro manda. Se deja el snapshot en NULL (= 16% implicito) antes que
+    -- hacer fallar el INSERT/UPDATE que registra el pago.
+    RAISE WARNING 'snapshot_booking_tax fallo para booking %: % (%)', NEW.id, SQLERRM, SQLSTATE;
+    NEW.tax_treatment := NULL; NEW.exempt_ratio := NULL; NEW.exempt_amount := NULL;
+    NEW.taxable_base  := NULL; NEW.vat_amount   := NULL; NEW.tax_rate      := NULL;
+  END;
   RETURN NEW;
 END;
 $$;
@@ -139,22 +169,28 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT ts.tax_treatment, ts.exempt_ratio INTO v_sup
-  FROM public.tour_supplements ts WHERE ts.id = NEW.tour_supplement_id;
+  BEGIN
+    SELECT ts.tax_treatment, ts.exempt_ratio INTO v_sup
+    FROM public.tour_supplements ts WHERE ts.id = NEW.tour_supplement_id;
 
-  IF NOT FOUND THEN
-    RETURN NEW;
-  END IF;
+    IF NOT FOUND THEN
+      RETURN NEW;
+    END IF;
 
-  v_gross := COALESCE(NEW.unit_price, 0) * COALESCE(NEW.quantity, 1);
-  SELECT * INTO v_calc FROM public.compute_tax_snapshot(v_gross, v_sup.tax_treatment, v_sup.exempt_ratio);
+    v_gross := COALESCE(NEW.unit_price, 0) * COALESCE(NEW.quantity, 1);
+    SELECT * INTO v_calc FROM public.compute_tax_snapshot(v_gross, v_sup.tax_treatment, v_sup.exempt_ratio);
 
-  NEW.tax_treatment := v_sup.tax_treatment;
-  NEW.exempt_ratio  := v_sup.exempt_ratio;
-  NEW.exempt_amount := v_calc.exempt_amount;
-  NEW.taxable_base  := v_calc.taxable_base;
-  NEW.vat_amount    := v_calc.vat_amount;
-  NEW.tax_rate      := v_calc.tax_rate;
+    NEW.tax_treatment := v_sup.tax_treatment;
+    NEW.exempt_ratio  := v_sup.exempt_ratio;
+    NEW.exempt_amount := v_calc.exempt_amount;
+    NEW.taxable_base  := v_calc.taxable_base;
+    NEW.vat_amount    := v_calc.vat_amount;
+    NEW.tax_rate      := v_calc.tax_rate;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'snapshot_supplement_tax fallo para booking_supplement %: % (%)', NEW.id, SQLERRM, SQLSTATE;
+    NEW.tax_treatment := NULL; NEW.exempt_ratio := NULL; NEW.exempt_amount := NULL;
+    NEW.taxable_base  := NULL; NEW.vat_amount   := NULL; NEW.tax_rate      := NULL;
+  END;
   RETURN NEW;
 END;
 $$;
@@ -182,30 +218,32 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT tos.tax_treatment, tos.exempt_ratio INTO v_svc
-  FROM public.tour_optional_services tos WHERE tos.id = NEW.tour_optional_service_id;
+  BEGIN
+    SELECT tos.tax_treatment, tos.exempt_ratio INTO v_svc
+    FROM public.tour_optional_services tos WHERE tos.id = NEW.tour_optional_service_id;
 
-  IF NOT FOUND THEN
-    -- Pickup e idioma no tienen fila en tour_optional_services: son opcionales
-    -- del sistema, gravados al 16% como hasta ahora.
-    SELECT * INTO v_calc FROM public.compute_tax_snapshot(COALESCE(NEW.subtotal, 0), 'taxable_16', 0);
-    NEW.tax_treatment := 'taxable_16';
-    NEW.exempt_ratio  := 0;
+    IF NOT FOUND THEN
+      -- Pickup e idioma no tienen fila en tour_optional_services: son opcionales
+      -- del sistema, gravados al 16% como hasta ahora. Confirmado en datos:
+      -- hay filas con tour_optional_service_id NULL.
+      SELECT * INTO v_calc FROM public.compute_tax_snapshot(COALESCE(NEW.subtotal, 0), 'taxable_16', 0);
+      NEW.tax_treatment := 'taxable_16';
+      NEW.exempt_ratio  := 0;
+    ELSE
+      SELECT * INTO v_calc FROM public.compute_tax_snapshot(COALESCE(NEW.subtotal, 0), v_svc.tax_treatment, v_svc.exempt_ratio);
+      NEW.tax_treatment := v_svc.tax_treatment;
+      NEW.exempt_ratio  := v_svc.exempt_ratio;
+    END IF;
+
     NEW.exempt_amount := v_calc.exempt_amount;
     NEW.taxable_base  := v_calc.taxable_base;
     NEW.vat_amount    := v_calc.vat_amount;
     NEW.tax_rate      := v_calc.tax_rate;
-    RETURN NEW;
-  END IF;
-
-  SELECT * INTO v_calc FROM public.compute_tax_snapshot(COALESCE(NEW.subtotal, 0), v_svc.tax_treatment, v_svc.exempt_ratio);
-
-  NEW.tax_treatment := v_svc.tax_treatment;
-  NEW.exempt_ratio  := v_svc.exempt_ratio;
-  NEW.exempt_amount := v_calc.exempt_amount;
-  NEW.taxable_base  := v_calc.taxable_base;
-  NEW.vat_amount    := v_calc.vat_amount;
-  NEW.tax_rate      := v_calc.tax_rate;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'snapshot_optional_service_tax fallo para booking_optional_service %: % (%)', NEW.id, SQLERRM, SQLSTATE;
+    NEW.tax_treatment := NULL; NEW.exempt_ratio := NULL; NEW.exempt_amount := NULL;
+    NEW.taxable_base  := NULL; NEW.vat_amount   := NULL; NEW.tax_rate      := NULL;
+  END;
   RETURN NEW;
 END;
 $$;
