@@ -246,6 +246,29 @@ const Field: React.FC<{ label: string; value: React.ReactNode; mono?: boolean }>
 
 // ─── Sort Icon ─────────────────────────────────────────────────────────────────
 
+// Fuera de AdminBookings a proposito (react-hooks/static-components). Definido
+// dentro, era un tipo de componente nuevo en cada render: React desmontaba y
+// volvia a montar los 11 <th> en vez de actualizarlos. Captura el estado de
+// orden por props (sortCol, sortDir, onSort) en vez de por closure.
+const Th: React.FC<{
+  col: string;
+  label: string;
+  align?: string;
+  sortCol: string;
+  sortDir: 'asc' | 'desc';
+  onSort: (col: string) => void;
+}> = ({ col, label, align = 'left', sortCol, sortDir, onSort }) => (
+  <th
+    onClick={() => onSort(col)}
+    className={`px-4 py-3 text-${align} text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none whitespace-nowrap hover:bg-gray-100 transition-colors`}
+  >
+    <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'flex-row-reverse' : ''}`}>
+      <span className={sortCol === col ? 'text-blue-600 font-semibold' : ''}>{label}</span>
+      <span className={sortCol === col ? 'text-blue-600' : ''}><SortIcon active={sortCol === col} dir={sortDir} /></span>
+    </span>
+  </th>
+);
+
 const SortIcon: React.FC<{ active: boolean; dir: 'asc' | 'desc' }> = ({ active, dir }) => {
   if (!active) return <ChevronsUpDown className="h-3 w-3 opacity-30" />;
   return dir === 'asc'
@@ -489,17 +512,9 @@ function AdminBookings() {
     else { setSortCol(col); setSortDir('asc'); }
   };
 
-  const Th: React.FC<{ col: string; label: string; align?: string }> = ({ col, label, align = 'left' }) => (
-    <th
-      onClick={() => handleSort(col)}
-      className={`px-4 py-3 text-${align} text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none whitespace-nowrap hover:bg-gray-100 transition-colors`}
-    >
-      <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'flex-row-reverse' : ''}`}>
-        <span className={sortCol === col ? 'text-blue-600 font-semibold' : ''}>{label}</span>
-        <span className={sortCol === col ? 'text-blue-600' : ''}><SortIcon active={sortCol === col} dir={sortDir} /></span>
-      </span>
-    </th>
-  );
+  // El estado de orden que Th necesita, en un objeto para no repetir tres props
+  // en cada uno de los 11 encabezados.
+  const sortProps = { sortCol, sortDir, onSort: handleSort };
 
   // ── Stats cards ──────────────────────────────────────────────────────────────
 
@@ -638,17 +653,17 @@ function AdminBookings() {
               <table className="min-w-full divide-y divide-gray-100 text-sm">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <Th col="booking_code" label="Folio" />
-                    <Th col="traveler" label="Viajero" />
-                    <Th col="tour" label="Tour" />
-                    <Th col="agency" label="Agencia" />
-                    <Th col="created_at" label="Fecha Reserva" />
-                    <Th col="booking_date" label="Fecha Tour" />
-                    <Th col="payment_status" label="Pago" />
-                    <Th col="status" label="Estado" />
-                    <Th col="pax" label="Pax" align="right" />
-                    <Th col="total_price" label="Total" align="right" />
-                    <Th col="service_charge" label="Cargo Serv." align="right" />
+                    <Th col="booking_code" label="Folio" {...sortProps} />
+                    <Th col="traveler" label="Viajero" {...sortProps} />
+                    <Th col="tour" label="Tour" {...sortProps} />
+                    <Th col="agency" label="Agencia" {...sortProps} />
+                    <Th col="created_at" label="Fecha Reserva" {...sortProps} />
+                    <Th col="booking_date" label="Fecha Tour" {...sortProps} />
+                    <Th col="payment_status" label="Pago" {...sortProps} />
+                    <Th col="status" label="Estado" {...sortProps} />
+                    <Th col="pax" label="Pax" align="right" {...sortProps} />
+                    <Th col="total_price" label="Total" align="right" {...sortProps} />
+                    <Th col="service_charge" label="Cargo Serv." align="right" {...sortProps} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">

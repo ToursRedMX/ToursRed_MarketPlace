@@ -21,6 +21,17 @@ interface AgentOption {
   last_name: string;
 }
 
+// Fuera de AdminServiceDesk a proposito (react-hooks/static-components).
+// Definido dentro, era un tipo de componente nuevo en cada render y React
+// remontaba los 8 iconos en vez de actualizarlos. Recibe el estado de orden
+// por props en vez de tomarlo del closure.
+const SortIcon = ({ col, sortCol, sortDir }: { col: SortColumn; sortCol: SortColumn; sortDir: SortDir }) => {
+  if (sortCol !== col) return <ArrowUpDown className="h-3.5 w-3.5 text-gray-300 ml-1 flex-shrink-0" />;
+  return sortDir === 'asc'
+    ? <ArrowUp className="h-3.5 w-3.5 text-primary-500 ml-1 flex-shrink-0" />
+    : <ArrowDown className="h-3.5 w-3.5 text-primary-500 ml-1 flex-shrink-0" />;
+};
+
 const AdminServiceDesk: React.FC = () => {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -106,18 +117,30 @@ const AdminServiceDesk: React.FC = () => {
     setPage(0);
   };
 
-  const SortIcon = ({ col }: { col: SortColumn }) => {
-    if (sortCol !== col) return <ArrowUpDown className="h-3.5 w-3.5 text-gray-300 ml-1 flex-shrink-0" />;
-    return sortDir === 'asc'
-      ? <ArrowUp className="h-3.5 w-3.5 text-primary-500 ml-1 flex-shrink-0" />
-      : <ArrowDown className="h-3.5 w-3.5 text-primary-500 ml-1 flex-shrink-0" />;
-  };
+  const sortProps = { sortCol, sortDir };
+
+  // Reloj compartido para el SLA, refrescado cada minuto.
+  //
+  // UN solo timer por pantalla, no uno por fila. La alternativa —extraer un
+  // <SlaBadge> con su propio useEffect+interval— crearia hasta PAGE_SIZE (20)
+  // intervalos, cada uno disparando un re-render independiente, para un
+  // resultado identico: las 20 filas leen el mismo reloj. Asi es un timer, un
+  // re-render por minuto, y las 20 filas se refrescan juntas.
+  //
+  // 60s y no 1s a proposito: el badge muestra horas o dias, nunca segundos, asi
+  // que un tick por segundo serian 59 re-renders de mas por minuto sin cambiar
+  // un solo pixel.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const slaStatus = (ticket: any) => {
     const closed = ticket.status === 'resuelto' || ticket.status === 'cancelado' || ticket.status === 'duplicado';
     if (closed) return null;
     if (!ticket.sla_deadline) return null;
-    const remaining = new Date(ticket.sla_deadline).getTime() - Date.now();
+    const remaining = new Date(ticket.sla_deadline).getTime() - now;
     if (remaining <= 0) return <span className="text-xs text-red-600 font-medium">SLA vencido</span>;
     const hours = Math.floor(remaining / 3600000);
     if (hours < 2) return <span className="text-xs text-orange-600 font-medium">{hours}h</span>;
@@ -294,31 +317,31 @@ const AdminServiceDesk: React.FC = () => {
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('folio')}>
-                        <span className="flex items-center">Folio <SortIcon col="folio" /></span>
+                        <span className="flex items-center">Folio <SortIcon col="folio" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('tipo')}>
-                        <span className="flex items-center">Tipo <SortIcon col="tipo" /></span>
+                        <span className="flex items-center">Tipo <SortIcon col="tipo" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                         Subcategoria
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('prioridad')}>
-                        <span className="flex items-center">Prioridad <SortIcon col="prioridad" /></span>
+                        <span className="flex items-center">Prioridad <SortIcon col="prioridad" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('status')}>
-                        <span className="flex items-center">Estado <SortIcon col="status" /></span>
+                        <span className="flex items-center">Estado <SortIcon col="status" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('solicitante_nombre')}>
-                        <span className="flex items-center">Solicitante <SortIcon col="solicitante_nombre" /></span>
+                        <span className="flex items-center">Solicitante <SortIcon col="solicitante_nombre" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('agente_asignado_id')}>
-                        <span className="flex items-center">Asignado a <SortIcon col="agente_asignado_id" /></span>
+                        <span className="flex items-center">Asignado a <SortIcon col="agente_asignado_id" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('sla')}>
-                        <span className="flex items-center">SLA <SortIcon col="sla" /></span>
+                        <span className="flex items-center">SLA <SortIcon col="sla" {...sortProps} /></span>
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 transition-colors" onClick={() => handleSort('created_at')}>
-                        <span className="flex items-center">Fecha <SortIcon col="created_at" /></span>
+                        <span className="flex items-center">Fecha <SortIcon col="created_at" {...sortProps} /></span>
                       </th>
                       <th className="px-4 py-3"></th>
                     </tr>
