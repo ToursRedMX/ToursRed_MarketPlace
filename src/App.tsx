@@ -25,6 +25,10 @@ import XCallbackPage from './pages/auth/XCallbackPage';
 import XOnboardingPage from './pages/auth/XOnboardingPage';
 import XTravelerSignupPage from './pages/auth/XTravelerSignupPage';
 import XAgencySignupPage from './pages/auth/XAgencySignupPage';
+import LinkedInCallbackPage from './pages/auth/LinkedInCallbackPage';
+import LinkedInOnboardingPage from './pages/auth/LinkedInOnboardingPage';
+import LinkedInTravelerSignupPage from './pages/auth/LinkedInTravelerSignupPage';
+import LinkedInAgencySignupPage from './pages/auth/LinkedInAgencySignupPage';
 import AzureOnboardingPage from './pages/auth/AzureOnboardingPage';
 import AzureTravelerSignupPage from './pages/auth/AzureTravelerSignupPage';
 import AzureAgencySignupPage from './pages/auth/AzureAgencySignupPage';
@@ -246,6 +250,10 @@ const App: React.FC = () => {
           <Route path="/auth/x-onboarding" element={<XOnboardingPage />} />
           <Route path="/auth/x-signup/traveler" element={<XTravelerSignupPage />} />
           <Route path="/auth/x-signup/agency" element={<XAgencySignupPage />} />
+          <Route path="/auth/linkedin-callback" element={<LinkedInCallbackPage />} />
+          <Route path="/auth/linkedin-onboarding" element={<LinkedInOnboardingPage />} />
+          <Route path="/auth/linkedin-signup/traveler" element={<LinkedInTravelerSignupPage />} />
+          <Route path="/auth/linkedin-signup/agency" element={<LinkedInAgencySignupPage />} />
           <Route path="/auth/azure-onboarding" element={<AzureOnboardingPage />} />
           <Route path="/auth/azure-signup/traveler" element={<AzureTravelerSignupPage />} />
           <Route path="/auth/azure-signup/agency" element={<AzureAgencySignupPage />} />

@@ -11,6 +11,7 @@ interface OAuthToggles {
   azure: boolean;
   x: boolean;
   facebook: boolean;
+  linkedin: boolean;
 }
 
 function computeDeviceFingerprint(): string {
@@ -59,16 +60,17 @@ const LoginPage: React.FC = () => {
   const [isAzureLoading, setIsAzureLoading] = useState(false);
   const [isTwitterLoading, setIsTwitterLoading] = useState(false);
   const [isFacebookLoading, setIsFacebookLoading] = useState(false);
+  const [isLinkedinLoading, setIsLinkedinLoading] = useState(false);
   const [ipBlocked, setIpBlocked] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const { turnstileEnabled } = useTurnstileEnabled();
-  const [oauthToggles, setOauthToggles] = useState<OAuthToggles>({ google: true, azure: true, x: false, facebook: false });
+  const [oauthToggles, setOauthToggles] = useState<OAuthToggles>({ google: true, azure: true, x: false, facebook: false, linkedin: false });
   const [passkeysEnabled, setPasskeysEnabled] = useState(false);
   const [isPasskeyLoading, setIsPasskeyLoading] = useState(false);
   const deviceFingerprintRef = useRef<string>(computeDeviceFingerprint());
   const navigate = useNavigate();
   const location = useLocation();
-  const { signInWithGoogle, signInWithAzure, signInWithTwitter, signInWithFacebook } = useAuth();
+  const { signInWithGoogle, signInWithAzure, signInWithTwitter, signInWithFacebook, signInWithLinkedIn } = useAuth();
 
   const searchParams = new URLSearchParams(location.search);
   const redirectUrl = searchParams.get('redirect');
@@ -84,7 +86,7 @@ const LoginPage: React.FC = () => {
   useEffect(() => {
     supabase
       .from('platform_settings')
-      .select('oauth_google_login_enabled, oauth_azure_login_enabled, oauth_twitter_login_enabled, oauth_facebook_login_enabled, passkeys_enabled')
+      .select('oauth_google_login_enabled, oauth_azure_login_enabled, oauth_twitter_login_enabled, oauth_facebook_login_enabled, oauth_linkedin_login_enabled, passkeys_enabled')
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
@@ -93,6 +95,7 @@ const LoginPage: React.FC = () => {
             azure: data.oauth_azure_login_enabled ?? true,
             x: data.oauth_twitter_login_enabled ?? false,
             facebook: data.oauth_facebook_login_enabled ?? false,
+            linkedin: data.oauth_linkedin_login_enabled ?? false,
           });
           setPasskeysEnabled(data.passkeys_enabled ?? false);
         }
@@ -214,6 +217,16 @@ const LoginPage: React.FC = () => {
     } catch {
       setError('No se pudo iniciar sesión con Facebook. Por favor intenta de nuevo.');
       setIsFacebookLoading(false);
+    }
+  };
+
+  const handleLinkedInSignIn = async () => {
+    setIsLinkedinLoading(true);
+    try {
+      await signInWithLinkedIn();
+    } catch {
+      setError('No se pudo iniciar sesión con LinkedIn. Por favor intenta de nuevo.');
+      setIsLinkedinLoading(false);
     }
   };
 
@@ -378,7 +391,7 @@ const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {(oauthToggles.google || oauthToggles.azure || oauthToggles.x || oauthToggles.facebook) && (
+          {(oauthToggles.google || oauthToggles.azure || oauthToggles.x || oauthToggles.facebook || oauthToggles.linkedin) && (
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -394,7 +407,7 @@ const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
-                disabled={isGoogleLoading || isAzureLoading || isTwitterLoading || isFacebookLoading}
+                disabled={isGoogleLoading || isAzureLoading || isTwitterLoading || isFacebookLoading || isLinkedinLoading}
                 className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
               >
                 {isGoogleLoading ? (
@@ -415,7 +428,7 @@ const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleAzureSignIn}
-                disabled={isAzureLoading || isGoogleLoading || isTwitterLoading || isFacebookLoading}
+                disabled={isAzureLoading || isGoogleLoading || isTwitterLoading || isFacebookLoading || isLinkedinLoading}
                 className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
               >
                 {isAzureLoading ? (
@@ -437,7 +450,7 @@ const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleTwitterSignIn}
-                disabled={isTwitterLoading || isGoogleLoading || isAzureLoading || isFacebookLoading}
+                disabled={isTwitterLoading || isGoogleLoading || isAzureLoading || isFacebookLoading || isLinkedinLoading}
                 className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
               >
                 {isTwitterLoading ? (
@@ -455,7 +468,7 @@ const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleFacebookSignIn}
-                disabled={isFacebookLoading || isGoogleLoading || isAzureLoading || isTwitterLoading}
+                disabled={isFacebookLoading || isGoogleLoading || isAzureLoading || isTwitterLoading || isLinkedinLoading}
                 className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
               >
                 {isFacebookLoading ? (
@@ -466,6 +479,24 @@ const LoginPage: React.FC = () => {
                   </svg>
                 )}
                 Continuar con Facebook
+              </button>
+              )}
+
+              {oauthToggles.linkedin && (
+              <button
+                type="button"
+                onClick={handleLinkedInSignIn}
+                disabled={isLinkedinLoading || isGoogleLoading || isAzureLoading || isTwitterLoading || isFacebookLoading}
+                className="w-full inline-flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-md shadow-xs bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
+              >
+                {isLinkedinLoading ? (
+                  <div className="w-5 h-5 border-t-2 border-b-2 border-gray-400 rounded-full animate-spin" />
+                ) : (
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" aria-hidden="true">
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" fill="#0A66C2"/>
+                  </svg>
+                )}
+                Continuar con LinkedIn
               </button>
               )}
             </div>
