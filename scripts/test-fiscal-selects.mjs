@@ -32,7 +32,15 @@
  *   - `// fiscal-select-ok: <razon>` en la linea de la lectura, para valores
  *     que no vienen de un select (p. ej. del body de la peticion).
  *
- * Uso:  node scripts/test-fiscal-selects.mjs
+ * Uso:  node scripts/test-fiscal-selects.mjs [ruta/a/supabase/functions]
+ *
+ * Sin argumento audita el repo. Con argumento audita cualquier arbol con la
+ * misma forma — sirve para correrlo contra el codigo DESCARGADO DE PRODUCCION
+ * (`supabase functions download ... --workdir <tmp>`) y comprobar que lo que
+ * esta vivo cumple, no solo lo que quedo escrito en la rama. No es lo mismo:
+ * una funcion puede llevar meses desplegada desde antes de que existiera la
+ * comprobacion.
+ *
  * Sale con codigo 1 si algo falla.
  */
 
@@ -41,7 +49,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const FUNCTIONS_DIR = path.join(ROOT, 'supabase', 'functions');
+const FUNCTIONS_DIR = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.join(ROOT, 'supabase', 'functions');
 
 /** Columnas que toda consulta que alimente un desglose fiscal debe traer. */
 const REQUIRED_COLUMNS = ['tax_treatment', 'exempt_ratio'];
