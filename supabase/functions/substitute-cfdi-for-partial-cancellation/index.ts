@@ -1,3 +1,4 @@
+import { calculateTaxBreakdown, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.108.2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -29,6 +30,16 @@ interface CfdiConcepto {
     regimen_fiscal: string;
     domicilio_fiscal: string;
   } | null;
+  /**
+   * Concepto exento de IVA (Art. 15 fr. XIII LIVA). Vive en la interfaz
+   * PAC-agnostica, no en el adaptador: el codigo que arma conceptos no deberia
+   * saber que PAC esta configurado.
+   *
+   * OJO con valor_unitario: en un concepto GRAVADO es el NETO (bruto/1.16,
+   * porque tax_included es false). En uno EXENTO es el importe COMPLETO.
+   * Dividir un exento entre 1.16 desaparece dinero del CFDI.
+   */
+  exento?: boolean;
 }
 
 interface CfdiReceptor {
@@ -93,7 +104,9 @@ async function facturapiStamp(
         unit_key: c.clave_unidad,
         price: c.valor_unitario,
         tax_included: false,
-        taxes: [{ type: "IVA", rate: 0.16 }],
+        taxes: c.exento
+          ? [{ type: "IVA", factor: "Exento", rate: 0 }]
+          : [{ type: "IVA", rate: 0.16 }],
       },
       quantity: c.cantidad,
       ...(c.tercero && c.tercero.domicilio_fiscal
@@ -218,7 +231,7 @@ Deno.serve(async (req: Request) => {
       .from("bookings")
       .select(`
         id, booking_code, user_id, total_price, deposit_amount,
-        travel_insurance_included, travel_insurance_cost,
+        travel_insurance_included, travel_insurance_cost, tax_treatment, exempt_ratio,
         tours (name),
         agencies (id, rfc, razon_social, regimen_fiscal, codigo_postal_fiscal)
       `)
@@ -365,16 +378,40 @@ Deno.serve(async (req: Request) => {
 
       const conceptos: CfdiConcepto[] = [];
 
-      conceptos.push({
-        clave_prod_serv: "90121500",
-        cantidad: 1,
-        clave_unidad: "E48",
-        descripcion: isDeposit
-          ? `${tourName} (Reserva ${bookingCode}) — Depósito`
-          : `${tourName} (Reserva ${bookingCode}) — Parcialidad`,
-        valor_unitario: r6(newTourAmount / 1.16),
-        tercero: terceroAgencia,
+      // El CFDI sustituto conserva la composicion fiscal del original: lo que
+      // cambia es el MONTO tras la cancelacion parcial, no el tratamiento.
+      // Se lee el snapshot de la reserva, no la config viva del tour.
+      const subTax = calculateTaxBreakdown({
+        grossAmount: newTourAmount,
+        taxTreatment: (((booking as { tax_treatment?: TaxTreatment }).tax_treatment ?? "taxable_16")),
+        exemptRatio: Number((booking as { exempt_ratio?: number | string }).exempt_ratio ?? 0),
+        decimals: 6,
       });
+      const subDesc = isDeposit
+        ? `${tourName} (Reserva ${bookingCode}) — Depósito`
+        : `${tourName} (Reserva ${bookingCode}) — Parcialidad`;
+
+      if (subTax.taxableBase > 0) {
+        conceptos.push({
+          clave_prod_serv: "90121500",
+          cantidad: 1,
+          clave_unidad: "E48",
+          descripcion: subDesc,
+          valor_unitario: subTax.taxableBase,
+          tercero: terceroAgencia,
+        });
+      }
+      if (subTax.exemptAmount > 0) {
+        conceptos.push({
+          clave_prod_serv: "90121500",
+          cantidad: 1,
+          clave_unidad: "E48",
+          descripcion: subDesc,
+          valor_unitario: subTax.exemptAmount,
+          exento: true,
+          tercero: terceroAgencia,
+        });
+      }
 
       if (newSeguroAmount > 0) {
         conceptos.push({

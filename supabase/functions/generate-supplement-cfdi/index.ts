@@ -1,3 +1,4 @@
+import { calculateTaxBreakdown, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -26,6 +27,16 @@ interface CfdiConcepto {
   valor_unitario: number;
   descuento?: number;
   tercero?: { rfc: string; nombre: string; regimen_fiscal: string; domicilio_fiscal: string };
+  /**
+   * Concepto exento de IVA (Art. 15 fr. XIII LIVA). Vive en la interfaz
+   * PAC-agnostica, no en el adaptador: el codigo que arma conceptos no deberia
+   * saber que PAC esta configurado.
+   *
+   * OJO con valor_unitario: en un concepto GRAVADO es el NETO (bruto/1.16,
+   * porque tax_included es false). En uno EXENTO es el importe COMPLETO.
+   * Dividir un exento entre 1.16 desaparece dinero del CFDI.
+   */
+  exento?: boolean;
 }
 
 interface CfdiRequest {
@@ -74,7 +85,9 @@ async function facturapiStamp(apiKey: string, organizationId: string, request: C
         unit_key: c.clave_unidad,
         price: c.valor_unitario,
         tax_included: false,
-        taxes: [{ type: "IVA", rate: 0.16 }],
+        taxes: c.exento
+          ? [{ type: "IVA", factor: "Exento", rate: 0 }]
+          : [{ type: "IVA", rate: 0.16 }],
       },
       quantity: c.cantidad,
       ...(c.descuento != null && c.descuento > 0 ? { discount: c.descuento } : {}),
@@ -138,7 +151,7 @@ Deno.serve(async (req: Request) => {
       .from("booking_supplements")
       .select(`
         id, booking_id, quantity, unit_price, service_charge, membership_exemption_used,
-        total_paid, payment_method, status,
+        total_paid, payment_method, status, tax_treatment, exempt_ratio,
         tour_supplements!inner(id, name, tour_id),
         bookings!inner(id, user_id, tour_id)
       `)
@@ -216,11 +229,37 @@ Deno.serve(async (req: Request) => {
     const netServiceCharge = Number(suppReq.service_charge);
     const exactTotal = Number(suppReq.total_paid);
 
-    const precioSuplemento = r6(subtotal_supp / 1.16);
+    // Desglose fiscal del SUPLEMENTO segun su propio snapshot, congelado al
+    // cobrarse. Independiente del tour y de los servicios opcionales.
+    // NULL = cobro anterior a la feature -> 16% implicito.
+    // BUG PREEXISTENTE CORREGIDO: el desglose del CONCEPTO se calcula sobre el
+    // precio UNITARIO, no sobre subtotal_supp (que ya es unit_price * quantity).
+    // Como el concepto lleva `cantidad: quantity`, FacturAPI vuelve a
+    // multiplicar: con quantity=2 el CFDI amparaba 400.00 habiendose cobrado
+    // 200.00. El desglose para la BD (mas abajo) SI va sobre el total, porque
+    // ahi se registra el importe completo del suplemento.
+    const suppTaxCfdi = calculateTaxBreakdown({
+      grossAmount: Number(suppReq.unit_price),
+      taxTreatment: ((suppReq as { tax_treatment?: TaxTreatment }).tax_treatment ?? "taxable_16"),
+      exemptRatio: Number((suppReq as { exempt_ratio?: number | string }).exempt_ratio ?? 0),
+      decimals: 6,
+    });
+
+    const precioSuplemento = suppTaxCfdi.taxableBase;
     const precioServicio = netServiceCharge > 0 ? r6(netServiceCharge / 1.16) : 0;
 
-    // DB amounts via complement
-    const iva = Math.round(exactTotal * 16 / 116 * 100) / 100;
+    // DB amounts: el IVA del suplemento sale de su desglose (puede ser cero si
+    // esta exento); el del cargo por servicio SIEMPRE es 16% porque es
+    // operacion propia de ToursRed, ajena al tratamiento de lo que se vende.
+    const suppTaxDb = calculateTaxBreakdown({
+      grossAmount: subtotal_supp,
+      taxTreatment: ((suppReq as { tax_treatment?: TaxTreatment }).tax_treatment ?? "taxable_16"),
+      exemptRatio: Number((suppReq as { exempt_ratio?: number | string }).exempt_ratio ?? 0),
+    });
+    const ivaServicio = netServiceCharge > 0
+      ? Math.round((netServiceCharge - netServiceCharge / 1.16) * 100) / 100
+      : 0;
+    const iva = Math.round((suppTaxDb.vatAmount + ivaServicio) * 100) / 100;
     const subtotal_db = Math.round((exactTotal - iva) * 100) / 100;
 
     // Build receptor
@@ -280,16 +319,33 @@ Deno.serve(async (req: Request) => {
     const serie = (settings.cfdi_serie_booking || "A") + "S";
     const effectivePaymentForm = payment_form || "03";
 
-    const conceptos: CfdiConcepto[] = [
-      {
+    const conceptos: CfdiConcepto[] = [];
+
+    if (suppTaxCfdi.taxableBase > 0) {
+      conceptos.push({
         clave_prod_serv: "90121500",
         cantidad: suppReq.quantity,
         clave_unidad: "E48",
         descripcion: `Suplemento adicional: ${supplementName} (Ref. ${suppRef})`,
         valor_unitario: precioSuplemento,
         tercero: terceroAgencia,
-      },
-    ];
+      });
+    }
+
+    // Parte exenta: importe COMPLETO (no hay IVA que separar) y con
+    // ACuentaTerceros igual que la gravada — atribucion de ingreso a la
+    // agencia para ISR, independiente de si causa IVA.
+    if (suppTaxCfdi.exemptAmount > 0) {
+      conceptos.push({
+        clave_prod_serv: "90121500",
+        cantidad: suppReq.quantity,
+        clave_unidad: "E48",
+        descripcion: `Suplemento adicional: ${supplementName} (Ref. ${suppRef})`,
+        valor_unitario: suppTaxCfdi.exemptAmount,
+        exento: true,
+        tercero: terceroAgencia,
+      });
+    }
 
     if (precioServicio > 0) {
       conceptos.push({
@@ -299,6 +355,30 @@ Deno.serve(async (req: Request) => {
         descripcion: `Cargo por servicio de plataforma - Suplemento (Ref. ${suppRef})`,
         valor_unitario: precioServicio,
       });
+    }
+
+    // ── Guardia de cuadre ────────────────────────────────────────────────────
+    // Verifica que los conceptos reconstruyan lo cobrado ANTES de timbrar. El
+    // bug de `cantidad` en suplementos y opcionales (el CFDI amparaba el doble
+    // con quantity=2) sobrevivio precisamente porque nada comprobaba esto.
+    //
+    // NO BLOQUEA a proposito: un CFDI que no se timbra deja al viajero sin
+    // comprobante, y no hay datos en sandbox con los que comprobar que la
+    // reconstruccion cuadra en todos los caminos legitimos (descuentos por
+    // puntos repartidos entre conceptos, cortesias, saldos aplicados). Se
+    // reporta a Sentry con los numeros para poder decidir con evidencia si
+    // conviene endurecerlo.
+    {
+      const chk = verifyConceptosTotal(conceptos, exactTotal);
+      if (!chk.ok) {
+        console.error(
+          `[cfdi] descuadre de conceptos: reconstruido ${chk.computed} vs cobrado ${chk.expected} (diff ${chk.diff})`,
+        );
+        Sentry.captureMessage("CFDI: los conceptos no cuadran con el importe cobrado", {
+          level: "error",
+          extra: { ...chk, conceptos: conceptos.length, funcion: "generate-supplement-cfdi" },
+        });
+      }
     }
 
     const cfdiRequest: CfdiRequest = {
@@ -334,6 +414,10 @@ Deno.serve(async (req: Request) => {
         receptor_codigo_postal: receptorCP,
         subtotal: subtotal_db,
         iva_amount: iva,
+        exempt_amount: Math.round(
+          conceptos.filter((c) => c.exento)
+            .reduce((s, c) => s + c.valor_unitario * c.cantidad - (c.descuento ?? 0), 0) * 100,
+        ) / 100,
         total: exactTotal,
         status: "pending",
       })

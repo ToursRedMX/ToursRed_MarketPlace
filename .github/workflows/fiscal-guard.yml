@@ -1,0 +1,45 @@
+name: Guardia fiscal (bloquea)
+
+# A diferencia de lint.yml y typecheck.yml, este SI bloquea.
+#
+# Aquellos son contadores de deuda heredada: arrancan con 2,423 y 460 hallazgos
+# y solo avisan si el numero sube. Este arranca en CERO y vigila una sola cosa
+# con consecuencia fiscal directa: que el desglose de IVA sea correcto y que las
+# consultas que lo alimentan traigan las columnas que el codigo va a leer.
+#
+# El 01-sep-2026, generate-booking-cfdi leia booking.tax_treatment sin pedirlo
+# en su .select(). Llegaba undefined, caia en el `?? "taxable_16"` y todo tour
+# exento se facturaba al 16%. Los 44 tests del desglose pasaban en verde porque
+# prueban la funcion pura, no la consulta. Un CFDI mal timbrado no se corrige:
+# se cancela y se reemite, con el viajero ya teniendo el comprobante equivocado.
+# Por eso esto es un check rojo, no un resumen que alguien tal vez lea.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guardia-fiscal:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          # 22.17+ por --experimental-strip-types, que usa el harness del
+          # desglose para importar el .ts canonico sin transpilarlo aparte.
+          node-version: '24'
+
+      - name: Desglose fiscal — aritmetica (funcion pura)
+        run: node scripts/test-tax-breakdown.mjs
+
+      - name: Desglose fiscal — consultas reales de las Edge Functions
+        run: node scripts/test-fiscal-selects.mjs

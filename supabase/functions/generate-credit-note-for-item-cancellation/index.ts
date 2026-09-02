@@ -1,3 +1,4 @@
+import { calculateTaxBreakdown, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.108.2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -29,6 +30,16 @@ interface CfdiConcepto {
     regimen_fiscal: string;
     domicilio_fiscal: string;
   } | null;
+  /**
+   * Concepto exento de IVA (Art. 15 fr. XIII LIVA). Vive en la interfaz
+   * PAC-agnostica, no en el adaptador: el codigo que arma conceptos no deberia
+   * saber que PAC esta configurado.
+   *
+   * OJO con valor_unitario: en un concepto GRAVADO es el NETO (bruto/1.16,
+   * porque tax_included es false). En uno EXENTO es el importe COMPLETO.
+   * Dividir un exento entre 1.16 desaparece dinero del CFDI.
+   */
+  exento?: boolean;
 }
 
 interface CfdiReceptor {
@@ -91,7 +102,9 @@ async function facturapiStamp(
         unit_key: c.clave_unidad,
         price: c.valor_unitario,
         tax_included: false,
-        taxes: [{ type: "IVA", rate: 0.16 }],
+        taxes: c.exento
+          ? [{ type: "IVA", factor: "Exento", rate: 0 }]
+          : [{ type: "IVA", rate: 0.16 }],
       },
       quantity: c.cantidad,
       ...(c.tercero && c.tercero.domicilio_fiscal
@@ -161,6 +174,13 @@ Deno.serve(async (req: Request) => {
       related_cfdi_uuid,
       item_type,
       tercero_agencia,
+      // Composicion fiscal del componente que se reembolsa. Los manda quien
+      // invoca, desde el SNAPSHOT del cobro original: una nota de credito debe
+      // espejear la composicion del CFDI que corrige, no recalcularla contra
+      // la config actual del tour/suplemento/opcional.
+      // Ausentes = cobro anterior a la feature -> 16% implicito.
+      tax_treatment,
+      exempt_ratio,
     } = await req.json();
 
     if (!booking_id || !user_id || !refund_amount || !related_cfdi_invoice_id || !related_cfdi_uuid || !item_type) {
@@ -260,20 +280,44 @@ Deno.serve(async (req: Request) => {
       receptorCP = issuerPostalCode;
     }
 
-    const r6 = (n: number) => Math.round(n * 1000000) / 1000000;
-    const subtotalBruto = r6(refund_amount / 1.16);
-    const iva = Math.round(refund_amount * 16 / 116 * 100) / 100;
+    const cnTreatment: TaxTreatment = (tax_treatment ?? "taxable_16") as TaxTreatment;
+    const cnRatio = Number(exempt_ratio ?? 0);
+    // El reembolso conserva PROPORCIONALMENTE la composicion fiscal del cobro
+    // original: reembolsar la mitad de un tour 30% exento devuelve 30% exento
+    // de esa mitad, no una mitad gravada al 100%.
+    const cnTaxCfdi = calculateTaxBreakdown({
+      grossAmount: refund_amount, taxTreatment: cnTreatment, exemptRatio: cnRatio, decimals: 6,
+    });
+    const cnTaxDb = calculateTaxBreakdown({
+      grossAmount: refund_amount, taxTreatment: cnTreatment, exemptRatio: cnRatio,
+    });
+
+    const iva = cnTaxDb.vatAmount;
     const subtotal = Math.round((refund_amount - iva) * 100) / 100;
     const total = refund_amount;
 
-    const conceptos: CfdiConcepto[] = [{
-      clave_prod_serv: "90121500",
-      cantidad: 1,
-      clave_unidad: "E48",
-      descripcion: `Nota de crédito — ${item_description}`,
-      valor_unitario: subtotalBruto,
-      tercero: tercero_agencia || null,
-    }];
+    const conceptos: CfdiConcepto[] = [];
+    if (cnTaxCfdi.taxableBase > 0) {
+      conceptos.push({
+        clave_prod_serv: "90121500",
+        cantidad: 1,
+        clave_unidad: "E48",
+        descripcion: `Nota de crédito — ${item_description}`,
+        valor_unitario: cnTaxCfdi.taxableBase,
+        tercero: tercero_agencia || null,
+      });
+    }
+    if (cnTaxCfdi.exemptAmount > 0) {
+      conceptos.push({
+        clave_prod_serv: "90121500",
+        cantidad: 1,
+        clave_unidad: "E48",
+        descripcion: `Nota de crédito — ${item_description}`,
+        valor_unitario: cnTaxCfdi.exemptAmount,
+        exento: true,
+        tercero: tercero_agencia || null,
+      });
+    }
 
     const cfdiRequest: CfdiRequest = {
       tipo_de_comprobante: "E",

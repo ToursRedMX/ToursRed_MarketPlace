@@ -1,3 +1,4 @@
+import { calculateTaxBreakdown, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -28,6 +29,17 @@ interface CfdiConcepto {
   valor_unitario: number;
   descuento?: number;
   tercero?: CfdiTercero;
+  /**
+   * Concepto exento de IVA (Art. 15 fr. XIII LIVA). Va en la interfaz
+   * PAC-agnostica, no en el adaptador: cada PAC lo expresa a su manera y el
+   * codigo que arma conceptos no deberia saber cual esta configurado.
+   *
+   * OJO con valor_unitario: en un concepto GRAVADO es el valor NETO (bruto/1.16,
+   * porque tax_included es false). En uno EXENTO no hay IVA que separar, asi
+   * que es el importe completo. Dividir un exento entre 1.16 desaparece dinero
+   * del CFDI.
+   */
+  exento?: boolean;
   impuestos?: {
     traslados?: Array<{
       base: number;
@@ -73,6 +85,78 @@ interface CfdiResult {
   serie: string;
   stamped_at: string;
 }
+
+// =============================================
+// FILA DE `bookings` QUE NECESITA ESTE CFDI
+// =============================================
+/**
+ * Forma exacta de lo que el select trae de `bookings`.
+ *
+ * Los numericos de Postgres llegan como string por PostgREST, de ahi los
+ * `number | string`. Se declaran tal cual en vez de "arreglarlos" en el tipo:
+ * el codigo ya los pasa por Number() y mentir aqui esconderia el problema real.
+ */
+interface BookingRow {
+  id: string;
+  total_price: number | string | null;
+  deposit_amount: number | string | null;
+  service_charge: number | string | null;
+  user_id: string;
+  tour_id: string | null;
+  booking_code: string | null;
+  discount_amount: number | string | null;
+  service_charge_discount: number | string | null;
+  points_used: number | null;
+  toursred_cash_used: number | string | null;
+  payment_method: string | null;
+  travel_insurance_included: boolean | null;
+  travel_insurance_cost: number | string | null;
+  membership_purchased: boolean | null;
+  membership_cost: number | string | null;
+  membership_plan: string | null;
+  /** Snapshot fiscal del cobro. NULL = cobro anterior a la feature -> 16%. */
+  tax_treatment: TaxTreatment | null;
+  exempt_ratio: number | string | null;
+  tours: { name: string; agency_id: string } | null;
+}
+
+/** Columnas planas a pedir. Tipadas contra BookingRow: un nombre inventado no compila. */
+const BOOKING_COLUMNS = [
+  "id",
+  "total_price",
+  "deposit_amount",
+  "service_charge",
+  "user_id",
+  "tour_id",
+  "booking_code",
+  "discount_amount",
+  "service_charge_discount",
+  "points_used",
+  "toursred_cash_used",
+  "payment_method",
+  "travel_insurance_included",
+  "travel_insurance_cost",
+  "membership_purchased",
+  "membership_cost",
+  "membership_plan",
+  "tax_treatment",
+  "exempt_ratio",
+] as const satisfies readonly (keyof Omit<BookingRow, "tours">)[];
+
+/**
+ * Cierra el circulo en la direccion que fallo: si alguien agrega un campo a
+ * BookingRow y olvida pedirlo en BOOKING_COLUMNS, esto NO COMPILA. Sin esto el
+ * tipo prometeria una columna que PostgREST nunca devuelve — exactamente el
+ * bug de tax_treatment, solo que declarado.
+ */
+type MissingBookingColumn = Exclude<
+  keyof Omit<BookingRow, "tours">,
+  (typeof BOOKING_COLUMNS)[number]
+>;
+const _assertAllBookingColumnsSelected: [MissingBookingColumn] extends [never] ? true : never = true;
+void _assertAllBookingColumnsSelected;
+
+const BOOKING_SELECT = `${BOOKING_COLUMNS.join(", ")}, tours (name, agency_id)`;
 
 // =============================================
 // FACTURAPI ADAPTER
@@ -123,7 +207,11 @@ async function facturapiStamp(
         unit_key: c.clave_unidad,
         price: c.valor_unitario,
         tax_included: false,
-        taxes: [{ type: "IVA", rate: 0.16 }],
+        // Exento: factor "Exento" con tasa 0. FacturAPI emite el nodo Traslado
+        // con TipoFactor="Exento", que el SAT exige incluso cuando no hay IVA.
+        taxes: c.exento
+          ? [{ type: "IVA", factor: "Exento", rate: 0 }]
+          : [{ type: "IVA", rate: 0.16 }],
       },
       quantity: c.cantidad,
       ...(c.descuento != null && c.descuento > 0 ? { discount: c.descuento } : {}),
@@ -333,24 +421,34 @@ Deno.serve(async (req: Request) => {
     const isCheckinCharge = !!checkin_charge_id;
 
     // Load booking details
-    const { data: booking, error: bookingError } = await supabase
+    //
+    // El select y el tipo se derivan uno del otro a proposito. Hasta el
+    // 01-sep-2026 este select NO pedia tax_treatment ni exempt_ratio, pero el
+    // codigo de mas abajo si los leia — a traves de un `booking as {...}` que
+    // dejaba a TypeScript sin nada que revisar. PostgREST devuelve unicamente
+    // las columnas pedidas, asi que ambas llegaban `undefined`, caian en el
+    // `?? "taxable_16"` y TODO tour se facturaba al 16%: la ruta de exentos
+    // estaba muerta sin que nada fallara, ni en tsc ni en runtime.
+    //
+    // Por eso BOOKING_COLUMNS esta tipado contra BookingRow y la asercion de
+    // abajo no compila si se agrega un campo al tipo sin pedirlo en el select.
+    const { data: bookingRow, error: bookingError } = await supabase
       .from("bookings")
-      .select(`
-        id, total_price, deposit_amount, service_charge, user_id, tour_id, booking_code,
-        discount_amount, service_charge_discount, points_used, toursred_cash_used, payment_method,
-        travel_insurance_included, travel_insurance_cost,
-        membership_purchased, membership_cost, membership_plan,
-        tours (name, agency_id)
-      `)
+      .select(BOOKING_SELECT)
       .eq("id", booking_id)
       .maybeSingle();
 
-    if (bookingError || !booking) {
+    if (bookingError || !bookingRow) {
       return new Response(JSON.stringify({ error: "Booking not found", detail: bookingError?.message }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Unico cast de frontera. De aqui en adelante todo acceso a `booking` lo
+    // valida BookingRow: leer un campo que no este en el tipo deja de compilar,
+    // que es justo lo que los `(booking as any)` impedian.
+    const booking = bookingRow as unknown as BookingRow;
 
     // --- Autorizacion ---
     // Esta funcion timbra ante el SAT usando el service role internamente, y hasta
@@ -441,7 +539,7 @@ Deno.serve(async (req: Request) => {
       originalCfdi = { id: orig.id, uuid_fiscal: orig.uuid_fiscal, invoice_type: orig.invoice_type };
     }
 
-    const tourData = booking.tours as { name: string; agency_id: string } | null;
+    const tourData = booking.tours;
 
     // Load agency data separately to avoid join ambiguity
     let agencyData: { id: string; rfc?: string; razon_social?: string; regimen_fiscal?: string; postal_code?: string } | null = null;
@@ -487,11 +585,19 @@ Deno.serve(async (req: Request) => {
     // -------------------------------------------------------
     // MONTOS: difieren según si es cobro de check-in o reserva
     // -------------------------------------------------------
+    // Bruto del tour (IVA incluido) antes de separar base e IVA. Se necesita
+    // aparte de precioTourBruto porque ese ya viene dividido entre 1.16 y el
+    // desglose fiscal tiene que partir del bruto, no del neto.
+    let grossTourAmount = 0;
     let precioTourBruto: number;
     let precioServicioBruto: number;
     let precioSeguroBruto: number;
     let precioMembresiaBruto: number;
-    let descuentoTour: number;
+    // Descuento del tour en BRUTO (IVA incluido). Se guarda sin dividir entre
+    // 1.16 porque en un tour exento o mixto hay que repartirlo con el mismo
+    // criterio que el importe, y la parte exenta no lleva IVA que quitar. El
+    // reparto se hace mas abajo, junto a los conceptos.
+    let descuentoTourBruto: number;
     let descuentoServicio: number;
     let invoiceType: string;
     let effectivePaymentForm: string;
@@ -524,34 +630,36 @@ Deno.serve(async (req: Request) => {
       // r6: 6 decimales para valor_unitario en FacturAPI (evita error de centavo en XML)
       const r6 = (n: number) => Math.round(n * 1000000) / 1000000;
 
+      grossTourAmount = amountCharged;
       precioTourBruto = r6(amountCharged / 1.16);
       precioServicioBruto = netServiceCharge > 0 ? r6(netServiceCharge / 1.16) : 0;
       precioSeguroBruto = 0;
       precioMembresiaBruto = 0;
-      descuentoTour = 0;
+      descuentoTourBruto = 0;
       descuentoServicio = 0;
       exactTotal = amountCharged + (netServiceCharge > 0 ? netServiceCharge : 0);
       invoiceType = "checkin_wallet";
       effectivePaymentForm = payment_form || "17";
     } else {
       // Montos de la reserva original
-      depositAmount = Number((booking as any).deposit_amount || booking.total_price);
-      const serviceCharge = Number((booking as any).service_charge || 0);
-      const discountAmountRaw = Number((booking as any).discount_amount || 0);
-      const serviceChargeDiscountRaw = Number((booking as any).service_charge_discount || 0);
-      const insuranceCost = (booking as any).travel_insurance_included ? Number((booking as any).travel_insurance_cost || 0) : 0;
+      depositAmount = Number(booking.deposit_amount || booking.total_price);
+      const serviceCharge = Number(booking.service_charge || 0);
+      const discountAmountRaw = Number(booking.discount_amount || 0);
+      const serviceChargeDiscountRaw = Number(booking.service_charge_discount || 0);
+      const insuranceCost = booking.travel_insurance_included ? Number(booking.travel_insurance_cost || 0) : 0;
 
       // r6 definido en bloque anterior; también aplica aquí
       const r6b = (n: number) => Math.round(n * 1000000) / 1000000;
 
-      const membershipIncluded = (booking as any).membership_purchased === true;
-      const membershipCost = membershipIncluded ? Number((booking as any).membership_cost || 0) : 0;
+      const membershipIncluded = booking.membership_purchased === true;
+      const membershipCost = membershipIncluded ? Number(booking.membership_cost || 0) : 0;
 
+      grossTourAmount = depositAmount;
       precioTourBruto = r6b(depositAmount / 1.16);
       precioServicioBruto = serviceCharge > 0 ? r6b(serviceCharge / 1.16) : 0;
       precioSeguroBruto = insuranceCost > 0 ? r6b(insuranceCost / 1.16) : 0;
       precioMembresiaBruto = membershipCost > 0 ? r6b(membershipCost / 1.16) : 0;
-      descuentoTour = discountAmountRaw > 0 ? r6b(discountAmountRaw / 1.16) : 0;
+      descuentoTourBruto = discountAmountRaw > 0 ? r6b(discountAmountRaw) : 0;
       descuentoServicio = serviceChargeDiscountRaw > 0 ? r6b(serviceChargeDiscountRaw / 1.16) : 0;
       exactTotal = Math.round((depositAmount + serviceCharge + insuranceCost + membershipCost - discountAmountRaw - serviceChargeDiscountRaw) * 100) / 100;
       invoiceType = "booking";
@@ -565,7 +673,7 @@ Deno.serve(async (req: Request) => {
     // Add paid optional services total to exactTotal and build concepts
     const { data: paidOptionals } = await supabase
       .from("booking_optional_services")
-      .select("service_kind, description, subtotal, total_paid")
+      .select("service_kind, description, subtotal, total_paid, tax_treatment, exempt_ratio")
       .eq("booking_id", booking.id)
       .eq("is_cancelled", false)
       .not("paid_at", "is", null);
@@ -586,7 +694,7 @@ Deno.serve(async (req: Request) => {
     // completo; descontarlo negaria el comprobante por dinero que si desembolso.
     const saldoAplicadoBruto = isCheckinCharge ? 0 : Math.min(
       exactTotal,
-      Math.round((Number((booking as any).points_used || 0) / 100) * 100) / 100
+      Math.round((Number(booking.points_used || 0) / 100) * 100) / 100
     );
     if (saldoAplicadoBruto > 0) {
       exactTotal = Math.round((exactTotal - saldoAplicadoBruto) * 100) / 100;
@@ -603,7 +711,7 @@ Deno.serve(async (req: Request) => {
     const formaProcesador = effectivePaymentForm;
     const cashAplicado = isCheckinCharge
       ? 0
-      : Math.min(Number((booking as any).toursred_cash_used || 0), exactTotal);
+      : Math.min(Number(booking.toursred_cash_used || 0), exactTotal);
     const montoProcesador = Math.round((exactTotal - cashAplicado) * 100) / 100;
     if (cashAplicado > montoProcesador) {
       effectivePaymentForm = "05";
@@ -613,9 +721,8 @@ Deno.serve(async (req: Request) => {
       `(${formaProcesador}) => ${effectivePaymentForm}`
     );
 
-    const iva = Math.round(exactTotal * 16 / 116 * 100) / 100;
-    const subtotal = Math.round((exactTotal - iva) * 100) / 100;
-    const total = exactTotal;
+    // subtotal / iva / exempt_amount NO se calculan aqui: se derivan de los
+    // conceptos ya finales, mas abajo, despues de repartir puntos y saldo.
 
     // Build receptor data from separately-fetched traveler following SAT rules:
     // - Traveler with Mexican RFC: use their own fiscal data
@@ -692,17 +799,89 @@ Deno.serve(async (req: Request) => {
     const bookingRef = booking.booking_code || booking.id;
     const checkinLabel = isCheckinCharge ? " (cobro en check-in)" : "";
 
-    const conceptos: CfdiConcepto[] = [
-      {
+    // ── Desglose fiscal del componente TOUR ──────────────────────────────────
+    // Se lee el SNAPSHOT de la reserva, no la config viva del tour: si la
+    // agencia cambia el tratamiento despues, este CFDI no debe moverse.
+    // NULL = cobro anterior a la feature -> 16% implicito, que es exactamente
+    // como se comporto el sistema hasta ahora.
+    const tourTreatment: TaxTreatment = booking.tax_treatment ?? "taxable_16";
+    const tourExemptRatio = Number(booking.exempt_ratio ?? 0);
+    const tourTax = calculateTaxBreakdown({
+      grossAmount: grossTourAmount,
+      taxTreatment: tourTreatment,
+      exemptRatio: tourExemptRatio,
+      decimals: 6,
+    });
+
+    // El descuento se parte con EL MISMO criterio que el importe, pasandolo por
+    // la misma formula canonica. Antes iba entero al concepto gravado: en un
+    // tour exento no habia concepto gravado donde colgarlo y el descuento
+    // desaparecia del CFDI, que entonces amparaba mas de lo cobrado (un tour
+    // exento de $1,000 con $200 de descuento se facturaba en $1,000).
+    //
+    // Del gravado se descuenta el NETO y del exento el BRUTO, por la misma
+    // razon que en valor_unitario: en el exento no hay IVA que separar.
+    const descuentoTax = calculateTaxBreakdown({
+      grossAmount: descuentoTourBruto,
+      taxTreatment: tourTreatment,
+      exemptRatio: tourExemptRatio,
+      decimals: 6,
+    });
+    const descuentoTourGravado = descuentoTourBruto > 0 ? descuentoTax.taxableBase : 0;
+    const descuentoTourExento = descuentoTourBruto > 0 ? descuentoTax.exemptAmount : 0;
+
+    const conceptos: CfdiConcepto[] = [];
+
+    // Parte gravada. valor_unitario NETO porque tax_included es false.
+    if (tourTax.taxableBase > 0) {
+      conceptos.push({
+        clave_prod_serv: "90121500",
+        cantidad: 1,
+        clave_unidad: "E48",
+        descripcion: `Servicio de viaje: ${tourName} (Reserva ${bookingRef})${checkinLabel}`,
+        valor_unitario: tourTax.taxableBase,
+        ...(descuentoTourGravado > 0 ? { descuento: descuentoTourGravado } : {}),
+        tercero: terceroAgencia,
+      });
+    }
+
+    // Parte exenta. valor_unitario COMPLETO: no hay IVA que separar.
+    //
+    // Descripcion neutral a proposito: la exencion corresponde a la operacion
+    // de la AGENCIA, no a ToursRed. Describirla como "servicio de intermediacion
+    // exento de ToursRed" atribuiria a ToursRed una exencion que no es suya.
+    //
+    // Y lleva `tercero` igual que la parte gravada: ACuentaTerceros es un
+    // mecanismo de atribucion de INGRESO a la agencia para efectos de ISR,
+    // independiente de si ese concepto causa IVA. Sin el nodo, ese ingreso
+    // quedaria sin atribuir: ni a la agencia (no lo ampara) ni a ToursRed
+    // (nunca lo declaro como propio).
+    if (tourTax.exemptAmount > 0) {
+      conceptos.push({
+        clave_prod_serv: "90121500",
+        cantidad: 1,
+        clave_unidad: "E48",
+        descripcion: `Anticipo por servicio turístico: ${tourName} (Reserva ${bookingRef})${checkinLabel}`,
+        valor_unitario: tourTax.exemptAmount,
+        ...(descuentoTourExento > 0 ? { descuento: descuentoTourExento } : {}),
+        exento: true,
+        tercero: terceroAgencia,
+      });
+    }
+
+    // Un tour de importe cero no deberia llegar aqui, pero si llegara, un CFDI
+    // sin conceptos revienta en el PAC con un error incomprensible.
+    if (conceptos.length === 0) {
+      conceptos.push({
         clave_prod_serv: "90121500",
         cantidad: 1,
         clave_unidad: "E48",
         descripcion: `Servicio de viaje: ${tourName} (Reserva ${bookingRef})${checkinLabel}`,
         valor_unitario: precioTourBruto,
-        ...(descuentoTour > 0 ? { descuento: descuentoTour } : {}),
+        ...(descuentoTourGravado > 0 ? { descuento: descuentoTourGravado } : {}),
         tercero: terceroAgencia,
-      },
-    ];
+      });
+    }
 
     if (precioServicioBruto > 0) {
       conceptos.push({
@@ -726,7 +905,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (precioMembresiaBruto > 0) {
-      const planLabel = (booking as any).membership_plan === "annual" ? "anual" : "mensual";
+      const planLabel = booking.membership_plan === "annual" ? "anual" : "mensual";
       conceptos.push({
         clave_prod_serv: "80141628",
         cantidad: 1,
@@ -741,20 +920,44 @@ Deno.serve(async (req: Request) => {
       for (const opt of paidOptionals) {
         const optAmount = opt.total_paid || opt.subtotal;
         if (optAmount <= 0) continue;
-        const optBruto = Math.round((optAmount / 1.16) * 100) / 100;
         const claveProdServ = opt.service_kind === "pickup"
           ? "78111804"
           : opt.service_kind === "language"
             ? "90121702"
             : "90121500";
-        conceptos.push({
-          clave_prod_serv: claveProdServ,
-          cantidad: 1,
-          clave_unidad: "E48",
-          descripcion: opt.description || (opt.service_kind === "pickup" ? "Pick Up" : opt.service_kind === "language" ? "Idioma/Intérprete" : "Servicio opcional"),
-          valor_unitario: optBruto,
-          tercero: terceroAgencia,
+        const optDesc = opt.description || (opt.service_kind === "pickup" ? "Pick Up" : opt.service_kind === "language" ? "Idioma/Intérprete" : "Servicio opcional");
+
+        // Cada opcional usa SU PROPIO snapshot fiscal. No hereda nada del tour:
+        // un tour gravado puede llevar una "Entrada a Six Flags" exenta
+        // (Art. 15 fr. XIII LIVA) y ninguno contamina al otro.
+        const optTax = calculateTaxBreakdown({
+          grossAmount: optAmount,
+          taxTreatment: (opt.tax_treatment ?? "taxable_16") as TaxTreatment,
+          exemptRatio: Number(opt.exempt_ratio ?? 0),
+          decimals: 6,
         });
+
+        if (optTax.taxableBase > 0) {
+          conceptos.push({
+            clave_prod_serv: claveProdServ,
+            cantidad: 1,
+            clave_unidad: "E48",
+            descripcion: optDesc,
+            valor_unitario: optTax.taxableBase,
+            tercero: terceroAgencia,
+          });
+        }
+        if (optTax.exemptAmount > 0) {
+          conceptos.push({
+            clave_prod_serv: claveProdServ,
+            cantidad: 1,
+            clave_unidad: "E48",
+            descripcion: optDesc,
+            valor_unitario: optTax.exemptAmount,
+            exento: true,
+            tercero: terceroAgencia,
+          });
+        }
       }
     }
 
@@ -777,25 +980,38 @@ Deno.serve(async (req: Request) => {
         : {}),
     };
 
+    // Lo que un concepto aporta al total del comprobante, y lo que un descuento
+    // suyo le quita: el gravado se multiplica por 1.16 (valor_unitario es neto)
+    // y el exento no (ya es el importe completo). Se usan en el reparto de
+    // saldo, en el descuento consolidado y en la guardia de cuadre, que antes
+    // asumian 1.16 en todos lados.
+    const factorBruto = (c: CfdiConcepto) => (c.exento ? 1 : 1.16);
+    const disponibleBruto = (c: CfdiConcepto) =>
+      (c.valor_unitario * c.cantidad - (c.descuento ?? 0)) * factorBruto(c);
+
     // Repartir el saldo (puntos + ToursRed Cash) proporcionalmente entre las partidas.
     // Proporcional y con tope por partida para que ninguna quede en negativo y la suma
     // de conceptos siga cuadrando contra el total ya ajustado arriba.
+    //
+    // El reparto se hace en BRUTO y se convierte a las unidades de cada concepto
+    // al aplicarlo. Antes se repartia saldo/1.16 por igual entre todos: sobre un
+    // concepto exento eso descuenta 1.16 veces menos de lo debido, y el CFDI
+    // amparaba mas de lo cobrado en cuanto la reserva mezclaba exento y puntos.
     if (saldoAplicadoBruto > 0) {
-      const saldoNeto = Math.round((saldoAplicadoBruto / 1.16) * 1000000) / 1000000;
-      const baseNeta = conceptos.reduce(
-        (acc, c) => acc + (c.valor_unitario - (c.descuento ?? 0)), 0);
-      if (baseNeta > 0) {
+      const baseBruta = conceptos.reduce((acc, c) => acc + disponibleBruto(c), 0);
+      if (baseBruta > 0) {
         let repartido = 0;
         conceptos.forEach((c, i) => {
-          const disponible = c.valor_unitario - (c.descuento ?? 0);
+          const disponible = disponibleBruto(c);
           const teorico = i === conceptos.length - 1
-            ? saldoNeto - repartido
-            : (saldoNeto * disponible) / baseNeta;
-          const aplicado = Math.max(0, Math.min(
+            ? saldoAplicadoBruto - repartido
+            : (saldoAplicadoBruto * disponible) / baseBruta;
+          const aplicadoBruto = Math.max(0, Math.min(
             Math.round(teorico * 1000000) / 1000000, disponible));
-          if (aplicado > 0) {
+          if (aplicadoBruto > 0) {
+            const aplicado = aplicadoBruto / factorBruto(c);
             c.descuento = Math.round(((c.descuento ?? 0) + aplicado) * 1000000) / 1000000;
-            repartido += aplicado;
+            repartido += aplicadoBruto;
           }
         });
       }
@@ -804,7 +1020,51 @@ Deno.serve(async (req: Request) => {
     // Descuento total consolidado (con IVA incluido). Se deriva de los conceptos para
     // que incluya tambien el saldo repartido arriba, no solo los descuentos por codigo.
     const descuentoTotal = Math.round(
-      conceptos.reduce((acc, c) => acc + (c.descuento ?? 0), 0) * 1.16 * 100) / 100;
+      conceptos.reduce((acc, c) => acc + (c.descuento ?? 0) * factorBruto(c), 0) * 100) / 100;
+
+    // ── Guardia de cuadre ────────────────────────────────────────────────────
+    // Verifica que los conceptos reconstruyan lo cobrado ANTES de timbrar. El
+    // bug de `cantidad` en suplementos y opcionales (el CFDI amparaba el doble
+    // con quantity=2) sobrevivio precisamente porque nada comprobaba esto.
+    //
+    // Corre DESPUES de repartir puntos y saldo. Cuando corria antes comparaba
+    // conceptos sin descontar contra un exactTotal que ya venia descontado, asi
+    // que toda reserva con puntos reportaba un descuadre falso a Sentry — y ese
+    // ruido tapaba justamente los descuadres reales que la guardia busca.
+    //
+    // NO BLOQUEA a proposito: un CFDI que no se timbra deja al viajero sin
+    // comprobante. Se reporta a Sentry con los numeros para poder decidir con
+    // evidencia si conviene endurecerlo.
+    {
+      const chk = verifyConceptosTotal(conceptos, exactTotal);
+      if (!chk.ok) {
+        console.error(
+          `[cfdi] descuadre de conceptos: reconstruido ${chk.computed} vs cobrado ${chk.expected} (diff ${chk.diff})`,
+        );
+        Sentry.captureMessage("CFDI: los conceptos no cuadran con el importe cobrado", {
+          level: "error",
+          extra: { ...chk, conceptos: conceptos.length, funcion: "generate-booking-cfdi" },
+        });
+      }
+    }
+
+    // ── Importes fiscales del comprobante ────────────────────────────────────
+    // Se derivan de los conceptos ya finales, no de exactTotal. Antes era
+    // `iva = exactTotal * 16/116` a secas: un IVA inventado en cuanto hay algo
+    // exento. Un CFDI 100% exento de $1,000 guardaba exempt_amount 1,000 Y
+    // iva_amount 137.93 a la vez.
+    //
+    // El IVA sale POR DIFERENCIA contra el total, igual que en el bloque
+    // canonico, para que se cumpla EXACTO subtotal + iva + exento == total sin
+    // dejar un centavo colgando entre las tres columnas.
+    const total = exactTotal;
+    const exemptAmount = Math.round(
+      conceptos.filter((c) => c.exento)
+        .reduce((s, c) => s + c.valor_unitario * c.cantidad - (c.descuento ?? 0), 0) * 100,
+    ) / 100;
+    const gravadoBruto = Math.round((total - exemptAmount) * 100) / 100;
+    const subtotal = Math.round((gravadoBruto / 1.16) * 100) / 100;
+    const iva = Math.round((gravadoBruto - subtotal) * 100) / 100;
 
     // Sustitucion: se omite claim_cfdi_stamping_slot a proposito. Ese RPC rechaza con
     // already_exists si la reserva ya tiene un CFDI stamped, que es justamente el caso
@@ -831,6 +1091,7 @@ Deno.serve(async (req: Request) => {
           cfdi_type: "I",
           subtotal,
           iva_amount: iva,
+          exempt_amount: exemptAmount,
           total,
           currency: "MXN",
           status: "pending",
@@ -882,6 +1143,25 @@ Deno.serve(async (req: Request) => {
     }
 
     cfdiRecord = { id: claimResult.cfdi_id, retry_count: 0 };
+
+    // exempt_amount va aparte porque claim_cfdi_stamping_slot no lo recibe: su
+    // firma es anterior a la feature de exentos. Se actualiza en vez de agregar
+    // un parametro al RPC para no meter una migracion en un cambio de Edge
+    // Function; si el CFDI se queda en `pending` por un fallo de timbrado, la
+    // fila igual queda con la composicion correcta.
+    if (exemptAmount > 0) {
+      const { error: exemptError } = await supabase
+        .from("cfdi_invoices")
+        .update({ exempt_amount: exemptAmount })
+        .eq("id", cfdiRecord.id);
+      if (exemptError) {
+        console.error(`[cfdi] no se pudo guardar exempt_amount: ${exemptError.message}`);
+        Sentry.captureMessage("CFDI: exempt_amount no se persistio", {
+          level: "error",
+          extra: { cfdi_id: cfdiRecord.id, exemptAmount, error: exemptError.message },
+        });
+      }
+    }
     }
 
     // Stamp with PAC

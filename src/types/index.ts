@@ -1,4 +1,5 @@
 import type { VehicleMapType } from './seats';
+import type { TaxTreatment } from '../utils/taxBreakdown';
 
 export interface User {
   id: string;
@@ -215,6 +216,9 @@ export interface Tour {
   // Existia en la BD y se leia con `(tour as any).vehicle_map_type` en cuatro
   // lugares. VehicleMapType ya vivia en ./seats; solo faltaba declararlo aqui.
   vehicle_map_type?: VehicleMapType | null;
+  // Tratamiento fiscal de IVA (Art. 15 fr. XIII LIVA). Default gravado al 16%.
+  tax_treatment?: TaxTreatment;
+  exempt_ratio?: number;
   operating_days?: number[];
   operating_months?: number[];
   min_advance_booking_hours?: number;

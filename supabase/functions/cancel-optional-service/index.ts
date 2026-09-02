@@ -60,6 +60,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, booking_id, tour_optional_service_id, quantity, unit_price, subtotal,
         service_charge, total_paid, membership_exemption_used, is_cancelled, service_kind,
+        tax_treatment, exempt_ratio,
         tour_optional_services (id, name, is_refundable)
       `)
       .eq("id", booking_optional_service_id)
@@ -310,6 +311,12 @@ Deno.serve(async (req: Request) => {
                   related_cfdi_uuid: ownCfdi.uuid_fiscal,
                   item_type: "optional_service",
                   tercero_agencia: terceroAgencia,
+                  // Snapshot fiscal del cobro original: el reembolso conserva
+                  // proporcionalmente la composicion de lo cobrado. Un opcional
+                  // exento (p.ej. entrada a Six Flags) no puede generar una nota
+                  // de credito con IVA trasladado que nunca se cobro.
+                  tax_treatment: (optService as { tax_treatment?: string }).tax_treatment ?? null,
+                  exempt_ratio: (optService as { exempt_ratio?: number }).exempt_ratio ?? null,
                 },
               }).catch((err: any) => console.error("Credit note generation failed (no crítico):", err))
             );
@@ -346,6 +353,12 @@ Deno.serve(async (req: Request) => {
                   related_cfdi_uuid: depositCfdi.uuid_fiscal,
                   item_type: "optional_service",
                   tercero_agencia: terceroAgencia,
+                  // Snapshot fiscal del cobro original: el reembolso conserva
+                  // proporcionalmente la composicion de lo cobrado. Un opcional
+                  // exento (p.ej. entrada a Six Flags) no puede generar una nota
+                  // de credito con IVA trasladado que nunca se cobro.
+                  tax_treatment: (optService as { tax_treatment?: string }).tax_treatment ?? null,
+                  exempt_ratio: (optService as { exempt_ratio?: number }).exempt_ratio ?? null,
                 },
               }).catch((err: any) => console.error("Credit note generation failed (no crítico):", err))
             );
