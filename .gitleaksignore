@@ -1,0 +1,27 @@
+# .gitleaksignore — hallazgos revisados uno por uno el 02-sep-2026 y descartados.
+# Formato: <commit>:<ruta>:<regla>:<linea>   (fingerprint de gitleaks)
+#
+# Los 5 apuntan al commit historico 02f142fa (22-jul-2026) y traen las rutas
+# viejas de las migraciones, de antes del archivado de b0a9a1c. Se silencian
+# aqui para que un hallazgo REAL a futuro no se pierda entre ruido conocido.
+# Si agregas una linea nueva, deja escrito por que es seguro ignorarla.
+
+# Token de afiliado de Exoticca dentro de una URL publica. Va al navegador a
+# proposito; identifica la cuenta de afiliado, no es una credencial.
+02f142fa7a8891a59631d6c1896fa26c233b4b20:src/pages/international/ExoticcaPage.tsx:generic-api-key:10
+
+# Falso positivo: es el atributo placeholder de un input del formulario
+# ("sk_live_... o equivalente"), no una llave de Stripe.
+02f142fa7a8891a59631d6c1896fa26c233b4b20:src/pages/admin/AdminSettings.tsx:stripe-access-token:1498
+
+# Llave SMTP rotada el 02-sep-2026: el valor que quedo en el historial es una
+# credencial muerta. El UPDATE que la sembraba se removio del archivo en
+# supabase/migrations_archive/, pero el historial no se limpia sin reescribirlo.
+02f142fa7a8891a59631d6c1896fa26c233b4b20:supabase/migrations/20251211014324_add_smtp_api_key.sql:generic-api-key:15
+
+# JWT con claim role:anon — llave publica de Supabase por diseno, protegida por
+# RLS. Verificado decodificando el payload el 02-sep-2026. No es fuga.
+02f142fa7a8891a59631d6c1896fa26c233b4b20:supabase/migrations/20260602040035_fix_notify_executive_by_email_hardcode_url.sql:jwt:11
+
+# Idem: JWT con claim role:anon.
+02f142fa7a8891a59631d6c1896fa26c233b4b20:supabase/migrations/20260528055744_fix_process_expired_slot_reschedules_use_anon_key.sql:jwt:21

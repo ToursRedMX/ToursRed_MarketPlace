@@ -142,6 +142,7 @@ interface AuthContextType {
   signInWithAzure: () => Promise<void>;
   signInWithTwitter: () => Promise<void>;
   signInWithFacebook: () => Promise<void>;
+  signInWithLinkedIn: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
   refreshAuthState: () => Promise<void>;
 }
@@ -174,6 +175,7 @@ const AuthContext = createContext<AuthContextType>({
   signInWithAzure: async () => {},
   signInWithTwitter: async () => {},
   signInWithFacebook: async () => {},
+  signInWithLinkedIn: async () => {},
   completeOnboarding: async () => {},
   refreshAuthState: async () => {},
 });
@@ -383,6 +385,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const redirectTo = `${window.location.origin}/auth/facebook-callback`;
     await supabase.auth.signInWithOAuth({
       provider: 'facebook',
+      options: { redirectTo },
+    });
+  }, []);
+
+  const signInWithLinkedIn = useCallback(async () => {
+    const redirectTo = `${window.location.origin}/auth/linkedin-callback`;
+    await supabase.auth.signInWithOAuth({
+      provider: 'linkedin_oidc',
       options: { redirectTo },
     });
   }, []);
@@ -908,9 +918,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signInWithAzure,
     signInWithTwitter,
     signInWithFacebook,
+    signInWithLinkedIn,
     completeOnboarding,
     refreshAuthState,
-  }), [user, userRole, isLoading, isAdmin, isAgency, isTraveler, isAccountant, isAccountExecutive, isEmailVerified, isSuperAdmin, isOnboardingPending, mustChangePassword, permissions, accountantPermissions, accountExecutiveInfo, isAgencyStaff, staffInfo, allStaffInfo, activeAgencyId, switchActiveAgency, isAgencyApproved, needsTermsAcceptance, markTermsAccepted, signInWithGoogle, signInWithAzure, signInWithTwitter, signInWithFacebook, completeOnboarding, refreshAuthState]);
+  }), [user, userRole, isLoading, isAdmin, isAgency, isTraveler, isAccountant, isAccountExecutive, isEmailVerified, isSuperAdmin, isOnboardingPending, mustChangePassword, permissions, accountantPermissions, accountExecutiveInfo, isAgencyStaff, staffInfo, allStaffInfo, activeAgencyId, switchActiveAgency, isAgencyApproved, needsTermsAcceptance, markTermsAccepted, signInWithGoogle, signInWithAzure, signInWithTwitter, signInWithFacebook, signInWithLinkedIn, completeOnboarding, refreshAuthState]);
 
   return (
     <AuthContext.Provider value={contextValue}>

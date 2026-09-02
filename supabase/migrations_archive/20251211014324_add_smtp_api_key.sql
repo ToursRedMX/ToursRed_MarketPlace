@@ -10,7 +10,13 @@ BEGIN
   END IF;
 END $$;
 
--- Update existing row with the API key
-UPDATE email_settings 
-SET smtp_api_key = 'api-D1F65BD8A6DC496489C600EC517B9FF1'
-WHERE smtp_api_key IS NULL OR smtp_api_key = '';
+-- Aqui iba un UPDATE que sembraba la llave SMTP hardcodeada. Se removio el
+-- 02-sep-2026, despues de rotar esa llave: el valor viejo quedo muerto y en un
+-- entorno nuevo se sembraba solo (el guard WHERE smtp_api_key IS NULL no frena
+-- en una base recien creada), dejando el correo fallando en silencio con una
+-- credencial presente pero invalida.
+--
+-- La columna queda en NULL a proposito: la llave se carga por configuracion,
+-- no por migracion. Esta migracion ya esta aplicada en produccion, asi que
+-- editar este archivo no altera la base existente; solo cambia lo que recibe
+-- un entorno reconstruido desde el repo.

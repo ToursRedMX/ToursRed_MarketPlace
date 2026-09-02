@@ -88,11 +88,13 @@ interface PlatformSettings {
   oauth_azure_login_enabled: boolean;
   oauth_twitter_login_enabled: boolean;
   oauth_facebook_login_enabled: boolean;
+  oauth_linkedin_login_enabled: boolean;
   turnstile_auth_enabled: boolean;
   oauth_google_link_enabled: boolean;
   oauth_azure_link_enabled: boolean;
   oauth_twitter_link_enabled: boolean;
   oauth_facebook_link_enabled: boolean;
+  oauth_linkedin_link_enabled: boolean;
   stripe_bookings_enabled: boolean;
   stripe_gift_cards_enabled: boolean;
   stripe_memberships_enabled: boolean;
@@ -176,11 +178,13 @@ const AdminSettings: React.FC = () => {
     oauth_azure_login_enabled: true,
     oauth_twitter_login_enabled: false,
     oauth_facebook_login_enabled: false,
+    oauth_linkedin_login_enabled: false,
     turnstile_auth_enabled: false,
     oauth_google_link_enabled: true,
     oauth_azure_link_enabled: true,
     oauth_twitter_link_enabled: false,
     oauth_facebook_link_enabled: false,
+    oauth_linkedin_link_enabled: false,
     stripe_bookings_enabled: true,
     stripe_gift_cards_enabled: true,
     stripe_memberships_enabled: true,
@@ -476,11 +480,13 @@ const AdminSettings: React.FC = () => {
             oauth_azure_login_enabled: platformSettings.oauth_azure_login_enabled,
             oauth_twitter_login_enabled: platformSettings.oauth_twitter_login_enabled,
             oauth_facebook_login_enabled: platformSettings.oauth_facebook_login_enabled,
+            oauth_linkedin_login_enabled: platformSettings.oauth_linkedin_login_enabled,
             turnstile_auth_enabled: platformSettings.turnstile_auth_enabled,
             oauth_google_link_enabled: platformSettings.oauth_google_link_enabled,
             oauth_azure_link_enabled: platformSettings.oauth_azure_link_enabled,
             oauth_twitter_link_enabled: platformSettings.oauth_twitter_link_enabled,
             oauth_facebook_link_enabled: platformSettings.oauth_facebook_link_enabled,
+            oauth_linkedin_link_enabled: platformSettings.oauth_linkedin_link_enabled,
             stripe_bookings_enabled: platformSettings.stripe_bookings_enabled,
             stripe_gift_cards_enabled: platformSettings.stripe_gift_cards_enabled,
             stripe_memberships_enabled: platformSettings.stripe_memberships_enabled,
@@ -545,7 +551,7 @@ const AdminSettings: React.FC = () => {
   const handlePlatformChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     const numericFields = ['service_charge_percentage', 'agency_commission_percentage', 'supplement_commission_percentage', 'optional_service_commission_percentage', 'membership_monthly_price', 'membership_annual_price', 'membership_service_fee_exemption_monthly_limit', 'default_max_referrals_per_user', 'referral_bonus_points', 'openpay_commission_pct', 'openpay_commission_fixed', 'stripe_commission_pct', 'stripe_commission_fixed', 'paypal_commission_pct', 'paypal_commission_fixed', 'mercadopago_commission_pct', 'mercadopago_commission_fixed', 'conekta_commission_pct', 'conekta_commission_fixed'];
-    const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'conekta_enabled', 'openpay_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'turnstile_auth_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
+    const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'conekta_enabled', 'openpay_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'oauth_linkedin_login_enabled', 'turnstile_auth_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'oauth_linkedin_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
     setPlatformSettings(prev => ({
       ...prev,
       [name]: booleanFields.includes(name) ? checked : (numericFields.includes(name) ? (parseFloat(value) || 0) : value),
@@ -2754,6 +2760,11 @@ const AdminSettings: React.FC = () => {
                   { label: 'Facebook', loginKey: 'oauth_facebook_login_enabled', linkKey: 'oauth_facebook_link_enabled', icon: (
                     <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" fill="#1877F2"/>
+                    </svg>
+                  ) },
+                  { label: 'LinkedIn', loginKey: 'oauth_linkedin_login_enabled', linkKey: 'oauth_linkedin_link_enabled', icon: (
+                    <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" fill="#0A66C2"/>
                     </svg>
                   ) },
                 ].map(({ label, loginKey, linkKey, icon }) => (
