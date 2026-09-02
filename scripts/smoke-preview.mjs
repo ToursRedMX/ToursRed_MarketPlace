@@ -21,6 +21,59 @@ if (!BASE) {
   process.exit(2);
 }
 
+// ---------- la URL tiene que ser la app, no cualquier pagina ----------
+// Netlify reporta el commit status como `success` incluso cuando el deploy se
+// CANCELA, y en ese caso su target_url apunta al panel de administracion
+// (app.netlify.com/projects/<sitio>/deploys/<id>) en vez de al preview.
+//
+// Cargar esa pagina producia un rojo enganoso: el panel es una app React con
+// su propio #root (243 nodos, por encima de MIN_NODES) y sus propios errores
+// de consola de reCAPTCHA, que no estan en THIRD_PARTY. El script terminaba
+// reportando "la app NO arranca" sin haber abierto nunca la app. Paso en el
+// PR #116, donde el commit solo tocaba un .sql y Netlify salto el build.
+//
+// Ante una URL que no es un destino de despliegue se sale con codigo 2
+// (error de invocacion, igual que la URL faltante), no con 1: 1 significa
+// "la app esta rota" y aqui no se llego a probar nada.
+const ALLOWED_HOSTS = (process.env.SMOKE_ALLOWED_HOSTS || 'netlify.app,toursred.com')
+  .split(',')
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean);
+
+let baseUrl;
+try {
+  baseUrl = new URL(BASE);
+} catch {
+  console.error(`ERROR: la URL base no es una URL valida: ${BASE}`);
+  process.exit(2);
+}
+
+if (baseUrl.protocol !== 'http:' && baseUrl.protocol !== 'https:') {
+  console.error(`ERROR: la URL base debe ser http(s), se recibio: ${baseUrl.protocol}//`);
+  process.exit(2);
+}
+
+const HOST = baseUrl.hostname.toLowerCase();
+
+if (HOST === 'app.netlify.com') {
+  console.error(`ERROR: la URL apunta al panel de Netlify, no a la app: ${BASE}`);
+  console.error('');
+  console.error('Netlify devuelve esta URL cuando el deploy fue CANCELADO (por ejemplo');
+  console.error('si el commit no toco archivos de frontend), aunque el commit status');
+  console.error('siga marcado como success. No hay preview que probar.');
+  console.error('');
+  console.error('Esto NO significa que la app este rota: significa que no se construyo');
+  console.error('un preview para este commit.');
+  process.exit(2);
+}
+
+if (!ALLOWED_HOSTS.some((h) => HOST === h || HOST.endsWith(`.${h}`))) {
+  console.error(`ERROR: el host "${HOST}" no es un destino de despliegue conocido.`);
+  console.error(`Permitidos: ${ALLOWED_HOSTS.join(', ')} (y sus subdominios).`);
+  console.error('Ajustable con SMOKE_ALLOWED_HOSTS si se agrega un dominio nuevo.');
+  process.exit(2);
+}
+
 const ROUTES = (process.env.SMOKE_ROUTES || '/,/tours').split(',').map((r) => r.trim()).filter(Boolean);
 
 // Medido sobre produccion el 28-ago: "/" rinde 708 nodos y "/tours" 406.
