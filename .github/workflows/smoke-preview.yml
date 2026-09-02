@@ -72,6 +72,19 @@ jobs:
 
             case "$STATE" in
               success)
+                # Netlify marca el status como `success` incluso cuando el
+                # deploy fue CANCELADO, y ahi el target_url apunta a su panel
+                # en vez de al preview. Pasarselo al smoke daba un rojo
+                # enganoso: probaba el panel de Netlify y reportaba que la app
+                # no arranca (PR #116). No hay preview: no hay nada que probar.
+                case "$URL" in
+                  https://app.netlify.com/*)
+                    echo "::notice::Deploy preview CANCELADO por Netlify (target_url apunta a su panel). Smoke omitido: no hay preview para este commit."
+                    echo "skipped=1" >> "$GITHUB_OUTPUT"
+                    echo "skip_url=${URL}" >> "$GITHUB_OUTPUT"
+                    exit 0
+                    ;;
+                esac
                 echo "Preview listo: ${URL}"
                 echo "url=${URL}" >> "$GITHUB_OUTPUT"
                 exit 0
@@ -92,6 +105,7 @@ jobs:
 
       - name: Resolver la URL a probar
         id: target
+        if: steps.preview.outputs.skipped != '1'
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             URL="${{ steps.preview.outputs.url }}"
@@ -109,10 +123,12 @@ jobs:
 
       - name: Setup Node
         uses: actions/setup-node@v7
+        if: steps.preview.outputs.skipped != '1'
         with:
           node-version: '24'
 
       - name: Instalar Playwright
+        if: steps.preview.outputs.skipped != '1'
         # Se instala aqui y no en package.json a proposito: es una dependencia
         # solo de CI, y anadirla al repo cargaria ~300 MB a cada npm install
         # local sin que nadie la use fuera de este workflow.
@@ -121,6 +137,7 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Smoke test
+        if: steps.preview.outputs.skipped != '1'
         env:
           SMOKE_ROUTES: '/,/tours'
         run: node scripts/smoke-preview.mjs "${{ steps.target.outputs.url }}"
@@ -131,6 +148,16 @@ jobs:
           {
             echo "### Smoke test post-deploy"
             echo ""
+            if [ "${{ steps.preview.outputs.skipped }}" = "1" ]; then
+              echo "> :warning: **SMOKE NO EJECUTADO.** Netlify cancelo el deploy"
+              echo "> preview de este commit, asi que no habia app que probar."
+              echo "> El status de Netlify sigue en \`success\` y su target_url"
+              echo "> apunta al panel (\`${{ steps.preview.outputs.skip_url }}\`)."
+              echo ""
+              echo "Suele pasar cuando el commit no toca archivos de frontend."
+              echo "**No se verifico que la app arranque en este commit.**"
+              exit 0
+            fi
             echo "URL probada: ${{ steps.target.outputs.url }}"
             echo ""
             if [ "${{ job.status }}" = "success" ]; then
