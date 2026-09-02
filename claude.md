@@ -31,6 +31,7 @@ ToursRed es una plataforma donde agencias de viaje comercializan sus propios tou
 - Centralizar lógica de desglose de costos de reserva (~4–6 días de trabajo)
 - Handlers en `stripe-webhook` para disputas (`charge.dispute.*`) y payouts (`payout.paid/failed`)
 - Bug conocido en `BookingForm.tsx`: el mensaje de ToursRed Points no incluye opcionales ni seguro en el cálculo mostrado al usuario
+- **Ninguna Edge Function pasa por `tsc` en CI.** `npm run typecheck` corre `tsc -p tsconfig.app.json`, y ese tsconfig tiene `"include": ["src"]`: las ~175 funciones de `supabase/functions/` no las type-checkea nada, ni en local ni en CI. Detectado el 01-sep-2026 a raíz del bug de `generate-booking-cfdi`, donde un `booking as {...}` escondía que el `.select()` no pedía `tax_treatment`: el código leía una columna que la consulta nunca traía y ni tsc ni runtime decían nada. `scripts/test-fiscal-selects.mjs` (bloqueante en `fiscal-guard.yml`) tapa ese hueco **concreto**, pero solo ése — cualquier otro error de tipos en cualquier Edge Function sigue sin red. Cerrarlo pide un `deno check` sobre `supabase/functions/` en CI, con su propia línea base, porque el runtime es Deno y no comparte tsconfig con el front.
 
 ## Comandos del proyecto
 - Instalar: `npm install` (o el que uses)
