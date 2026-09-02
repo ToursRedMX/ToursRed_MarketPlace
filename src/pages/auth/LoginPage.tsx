@@ -340,7 +340,9 @@ const LoginPage: React.FC = () => {
                   setIsPasskeyLoading(true);
                   setError('');
                   try {
-                    const { data: pkData, error: pkError } = await supabase.auth.signInWithPasskey();
+                    const { data: pkData, error: pkError } = await supabase.auth.signInWithPasskey({
+                      options: { captchaToken: turnstileToken || undefined },
+                    });
                     if (pkError) throw pkError;
                     if (pkData?.user) {
                       const role = pkData.user.user_metadata?.role;
@@ -357,12 +359,13 @@ const LoginPage: React.FC = () => {
                       }
                     }
                   } catch (err: any) {
+                    console.error('[passkey] signInWithPasskey failed:', err);
                     setError('No se pudo iniciar sesion con clave de acceso.');
                   } finally {
                     setIsPasskeyLoading(false);
                   }
                 }}
-                disabled={isPasskeyLoading}
+                disabled={isPasskeyLoading || (turnstileEnabled && !turnstileToken)}
                 className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-blue-300 rounded-md shadow-xs bg-blue-50 text-sm font-medium text-blue-700 hover:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
               >
                 {isPasskeyLoading ? (
