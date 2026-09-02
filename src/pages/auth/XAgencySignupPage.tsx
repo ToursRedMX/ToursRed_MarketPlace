@@ -117,7 +117,7 @@ const XAgencySignupPage: React.FC = () => {
       if (onboardingError) throw new Error(onboardingError.message);
 
       await supabase.from('user_auth_providers').upsert(
-        { user_id: user.id, provider: 'twitter', provider_user_id: user.id },
+        { user_id: user.id, provider: 'x', provider_user_id: user.id },
         { onConflict: 'user_id,provider' }
       );
       await supabase.from('user_auth_providers').upsert(
