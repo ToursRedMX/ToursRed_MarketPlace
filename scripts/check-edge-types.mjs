@@ -104,7 +104,16 @@ for (let i = 0; i < lineas.length; i++) {
     if (a) { ruta = rutaRelativa(a[1]); break; }
   }
 
-  const firma = `${ruta} | ${codigo} | ${mensaje.trim().replace(/\s+/g, ' ')}`;
+  // Algunos mensajes traen una ruta ABSOLUTA embebida (p.ej. TS2305 cita el
+  // modulo por su URL completa). Sin normalizarla, la misma firma difiere
+  // entre la maquina de quien genera la linea base y el runner de CI, y todo
+  // aparece como nuevo y resuelto a la vez. Paso real, no hipotetico.
+  const mensajeNormalizado = mensaje
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/file:\/\/\/[^"'`\s]+/g, (u) => rutaRelativa(u));
+
+  const firma = `${ruta} | ${codigo} | ${mensajeNormalizado}`;
   firmas.set(firma, (firmas.get(firma) || 0) + 1);
 }
 

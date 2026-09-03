@@ -24,7 +24,7 @@
 2	supabase/functions/admin-finalize-cancellation/index.ts | TS2339 | Property 'id' does not exist on type 'never'.
 1	supabase/functions/admin-finalize-cancellation/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
 1	supabase/functions/admin-finalize-cancellation/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
-1	supabase/functions/approve-agency-documents/index.ts | TS2305 | Module '"file:///C:/Users/AxelAlvarez/ToursRed/ToursRed_MarketPlace/supabase/functions/_shared/contractDocDefinition.ts"' has no exported member 'ContractData'.
+1	supabase/functions/approve-agency-documents/index.ts | TS2305 | Module '"supabase/functions/_shared/contractDocDefinition.ts"' has no exported member 'ContractData'.
 1	supabase/functions/approve-agency-documents/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
 1	supabase/functions/cancel-cfdi/index.ts | TS18047 | 'settings' is possibly 'null'.
 1	supabase/functions/cancel-cfdi/index.ts | TS2339 | Property 'access_token' does not exist on type 'never'.
@@ -262,8 +262,8 @@
 3	supabase/functions/sync-transport-locations/index.ts | TS7006 | Parameter 'tags' implicitly has an 'any' type.
 1	supabase/functions/test-openpay-3ds-charge/index.ts | TS18046 | 'err' is of type 'unknown'.
 1	supabase/functions/validate-agency-rfc/index.ts | TS18047 | 'settings' is possibly 'null'.
-1	supabase/functions/verify-contract-otp/index.ts | TS2305 | Module '"file:///C:/Users/AxelAlvarez/ToursRed/ToursRed_MarketPlace/supabase/functions/_shared/contractDocDefinition.ts"' has no exported member 'AnexoBData'.
-1	supabase/functions/verify-contract-otp/index.ts | TS2305 | Module '"file:///C:/Users/AxelAlvarez/ToursRed/ToursRed_MarketPlace/supabase/functions/_shared/contractDocDefinition.ts"' has no exported member 'ContractData'.
+1	supabase/functions/verify-contract-otp/index.ts | TS2305 | Module '"supabase/functions/_shared/contractDocDefinition.ts"' has no exported member 'AnexoBData'.
+1	supabase/functions/verify-contract-otp/index.ts | TS2305 | Module '"supabase/functions/_shared/contractDocDefinition.ts"' has no exported member 'ContractData'.
 1	supabase/functions/verify-contract-otp/index.ts | TS2339 | Property 'message' does not exist on type '{}'.
 1	supabase/functions/verify-contract-otp/index.ts | TS2345 | Argument of type 'Uint8Array<ArrayBufferLike>' is not assignable to parameter of type 'BufferSource'.
 1	supabase/functions/verify-email-code/index.ts | TS18046 | 'error' is of type 'unknown'.
