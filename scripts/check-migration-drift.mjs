@@ -34,8 +34,15 @@
  * Salida: cuantas versiones aplicadas no tienen archivo, cuantos archivos nunca
  * se aplicaron bajo su propia version, y los comandos para reconciliar.
  *
+ * Flag --ci: en integracion continua solo debe fallar UNA de las dos
+ * direcciones del desfase. Un archivo todavia sin aplicar es lo normal en un
+ * PR que agrega una migracion, y hacerlo rojo entrenaria al equipo a ignorar
+ * el check. Una version aplicada SIN archivo, en cambio, es el defecto real:
+ * alguien aplico sin pasar por un commit. Con --ci el codigo de salida
+ * depende solo de esa direccion; la otra se sigue reportando, informativa.
+ *
  * Codigos de salida:
- *   0  sin desfase
+ *   0  sin desfase (con --ci: sin aplicadas-sin-archivo)
  *   1  hay desfase (uso normal en auditoria; NO es un error de ejecucion)
  *   2  error de invocacion (falta el archivo, no se pudo leer, etc.)
  */
@@ -46,7 +53,9 @@ import { join } from 'node:path';
 const DIRS = ['supabase/migrations', 'supabase/migrations_archive'];
 const VERSION_RE = /\b(\d{14})\b/;
 
-const input = process.argv[2];
+const args = process.argv.slice(2);
+const modoCI = args.includes('--ci');
+const input = args.find((a) => !a.startsWith('--'));
 if (!input) {
   console.error('ERROR: falta el archivo con las versiones aplicadas.');
   console.error('');
@@ -151,6 +160,27 @@ console.log(`\n${'='.repeat(60)}`);
 if (appliedSinArchivo.length === 0 && archivoSinAplicar.length === 0) {
   console.log('Sin desfase: el ledger y los archivos del repo coinciden.\n');
   process.exit(0);
+}
+
+if (modoCI) {
+  // En CI solo bloquea la direccion que denuncia un cambio aplicado sin commit.
+  // Un archivo pendiente de aplicar es lo esperado en un PR que agrega una
+  // migracion: hacerlo rojo entrenaria al equipo a ignorar este check.
+  if (appliedSinArchivo.length === 0) {
+    console.log(
+      'Sin cambios aplicados fuera del repo. Quedan ' +
+        archivoSinAplicar.length +
+        ' archivo(s) sin aplicar bajo su version, que es lo normal antes de aplicarlos.\n',
+    );
+    process.exit(0);
+  }
+  console.log(
+    'Hay ' +
+      appliedSinArchivo.length +
+      ' version(es) aplicadas SIN archivo en el repo: un cambio de esquema llego a la'+
+      ' base sin pasar por un commit.\n',
+  );
+  process.exit(1);
 }
 
 console.log('Hay desfase entre el ledger y el repo.\n');
