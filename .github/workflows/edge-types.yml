@@ -18,11 +18,6 @@ name: Tipos de Edge Functions
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'supabase/functions/**'
-      - 'scripts/check-edge-types.mjs'
-      - 'scripts/edge-check/**'
-      - '.github/workflows/edge-types.yml'
   workflow_dispatch:
 
 permissions:
