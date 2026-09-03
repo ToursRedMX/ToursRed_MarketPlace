@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .select(`
-        id, user_id, agency_id, status, booking_code,
+        id, user_id, agency_id, status, booking_code, dispute_hold_at,
         tour:tours(name, start_date),
         traveler:users!bookings_user_id_fkey(id, first_name, last_name, email, no_show_count),
         agency:agencies(id, name, user_id, contact_email)
@@ -142,6 +142,18 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ error: "Solo la agencia del tour puede confirmar el check-in" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Una reserva con disputa abierta no se opera: el dinero esta en
+    // contracargo y el tour todavia no se ha entregado. Lo pone
+    // charge.dispute.created y lo limpia una disputa ganada.
+    if (booking.dispute_hold_at) {
+      return new Response(
+        JSON.stringify({
+          error: 'Esta reserva tiene una disputa de pago abierta y el check-in esta bloqueado. Contacta a ToursRed antes de operar el tour.',
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
