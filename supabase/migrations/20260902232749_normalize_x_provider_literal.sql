@@ -1,33 +1,38 @@
--- ============================================================================
--- EXPORTACION FUNCIONAL desde supabase_migrations.schema_migrations
---
--- Este archivo NO es la migracion original: es el SQL que la base registro
--- haber ejecutado, reconstruido a partir del ledger.
---
---   version: 20260902232749
---   name:    normalize_x_provider_literal
---
--- Recuperado : las sentencias ejecutadas, en su orden original.
--- Perdido    : los comentarios sueltos entre sentencias. El ledger guarda solo
---              sentencias ejecutables, asi que la documentacion que tuviera el
---              archivo original no es recuperable desde aqui.
--- Transformado: saltos de linea desescapados y ';' separadores repuestos, que
---              statements[] no conserva. La alineacion puede diferir.
---
--- Se agrega para que el cambio de esquema sea revisable y reproducible desde
--- el repo. Para el detalle de por que existe, ver el bullet del desfase de
--- migraciones en claude.md.
--- ============================================================================
-
 -- Normaliza el literal de X en user_auth_providers y quita el sobrante del CHECK.
 --
--- 'x' es el valor canonico: es el string que usa Supabase OAuth
--- (signInWithOAuth provider: 'x', y app_metadata?.provider === 'x' en
--- AuthContext.tsx), consistente con google/facebook/azure/linkedin_oidc.
--- XAgencySignupPage.tsx se alinea a 'x' en el mismo PR (#117).
+-- Contexto: la migracion 20260902160000 tuvo que permitir 'twitter' Y 'x' a la
+-- vez porque las dos paginas de alta de X no coincidian entre si:
 --
--- Verificado: 0 filas con 'twitter' o 'x' en user_auth_providers antes de
--- este cambio, asi que no hace falta backfill.
+--     XAgencySignupPage.tsx:120   -> 'twitter'
+--     XTravelerSignupPage.tsx:163 -> 'x'
+--
+-- Admitir solo uno habria dejado la mitad del flujo roto, asi que se dejaron
+-- ambos y se anoto normalizar despues. Esto es ese "despues".
+--
+-- Se elige 'x' como valor canonico, no 'twitter', porque esta columna guarda
+-- consistentemente el string de proveedor de Supabase OAuth ('google',
+-- 'facebook', 'azure', 'linkedin_oidc'), y para X ese string es 'x':
+--
+--     AuthContext.tsx:379   signInWithOAuth({ provider: 'x' })
+--     AuthContext.tsx:413   app_metadata?.provider === 'x'
+--
+-- El nombre de las columnas oauth_twitter_* en platform_settings es un legado
+-- de nomenclatura aparte y no cambia aqui: no tiene relacion con el valor que
+-- guarda esta columna.
+--
+-- El commit que acompana a esta migracion alinea XAgencySignupPage a 'x'.
+--
+-- Seguridad del cambio: verificado el 02-sep-2026 que user_auth_providers no
+-- tiene ninguna fila con 'twitter' ni con 'x' (solo 'google' y 'email', 4 y 4),
+-- asi que quitar 'twitter' del CHECK no invalida datos existentes ni requiere
+-- backfill.
+--
+-- NO se toca XCallbackPage.tsx, que sigue aceptando 'x' y 'twitter' en
+-- app_metadata/identities: eso valida lo que reporta Supabase Auth, que es una
+-- cosa distinta de lo que nosotros guardamos en esta tabla.
+--
+-- 'microsoft' y 'apple' se conservan aunque hoy nada los inserta: quitarlos es
+-- un cambio con riesgo propio y ajeno a lo que se busca aqui.
 
 ALTER TABLE public.user_auth_providers
   DROP CONSTRAINT IF EXISTS user_auth_providers_provider_check;
@@ -43,5 +48,4 @@ ALTER TABLE public.user_auth_providers
     'linkedin_oidc',
     'azure',
     'x'
-  ))
-;
+  ));
