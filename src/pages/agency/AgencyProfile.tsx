@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Building, Mail, Phone, Globe, Star, CreditCard as Edit, Save, X, Upload, User, Calendar, MapPin, FileText, Landmark, Hash, Shield, Link2, Building2, Image, ExternalLink, CheckCircle, AlertCircle, Download, Briefcase } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { validarRfcAgencia, tieneDatosFiscalesCompletos } from '../../lib/validarRfcAgencia';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import ImageUploader from '../../components/ImageUploader';
 import ChangePasswordSection from '../../components/ChangePasswordSection';
@@ -32,6 +33,13 @@ interface AgencyProfile {
   postal_code?: string;
   country?: string;
   domicilio_fiscal?: string;
+  rfc?: string;
+  razon_social?: string;
+  regimen_fiscal?: string;
+  rnt?: string;
+  banco?: string;
+  cuenta_clabe?: string;
+  titular_cuenta?: string;
   users?: {
     first_name?: string;
     last_name?: string;
@@ -230,36 +238,41 @@ const AgencyProfile: React.FC = () => {
       setError('');
       setSuccess('');
 
-      // Validar RFC contra el SAT si se está cambiando
-      if (editForm.rfc?.trim() && editForm.razon_social?.trim() && editForm.regimen_fiscal) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const validateRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-agency-rfc`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              rfc: editForm.rfc.trim(),
-              razon_social: editForm.razon_social.trim(),
-              regimen_fiscal: editForm.regimen_fiscal,
-              postal_code: editForm.postal_code || undefined,
-            }),
-          });
+      // Validar el RFC contra el SAT, pero solo si algo fiscal cambio: si la
+      // agencia edita su logo o su telefono no tiene por que depender del PAC.
+      //
+      // Antes esto fallaba ABIERTO. La comprobacion del veredicto vivia dentro
+      // de `if (validateRes.ok)`, asi que un 500 del PAC o una Edge Function
+      // caida hacian que el perfil se guardara igual, con el RFC sin verificar
+      // y sin que nadie se enterara. Ahora un veredicto que no llega bloquea.
+      const norm = (v?: string) => (v || '').trim();
+      const fiscalCambio =
+        norm(editForm.rfc)            !== norm(agency?.rfc) ||
+        norm(editForm.razon_social)   !== norm(agency?.razon_social) ||
+        norm(editForm.regimen_fiscal) !== norm(agency?.regimen_fiscal) ||
+        norm(editForm.postal_code)    !== norm(agency?.postal_code);
 
-          if (validateRes.ok) {
-            const validateData = await validateRes.json();
-            if (!validateData.valid) {
-              const errMsg = validateData.message
-                || (Array.isArray(validateData.errors)
-                  ? validateData.errors.map((e: { message: string }) => e.message).join('; ')
-                  : 'El RFC no es válido según el SAT');
-              setError(errMsg);
-              setIsSaving(false);
-              return;
-            }
-          }
+      if (fiscalCambio) {
+        if (!tieneDatosFiscalesCompletos({
+          rfc: editForm.rfc,
+          razonSocial: editForm.razon_social,
+          regimenFiscal: editForm.regimen_fiscal,
+        })) {
+          setError('Para cambiar tus datos fiscales necesitas RFC, razón social y régimen fiscal completos.');
+          setIsSaving(false);
+          return;
+        }
+
+        const veredictoRfc = await validarRfcAgencia({
+          rfc: editForm.rfc,
+          razonSocial: editForm.razon_social,
+          regimenFiscal: editForm.regimen_fiscal,
+          codigoPostal: editForm.postal_code,
+        });
+        if (!veredictoRfc.ok) {
+          setError(veredictoRfc.mensaje);
+          setIsSaving(false);
+          return;
         }
       }
 

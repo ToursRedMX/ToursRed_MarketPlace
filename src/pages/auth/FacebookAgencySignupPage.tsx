@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase, UserRole } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useFieldAvailability } from '../../hooks/useFieldAvailability';
+import { validarRfcAgencia } from '../../lib/validarRfcAgencia';
 import AgencySignupFormBody, { AgencyFormData, defaultAgencyFormData } from './AgencySignupFormBody';
 
 const isLeakedPasswordError = (message: string) =>
@@ -71,6 +72,22 @@ const FacebookAgencySignupPage: React.FC = () => {
     if (!razonSocial.trim()) { setError('La razón social es obligatoria'); setIsLoading(false); return; }
     if (!personaType) { setError('El tipo de persona es obligatorio'); setIsLoading(false); return; }
     if (!representanteLegalNombre.trim()) { setError('El nombre de quien firma el contrato es obligatorio'); setIsLoading(false); return; }
+    if (!formData.regimenFiscal.trim()) { setError('El régimen fiscal es obligatorio: sin él no podemos validar tu RFC ante el SAT ni emitir CFDI'); setIsLoading(false); return; }
+    if (!formData.postalCode.trim()) { setError('El código postal fiscal es obligatorio'); setIsLoading(false); return; }
+
+    // Validar el RFC contra el SAT antes de crear la agencia. Este camino no
+    // validaba nada: pedia el RFC como obligatorio y lo guardaba sin verificar.
+    const veredictoRfc = await validarRfcAgencia({
+      rfc,
+      razonSocial,
+      regimenFiscal: formData.regimenFiscal,
+      codigoPostal: formData.postalCode,
+    });
+    if (!veredictoRfc.ok) {
+      setError(veredictoRfc.mensaje);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       if (!user) throw new Error('Sesión no encontrada');

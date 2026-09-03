@@ -416,11 +416,10 @@ const AgencySignupFormBody: React.FC<Props> = ({
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Régimen Fiscal <span className="text-gray-400 font-normal">(opcional)</span>
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700">Régimen Fiscal *</label>
                   <select
                     value={formData.regimenFiscal}
+                    required
                     onChange={e => onChange('regimenFiscal', e.target.value)}
                     className={`mt-1 ${inputClass} bg-white`}
                   >

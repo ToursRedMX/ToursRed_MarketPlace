@@ -4,6 +4,7 @@ import { signUp, supabase } from '../../lib/supabase';
 import { UserRole } from '../../lib/supabase';
 import { useFieldAvailability } from '../../hooks/useFieldAvailability';
 import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
+import { validarRfcAgencia } from '../../lib/validarRfcAgencia';
 import AgencySignupFormBody, {
   AgencyFormData,
   defaultAgencyFormData,
@@ -61,48 +62,22 @@ const AgencySignupPage: React.FC = () => {
     if (!razonSocial.trim()) { setError('La razón social es obligatoria'); setIsLoading(false); return; }
     if (!personaType) { setError('El tipo de persona es obligatorio'); setIsLoading(false); return; }
     if (!representanteLegalNombre.trim()) { setError('El nombre de quien firma el contrato es obligatorio'); setIsLoading(false); return; }
+    if (!formData.regimenFiscal.trim()) { setError('El régimen fiscal es obligatorio: sin él no podemos validar tu RFC ante el SAT ni emitir CFDI'); setIsLoading(false); return; }
+    if (!formData.postalCode.trim()) { setError('El código postal fiscal es obligatorio'); setIsLoading(false); return; }
 
-    // Validar RFC contra el SAT antes de avanzar a la firma del contrato
-    if (rfc.trim() && razonSocial.trim() && formData.regimenFiscal) {
-      setIsLoading(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('No hay sesión activa');
-
-        const validateRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-agency-rfc`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            rfc: rfc.trim(),
-            razon_social: razonSocial.trim(),
-            regimen_fiscal: formData.regimenFiscal,
-            postal_code: formData.postalCode || undefined,
-          }),
-        });
-
-        if (!validateRes.ok) {
-          const errData = await validateRes.json().catch(() => ({}));
-          throw new Error(errData.error || `Error validando RFC (${validateRes.status})`);
-        }
-
-        const validateData = await validateRes.json();
-        if (!validateData.valid) {
-          const errMsg = validateData.message
-            || (Array.isArray(validateData.errors)
-              ? validateData.errors.map((e: { message: string }) => e.message).join('; ')
-              : 'El RFC no es válido según el SAT');
-          setError(errMsg);
-          setIsLoading(false);
-          return;
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error validando RFC contra el SAT');
-        setIsLoading(false);
-        return;
-      }
+    // Validar RFC contra el SAT antes de avanzar a la firma del contrato.
+    // Sin condicional: los tres campos que necesita ya son obligatorios arriba,
+    // asi que no hay forma de llegar aqui y saltarse la validacion.
+    const veredictoRfc = await validarRfcAgencia({
+      rfc,
+      razonSocial,
+      regimenFiscal: formData.regimenFiscal,
+      codigoPostal: formData.postalCode,
+    });
+    if (!veredictoRfc.ok) {
+      setError(veredictoRfc.mensaje);
+      setIsLoading(false);
+      return;
     }
 
     try {
