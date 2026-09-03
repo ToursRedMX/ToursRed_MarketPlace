@@ -19,6 +19,12 @@
  * El paso 1 lo tiene que hacer una persona con acceso a la base: este repo no
  * guarda cadena de conexion y el CLI no esta linkeado.
  *
+ * OJO AL REEJECUTAR: el script SOBRESCRIBE cualquier archivo que ya exista en
+ * la ruta destino. Si una migracion se sustituyo a mano por su original
+ * documentado (como se hizo con las dos del 02-sep-2026), volver a correr esto
+ * la pisa con la copia mecanica y se pierde la documentacion. Revisar
+ * `git status` despues de correrlo.
+ *
  * ----------------------------------------------------------------------------
  * QUE PRODUCE, Y QUE NO
  *
@@ -45,13 +51,14 @@
  * reparte en archivos y pone la cabecera.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
 const DEST = 'supabase/migrations';
 
-const input = process.argv[2];
+const OMITIR_SOLAPADOS = process.argv.includes('--omitir-solapados');
+const input = process.argv.slice(2).find((a) => !a.startsWith('--'));
 if (!input || !existsSync(input)) {
   console.error('ERROR: falta el archivo exportado (o no existe).');
   console.error('Uso: node scripts/import-orphan-migrations.mjs <archivo.json>');
@@ -150,10 +157,50 @@ const cabecera = (version, name) => `-- ========================================
 
 `;
 
+// ----------------------------------------------------------------------------
+// Deteccion de solapamiento
+//
+// El ledger puede contener una migracion que YA existe en el repo bajo otro
+// nombre/version -- tipicamente una escrita a mano y aplicada despues, donde
+// la base le asigno su propio timestamp. Escribir la copia mecanica encima
+// deja DOS archivos con el mismo DDL de fondo, y el mecanico es el peor de
+// los dos porque perdio los comentarios.
+//
+// Paso exactamente eso al reconstruir las 153: las dos migraciones escritas
+// el 02-sep-2026 quedaron duplicadas. Se detecto en revision, no aqui.
+//
+// La comparacion normaliza el DDL (sin comentarios de linea ni de bloque, sin
+// espacios, en minusculas) para que solo pese lo ejecutable: si el unico
+// cambio es la documentacion, cuenta como el mismo DDL.
+// ----------------------------------------------------------------------------
+const FUENTES_EXISTENTES = ['supabase/migrations', 'supabase/migrations_archive'];
+
+function normalizarDDL(sql) {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')   // comentarios de bloque
+    .replace(/--[^\n]*/g, ' ')           // comentarios de linea
+    .replace(/\s+/g, '')                 // todo el espacio en blanco
+    .toLowerCase();
+}
+
+const ddlExistente = new Map(); // ddl normalizado -> ruta del archivo que ya lo tiene
+for (const dir of FUENTES_EXISTENTES) {
+  if (!existsSync(dir)) continue;
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.sql')) continue;
+    const ruta = join(dir, f);
+    try {
+      const ddl = normalizarDDL(readFileSync(ruta, 'utf8'));
+      if (ddl && !ddlExistente.has(ddl)) ddlExistente.set(ddl, ruta);
+    } catch { /* archivo ilegible: se ignora, no vale abortar por esto */ }
+  }
+}
+
 if (!existsSync(DEST)) mkdirSync(DEST, { recursive: true });
 
-let escritos = 0, vacios = 0, omitidos = 0;
+let escritos = 0, vacios = 0, omitidos = 0, omitidosPorSolape = 0;
 let verificados = 0, discrepancias = 0, sinMd5 = 0;
+const solapados = [];
 const manifiesto = [];
 const fallos = [];
 
@@ -174,6 +221,18 @@ for (const f of filas) {
     .replace(/\.sql$/i, '')
     .replace(/[^A-Za-z0-9_.-]/g, '_');
   const ruta = join(DEST, `${version}_${slug}.sql`);
+
+  // ¿Este DDL ya existe en el repo bajo otro archivo? Si es asi, escribirlo
+  // duplicaria el cambio y la copia mecanica seria la peor de las dos.
+  const ddlNuevo = normalizarDDL(cuerpo);
+  const yaExiste = ddlNuevo ? ddlExistente.get(ddlNuevo) : undefined;
+  if (yaExiste && yaExiste !== ruta) {
+    solapados.push({ version, ruta, existente: yaExiste });
+    if (OMITIR_SOLAPADOS) {
+      omitidosPorSolape++;
+      continue;
+    }
+  }
 
   let contenido = cabecera(version, name || '(sin nombre)');
   if (!cuerpo.trim()) {
@@ -230,6 +289,35 @@ console.log(`  coinciden       : ${verificados}`);
 console.log(`  DISCREPANCIAS   : ${discrepancias}`);
 console.log(`  sin md5 origen  : ${sinMd5}`);
 console.log(`\nManifiesto        : ${rutaManifiesto}`);
+
+if (solapados.length > 0) {
+  console.log(`
+${'-'.repeat(60)}`);
+  console.log(`SOLAPAMIENTO: ${solapados.length} migracion(es) del ledger ya existen`);
+  console.log('en el repo bajo otro nombre, con el mismo DDL de fondo.');
+  console.log('');
+  console.log('SE ESCRIBIERON IGUAL. Esto es un AVISO para que lo revises a mano,');
+  console.log('no una decision automatica: omitir por DDL identico es peligroso.');
+  console.log('Dos entradas distintas y legitimas del ledger pueden compartir DDL');
+  console.log('(p.ej. el mismo reset corrido dos veces), y omitir una la dejaria');
+  console.log('sin archivo -- justo lo que este script existe para evitar.');
+  console.log('');
+  console.log('Al revisar, la pregunta es: ¿el archivo que YA esta corresponde a');
+  console.log('OTRA version aplicada del ledger (entonces ambos son legitimos), o');
+  console.log('es el original escrito a mano de ESTE mismo cambio (entonces sobra');
+  console.log('la copia mecanica y conviene quedarse con el original documentado)?');
+  console.log('');
+  if (OMITIR_SOLAPADOS) {
+    console.log('NOTA: corriste con --omitir-solapados, asi que NO se escribieron.');
+    console.log('Verifica que no hayas dejado una version aplicada sin archivo.');
+    console.log('');
+  }
+  for (const s2 of solapados) {
+    console.log(`  ${s2.version}`);
+    console.log(`    ya presente en: ${s2.existente}`);
+  }
+  console.log(`${'-'.repeat(60)}`);
+}
 
 if (discrepancias > 0) {
   console.log(`\n${'!'.repeat(60)}`);
