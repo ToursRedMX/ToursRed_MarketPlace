@@ -25,3 +25,16 @@
 
 # Idem: JWT con claim role:anon.
 02f142fa7a8891a59631d6c1896fa26c233b4b20:supabase/migrations/20260528055744_fix_process_expired_slot_reschedules_use_anon_key.sql:jwt:21
+
+# Agregados al reconstruir las 153 migraciones huerfanas desde el ledger
+# (PR de reconstruccion). Ambos son llaves PUBLICAS por diseno, verificadas
+# una por una el 02-sep-2026 -- no son fuga.
+
+# Publishable key de Supabase (sb_publishable_...). Es publica por diseno; el
+# propio comentario de la migracion lo dice: "URL y publishable key son
+# publicos (no son secretos)". Confirmado contra la API: tipo 'publishable'.
+8fa6a786e8ba6cc0d26d4a0208234ae5e94fa691:supabase/migrations/20260821212921_update_notify_executive_by_email_to_new_publishable_key.sql:generic-api-key:35
+
+# JWT con claim role:anon -- la anon key, que ya viaja en el bundle del
+# frontend y esta protegida por RLS. Verificado decodificando el payload.
+8fa6a786e8ba6cc0d26d4a0208234ae5e94fa691:supabase/migrations/20260821212354_fix_pg_net_calls_use_apikey_header_for_new_key_format_compat.sql:jwt:44
