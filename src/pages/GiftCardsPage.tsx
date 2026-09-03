@@ -7,6 +7,7 @@ import { usePreventUnload } from '../hooks/usePreventUnload';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import Seo from '../components/Seo';
+import { getMpDeviceId } from '../utils/mercadopagoDevice';
 import PaymentProviderSelector, { PaymentProvider, ConektaMethod, OpenpayMethod } from '../components/PaymentProviderSelector';
 
 const DEFAULT_GIFT_CARD_AMOUNTS = [100, 200, 500, 1000];
@@ -243,6 +244,7 @@ export default function GiftCardsPage() {
               amount: finalAmount,
               description: `Tarjeta de Regalo ToursRed $${finalAmount} MXN`,
               context: 'gift_card',
+              deviceId: await getMpDeviceId(),
             }),
           }
         );

@@ -7,6 +7,7 @@ import { Booking, BookingTraveler, Tour, FrequentCompanion } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useStepUp } from '../context/StepUpContext';
 import { validateBirthDateForCategory, validateAllTravelers } from '../utils/birthDateValidation';
+import { getMpDeviceId } from '../utils/mercadopagoDevice';
 
 interface TravelerFormData {
   categoria_viajero: 'adulto' | 'nino' | 'infante' | 'adulto_mayor' | 'mascota';
@@ -736,6 +737,7 @@ const TravelersInfoPage: React.FC = () => {
               amount: amountToCharge,
               description: `Depósito para ${tour?.name}`,
               context: 'booking',
+              deviceId: await getMpDeviceId(),
             }),
           }
         );
