@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CreditCard, Lock, Info, AlertTriangle, Wallet, Banknote, Landmark } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { preloadMpDeviceId } from '../utils/mercadopagoDevice';
 
 export type PaymentProvider = 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay' | 'toursred_cash';
 
@@ -113,6 +114,13 @@ export default function PaymentProviderSelector({
   onOpenpayMethodChange,
 }: PaymentProviderSelectorProps) {
   const [config, setConfig] = useState<ProviderConfig | null>(null);
+
+  // Adelanta la carga del SDK de MercadoPago en cuanto el usuario elige ese
+  // proveedor, para que el Device ID ya este listo al apretar pagar y no se
+  // pierda por timeout. No se precarga para los demas proveedores.
+  useEffect(() => {
+    if (value === 'mercadopago') preloadMpDeviceId();
+  }, [value]);
 
   useEffect(() => {
     supabase

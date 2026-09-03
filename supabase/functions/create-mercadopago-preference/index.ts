@@ -28,7 +28,9 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { bookingId, supplementId, customerEmail, amount, description, context } = await req.json();
+    const { bookingId, supplementId, customerEmail, amount, description, context, deviceId } = await req.json();
+
+    let authedUser: { id: string; email?: string } | null = null;
 
     if (context !== "gift_card") {
       const authHeader = req.headers.get("Authorization");
@@ -47,6 +49,7 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      authedUser = user;
     }
 
     if (!amount) {
@@ -246,9 +249,35 @@ Deno.serve(async (req: Request) => {
       ? `${origin}/payment-return?provider=mercadopago&booking_supplement_id=${supplementId}&tr_status=pending`
       : `${origin}/payment-return?provider=mercadopago&booking_id=${bookingId}&tr_status=pending`;
 
+    // Checklist de calidad de MercadoPago: payer.email, payer.first_name y
+    // payer.last_name alimentan su motor antifraude y suben la tasa de
+    // aprobacion. Antes solo se mandaba el email, y solo si el front lo incluia.
+    let payerFirstName: string | null = null;
+    let payerLastName: string | null = null;
+
+    if (authedUser) {
+      const { data: payerProfile } = await supabase
+        .from("users")
+        .select("first_name, last_name")
+        .eq("id", authedUser.id)
+        .maybeSingle();
+      payerFirstName = payerProfile?.first_name ?? null;
+      payerLastName = payerProfile?.last_name ?? null;
+    }
+
+    const payer: Record<string, string> = {};
+    const payerEmail = customerEmail || authedUser?.email || null;
+    if (payerEmail) payer.email = payerEmail;
+    // Ojo con los nombres de campo: la API de Preferencias usa "name" y
+    // "surname", no "first_name"/"last_name" como pide el checklist de calidad.
+    // Mandar los equivocados no da error: MercadoPago los descarta en silencio y
+    // devuelve name y surname vacios (verificado contra la API el 03-sep-2026).
+    if (payerFirstName) payer.name = payerFirstName;
+    if (payerLastName) payer.surname = payerLastName;
+
     const preferencePayload = {
       items,
-      payer: customerEmail ? { email: customerEmail } : undefined,
+      payer: Object.keys(payer).length > 0 ? payer : undefined,
       back_urls: {
         success: successUrl,
         failure: cancelUrl,
@@ -269,6 +298,9 @@ Deno.serve(async (req: Request) => {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${mpAccessToken}`,
+        // Device ID de security.js. MercadoPago lo usa para afinar su evaluacion
+        // antifraude y rechazar menos pagos legitimos.
+        ...(deviceId ? { "X-meli-session-id": String(deviceId) } : {}),
       },
       body: JSON.stringify(preferencePayload),
     });

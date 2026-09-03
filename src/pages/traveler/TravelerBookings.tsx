@@ -14,6 +14,7 @@ import { usePreventUnload } from '../../hooks/usePreventUnload';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
 import { paymentLabel } from '../../utils/paymentLabels';
 import { validateAllTravelers } from '../../utils/birthDateValidation';
+import { getMpDeviceId } from '../../utils/mercadopagoDevice';
 import PaymentProviderSelector from '../../components/PaymentProviderSelector';
 
 const TravelerBookings: React.FC = () => {
@@ -1476,6 +1477,7 @@ const TravelerBookings: React.FC = () => {
               amount: amountToCharge,
               description: `Depósito para ${booking.tours?.name || 'Tour'}`,
               context: 'booking',
+              deviceId: await getMpDeviceId(),
             }),
           }
         );
@@ -1850,6 +1852,7 @@ const TravelerBookings: React.FC = () => {
             amount: totalAmount,
             description: `Suplemento: ${bookingSupplement.tour_supplements?.name || 'Suplemento'}`,
             context: 'supplement',
+            deviceId: await getMpDeviceId(),
           }),
         });
         const mpData = await mpRes.json();
@@ -2181,6 +2184,7 @@ const TravelerBookings: React.FC = () => {
               amount: totalAmount,
               description: `Suplemento: ${supplement.name || 'Suplemento'}`,
               context: 'supplement',
+              deviceId: await getMpDeviceId(),
             }),
           });
           const mpData = await mpRes.json();

@@ -13,6 +13,7 @@ import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { getEffectiveDepositPct } from '../../utils/depositCalculation';
 import { totalTravelerCount } from '../../types/booking-flow';
 import type { Tour } from '../../types';
+import { getMpDeviceId } from '../../utils/mercadopagoDevice';
 import PaymentProviderSelector, {
   PaymentProvider as Provider,
   ConektaMethod,
@@ -560,7 +561,7 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}` }),
+            body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, deviceId: await getMpDeviceId() }),
           }
         );
         const mpResult = await resp.json();
