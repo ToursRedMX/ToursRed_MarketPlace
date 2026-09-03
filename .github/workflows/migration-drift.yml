@@ -1,0 +1,101 @@
+name: Guardia de desfase de migraciones
+
+# La causa raiz de las 151 migraciones huerfanas nunca fue tecnica: no habia
+# nada que impidiera aplicar un cambio de esquema sin pasar por un commit. La
+# regla dura n1 se sostenia a mano. Esto la hace cumplir.
+#
+# Que compara: las versiones de `supabase_migrations.schema_migrations` contra
+# los archivos de supabase/migrations/. Las dos direcciones del desfase NO
+# significan lo mismo, y por eso solo una pone el check en rojo (--ci):
+#
+#   aplicada SIN archivo  -> ROJO. Un cambio llego a la base sin commit, o se
+#                            aplico desde el Dashboard y la base le puso su
+#                            propia version. Su SQL solo existe dentro de la
+#                            base: no es revisable en un PR ni reproducible.
+#
+#   archivo SIN aplicar   -> informativo. Es lo normal en un PR que agrega una
+#                            migracion todavia no aplicada. Ponerlo en rojo
+#                            entrenaria al equipo a ignorar este check, que es
+#                            la peor forma de perderlo.
+#
+# Corre en todos los PR a proposito, sin filtro de rutas: el desfase es una
+# propiedad de la base contra el repo, no de los archivos que toque el PR.
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Diario. El desfase lo causa una accion en la base, no un PR, asi que
+    # puede aparecer sin que nadie abra nada.
+    - cron: "20 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guardia-desfase:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Asegurar el cliente de psql
+        run: |
+          # El runner de ubuntu-latest ya trae postgresql-client; solo se
+          # instala si falta, para no gastar ~1 min en cada PR.
+          command -v psql >/dev/null 2>&1 || {
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          }
+          psql --version
+
+      - name: Volcar las versiones aplicadas
+        id: volcado
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            # Pasa en PR desde un fork: los secrets no se exponen. Se omite en
+            # vez de fallar, para no dar un rojo que no dice nada del cambio.
+            echo "sin_credenciales=1" >> "$GITHUB_OUTPUT"
+            echo "SIN CREDENCIALES: no hay SUPABASE_DB_URL, se omite la comprobacion." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          psql \
+            "$SUPABASE_DB_URL" \
+            --variable ON_ERROR_STOP=1 \
+            --no-align \
+            --tuples-only \
+            --quiet \
+            --command "select version from supabase_migrations.schema_migrations order by version;" \
+            > versiones-aplicadas.txt
+
+          echo "sin_credenciales=0" >> "$GITHUB_OUTPUT"
+          echo "Versiones aplicadas leidas: $(wc -l < versiones-aplicadas.txt)"
+
+      - name: Auditar el desfase
+        if: steps.volcado.outputs.sin_credenciales != '1'
+        run: |
+          set -o pipefail
+          # Un volcado vacio o ilegible sale 2 (error de invocacion), no 0: un
+          # psql que falle no puede pasar por "sin desfase".
+          node scripts/check-migration-drift.mjs --ci versiones-aplicadas.txt \
+            | tee reporte-desfase.txt
+
+      - name: Resumen
+        if: always() && steps.volcado.outputs.sin_credenciales != '1'
+        run: |
+          {
+            echo "## Guardia de desfase de migraciones"
+            echo ""
+            if [ -f reporte-desfase.txt ]; then
+              echo '```'
+              cat reporte-desfase.txt
+              echo '```'
+            else
+              echo "No se genero reporte: la auditoria no llego a correr."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
