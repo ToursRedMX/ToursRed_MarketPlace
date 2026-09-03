@@ -1,0 +1,271 @@
+2	(sin ubicacion) | TS2771 | The last overload is declared here.
+2	supabase/functions/_shared/cfdiAuth.ts | TS2339 | Property 'role' does not exist on type 'never'.
+1	supabase/functions/_shared/contractDocDefinition.ts | TS7006 | Parameter 'a' implicitly has an 'any' type.
+1	supabase/functions/_shared/contractDocDefinition.ts | TS7006 | Parameter 'anexo' implicitly has an 'any' type.
+1	supabase/functions/_shared/contractDocDefinition.ts | TS7006 | Parameter 'currentPage' implicitly has an 'any' type.
+4	supabase/functions/_shared/contractDocDefinition.ts | TS7006 | Parameter 'data' implicitly has an 'any' type.
+1	supabase/functions/_shared/contractDocDefinition.ts | TS7006 | Parameter 'label' implicitly has an 'any' type.
+1	supabase/functions/_shared/contractDocDefinition.ts | TS7006 | Parameter 'pageCount' implicitly has an 'any' type.
+1	supabase/functions/_shared/contractDocDefinition.ts | TS7006 | Parameter 'value' implicitly has an 'any' type.
+1	supabase/functions/_shared/openpay.ts | TS2345 | Argument of type '{ openpay_customer_id: any; }' is not assignable to parameter of type 'never'.
+1	supabase/functions/_shared/openpay.ts | TS2741 | Property 'id' is missing in type '{ name: string; last_name: string | undefined; email: string; phone_number: string | undefined; requires_account: false; }' but required in type 'OpenPayCustomer'.
+2	supabase/functions/_shared/robotoFonts.ts | TS2323 | Cannot redeclare exported variable 'ROBOTO_BOLDITALICS_B64'.
+2	supabase/functions/_shared/robotoFonts.ts | TS2323 | Cannot redeclare exported variable 'ROBOTO_BOLD_B64'.
+2	supabase/functions/_shared/robotoFonts.ts | TS2323 | Cannot redeclare exported variable 'ROBOTO_ITALICS_B64'.
+2	supabase/functions/_shared/robotoFonts.ts | TS2323 | Cannot redeclare exported variable 'ROBOTO_NORMAL_B64'.
+1	supabase/functions/_shared/robotoFonts.ts | TS2484 | Export declaration conflicts with exported declaration of 'ROBOTO_BOLDITALICS_B64'.
+1	supabase/functions/_shared/robotoFonts.ts | TS2484 | Export declaration conflicts with exported declaration of 'ROBOTO_BOLD_B64'.
+1	supabase/functions/_shared/robotoFonts.ts | TS2484 | Export declaration conflicts with exported declaration of 'ROBOTO_ITALICS_B64'.
+1	supabase/functions/_shared/robotoFonts.ts | TS2484 | Export declaration conflicts with exported declaration of 'ROBOTO_NORMAL_B64'.
+2	supabase/functions/admin-cancel-booking/index.ts | TS2339 | Property 'id' does not exist on type 'never'.
+1	supabase/functions/admin-cancel-booking/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+1	supabase/functions/admin-cancel-booking/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/admin-credit-wallet-topup/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+2	supabase/functions/admin-finalize-cancellation/index.ts | TS2339 | Property 'id' does not exist on type 'never'.
+1	supabase/functions/admin-finalize-cancellation/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+1	supabase/functions/admin-finalize-cancellation/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/approve-agency-documents/index.ts | TS2305 | Module '"supabase/functions/_shared/contractDocDefinition.ts"' has no exported member 'ContractData'.
+1	supabase/functions/approve-agency-documents/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+1	supabase/functions/cancel-cfdi/index.ts | TS18047 | 'settings' is possibly 'null'.
+1	supabase/functions/cancel-cfdi/index.ts | TS2339 | Property 'access_token' does not exist on type 'never'.
+1	supabase/functions/cancel-cfdi/index.ts | TS2339 | Property 'access_token_expires_at' does not exist on type 'never'.
+1	supabase/functions/cancel-cfdi/index.ts | TS2339 | Property 'api_domain' does not exist on type 'never'.
+2	supabase/functions/cancel-cfdi/index.ts | TS2339 | Property 'refresh_token' does not exist on type 'never'.
+2	supabase/functions/cancel-cfdi/index.ts | TS2339 | Property 'zoho_client_id' does not exist on type 'never'.
+1	supabase/functions/cancel-cfdi/index.ts | TS2339 | Property 'zoho_client_secret' does not exist on type 'never'.
+1	supabase/functions/cancel-cfdi/index.ts | TS2339 | Property 'zoho_region' does not exist on type 'never'.
+2	supabase/functions/cancel-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/cancel-cfdi/index.ts | TS2345 | Argument of type '{ access_token: any; access_token_expires_at: string; api_domain: any; }' is not assignable to parameter of type 'never'.
+2	supabase/functions/capture-paypal-order/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_insurance_purchase", null, "RPC", false>'. Did you mean 'match'?
+2	supabase/functions/capture-paypal-order/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_optional_service", null, "RPC", false>'. Did you mean 'match'?
+2	supabase/functions/capture-paypal-order/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_payment_plan_installment", null, "RPC", false>'. Did you mean 'match'?
+2	supabase/functions/capture-paypal-order/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_supplement", null, "RPC", false>'. Did you mean 'match'?
+8	supabase/functions/capture-paypal-order/index.ts | TS7006 | Parameter 'e' implicitly has an 'any' type.
+1	supabase/functions/check-openpay-topup-status/index.ts | TS18046 | 'acctErr' is of type 'unknown'.
+1	supabase/functions/cleanup-orphan-agencies/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, never, null, "RPC", false>'. Did you mean 'match'?
+1	supabase/functions/conekta-webhook/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_gift_card_sale", null, "RPC", false>'. Did you mean 'match'?
+1	supabase/functions/conekta-webhook/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_insurance_purchase", null, "RPC", false>'. Did you mean 'match'?
+1	supabase/functions/conekta-webhook/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_optional_service", null, "RPC", false>'. Did you mean 'match'?
+1	supabase/functions/conekta-webhook/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_payment_plan_installment", null, "RPC", false>'. Did you mean 'match'?
+1	supabase/functions/conekta-webhook/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_supplement", null, "RPC", false>'. Did you mean 'match'?
+5	supabase/functions/conekta-webhook/index.ts | TS7006 | Parameter 'e' implicitly has an 'any' type.
+1	supabase/functions/confirm-booking-checkin/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/confirm-booking-checkin/index.ts | TS2339 | Property 'no_show_count' does not exist on type '{ id: any; first_name: any; last_name: any; email: any; no_show_count: any; }[]'.
+1	supabase/functions/confirm-booking-checkin/index.ts | TS2339 | Property 'user_id' does not exist on type '{ id: any; name: any; user_id: any; contact_email: any; }[]'.
+1	supabase/functions/confirm-booking-wallet-payment/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/confirm-checkin-wallet-charge/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/confirm-checkin-wallet-charge/index.ts | TS2339 | Property 'membership_service_fee_saved' does not exist on type '{ id: any; user_id: any; agency_id: any; total_price: any; deposit_amount: any; wallet_charged_at_checkin: any; status: any; agency: { id: any; name: any; user_id: any; }[]; }'.
+1	supabase/functions/create-admin-user/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+1	supabase/functions/create-checkout-session/index.ts | TS18046 | 'error' is of type 'unknown'.
+2	supabase/functions/create-conekta-order/index.ts | TS18047 | 'user' is possibly 'null'.
+1	supabase/functions/create-executive-user/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+2	supabase/functions/create-featured-slot-checkout/index.ts | TS2339 | Property 'expiry_date' does not exist on type 'OpenPayPaymentMethod'.
+2	supabase/functions/create-featured-slot-checkout/index.ts | TS2339 | Property 'store' does not exist on type 'OpenPayPaymentMethod'.
+1	supabase/functions/create-featured-slot-checkout/index.ts | TS2339 | Property 'url' does not exist on type 'OpenPayPaymentMethod'.
+1	supabase/functions/create-featured-slot-checkout/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+1	supabase/functions/create-featured-slot-checkout/index.ts | TS2352 | Conversion of type '{ name: any; price: any; }[]' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+1	supabase/functions/create-featured-slot-checkout/index.ts | TS2352 | Conversion of type '{ name: any; user_id: any; }[]' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+1	supabase/functions/create-featured-slot-checkout/index.ts | TS2352 | Conversion of type '{ name: any; }[]' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+1	supabase/functions/create-membership-subscription/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/create-openpay-checkout/index.ts | TS18046 | 'err' is of type 'unknown'.
+3	supabase/functions/create-openpay-checkout/index.ts | TS18047 | 'user' is possibly 'null'.
+1	supabase/functions/create-openpay-checkout/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+4	supabase/functions/create-openpay-topup/index.ts | TS18046 | 'err' is of type 'unknown'.
+1	supabase/functions/create-openpay-topup/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+1	supabase/functions/create-openpay-topup/index.ts | TS2367 | This comparison appears to be unintentional because the types '"spei"' and '"codi"' have no overlap.
+1	supabase/functions/delete-auth-user/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+2	supabase/functions/download-cfdi/index.ts | TS18047 | 'settings' is possibly 'null'.
+1	supabase/functions/fix-orphaned-google-identity/index.ts | TS18046 | 'err' is of type 'unknown'.
+2	supabase/functions/fix-orphaned-google-identity/index.ts | TS2345 | Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+1	supabase/functions/generate-accounting-entries/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+1	supabase/functions/generate-booking-cfdi/index.ts | TS2339 | Property 'access_token' does not exist on type 'never'.
+1	supabase/functions/generate-booking-cfdi/index.ts | TS2339 | Property 'access_token_expires_at' does not exist on type 'never'.
+1	supabase/functions/generate-booking-cfdi/index.ts | TS2339 | Property 'api_domain' does not exist on type 'never'.
+2	supabase/functions/generate-booking-cfdi/index.ts | TS2339 | Property 'refresh_token' does not exist on type 'never'.
+2	supabase/functions/generate-booking-cfdi/index.ts | TS2339 | Property 'zoho_client_id' does not exist on type 'never'.
+2	supabase/functions/generate-booking-cfdi/index.ts | TS2339 | Property 'zoho_client_secret' does not exist on type 'never'.
+1	supabase/functions/generate-booking-cfdi/index.ts | TS2339 | Property 'zoho_region' does not exist on type 'never'.
+1	supabase/functions/generate-booking-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/generate-booking-cfdi/index.ts | TS2345 | Argument of type '{ access_token: any; access_token_expires_at: string; api_domain: any; }' is not assignable to parameter of type 'never'.
+1	supabase/functions/generate-booking-installment-cfdi/index.ts | TS2339 | Property 'access_token' does not exist on type 'never'.
+1	supabase/functions/generate-booking-installment-cfdi/index.ts | TS2339 | Property 'access_token_expires_at' does not exist on type 'never'.
+1	supabase/functions/generate-booking-installment-cfdi/index.ts | TS2339 | Property 'api_domain' does not exist on type 'never'.
+2	supabase/functions/generate-booking-installment-cfdi/index.ts | TS2339 | Property 'refresh_token' does not exist on type 'never'.
+2	supabase/functions/generate-booking-installment-cfdi/index.ts | TS2339 | Property 'zoho_client_id' does not exist on type 'never'.
+2	supabase/functions/generate-booking-installment-cfdi/index.ts | TS2339 | Property 'zoho_client_secret' does not exist on type 'never'.
+1	supabase/functions/generate-booking-installment-cfdi/index.ts | TS2339 | Property 'zoho_region' does not exist on type 'never'.
+2	supabase/functions/generate-booking-installment-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/generate-booking-installment-cfdi/index.ts | TS2345 | Argument of type '{ access_token: any; access_token_expires_at: string; api_domain: any; }' is not assignable to parameter of type 'never'.
+1	supabase/functions/generate-booking-qr-token/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/generate-booking-qr-token/index.ts | TS2339 | Property 'start_date' does not exist on type '{ start_date: any; }[]'.
+1	supabase/functions/generate-cancellation-commission-cfdi/index.ts | TS2339 | Property 'access_token' does not exist on type 'never'.
+1	supabase/functions/generate-cancellation-commission-cfdi/index.ts | TS2339 | Property 'access_token_expires_at' does not exist on type 'never'.
+1	supabase/functions/generate-cancellation-commission-cfdi/index.ts | TS2339 | Property 'api_domain' does not exist on type 'never'.
+2	supabase/functions/generate-cancellation-commission-cfdi/index.ts | TS2339 | Property 'refresh_token' does not exist on type 'never'.
+2	supabase/functions/generate-cancellation-commission-cfdi/index.ts | TS2339 | Property 'zoho_client_id' does not exist on type 'never'.
+1	supabase/functions/generate-cancellation-commission-cfdi/index.ts | TS2339 | Property 'zoho_client_secret' does not exist on type 'never'.
+1	supabase/functions/generate-cancellation-commission-cfdi/index.ts | TS2339 | Property 'zoho_region' does not exist on type 'never'.
+2	supabase/functions/generate-cancellation-commission-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/generate-cancellation-commission-cfdi/index.ts | TS2345 | Argument of type '{ access_token: any; access_token_expires_at: string; api_domain: any; }' is not assignable to parameter of type 'never'.
+1	supabase/functions/generate-commission-cfdi/index.ts | TS2339 | Property 'access_token' does not exist on type 'never'.
+1	supabase/functions/generate-commission-cfdi/index.ts | TS2339 | Property 'access_token_expires_at' does not exist on type 'never'.
+1	supabase/functions/generate-commission-cfdi/index.ts | TS2339 | Property 'api_domain' does not exist on type 'never'.
+2	supabase/functions/generate-commission-cfdi/index.ts | TS2339 | Property 'refresh_token' does not exist on type 'never'.
+2	supabase/functions/generate-commission-cfdi/index.ts | TS2339 | Property 'zoho_client_id' does not exist on type 'never'.
+1	supabase/functions/generate-commission-cfdi/index.ts | TS2339 | Property 'zoho_client_secret' does not exist on type 'never'.
+1	supabase/functions/generate-commission-cfdi/index.ts | TS2339 | Property 'zoho_region' does not exist on type 'never'.
+2	supabase/functions/generate-commission-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/generate-commission-cfdi/index.ts | TS2345 | Argument of type '{ access_token: any; access_token_expires_at: string; api_domain: any; }' is not assignable to parameter of type 'never'.
+1	supabase/functions/generate-commission-cfdi/index.ts | TS2352 | Conversion of type '{ id: any; rfc: any; razon_social: any; regimen_fiscal: any; postal_code: any; }[]' to type '{ id: string; rfc?: string | undefined; razon_social?: string | undefined; regimen_fiscal?: string | undefined; postal_code?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+1	supabase/functions/generate-featured-slot-cfdi/index.ts | TS2339 | Property 'catch' does not exist on type 'PromiseLike<void>'.
+1	supabase/functions/generate-featured-slot-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/generate-featured-slot-cfdi/index.ts | TS2352 | Conversion of type '{ id: any; name: any; user_id: any; rfc: any; razon_social: any; regimen_fiscal: any; postal_code: any; users: { rfc: any; razon_social: any; regimen_fiscal: any; uso_cfdi: any; codigo_postal_fiscal: any; }[]; }[]' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+1	supabase/functions/generate-featured-slot-cfdi/index.ts | TS2352 | Conversion of type '{ name: any; duration_days: any; price: any; }[]' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+2	supabase/functions/generate-manual-cfdi/index.ts | TS2345 | Argument of type 'PromiseLike<void>' is not assignable to parameter of type 'Promise<void>'.
+1	supabase/functions/generate-manual-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+1	supabase/functions/generate-membership-cfdi/index.ts | TS2339 | Property 'access_token' does not exist on type 'never'.
+1	supabase/functions/generate-membership-cfdi/index.ts | TS2339 | Property 'access_token_expires_at' does not exist on type 'never'.
+1	supabase/functions/generate-membership-cfdi/index.ts | TS2339 | Property 'api_domain' does not exist on type 'never'.
+2	supabase/functions/generate-membership-cfdi/index.ts | TS2339 | Property 'refresh_token' does not exist on type 'never'.
+2	supabase/functions/generate-membership-cfdi/index.ts | TS2339 | Property 'zoho_client_id' does not exist on type 'never'.
+2	supabase/functions/generate-membership-cfdi/index.ts | TS2339 | Property 'zoho_client_secret' does not exist on type 'never'.
+1	supabase/functions/generate-membership-cfdi/index.ts | TS2339 | Property 'zoho_region' does not exist on type 'never'.
+2	supabase/functions/generate-membership-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/generate-membership-cfdi/index.ts | TS2345 | Argument of type '{ access_token: any; access_token_expires_at: string; api_domain: any; }' is not assignable to parameter of type 'never'.
+1	supabase/functions/generate-optional-service-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/generate-post-booking-insurance-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/generate-sat-xml/index.ts | TS2345 | Argument of type 'Uint8Array<ArrayBufferLike>' is not assignable to parameter of type 'BodyInit | null | undefined'.
+2	supabase/functions/generate-signed-contract/index.ts | TS18046 | 'pdfBytes' is of type 'unknown'.
+1	supabase/functions/generate-signed-contract/index.ts | TS2339 | Property 'message' does not exist on type '{}'.
+1	supabase/functions/generate-signed-contract/index.ts | TS2339 | Property 'specialCommissionClause' does not exist on type '{ razonSocial: any; rfcAgencia: any; domicilioFiscal: any; representanteLegal: any; emailContacto: any; folioContrato: any; fechaDia: any; fechaMes: any; fechaAnio: any; versionContrato: any; commissionPercentage: any; }'.
+1	supabase/functions/generate-signed-contract/index.ts | TS2345 | Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+1	supabase/functions/generate-signed-contract/index.ts | TS2345 | Argument of type 'unknown' is not assignable to parameter of type 'FileBody'.
+2	supabase/functions/generate-signed-contract/index.ts | TS7005 | Variable 'chunks' implicitly has an 'any[]' type.
+1	supabase/functions/generate-signed-contract/index.ts | TS7006 | Parameter 'bytes' implicitly has an 'any' type.
+1	supabase/functions/generate-signed-contract/index.ts | TS7006 | Parameter 'chunk' implicitly has an 'any' type.
+1	supabase/functions/generate-signed-contract/index.ts | TS7006 | Parameter 'pdfDoc' implicitly has an 'any' type.
+1	supabase/functions/generate-signed-contract/index.ts | TS7034 | Variable 'chunks' implicitly has type 'any[]' in some locations where its type cannot be determined.
+1	supabase/functions/generate-supplement-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/get-booking-checkin-details/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/get-booking-checkin-details/index.ts | TS2339 | Property 'contact_email' does not exist on type '{ id: any; name: any; user_id: any; contact_email: any; contact_phone: any; }[]'.
+1	supabase/functions/get-booking-checkin-details/index.ts | TS2339 | Property 'contact_phone' does not exist on type '{ id: any; name: any; user_id: any; contact_email: any; contact_phone: any; }[]'.
+1	supabase/functions/get-booking-checkin-details/index.ts | TS2339 | Property 'id' does not exist on type '{ id: any; name: any; user_id: any; contact_email: any; contact_phone: any; }[]'.
+1	supabase/functions/get-booking-checkin-details/index.ts | TS2339 | Property 'name' does not exist on type '{ id: any; name: any; user_id: any; contact_email: any; contact_phone: any; }[]'.
+1	supabase/functions/get-booking-checkin-details/index.ts | TS2339 | Property 'user_id' does not exist on type '{ id: any; name: any; user_id: any; contact_email: any; contact_phone: any; }[]'.
+1	supabase/functions/get-gift-card-status/index.ts | TS18046 | 'err' is of type 'unknown'.
+1	supabase/functions/manage-membership-subscription/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/manage-membership-subscription/index.ts | TS2769 | No overload matches this call.
+1	supabase/functions/mercadopago-webhook/index.ts | TS1064 | The return type of an async function or method must be the global Promise<T> type. Did you mean to write 'Promise<string>'?
+1	supabase/functions/mercadopago-webhook/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_insurance_purchase", null, "RPC", false>'. Did you mean 'match'?
+1	supabase/functions/mercadopago-webhook/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_optional_service", null, "RPC", false>'. Did you mean 'match'?
+1	supabase/functions/mercadopago-webhook/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, any, "create_accounting_entry_for_supplement", null, "RPC", false>'. Did you mean 'match'?
+3	supabase/functions/mercadopago-webhook/index.ts | TS7006 | Parameter 'e' implicitly has an 'any' type.
+1	supabase/functions/openpay-webhook/index.ts | TS18046 | 'acctErr' is of type 'unknown'.
+1	supabase/functions/openpay-webhook/index.ts | TS18046 | 'err' is of type 'unknown'.
+2	supabase/functions/openpay-webhook/index.ts | TS18046 | 'verifyErr' is of type 'unknown'.
+1	supabase/functions/openpay-webhook/index.ts | TS2339 | Property 'fee_details' does not exist on type 'OpenPayCharge'.
+1	supabase/functions/openpay-webhook/index.ts | TS2345 | Argument of type 'number | "0"' is not assignable to parameter of type 'string'.
+5	supabase/functions/openpay-webhook/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, unknown, unknown>'. Did you mean 'match'?
+5	supabase/functions/openpay-webhook/index.ts | TS7006 | Parameter 'e' implicitly has an 'any' type.
+2	supabase/functions/process-agency-booking-cancellation/index.ts | TS2339 | Property 'id' does not exist on type 'never'.
+1	supabase/functions/process-agency-booking-cancellation/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/process-agency-payout/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/process-agency-payout/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+2	supabase/functions/process-agency-payout/index.ts | TS2345 | Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+2	supabase/functions/process-payment-plan-installment/index.ts | TS2339 | Property 'expiry_date' does not exist on type 'OpenPayPaymentMethod'.
+2	supabase/functions/process-payment-plan-installment/index.ts | TS2339 | Property 'store' does not exist on type 'OpenPayPaymentMethod'.
+1	supabase/functions/process-payment-plan-installment/index.ts | TS2339 | Property 'url' does not exist on type 'OpenPayPaymentMethod'.
+1	supabase/functions/process-payment-plan-installment/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+2	supabase/functions/process-payment-plan-tour-deadline/index.ts | TS2339 | Property 'id' does not exist on type 'never'.
+1	supabase/functions/process-payment-plan-tour-deadline/index.ts | TS2345 | Argument of type '"automatica"' is not assignable to parameter of type '"administrativa" | "self-service"'.
+1	supabase/functions/process-payment-plan-tour-deadline/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/process-payment-plan-tour-deadline/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, null, "notifications", unknown, "POST", false>'. Did you mean 'match'?
+1	supabase/functions/process-payment-plan-tour-deadline/index.ts | TS7006 | Parameter 'e' implicitly has an 'any' type.
+1	supabase/functions/process-payment-refund/index.ts | TS2588 | Cannot assign to 'paypalClientId' because it is a constant.
+1	supabase/functions/process-supplement-payment/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+2	supabase/functions/process-tour-cancellation/index.ts | TS2339 | Property 'id' does not exist on type 'never'.
+1	supabase/functions/process-tour-cancellation/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+2	supabase/functions/process-traveler-cancellation/index.ts | TS2339 | Property 'id' does not exist on type 'never'.
+1	supabase/functions/process-traveler-cancellation/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/purchase-gift-card/index.ts | TS18046 | 'error' is of type 'unknown'.
+2	supabase/functions/purchase-post-booking-extras/index.ts | TS2339 | Property 'expiry_date' does not exist on type 'OpenPayPaymentMethod'.
+2	supabase/functions/purchase-post-booking-extras/index.ts | TS2339 | Property 'store' does not exist on type 'OpenPayPaymentMethod'.
+1	supabase/functions/purchase-post-booking-extras/index.ts | TS2339 | Property 'url' does not exist on type 'OpenPayPaymentMethod'.
+1	supabase/functions/purchase-post-booking-extras/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+1	supabase/functions/purchase-post-booking-extras/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/redeem-gift-card/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/reject-agency-permanently/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+1	supabase/functions/request-checkin-wallet-charge/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/request-checkin-wallet-charge/index.ts | TS2339 | Property 'user_id' does not exist on type '{ id: any; name: any; user_id: any; }[]'.
+1	supabase/functions/request-contract-otp/index.ts | TS2339 | Property 'contact_email' does not exist on type 'never'.
+1	supabase/functions/request-contract-otp/index.ts | TS2339 | Property 'smtp_api_key' does not exist on type 'never'.
+1	supabase/functions/request-contract-otp/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/respond-to-reschedule/index.ts | TS2769 | No overload matches this call.
+1	supabase/functions/retry-failed-cfdi/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/reverse-agency-rejection/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient'.
+1	supabase/functions/send-agency-registration-admin/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-agency-welcome/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-booking-confirmation/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-cfdi-email/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/send-checkin-confirmation-email/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-checkin-confirmation-email/index.ts | TS2339 | Property 'contact_email' does not exist on type '{ name: any; contact_email: any; contact_phone: any; }[]'.
+2	supabase/functions/send-checkin-confirmation-email/index.ts | TS2339 | Property 'contact_phone' does not exist on type '{ name: any; contact_email: any; contact_phone: any; }[]'.
+1	supabase/functions/send-checkin-confirmation-email/index.ts | TS2339 | Property 'destination' does not exist on type '{ name: any; destination: any; start_date: any; end_date: any; }[]'.
+1	supabase/functions/send-checkin-confirmation-email/index.ts | TS2339 | Property 'email' does not exist on type '{ first_name: any; last_name: any; email: any; }[]'.
+1	supabase/functions/send-checkin-confirmation-email/index.ts | TS2339 | Property 'end_date' does not exist on type '{ name: any; destination: any; start_date: any; end_date: any; }[]'.
+1	supabase/functions/send-checkin-confirmation-email/index.ts | TS2339 | Property 'first_name' does not exist on type '{ first_name: any; last_name: any; email: any; }[]'.
+1	supabase/functions/send-checkin-confirmation-email/index.ts | TS2339 | Property 'last_name' does not exist on type '{ first_name: any; last_name: any; email: any; }[]'.
+2	supabase/functions/send-checkin-confirmation-email/index.ts | TS2339 | Property 'name' does not exist on type '{ name: any; contact_email: any; contact_phone: any; }[]'.
+3	supabase/functions/send-checkin-confirmation-email/index.ts | TS2339 | Property 'name' does not exist on type '{ name: any; destination: any; start_date: any; end_date: any; }[]'.
+1	supabase/functions/send-checkin-confirmation-email/index.ts | TS2339 | Property 'start_date' does not exist on type '{ name: any; destination: any; start_date: any; end_date: any; }[]'.
+1	supabase/functions/send-contact-email/index.ts | TS18046 | 'error' is of type 'unknown'.
+3	supabase/functions/send-gift-card-email/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-inquiry-email/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-membership-cancellation/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-membership-payment-failed/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-membership-renewal-reminder/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-membership-welcome/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-no-show-notification/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-password-reset/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-payout-notification/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/send-payout-notification/index.ts | TS2345 | Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+1	supabase/functions/send-verification-email/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/stripe-webhook/index.ts | TS18046 | 'e' is of type 'unknown'.
+2	supabase/functions/stripe-webhook/index.ts | TS18046 | 'err' is of type 'unknown'.
+3	supabase/functions/stripe-webhook/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/stripe-webhook/index.ts | TS2339 | Property 'payment_intent' does not exist on type 'Response<Invoice>'.
+2	supabase/functions/stripe-webhook/index.ts | TS2339 | Property 'user_id' does not exist on type '{ tour_id: any; travelers_count: any; }'.
+1	supabase/functions/stripe-webhook/index.ts | TS2345 | Argument of type 'string | null' is not assignable to parameter of type 'string'.
+5	supabase/functions/stripe-webhook/index.ts | TS2551 | Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, unknown, unknown>'. Did you mean 'match'?
+5	supabase/functions/stripe-webhook/index.ts | TS7006 | Parameter 'e' implicitly has an 'any' type.
+1	supabase/functions/stripe-webhook/index.ts | TS7053 | Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ incomplete: string; incomplete_expired: string; trialing: string; active: string; past_due: string; canceled: string; unpaid: string; paused: string; }'.
+1	supabase/functions/subscribe-newsletter/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/sync-payout-to-accounting/index.ts | TS2352 | Conversion of type '{ id: any; user_id: any; rfc: any; razon_social: any; regimen_fiscal: any; postal_code: any; users: { email: any; first_name: any; last_name: any; }[]; }[]' to type '{ id: string; user_id: string; rfc?: string | undefined; razon_social?: string | undefined; regimen_fiscal?: string | undefined; postal_code?: string | undefined; users: { email?: string | undefined; first_name?: string | undefined; last_name?: string | undefined; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+1	supabase/functions/sync-to-accounting/index.ts | TS2339 | Property 'access_token' does not exist on type 'never'.
+1	supabase/functions/sync-to-accounting/index.ts | TS2339 | Property 'access_token_expires_at' does not exist on type 'never'.
+2	supabase/functions/sync-to-accounting/index.ts | TS2339 | Property 'api_domain' does not exist on type 'never'.
+3	supabase/functions/sync-to-accounting/index.ts | TS2339 | Property 'external_entity_id' does not exist on type 'never'.
+1	supabase/functions/sync-to-accounting/index.ts | TS2339 | Property 'id' does not exist on type 'never'.
+2	supabase/functions/sync-to-accounting/index.ts | TS2339 | Property 'refresh_token' does not exist on type 'never'.
+1	supabase/functions/sync-to-accounting/index.ts | TS2339 | Property 'retry_count' does not exist on type 'never'.
+1	supabase/functions/sync-to-accounting/index.ts | TS2339 | Property 'zoho_client_id' does not exist on type 'never'.
+1	supabase/functions/sync-to-accounting/index.ts | TS2339 | Property 'zoho_client_secret' does not exist on type 'never'.
+1	supabase/functions/sync-to-accounting/index.ts | TS2339 | Property 'zoho_region' does not exist on type 'never'.
+6	supabase/functions/sync-to-accounting/index.ts | TS2345 | Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'SupabaseClient<unknown, { PostgrestVersion: string; }, never, never, { PostgrestVersion: string; }>'.
+1	supabase/functions/sync-to-accounting/index.ts | TS2345 | Argument of type '{ access_token: any; access_token_expires_at: string; api_domain: any; }' is not assignable to parameter of type 'never'.
+1	supabase/functions/sync-to-accounting/index.ts | TS2345 | Argument of type '{ p_provider: string; p_record_type: string; p_record_id: string; }' is not assignable to parameter of type 'undefined'.
+1	supabase/functions/sync-to-accounting/index.ts | TS2345 | Argument of type '{ retry_count: any; }' is not assignable to parameter of type 'never'.
+2	supabase/functions/sync-to-accounting/index.ts | TS2353 | Object literal may only specify known properties, and 'provider' does not exist in type 'never[]'.
+1	supabase/functions/sync-transport-locations/index.ts | TS2345 | Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+2	supabase/functions/sync-transport-locations/index.ts | TS7006 | Parameter 'city' implicitly has an 'any' type.
+2	supabase/functions/sync-transport-locations/index.ts | TS7006 | Parameter 'system' implicitly has an 'any' type.
+3	supabase/functions/sync-transport-locations/index.ts | TS7006 | Parameter 'tags' implicitly has an 'any' type.
+1	supabase/functions/test-openpay-3ds-charge/index.ts | TS18046 | 'err' is of type 'unknown'.
+1	supabase/functions/validate-agency-rfc/index.ts | TS18047 | 'settings' is possibly 'null'.
+1	supabase/functions/verify-contract-otp/index.ts | TS2305 | Module '"supabase/functions/_shared/contractDocDefinition.ts"' has no exported member 'AnexoBData'.
+1	supabase/functions/verify-contract-otp/index.ts | TS2305 | Module '"supabase/functions/_shared/contractDocDefinition.ts"' has no exported member 'ContractData'.
+1	supabase/functions/verify-contract-otp/index.ts | TS2339 | Property 'message' does not exist on type '{}'.
+1	supabase/functions/verify-contract-otp/index.ts | TS2345 | Argument of type 'Uint8Array<ArrayBufferLike>' is not assignable to parameter of type 'BufferSource'.
+1	supabase/functions/verify-email-code/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/verify-reset-code/index.ts | TS18046 | 'error' is of type 'unknown'.
+1	supabase/functions/verify-reset-code/index.ts | TS2339 | Property 'code' does not exist on type '{ id: any; user_id: any; expires_at: any; used: any; failed_attempts: any; }'.

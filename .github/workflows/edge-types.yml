@@ -1,0 +1,66 @@
+name: Tipos de Edge Functions
+
+# `npm run typecheck` corre `tsc -p tsconfig.app.json` y ese tsconfig tiene
+# "include": ["src"]. Las ~173 funciones de supabase/functions/ NO las
+# type-checkea nada, ni en local ni en CI. Lo detectamos el 01-sep-2026 a raiz
+# de generate-booking-cfdi: un `booking as {...}` escondia que el .select() no
+# pedia tax_treatment, asi que el codigo leia una columna que la consulta nunca
+# traia, y ni tsc ni el runtime decian nada.
+#
+# El runtime es Deno y no comparte tsconfig con el front, por eso es un check
+# aparte con `deno check` en vez de ampliar el tsconfig del front.
+#
+# Hay 380 errores preexistentes. Exigir cero seria pedir semanas de limpieza
+# antes de tener cualquier red, asi que la comparacion es contra una linea base
+# commiteada: los viejos se toleran, uno NUEVO falla. Ver
+# scripts/check-edge-types.mjs para por que la firma no lleva numero de linea.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tipos-edge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Cache de dependencias de Deno
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/deno
+            node_modules
+          key: deno-edge-${{ runner.os }}-${{ hashFiles('supabase/functions/**/*.ts') }}
+          restore-keys: |
+            deno-edge-${{ runner.os }}-
+
+      - name: Type-check contra la linea base
+        run: node scripts/check-edge-types.mjs | tee reporte-tipos-edge.txt
+        shell: bash
+
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            echo "## Tipos de Edge Functions"
+            echo ""
+            if [ -f reporte-tipos-edge.txt ]; then
+              echo '```'
+              tail -60 reporte-tipos-edge.txt
+              echo '```'
+            else
+              echo "No se genero reporte: el chequeo no llego a correr."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
