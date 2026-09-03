@@ -268,8 +268,12 @@ Deno.serve(async (req: Request) => {
     const payer: Record<string, string> = {};
     const payerEmail = customerEmail || authedUser?.email || null;
     if (payerEmail) payer.email = payerEmail;
-    if (payerFirstName) payer.first_name = payerFirstName;
-    if (payerLastName) payer.last_name = payerLastName;
+    // Ojo con los nombres de campo: la API de Preferencias usa "name" y
+    // "surname", no "first_name"/"last_name" como pide el checklist de calidad.
+    // Mandar los equivocados no da error: MercadoPago los descarta en silencio y
+    // devuelve name y surname vacios (verificado contra la API el 03-sep-2026).
+    if (payerFirstName) payer.name = payerFirstName;
+    if (payerLastName) payer.surname = payerLastName;
 
     const preferencePayload = {
       items,
