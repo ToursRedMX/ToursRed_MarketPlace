@@ -7,7 +7,7 @@ import { Booking, BookingTraveler, Tour, FrequentCompanion } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useStepUp } from '../context/StepUpContext';
 import { validateBirthDateForCategory, validateAllTravelers } from '../utils/birthDateValidation';
-import { getMpDeviceId } from '../utils/mercadopagoDevice';
+import { getMpDeviceId, preloadMpDeviceId } from '../utils/mercadopagoDevice';
 
 interface TravelerFormData {
   categoria_viajero: 'adulto' | 'nino' | 'infante' | 'adulto_mayor' | 'mascota';
@@ -70,6 +70,14 @@ const TravelersInfoPage: React.FC = () => {
     }
     loadBookingData();
   }, [bookingId]);
+
+  // Esta pagina no usa PaymentProviderSelector: el proveedor viene fijado en la
+  // reserva. Se precarga solo si es MercadoPago.
+  useEffect(() => {
+    if ((booking as { payment_provider?: string } | null)?.payment_provider === 'mercadopago') {
+      preloadMpDeviceId();
+    }
+  }, [booking]);
 
   const loadBookingData = async () => {
     try {
