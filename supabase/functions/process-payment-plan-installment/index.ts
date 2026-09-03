@@ -56,7 +56,6 @@ Deno.serve(async (req: Request) => {
       payment_method,
       stripe_payment_intent_id,
       paypal_order_id,
-      mp_form_data,
       mercadopago_payment_id,
       conekta_method,
       bnpl_product_type,
@@ -448,8 +447,8 @@ Deno.serve(async (req: Request) => {
       const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
       const notificationUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`;
 
-      // Path (a): No form data and no payment_id → create Checkout Pro preference for redirect flow
-      if (!mp_form_data && !mercadopago_payment_id) {
+      // Path (a): No payment_id → create Checkout Pro preference for redirect flow
+      if (!mercadopago_payment_id) {
         const preferencePayload = {
           items: [{
             title: `Abono plan de pagos - ${tourName} (${bookingCode})`,
@@ -485,7 +484,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Path (c): mercadopago_payment_id present → verify against MP API before confirming
+      // Path (b): mercadopago_payment_id present → verify against MP API before confirming
       if (mercadopago_payment_id) {
         const verifyResponse = await fetch(`https://api.mercadopago.com/v1/payments/${mercadopago_payment_id}`, {
           headers: { Authorization: `Bearer ${mpAccessToken}` },
@@ -518,42 +517,6 @@ Deno.serve(async (req: Request) => {
           message: "Abono con MercadoPago completado.",
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      // Path (b): mp_form_data present → direct Brick charge with server-calculated amount
-      const mpPayload = {
-        ...mp_form_data,
-        transaction_amount: totalToPay,
-        external_reference: plan_id,
-        notification_url: notificationUrl,
-        metadata: { ...(mp_form_data.metadata || {}), plan_id, payment_for: "payment_plan_installment" },
-      };
-
-      const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${mpAccessToken}`,
-          "X-Idempotency-Key": `plan-${plan_id}-${Date.now()}`,
-        },
-        body: JSON.stringify(mpPayload),
-      });
-
-      const mpPayment = await mpResponse.json();
-      if (!mpResponse.ok || mpPayment.status !== "approved") {
-        return new Response(JSON.stringify({
-          error: mpPayment.message || "Error en el pago con MercadoPago",
-          status_detail: mpPayment.status_detail,
-        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      const { pointsEarned } = await finalizePayment("mercadopago", String(mpPayment.id));
-      return new Response(JSON.stringify({
-        success: true,
-        amount_paid: effectiveAmount,
-        total_charged: totalToPay,
-        points_earned: pointsEarned,
-        message: "Abono con MercadoPago completado.",
-      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // 5. PayPal
