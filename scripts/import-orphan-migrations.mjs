@@ -11,10 +11,10 @@
  * COMO USARLO
  *
  * 1. En el SQL editor del Dashboard de Supabase, correr la consulta que esta
- *    en scripts/export-orphan-migrations.sql y descargar el resultado como
- *    JSON (boton "Download" del editor).
+ *    en scripts/export-orphan-migrations.sql y descargar el resultado con el
+ *    boton "Download" del editor (entrega CSV; tambien se acepta JSON).
  *
- * 2. node scripts/import-orphan-migrations.mjs <archivo.json>
+ * 2. node scripts/import-orphan-migrations.mjs <archivo.csv|archivo.json>
  *
  * El paso 1 lo tiene que hacer una persona con acceso a la base: este repo no
  * guarda cadena de conexion y el CLI no esta linkeado.
@@ -58,15 +58,72 @@ if (!input || !existsSync(input)) {
   process.exit(2);
 }
 
-let filas;
-try {
-  filas = JSON.parse(readFileSync(input, 'utf8'));
-} catch (e) {
-  console.error(`ERROR: no se pudo parsear ${input} como JSON: ${e.message}`);
-  process.exit(2);
+// Parser CSV segun RFC4180: campos entrecomillados pueden contener saltos de
+// linea y comillas escapadas como "". Se implementa aqui en vez de usar una
+// dependencia porque el SQL exportado trae ambas cosas y un split(',') ingenuo
+// destrozaria el contenido en silencio.
+function parseCSV(texto) {
+  const filas = [];
+  let campo = '';
+  let fila = [];
+  let enComillas = false;
+  let i = 0;
+
+  // Quitar BOM si viene
+  if (texto.charCodeAt(0) === 0xfeff) texto = texto.slice(1);
+
+  while (i < texto.length) {
+    const c = texto[i];
+
+    if (enComillas) {
+      if (c === '"') {
+        if (texto[i + 1] === '"') { campo += '"'; i += 2; continue; }
+        enComillas = false; i++; continue;
+      }
+      campo += c; i++; continue;
+    }
+
+    if (c === '"') { enComillas = true; i++; continue; }
+    if (c === ',') { fila.push(campo); campo = ''; i++; continue; }
+    if (c === '\r') { i++; continue; }
+    if (c === '\n') { fila.push(campo); filas.push(fila); fila = []; campo = ''; i++; continue; }
+    campo += c; i++;
+  }
+
+  if (campo !== '' || fila.length > 0) { fila.push(campo); filas.push(fila); }
+  return filas;
 }
+
+function csvAObjetos(texto) {
+  const filas = parseCSV(texto);
+  if (filas.length < 2) return [];
+  const cabecera = filas[0].map((h) => h.trim());
+  return filas.slice(1)
+    .filter((f) => f.some((v) => v !== ''))
+    .map((f) => Object.fromEntries(cabecera.map((h, idx) => [h, f[idx] ?? ''])));
+}
+
+const crudo = readFileSync(input, 'utf8');
+let filas;
+
+if (input.toLowerCase().endsWith('.csv') || !crudo.trimStart().startsWith('[')) {
+  try {
+    filas = csvAObjetos(crudo);
+  } catch (e) {
+    console.error(`ERROR: no se pudo parsear ${input} como CSV: ${e.message}`);
+    process.exit(2);
+  }
+} else {
+  try {
+    filas = JSON.parse(crudo);
+  } catch (e) {
+    console.error(`ERROR: no se pudo parsear ${input} como JSON: ${e.message}`);
+    process.exit(2);
+  }
+}
+
 if (!Array.isArray(filas) || filas.length === 0) {
-  console.error('ERROR: se esperaba un arreglo JSON no vacio.');
+  console.error('ERROR: no se encontro ninguna fila en el archivo.');
   process.exit(2);
 }
 
@@ -96,7 +153,9 @@ const cabecera = (version, name) => `-- ========================================
 if (!existsSync(DEST)) mkdirSync(DEST, { recursive: true });
 
 let escritos = 0, vacios = 0, omitidos = 0;
+let verificados = 0, discrepancias = 0, sinMd5 = 0;
 const manifiesto = [];
+const fallos = [];
 
 for (const f of filas) {
   const version = String(f.version ?? '').trim();
@@ -109,7 +168,11 @@ for (const f of filas) {
     continue;
   }
 
-  const slug = (name || 'sin_nombre').replace(/[^A-Za-z0-9_.-]/g, '_');
+  // Algunos `name` del ledger ya terminan en .sql (quedaron asi al aplicarse
+  // desde un archivo). Sin quitarlo, el archivo sale como `foo.sql.sql`.
+  const slug = (name || 'sin_nombre')
+    .replace(/\.sql$/i, '')
+    .replace(/[^A-Za-z0-9_.-]/g, '_');
   const ruta = join(DEST, `${version}_${slug}.sql`);
 
   let contenido = cabecera(version, name || '(sin nombre)');
@@ -121,11 +184,37 @@ for (const f of filas) {
   }
 
   writeFileSync(ruta, contenido, 'utf8');
+
+  // Verificacion de fidelidad: el md5 del cuerpo que quedo en disco debe
+  // coincidir con el que calculo la base al exportar. Si no cuadra, el
+  // archivo NO es fiel y hay que reexportarlo -- se reporta, no se silencia.
+  const md5Local = createHash('md5').update(cuerpo, 'utf8').digest('hex');
+  const bytesLocal = Buffer.byteLength(cuerpo, 'utf8');
+  const md5Origen = String(f.md5_cuerpo ?? '').trim();
+  const bytesOrigen = f.bytes_cuerpo === undefined || f.bytes_cuerpo === ''
+    ? null : Number(f.bytes_cuerpo);
+
+  let estado;
+  if (!md5Origen) {
+    estado = 'sin_md5_de_origen';
+    sinMd5++;
+  } else if (md5Origen === md5Local && (bytesOrigen === null || bytesOrigen === bytesLocal)) {
+    estado = 'ok';
+    verificados++;
+  } else {
+    estado = 'DISCREPANCIA';
+    discrepancias++;
+    fallos.push({ version, archivo: ruta, md5Origen, md5Local, bytesOrigen, bytesLocal });
+  }
+
   manifiesto.push({
     version,
     archivo: ruta,
-    md5_cuerpo: createHash('md5').update(cuerpo, 'utf8').digest('hex'),
-    bytes_cuerpo: Buffer.byteLength(cuerpo, 'utf8'),
+    md5_origen: md5Origen || null,
+    md5_local: md5Local,
+    bytes_origen: bytesOrigen,
+    bytes_local: bytesLocal,
+    verificacion: estado,
   });
   escritos++;
 }
@@ -136,9 +225,23 @@ writeFileSync(rutaManifiesto, JSON.stringify(manifiesto, null, 2), 'utf8');
 console.log(`\nArchivos escritos : ${escritos}`);
 console.log(`  sin sentencias  : ${vacios}`);
 console.log(`  omitidos        : ${omitidos}`);
-console.log(`Manifiesto        : ${rutaManifiesto}`);
-console.log(`\nVerificar fidelidad: comparar md5_cuerpo del manifiesto contra`);
-console.log(`el md5 que devuelve la consulta de exportacion. Si alguno no cuadra,`);
-console.log(`el archivo NO es fiel y hay que reexportarlo.\n`);
+console.log(`\nVerificacion md5 contra la base:`);
+console.log(`  coinciden       : ${verificados}`);
+console.log(`  DISCREPANCIAS   : ${discrepancias}`);
+console.log(`  sin md5 origen  : ${sinMd5}`);
+console.log(`\nManifiesto        : ${rutaManifiesto}`);
 
-process.exit(omitidos ? 1 : 0);
+if (discrepancias > 0) {
+  console.log(`\n${'!'.repeat(60)}`);
+  console.log('ARCHIVOS NO FIELES -- reexportar estas versiones:');
+  for (const d of fallos) {
+    console.log(`  ${d.version}`);
+    console.log(`    origen: ${d.md5Origen} (${d.bytesOrigen} bytes)`);
+    console.log(`    local : ${d.md5Local} (${d.bytesLocal} bytes)`);
+  }
+  console.log(`${'!'.repeat(60)}\n`);
+} else if (verificados > 0) {
+  console.log(`\nTodos los cuerpos coinciden byte a byte con lo exportado.\n`);
+}
+
+process.exit(omitidos > 0 || discrepancias > 0 ? 1 : 0);

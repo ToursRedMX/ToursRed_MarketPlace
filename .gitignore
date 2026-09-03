@@ -36,3 +36,9 @@ vite.config.js.timestamp-*
 eslint-report.json
 eslint-report.txt
 eslint-stderr.log
+
+# Artefactos de la exportacion de migraciones huerfanas (scripts/import-orphan-migrations.mjs).
+# El resultado real son los archivos .sql en supabase/migrations/; estos son
+# intermedios y se regeneran corriendo el script otra vez.
+migraciones-exportadas.manifiesto.json
+scripts/Supabase Snippet Export*.csv
