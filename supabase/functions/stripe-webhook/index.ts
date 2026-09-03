@@ -1,7 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.39.6";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9";
+
+// Se nombra el tipo del cliente para no sumar mas `any` a un archivo que ya
+// tiene varios. Se importa en vez de derivarlo con ReturnType<typeof
+// createClient>, que resuelve a SupabaseClient<unknown, never, ...> y no
+// acepta el cliente real.
+type ClienteSupabase = SupabaseClient;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,6 +53,148 @@ async function getStripeProcessorFee(stripe: any, paymentIntentId: string): Prom
     console.error('Error fetching Stripe processor fee:', e.message);
   }
   return null;
+}
+
+/**
+ * Asiento contable generico. Existe para que las disputas y los payouts no
+ * agreguen dos copias mas de la misma logica de numeracion.
+ *
+ * Ojo con entry_number: se calcula contando los asientos del periodo, asi que
+ * dos asientos simultaneos pueden pedir el mismo numero. Es un defecto
+ * preexistente de createStripeRefundFeeAccountingEntry que se hereda aqui a
+ * proposito, para no cambiar el criterio de numeracion en este cambio.
+ */
+async function crearAsientoContable(
+  supabase: ClienteSupabase,
+  opts: {
+    entryType: "ingreso" | "egreso" | "diario" | "apertura";
+    descripcion: string;
+    sourceType: string;
+    sourceId: string;
+    lineas: { account_code: string; description: string; debit: number; credit: number }[];
+  },
+): Promise<string | null> {
+  const hoy = new Date();
+  const year = hoy.getFullYear();
+  const month = hoy.getMonth() + 1;
+
+  const { count } = await supabase
+    .from("accounting_entries")
+    .select("id", { count: "exact", head: true })
+    .eq("period_year", year)
+    .eq("period_month", month);
+
+  const entryNumber = `AS-${year}${String(month).padStart(2, "0")}-${String((count || 0) + 1).padStart(5, "0")}`;
+
+  const { data: entry, error } = await supabase
+    .from("accounting_entries")
+    .insert({
+      entry_number: entryNumber,
+      entry_type: opts.entryType,
+      entry_date: hoy.toISOString().split("T")[0],
+      period_year: year,
+      period_month: month,
+      description: opts.descripcion,
+      source_type: opts.sourceType,
+      source_id: opts.sourceId,
+      is_posted: true,
+      posted_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (error || !entry) {
+    console.error("Error creando asiento contable:", error);
+    return null;
+  }
+
+  const { error: lineasError } = await supabase.from("accounting_entry_lines").insert(
+    opts.lineas.map((l, i) => ({ entry_id: entry.id, line_number: i + 1, ...l })),
+  );
+  if (lineasError) console.error("Error creando lineas del asiento:", lineasError);
+
+  return entry.id;
+}
+
+/** Notificacion en la app para los administradores. */
+async function notificarAdmins(
+  supabase: ClienteSupabase,
+  tipo: string,
+  titulo: string,
+  mensaje: string,
+  data: Record<string, unknown>,
+) {
+  const { data: admins } = await supabase
+    .from("users")
+    .select("id")
+    .in("role", ["admin", "super_admin"]);
+
+  if (!admins?.length) {
+    console.warn("No hay administradores a quienes notificar");
+    return;
+  }
+
+  const { error } = await supabase.from("notifications").insert(
+    admins.map((a: { id: string }) => ({
+      user_id: a.id,
+      type: tipo,
+      title: titulo,
+      message: mensaje,
+      data,
+    })),
+  );
+  if (error) console.error("Error notificando a admins:", error);
+}
+
+/**
+ * Correo a operaciones, mismo camino que notify-ops-refund-failed: smtp2go con
+ * la llave guardada en email_settings.
+ */
+async function alertarOps(supabase: ClienteSupabase, asunto: string, filas: [string, string][]) {
+  const { data: emailSettings } = await supabase
+    .from("email_settings")
+    .select("smtp_api_key, sender_email, platform_url")
+    .maybeSingle();
+
+  if (!emailSettings?.smtp_api_key) {
+    console.warn(`Sin smtp_api_key: no se envio la alerta "${asunto}"`);
+    return;
+  }
+
+  const cuerpo = filas
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold;">${k}</td>` +
+        `<td style="padding:8px;border:1px solid #ddd;">${v}</td></tr>`,
+    )
+    .join("");
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 640px;">
+      <h2 style="color:#dc2626;">${asunto}</h2>
+      <table style="border-collapse:collapse;width:100%;">${cuerpo}</table>
+      <p style="color:#6b7280;font-size:12px;margin-top:30px;">
+        Mensaje automatico del webhook de Stripe de ToursRed.
+      </p>
+    </div>
+  `;
+
+  try {
+    const res = await fetch("https://api.smtp2go.com/v3/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: emailSettings.smtp_api_key,
+        to: ["contacto@toursred.com"],
+        sender: emailSettings.sender_email || "contacto@toursred.com",
+        subject: asunto,
+        html_body: html,
+      }),
+    });
+    if (!res.ok) console.error("smtp2go rechazo la alerta:", await res.text());
+  } catch (e) {
+    console.error("Error enviando la alerta a operaciones:", e);
+  }
 }
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
@@ -2485,6 +2634,252 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // --- Disputas (contracargos) -------------------------------------
+      // Los cinco eventos comparten la busqueda y el upsert; lo que cambia es
+      // el efecto. El upsert va sobre stripe_dispute_id porque Stripe reintenta
+      // y un reintento no debe duplicar la alerta ni el asiento.
+      case 'charge.dispute.created':
+      case 'charge.dispute.updated':
+      case 'charge.dispute.closed':
+      case 'charge.dispute.funds_withdrawn':
+      case 'charge.dispute.funds_reinstated': {
+        const dispute = event.data.object;
+        const monto = (dispute.amount || 0) / 100;
+        const moneda = (dispute.currency || 'mxn').toUpperCase();
+        const ahora = new Date().toISOString();
+
+        const paymentIntentId = typeof dispute.payment_intent === 'string'
+          ? dispute.payment_intent
+          : dispute.payment_intent?.id ?? null;
+        const chargeId = typeof dispute.charge === 'string'
+          ? dispute.charge
+          : dispute.charge?.id ?? null;
+
+        let ptxId: string | null = null;
+        let bookingId: string | null = null;
+        if (paymentIntentId) {
+          const { data: ptx } = await supabase
+            .from('payment_transactions')
+            .select('id, booking_id')
+            .eq('stripe_payment_intent_id', paymentIntentId)
+            .maybeSingle();
+          if (ptx) {
+            ptxId = ptx.id;
+            bookingId = ptx.booking_id;
+          }
+        }
+        if (!ptxId) {
+          console.warn('Disputa ' + dispute.id + ': sin payment_transaction para PI ' + paymentIntentId + '. Se registra sin ligar.');
+        }
+
+        const vencimiento = dispute.evidence_details?.due_by
+          ? new Date(dispute.evidence_details.due_by * 1000).toISOString()
+          : null;
+
+        const fila: Record<string, unknown> = {
+          stripe_dispute_id: dispute.id,
+          stripe_charge_id: chargeId,
+          stripe_payment_intent_id: paymentIntentId,
+          amount: monto,
+          currency: dispute.currency || 'mxn',
+          reason: dispute.reason ?? null,
+          status: dispute.status,
+          evidence_due_by: vencimiento,
+          last_event_type: event.type,
+          last_payload: event,
+          updated_at: ahora,
+        };
+        if (ptxId) fila.payment_transaction_id = ptxId;
+        if (bookingId) fila.booking_id = bookingId;
+        if (event.type === 'charge.dispute.funds_withdrawn') fila.funds_withdrawn_at = ahora;
+        if (event.type === 'charge.dispute.funds_reinstated') fila.funds_reinstated_at = ahora;
+        if (event.type === 'charge.dispute.closed') {
+          fila.closed_at = ahora;
+          fila.outcome = dispute.status;
+        }
+
+        const { data: disputa, error: disputaError } = await supabase
+          .from('payment_disputes')
+          .upsert(fila, { onConflict: 'stripe_dispute_id' })
+          .select('id, booking_id')
+          .single();
+
+        if (disputaError || !disputa) {
+          console.error('Error guardando la disputa ' + dispute.id + ':', disputaError);
+          Sentry.captureException(new Error('No se pudo guardar la disputa ' + dispute.id));
+          break;
+        }
+
+        if (event.type === 'charge.dispute.created') {
+          // Bloquea el check-in mientras la disputa este abierta: no se opera un
+          // tour que ya esta en contracargo. Se libera si la disputa se gana.
+          if (bookingId) {
+            await supabase
+              .from('bookings')
+              .update({ dispute_hold_at: ahora })
+              .eq('id', bookingId);
+          }
+
+          const limite = vencimiento
+            ? new Date(vencimiento).toLocaleString('es-MX')
+            : 'sin fecha informada';
+
+          await notificarAdmins(
+            supabase,
+            'payment_dispute_opened',
+            'Disputa de pago abierta',
+            'Se abrio una disputa por $' + monto + ' ' + moneda + '. Fecha limite para responder: ' + limite + '.',
+            {
+              dispute_id: disputa.id,
+              stripe_dispute_id: dispute.id,
+              booking_id: bookingId,
+              evidence_due_by: vencimiento,
+            },
+          );
+
+          await alertarOps(supabase, '[ALERTA] Disputa de pago abierta - $' + monto + ' ' + moneda, [
+            ['Monto', '$' + monto + ' ' + moneda],
+            ['Motivo', dispute.reason || 'no informado'],
+            ['Fecha limite de evidencia', limite],
+            ['Reserva', bookingId || 'no ligada'],
+            ['Dispute ID', dispute.id],
+            ['Payment Intent', paymentIntentId || 'no informado'],
+          ]);
+
+          console.log('Disputa ' + dispute.id + ' registrada; check-in bloqueado para la reserva ' + (bookingId ?? '(ninguna)'));
+        }
+
+        if (event.type === 'charge.dispute.closed') {
+          if (dispute.status === 'won') {
+            if (disputa.booking_id) {
+              await supabase
+                .from('bookings')
+                .update({ dispute_hold_at: null })
+                .eq('id', disputa.booking_id);
+            }
+            console.log('Disputa ' + dispute.id + ' ganada; bloqueo liberado');
+          } else if (dispute.status === 'lost') {
+            // Idempotencia: un reintento de Stripe no debe postear dos veces.
+            const { count: yaPosteado } = await supabase
+              .from('accounting_entries')
+              .select('id', { count: 'exact', head: true })
+              .eq('source_type', 'dispute')
+              .eq('source_id', disputa.id);
+
+            if (yaPosteado && yaPosteado > 0) {
+              console.log('Disputa ' + dispute.id + ' perdida: el asiento ya existia, no se duplica');
+            } else {
+              await crearAsientoContable(supabase, {
+                entryType: 'egreso',
+                descripcion: 'Contracargo perdido (disputa ' + dispute.id + ')',
+                sourceType: 'dispute',
+                sourceId: disputa.id,
+                lineas: [
+                  { account_code: '606.03', description: 'Contracargo por disputa perdida', debit: monto, credit: 0 },
+                  { account_code: '102.03', description: 'Reduccion de saldo - Stripe', debit: 0, credit: monto },
+                ],
+              });
+              console.log('Disputa ' + dispute.id + ' perdida; asiento contable creado por $' + monto);
+            }
+          } else {
+            console.log('Disputa ' + dispute.id + ' cerrada con estado ' + dispute.status + '; sin efecto contable');
+          }
+        }
+
+        break;
+      }
+
+      // --- Payouts de Stripe hacia la cuenta de ToursRed ------------------
+      // No son pagos a agencias (eso es agency_payouts y es manual): es Stripe
+      // depositando el saldo en el banco. Sirve para conciliar contra el estado
+      // de cuenta, y payout.failed avisa que el dinero NO llego.
+      case 'payout.paid':
+      case 'payout.failed': {
+        const payout = event.data.object;
+        const monto = (payout.amount || 0) / 100;
+        const moneda = (payout.currency || 'mxn').toUpperCase();
+        const ahora = new Date().toISOString();
+        const fallo = event.type === 'payout.failed';
+
+        const fila: Record<string, unknown> = {
+          stripe_payout_id: payout.id,
+          amount: monto,
+          currency: payout.currency || 'mxn',
+          status: payout.status,
+          method: payout.method ?? null,
+          arrival_date: payout.arrival_date
+            ? new Date(payout.arrival_date * 1000).toISOString().split('T')[0]
+            : null,
+          last_event_type: event.type,
+          last_payload: event,
+          updated_at: ahora,
+        };
+        if (fallo) {
+          fila.failed_at = ahora;
+          fila.failure_code = payout.failure_code ?? null;
+          fila.failure_message = payout.failure_message ?? null;
+        } else {
+          fila.paid_at = ahora;
+        }
+
+        const { data: registro, error: payoutError } = await supabase
+          .from('stripe_payouts')
+          .upsert(fila, { onConflict: 'stripe_payout_id' })
+          .select('id')
+          .single();
+
+        if (payoutError || !registro) {
+          console.error('Error guardando el payout ' + payout.id + ':', payoutError);
+          Sentry.captureException(new Error('No se pudo guardar el payout ' + payout.id));
+          break;
+        }
+
+        if (fallo) {
+          await notificarAdmins(
+            supabase,
+            'stripe_payout_failed',
+            'Deposito de Stripe fallido',
+            'Stripe no pudo depositar $' + monto + ' ' + moneda + ': ' + (payout.failure_message || payout.failure_code || 'sin detalle') + '.',
+            { payout_id: registro.id, stripe_payout_id: payout.id, failure_code: payout.failure_code },
+          );
+
+          await alertarOps(supabase, '[ALERTA] Deposito de Stripe fallido - $' + monto + ' ' + moneda, [
+            ['Monto', '$' + monto + ' ' + moneda],
+            ['Codigo de fallo', payout.failure_code || 'no informado'],
+            ['Detalle', payout.failure_message || 'no informado'],
+            ['Payout ID', payout.id],
+          ]);
+
+          console.error('Payout ' + payout.id + ' fallido: el dinero no llego al banco');
+        } else {
+          // Transferencia entre dos cuentas propias: sale del saldo de Stripe
+          // (102.03) y entra al banco (102.01). Por eso el asiento es 'diario'.
+          const { count: yaPosteado } = await supabase
+            .from('accounting_entries')
+            .select('id', { count: 'exact', head: true })
+            .eq('source_type', 'payout')
+            .eq('source_id', registro.id);
+
+          if (yaPosteado && yaPosteado > 0) {
+            console.log('Payout ' + payout.id + ': el asiento ya existia, no se duplica');
+          } else {
+            await crearAsientoContable(supabase, {
+              entryType: 'diario',
+              descripcion: 'Deposito de Stripe a cuenta bancaria (payout ' + payout.id + ')',
+              sourceType: 'payout',
+              sourceId: registro.id,
+              lineas: [
+                { account_code: '102.01', description: 'Entrada a cuenta bancaria', debit: monto, credit: 0 },
+                { account_code: '102.03', description: 'Salida del saldo de Stripe', debit: 0, credit: monto },
+              ],
+            });
+            console.log('Payout ' + payout.id + ' depositado; asiento contable creado por $' + monto);
+          }
+        }
+
+        break;
+      }
+
       case 'charge.refunded': {
         const charge = event.data.object;
         const refundId = charge.refunds?.data?.[0]?.id;
@@ -2698,7 +3093,11 @@ async function createStripeRefundFeeAccountingEntry(supabase: any, refundId: str
     .from("accounting_entries")
     .insert({
       entry_number: entryNumber,
-      entry_type: "pago",
+      // Era "pago", que el CHECK de accounting_entries NO admite (solo
+      // ingreso/egreso/diario/apertura). Este asiento habria fallado siempre,
+      // en silencio, porque quien lo llama solo hace console.error. Causa
+      // distinta a las disputas: se corrige aqui porque es el mismo CHECK.
+      entry_type: "egreso",
       entry_date: today.toISOString().split("T")[0],
       period_year: year,
       period_month: month,
