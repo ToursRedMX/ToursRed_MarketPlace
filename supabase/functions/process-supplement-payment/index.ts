@@ -52,7 +52,6 @@ Deno.serve(async (req: Request) => {
       booking_supplement_id,
       payment_method,
       stripe_payment_intent_id,
-      mp_form_data,
       mercadopago_payment_id,
       paypal_order_id,
       conekta_method,
@@ -472,7 +471,7 @@ Deno.serve(async (req: Request) => {
       const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
       const notificationUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`;
 
-      if (!mp_form_data && !mercadopago_payment_id) {
+      if (!mercadopago_payment_id) {
         const preferencePayload = {
           items: [{
             id: booking_supplement_id,
@@ -539,38 +538,6 @@ Deno.serve(async (req: Request) => {
           message: "Pago con MercadoPago completado.",
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      const mpPayload = {
-        ...mp_form_data,
-        transaction_amount: totalToPay,
-        external_reference: booking_supplement_id,
-        notification_url: notificationUrl,
-        metadata: { ...(mp_form_data.metadata || {}), booking_supplement_id, payment_for: "supplement" },
-      };
-
-      const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${mpAccessToken}`,
-          "X-Idempotency-Key": `supp-${booking_supplement_id}-${Date.now()}`,
-        },
-        body: JSON.stringify(mpPayload),
-      });
-
-      const mpPayment = await mpResponse.json();
-      if (!mpResponse.ok || mpPayment.status !== "approved") {
-        return new Response(JSON.stringify({
-          error: mpPayment.message || "Error en el pago con MercadoPago",
-          status_detail: mpPayment.status_detail,
-        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      const pointsEarned = await finalizePayment("mercadopago", String(mpPayment.id));
-      return new Response(JSON.stringify({
-        success: true, total_charged: totalToPay, points_earned: pointsEarned,
-        message: "Pago con MercadoPago completado.",
-      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (payment_method === "paypal") {
