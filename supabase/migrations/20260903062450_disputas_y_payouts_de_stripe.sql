@@ -129,10 +129,17 @@ CREATE INDEX IF NOT EXISTS idx_bookings_dispute_hold ON public.bookings(dispute_
 -- ---------------------------------------------------------------------------
 -- 606 es "Reembolsos y cancelaciones"; un contracargo perdido es dinero que se
 -- devuelve sin haberlo decidido nosotros, asi que cuelga de ahi.
+-- sat_group_code es NOT NULL. Ojo: su valor NO es uniforme entre las hermanas
+-- (606 usa '606-01', 606.02 usa '606' y 606.01 usa '601-01', que parece un
+-- error en los datos ya cargados). Se usa '606', igual que 606.02, que es la
+-- cuenta mas analoga: un costo de procesamiento que no se recupera. Vale la
+-- pena que un contador confirme la agrupacion; no se toca 606.01 aqui.
+--
+-- level 4 como las hermanas, no 3: 606 es el nivel 3 y las 606.xx cuelgan de el.
 INSERT INTO public.chart_of_accounts
-  (code, name, account_type, parent_code, level, nature, is_system, is_active, description)
+  (code, sat_group_code, name, account_type, parent_code, level, nature, is_system, is_active, description)
 VALUES
-  ('606.03', 'Contracargos por disputas', 'gasto', '606', 2, 'deudora', true, true,
+  ('606.03', '606', 'Contracargos por disputas', 'gasto', '606', 4, 'deudora', true, true,
    'Importe perdido en disputas de tarjeta resueltas en contra. Lo escribe stripe-webhook al recibir charge.dispute.closed con outcome lost.')
 ON CONFLICT (code) DO NOTHING;
 
