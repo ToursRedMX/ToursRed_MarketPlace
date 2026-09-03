@@ -1,0 +1,45 @@
+-- ============================================================================
+-- EXPORTACION FUNCIONAL desde supabase_migrations.schema_migrations
+--
+-- Este archivo NO es la migracion original: es el SQL que la base registro
+-- haber ejecutado, reconstruido a partir del ledger.
+--
+--   version: 20260714042628
+--   name:    add_agency_documents_storage_update_policy
+--
+-- Recuperado : las sentencias ejecutadas, en su orden original.
+-- Perdido    : los comentarios sueltos entre sentencias. El ledger guarda solo
+--              sentencias ejecutables, asi que la documentacion que tuviera el
+--              archivo original no es recuperable desde aqui.
+-- Transformado: saltos de linea desescapados y ';' separadores repuestos, que
+--              statements[] no conserva. La alineacion puede diferir.
+--
+-- Se agrega para que el cambio de esquema sea revisable y reproducible desde
+-- el repo. Para el detalle de por que existe, ver el bullet del desfase de
+-- migraciones en claude.md.
+-- ============================================================================
+
+
+-- Añadir política UPDATE para agencias en el bucket agency-documents
+-- Esto permite a las agencias actualizar (upsert) sus propios archivos en storage
+CREATE POLICY "agency_update_own_documents"
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (
+    bucket_id = 'agency-documents'
+    AND (storage.foldername(name))[1] IN (
+      SELECT (agencies.id)::text AS id
+      FROM agencies
+      WHERE agencies.user_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    bucket_id = 'agency-documents'
+    AND (storage.foldername(name))[1] IN (
+      SELECT (agencies.id)::text AS id
+      FROM agencies
+      WHERE agencies.user_id = auth.uid()
+    )
+  );
+
+;
