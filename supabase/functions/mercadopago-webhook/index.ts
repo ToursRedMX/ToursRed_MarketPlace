@@ -88,23 +88,43 @@ Deno.serve(async (req: Request) => {
   try {
     const rawBody = await req.text();
 
-    const webhookSecret = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
-    if (webhookSecret) {
-      const isValid = await verifyMercadoPagoSignature(req, rawBody, webhookSecret);
-      if (!isValid) {
-        console.error("Invalid MercadoPago webhook signature");
-        return new Response(JSON.stringify({ error: "Invalid signature" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    } else {
-      console.error("MERCADOPAGO_WEBHOOK_SECRET not configured, rejecting webhook");
+    const webhookSecretProd = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
+    const webhookSecretTest = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET_TEST");
+    const candidateSecrets: { label: string; value: string }[] = [];
+    if (webhookSecretProd) candidateSecrets.push({ label: "prod", value: webhookSecretProd });
+    if (webhookSecretTest) candidateSecrets.push({ label: "test", value: webhookSecretTest });
+
+    if (candidateSecrets.length === 0) {
+      console.error("Ningún MERCADOPAGO_WEBHOOK_SECRET configurado, rechazando webhook");
       return new Response(JSON.stringify({ error: "Webhook secret not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    let signatureValid = false;
+    let matchedLabel = "";
+    for (const candidate of candidateSecrets) {
+      if (await verifyMercadoPagoSignature(req, rawBody, candidate.value)) {
+        signatureValid = true;
+        matchedLabel = candidate.label;
+        break;
+      }
+    }
+
+    if (!signatureValid) {
+      console.error(
+        "Invalid MercadoPago webhook signature (secretos probados: " +
+          candidateSecrets.map((c) => c.label).join(", ") +
+          ")"
+      );
+      return new Response(JSON.stringify({ error: "Invalid signature" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`MercadoPago webhook signature válida con secreto: ${matchedLabel}`);
 
     let body: any = {};
     try {
