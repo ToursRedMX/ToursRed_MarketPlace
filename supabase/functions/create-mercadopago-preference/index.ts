@@ -17,6 +17,81 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// ---------------------------------------------------------------------------
+// Checklist de calidad de MercadoPago: telefono, direccion e identificacion del
+// comprador alimentan su motor antifraude y suben la tasa de aprobacion. Los
+// tres son opcionales en el perfil, asi que cada helper devuelve null cuando no
+// hay dato util: omitir el campo es mejor que mandarlo vacio o a medias.
+// ---------------------------------------------------------------------------
+
+type PerfilPayer = {
+  first_name?: string | null;
+  last_name?: string | null;
+  phone_number?: string | null;
+  street?: string | null;
+  postal_code?: string | null;
+  curp?: string | null;
+  rfc?: string | null;
+};
+
+/**
+ * Parte un telefono mexicano en area_code + number, que es como los pide la API
+ * de Preferencias. En la base conviven dos formatos (verificado el 04-sep-2026):
+ * 10 digitos y 12 con lada de pais. Tambien se contempla el formato viejo de
+ * celular "+52 1 ..." (13 digitos), retirado en 2019 pero que sigue vivo en
+ * datos cargados hace tiempo. Las ladas de CDMX (55 y 56), Guadalajara (33) y
+ * Monterrey (81) son de dos digitos; el resto del pais usa tres.
+ */
+function partirTelefonoMx(raw: string | null): { area_code: string; number: string } | null {
+  if (!raw) return null;
+  let digitos = raw.replace(/\D/g, "");
+  if (digitos.length === 13 && digitos.startsWith("521")) digitos = digitos.slice(3);
+  if (digitos.length === 12 && digitos.startsWith("52")) digitos = digitos.slice(2);
+  if (digitos.length === 11 && digitos.startsWith("1")) digitos = digitos.slice(1);
+  if (digitos.length !== 10) return null;
+  const corte = ["55", "56", "33", "81"].includes(digitos.slice(0, 2)) ? 2 : 3;
+  return { area_code: digitos.slice(0, corte), number: digitos.slice(corte) };
+}
+
+/**
+ * MercadoPago Mexico acepta CURP y RFC como tipos de identificacion. Se prefiere
+ * CURP: es la identificacion de persona fisica, que es quien paga, y es la que
+ * mas usuarios tienen cargada (6 de 11 contra 1 con RFC, al 04-sep-2026).
+ */
+function identificacionPayer(perfil: PerfilPayer | null): { type: string; number: string } | null {
+  const curp = perfil?.curp?.trim();
+  if (curp) return { type: "CURP", number: curp.toUpperCase() };
+  const rfc = perfil?.rfc?.trim();
+  if (rfc) return { type: "RFC", number: rfc.toUpperCase() };
+  return null;
+}
+
+/**
+ * El perfil guarda la calle en un solo campo de texto y MercadoPago la quiere
+ * partida, asi que se separa el numero final cuando lo hay ("Av. Reforma 123"
+ * -> "Av. Reforma" + "123"). Sin codigo postal no se manda nada: es el dato que
+ * su antifraude realmente cruza, y una direccion sin CP no le sirve.
+ */
+function partirDireccion(
+  street: string | null,
+  postalCode: string | null
+): Record<string, string> | null {
+  const cp = postalCode?.replace(/\D/g, "");
+  if (!cp) return null;
+  const direccion: Record<string, string> = { zip_code: cp };
+  const calle = street?.trim();
+  if (calle) {
+    const partes = calle.match(/^(.*?)[\s,]+(\d+[A-Za-z]?)$/);
+    if (partes) {
+      direccion.street_name = partes[1].trim();
+      direccion.street_number = partes[2];
+    } else {
+      direccion.street_name = calle;
+    }
+  }
+  return direccion;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -204,6 +279,7 @@ Deno.serve(async (req: Request) => {
           id: bookingId,
           title: description || "Tarjeta de Regalo ToursRed",
           description: "Tarjeta de regalo valida por 1 ano",
+          category_id: "virtual_goods",
           quantity: 1,
           unit_price: validatedAmount,
           currency_id: "MXN",
@@ -217,6 +293,7 @@ Deno.serve(async (req: Request) => {
           id: supplementId,
           title: description || "Suplemento - ToursRed",
           description: "Pago de suplemento para reserva",
+          category_id: "travels",
           quantity: 1,
           unit_price: validatedAmount,
           currency_id: "MXN",
@@ -230,6 +307,7 @@ Deno.serve(async (req: Request) => {
           id: bookingId,
           title: description || "Deposito de Reserva - ToursRed",
           description: "Deposito para reserva de tour",
+          category_id: "travels",
           quantity: 1,
           unit_price: validatedAmount,
           currency_id: "MXN",
@@ -252,28 +330,45 @@ Deno.serve(async (req: Request) => {
     // Checklist de calidad de MercadoPago: payer.email, payer.first_name y
     // payer.last_name alimentan su motor antifraude y suben la tasa de
     // aprobacion. Antes solo se mandaba el email, y solo si el front lo incluia.
-    let payerFirstName: string | null = null;
-    let payerLastName: string | null = null;
+    let perfilPayer: PerfilPayer | null = null;
 
     if (authedUser) {
       const { data: payerProfile } = await supabase
         .from("users")
-        .select("first_name, last_name")
+        .select("first_name, last_name, phone_number, street, postal_code, curp, rfc")
         .eq("id", authedUser.id)
         .maybeSingle();
-      payerFirstName = payerProfile?.first_name ?? null;
-      payerLastName = payerProfile?.last_name ?? null;
+      perfilPayer = payerProfile ?? null;
     }
 
-    const payer: Record<string, string> = {};
+    const payer: Record<string, unknown> = {};
     const payerEmail = customerEmail || authedUser?.email || null;
     if (payerEmail) payer.email = payerEmail;
     // Ojo con los nombres de campo: la API de Preferencias usa "name" y
     // "surname", no "first_name"/"last_name" como pide el checklist de calidad.
     // Mandar los equivocados no da error: MercadoPago los descarta en silencio y
     // devuelve name y surname vacios (verificado contra la API el 03-sep-2026).
-    if (payerFirstName) payer.name = payerFirstName;
-    if (payerLastName) payer.surname = payerLastName;
+    if (perfilPayer?.first_name) payer.name = perfilPayer.first_name;
+    if (perfilPayer?.last_name) payer.surname = perfilPayer.last_name;
+
+    const telefonoPayer = partirTelefonoMx(perfilPayer?.phone_number ?? null);
+    if (telefonoPayer) payer.phone = telefonoPayer;
+
+    const identificacion = identificacionPayer(perfilPayer);
+    if (identificacion) payer.identification = identificacion;
+
+    const direccionPayer = partirDireccion(
+      perfilPayer?.street ?? null,
+      perfilPayer?.postal_code ?? null
+    );
+    if (direccionPayer) payer.address = direccionPayer;
+
+    // La preferencia vive 24 horas. Es holgado de sobra para un checkout que se
+    // abre en el momento, y evita que un link viejo reviva el cobro de una
+    // reserva que mientras tanto se cancelo o se pago por otro medio.
+    const creadaEn = new Date();
+    const venceEn = new Date(creadaEn.getTime() + 24 * 60 * 60 * 1000);
+    const isoConOffset = (d: Date) => d.toISOString().replace("Z", "+00:00");
 
     const preferencePayload = {
       items,
@@ -288,8 +383,15 @@ Deno.serve(async (req: Request) => {
       notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
       statement_descriptor: "TOURSRED",
       binary_mode: false,
+      expires: true,
+      expiration_date_from: isoConOffset(creadaEn),
+      expiration_date_to: isoConOffset(venceEn),
       payment_methods: {
         excluded_payment_types: [{ id: "ticket" }],
+        // Tope de cuotas. Sin este campo MercadoPago ofrece el maximo que
+        // permita cada tarjeta. Acotarlo no le cuesta nada al vendedor: los
+        // intereses de las cuotas los paga el comprador.
+        installments: 12,
       },
     };
 
