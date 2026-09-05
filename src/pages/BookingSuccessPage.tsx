@@ -66,6 +66,7 @@ const BookingSuccessPage: React.FC = () => {
             image_url,
             start_date,
             end_date,
+            deposit_percentage,
             agencies(name)
           ),
           users!bookings_user_id_fkey(email)
