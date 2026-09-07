@@ -16,6 +16,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Stripe elimino `Invoice.subscription` en la version Basil (2025-03-31): ahora
+// vive en `parent.subscription_details.subscription`. Este webhook habla Dahlia
+// (2026-06-24), varias versiones despues, asi que `invoice.subscription` llegaba
+// undefined y los handlers de invoice.payment_succeeded / invoice.payment_failed
+// se salian por su guard "sin suscripcion, omitiendo": las membresias no se
+// activaban ni se renovaban, y la cobranza fallida nunca corria.
+//
+// Se leen las DOS ubicaciones a proposito: el cuerpo del webhook se serializa
+// con la version de API configurada en el endpoint del dashboard, que puede ser
+// anterior a la del SDK. Asi el handler funciona con cualquiera de las dos.
+function resolveInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const parent = invoice.parent;
+  const desdeParent = parent?.type === 'subscription_details'
+    ? parent.subscription_details?.subscription
+    : null;
+  const legado = (invoice as unknown as {
+    subscription?: string | Stripe.Subscription | null;
+  }).subscription;
+  const bruto = desdeParent ?? legado ?? null;
+  if (!bruto) return null;
+  return typeof bruto === 'string' ? bruto : bruto.id;
+}
+
 function resolvePlanType(metadata: any, periodStart: number, periodEnd: number, fallback: string = 'monthly'): string {
   if (metadata?.plan_type === 'annual' || metadata?.plan_type === 'monthly') return metadata.plan_type;
   const daysDiff = (periodEnd - periodStart) / 86400;
@@ -297,7 +320,10 @@ Deno.serve(async (req) => {
     await supabase.from('webhook_logs').insert({
       event_type: event.type,
       event_id: event.id,
-      booking_id: event.data.object?.metadata?.booking_id || null,
+      // El objeto del evento es la union de ~80 recursos de Stripe y solo
+      // algunos traen metadata; el acceso opcional ya era correcto en runtime.
+      booking_id: (event.data.object as { metadata?: Record<string, string> | null })
+        ?.metadata?.booking_id || null,
       payload: event
     });
 
@@ -679,8 +705,8 @@ Deno.serve(async (req) => {
                 ? 'generate-optional-service-cfdi'
                 : 'generate-post-booking-insurance-cfdi';
               const cfdiBody = extraType === 'optional_service'
-                ? { booking_optional_service_id: extraBosId, service_charge: netServiceChargeExtra, total_paid: session.amount_total / 100, payment_method: 'stripe' }
-                : { booking_id: extraBookingId, service_charge: netServiceChargeExtra, total_paid: session.amount_total / 100, payment_method: 'stripe' };
+                ? { booking_optional_service_id: extraBosId, service_charge: netServiceChargeExtra, total_paid: (session.amount_total ?? 0) / 100, payment_method: 'stripe' }
+                : { booking_id: extraBookingId, service_charge: netServiceChargeExtra, total_paid: (session.amount_total ?? 0) / 100, payment_method: 'stripe' };
 
               EdgeRuntime.waitUntil(
                 fetch(`${supabaseUrl}/functions/v1/${cfdiFunction}`, {
@@ -1604,11 +1630,11 @@ Deno.serve(async (req) => {
             booking_id: bookingId,
             stripe_payment_intent_id: paymentIntentId,
             payment_processor: 'stripe',
-            amount: session.amount_total / 100,
+            amount: (session.amount_total ?? 0) / 100,
             currency: session.currency,
             status: 'succeeded',
             payment_method_type: paymentMethod,
-            net_amount: session.amount_total / 100,
+            net_amount: (session.amount_total ?? 0) / 100,
             processor_fee: 0,
             charge_context: 'booking_deposit',
             charge_reference_id: bookingId,
@@ -1634,8 +1660,8 @@ Deno.serve(async (req) => {
             checkout_session_id: session.id,
             payment_intent_id: paymentIntentId,
             customer_id: session.customer,
-            amount_subtotal: session.amount_subtotal / 100,
-            amount_total: session.amount_total / 100,
+            amount_subtotal: (session.amount_subtotal ?? 0) / 100,
+            amount_total: (session.amount_total ?? 0) / 100,
             currency: session.currency,
             payment_status: paymentStatus === 'unpaid' ? 'unpaid' : 'succeeded',
             status: paymentStatus === 'unpaid' ? 'pending' : 'completed'
@@ -2165,7 +2191,7 @@ Deno.serve(async (req) => {
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object;
-        const subscriptionId = invoice.subscription;
+        const subscriptionId = resolveInvoiceSubscriptionId(invoice);
 
         if (!subscriptionId) {
           console.log(`invoice.payment_succeeded: sin suscripción, omitiendo`);
@@ -2413,7 +2439,7 @@ Deno.serve(async (req) => {
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
-        const subscriptionId = invoice.subscription;
+        const subscriptionId = resolveInvoiceSubscriptionId(invoice);
 
         if (!subscriptionId) {
           console.log('invoice.payment_failed: sin suscripcion, omitiendo');
@@ -2620,38 +2646,13 @@ Deno.serve(async (req) => {
         break;
       }
 
-      case 'oxxo_payment.expired': {
-        const oxxoPayment = event.data.object;
-        const paymentIntentId = oxxoPayment.payment_intent;
-
-        console.log(`OXXO payment expired for payment_intent: ${paymentIntentId}`);
-
-        if (paymentIntentId) {
-          await supabase
-            .from('stripe_orders')
-            .update({
-              payment_status: 'expired',
-              status: 'expired',
-            })
-            .eq('payment_intent_id', paymentIntentId);
-          console.log(`Updated stripe_orders for expired OXXO payment ${paymentIntentId}`);
-        }
-
-        const bookingId = oxxoPayment.metadata?.booking_id;
-        if (bookingId) {
-          await supabase
-            .from('bookings')
-            .update({
-              status: 'cancelled',
-              payment_status: 'failed',
-            })
-            .eq('id', bookingId)
-            .eq('payment_status', 'processing');
-          console.log(`Marked booking ${bookingId} as cancelled due to expired OXXO payment`);
-        }
-
-        break;
-      }
+      // Aqui vivia `case 'oxxo_payment.expired'`. Stripe NO emite ese evento en
+      // ninguna version de la API (no esta en la union de 259 tipos de evento),
+      // asi que el handler nunca corrio ni una vez. Lo que Stripe si manda
+      // cuando vence un voucher OXXO es `payment_intent.payment_failed`, que ya
+      // se atiende arriba y hace estrictamente mas: cancela la reserva, marca
+      // stripe_orders como fallido y ademas devuelve puntos y ToursRed Cash.
+      // Borrarlo no pierde comportamiento; mantenerlo solo escondia el hueco.
 
       // --- Disputas (contracargos) -------------------------------------
       // Los cinco eventos comparten la busqueda y el upsert; lo que cambia es
