@@ -1,6 +1,15 @@
-name: Lint (informative)
+name: Lint
 
-# Modo informativo a proposito: reporta y nunca bloquea.
+# Bloquea si el conteo SUBE respecto de la linea base. Hasta el 07-sep-2026 este
+# workflow era informativo a proposito y salia verde siempre, incluso ante un PR
+# que agregara 50 errores: la linea base existia pero no se exigia (F-4 de la
+# auditoria de frontend). Eso ya escondio un hallazgo real —una funcion de cobro
+# muerta que ESLint llevaba marcando desde siempre, invisible en un reporte de
+# 2,485 lineas—.
+#
+# NO se exige cero: bloquear con ~2,400 errores heredados haria imposible
+# mergear nada. Se tolera lo viejo y se corta lo nuevo, igual que tipos-edge.
+#
 # Hermano de typecheck.yml. Hasta el 31-ago-2026 ningun workflow ejecutaba
 # ESLint, asi que `npm run lint` era decorativo: 2,472 errores que nadie veia.
 #
@@ -55,10 +64,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint (never blocks)
+      - name: Run ESLint (el veredicto lo da el paso siguiente)
         run: |
-          # bash corre con -e: sin set +e, eslint saliendo != 0 aborta el step
-          # y el check saldria rojo, que es justo lo que no queremos.
+          # bash corre con -e: sin set +e, eslint saliendo != 0 aborta el step.
+          # Aqui NO se juzga: el codigo de salida de eslint solo dice "hubo
+          # problemas", no si son nuevos. Quien decide es summarize-lint --strict.
           set +e
           npx eslint . -f json -o eslint-report.json > eslint-stderr.log 2>&1
           CODE=$?
@@ -75,11 +85,11 @@ jobs:
           fi
           exit 0
 
-      - name: Summarize by rule
+      - name: Summarize by rule (y bloquear si subio)
         run: |
           if [ "${ESLINT_BROKEN:-0}" = "1" ]; then
             {
-              echo "## Lint (informativo, no bloquea)"
+              echo "## Lint"
               echo ""
               echo "> :rotating_light: ESLint no produjo reporte JSON."
               echo "> El conteo de este run no es comparable con la base."
@@ -88,9 +98,13 @@ jobs:
               tail -40 eslint-stderr.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            # Antes esto salia con 0: si eslint reventaba, el check pasaba verde.
+            # Mismo falso verde que se corrigio en check-edge-types.mjs.
+            # "No se pudo medir" no es "no hay errores nuevos".
+            echo "::error::ESLint no produjo reporte: no se puede concluir nada"
+            exit 1
           fi
-          node scripts/summarize-lint.mjs
+          node scripts/summarize-lint.mjs --strict
 
       - name: Upload lint report
         if: always()

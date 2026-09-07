@@ -60,19 +60,43 @@ if (res.error) {
 
 const salida = `${res.stdout || ''}${res.stderr || ''}`.replace(/\x1b\[[0-9;]*m/g, '');
 
-if (!salida.trim()) {
-  console.error('ERROR: deno check no produjo salida. No se puede concluir nada.');
+// Distinguir "sin errores" de "no corrio" es la razon de ser de este bloque:
+// lo segundo NO puede pasar por lo primero.
+//
+// La version anterior buscaba el texto 'error: Type checking failed' para
+// detectar un fallo. Eso deja fuera todos los modos de fallo que no son de
+// tipos. Detectado el 07-sep-2026 con jsr.io devolviendo 403: `deno check`
+// murio sin poder resolver un import, imprimio su propio error, y este script
+// reporto "Bloques de error ahora: 0 ... Sin errores nuevos" y salio con 0.
+// O sea, un corte de red convertia `tipos-edge` —que es un check REQUERIDO—
+// en un sello de goma.
+//
+// El codigo de salida es la unica evidencia POSITIVA de que el chequeo corrio:
+//   0     -> corrio y no encontro nada
+//   != 0  -> corrio y encontro errores, O fallo por otra causa
+// Para el segundo caso se exige ademas ver errores de tipos de verdad.
+const contadorFinal = salida.match(/Found (\d+) errors?\./);
+const hayErroresDeTipos = Boolean(contadorFinal) || /^TS\d+ \[ERROR\]/m.test(salida);
+const salioLimpio = res.status === 0;
+
+const abortar = (motivo) => {
+  console.error(`ERROR: ${motivo}`);
+  console.error('No se puede concluir nada, y esto NO es "sin errores nuevos".');
+  console.error('--- ultimas lineas de la salida de deno ---');
+  console.error(salida.trim().split('\n').slice(-15).join('\n') || '(sin salida)');
   process.exit(2);
+};
+
+if (res.status === null) {
+  abortar(`"${DENO}" murio por señal (${res.signal ?? 'desconocida'}).`);
 }
 
-// Un check limpio no imprime "Found N errors"; uno roto tampoco. Distinguir
-// "sin errores" de "no corrio" importa: lo segundo no puede pasar por lo primero.
-const huboError = /error: Type checking failed/.test(salida);
-const contadorFinal = salida.match(/Found (\d+) errors?\./);
-if (huboError && !contadorFinal && !/^TS\d+ \[ERROR\]/m.test(salida)) {
-  console.error('ERROR: deno check fallo sin reportar errores de tipos:');
-  console.error(salida.trim().split('\n').slice(-15).join('\n'));
-  process.exit(2);
+if (!salioLimpio && !hayErroresDeTipos) {
+  abortar(`deno check fallo (codigo ${res.status}) sin reportar ni un error de tipos.`);
+}
+
+if (salioLimpio && hayErroresDeTipos) {
+  abortar('deno check salio con codigo 0 pero reporto errores de tipos.');
 }
 
 // ---------- parsear a firmas ----------
@@ -117,9 +141,8 @@ for (let i = 0; i < lineas.length; i++) {
   firmas.set(firma, (firmas.get(firma) || 0) + 1);
 }
 
-if (total === 0 && huboError) {
-  console.error('ERROR: deno check fallo pero no se pudo parsear ningun error.');
-  process.exit(2);
+if (total === 0 && !salioLimpio) {
+  abortar('deno check fallo pero no se pudo parsear ningun error de su salida.');
 }
 
 const serializar = (mapa) =>
