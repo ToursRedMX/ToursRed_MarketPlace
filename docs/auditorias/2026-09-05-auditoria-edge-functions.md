@@ -642,14 +642,21 @@ Lo que cerraría la llave, en orden de rendimiento:
 1. **Un `_shared/auth.ts`** con `requireServiceRole()`, `requireUser()`,
    `requireAdmin()`, `requireOwnerOrAdmin()`, siguiendo el molde de `cfdiAuth.ts`.
    Que llamar al guard sea más fácil que escribirlo a mano.
-2. **Un `_shared/cors.ts`**, para que el header no se copie 171 veces.
+   → **Hecho en `98fee3f`.** Adoptado solo en los dos crons de M-4, a propósito: son el
+   caso más simple y sus guards se escribieron en `bed5563`, así que se sabe exactamente
+   qué deben hacer. **No** se tocaron los guards recién verificados de
+   `generate-booking-qr-token` ni `create-checkout-session` — sustituir un guard que hoy
+   funciona por uno nuevo sin volver a comprobar sus llamadores es justo como se rompen
+   los caminos de pago. El resto se adopta función por función.
+2. **Un `_shared/cors.ts`**, para que el header no se copie 171 veces. → pendiente.
 3. **Un check en CI** que falle si una función nueva no invoca ningún guard. El repo ya
    tiene el precedente exacto y funcionando: `scripts/check-edge-types.mjs` con línea
    base, que falla solo ante errores *nuevos*. La misma técnica sirve aquí: línea base de
-   las ~81 funciones abiertas de hoy, y que no crezca.
+   las ~81 funciones abiertas de hoy, y que no crezca. → **pendiente.**
 
 Ese tercer punto es el que convierte esta auditoría en algo que no hay que repetir en seis
-meses.
+meses, **y sigue sin hacerse.** Los puntos 1 y 2 bajan el costo de ponerse el guard; solo
+el 3 impide que la función 172 nazca sin él.
 
 ---
 
@@ -750,7 +757,7 @@ OXXO es `payment_intent.payment_failed`, que ya se atiende en el mismo archivo y
 estrictamente más: cancela la reserva, marca `stripe_orders` y además devuelve puntos y
 ToursRed Cash. Borrarlo no perdió comportamiento.
 
-## R-4. `check-edge-types.mjs` da falso verde si `deno` no puede bajar dependencias
+## R-4. `check-edge-types.mjs` da falso verde si `deno` no puede bajar dependencias — CORREGIDO en `e8a2868`
 
 **Archivo:** `scripts/check-edge-types.mjs`
 
@@ -767,13 +774,16 @@ cualquier otro modo de fallo (red, 403 de un registry, registry caído) pasa por
 
 **Por qué importa:** es el mismo tipo de problema que el guard fue creado para prevenir —
 un check que parece proteger y no protege. Un corte de red en CI convertiría `tipos-edge`,
-que es un check **requerido**, en un sello de goma. El arreglo es acotado: exigir que
-`deno check` haya terminado de forma reconocible (código de salida esperado *y* salida
-parseable) y salir con 2 en cualquier otro caso.
+que es un check **requerido**, en un sello de goma.
 
-Va al mismo saco que F-4 de la auditoría de frontend.
+**Corregido en `e8a2868`.** La evidencia de que el chequeo corrió es ahora el código de
+salida de `deno`, no un string en su salida: `0` = corrió limpio; `!= 0` exige además ver
+errores de tipos reales, y si no los hay se sale con 2. También se cortan la muerte por
+señal y el caso inconsistente (código 0 con errores reportados). Verificado con un `deno`
+falso en los cuatro caminos: limpio → 0, error nuevo → 1, fallo de infra → 2,
+inconsistente → 2.
 
-## R-5. `lint` no es un check requerido
+## R-5. `lint` no es un check requerido — PARCIALMENTE CORREGIDO en `e8a2868`
 
 `eslint` corre sobre `**/*.{ts,tsx}` —incluye `supabase/functions/`— pero **no está en la
 lista de checks requeridos** del branch protection (que son `typecheck`,
@@ -781,4 +791,21 @@ lista de checks requeridos** del branch protection (que son `typecheck`,
 
 `stripe-webhook/index.ts` acumula 30 errores de lint y `create-checkout-session/index.ts`
 otros 15, sin que nada los frene. Es exactamente el hueco que describe F-4.
+
+**Corregido a medias en `e8a2868`, y la mitad que falta no es de código.** `lint` ahora
+**puede** salir rojo: `summarize-lint.mjs --strict` sale con 1 si los errores o warnings
+suben sobre la línea base, y con 2 si el reporte no es utilizable. De paso se cerró el
+mismo falso verde de R-4 en el camino de "ESLint reventó", que salía con `exit 0`.
+
+No se exige cero: bloquear con ~2,400 errores heredados haría imposible mergear nada. Se
+tolera lo viejo y se corta lo nuevo, igual que `tipos-edge`.
+
+**Lo que falta lo tiene que hacer Axel en GitHub, no yo en el repo:** agregar `lint` a la
+lista de checks requeridos en la protección de la rama. Mientras no esté ahí, sale rojo
+pero no impide mergear.
+
+Medición al hacerlo: 2,476 problemas (2,388 errores, 88 warnings) contra una base de
+2,512 (2,423/89) — **36 por debajo**, así que el gate no puso nada en rojo. Bajar la base
+al número real queda para un commit aparte, con el número que mida CI y no el de un
+entorno local.
 
