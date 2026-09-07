@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { requireServiceRole } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,15 +29,12 @@ Deno.serve(async (req: Request) => {
 
     // La invoca el cron con el service role. Sin este guard cualquiera podia
     // dispararla en bucle y bombardear con correos de cobranza a clientes
-    // reales. Mismo patron que process-payment-plan-tour-deadline.
-    const bearer = (req.headers.get("Authorization") ?? "").replace("Bearer ", "").trim();
-    if (!bearer || bearer !== serviceKey) {
-      console.warn("process-incremental-payment-deadlines: llamada sin service role, rechazada");
-      return new Response(
-        JSON.stringify({ error: "No autorizado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // reales.
+    const auth = requireServiceRole(req, {
+      recurso: "process-incremental-payment-deadlines",
+      cors: corsHeaders,
+    });
+    if (!auth.ok) return auth.response;
 
     const supabase = createClient(
       supabaseUrl,
