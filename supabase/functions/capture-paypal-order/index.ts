@@ -467,7 +467,16 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { orderId, bookingId, context, giftCardId, slotId } = await req.json();
+    // Del cuerpo solo se usan orderId y context. El front tambien manda
+    // bookingId, giftCardId y slotId, pero NO se leen a proposito: el
+    // identificador del recurso se toma de la respuesta de PayPal
+    // (purchase_units[0].reference_id / custom_id), que es la fuente
+    // autoritativa. Aceptarlos del cliente permitiria dirigir un pago a una
+    // reserva distinta de aquella para la que se creo la orden.
+    //
+    // Se dejaban desestructurados sin usar y eso confunde: parece que el
+    // bookingId del cliente decide algo. No decide nada.
+    const { orderId, context } = await req.json();
 
     if (!orderId) {
       return new Response(JSON.stringify({ error: "order_id requerido" }), {

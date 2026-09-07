@@ -13,6 +13,32 @@ migraciones SQL, funciones de Netlify, y la superficie de `_shared/contractDocDe
 
 ---
 
+## Estado de la remediación (actualizado 07-sep-2026)
+
+Este documento nació como solo-lectura. Después se atacaron los hallazgos, y **dos cosas
+cambiaron respecto de lo que se escribió el 05-sep**: A-3 resultó falso positivo, y C-1
+resultó bastante más grande de lo documentado. Ambas correcciones están abajo, en su
+sección, con la evidencia.
+
+| Hallazgo | Estado | Dónde |
+|---|---|---|
+| C-1 | **Corregido** (y reescrito: eran 4 palancas, no 1) | `a90237d` |
+| C-2 | **Corregido** — el webhook falla cerrado | `bed5563` |
+| A-1 | Pendiente | — |
+| A-2 | **Corregido** — exige dueño/agencia/staff/admin o service role | `bed5563` |
+| A-3 | **FALSO POSITIVO** — retirado del conteo | — |
+| M-1 | Pendiente | — |
+| M-2, M-3, M-5, M-6 | Pendiente (decisiones de arquitectura) | — |
+| M-4 | **Corregido** — guard de service role en los dos crons | `bed5563` |
+
+**Conteo corregido: 10 hallazgos reales en este documento** (2 críticos, 2 altos,
+6 medios), no 11. Sumando las otras dos auditorías, **21 en total, no 22.**
+
+Durante la remediación aparecieron hallazgos nuevos que no estaban en esta auditoría;
+se documentan al final, en *Hallazgos surgidos durante la remediación*.
+
+---
+
 ## Nota metodológica importante: qué significa `verify_jwt = true`
 
 Esto es la clave para leer todo lo que sigue, y ya está bien entendido en el repo
@@ -50,7 +76,9 @@ verifica contra la API de PayPal. **No hay ni un secreto hardcodeado** en las 17
 funciones. La idempotencia está pensada en los webhooks de OpenPay y en las llamadas
 a wallet/puntos.
 
-Dicho eso, encontré **2 hallazgos críticos, 3 altos y 6 medios**. El patrón de fondo
+Dicho eso, encontré **2 hallazgos críticos, 3 altos y 6 medios**. (Corrección posterior:
+A-3 resultó falso positivo, así que el conteo real de este documento es **2 críticos,
+2 altos y 6 medios = 10**.) El patrón de fondo
 que los conecta: **la autorización se resolvió función por función, y quedó desigual.**
 Los caminos que alguien revisó a conciencia están sólidos; los que nadie revisó están
 completamente abiertos. No hay un guard compartido que se aplique por defecto, así que
@@ -59,6 +87,12 @@ la seguridad de cada endpoint depende de si a alguien se le ocurrió ponérselo.
 El hallazgo #1 es el que atendería antes del lanzamiento del 21 de septiembre: **el
 camino de Stripe —el procesador principal— acepta el monto a cobrar desde el cliente
 y lo confirma sin validarlo contra el precio guardado.**
+
+> **Corrección del 07-sep-2026, al arreglarlo.** Esa frase se quedó corta. `amount` no
+> era la única palanca ni la más directa: `create-checkout-session` tampoco verificaba
+> la identidad de quien llamaba (leía la cabecera `Authorization` solo para comprobar
+> que existiera), y aceptaba `toursRedCashUsed` y `pointsUsed` del cuerpo como descuento
+> directo sobre el cobro, sin contrastarlos contra el saldo real. Ver C-1.
 
 ---
 
@@ -144,6 +178,61 @@ cobró.
 **Cómo verificarlo sin arreglarlo:** en staging, `POST` a
 `/functions/v1/create-checkout-session` con el `bookingId` de una reserva real y
 `amount: 1`, completar el pago con tarjeta de prueba y ver el estado final de la reserva.
+
+---
+
+### Corrección del 07-sep-2026: eran cuatro palancas, no una — CORREGIDO en `a90237d`
+
+Al abrir el archivo para arreglarlo, `amount` resultó ser **la menos directa** de las
+vías para pagar de menos. Lo que este hallazgo debió decir desde el principio:
+
+| # | Problema | Estado antes |
+|---|---|---|
+| 1 | **Sin verificación de identidad** | `:87` leía la cabecera `Authorization` solo para comprobar que existiera. **Nunca llamaba `getUser()`.** Con `verify_jwt` puesto, la llave publicable ya es un JWT válido del proyecto (ver la nota metodológica al inicio), así que **cualquiera con un `bookingId` podía abrir un cobro sobre la reserva de otra persona** |
+| 2 | `toursRedCashUsed` del cliente | `buildDesgloseLineItems` lo resta directo de las líneas de Stripe, **sin contrastarlo contra el saldo real** |
+| 3 | `pointsUsed` del cliente | Igual, a razón de 100 puntos = 1 MXN, sin contrastar |
+| 4 | `amount` del cliente | El bloque rotulado "Safety" descrito arriba |
+
+**Lo que cierra el círculo, y que no vi en la primera pasada:** `update_wallet_balance`
+**sí** lanza `Insufficient balance` cuando el saldo no alcanza (verificado en
+`20260831031430_revert_null_check_and_lockdown_partial_cancel_points.sql:263`). Pero el
+webhook captura esa excepción, la manda a `console.error` (`stripe-webhook:1260`) y
+**confirma la reserva de todos modos.**
+
+O sea: con `toursRedCashUsed: 30000` sobre un tour de $30,000, Stripe cobraba ~nada, el
+descuento de billetera fallaba en silencio, y la reserva quedaba `confirmed`. **Sin tocar
+`amount`.** La palanca #2 era más simple de explotar que la que documenté como principal.
+
+Y el equivalente en puntos ni siquiera falla: `deduct_points_for_booking` hace
+`p_points_to_deduct := LEAST(p_points_to_deduct, v_current_balance)`, o sea **recorta en
+silencio** — el descuento ya se dio en Stripe y no hay error que ver.
+
+**Qué se hizo (`a90237d`):**
+
+1. `getUser()` real con la llave anon + el header entrante; se exige dueño de la reserva
+   o admin, o 403. Verificado antes de aplicarlo que los tres llamadores del front
+   (`BookingFlowStep4`, `TravelersInfoPage`, `TravelerBookings`) mandan el `access_token`
+   del usuario y que **no hay ningún llamador interno con service role**.
+2. Saldo y puntos se leen de `toursred_cash_wallets` / `toursred_points_wallets`; si se
+   pide más de lo disponible, 400. La metadata que viaja a Stripe lleva los valores
+   validados, no los crudos.
+3. **Se eliminó el ajuste por drift.** Las líneas ya se derivaban de la base; `amount`
+   solo servía para deformarlas. Ahora se cobra siempre el total del servidor.
+4. `amount` queda como *tripwire*: se compara contra el desglose y se rechaza si difiere
+   más de `TOLERANCIA_MONTO_MXN` ($1). Entre 1 centavo y $1 se cobra el del servidor y se
+   deja un `console.warn`.
+
+**Matiz importante para quien lea esto después:** el hueco lo cierran los puntos 1–3.
+El punto 4 es una alarma para detectar bugs propios del front, **no** la defensa. Si
+algún día estorba, se puede subir la tolerancia o quitarlo sin reabrir nada.
+
+**Lo que sigue pendiente de C-1:** la segunda mitad —que el webhook confirme sin comparar
+lo cobrado contra `deposit_amount`, como sí hace `capture-paypal-order:116-131`—. Con lo
+anterior arreglado ya no es explotable desde fuera (habría que fabricar la sesión de
+Stripe, lo que exige la secret key), así que esa capa protege contra bugs propios, no
+contra un atacante. Tocar la confirmación de reservas (OXXO, transferencia, pagos
+parciales, descuentos) tiene riesgo real de romper confirmaciones legítimas y merece su
+propio pase revisado.
 
 **Nota de alcance:** no revisé si alguna política RLS o algún trigger en `bookings`
 frena esto aguas abajo. Lo dudo por cómo está escrito el webhook (usa service role, que
@@ -303,7 +392,26 @@ porque la defensa depende de que *otros* dos endpoints sigan validando bien para
 
 ---
 
-## A-3. `capture-paypal-order` no ata la orden de PayPal a la reserva que se le pasa
+## A-3. ~~`capture-paypal-order` no ata la orden de PayPal a la reserva que se le pasa~~ — FALSO POSITIVO
+
+> **Retirado el 07-sep-2026.** Este hallazgo es incorrecto y no cuenta en el total.
+> Al ir a arreglarlo, las dos llamadas a `confirmBooking` en el contexto de reserva ya
+> pasaban el `referenceId` que viene de la respuesta de PayPal
+> (`purchase_units[0].reference_id`), **no el `bookingId` del cliente**. El `bookingId`
+> del cuerpo nunca se usaba para confirmar: se destructuraba y se ignoraba, que es
+> exactamente lo que lo hacía parecer un agujero al leerlo por encima.
+>
+> El error de método fue mío: vi el destructuring de la línea 31 y las llamadas a
+> `confirmBooking`, y **asumí** que una alimentaba a la otra sin seguir la variable hasta
+> su uso. Es el mismo sesgo que ya anoté abajo con `process-payment-refund`.
+>
+> Lo único que se hizo en `bed5563` fue limpieza: dejar de destructurar los campos que no
+> se leen (`bookingId`, `giftCardId`, `slotId`) y anotar por qué, para que el próximo que
+> lea el archivo no repita mi conclusión.
+>
+> **El texto original se conserva abajo sin editar, como registro de la equivocación.**
+> Léelo sabiendo que su conclusión es falsa.
+
 
 **Archivo:** `supabase/functions/capture-paypal-order/index.ts:31`
 
@@ -494,15 +602,15 @@ El orden es por riesgo sobre el lanzamiento del 21 de septiembre, no por dificul
 
 | # | Hallazgo | Severidad | Esfuerzo estimado |
 |---|---|---|---|
-| 1 | **C-2** — verificar que `STRIPE_WEBHOOK_SECRET` esté en los 3 ambientes | Crítico | **minutos, sin tocar código** |
-| 2 | **C-1** — validar `amount` contra el precio guardado (y/o en el webhook) | Crítico | medio |
-| 3 | **C-2** — hacer que el webhook de Stripe falle cerrado, como el de PayPal | Crítico | trivial (copiar el patrón) |
-| 4 | **A-1** — inventariar las ~44 `send-*` y cerrarlas con el guard de service role | Alto | medio (el inventario es el trabajo) |
-| 5 | **A-3** — comparar `reference_id` contra `bookingId` en el capture de PayPal | Alto | trivial |
-| 6 | **A-2** — exigir dueño/agencia/admin en `generate-booking-qr-token` | Alto | bajo |
-| 7 | **M-1** — Turnstile obligatorio y rate limit por IP en el formulario de contacto | Medio | bajo |
-| 8 | **M-4** — guard de service role en los dos crons abiertos | Medio | trivial |
-| 9 | **M-2, M-3, M-5, M-6** — decisiones de arquitectura, no parches sueltos | Medio | a discutir |
+| 1 | **C-2** — verificar que `STRIPE_WEBHOOK_SECRET` esté en los 3 ambientes | Crítico | ✅ resuelto: hoy hay un solo ambiente y la variable existe |
+| 2 | **C-1** — que el servidor fije el precio | Crítico | ✅ `a90237d` |
+| 3 | **C-2** — hacer que el webhook de Stripe falle cerrado, como el de PayPal | Crítico | ✅ `bed5563` |
+| 4 | **A-1** — inventariar las ~44 `send-*` y cerrarlas con el guard de service role | Alto | **pendiente** — medio (el inventario es el trabajo) |
+| 5 | ~~**A-3**~~ | ~~Alto~~ | ❌ falso positivo, retirado |
+| 6 | **A-2** — exigir dueño/agencia/admin en `generate-booking-qr-token` | Alto | ✅ `bed5563` |
+| 7 | **M-1** — Turnstile obligatorio y rate limit por IP en el formulario de contacto | Medio | **pendiente** — bajo |
+| 8 | **M-4** — guard de service role en los dos crons abiertos | Medio | ✅ `bed5563` |
+| 9 | **M-2, M-3, M-5, M-6** — decisiones de arquitectura, no parches sueltos | Medio | **pendiente** — a discutir |
 
 **El punto 1 va primero por relación costo/beneficio:** es una consulta al dashboard, no
 un cambio de código, y descarta (o confirma) el peor escenario de todos.
@@ -524,7 +632,7 @@ La evidencia de que es un problema estructural y no una serie de descuidos:
 - El mismo par de decisiones opuestas aparece dos veces: PayPal falla cerrado / Stripe
   falla abierto; `stepUpCheck` falla cerrado / `aal2Check` falla abierto.
 
-Parchar los 11 hallazgos uno por uno deja el mecanismo intacto: la función número 172 va
+Parchar los 10 hallazgos uno por uno deja el mecanismo intacto: la función número 172 va
 a nacer con el mismo problema. Es el mismo tipo de conclusión a la que ya se llegó con el
 desfase de migraciones —"distingue detectar de prevenir"—: aquí también hay que decidir
 si se corrigen los síntomas o se cierra la llave.
@@ -534,20 +642,27 @@ Lo que cerraría la llave, en orden de rendimiento:
 1. **Un `_shared/auth.ts`** con `requireServiceRole()`, `requireUser()`,
    `requireAdmin()`, `requireOwnerOrAdmin()`, siguiendo el molde de `cfdiAuth.ts`.
    Que llamar al guard sea más fácil que escribirlo a mano.
-2. **Un `_shared/cors.ts`**, para que el header no se copie 171 veces.
+   → **Hecho en `98fee3f`.** Adoptado solo en los dos crons de M-4, a propósito: son el
+   caso más simple y sus guards se escribieron en `bed5563`, así que se sabe exactamente
+   qué deben hacer. **No** se tocaron los guards recién verificados de
+   `generate-booking-qr-token` ni `create-checkout-session` — sustituir un guard que hoy
+   funciona por uno nuevo sin volver a comprobar sus llamadores es justo como se rompen
+   los caminos de pago. El resto se adopta función por función.
+2. **Un `_shared/cors.ts`**, para que el header no se copie 171 veces. → pendiente.
 3. **Un check en CI** que falle si una función nueva no invoca ningún guard. El repo ya
    tiene el precedente exacto y funcionando: `scripts/check-edge-types.mjs` con línea
    base, que falla solo ante errores *nuevos*. La misma técnica sirve aquí: línea base de
-   las ~81 funciones abiertas de hoy, y que no crezca.
+   las ~81 funciones abiertas de hoy, y que no crezca. → **pendiente.**
 
 Ese tercer punto es el que convierte esta auditoría en algo que no hay que repetir en seis
-meses.
+meses, **y sigue sin hacerse.** Los puntos 1 y 2 bajan el costo de ponerse el guard; solo
+el 3 impide que la función 172 nazca sin él.
 
 ---
 
 ## Verificación y límites de esta auditoría
 
-**Verificado leyendo el código:** los 11 hallazgos citan archivo y línea, y todas las
+**Verificado leyendo el código:** los hallazgos citan archivo y línea, y todas las
 citas se leyeron directamente del árbol en la rama auditada.
 
 **Lo que NO pude verificar desde el repo, y por lo tanto no afirmo:**
@@ -561,10 +676,136 @@ citas se leyeron directamente del árbol en la rama auditada.
 - **Nada se probó en ejecución.** Toda la auditoría es lectura estática. C-1 y C-2 tienen
   arriba un procedimiento concreto para confirmarlos en staging.
 
-**Corrección de una hipótesis propia:** durante el barrido marqué inicialmente
+**Correcciones de hipótesis propias.** Van dos, y las dos son del mismo tipo.
+
+*La segunda, del 07-sep-2026:* **A-3 era falso positivo** (ver su sección). Lo reporté
+como "alto" por leer el destructuring del cuerpo y las llamadas a `confirmBooking` sin
+seguir la variable hasta su uso real. Refuerza justo lo que digo abajo: una lectura
+parcial produce hallazgos falsos con la misma facilidad con la que un grep produce falsos
+negativos. **Un hallazgo no está confirmado hasta que se sigue el dato de punta a punta.**
+
+*La primera, del barrido original:* durante el barrido marqué inicialmente
 `process-payment-refund`, `admin-send-broadcast-message` y `process-agency-payout` como
 "sin autorización". Al leerlas resultó falso: `process-payment-refund` exige service role
 en `:27-36`. Mi grep buscaba `role === 'admin'` y no reconocía la comparación contra el
 bearer. Lo anoto porque el mismo sesgo puede afectar a otras funciones que di por buenas:
 **una ausencia en un barrido automático no es evidencia de un agujero hasta que se lee el
 archivo.**
+
+---
+
+# Hallazgos surgidos durante la remediación (07-sep-2026)
+
+Cosas que **no** estaban en la auditoría del 05-sep y aparecieron al arreglar lo anterior.
+Se documentan aquí porque el mecanismo por el que salieron a la luz es más instructivo que
+los bugs en sí.
+
+## R-1. Las membresías no se activaban ni se renovaban — CORREGIDO en `331a438`
+
+**Archivo:** `supabase/functions/stripe-webhook/index.ts`, handlers de
+`invoice.payment_succeeded` e `invoice.payment_failed`.
+
+```ts
+const subscriptionId = invoice.subscription;   // undefined, siempre
+if (!subscriptionId) { console.log('sin suscripción, omitiendo'); break; }
+```
+
+Stripe **eliminó `Invoice.subscription` en la versión Basil (31-mar-2025)** y lo movió a
+`parent.subscription_details.subscription`. Esta función declara
+`apiVersion: "2026-06-24.dahlia"`, muchas versiones después, y Axel confirmó que **la
+versión de API en Stripe es esa misma**. Así que el campo llegaba `undefined` y los dos
+handlers se salían por su guard en cada evento.
+
+**Efecto:** altas de membresía sin activar, renovaciones sin registrar, CFDI de membresía
+sin timbrar, y la cobranza por pago fallido (dunning) que nunca corría.
+
+**Lo que lo hacía invisible:** no dejaba error. Solo un `console.log` que dice
+"omitiendo", que parece comportamiento normal.
+
+**Arreglo:** `resolveInvoiceSubscriptionId()` lee la ubicación nueva y cae a la legacy —
+las dos, porque el cuerpo del webhook se serializa con la versión configurada en el
+endpoint, que no tiene por qué coincidir con la del SDK.
+
+**Pendiente operativo, no de código:** revisar en Stripe qué invoices de suscripción se
+cobraron mientras esto estuvo roto, y reconciliar contra las membresías de la base.
+
+## R-2. Un `any` estaba apagando el type-check de todo el webhook de Stripe
+
+Esta es la parte que vale la pena recordar. El código de C-2 era:
+
+```ts
+let event;                          // sin anotación de tipo
+if (!endpointSecret) {
+  event = JSON.parse(body);         // ← `any`
+} else { ... constructEventAsync ... }
+```
+
+Esa asignación era **lo único** que le daba tipo `any` a `event`, y con `any` TypeScript
+**dejaba de revisar las ~40 ramas del `switch`**. Al cerrar el hueco de seguridad la
+línea desapareció, `event` pasó a ser `Stripe.Event` de verdad, y `deno check` destapó
+6 errores latentes —entre ellos R-1 y R-3.
+
+**El agujero de seguridad estaba, además, tapándole los ojos al compilador sobre el
+archivo de pagos más crítico del repo.** Vale como argumento a favor de erradicar `any`
+en los caminos de dinero, con más fuerza que cualquier regla de lint.
+
+## R-3. `case 'oxxo_payment.expired'` era código muerto — RETIRADO en `331a438`
+
+Stripe **no emite ese evento en ninguna versión de la API** (no está en la unión de 259
+tipos de evento). El handler nunca corrió. Lo que Stripe sí manda cuando vence un voucher
+OXXO es `payment_intent.payment_failed`, que ya se atiende en el mismo archivo y hace
+estrictamente más: cancela la reserva, marca `stripe_orders` y además devuelve puntos y
+ToursRed Cash. Borrarlo no perdió comportamiento.
+
+## R-4. `check-edge-types.mjs` da falso verde si `deno` no puede bajar dependencias — CORREGIDO en `e8a2868`
+
+**Archivo:** `scripts/check-edge-types.mjs`
+
+Detectado al intentar correrlo en un entorno donde `jsr.io` estaba bloqueado. `deno check`
+falló por no poder resolver el import, imprimió su error, y el script reportó:
+
+```
+Bloques de error ahora : 0   (deno reporta 0)
+Sin errores nuevos en supabase/functions/.
+```
+
+…y salió con código **0**. El guard solo reconoce el string `error: Type checking failed`;
+cualquier otro modo de fallo (red, 403 de un registry, registry caído) pasa por "limpio".
+
+**Por qué importa:** es el mismo tipo de problema que el guard fue creado para prevenir —
+un check que parece proteger y no protege. Un corte de red en CI convertiría `tipos-edge`,
+que es un check **requerido**, en un sello de goma.
+
+**Corregido en `e8a2868`.** La evidencia de que el chequeo corrió es ahora el código de
+salida de `deno`, no un string en su salida: `0` = corrió limpio; `!= 0` exige además ver
+errores de tipos reales, y si no los hay se sale con 2. También se cortan la muerte por
+señal y el caso inconsistente (código 0 con errores reportados). Verificado con un `deno`
+falso en los cuatro caminos: limpio → 0, error nuevo → 1, fallo de infra → 2,
+inconsistente → 2.
+
+## R-5. `lint` no es un check requerido — PARCIALMENTE CORREGIDO en `e8a2868`
+
+`eslint` corre sobre `**/*.{ts,tsx}` —incluye `supabase/functions/`— pero **no está en la
+lista de checks requeridos** del branch protection (que son `typecheck`,
+`netlify/toursredmx/deploy-preview`, `guardia-desfase`, `guardia-fiscal` y `tipos-edge`).
+
+`stripe-webhook/index.ts` acumula 30 errores de lint y `create-checkout-session/index.ts`
+otros 15, sin que nada los frene. Es exactamente el hueco que describe F-4.
+
+**Corregido a medias en `e8a2868`, y la mitad que falta no es de código.** `lint` ahora
+**puede** salir rojo: `summarize-lint.mjs --strict` sale con 1 si los errores o warnings
+suben sobre la línea base, y con 2 si el reporte no es utilizable. De paso se cerró el
+mismo falso verde de R-4 en el camino de "ESLint reventó", que salía con `exit 0`.
+
+No se exige cero: bloquear con ~2,400 errores heredados haría imposible mergear nada. Se
+tolera lo viejo y se corta lo nuevo, igual que `tipos-edge`.
+
+**Lo que falta lo tiene que hacer Axel en GitHub, no yo en el repo:** agregar `lint` a la
+lista de checks requeridos en la protección de la rama. Mientras no esté ahí, sale rojo
+pero no impide mergear.
+
+Medición al hacerlo: 2,476 problemas (2,388 errores, 88 warnings) contra una base de
+2,512 (2,423/89) — **36 por debajo**, así que el gate no puso nada en rojo. Bajar la base
+al número real queda para un commit aparte, con el número que mida CI y no el de un
+entorno local.
+

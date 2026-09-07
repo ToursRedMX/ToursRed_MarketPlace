@@ -13,31 +13,46 @@
  * sueltas del mensaje ("renders", "declared", "render"). El JSON trae ruleId
  * en todos los mensajes.
  *
- * Uso:  node scripts/summarize-lint.mjs [ruta-al-json]
+ * Uso:  node scripts/summarize-lint.mjs [ruta-al-json] [--strict]
  * Fuera de Actions (sin GITHUB_STEP_SUMMARY) imprime la tabla por stdout.
+ *
+ * Con --strict el resumen ademas PUERTEA (F-4 de la auditoria de frontend):
+ *   0  el conteo no subio respecto de la linea base
+ *   1  subieron errores o warnings sobre la base
+ *   2  el reporte no es utilizable (eslint no linteo nada, JSON ilegible)
+ *
+ * Por que hacia falta: hasta el 07-sep-2026 este workflow salia verde SIEMPRE
+ * —el step terminaba en `exit 0` a proposito— asi que un PR que agregara 50
+ * errores pasaba igual. La linea base existia pero no se exigia. Eso ya
+ * escondio un hallazgo real (F-2: una funcion de cobro muerta que ESLint
+ * llevaba marcando desde siempre, invisible en un reporte de 2,485 lineas).
+ *
+ * El molde es el de scripts/check-edge-types.mjs: se toleran los errores
+ * viejos, uno NUEVO bloquea. No se exige cero, que seria pedir semanas de
+ * limpieza antes de tener cualquier red.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Base por regla del 31-ago-2026 sobre main, con eslint 10 /
-// typescript-eslint 8.68.0. Mover junto con las BASELINE_* de lint.yml:
-// si una baja, se actualizan las dos.
+// Base por regla, medida por CI el 07-sep-2026 sobre 98fee3f (job
+// 101883996483), con eslint 10 / typescript-eslint 8.68.0. Mover junto con las
+// BASELINE_* de lint.yml: si una baja, se actualizan las dos.
 const BASE = {
-  '@typescript-eslint/no-explicit-any': 1668,
-  '@typescript-eslint/no-unused-vars': 322,
+  '@typescript-eslint/no-explicit-any': 1648,
+  '@typescript-eslint/no-unused-vars': 310,
   'no-useless-escape': 171,
-  'react-hooks/set-state-in-effect': 118,
+  'react-hooks/set-state-in-effect': 117,
   'react-hooks/immutability': 86,
-  'react-hooks/exhaustive-deps': 85,
+  'react-hooks/exhaustive-deps': 84,
   'react-hooks/refs': 21,
   'no-useless-assignment': 16,
-  'no-empty': 12,
+  'no-empty': 10,
   'react-hooks/preserve-manual-memoization': 4,
   'react-refresh/only-export-components': 4,
-  'react-hooks/purity': 1,
   '@typescript-eslint/no-unused-expressions': 2,
   'prefer-const': 2,
+  'react-hooks/purity': 1,
   // react-hooks/rules-of-hooks y react-hooks/static-components NO van aqui a
   // proposito: los dos quedaron en 0. Fuera de BASE, si reaparecen se marcan
   // con el aviso de "reglas fuera de la base" ademas del delta, que es la
@@ -47,12 +62,14 @@ const BASE = {
 // Corriendo local sin las env del workflow, se cae a la misma base para que
 // los deltas sigan teniendo sentido.
 const num = (name, fallback) => Number(process.env[name] ?? fallback);
-const BASELINE_ERRORS = num('BASELINE_ERRORS', 2423);
-const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 89);
-const BASELINE_TOTAL = num('BASELINE_TOTAL', 2512);
-const BASELINE_FILES = num('BASELINE_FILES', 324);
+const BASELINE_ERRORS = num('BASELINE_ERRORS', 2388);
+const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 88);
+const BASELINE_TOTAL = num('BASELINE_TOTAL', 2476);
+const BASELINE_FILES = num('BASELINE_FILES', 325);
 
-const reportPath = process.argv[2] ?? 'eslint-report.json';
+const argv = process.argv.slice(2);
+const estricto = argv.includes('--strict');
+const reportPath = argv.find((a) => !a.startsWith('--')) ?? 'eslint-report.json';
 const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
 
 // `-f json` emite una entrada por archivo lintado, incluidos los limpios. Cero
@@ -112,7 +129,7 @@ const restBase = BASELINE_TOTAL - BASE[ANY] - BASE[UNUSED] - hooksBase;
 const pct = (x) => (total ? ` (${Math.round((x / total) * 100)}%)` : '');
 
 const out = [];
-out.push('## Lint (informativo, no bloquea)');
+out.push(estricto ? '## Lint (bloquea si sube sobre la linea base)' : '## Lint (informativo, no bloquea)');
 out.push('');
 out.push('`npm run lint` — `eslint .`');
 out.push('');
@@ -121,7 +138,7 @@ if (lintedFiles === 0) {
   out.push('> **no es comparable con la base**: revisar `ignores` en `eslint.config.js`.');
   out.push('');
 }
-out.push('| | Ahora | Base 31-ago | Δ |');
+out.push('| | Ahora | Base 07-sep | Δ |');
 out.push('|---|---|---|---|');
 out.push(`| **Problemas** | **${total}** en ${files} archivos | ${BASELINE_TOTAL} en ${BASELINE_FILES} | ${delta(total, BASELINE_TOTAL)} |`);
 out.push(`| Errores | ${errors} | ${BASELINE_ERRORS} | ${delta(errors, BASELINE_ERRORS)} |`);
@@ -177,3 +194,37 @@ console.log(`${total} problems (${errors} errors, ${warnings} warnings) en ${fil
 console.log(
   `base: ${BASELINE_TOTAL} (${BASELINE_ERRORS} errors, ${BASELINE_WARNINGS} warnings) — delta ${delta(total, BASELINE_TOTAL)}`,
 );
+
+if (!estricto) process.exit(0);
+
+// Cero archivos linteados no es "el repo esta impecable": es que eslint no
+// linteo nada. Sin este corte, un `ignores` roto se leeria como una mejora de
+// -2512 y el check saldria verde. Mismo modo de fallo que el que se corrigio
+// en check-edge-types.mjs el 07-sep-2026.
+if (lintedFiles === 0) {
+  console.error('\nERROR: ESLint no linteo ningun archivo. El conteo no es comparable con la base.');
+  console.error('Revisar `ignores` en eslint.config.js o el glob del workflow.');
+  process.exit(2);
+}
+
+const subieronErrores = errors > BASELINE_ERRORS;
+const subieronWarnings = warnings > BASELINE_WARNINGS;
+
+if (subieronErrores || subieronWarnings) {
+  console.error('\n' + '='.repeat(60));
+  if (subieronErrores) {
+    console.error(`Errores de lint NUEVOS: ${errors} vs base ${BASELINE_ERRORS} (+${errors - BASELINE_ERRORS}).`);
+  }
+  if (subieronWarnings) {
+    console.error(`Warnings de lint NUEVOS: ${warnings} vs base ${BASELINE_WARNINGS} (+${warnings - BASELINE_WARNINGS}).`);
+  }
+  console.error('');
+  console.error('La linea base tolera lo heredado, no lo nuevo. Revisa la tabla "Por regla"');
+  console.error('de arriba: la fila con delta positivo dice que regla subio.');
+  console.error('Si la subida es legitima, se actualizan BASELINE_* en .github/workflows/lint.yml');
+  console.error('y BASE en este script, en el mismo PR y explicando por que.');
+  process.exit(1);
+}
+
+console.log('\nSin errores de lint nuevos respecto de la linea base.');
+process.exit(0);

@@ -27,9 +27,6 @@ verify_jwt = false
 [functions."fix-orphaned-google-identity"]
 verify_jwt = false
 
-[functions."generate-booking-qr-token"]
-verify_jwt = false
-
 [functions."get-booking-checkin-details"]
 verify_jwt = false
 

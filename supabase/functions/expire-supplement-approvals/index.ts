@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { requireServiceRole } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,9 +24,16 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // La invoca el cron con el service role. Sin este guard cualquiera podia
+    // ejecutar expire_supplement_approvals() a demanda.
+    const auth = requireServiceRole(req, { recurso: "expire-supplement-approvals", cors: corsHeaders });
+    if (!auth.ok) return auth.response;
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      supabaseServiceKey
     );
 
     const { data: expiredCount } = await supabase.rpc("expire_supplement_approvals");

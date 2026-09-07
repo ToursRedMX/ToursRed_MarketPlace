@@ -1379,51 +1379,6 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
     }
   };
 
-  const createStripeCheckout = async (bookingId: string, customerEmail: string, amount: number) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        throw new Error('No hay sesión activa');
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            bookingId,
-            customerEmail,
-            amount,
-            description: `Depósito para ${tour.name}`,
-            addMembership: addMembershipToBooking,
-            membershipPlan: selectedMembershipPlan,
-            toursRedCashUsed: toursRedCashApplied,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al crear la sesión de checkout');
-      }
-
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Error al crear la sesión de checkout');
-      }
-
-      return result;
-    } catch (error: any) {
-      console.error('Error creando sesión de checkout:', error);
-      return { success: false, error: error.message };
-    }
-  };
 
   // Determinar el label del selector
   const getSelectorLabel = () => {

@@ -319,7 +319,7 @@ línea base. **El problema nunca fue no saber cómo hacerlo. Fue que la versión
 propagó al caso gemelo.**
 
 Por eso, si tuviera que recomendar una sola cosa antes del 21 de septiembre, no sería
-arreglar ninguno de los 22 hallazgos: sería **extender el patrón de `tipos-edge` —línea
+arreglar ninguno de los 21 hallazgos: sería **extender el patrón de `tipos-edge` —línea
 base que no puede crecer, como check requerido— a lint, y aplicar el mismo criterio a los
 guards de las Edge Functions.** Eso convierte "lo arreglamos" en "no puede volver a
 entrar", que es la diferencia entre las tres auditorías siendo útiles una vez o siendo

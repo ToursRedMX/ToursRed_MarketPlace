@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { requireServiceRole } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,14 +24,23 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    );
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // La invoca el cron con el service role. Sin este guard cualquiera podia
+    // dispararla en bucle y bombardear con correos de cobranza a clientes
+    // reales.
+    const auth = requireServiceRole(req, {
+      recurso: "process-incremental-payment-deadlines",
+      cors: corsHeaders,
+    });
+    if (!auth.ok) return auth.response;
+
+    const supabase = createClient(
+      supabaseUrl,
+      serviceKey,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
 
     const { data: bookings, error } = await supabase
       .from("bookings")
