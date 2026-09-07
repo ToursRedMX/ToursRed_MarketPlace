@@ -6,7 +6,7 @@ import { DollarSign, TrendingUp, Calendar, Download, FileText, CheckCircle, Cloc
 import AgencyCfdiList from '../../components/AgencyCfdiList';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { format } from 'date-fns';
-import type { FinancialSummary, TourFinancialSummary, CommissionRecord } from '../../types';
+import type { FinancialSummary, TourFinancialSummary } from '../../types';
 import jsPDF from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -22,7 +22,6 @@ const AgencyFinancials: React.FC = () => {
     total_lifetime: 0,
   });
   const [tourSummaries, setTourSummaries] = useState<TourFinancialSummary[]>([]);
-  const [commissionRecords, setCommissionRecords] = useState<CommissionRecord[]>([]);
   const [processedPayments, setProcessedPayments] = useState<any[]>([]);
   const [penaltyRecords, setPenaltyRecords] = useState<any[]>([]);
   const [startDate, setStartDate] = useState('');
@@ -78,7 +77,9 @@ const AgencyFinancials: React.FC = () => {
 
       if (error) throw error;
 
-      setCommissionRecords(records || []);
+      // records SI se usa: alimenta los resumenes de abajo. Lo que sobraba era
+      // guardarlo ademas en estado, porque commissionRecords no se leia en
+      // ningun lado (el panel no muestra el desglose por comision).
 
       const { data: penaltiesData } = await supabase
         .from('cancellation_penalty_records')

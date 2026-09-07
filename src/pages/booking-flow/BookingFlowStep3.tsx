@@ -44,9 +44,6 @@ const BookingFlowStep3: React.FC = () => {
 
   const [hasMembership, setHasMembership] = useState(false);
   const [isLoadingMembership, setIsLoadingMembership] = useState(true);
-  const [walletBalance, setWalletBalance] = useState(0);
-  const [pointsBalance, setPointsBalance] = useState(0);
-  const [pointsWalletActive, setPointsWalletActive] = useState(false);
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
   const [noShowCount, setNoShowCount] = useState(0);
   const [isHighRisk, setIsHighRisk] = useState(false);
@@ -107,22 +104,9 @@ const BookingFlowStep3: React.FC = () => {
         );
         setHasMembership(isActive);
 
-        const { data: walletData } = await supabase
-          .from('toursred_cash_wallets')
-          .select('balance')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .maybeSingle();
-        setWalletBalance(walletData?.balance || 0);
-
-        const { data: pointsData } = await supabase
-          .from('toursred_points_wallets')
-          .select('balance, is_active')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        setPointsBalance(pointsData?.balance || 0);
-        const memStillActive = isActive;
-        setPointsWalletActive((pointsData?.is_active || false) || memStillActive);
+        // El saldo de ToursRed Cash y de puntos se consultaba aqui y no se
+        // usaba en ningun lado: este paso es asientos y extras. Quien los
+        // muestra y aplica es BookingFlowStep4, con su propio estado.
 
         const { data: userData } = await supabase
           .from('users')

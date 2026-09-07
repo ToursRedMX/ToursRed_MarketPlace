@@ -23,9 +23,23 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // La invoca el cron con el service role. Sin este guard cualquiera podia
+    // ejecutar expire_supplement_approvals() a demanda.
+    // Mismo patron que process-payment-plan-tour-deadline.
+    const bearer = (req.headers.get("Authorization") ?? "").replace("Bearer ", "").trim();
+    if (!bearer || bearer !== supabaseServiceKey) {
+      console.warn("expire-supplement-approvals: llamada sin service role, rechazada");
+      return new Response(
+        JSON.stringify({ error: "No autorizado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      supabaseServiceKey
     );
 
     const { data: expiredCount } = await supabase.rpc("expire_supplement_approvals");

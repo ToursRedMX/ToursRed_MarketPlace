@@ -23,14 +23,26 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    );
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // La invoca el cron con el service role. Sin este guard cualquiera podia
+    // dispararla en bucle y bombardear con correos de cobranza a clientes
+    // reales. Mismo patron que process-payment-plan-tour-deadline.
+    const bearer = (req.headers.get("Authorization") ?? "").replace("Bearer ", "").trim();
+    if (!bearer || bearer !== serviceKey) {
+      console.warn("process-incremental-payment-deadlines: llamada sin service role, rechazada");
+      return new Response(
+        JSON.stringify({ error: "No autorizado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabase = createClient(
+      supabaseUrl,
+      serviceKey,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
 
     const { data: bookings, error } = await supabase
       .from("bookings")

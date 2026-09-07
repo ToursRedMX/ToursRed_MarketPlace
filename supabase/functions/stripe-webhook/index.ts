@@ -238,8 +238,27 @@ Deno.serve(async (req) => {
     let event;
 
     if (!endpointSecret) {
-      console.warn("⚠️ No STRIPE_WEBHOOK_SECRET configured - skipping signature verification");
-      event = JSON.parse(body);
+      // FALLA CERRADO a proposito, mismo criterio que paypal-webhook ante un
+      // PAYPAL_WEBHOOK_ID ausente. Sin el secreto no hay forma de distinguir un
+      // evento real de Stripe de uno fabricado, y este webhook confirma
+      // reservas, timbra CFDIs y genera asientos contables. Antes se procesaba
+      // el cuerpo tal cual con un console.warn que nadie lee.
+      //
+      // Importa sobre todo al partir ambientes: uno nuevo nace SIN esta
+      // variable, y esa es justo la ventana en la que el endpoint quedaria
+      // aceptando eventos de cualquiera.
+      console.error("❌ STRIPE_WEBHOOK_SECRET no configurado: el evento NO se procesa");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Webhook no configurado",
+          hint: "Falta STRIPE_WEBHOOK_SECRET en este ambiente"
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
     } else if (!signature) {
       console.error("❌ No stripe-signature header found");
       return new Response(
