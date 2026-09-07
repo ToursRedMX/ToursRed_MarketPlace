@@ -42,10 +42,17 @@ env:
   #                      (-2 purity), #99 saca Th/SortIcon/SectionMessage
   #                      (-29 static-components). Medido sobre main en 4fa4c2d,
   #                      no proyectado.
-  BASELINE_ERRORS: 2423
-  BASELINE_WARNINGS: 89
-  BASELINE_TOTAL: 2512
-  BASELINE_FILES: 324
+  #   07-sep  2388/2476  #146: se retira codigo muerto (una funcion de cobro
+  #                      sin usar en BookingForm, consultas de wallet/puntos
+  #                      sin consumir en BookingFlowStep3, un estado sin leer
+  #                      en AgencyFinancials) y se borra el handler muerto de
+  #                      oxxo_payment.expired. Numero MEDIDO por CI en el job
+  #                      101883996483 sobre 98fee3f, no proyectado ni tomado
+  #                      de un entorno local.
+  BASELINE_ERRORS: 2388
+  BASELINE_WARNINGS: 88
+  BASELINE_TOTAL: 2476
+  BASELINE_FILES: 325
 
 jobs:
   lint:

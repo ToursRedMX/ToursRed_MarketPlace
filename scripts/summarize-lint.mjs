@@ -35,24 +35,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Base por regla del 31-ago-2026 sobre main, con eslint 10 /
-// typescript-eslint 8.68.0. Mover junto con las BASELINE_* de lint.yml:
-// si una baja, se actualizan las dos.
+// Base por regla, medida por CI el 07-sep-2026 sobre 98fee3f (job
+// 101883996483), con eslint 10 / typescript-eslint 8.68.0. Mover junto con las
+// BASELINE_* de lint.yml: si una baja, se actualizan las dos.
 const BASE = {
-  '@typescript-eslint/no-explicit-any': 1668,
-  '@typescript-eslint/no-unused-vars': 322,
+  '@typescript-eslint/no-explicit-any': 1648,
+  '@typescript-eslint/no-unused-vars': 310,
   'no-useless-escape': 171,
-  'react-hooks/set-state-in-effect': 118,
+  'react-hooks/set-state-in-effect': 117,
   'react-hooks/immutability': 86,
-  'react-hooks/exhaustive-deps': 85,
+  'react-hooks/exhaustive-deps': 84,
   'react-hooks/refs': 21,
   'no-useless-assignment': 16,
-  'no-empty': 12,
+  'no-empty': 10,
   'react-hooks/preserve-manual-memoization': 4,
   'react-refresh/only-export-components': 4,
-  'react-hooks/purity': 1,
   '@typescript-eslint/no-unused-expressions': 2,
   'prefer-const': 2,
+  'react-hooks/purity': 1,
   // react-hooks/rules-of-hooks y react-hooks/static-components NO van aqui a
   // proposito: los dos quedaron en 0. Fuera de BASE, si reaparecen se marcan
   // con el aviso de "reglas fuera de la base" ademas del delta, que es la
@@ -62,10 +62,10 @@ const BASE = {
 // Corriendo local sin las env del workflow, se cae a la misma base para que
 // los deltas sigan teniendo sentido.
 const num = (name, fallback) => Number(process.env[name] ?? fallback);
-const BASELINE_ERRORS = num('BASELINE_ERRORS', 2423);
-const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 89);
-const BASELINE_TOTAL = num('BASELINE_TOTAL', 2512);
-const BASELINE_FILES = num('BASELINE_FILES', 324);
+const BASELINE_ERRORS = num('BASELINE_ERRORS', 2388);
+const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 88);
+const BASELINE_TOTAL = num('BASELINE_TOTAL', 2476);
+const BASELINE_FILES = num('BASELINE_FILES', 325);
 
 const argv = process.argv.slice(2);
 const estricto = argv.includes('--strict');
@@ -138,7 +138,7 @@ if (lintedFiles === 0) {
   out.push('> **no es comparable con la base**: revisar `ignores` en `eslint.config.js`.');
   out.push('');
 }
-out.push('| | Ahora | Base 31-ago | Δ |');
+out.push('| | Ahora | Base 07-sep | Δ |');
 out.push('|---|---|---|---|');
 out.push(`| **Problemas** | **${total}** en ${files} archivos | ${BASELINE_TOTAL} en ${BASELINE_FILES} | ${delta(total, BASELINE_TOTAL)} |`);
 out.push(`| Errores | ${errors} | ${BASELINE_ERRORS} | ${delta(errors, BASELINE_ERRORS)} |`);
