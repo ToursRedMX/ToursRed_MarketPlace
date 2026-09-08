@@ -19,7 +19,7 @@ qué.
 
 | Hallazgo | Estado | Dónde | Cómo se comprobó |
 |---|---|---|---|
-| F-1 — la mitad de las consultas ignoran el error y renderizan vacío | Pendiente | — | Re-medido hoy con el mismo método: **247 de 498** sitios no piden `error` (era 248 de 499) |
+| F-1 — la mitad de las consultas ignoran el error y renderizan vacío | **Triage hecho, tier 1 corregido, contador puesto** — 262 → 247 sitios | 8 archivos de `src/` + `scripts/check-supabase-errors.mjs` + paso en `lint.yml` | Ver *Triage y primera tanda* al final de F-1 |
 | F-2 — 60 líneas de cobro con Stripe que nunca se ejecutan | **Corregido** | #146 | `grep -rn 'createStripeCheckout' src/` no devuelve nada |
 | F-3 — consultas que se ejecutan y cuyo resultado se descarta | **Corregido** | — | Los tres estados de `BookingFlowStep3` ya no existen; en `AgencyFinancials.tsx:79-81` hay un comentario que documenta por qué se quitó `commissionRecords` del estado |
 | F-4 — el check de `lint` no puede salir rojo | **Corregido** | #146 + branch protection | `lint` corre con `--strict` y falla si el conteo sube; el 08-sep se agregó como **check requerido** (junto con `smoke`) |
@@ -113,6 +113,96 @@ aquí está en 248 lugares.
 una muestra. Es perfectamente posible que una parte sean intencionales (widgets
 opcionales donde fallar en silencio es lo correcto). El trabajo de triage —cuáles
 importan— es el primer paso del arreglo, no algo que esta auditoría resuelva.
+
+### Triage y primera tanda — 08-sep-2026
+
+#### La medición, rehecha
+
+El hallazgo decía 247 de 498. Volví a medirlo con un patrón más amplio
+(`const {...} = await supabase`, sin exigir que la llamada siguiera con `.from`):
+
+| | |
+|---|---|
+| Consultas totales | **688** |
+| ...que desestructuran `error` | 426 |
+| **...que NO piden `error`** | **262** (38%) |
+
+El denominador cambia porque mi patrón es más amplio, pero el número absoluto de
+sitios problemáticos coincide bien con el original: 247 frente a 262.
+
+#### El triage
+
+| Zona | Sitios |
+|---|---|
+| admin | 59 |
+| viajero | 44 |
+| agencia | 37 |
+| componentes | 36 |
+| páginas públicas | 30 |
+| lib | 18 |
+| **flujo de reserva** | **10** |
+| contexto / auth / ejecutivo | 24 |
+| **mapa de asientos** | **3** |
+| utils | 1 |
+
+**Tier 1** = lo que bloquea la venta o toca dinero: flujo de reserva, mapa de
+asientos, y los cuatro archivos que el hallazgo nombró. 17 sitios en 8 archivos.
+Corregidos los 15 que quedaban tras revisarlos uno por uno.
+
+#### Dos casos que resultaron peores de lo que decía el hallazgo
+
+**1. El mapa de asientos no pintaba vacío: pintaba MAL.** En
+`SeatMapPicker`, un fallo dejaba `statusData = []`, y de ahí todos los asientos
+salían **libres**. El viajero elegía uno ya ocupado y el problema aparecía al
+final del checkout. No es una pantalla en blanco, es información falsa. Por eso
+ahí se corta el render con un mensaje, en vez de continuar.
+
+Lo mismo en `SeatMapManager`: si fallaba la lectura de salidas al propagar un
+bloqueo, `slotIds` quedaba vacío y el bloqueo terminaba **"con éxito" sin haber
+bloqueado un solo asiento**.
+
+**2. En el checkout, el fallo silencioso cambiaba el precio.** Los pasos 3 y 4
+leen cinco cosas dentro de un `try { ... } catch { /* non-critical */ }`. No
+eran no-críticas:
+
+| Consulta | Si fallaba, en silencio... |
+|---|---|
+| `platform_settings` | se cobraba la comisión **por defecto (10%)** en vez de la configurada |
+| `memberships` | el socio **perdía su beneficio** |
+| `get_remaining_service_fee_exemption` | se perdía la exención de cuota |
+| `toursred_cash_wallets` | el saldo del monedero aparecía en **$0** |
+| `toursred_points_wallets` | los puntos aparecían en **0** |
+| `get_optional_services_capacity` | se podían elegir servicios ya llenos |
+
+El viajero pagaba de más, sin su exención, con su propio dinero sin poder usarlo.
+Ahora cada fallo deja rastro en consola y se avisa en un banner ámbar
+no bloqueante: no se le impide pagar, pero se le dice que recargue antes.
+
+**3. `TravelerCfdiList` hacía el fallo literalmente invisible.** Terminaba en
+`if (invoices.length === 0) return null;`, así que un error de consulta no
+pintaba **nada**. Ahora, si hubo error, muestra el aviso con un botón de
+reintentar.
+
+#### Lo que queda, y por qué es un contador y no una guardia en cero
+
+Quedan **247 sitios**. Arreglarlos de golpe sería un cambio enorme e irrevisable,
+y una parte son intencionales: un banner de mantenimiento que no se pinta, un
+contador que no aparece. Fallar en silencio ahí es lo correcto.
+
+`scripts/check-supabase-errors.mjs` cuenta y compara contra una línea base de
+247. **No exige bajar; impide subir.** Corre dentro del job de `lint`, que ya es
+check requerido y se ejecuta en todos los PR — así no se agrega un check nuevo
+que pueda quedarse en *"Waiting for status to be reported"*, como pasó con
+`smoke` en el PR #156.
+
+Probado en los tres caminos: falla con `exit 1` si el número sube, avisa y pide
+bajar la línea base si baja, y con `--lista` enumera los sitios.
+
+#### Verificación
+
+`typecheck`: **446 errores antes y 446 después** (comparados ignorando el número
+de línea, porque las inserciones los corren). `eslint`: **67 antes y 67 después**
+en los 8 archivos tocados. Cero agregados en ambos.
 
 ---
 

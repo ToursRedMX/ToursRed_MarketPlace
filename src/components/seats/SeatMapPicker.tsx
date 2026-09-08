@@ -236,17 +236,32 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
             .is('slot_id', null)
             .in('status', ['bloqueado_agencia']),
         ]);
+        // F-1: si una de las dos consultas falla y se ignora, el mapa se pinta
+        // con los asientos que SI se pudieron leer y el resto aparece LIBRE.
+        // No es una pantalla vacia: es informacion falsa, y el viajero elige un
+        // asiento ya ocupado. Por eso aqui se corta en vez de continuar.
+        if (slotResult.error || globalResult.error) {
+          console.error('[SeatMapPicker] fallo la carga de asientos:', slotResult.error || globalResult.error);
+          setError('No se pudo cargar la disponibilidad de asientos. Recarga la pagina antes de elegir.');
+          return;  // el finally de abajo apaga isLoading
+        }
+
         // Slot-specific records take precedence; globals fill in the rest
         const slotMap: Record<number, any> = {};
         (globalResult.data || []).forEach((s: any) => { slotMap[s.seat_number] = s; });
         (slotResult.data || []).forEach((s: any) => { slotMap[s.seat_number] = s; });
         statusData = Object.values(slotMap);
       } else {
-        const { data } = await supabase
+        const { data, error: errorEstados } = await supabase
           .from('slot_seat_status')
           .select('seat_number, status, booking_id, block_note')
           .eq('tour_id', tourId)
           .is('slot_id', null);
+        if (errorEstados) {
+          console.error('[SeatMapPicker] fallo la carga de asientos:', errorEstados);
+          setError('No se pudo cargar la disponibilidad de asientos. Recarga la pagina antes de elegir.');
+          return;  // el finally de abajo apaga isLoading
+        }
         statusData = data || [];
       }
 

@@ -64,13 +64,21 @@ const AgencyContractSection: React.FC<Props> = ({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data: docs } = await supabase
+    const { data: docs, error: errDocs } = await supabase
       .from('agency_documents')
       .select('id, document_type_key, file_name, storage_path, status, rejection_reason, reviewed_at, reviewed_by, created_at')
       .eq('agency_id', agencyId)
       .eq('is_current', true)
       .order('created_at', { ascending: true });
 
+    if (errDocs) {
+      // F-1: sin esto la agencia veia "no hay documentos" cuando en realidad
+      // la consulta habia fallado, y volvia a subirlos.
+      console.error('[AgencyContractSection] no se pudieron leer los documentos:', errDocs);
+      setError('No se pudieron cargar tus documentos. Recarga la pagina antes de volver a subirlos.');
+      setLoading(false);
+      return;
+    }
     const list = docs ?? [];
     setDocuments(list);
     setLoading(false);

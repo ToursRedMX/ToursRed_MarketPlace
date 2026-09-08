@@ -43,10 +43,11 @@ Las otras dos tienen ahora su propia tabla de estado, verificada contra el códi
 
 | Auditoría | Cerrados | Abiertos | Total |
 |---|---|---|---|
-| Edge functions (este documento) | C-1, C-2, A-1, A-2, M-1, M-2, M-4, M-6 | M-3, M-5 | 8 / 10 |
+| Edge functions (este documento) | C-1, C-2, A-1, A-2, M-1, M-2, M-4, M-6 | M-5 | 9 / 10 |
+| — de esos, M-3 se cierra como decisión: el panel de OpenPay no ofrece ni firma ni Basic auth; la re-consulta del cargo es la defensa disponible | | | |
 | Postgres | A-1, M-1, M-2, M-3, M-4 | — | **5 / 5** |
-| Frontend | F-2, F-3, F-4, F-5, F-6 | F-1 | 5 / 6 |
-| **Total** | **18** | **3** | **21** |
+| Frontend | F-2, F-3, F-4, F-5, F-6 | F-1 (tier 1 corregido, contador puesto; 247 sitios abiertos) | 5 / 6 |
+| **Total** | **19** | **2** | **21** |
 
 > Este total se calcula sumando las filas de arriba, no de memoria. El 08-sep-2026
 > estuvo mal (decía 14/7) porque se incrementó a mano sin recontar; las filas ya

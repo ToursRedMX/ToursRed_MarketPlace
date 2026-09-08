@@ -89,12 +89,17 @@ const TourCard: React.FC<TourCardProps> = ({
   const checkIfSaved = async () => {
     if (!user) return;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('saved_tours')
       .select('id')
       .eq('user_id', user.id)
       .eq('tour_id', tour.id)
       .maybeSingle();
+
+    // Solo rastro en consola, a proposito: el impacto es que el corazon sale
+    // sin marcar. Un banner de error en cada tarjeta del catalogo seria peor
+    // que el problema.
+    if (error) console.error('[TourCard] no se pudo leer si el tour esta guardado:', error);
 
     setIsSaved(!!data);
   };

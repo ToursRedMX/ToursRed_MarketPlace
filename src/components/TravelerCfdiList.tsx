@@ -54,11 +54,14 @@ interface Props {
 const TravelerCfdiList: React.FC<Props> = ({ userId }) => {
   const [invoices, setInvoices] = useState<CfdiInvoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // F-1: antes, si la consulta fallaba el viajero veia "no tienes facturas" y
+  // no podia distinguirlo de que la consulta no hubiera funcionado.
+  const [error, setError] = useState('');
 
   const fetchInvoices = async () => {
     setIsLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error: errFacturas } = await supabase
         .from('cfdi_invoices')
         .select(`
           *,
@@ -68,6 +71,13 @@ const TravelerCfdiList: React.FC<Props> = ({ userId }) => {
         .eq('bookings.user_id', userId)
         .order('created_at', { ascending: false })
         .limit(50);
+
+      if (errFacturas) {
+        console.error('[TravelerCfdiList] no se pudieron leer las facturas:', errFacturas);
+        setError('No pudimos cargar tus facturas. Esto no significa que no existan: vuelve a intentarlo en un momento.');
+      } else {
+        setError('');
+      }
 
       if (data) {
         setInvoices(data as CfdiInvoice[]);
@@ -89,7 +99,23 @@ const TravelerCfdiList: React.FC<Props> = ({ userId }) => {
     );
   }
 
-  if (invoices.length === 0) return null;
+  // Sin facturas y sin error, el componente no se pinta (comportamiento
+  // original). Pero si la consulta FALLO hay que decirlo: devolver null hacia
+  // invisible el fallo, y el viajero concluia que no tenia comprobantes.
+  if (invoices.length === 0) {
+    if (!error) return null;
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex items-start justify-between gap-4">
+          <p className="text-sm text-amber-900">{error}</p>
+          <button onClick={fetchInvoices} className="btn btn-outline btn-sm flex-shrink-0">
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
