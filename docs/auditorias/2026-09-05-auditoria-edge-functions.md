@@ -411,10 +411,40 @@ real de cada llamada, no el nombre de la función) encontró:
     dirección del cuerpo. Es un formulario público de landing y no se puede cerrar sin
     Turnstile (M-1); mientras tanto, tope de 3 cotizaciones por correo por hora.
 
-**Un bug encontrado de paso.** `send-gift-card-email` sí tenía guard, pero hacía
-`getUser(token)` con el token que le llega, y los 5 webhooks de pago la llaman con el
-`SERVICE_ROLE_KEY`, que no tiene usuario detrás. O sea: **el correo de una tarjeta de
-regalo pagada nunca salía** — respondía 401. Corregido aceptando al llamador interno.
+**Tres bugs encontrados de paso, todos en `send-gift-card-email`.** Sí tenía guard,
+pero:
+
+1. Hacía `getUser(token)` con el token recibido, y los 5 webhooks de pago la llaman con
+   el `SERVICE_ROLE_KEY`, que no tiene usuario detrás. **El correo de una tarjeta de
+   regalo pagada nunca salía** — respondía 401. Corregido aceptando al llamador interno.
+2. **El comprador invitado quedaba fuera.** Se puede comprar una tarjeta sin cuenta
+   (`GiftCardsPage` solo exige sesión para el código de descuento), pero al volver a
+   `/gift-card/success` el navegador manda la llave publicable, que no identifica a
+   nadie: el reenvío contestaba 401 y el invitado no tenía forma de recuperar su código.
+   Ahora se acepta al llamador anónimo con dos condiciones: la tarjeta debe estar
+   **pagada** y respetar el enfriamiento del punto 3. No elige destinatario ni contenido
+   —todo sale de la fila—, así que lo peor que puede hacer quien tenga el enlace es
+   reenviarle el correo a su dueño legítimo. Es el mismo criterio que ya rige
+   `get-gift-card-status`, que es pública y responde por `gift_card_id`.
+3. **El límite de reenvíos no limitaba nada.** Decía "máx. 3 correos en 24 h" pero
+   contaba filas de `gift_cards` con ese id y `email_sent_at` reciente: como mucho hay
+   UNA fila, así que la condición `>= 3` nunca se cumplía. La tabla no lleva contador,
+   sólo un timestamp, así que el límite real que se puede poner sin migración es un
+   enfriamiento de 5 minutos entre envíos. No aplica al service role: los webhooks son
+   el camino principal y nunca deben quedarse sin mandar el correo de una compra.
+
+Del lado del front, `GiftCardSuccessPage` le mostraba al invitado **"Pago en proceso"
+aunque el pago estuviera confirmado**, porque la política RLS de `gift_cards` es
+`TO authenticated` y su `select` devolvía vacío. Ahora cae a `get-gift-card-status`
+—pública y que a propósito **no** devuelve `code`— y muestra la compra confirmada, el
+monto y el botón de reenvío. **El código sigue sin mostrarse en pantalla a quien no
+tiene cuenta**: va por correo. Esa decisión ya estaba tomada en
+`get-gift-card-status` y no se cambia aquí; si se quiere mostrar, es una decisión de
+producto aparte, porque el `gift_card_id` viaja en la URL y el código es dinero.
+
+De paso, ni `sendEmailBackup` ni `handleResendEmail` miraban el `error` que devuelve
+`functions.invoke` (que **no lanza** en respuestas != 2xx): un 403 o un 429 se
+mostraban como "El correo ha sido reenviado exitosamente".
 
 **Lo que falta y por qué.** `send-executive-notification` quedó con guard de service
 role, pero su único llamador (`notify_executive_by_email`, un trigger) manda la
