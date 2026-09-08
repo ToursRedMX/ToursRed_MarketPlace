@@ -74,6 +74,9 @@ jobs:
       - name: Verify MFA helper and privileged handlers
         run: node scripts/test-mfa-aal2.mjs
 
+      - name: Verify Sentry tunnel destination restrictions
+        run: node scripts/test-sentry-tunnel.mjs
+
       - name: Run ESLint (el veredicto lo da el paso siguiente)
         run: |
           # bash corre con -e: sin set +e, eslint saliendo != 0 aborta el step.
