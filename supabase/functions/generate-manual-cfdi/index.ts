@@ -237,7 +237,7 @@ Deno.serve(async (req: Request) => {
     // own JWT), not the service-role client.
     const aal2 = await checkAal2Required(userClient);
     if (!aal2.allowed) {
-      return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores");
+      return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores", aal2.code);
     }
 
     const body: RequestBody = await req.json();

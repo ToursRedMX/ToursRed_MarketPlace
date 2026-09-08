@@ -29,7 +29,8 @@ igual de alcanzables). Las tres correcciones están abajo, en su sección, con l
 | A-2 | **Corregido** — exige dueño/agencia/staff/admin o service role | `bed5563` |
 | A-3 | **FALSO POSITIVO** — retirado del conteo | — |
 | M-1 | Pendiente | — |
-| M-2, M-3, M-5, M-6 | Pendiente (decisiones de arquitectura) | — |
+| M-2 | **Corregido** — el helper falla cerrado, y el hallazgo se quedó corto: los toggles de MFA están **encendidos** en producción, así que era un bypass vivo, no latente | ver más abajo |
+| M-3, M-5, M-6 | Pendiente (decisiones de arquitectura) | — |
 | M-4 | **Corregido** — guard de service role en los dos crons | `bed5563` |
 
 **Conteo corregido: 10 hallazgos reales en este documento** (2 críticos, 2 altos,
@@ -41,10 +42,10 @@ Las otras dos tienen ahora su propia tabla de estado, verificada contra el códi
 
 | Auditoría | Cerrados | Abiertos | Total |
 |---|---|---|---|
-| Edge functions (este documento) | C-1, C-2, A-1, A-2, M-4 | M-1, M-2, M-3, M-5, M-6 | 5 / 10 |
+| Edge functions (este documento) | C-1, C-2, A-1, A-2, M-2, M-4 | M-1, M-3, M-5, M-6 | 6 / 10 |
 | Postgres | A-1, M-2 | M-1, M-3, M-4 | 2 / 5 |
 | Frontend | F-2, F-3, F-4, F-5, F-6 | F-1 | 5 / 6 |
-| **Total** | **13** | **8** | **21** |
+| **Total** | **14** | **7** | **21** |
 
 Durante la remediación aparecieron hallazgos nuevos que no estaban en esta auditoría;
 se documentan al final, en *Hallazgos surgidos durante la remediación*.
@@ -649,6 +650,69 @@ tipo de error **falla cerrado** (`return { verified: false }`). Dos helpers herm
 criterios opuestos: convendría que la diferencia sea una decisión consciente y escrita,
 no una divergencia accidental.
 
+### Corregido el 08-sep-2026 — y el hallazgo se quedó corto
+
+Lo reporté como "observación, no error", porque el código lo documentaba como decisión
+deliberada. **Eso fue demasiado generoso.** Al ir a corregirlo aparecieron cuatro cosas
+que cambian la severidad, y ninguna se ve leyendo sólo este archivo:
+
+**1. Los toggles de MFA están ENCENDIDOS en producción.** Consultado antes de tocar nada:
+
+```sql
+select mfa_required_for_admins, mfa_required_for_accountant from platform_settings;
+-- mfa_required_for_admins = true, mfa_required_for_accountant = true
+```
+
+O sea que el camino feliz sí exige MFA hoy. La rama de error no era un riesgo latente
+para "el día que se active": era un **bypass vivo**.
+
+**2. Son 12 funciones, y son las que mueven dinero.** El hallazgo no las enumeraba:
+`process-agency-payout`, `admin-credit-wallet-topup`, `admin-cancel-booking`,
+`admin-finalize-cancellation`, `create-admin-user`, `create-executive-user`,
+`delete-auth-user`, `generate-manual-cfdi`, `generate-accounting-entries`,
+`approve-agency-documents`, `reject-agency-permanently`, `reverse-agency-rejection`.
+
+**3. La capa de RLS ya fallaba cerrada; ésta era la única que dejaba pasar.** Las
+políticas de `20260818031526` usan `(NOT requires_aal2_check() OR has_aal2())`: si esa
+función lanza, la sentencia aborta. Pero **las funciones de pago no pasan por RLS** —
+llaman a `process_agency_payout_atomic` y compañía con el cliente de service role, que
+la salta. Para ese camino, el helper de Edge era la única puerta.
+
+**4. La incoherencia ya estaba dentro del propio archivo.** El error de `has_aal2()`
+(segunda RPC) *siempre* falló cerrado; sólo el de `requires_aal2_check()` (primera RPC)
+fallaba abierto. Dos ramas hermanas con criterios opuestos a diez líneas de distancia se
+lee como descuido, no como decisión de disponibilidad.
+
+#### El arreglo
+
+Las tres ramas de error devuelven ahora `{ allowed: false }`, con `console.error` para
+que dejen rastro en los logs —antes eran mudas, que es justo lo que las hacía útiles a un
+atacante— y con un código nuevo, `MFA_CHECK_FAILED`, servido con **HTTP 503** en vez de
+403: decirle *"necesitas MFA"* a un admin que sí lo tiene activado manda a soporte por el
+camino equivocado. `MFA_REQUIRED` y su 403 no cambian.
+
+#### El costo de disponibilidad, medido
+
+Era el argumento del `fail-open`, así que se midió en vez de suponerlo. En producción hay
+dos cuentas admin:
+
+| Cuenta | MFA | Último acceso |
+|---|---|---|
+| `admin@toursred.com` | verificado | 03-sep-2026 |
+| `contacto@toursred.com` | **sin MFA** | 27-jun-2026 |
+
+La cuenta sin MFA **ya está bloqueada hoy** por el camino normal (toggle encendido y sin
+AAL2), así que este cambio no le quita nada. Y si la base está tan mal que esta RPC falla,
+la RPC que de verdad mueve el dinero tampoco va a completarse: cerrar no cuesta ninguna
+operación que de otro modo hubiera funcionado.
+
+#### Verificación
+
+Se compiló el helper real a JS y se ejecutaron los siete escenarios. Los tres normales se
+comportan igual que antes; los tres de fallo cambiaron de `PASA (sin MFA)` a `BLOQUEA`,
+contrastados ejecutando **el archivo anterior y el nuevo lado a lado**. `eslint`: 38
+problemas antes y 38 después en los 13 archivos tocados, cero agregados.
+
 ## M-3. `openpay-webhook` no verifica firma (mitigado, pero conviene saberlo)
 
 **Archivo:** `supabase/functions/openpay-webhook/index.ts`
@@ -754,7 +818,8 @@ El orden es por riesgo sobre el lanzamiento del 21 de septiembre, no por dificul
 | 6 | **A-2** — exigir dueño/agencia/admin en `generate-booking-qr-token` | Alto | ✅ `bed5563` |
 | 7 | **M-1** — Turnstile obligatorio y rate limit por IP en el formulario de contacto | Medio | **pendiente** — bajo |
 | 8 | **M-4** — guard de service role en los dos crons abiertos | Medio | ✅ `bed5563` |
-| 9 | **M-2, M-3, M-5, M-6** — decisiones de arquitectura, no parches sueltos | Medio | **pendiente** — a discutir |
+| 9 | **M-2** — el helper de AAL2 falla cerrado | Medio | **hecho** (08-sep-2026) |
+| 10 | **M-3, M-5, M-6** — decisiones de arquitectura, no parches sueltos | Medio | **pendiente** — a discutir |
 
 **El punto 1 va primero por relación costo/beneficio:** es una consulta al dashboard, no
 un cambio de código, y descarta (o confirma) el peor escenario de todos.
