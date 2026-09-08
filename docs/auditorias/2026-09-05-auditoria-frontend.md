@@ -11,6 +11,29 @@ código además de huecos de seguridad**, por pedido explícito.
 
 ---
 
+## Estado de la remediación (actualizado 08-sep-2026)
+
+Este documento nació como solo-lectura. La tabla se verificó hallazgo por hallazgo
+contra `src/` tal como está hoy, no de memoria; la columna *Cómo se comprobó* dice con
+qué.
+
+| Hallazgo | Estado | Dónde | Cómo se comprobó |
+|---|---|---|---|
+| F-1 — la mitad de las consultas ignoran el error y renderizan vacío | Pendiente | — | Re-medido hoy con el mismo método: **247 de 498** sitios no piden `error` (era 248 de 499) |
+| F-2 — 60 líneas de cobro con Stripe que nunca se ejecutan | **Corregido** | #146 | `grep -rn 'createStripeCheckout' src/` no devuelve nada |
+| F-3 — consultas que se ejecutan y cuyo resultado se descarta | **Corregido** | — | Los tres estados de `BookingFlowStep3` ya no existen; en `AgencyFinancials.tsx:79-81` hay un comentario que documenta por qué se quitó `commissionRecords` del estado |
+| F-4 — el check de `lint` no puede salir rojo | **Corregido** | #146 + branch protection | `lint` corre con `--strict` y falla si el conteo sube; el 08-sep se agregó como **check requerido** (junto con `smoke`) |
+| F-5 — `xlsx` se instala desde un tarball de CDN, no desde npm | Pendiente | — | `package.json:36` sigue con `"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"` |
+| F-6 — HTML sin sanitizar de contenido administrable | Pendiente | — | Siguen **9 usos de `dangerouslySetInnerHTML` en 6 archivos**, y no hay `DOMPurify` ni ninguna sanitización en `src/` ni en `package.json` |
+
+**3 corregidos de 6.**
+
+De los tres pendientes, **F-5 es el más barato y el de peor relación riesgo/esfuerzo**:
+instalar `xlsx` desde un tarball de CDN significa que la cadena de suministro del build
+depende de un host que no es npm y sin `integrity` en el lockfile.
+
+---
+
 ## Método: esta vez sí corrí las herramientas
 
 En las dos auditorías anteriores todo fue lectura estática. Aquí instalé las
