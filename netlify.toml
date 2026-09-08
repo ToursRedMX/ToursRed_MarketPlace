@@ -4,7 +4,9 @@ publish = "dist"
 # Netlify construye en CADA push. Los PR que solo tocan supabase/ o
 # .github/ no cambian el sitio, asi que no hace falta gastar un build.
 # Exit 0 = saltar el build; distinto de 0 = construir.
-ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- src/ index.html package.json package-lock.json netlify.toml vite.config.ts tailwind.config.js"
+# Sin referencias validas, o al reconstruir el mismo commit, continuar el build.
+# Incluir Edge Functions, archivos publicos y configuracion que afecta al bundle.
+ignore = 'test -n "$CACHED_COMMIT_REF" && test -n "$COMMIT_REF" && test "$CACHED_COMMIT_REF" != "$COMMIT_REF" && git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- src/ public/ netlify/ index.html package.json package-lock.json netlify.toml vite.config.ts tailwind.config.js postcss.config.js tsconfig.json tsconfig.app.json tsconfig.node.json'
 
 [build.environment]
 SECRETS_SCAN_ENABLED = "true"

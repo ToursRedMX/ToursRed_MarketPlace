@@ -74,6 +74,9 @@ jobs:
       - name: Verify MFA helper and privileged handlers
         run: node scripts/test-mfa-aal2.mjs
 
+      - name: Verify Sentry tunnel destination restrictions
+        run: node scripts/test-sentry-tunnel.mjs
+
       # F-1 de la auditoria de frontend. Contador, no guardia en cero: son 247
       # sitios y una parte son intencionales. No exige bajar, impide subir.
       # Va aqui dentro y no en un job aparte a proposito: `lint` ya es check
