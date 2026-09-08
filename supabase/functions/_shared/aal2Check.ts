@@ -66,11 +66,10 @@
 // `platform_settings`, o borrar el factor en `auth.mfa_factors`.
 
 interface SupabaseClient {
-  from(table: string): any;
   // La RPC se consume con `await`. Tiparla como objeto plano —como estaba—
   // miente sobre el valor real (`PostgrestFilterBuilder`, que es thenable) y
   // deja pasar codigo como `.catch(...)`, que sobre ese objeto revienta.
-  rpc(fn: string, params?: Record<string, unknown>): PromiseLike<{ data: any; error: any }>;
+  rpc(fn: "requires_aal2_check" | "has_aal2"): PromiseLike<{ data: unknown; error: unknown }>;
 }
 
 const corsHeaders = {
@@ -128,6 +127,10 @@ export async function checkAal2Required(supabase: SupabaseClient): Promise<Aal2R
       return NO_VERIFICABLE;
     }
 
+    if (data !== true && data !== false && data !== "true" && data !== "false") {
+      console.error("[aal2] requires_aal2_check devolvio un valor invalido");
+      return NO_VERIFICABLE;
+    }
     const requiresMfa = data === true || data === "true";
 
     if (!requiresMfa) {
@@ -142,6 +145,10 @@ export async function checkAal2Required(supabase: SupabaseClient): Promise<Aal2R
       return NO_VERIFICABLE;
     }
 
+    if (aal2Data !== true && aal2Data !== false && aal2Data !== "true" && aal2Data !== "false") {
+      console.error("[aal2] has_aal2 devolvio un valor invalido");
+      return NO_VERIFICABLE;
+    }
     const hasAal2 = aal2Data === true || aal2Data === "true";
 
     if (!hasAal2) {
