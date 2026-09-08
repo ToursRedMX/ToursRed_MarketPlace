@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { format } from 'date-fns';
 import RichTextEditor from '../../components/RichTextEditor';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 type SendChannel = 'email' | 'notification' | 'both';
 type Audience = 'travelers' | 'agencies' | 'all';
@@ -314,7 +315,7 @@ const AdminBroadcastMessages: React.FC = () => {
                   <Bell className="h-4 w-4 text-primary-600" />
                   <span className="text-sm font-semibold text-gray-900 truncate">{subject || 'Asunto del mensaje'}</span>
                 </div>
-                <div className="text-xs text-gray-600 line-clamp-3 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: messageBody || 'El contenido del mensaje aparecerá aquí...' }} />
+                <div className="text-xs text-gray-600 line-clamp-3 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(messageBody || 'El contenido del mensaje aparecerá aquí...') }} />
                 <p className="text-xs text-gray-400 mt-1">Ahora mismo · ToursRed</p>
               </div>
             </div>
@@ -377,7 +378,7 @@ const AdminBroadcastMessages: React.FC = () => {
                         {msg.error_count > 0 && <span className="text-red-600 font-semibold">{msg.error_count} fallidos</span>}
                       </div>
                       <div className="bg-white border-l-4 border-primary-400 rounded-r-xl px-4 py-3">
-                        <div className="text-sm text-gray-800 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: msg.message_body }} />
+                        <div className="text-sm text-gray-800 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(msg.message_body) }} />
                       </div>
                     </div>
                   )}

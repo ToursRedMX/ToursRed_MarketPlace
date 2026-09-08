@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FileText, LogOut, Check, AlertTriangle, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 interface ActiveTerms {
   id: string;
@@ -130,7 +131,7 @@ const TermsAcceptanceGate: React.FC<Props> = ({ termsType, onAccepted, onSignOut
             <div
               ref={contentRef}
               className="p-6 max-h-[420px] overflow-y-auto prose prose-sm max-w-none text-sm"
-              dangerouslySetInnerHTML={{ __html: terms.content }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(terms.content) }}
             />
             <div className="bg-gray-50 border-t border-gray-100 px-5 py-2 flex items-center justify-center gap-1.5 text-xs text-gray-400">
               <ChevronDown className="w-3.5 h-3.5" />
