@@ -446,12 +446,43 @@ De paso, ni `sendEmailBackup` ni `handleResendEmail` miraban el `error` que devu
 `functions.invoke` (que **no lanza** en respuestas != 2xx): un 403 o un 429 se
 mostraban como "El correo ha sido reenviado exitosamente".
 
-**Lo que falta y por qué.** `send-executive-notification` quedó con guard de service
-role, pero su único llamador (`notify_executive_by_email`, un trigger) manda la
-publishable key. La migración que lo cambia al `service_role_key` del Vault está escrita
-(`20260908180000_notify_executive_by_email_usa_service_key.sql`) pero **no aplicada**:
-va antes de desplegar esa función, o hay una ventana en la que el trigger llama con una
-credencial que la función ya rechaza.
+### El lado de Postgres — APLICADO el 08-sep-2026
+
+Tres funciones de Postgres llaman Edge Functions por `pg_net` y quedaban descolgadas del
+guard. Se arreglaron con dos migraciones **ya aplicadas** (con autorización explícita):
+
+| Migración | Qué hace |
+|---|---|
+| `20260908043951_notify_executive_by_email_usa_service_key.sql` | `notify_executive_by_email` mandaba la **publishable key**, que no autoriza nada. Ahora manda el `service_role_key` del Vault. |
+| `20260908044815_pg_net_crons_mandan_authorization_ademas_de_apikey.sql` | `process_membership_renewal_reminders` y `process_expired_slot_reschedules` mandaban la credencial **sólo en `apikey`**. Ahora también en `Authorization`. |
+
+**Lo que se comprobó antes de aplicarlas**, porque el guard compara contra
+`Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')` y si el valor del Vault no coincidiera se
+caerían los crons en silencio:
+
+- `vault.decrypted_secrets['service_role_key']` es hoy una llave del **formato nuevo**
+  (`sb_secret_…`, 41 chars), no el JWT legacy.
+- Los crons `expire-supplement-approvals` y `process-incremental-payment-deadlines`
+  mandan esa misma llave en `Authorization: Bearer` y sus funciones **ya tienen
+  `requireServiceRole` desplegado**: 8 corridas cada uno, 19 respuestas 200 en
+  `net._http_response`, **ningún 401**.
+
+De ahí salen dos conclusiones. El valor del Vault **sí** coincide con el del edge
+runtime. Y el comentario de la migración `20260821212354` —"el gateway rechaza el
+formato nuevo en `Authorization: Bearer`"— **hoy no se cumple**.
+
+Queda una sola suposición sin comprobar: si el gateway **reenvía** el header `apikey`
+hasta la función. No se puede comprobar hasta desplegar el guard, y por eso las tres
+funciones mandan ahora **las dos cabeceras**: si `apikey` no llega, `Authorization`
+cubre.
+
+La segunda migración no reescribe las funciones a mano: lee su definición viva con
+`pg_get_functiondef`, inserta la cabecera con `regexp_replace` y la reejecuta, fallando
+si el patrón no aparece. `process_expired_slot_reschedules` tiene 7,581 caracteres y
+lógica de reembolsos; copiarla para cambiar dos líneas es como se introducen errores que
+nadie nota. La verificación posterior fue por longitud: **+90 caracteres** en esa función
+(2 × 45) y **+43** en la de membresías (1 × 43), que cuadra al carácter con las
+inserciones y prueba que no se movió nada más.
 
 ---
 
