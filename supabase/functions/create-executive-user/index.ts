@@ -129,7 +129,11 @@ Deno.serve(async (req: Request) => {
       const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
       await fetch(`${supabaseUrl}/functions/v1/send-executive-credentials`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // send-executive-credentials exige service role desde A-1.
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
+        },
         body: JSON.stringify({
           email,
           firstName: first_name,

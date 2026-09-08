@@ -38,26 +38,57 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const token = (authHeader ?? "").replace("Bearer ", "").trim();
+
+    // Los 5 webhooks de pago llaman aqui con el SERVICE_ROLE_KEY cuando se paga
+    // una tarjeta de regalo (stripe, conekta, openpay, mercadopago, paypal).
+    // Ese token NO tiene usuario detras, asi que getUser devolvia null y el
+    // guard respondia 401: el correo de la tarjeta comprada nunca salia. El
+    // service role es el llamador interno y pasa como maxima autoridad.
+    const esLlamadaInterna = token.length > 0 && token === supabaseServiceKey;
+
+    // Tres tipos de llamador, no dos:
+    //
+    //   service_role -> los webhooks de pago. Autoridad maxima, sin limites.
+    //   usuario      -> admin, traveler duenno, agency_owner. Como antes.
+    //   anonimo      -> el COMPRADOR INVITADO. Se puede comprar una tarjeta de
+    //                   regalo sin cuenta (GiftCardsPage solo exige sesion para
+    //                   el codigo de descuento), y al volver a
+    //                   /gift-card/success el navegador manda la llave
+    //                   publicable, que no identifica a nadie: getUser devolvia
+    //                   null y el reenvio contestaba 401. El invitado se
+    //                   quedaba sin forma de recuperar su codigo si el correo
+    //                   del webhook fallaba o se le perdio.
+    //
+    // Al anonimo se le exige menos identidad pero mas condiciones: la tarjeta
+    // tiene que estar PAGADA y respetar el enfriamiento de abajo. No elige
+    // destinatario ni contenido —todo sale de la fila— asi que lo peor que
+    // puede hacer quien tenga el enlace es reenviarle el correo a su duenno
+    // legitimo. Es el mismo criterio que ya rige `get-gift-card-status`, que
+    // es publica y responde por gift_card_id.
+    const esAnonimo = !esLlamadaInterna && (token.length === 0 || token === supabaseAnonKey);
+
+    let rolLlamador = esLlamadaInterna ? "service_role" : "anonimo";
+    let userId: string | null = null;
+
+    if (!esLlamadaInterna && !esAnonimo) {
+      const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } }
       });
-    }
-    const token = authHeader.replace("Bearer ", "");
-    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } }
-    });
-    const { data: { user } } = await supabaseUser.auth.getUser(token);
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const { data: caller } = await supabaseUser.from("users").select("role").eq("id", user.id).maybeSingle();
-    if (!caller || !["admin", "super_admin", "traveler", "agency_owner"].includes(caller.role)) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const { data: { user } } = await supabaseUser.auth.getUser(token);
+      if (!user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: caller } = await supabaseUser.from("users").select("role").eq("id", user.id).maybeSingle();
+      if (!caller || !["admin", "super_admin", "traveler", "agency_owner"].includes(caller.role)) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      rolLlamador = caller.role as string;
+      userId = user.id;
     }
 
     const { giftCardId, sendToRecipient = true, sendToPurchaser = true }: SendGiftCardEmailRequest = await req.json();
@@ -72,9 +103,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (caller.role === "traveler") {
+    if (rolLlamador === "traveler") {
       const { data: gc } = await supabase.from("gift_cards").select("purchaser_user_id").eq("id", giftCardId).maybeSingle();
-      if (!gc || gc.purchaser_user_id !== user.id) {
+      if (!gc || gc.purchaser_user_id !== userId) {
         return new Response(JSON.stringify({ error: "Not authorized for this gift card" }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -97,17 +128,37 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Resend limit: max 3 emails in 24h per gift card
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { count: recentSends } = await supabase
-      .from("gift_cards")
-      .select("id", { count: "exact", head: true })
-      .eq("id", giftCardId)
-      .gte("email_sent_at", yesterday);
-
-    if (recentSends && recentSends >= 3) {
+    // Un anonimo solo puede pedir el correo de una tarjeta ya PAGADA. Antes de
+    // pagar no hay nada legitimo que reenviar, y asi quien tenga el id no puede
+    // sondear tarjetas a medio comprar. Misma respuesta que "no existe" para no
+    // decirle en que estado esta.
+    if (esAnonimo && giftCard.payment_status !== "paid") {
+      console.warn(`send-gift-card-email: anonimo pidio la tarjeta ${giftCardId} sin pago confirmado`);
       return new Response(
-        JSON.stringify({ error: "Se ha alcanzado el limite de 3 reenvios en 24 horas para esta tarjeta de regalo" }),
+        JSON.stringify({ error: "Gift card not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Enfriamiento entre envios.
+    //
+    // El tope anterior decia "max 3 correos en 24h" pero contaba filas de
+    // gift_cards con ese id y email_sent_at reciente: como mucho hay UNA fila,
+    // asi que la condicion >= 3 nunca se cumplia y no limitaba nada. La tabla
+    // no lleva contador, solo email_sent_at (un timestamp), asi que el limite
+    // que si se puede implementar sin migracion es un enfriamiento.
+    //
+    // No aplica al service role: los webhooks de pago son el camino principal y
+    // nunca deben quedarse sin mandar el correo de una compra.
+    const ENFRIAMIENTO_MINUTOS = 5;
+    const ultimoEnvio = giftCard.email_sent_at ? new Date(giftCard.email_sent_at).getTime() : 0;
+    const minutosDesdeUltimo = (Date.now() - ultimoEnvio) / 60000;
+
+    if (!esLlamadaInterna && ultimoEnvio > 0 && minutosDesdeUltimo < ENFRIAMIENTO_MINUTOS) {
+      return new Response(
+        JSON.stringify({
+          error: `Ya enviamos el correo hace poco. Espera ${ENFRIAMIENTO_MINUTOS} minutos antes de reenviarlo.`,
+        }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

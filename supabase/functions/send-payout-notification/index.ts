@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { requireServiceRole } from "../_shared/auth.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -23,6 +24,13 @@ Deno.serve(async (req)=>{
       headers: corsHeaders
     });
   }
+
+  // A-1 (auditoria 05-sep-2026): esta funcion manda correo con el dominio y el
+  // SMTP de ToursRed. Sus unicos llamadores son internos y ya mandan el service
+  // role (por Authorization los edge, por el header apikey los crons de
+  // Postgres). Sin este guard cualquiera en internet podia dispararla.
+  const guard = requireServiceRole(req, { recurso: "send-payout-notification", cors: corsHeaders });
+  if (!guard.ok) return guard.response;
   try {
     const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
     const { payout_id, agency_email, agency_name, amount, reference, commission_count } = await req.json();

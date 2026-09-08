@@ -171,7 +171,12 @@ Deno.serve(async (req: Request) => {
 
       await fetch(`${supabaseUrl}/functions/v1/send-agency-credentials`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        // send-agency-credentials exige service role desde A-1: manda la
+        // contrasena temporal por correo y antes era disparable sin credencial.
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${supabaseServiceKey}`,
+        },
         body: JSON.stringify({
           email: agency.contact_email,
           contactFirstName: leadData?.contact_first_name || "",

@@ -56,6 +56,27 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // A-1 (auditoria 05-sep-2026): es un formulario publico de landing, asi que
+    // no puede exigir sesion. Pero manda una copia de confirmacion a la
+    // direccion que venga en el cuerpo, y eso la convertia en un relay abierto
+    // con el dominio y el SMTP de ToursRed, sin tope. El tope va aqui: 3
+    // cotizaciones por correo por hora, contadas sobre las filas que la propia
+    // funcion inserta. No sustituye a Turnstile (M-1), lo acota mientras tanto.
+    const haceUnaHora = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recientes } = await supabase
+      .from("international_tour_inquiries")
+      .select("id", { count: "exact", head: true })
+      .eq("email", email)
+      .gte("created_at", haceUnaHora);
+
+    if ((recientes ?? 0) >= 3) {
+      console.warn(`send-inquiry-email: ${email} supero 3 cotizaciones en 1h, rechazado`);
+      return new Response(
+        JSON.stringify({ error: "Demasiadas solicitudes. Intenta de nuevo en una hora." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const inquirySource = source || "mega_travel";
     const formattedTourCode = tour_code
       ? (inquirySource === 'mega_travel' ? `MT-${tour_code}` : tour_code)

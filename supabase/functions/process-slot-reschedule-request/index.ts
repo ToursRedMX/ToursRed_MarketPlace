@@ -353,7 +353,9 @@ Deno.serve(async (req: Request) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${anonKey}`,
+            // Las funciones send-* exigen service role desde A-1: la anon
+            // key ya no basta.
+            Authorization: `Bearer ${serviceKey}`,
           },
           body: JSON.stringify({
             booking_id: booking.id,

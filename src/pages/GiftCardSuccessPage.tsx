@@ -18,10 +18,27 @@ interface GiftCardData {
   purchased_at: string;
 }
 
+/**
+ * Lo que se puede saber de la tarjeta SIN cuenta.
+ *
+ * La politica RLS de gift_cards es `TO authenticated`, asi que un comprador
+ * invitado no lee su propia fila: el select de abajo le devuelve vacio. Para el
+ * ya existe `get-gift-card-status`, que es publica y responde por id — y que a
+ * proposito NO devuelve `code`, porque el codigo es dinero y el id viaja en la
+ * URL. Por eso el invitado ve la compra confirmada y puede pedir el correo,
+ * pero el codigo lo recibe por correo, no en pantalla.
+ */
+interface GiftCardPublicStatus {
+  amount: number;
+  currency: string;
+  payment_status: string;
+}
+
 export default function GiftCardSuccessPage() {
   const [searchParams] = useSearchParams();
   const [isProcessing, setIsProcessing] = useState(true);
   const [giftCard, setGiftCard] = useState<GiftCardData | null>(null);
+  const [publicStatus, setPublicStatus] = useState<GiftCardPublicStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [emailResent, setEmailResent] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -40,19 +57,43 @@ export default function GiftCardSuccessPage() {
       .eq('id', giftCardId)
       .maybeSingle();
 
-    if (fetchError || !data) return false;
+    if (!fetchError && data) {
+      setGiftCard(data);
+      return data.payment_status === 'paid';
+    }
 
-    setGiftCard(data);
-    return data.payment_status === 'paid';
+    // Sin fila: o es un invitado sin cuenta (RLS) o la tarjeta no existe.
+    // get-gift-card-status distingue los dos casos sin exponer el codigo.
+    const { data: estado } = await supabase.functions.invoke('get-gift-card-status', {
+      body: { gift_card_id: giftCardId },
+    });
+
+    if (!estado || estado.error || !estado.payment_status) return false;
+
+    setPublicStatus({
+      amount: Number(estado.amount) || 0,
+      currency: estado.currency || 'MXN',
+      payment_status: estado.payment_status,
+    });
+    return estado.payment_status === 'paid';
   }, [giftCardId]);
 
   const sendEmailBackup = useCallback(async () => {
     if (!giftCardId) return;
 
     try {
-      await supabase.functions.invoke('send-gift-card-email', {
+      // Es una red de seguridad por si el webhook del pago no alcanzo a mandar
+      // el correo. Si contesta 429 es porque el webhook SI lo mando hace un
+      // momento (enfriamiento), asi que no es un error que mostrar — pero
+      // tampoco hay que decir "reenviado", que era lo que hacia antes al no
+      // mirar el `error` que devuelve invoke.
+      const { error: invokeError } = await supabase.functions.invoke('send-gift-card-email', {
         body: { giftCardId },
       });
+      if (invokeError) {
+        console.error('Error sending gift card email backup:', invokeError);
+        return;
+      }
       setEmailResent(true);
     } catch (err) {
       console.error('Error sending gift card email backup:', err);
@@ -113,10 +154,19 @@ export default function GiftCardSuccessPage() {
   const handleResendEmail = async () => {
     if (!giftCardId) return;
     setIsResending(true);
+    setError(null);
     try {
-      await supabase.functions.invoke('send-gift-card-email', {
+      // invoke NO lanza cuando la funcion responde !=2xx: devuelve el error en
+      // `error`. Con el try/catch solo, un 429 del enfriamiento o un 403 se
+      // mostraban como "reenviado exitosamente".
+      const { error: invokeError } = await supabase.functions.invoke('send-gift-card-email', {
         body: { giftCardId },
       });
+      if (invokeError) {
+        console.error('Error resending email:', invokeError);
+        setError('No se pudo reenviar el correo. Si acabas de pedirlo, espera unos minutos.');
+        return;
+      }
       setEmailResent(true);
     } catch (err) {
       console.error('Error resending email:', err);
@@ -126,7 +176,8 @@ export default function GiftCardSuccessPage() {
     }
   };
 
-  const isPaymentConfirmed = giftCard?.payment_status === 'paid' || isFree;
+  const isPaymentConfirmed =
+    giftCard?.payment_status === 'paid' || publicStatus?.payment_status === 'paid' || isFree;
 
   if (isProcessing) {
     return (
@@ -203,6 +254,37 @@ export default function GiftCardSuccessPage() {
                   </div>
                 </div>
               </div>
+            ) : isPaymentConfirmed && publicStatus ? (
+              /* Comprador invitado: el pago SI esta confirmado, pero sin cuenta
+                 no se le puede mostrar el codigo en pantalla (va por correo).
+                 Antes caia en "Pago en proceso", que era falso y alarmante. */
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 mb-8 border-2 border-amber-200">
+                <div className="flex items-center gap-x-4 mb-4">
+                  <div className="flex-shrink-0">
+                    <Gift className="w-12 h-12 text-amber-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-xl font-bold text-gray-900">
+                      Tu Tarjeta de Regalo ToursRed
+                    </h2>
+                    <p className="text-gray-600 text-sm">
+                      Pago confirmado. Te enviamos el codigo por correo electronico.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg p-4 my-4 border border-amber-200">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1 text-center">Monto</p>
+                  <p className="text-2xl font-bold text-gray-900 text-center">
+                    {formatCurrencyMXN(publicStatus.amount)} {publicStatus.currency}
+                  </p>
+                </div>
+
+                <p className="text-sm text-gray-600 text-center">
+                  Por seguridad el codigo solo se envia por correo. Si no lo ves, revisa tu
+                  carpeta de spam o usa el boton de abajo.
+                </p>
+              </div>
             ) : (
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mb-8">
                 <div className="flex items-start gap-x-3">
@@ -221,13 +303,21 @@ export default function GiftCardSuccessPage() {
             )}
 
             {/* Email status and resend */}
-            {isPaymentConfirmed && giftCard && (
+            {isPaymentConfirmed && (giftCard || publicStatus) && (
               <div className="mb-6">
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-3 flex items-start gap-x-3">
+                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-800">{error}</p>
+                  </div>
+                )}
                 {emailResent ? (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-x-3">
                     <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
                     <p className="text-sm text-green-800">
-                      El correo ha sido reenviado exitosamente a {giftCard.recipient_email || giftCard.purchaser_email}
+                      {giftCard
+                        ? `El correo ha sido reenviado exitosamente a ${giftCard.recipient_email || giftCard.purchaser_email}`
+                        : 'El correo ha sido reenviado exitosamente.'}
                     </p>
                   </div>
                 ) : (

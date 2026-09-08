@@ -93,8 +93,10 @@ Deno.serve(async (req: Request) => {
             `${supabaseUrl}/functions/v1/send-membership-cancellation`,
             {
               method: 'POST',
+              // send-membership-cancellation exige service role desde A-1.
               headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
               },
               body: JSON.stringify({
                 email: userData.email,
