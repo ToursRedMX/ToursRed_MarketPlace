@@ -3,6 +3,7 @@ import { Mail, Users, UserMinus, UserCheck, Send, Search, RefreshCw, CheckCheck,
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import RichTextEditor from '../../components/RichTextEditor';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 interface NewsletterSubscriber {
   id: string;
@@ -385,7 +386,7 @@ const AdminNewsletter: React.FC = () => {
                   {expandedBroadcast === broadcast.id && (
                     <div className="border-t border-gray-100 px-4 py-3 bg-gray-50">
                       <div className="bg-white border-l-4 border-blue-400 rounded-r-xl px-4 py-3">
-                        <div className="text-sm text-gray-800 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: broadcast.message_body }} />
+                        <div className="text-sm text-gray-800 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(broadcast.message_body) }} />
                       </div>
                     </div>
                   )}
@@ -450,7 +451,7 @@ const AdminNewsletter: React.FC = () => {
                     </div>
                     <div className="bg-white px-4 py-3">
                       <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>{sendSubject || 'Asunto del comunicado'}</div>
-                      <div className="bg-gray-50 border-l-4 border-blue-500 rounded-r-lg px-3 py-2 text-sm text-gray-800 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sendMessage }} />
+                      <div className="bg-gray-50 border-l-4 border-blue-500 rounded-r-lg px-3 py-2 text-sm text-gray-800 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(sendMessage) }} />
                     </div>
                     <div className="bg-gray-50 px-4 py-2 text-center text-xs text-gray-400 border-t border-gray-100">
                       Recibes este correo porque estas suscrito al boletin de ToursRed.

@@ -7,6 +7,7 @@ import jsPDF from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import RichTextEditor from '../../components/RichTextEditor';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 interface TermsVersion {
   id: string;
@@ -194,7 +195,7 @@ const VersionCard: React.FC<{ version: TermsVersion; acceptanceCount: number }> 
           )}
           <div
             className="prose prose-sm max-w-none text-sm bg-white rounded-lg p-4 border border-gray-200 max-h-80 overflow-y-auto"
-            dangerouslySetInnerHTML={{ __html: version.content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(version.content) }}
           />
         </div>
       )}
@@ -396,7 +397,7 @@ const TermsManagementPage: React.FC = () => {
                   {activeVersions[activeTab] && (
                     <div
                       className="prose prose-sm max-w-none text-sm border border-gray-100 rounded-lg p-4 max-h-72 overflow-y-auto bg-gray-50"
-                      dangerouslySetInnerHTML={{ __html: activeVersions[activeTab].content }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(activeVersions[activeTab].content) }}
                     />
                   )}
                 </div>

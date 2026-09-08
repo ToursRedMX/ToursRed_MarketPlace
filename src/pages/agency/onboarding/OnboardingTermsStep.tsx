@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, CheckCircle, ChevronDown } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
+import { sanitizeHtml } from '../../../utils/sanitizeHtml';
 
 interface Props {
   agencyId: string;
@@ -67,7 +68,7 @@ const OnboardingTermsStep: React.FC<Props> = ({ agencyId, onAccepted }) => {
           className="border border-gray-200 rounded-xl h-72 overflow-y-auto p-5 text-sm text-gray-700 leading-relaxed bg-gray-50 mb-4"
         >
           {termsHtml ? (
-            <div dangerouslySetInnerHTML={{ __html: termsHtml }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(termsHtml) }} />
           ) : (
             <div className="space-y-3 text-gray-600">
               <p><strong>Contrato de Colaboración — Agencias de Viaje</strong></p>

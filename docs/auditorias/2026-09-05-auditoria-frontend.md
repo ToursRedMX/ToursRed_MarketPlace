@@ -23,14 +23,13 @@ qué.
 | F-2 — 60 líneas de cobro con Stripe que nunca se ejecutan | **Corregido** | #146 | `grep -rn 'createStripeCheckout' src/` no devuelve nada |
 | F-3 — consultas que se ejecutan y cuyo resultado se descarta | **Corregido** | — | Los tres estados de `BookingFlowStep3` ya no existen; en `AgencyFinancials.tsx:79-81` hay un comentario que documenta por qué se quitó `commissionRecords` del estado |
 | F-4 — el check de `lint` no puede salir rojo | **Corregido** | #146 + branch protection | `lint` corre con `--strict` y falla si el conteo sube; el 08-sep se agregó como **check requerido** (junto con `smoke`) |
-| F-5 — `xlsx` se instala desde un tarball de CDN, no desde npm | Pendiente | — | `package.json:36` sigue con `"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"` |
-| F-6 — HTML sin sanitizar de contenido administrable | Pendiente | — | Siguen **9 usos de `dangerouslySetInnerHTML` en 6 archivos**, y no hay `DOMPurify` ni ninguna sanitización en `src/` ni en `package.json` |
+| F-5 — `xlsx` se instala desde un tarball de CDN, no desde npm | **Cerrado como decisión consciente** — la recomendación estaba al revés | README, sección *Requisitos del build* | Ver la corrección al final de F-5 |
+| F-6 — HTML sin sanitizar de contenido administrable | **Corregido** | `src/utils/sanitizeHtml.ts` + los 9 sitios | Ver *Cómo quedó* al final de F-6 |
 
-**3 corregidos de 6.**
+**5 de 6 cerrados** (4 corregidos + F-5 documentado como decisión).
 
-De los tres pendientes, **F-5 es el más barato y el de peor relación riesgo/esfuerzo**:
-instalar `xlsx` desde un tarball de CDN significa que la cadena de suministro del build
-depende de un host que no es npm y sin `integrity` en el lockfile.
+Queda **F-1** solo: 247 de 498 consultas a Supabase no piden `error`. Es el de mayor
+impacto y el más caro, porque el trabajo real es el triage.
 
 ---
 
@@ -258,6 +257,46 @@ decisión consciente y no una herencia: si `xlsx` solo se usa para exportar, hay
 alternativas en el registro; si se queda, vale documentar en el README que el build
 requiere acceso a ese dominio.
 
+### Corrección del 08-sep-2026: la recomendación estaba al revés — CERRADO
+
+Se verificó contra el registro de npm y contra su base de avisos. **Mover `xlsx` al
+registro sería empeorarlo:**
+
+| Paquete | Última versión | Publicada | Avisos |
+|---|---|---|---|
+| `xlsx` (npm oficial) | **0.18.5** | **mar-2022** | **2 HIGH, sin versión corregida en npm** |
+| Lo que usa el repo (CDN) | **0.20.3** | jul-2024 | ninguno |
+
+Los dos avisos, según la base de datos del propio npm:
+
+- [GHSA-4r6h-8v6p-xvw6](https://github.com/advisories/GHSA-4r6h-8v6p-xvw6) — Prototype
+  Pollution, vulnerable en `< 0.19.3`
+- [GHSA-5pgg-2g8v-p4x9](https://github.com/advisories/GHSA-5pgg-2g8v-p4x9) — ReDoS,
+  vulnerable en `< 0.20.2`
+
+Ambos con `patched_versions: None`, porque npm se quedó cuatro años atrás. La versión que
+usa el repo está **por encima de los dos umbrales**.
+
+**Dos cosas que el hallazgo no consideró:**
+
+1. **El `package-lock.json` sí guarda el `integrity`** (`sha512-oLDq3jw7…`), así que npm
+   verifica el contenido del tarball al instalarlo. El riesgo de manipulación estaba
+   cerrado; lo que queda es disponibilidad.
+2. **El repo sólo escribe hojas, nunca las lee.** Las llamadas son `book_new`,
+   `aoa_to_sheet`, `json_to_sheet` y `writeFile`; no hay un solo `XLSX.read`. Las dos
+   vulnerabilidades se disparan **parseando** archivos maliciosos, así que en este código
+   ese camino no existe. Eso cambiaría el día que se acepte subir un `.xlsx` de usuario.
+
+**Se evaluó y descartó `@e965/xlsx@0.20.3`**, una republicación comunitaria de la misma
+versión, sin avisos y en el registro. Se vería mejor en `npm audit`, pero cambia una
+fuente oficial por una de terceros que no se puede contrastar contra el original: peor
+posición de cadena de suministro con mejor reporte.
+
+**Cómo quedó:** documentado en el README, sección *Requisitos del build*, con un aviso
+explícito de **no** moverlo a npm "para limpiar el `npm audit`". Ese es el riesgo real
+del hallazgo: que alguien lo "arregle" dentro de seis meses y meta las dos CVEs sin
+saberlo.
+
 ## F-6. HTML sin sanitizar de contenido administrable, renderizado a usuarios finales
 
 **6 archivos, 9 usos de `dangerouslySetInnerHTML`:**
@@ -282,6 +321,48 @@ primeros archivos de la tabla son los que convierten el problema en masivo.
 Sanitizar en el render (DOMPurify o equivalente) corta esa amplificación sin quitarle nada
 al editor de contenido, y es una defensa que no depende de que ninguna cuenta se mantenga
 íntegra.
+
+### Cómo quedó — CORREGIDO el 08-sep-2026
+
+Un helper compartido, `src/utils/sanitizeHtml.ts`, con **DOMPurify 3.4.15**, aplicado en
+**los 9 sitios** — no solo en los 3 de cara al usuario. Verificado con `grep`: no queda
+un `dangerouslySetInnerHTML` sin sanitizar en `src/`.
+
+**Dos endurecimientos salieron de PROBAR la configuración, no de leerla.** Se renderizaron
+12 payloads de verdad en Chromium con la config exacta del helper:
+
+1. **El perfil `html` de DOMPurify permite formularios.** Un
+   `<form action="//evil"><input type="password">` pasaba entero. No es ejecución de
+   JavaScript, pero es el escenario de amplificación de F-6 con otro disfraz: un
+   "inicia sesión para aceptar los términos" falso, visible para todo el que abra la
+   página. Se añadió `FORBID_TAGS` con `form`, `input`, `button`, `textarea`, `select`,
+   `option`, `label` y `fieldset`.
+2. **El perfil quitaba `target="_blank"`**, cambiando el comportamiento de enlaces
+   legítimos. Se vuelve a permitir con `ADD_ATTR: ['target']`, más un hook que fuerza
+   `rel="noopener noreferrer"` para cerrar el reverse tabnabbing.
+
+**Resultado de la prueba final:** neutralizados `<script>`, `onerror`, `onload`,
+`onmouseover`, `onclick`, `javascript:` en `href`, `<svg>`, `<iframe>`, `<object>`,
+`<embed>`, `<meta http-equiv=refresh>` y los formularios. El contenido legítimo
+—títulos, negritas, listas, tablas, enlaces con `target`— pasa intacto.
+
+**Un falso positivo, documentado para que nadie lo persiga otra vez:**
+`style="background:url(javascript:...)"` sobrevive al saneado pero **no ejecuta**. Se
+renderizó de verdad y no corrió nada: los navegadores modernos bloquean `javascript:` en
+CSS.
+
+**Lo que queda abierto a propósito:** `style="background-image:url(//servidor-ajeno/x)"`
+sí sobrevive y pide ese recurso al renderizarse — un vector de rastreo que revela IP y
+User-Agent del lector. Se deja pasar porque quitar `url()` de los estilos en línea
+rompería boletines y mensajes masivos legítimos, que suelen usar imágenes de fondo. No es
+ejecución de código ni robo de credenciales, y exige una cuenta de admin ya comprometida.
+El helper documenta dónde cerrarlo si se decide.
+
+**Sobre la dependencia nueva**, con la lección de F-5 aplicada: DOMPurify 3.4.15 se
+publicó el 06-sep-2026, no tiene dependencias, trae sus propios tipos, y se comprobó
+contra la base de avisos de npm que **no tiene ninguno** (los que existen afectan a
+`<= 3.4.5`). El tarball se descargó del registro oficial y **su sha512 se contrastó
+contra el `integrity` del lockfile antes de usarlo**.
 
 ---
 
@@ -310,9 +391,9 @@ patrón se repite: **los barridos automáticos producen más falsos positivos qu
 | 1 | **F-3** — decidir si el saldo de wallet/puntos *debe* mostrarse en el paso 3 | Medio | **una respuesta tuya**, luego trivial |
 | 2 | **F-2** — borrar `createStripeCheckout` | Medio | trivial |
 | 3 | **F-4** — hacer que `lint` falle si el conteo sube (patrón de `tipos-edge`) | Medio | bajo, y protege todo lo demás |
-| 4 | **F-6** — sanitizar el HTML de términos (los 3 archivos de cara al usuario) | Medio | bajo |
+| 4 | **F-6** — sanitizar el HTML de términos (los 3 archivos de cara al usuario) | Medio | **hecho 08-sep-2026** — los 9 sitios, no solo los 3 |
 | 5 | **F-1** — triage de los 248 sitios: empezar por los de reserva y pago | Alto | medio-alto (el triage es el trabajo) |
-| 6 | **F-5** — decidir conscientemente si `xlsx` se queda por URL | Medio | una decisión |
+| 6 | **F-5** — decidir conscientemente si `xlsx` se queda por URL | Medio | **hecho 08-sep-2026** — se queda, y el README dice por qué |
 
 **F-1 es el de mayor impacto pero va quinto a propósito:** los cuatro anteriores se cierran
 en un día entre todos, y el #3 evita que el problema siga creciendo mientras se hace el

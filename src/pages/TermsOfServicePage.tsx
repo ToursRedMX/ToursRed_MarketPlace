@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FileText, Scale } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Seo from '../components/Seo';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 interface ActiveTerms {
   id: string;
@@ -71,7 +72,7 @@ export default function TermsOfServicePage() {
             </div>
             <div
               className="p-8 prose prose-sm sm:prose max-w-none text-gray-700"
-              dangerouslySetInnerHTML={{ __html: terms.content }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(terms.content) }}
             />
             <div className="border-t border-gray-200 px-8 py-6">
               <p className="text-sm text-gray-500 text-center">
