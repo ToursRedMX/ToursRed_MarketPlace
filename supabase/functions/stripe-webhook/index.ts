@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.39.6";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9";
+import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 
 // Se nombra el tipo del cliente para no sumar mas `any` a un archivo que ya
 // tiene varios. Se importa en vez de derivarlo con ReturnType<typeof
@@ -518,7 +519,7 @@ Deno.serve(async (req) => {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
                   body: JSON.stringify({ booking_supplement_id: bookingSupplementId }),
-                }).catch(() => {})
+                }).then((res: Response) => vigilarRespuesta(res, "stripe-webhook -> generate-supplement-cfdi")).catch((e: unknown) => registrarFallo("stripe-webhook -> generate-supplement-cfdi", e))
               );
             }
 
@@ -600,7 +601,7 @@ Deno.serve(async (req) => {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
                   body: JSON.stringify({ booking_id: extraBookingId, extra_type: 'insurance' }),
-                }).catch(() => {})
+                }).then((res: Response) => vigilarRespuesta(res, "stripe-webhook -> send-extras-purchase-notification")).catch((e: unknown) => registrarFallo("stripe-webhook -> send-extras-purchase-notification", e))
               );
 
             } else if (extraType === 'optional_service' && extraBosId) {
@@ -619,7 +620,7 @@ Deno.serve(async (req) => {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
                   body: JSON.stringify({ booking_id: extraBookingId, extra_type: 'optional_service', bos_id: extraBosId }),
-                }).catch(() => {})
+                }).then((res: Response) => vigilarRespuesta(res, "stripe-webhook -> send-extras-purchase-notification")).catch((e: unknown) => registrarFallo("stripe-webhook -> send-extras-purchase-notification", e))
               );
             }
 
@@ -717,7 +718,9 @@ Deno.serve(async (req) => {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
                   body: JSON.stringify(cfdiBody),
-                }).catch(() => {})
+                })
+                  .then((res: Response) => vigilarRespuesta(res, `stripe-webhook -> ${cfdiFunction}`, { extraType }))
+                  .catch((e: unknown) => registrarFallo(`stripe-webhook -> ${cfdiFunction}`, e, { extraType }))
               );
             }
 
@@ -765,7 +768,7 @@ Deno.serve(async (req) => {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
                   body: JSON.stringify({ slot_id: featuredSlotId }),
-                }).catch(() => {})
+                }).then((res: Response) => vigilarRespuesta(res, "stripe-webhook -> generate-featured-slot-cfdi")).catch((e: unknown) => registrarFallo("stripe-webhook -> generate-featured-slot-cfdi", e))
               );
             }
           }

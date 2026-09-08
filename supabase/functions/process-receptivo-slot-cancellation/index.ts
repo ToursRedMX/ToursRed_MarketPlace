@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -303,7 +304,7 @@ Deno.serve(async (req: Request) => {
                 reason: cancellation_reason,
                 response_deadline: responseDeadline,
               }),
-            }).catch(() => {})
+            }).then((res: Response) => vigilarRespuesta(res, "process-receptivo-slot-cancellation -> send-slot-reschedule-notification")).catch((e: unknown) => registrarFallo("process-receptivo-slot-cancellation -> send-slot-reschedule-notification", e))
           );
         });
 
@@ -426,7 +427,7 @@ Deno.serve(async (req: Request) => {
           cancellation_reason,
           tour_name: tourName,
         }),
-      }).catch(() => {});
+      }).then((res: Response) => vigilarRespuesta(res, "process-receptivo-slot-cancellation -> send-agency-cancellation-notification-admin")).catch((e: unknown) => registrarFallo("process-receptivo-slot-cancellation -> send-agency-cancellation-notification-admin", e));
     }
 
     return new Response(

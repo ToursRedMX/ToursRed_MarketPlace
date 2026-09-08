@@ -30,7 +30,8 @@ igual de alcanzables). Las tres correcciones están abajo, en su sección, con l
 | A-3 | **FALSO POSITIVO** — retirado del conteo | — |
 | M-1 | **Corregido en código** — pendiente de desplegar y de una confirmación (ver más abajo) | ver más abajo |
 | M-2 | **Corregido** — el helper falla cerrado, y el hallazgo se quedó corto: los toggles de MFA están **encendidos** en producción, así que era un bypass vivo, no latente | ver más abajo |
-| M-3, M-5, M-6 | Pendiente (decisiones de arquitectura) | — |
+| M-6 | **Corregido en código** — y el hallazgo se quedó corto por partida doble: 6 de los sitios eran correctos, y en los otros 20 el `catch` ni siquiera era el problema | ver más abajo |
+| M-3, M-5 | Pendiente (decisiones de arquitectura) | — |
 | M-4 | **Corregido** — guard de service role en los dos crons | `bed5563` |
 
 **Conteo corregido: 10 hallazgos reales en este documento** (2 críticos, 2 altos,
@@ -42,10 +43,10 @@ Las otras dos tienen ahora su propia tabla de estado, verificada contra el códi
 
 | Auditoría | Cerrados | Abiertos | Total |
 |---|---|---|---|
-| Edge functions (este documento) | C-1, C-2, A-1, A-2, M-2, M-4 | M-1, M-3, M-5, M-6 | 6 / 10 |
+| Edge functions (este documento) | C-1, C-2, A-1, A-2, M-1, M-2, M-4, M-6 | M-3, M-5 | 8 / 10 |
 | Postgres | A-1, M-1, M-2, M-3, M-4 | — | **5 / 5** |
 | Frontend | F-2, F-3, F-4, F-5, F-6 | F-1 | 5 / 6 |
-| **Total** | **16** | **5** | **21** |
+| **Total** | **18** | **3** | **21** |
 
 > Este total se calcula sumando las filas de arriba, no de memoria. El 08-sep-2026
 > estuvo mal (decía 14/7) porque se incrementó a mano sin recontar; las filas ya
@@ -844,6 +845,65 @@ Es **exactamente la misma categoría** que `claude.md` ya documenta para
 después —cuando ya se cobró o ya se timbró—. La observación que hace el backlog aplica
 igual aquí: la pregunta no es "fallar o no fallar", sino **qué se hace visible en el
 momento**.
+
+### M-6, corregido el 08-sep-2026 — el hallazgo se quedó corto por partida doble
+
+**1. Seis de los sitios que conté estaban bien.** Son `try { JSON.parse(errorBody) } catch {}`
+alrededor del cuerpo de error de una API de pagos, y en todos el error ya fue a
+`console.error` y hay un mensaje de respaldo. Que el parseo falle sólo significa "usa el
+mensaje genérico". Ahí tragar es lo correcto y se dejaron intactos:
+`create-conekta-order`, `create-conekta-tokenization-checkout`, `process-supplement-payment`,
+`purchase-post-booking-extras`, `process-payment-plan-installment`, `capture-paypal-order`.
+
+**2. En los otros 20, el `catch` ni siquiera era el problema.** Y esto es peor que lo que
+describí:
+
+```ts
+EdgeRuntime.waitUntil(
+  supabase.functions.invoke("send-cfdi-email", { ... }).catch(() => {})
+);
+```
+
+**Ni `fetch()` ni `functions.invoke()` rechazan la promesa cuando la respuesta es 4xx o
+5xx.** `fetch` sólo rechaza si falla la red; `invoke` resuelve con `{ data, error }` y
+nunca lanza.
+
+O sea que ese `.catch(() => {})` no estaba tragando el error: **el error nunca llegaba
+ahí**. Si `send-cfdi-email` devolvía 500 —el viajero no recibió su CFDI—, la promesa se
+resolvía correctamente y nadie miraba el resultado. El `catch` era decorativo y el camino
+de fallo que importa no se comprobaba en absoluto.
+
+Es la misma trampa que ya mordió a este repo en `c968c1d`, donde `.rpc().catch()`
+reventaba los 5 webhooks de pago porque `PostgrestFilterBuilder` es *thenable* pero no es
+una `Promise`. Tercera vez que aparece la misma familia de error.
+
+#### El arreglo
+
+`_shared/falloSilencioso.ts`, con tres funciones que **no lanzan nunca** (se usan dentro
+de `EdgeRuntime.waitUntil`, donde una excepción no la recoge nadie):
+
+| | |
+|---|---|
+| `vigilarRespuesta(res, ctx)` | mira `res.ok` — lo que faltaba tras un `fetch` |
+| `vigilarResultado(r, ctx)` | mira `r.error` — lo que faltaba tras un `invoke` |
+| `registrarFallo(ctx, e)` | `console.error` + una fila en `public.audit_errors` |
+
+Se diseñó para **encadenar y no para envolver**, de modo que aplicarlo a los 20 sitios
+fuera un cambio de una línea en cada uno y no una reestructuración de 20 bloques.
+
+El rastro en `audit_errors` es el mismo criterio que se aplicó del lado de SQL en M-4:
+no se trata de fallar o no fallar, sino de que el fallo se haga visible en el momento. Y
+`registrarFallo` escribe vía REST con su propio `try/catch`, así que dejar el rastro nunca
+puede romper el flujo que se intentaba salvar.
+
+#### Alcance y verificación
+
+20 sitios en 15 funciones. `eslint`: **78 problemas antes y 78 después** en los archivos
+tocados, cero agregados —hubo que corregir dos cosas para llegar ahí: importar en cada
+función sólo los helpers que usa, y tipar los parámetros de los lambdas, que si no
+entraban como `implicit any`.
+
+**Al mergear hay que desplegar las 15 funciones**, más `send-contact-email` por M-1.
 
 ---
 

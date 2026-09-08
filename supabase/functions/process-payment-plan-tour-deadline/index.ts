@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -417,7 +418,7 @@ Deno.serve(async (req: Request) => {
                 booking_id: booking.id,
                 cancellation_id: cancellationRecord.id,
               }),
-            }).catch(() => {})
+            }).then((res: Response) => vigilarRespuesta(res, "process-payment-plan-tour-deadline -> send-cancellation-notification-traveler")).catch((e: unknown) => registrarFallo("process-payment-plan-tour-deadline -> send-cancellation-notification-traveler", e))
           );
         }
 
