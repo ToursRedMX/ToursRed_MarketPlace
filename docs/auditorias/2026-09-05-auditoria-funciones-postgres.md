@@ -24,7 +24,7 @@ comprobó* dice con qué.
 | A-1 — `search_path = ''` dejó rotas 4 funciones (y con ellas el alta de reseñas) | **Corregido** | `20260908150000_reparar_funciones_con_search_path_vacio.sql`, aplicada | La migración está en el repo y en `supabase_migrations.schema_migrations` |
 | M-1 — la migración masiva de `search_path` dejó una trampa para el futuro | **Corregido** — barrera de CI | `scripts/check-search-path.mjs` + `.github/workflows/search-path-guard.yml` | La base está limpia hoy (246 `SECURITY DEFINER`, **cero** sin `search_path`); la guardia impide que entre la próxima. Probada contra un archivo con 4 violaciones reales y contra uno limpio |
 | M-2 — `deduct_points` valida el saldo sobre una lectura sin bloquear | **Corregido** (y el hallazgo estaba mal dimensionado: eran 4 funciones, y el daño no estaba acotado) | `20260908055006_bloquear_billetera_de_puntos_antes_de_validar_saldo.sql`, aplicada | Ver la sección de M-2 más abajo |
-| M-3 — `refresh_commission_record` no valida quién la llama | **Migración escrita, PENDIENTE DE APLICAR** — y el hallazgo se quedó corto: estaba expuesta a **PUBLIC y `anon`**, no sólo a `authenticated` | `20260908185700_revocar_refresh_commission_record_de_public.sql` | Ver la sección de M-3 más abajo |
+| M-3 — `refresh_commission_record` no valida quién la llama | **Corregido y aplicado** — y el hallazgo se quedó corto: estaba expuesta a **PUBLIC y `anon`**, no sólo a `authenticated` | `20260908190712_revocar_refresh_commission_record_de_public.sql`, aplicada | `has_function_privilege` da `false` para `anon` y `authenticated`, `true` para `service_role` y `postgres` — el mismo perfil que `create_commission_record` |
 | M-4 — el patrón de `snapshot_booking_tax` está en tres funciones, no en una | Pendiente | — | Las dos migraciones que la tocan (`20260901064051`, `20260903035817`) son **anteriores** a la auditoría |
 
 **2 corregidos de 5.**
@@ -379,6 +379,18 @@ sobre la función que dispara.
 
 La migración conserva `service_role`, igual que esas hermanas, y termina con un bloque de
 verificación que **falla ruidosamente** si el ACL no quedó como se espera.
+
+#### Aplicada el 08-sep-2026
+
+Ledger 876 → **877 aplicadas, 877 archivos**, sin desfase. Supabase le asignó la versión
+`20260908190712` y el archivo se renombró para que coincidan. ACL resultante:
+
+```
+postgres=X/postgres | service_role=X/postgres
+```
+
+Idéntico al de `create_commission_record`. Comprobado con `has_function_privilege`:
+`anon` y `authenticated` en `false`; `service_role` y `postgres` en `true`.
 
 ## M-4. El patrón de `snapshot_booking_tax` está en tres funciones, no en una
 
