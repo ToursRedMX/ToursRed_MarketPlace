@@ -85,6 +85,12 @@ jobs:
       - name: Consultas a Supabase sin manejo de error (no debe subir)
         run: node scripts/check-supabase-errors.mjs
 
+      # M-5 de la auditoria de Edge Functions. Guardia en cero, no contador:
+      # nace en 0 hallazgos sobre las 171 funciones, asi que puede bloquear.
+      # Va aqui por lo mismo que el paso de arriba: `lint` ya es requerido.
+      - name: Nadie lee Origin/Referer crudo en Edge Functions
+        run: node scripts/check-origin-header.mjs
+
       - name: Run ESLint (el veredicto lo da el paso siguiente)
         run: |
           # bash corre con -e: sin set +e, eslint saliendo != 0 aborta el step.

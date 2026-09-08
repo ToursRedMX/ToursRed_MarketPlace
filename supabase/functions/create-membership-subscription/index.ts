@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.39.6';
 import Stripe from 'npm:stripe@22.3.0';
 import * as Sentry from "npm:@sentry/deno@9";
+import { origenParaRedirigir } from "../_shared/cors.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -189,8 +190,8 @@ Deno.serve(async (req: Request) => {
           quantity: 1,
         },
       ],
-      success_url: `${req.headers.get('origin')}/traveler/membership?success=true`,
-      cancel_url: `${req.headers.get('origin')}/traveler/membership/checkout?plan=${planType}&cancelled=true`,
+      success_url: `${origenParaRedirigir(req)}/traveler/membership?success=true`,
+      cancel_url: `${origenParaRedirigir(req)}/traveler/membership/checkout?plan=${planType}&cancelled=true`,
       subscription_data: subscriptionData,
     };
 

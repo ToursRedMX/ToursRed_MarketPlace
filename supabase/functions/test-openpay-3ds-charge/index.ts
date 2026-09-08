@@ -8,6 +8,7 @@ import {
   getChargeMerchant,
 } from "../_shared/openpay.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { origenParaRedirigir } from "../_shared/cors.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -136,7 +137,7 @@ Deno.serve(async (req: Request) => {
     const merchantId = getMerchantId();
     const auth = getAuthHeader();
 
-    const origin = req.headers.get("Origin") || req.headers.get("Referer") || "https://toursred.com";
+    const origin = origenParaRedirigir(req);
     const redirectUrl = `${origin}/test-openpay-3ds?result=return`;
     const orderId = `test3ds_${Date.now()}`;
 

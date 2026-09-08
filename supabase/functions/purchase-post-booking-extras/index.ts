@@ -4,6 +4,7 @@ import Stripe from "npm:stripe@22.3.0";
 import { isConfigured as isOpenpayConfigured, getDashboardUrl, getMerchantId, createOrReuseCustomer as createOrReuseOpenpayCustomer, createSpeiCharge, createCashCharge, createCardCheckoutCharge } from "../_shared/openpay.ts";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { origenParaRedirigir } from "../_shared/cors.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -517,7 +518,7 @@ Deno.serve(async (req: Request) => {
         });
       }
       const stripe = new Stripe(stripeKey, { apiVersion: "2026-06-24.dahlia" });
-      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
 
       const successUrl = type === "insurance"
         ? `${origin}/extras-success?type=insurance&booking_id=${booking_id}`
@@ -560,7 +561,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
       const notificationUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`;
       const extraChargeContext = type === "insurance" ? "insurance" : "optional_service";
       const extraRefId = bookingOptionalServiceId || booking_id;
@@ -728,7 +729,7 @@ Deno.serve(async (req: Request) => {
         .from("users").select("first_name, last_name").eq("id", user.id).maybeSingle();
       const conektaCustomerName = `${userProfileConekta?.first_name || ""} ${userProfileConekta?.last_name || ""}`.trim() || "Cliente";
 
-      const origin = req.headers.get("origin") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
       const extraChargeContext = type === "insurance" ? "insurance" : "optional_service";
       const extraRefId = bookingOptionalServiceId || booking_id;
       const successUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking_id}&status=success&context=${extraChargeContext}`;
@@ -840,7 +841,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const origin = req.headers.get("origin") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
       const extraChargeContext = type === "insurance" ? "insurance" : "optional_service";
       const extraRefId = bookingOptionalServiceId || booking_id;
       const successUrlOp = `${origin}/payment-pending/${extraRefId}?context=${extraChargeContext}`;

@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { origenParaRedirigir } from "../_shared/cors.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -240,7 +241,7 @@ Deno.serve(async (req: Request) => {
       }, 409);
     }
 
-    const origin = req.headers.get("origin") || "https://toursred.com";
+    const origin = origenParaRedirigir(req);
     const successUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking_id}&status=success&context=${context}`;
     const failureUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking_id}&status=failure&context=${context}`;
     const cancelUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking_id}&status=cancel&context=${context}`;

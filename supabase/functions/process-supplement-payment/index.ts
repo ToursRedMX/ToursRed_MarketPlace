@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@22.3.0";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { origenParaRedirigir } from "../_shared/cors.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -429,7 +430,7 @@ Deno.serve(async (req: Request) => {
       }
       const stripe = new Stripe(stripeKey, { apiVersion: "2026-06-24.dahlia" });
 
-      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
 
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
@@ -468,7 +469,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
       const notificationUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`;
 
       if (!mercadopago_payment_id) {
@@ -592,7 +593,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (payment_method === "openpay") {
-      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
       const opResponse = await fetch(`${supabaseUrl}/functions/v1/create-openpay-checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
@@ -648,7 +649,7 @@ Deno.serve(async (req: Request) => {
       const { data: userProfileConekta } = await supabase.from("users").select("first_name, last_name").eq("id", user.id).maybeSingle();
       const conektaCustomerName = `${userProfileConekta?.first_name || ""} ${userProfileConekta?.last_name || ""}`.trim() || "Cliente";
 
-      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
       const successUrl = `${origin}/supplement-success?supplement_id=${booking_supplement_id}`;
       const failureUrl = `${origin}/traveler/bookings`;
       const cancelUrl = `${origin}/traveler/bookings`;
