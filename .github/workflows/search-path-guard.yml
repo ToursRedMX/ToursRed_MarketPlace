@@ -1,0 +1,78 @@
+name: Guardia de search_path (bloquea)
+
+# M-1 de la auditoria de funciones Postgres (05-sep-2026).
+#
+# `CREATE OR REPLACE FUNCTION` reemplaza TODOS los atributos de la funcion,
+# incluidas sus clausulas SET. El ALTER masivo de dic-2025 le puso
+# `SET search_path` a todas las funciones de entonces, pero cualquiera que se
+# recree despues sin la clausula explicita lo pierde en silencio: sin error, sin
+# warning. En una `SECURITY DEFINER` eso es escalada de privilegios.
+#
+# La base esta limpia hoy (comprobado el 08-sep-2026: 246 SECURITY DEFINER,
+# cero sin search_path). Esta guardia no audita el pasado: impide la proxima.
+#
+# Solo revisa las migraciones que trae el PR. Escanear las 877 historicas da 20
+# hallazgos, todos anteriores al ALTER masivo y ya arreglados en la base; una
+# guardia que nace en 20 se ignora. Esta nace en 0.
+#
+# SOBRE HACERLA CHECK REQUERIDO: es seguro. Corre en TODOS los PR sin filtro de
+# `paths`, y cuando el PR no toca migraciones sale con exit 0 en segundos. No
+# repite el problema del PR #156, donde `smoke` tenia un filtro de `paths` y un
+# check requerido que no se ejecuta bloquea el PR para siempre.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guardia-search-path:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          # Hace falta el historico para poder diferenciar contra la base.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Revisar las migraciones que trae este cambio
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BASE_SHA}" ] || [ "${BASE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+            echo "Sin base con la que comparar (rama nueva o ejecucion manual)."
+            echo "Se revisan TODAS las migraciones, solo como informe."
+            node scripts/check-search-path.mjs --todo || true
+            exit 0
+          fi
+
+          # --diff-filter=ACMR: agregados, copiados, modificados y renombrados.
+          # Los borrados se excluyen a proposito: no hay archivo que leer.
+          ARCHIVOS=()
+          while IFS= read -r f; do
+            [ -n "$f" ] && ARCHIVOS+=("$f")
+          done < <(git diff --name-only --diff-filter=ACMR "${BASE_SHA}" "${HEAD_SHA}" -- 'supabase/migrations/*.sql')
+
+          if [ ${#ARCHIVOS[@]} -eq 0 ]; then
+            echo "Este cambio no toca ninguna migracion. Nada que revisar."
+            exit 0
+          fi
+
+          printf 'Migraciones en este cambio (%d):\n' "${#ARCHIVOS[@]}"
+          printf '  %s\n' "${ARCHIVOS[@]}"
+          echo
+
+          node scripts/check-search-path.mjs "${ARCHIVOS[@]}"
