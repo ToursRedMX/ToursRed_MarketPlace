@@ -23,14 +23,14 @@ qué.
 | F-2 — 60 líneas de cobro con Stripe que nunca se ejecutan | **Corregido** | #146 | `grep -rn 'createStripeCheckout' src/` no devuelve nada |
 | F-3 — consultas que se ejecutan y cuyo resultado se descarta | **Corregido** | — | Los tres estados de `BookingFlowStep3` ya no existen; en `AgencyFinancials.tsx:79-81` hay un comentario que documenta por qué se quitó `commissionRecords` del estado |
 | F-4 — el check de `lint` no puede salir rojo | **Corregido** | #146 + branch protection | `lint` corre con `--strict` y falla si el conteo sube; el 08-sep se agregó como **check requerido** (junto con `smoke`) |
-| F-5 — `xlsx` se instala desde un tarball de CDN, no desde npm | Pendiente | — | `package.json:36` sigue con `"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"` |
+| F-5 — `xlsx` se instala desde un tarball de CDN, no desde npm | **Cerrado como decisión consciente** — la recomendación estaba al revés | README, sección *Requisitos del build* | Ver la corrección al final de F-5 |
 | F-6 — HTML sin sanitizar de contenido administrable | Pendiente | — | Siguen **9 usos de `dangerouslySetInnerHTML` en 6 archivos**, y no hay `DOMPurify` ni ninguna sanitización en `src/` ni en `package.json` |
 
-**3 corregidos de 6.**
+**4 de 6 cerrados** (3 corregidos + F-5 documentado como decisión).
 
-De los tres pendientes, **F-5 es el más barato y el de peor relación riesgo/esfuerzo**:
-instalar `xlsx` desde un tarball de CDN significa que la cadena de suministro del build
-depende de un host que no es npm y sin `integrity` en el lockfile.
+De los dos pendientes, **F-6 es el que yo atacaría**: 9 usos de
+`dangerouslySetInnerHTML` sin sanitización, con contenido que escriben admins y que ven
+usuarios finales.
 
 ---
 
@@ -258,6 +258,46 @@ decisión consciente y no una herencia: si `xlsx` solo se usa para exportar, hay
 alternativas en el registro; si se queda, vale documentar en el README que el build
 requiere acceso a ese dominio.
 
+### Corrección del 08-sep-2026: la recomendación estaba al revés — CERRADO
+
+Se verificó contra el registro de npm y contra su base de avisos. **Mover `xlsx` al
+registro sería empeorarlo:**
+
+| Paquete | Última versión | Publicada | Avisos |
+|---|---|---|---|
+| `xlsx` (npm oficial) | **0.18.5** | **mar-2022** | **2 HIGH, sin versión corregida en npm** |
+| Lo que usa el repo (CDN) | **0.20.3** | jul-2024 | ninguno |
+
+Los dos avisos, según la base de datos del propio npm:
+
+- [GHSA-4r6h-8v6p-xvw6](https://github.com/advisories/GHSA-4r6h-8v6p-xvw6) — Prototype
+  Pollution, vulnerable en `< 0.19.3`
+- [GHSA-5pgg-2g8v-p4x9](https://github.com/advisories/GHSA-5pgg-2g8v-p4x9) — ReDoS,
+  vulnerable en `< 0.20.2`
+
+Ambos con `patched_versions: None`, porque npm se quedó cuatro años atrás. La versión que
+usa el repo está **por encima de los dos umbrales**.
+
+**Dos cosas que el hallazgo no consideró:**
+
+1. **El `package-lock.json` sí guarda el `integrity`** (`sha512-oLDq3jw7…`), así que npm
+   verifica el contenido del tarball al instalarlo. El riesgo de manipulación estaba
+   cerrado; lo que queda es disponibilidad.
+2. **El repo sólo escribe hojas, nunca las lee.** Las llamadas son `book_new`,
+   `aoa_to_sheet`, `json_to_sheet` y `writeFile`; no hay un solo `XLSX.read`. Las dos
+   vulnerabilidades se disparan **parseando** archivos maliciosos, así que en este código
+   ese camino no existe. Eso cambiaría el día que se acepte subir un `.xlsx` de usuario.
+
+**Se evaluó y descartó `@e965/xlsx@0.20.3`**, una republicación comunitaria de la misma
+versión, sin avisos y en el registro. Se vería mejor en `npm audit`, pero cambia una
+fuente oficial por una de terceros que no se puede contrastar contra el original: peor
+posición de cadena de suministro con mejor reporte.
+
+**Cómo quedó:** documentado en el README, sección *Requisitos del build*, con un aviso
+explícito de **no** moverlo a npm "para limpiar el `npm audit`". Ese es el riesgo real
+del hallazgo: que alguien lo "arregle" dentro de seis meses y meta las dos CVEs sin
+saberlo.
+
 ## F-6. HTML sin sanitizar de contenido administrable, renderizado a usuarios finales
 
 **6 archivos, 9 usos de `dangerouslySetInnerHTML`:**
@@ -312,7 +352,7 @@ patrón se repite: **los barridos automáticos producen más falsos positivos qu
 | 3 | **F-4** — hacer que `lint` falle si el conteo sube (patrón de `tipos-edge`) | Medio | bajo, y protege todo lo demás |
 | 4 | **F-6** — sanitizar el HTML de términos (los 3 archivos de cara al usuario) | Medio | bajo |
 | 5 | **F-1** — triage de los 248 sitios: empezar por los de reserva y pago | Alto | medio-alto (el triage es el trabajo) |
-| 6 | **F-5** — decidir conscientemente si `xlsx` se queda por URL | Medio | una decisión |
+| 6 | **F-5** — decidir conscientemente si `xlsx` se queda por URL | Medio | **hecho 08-sep-2026** — se queda, y el README dice por qué |
 
 **F-1 es el de mayor impacto pero va quinto a propósito:** los cuatro anteriores se cierran
 en un día entre todos, y el #3 evita que el problema siga creciendo mientras se hace el

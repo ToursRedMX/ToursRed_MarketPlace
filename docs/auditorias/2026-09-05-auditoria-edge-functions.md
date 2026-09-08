@@ -42,9 +42,9 @@ Las otras dos tienen ahora su propia tabla de estado, verificada contra el códi
 | Auditoría | Cerrados | Abiertos | Total |
 |---|---|---|---|
 | Edge functions (este documento) | C-1, C-2, A-1, A-2, M-4 | M-1, M-2, M-3, M-5, M-6 | 5 / 10 |
-| Postgres | A-1 | M-1, M-2, M-3, M-4 | 1 / 5 |
-| Frontend | F-2, F-3, F-4 | F-1, F-5, F-6 | 3 / 6 |
-| **Total** | **9** | **12** | **21** |
+| Postgres | A-1, M-2 | M-1, M-3, M-4 | 2 / 5 |
+| Frontend | F-2, F-3, F-4, F-5 | F-1, F-6 | 4 / 6 |
+| **Total** | **12** | **9** | **21** |
 
 Durante la remediación aparecieron hallazgos nuevos que no estaban en esta auditoría;
 se documentan al final, en *Hallazgos surgidos durante la remediación*.
