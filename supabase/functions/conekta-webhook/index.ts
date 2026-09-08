@@ -500,8 +500,12 @@ FwIDAQAB
         }
 
         // Accounting entry for supplement (fire and forget)
-        supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: chargeReferenceId })
-          .catch((e) => console.error("Error creating supplement accounting entry (Conekta):", e));
+        EdgeRuntime.waitUntil(
+          (async () => {
+            const { error } = await supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: chargeReferenceId });
+            if (error) console.error("Error creating supplement accounting entry (Conekta):", error.message);
+          })()
+        );
       } else if (chargeContext === "insurance" && chargeReferenceId) {
         const extraSubtotal = parseFloat(conektaOrder?.metadata?.extra_subtotal || String(tx.amount));
         const insuranceDaysMeta = conektaOrder?.metadata?.insurance_days ? Number(conektaOrder.metadata.insurance_days) : null;
@@ -545,8 +549,12 @@ FwIDAQAB
         }
 
         // Accounting entry for insurance purchase (fire and forget)
-        supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: bookingId })
-          .catch((e) => console.error("Error creating insurance accounting entry (Conekta):", e));
+        EdgeRuntime.waitUntil(
+          (async () => {
+            const { error } = await supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: bookingId });
+            if (error) console.error("Error creating insurance accounting entry (Conekta):", error.message);
+          })()
+        );
       } else if (chargeContext === "optional_service" && chargeReferenceId) {
         const { data: bosRow } = await supabase.from("booking_optional_services").select("subtotal").eq("id", chargeReferenceId).maybeSingle();
         const extraSubtotal = Number(bosRow?.subtotal) || parseFloat(conektaOrder?.metadata?.extra_subtotal || String(tx.amount));
@@ -585,8 +593,12 @@ FwIDAQAB
         }
 
         // Accounting entry for optional service (fire and forget)
-        supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: chargeReferenceId })
-          .catch((e) => console.error("Error creating optional service accounting entry (Conekta):", e));
+        EdgeRuntime.waitUntil(
+          (async () => {
+            const { error } = await supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: chargeReferenceId });
+            if (error) console.error("Error creating optional service accounting entry (Conekta):", error.message);
+          })()
+        );
       } else if (chargeContext === "gift_card" && chargeReferenceId) {
         await supabase
           .from("gift_cards")
@@ -610,8 +622,12 @@ FwIDAQAB
         );
 
         // Accounting entry for gift card sale (fire and forget)
-        supabase.rpc("create_accounting_entry_for_gift_card_sale", { p_gift_card_id: chargeReferenceId })
-          .catch((e) => console.error("Error creating gift card accounting entry (Conekta):", e));
+        EdgeRuntime.waitUntil(
+          (async () => {
+            const { error } = await supabase.rpc("create_accounting_entry_for_gift_card_sale", { p_gift_card_id: chargeReferenceId });
+            if (error) console.error("Error creating gift card accounting entry (Conekta):", error.message);
+          })()
+        );
       } else if (chargeContext === "payment_plan_installment" && chargeReferenceId) {
         // chargeReferenceId is the plan_id (set by process-payment-plan-installment)
         const planId = chargeReferenceId;
@@ -705,8 +721,12 @@ FwIDAQAB
 
           // Accounting entry for payment plan installment (fire and forget)
           if (allocResult?.transaction_id) {
-            supabase.rpc("create_accounting_entry_for_payment_plan_installment", { p_installment_tx_id: allocResult.transaction_id })
-              .catch((e) => console.error("Error creating payment plan installment accounting entry (Conekta):", e));
+            EdgeRuntime.waitUntil(
+              (async () => {
+                const { error } = await supabase.rpc("create_accounting_entry_for_payment_plan_installment", { p_installment_tx_id: allocResult.transaction_id });
+                if (error) console.error("Error creating payment plan installment accounting entry (Conekta):", error.message);
+              })()
+            );
           }
         }
       }

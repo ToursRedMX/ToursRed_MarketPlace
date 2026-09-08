@@ -523,8 +523,12 @@ Deno.serve(async (req) => {
             }
 
             // Accounting entry for supplement (fire and forget)
-            supabase.rpc('create_accounting_entry_for_supplement', { p_supplement_id: bookingSupplementId })
-              .catch((e) => console.error('Error creating supplement accounting entry (Stripe):', e));
+            EdgeRuntime.waitUntil(
+              (async () => {
+                const { error } = await supabase.rpc('create_accounting_entry_for_supplement', { p_supplement_id: bookingSupplementId });
+                if (error) console.error('Error creating supplement accounting entry (Stripe):', error.message);
+              })()
+            );
           }
           break;
         }
@@ -719,11 +723,19 @@ Deno.serve(async (req) => {
 
             // Accounting entry for insurance or optional service (fire and forget)
             if (extraType === 'optional_service' && extraBosId) {
-              supabase.rpc('create_accounting_entry_for_optional_service', { p_bos_id: extraBosId })
-                .catch((e) => console.error('Error creating optional service accounting entry (Stripe):', e));
+              EdgeRuntime.waitUntil(
+                (async () => {
+                  const { error } = await supabase.rpc('create_accounting_entry_for_optional_service', { p_bos_id: extraBosId });
+                  if (error) console.error('Error creating optional service accounting entry (Stripe):', error.message);
+                })()
+              );
             } else if (extraType === 'insurance') {
-              supabase.rpc('create_accounting_entry_for_insurance_purchase', { p_booking_id: extraBookingId })
-                .catch((e) => console.error('Error creating insurance accounting entry (Stripe):', e));
+              EdgeRuntime.waitUntil(
+                (async () => {
+                  const { error } = await supabase.rpc('create_accounting_entry_for_insurance_purchase', { p_booking_id: extraBookingId });
+                  if (error) console.error('Error creating insurance accounting entry (Stripe):', error.message);
+                })()
+              );
             }
           }
           break;
@@ -1002,8 +1014,12 @@ Deno.serve(async (req) => {
 
             // Accounting entry for payment plan installment (fire and forget)
             if (txRecord?.id) {
-              supabase.rpc('create_accounting_entry_for_payment_plan_installment', { p_installment_tx_id: txRecord.id })
-                .catch((e) => console.error('Error creating payment plan installment accounting entry (Stripe):', e));
+              EdgeRuntime.waitUntil(
+                (async () => {
+                  const { error } = await supabase.rpc('create_accounting_entry_for_payment_plan_installment', { p_installment_tx_id: txRecord.id });
+                  if (error) console.error('Error creating payment plan installment accounting entry (Stripe):', error.message);
+                })()
+              );
             }
 
             console.log(`✅ Payment plan installment processed for plan ${planId}`);
@@ -2354,8 +2370,12 @@ Deno.serve(async (req) => {
 
         // Accounting entry for membership (fire and forget)
         if (membershipTxId) {
-          supabase.rpc('create_accounting_entry_for_membership', { p_payment_transaction_id: membershipTxId })
-            .catch((e) => console.error('Error creating membership accounting entry (Stripe):', e));
+          EdgeRuntime.waitUntil(
+            (async () => {
+              const { error } = await supabase.rpc('create_accounting_entry_for_membership', { p_payment_transaction_id: membershipTxId });
+              if (error) console.error('Error creating membership accounting entry (Stripe):', error.message);
+            })()
+          );
         }
 
         // --- CFDI (fire-and-forget, no bloquea la activación) ---

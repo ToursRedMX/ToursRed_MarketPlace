@@ -455,8 +455,12 @@ Deno.serve(async (req: Request) => {
           }
 
           // Accounting entry for supplement (fire and forget)
-          supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: chargeReferenceId })
-            .catch((e) => console.error("Error creating supplement accounting entry (Openpay):", e));
+          EdgeRuntime.waitUntil(
+            (async () => {
+              const { error } = await supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: chargeReferenceId });
+              if (error) console.error("Error creating supplement accounting entry (Openpay):", error.message);
+            })()
+          );
 
         } else if (chargeContext === "gift_card" && chargeReferenceId) {
           // ── Idempotency check: skip if payment_transaction already succeeded ──
@@ -516,8 +520,12 @@ Deno.serve(async (req: Request) => {
           );
 
           // Accounting entry for gift card sale (fire and forget)
-          supabase.rpc("create_accounting_entry_for_gift_card_sale", { p_gift_card_id: chargeReferenceId })
-            .catch((e) => console.error("Error creating gift card accounting entry (Openpay):", e));
+          EdgeRuntime.waitUntil(
+            (async () => {
+              const { error } = await supabase.rpc("create_accounting_entry_for_gift_card_sale", { p_gift_card_id: chargeReferenceId });
+              if (error) console.error("Error creating gift card accounting entry (Openpay):", error.message);
+            })()
+          );
 
         } else if (chargeContext === "insurance" && chargeReferenceId) {
           const extraSubtotal = parseFloat(transaction.metadata?.extra_subtotal || String(chargeAmount));
@@ -548,8 +556,12 @@ Deno.serve(async (req: Request) => {
           }
 
           // Accounting entry for insurance purchase (fire and forget)
-          supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: chargeReferenceId })
-            .catch((e) => console.error("Error creating insurance accounting entry (Openpay):", e));
+          EdgeRuntime.waitUntil(
+            (async () => {
+              const { error } = await supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: chargeReferenceId });
+              if (error) console.error("Error creating insurance accounting entry (Openpay):", error.message);
+            })()
+          );
 
         } else if (chargeContext === "optional_service" && chargeReferenceId) {
           const { data: bosRowOp } = await supabase.from("booking_optional_services").select("subtotal, booking_id").eq("id", chargeReferenceId).maybeSingle();
@@ -582,8 +594,12 @@ Deno.serve(async (req: Request) => {
           }
 
           // Accounting entry for optional service (fire and forget)
-          supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: chargeReferenceId })
-            .catch((e) => console.error("Error creating optional service accounting entry (Openpay):", e));
+          EdgeRuntime.waitUntil(
+            (async () => {
+              const { error } = await supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: chargeReferenceId });
+              if (error) console.error("Error creating optional service accounting entry (Openpay):", error.message);
+            })()
+          );
 
         } else if (chargeContext === "payment_plan_installment" && chargeReferenceId) {
           const planId = chargeReferenceId;
@@ -626,8 +642,12 @@ Deno.serve(async (req: Request) => {
             .select("id").eq("plan_id", planId).eq("payment_provider", "openpay")
             .order("created_at", { ascending: false }).limit(1).maybeSingle();
           if (planTxRecord?.id) {
-            supabase.rpc("create_accounting_entry_for_payment_plan_installment", { p_installment_tx_id: planTxRecord.id })
-              .catch((e) => console.error("Error creating payment plan installment accounting entry (Openpay):", e));
+            EdgeRuntime.waitUntil(
+              (async () => {
+                const { error } = await supabase.rpc("create_accounting_entry_for_payment_plan_installment", { p_installment_tx_id: planTxRecord.id });
+                if (error) console.error("Error creating payment plan installment accounting entry (Openpay):", error.message);
+              })()
+            );
           }
 
         } else if (chargeContext === "featured_slot" && chargeReferenceId) {
