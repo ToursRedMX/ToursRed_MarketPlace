@@ -2320,17 +2320,33 @@ Deno.serve(async (req) => {
           .maybeSingle();
         let membershipTxId: string | null = null;
         if (!existingMembershipTx && membershipAmount > 0) {
-          const { data: newMembershipTx } = await supabase.from('payment_transactions').insert({
-            stripe_payment_intent_id: invoice.id,
-            amount: membershipAmount,
-            currency: 'mxn',
-            status: 'succeeded',
-            payment_processor: 'stripe',
-            processor_fee: 0,
-            net_amount: membershipAmount,
-            charge_context: 'membership',
-            charge_reference_id: membership!.id,
-          }).select('id').single();
+          // El error se revisa a proposito. Antes se descartaba, y este insert
+          // llevaba fallando en silencio contra el NOT NULL de booking_id (una
+          // membresia no tiene reserva). Sin membershipTxId no corre
+          // create_accounting_entry_for_membership, asi que ninguna membresia
+          // generaba asiento contable y nada lo delataba.
+          // La columna se hizo nullable en 20260908021728; el log queda para
+          // que la proxima vez que este insert falle, se vea.
+          const { data: newMembershipTx, error: membershipTxError } = await supabase
+            .from('payment_transactions').insert({
+              stripe_payment_intent_id: invoice.id,
+              amount: membershipAmount,
+              currency: 'mxn',
+              status: 'succeeded',
+              payment_processor: 'stripe',
+              processor_fee: 0,
+              net_amount: membershipAmount,
+              charge_context: 'membership',
+              charge_reference_id: membership!.id,
+            }).select('id').single();
+
+          if (membershipTxError) {
+            console.error(
+              `Error creando payment_transaction de membresia ${membership!.id} ` +
+              `(invoice ${invoice.id}): ${membershipTxError.message}`
+            );
+          }
+
           membershipTxId = newMembershipTx?.id ?? null;
         } else if (existingMembershipTx) {
           membershipTxId = existingMembershipTx.id;
