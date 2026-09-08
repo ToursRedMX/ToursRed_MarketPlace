@@ -11,20 +11,23 @@ name: Smoke test post-deploy
 # status `netlify/toursredmx/deploy-preview` y leer su target_url.
 
 on:
-  # Mismo filtro que el `ignore` de netlify.toml: si Netlify no construye
-  # preview, este workflow se quedaria 15 min esperando un status que no
-  # llega. Las dos listas deben mantenerse iguales.
+  # Corre en TODOS los PR, a proposito, y sin filtro de `paths`.
+  #
+  # Antes tenia uno que replicaba el `ignore` de netlify.toml, para no quedarse
+  # 15 min esperando un preview que Netlify no iba a construir. El razonamiento
+  # era correcto cuando este check era informativo, pero dejo de serlo el
+  # 08-sep-2026, cuando `smoke` paso a ser un check REQUERIDO en branch
+  # protection: un check requerido que NO SE EJECUTA no sale verde, se queda en
+  # "Expected — Waiting for status to be reported", y bloquea el PR para
+  # siempre. Se detecto en el PR #156, que solo tocaba archivos .md.
+  #
+  # Quitar el filtro es seguro porque el motivo original ya esta resuelto mas
+  # abajo, en el paso "Esperar al deploy preview": Netlify SI publica un commit
+  # status en los PR que no construyen preview —`success`, descripcion
+  # "Deploy Preview canceled.", y `target_url` apuntando a su panel en vez de al
+  # sitio—, y ese caso se detecta en segundos y sale con exit 0. O sea que la
+  # espera de 15 min no ocurre: lo que se salta es el smoke, no el job.
   pull_request:
-    paths:
-      - 'src/**'
-      - 'index.html'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'netlify.toml'
-      - 'vite.config.ts'
-      - 'tailwind.config.js'
-      - 'scripts/smoke-preview.mjs'
-      - '.github/workflows/smoke-preview.yml'
   workflow_dispatch:
     inputs:
       url:
