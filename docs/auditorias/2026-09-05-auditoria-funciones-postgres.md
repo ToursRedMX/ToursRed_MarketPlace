@@ -485,7 +485,7 @@ causas distintas:
 
 | Llamador | Qué manda | Por qué falla |
 |---|---|---|
-| `approve-booking:220` | `p_points: booking.points_used` | El parámetro se llama **`p_amount`**. La firma es `deduct_points(p_user_id, p_amount, p_description, p_reference_id, p_reference_type)`, así que PostgREST no resuelve la función |
+| `approve-booking:220` | `p_points: booking.points_used` | El parámetro se llama **`p_amount`**. La firma es `deduct_points(p_user_id, p_amount, p_description, p_reference_id, p_reference_type)`, así que PostgREST no resuelve la función — **CORREGIDO el 08-sep-2026** |
 | `process-payment-plan-tour-deadline:327` | `p_reference_type: "payment_plan_auto_cancel"` | No está en el `CHECK` de `reference_type` |
 | `process-agency-booking-cancellation:243` | `p_reference_type: "agency_booking_cancellation"` | Ídem |
 | `process-tour-cancellation:257` | `p_reference_type: "tour_cancellation"` | Ídem — el whitelist tiene `traveler_cancellation` y `admin_cancellation`, pero no ése |
@@ -515,8 +515,13 @@ Es M-6 de la auditoría de Edge Functions —errores tragados en silencio— con
 contable: **la reversión de puntos al cancelar nunca ha ocurrido**. El viajero conserva
 puntos que se le otorgaron por una reserva que después se canceló.
 
-**Qué hay que decidir antes de arreglarlo**, y por eso queda documentado y no corregido:
+**Estado.** El `p_points` de `approve-booking` era un error plano y **ya está
+corregido**: ahora manda `p_amount`. Comprobado llamando a `deduct_points` con
+argumentos **por nombre** —igual que hace PostgREST— en una transacción revertida:
+resolvió y descontó (10,544 → 10,519), y el saldo volvió a 10,544 al revertir. Era el
+único `p_points` del repo.
+
+Los otros tres siguen **documentados y sin corregir**. Lo que hay que decidir antes:
 si los tres `reference_type` que faltan se agregan al `CHECK`, o si los llamadores deben
 usar los que ya existen (`admin_cancellation` / `traveler_cancellation`). Es una decisión
-de semántica contable, no de código. Lo del `p_points` de `approve-booking` sí es un
-error plano y se arregla solo.
+de semántica contable, no de código.
