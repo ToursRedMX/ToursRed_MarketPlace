@@ -255,10 +255,12 @@ Deno.serve(async (req: Request) => {
       converted_at: new Date().toISOString(),
     }).eq("id", leadId);
 
-    // Send credentials email (fire-and-forget — conversion succeeds even if email fails)
+    // The account is already created: email failure must not repeat the conversion.
+    let emailSent = false;
     try {
       const executiveName = `${execData.first_name} ${execData.last_name || ""}`.trim();
-      await fetch(`${supabaseUrl}/functions/v1/send-agency-credentials`, {
+      const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-agency-credentials`, {
+        signal: AbortSignal.timeout(15000),
         method: "POST",
         // send-agency-credentials exige service role desde A-1: manda la
         // contrasena temporal por correo y antes era disparable sin credencial.
@@ -276,12 +278,18 @@ Deno.serve(async (req: Request) => {
           executiveName,
         }),
       });
-    } catch (emailErr) {
-      console.error("Failed to send agency credentials email:", emailErr);
+      // Require acknowledgement from the sender, not just HTTP success.
+      const emailResult = await emailResponse.json();
+      emailSent = emailResponse.ok && emailResult?.success === true;
+      if (!emailSent) {
+        console.error("Agency credentials email not confirmed", { status: emailResponse.status });
+      }
+    } catch {
+      console.error("Agency credentials email not confirmed: request failed or invalid response");
     }
 
     return new Response(
-      JSON.stringify({ success: true, agencyId: agencyData.id }),
+      JSON.stringify({ success: true, agencyId: agencyData.id, emailSent }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

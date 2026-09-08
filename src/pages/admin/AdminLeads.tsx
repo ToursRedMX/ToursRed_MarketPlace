@@ -123,7 +123,9 @@ export default function AdminLeads() {
       });
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error || 'Error al corregir el correo');
-      setActionMessage('Correo corregido y credenciales reenviadas correctamente');
+      setActionMessage(result.emailSent === true
+        ? 'Correo corregido. El servicio de correo confirmó el envío de las credenciales.'
+        : 'El correo y la contraseña ya se actualizaron, pero no se pudo confirmar el envío. No repitas la corrección. Contacta a soporte para verificar el envío.');
       setFixEmailLead(null);
       setFixEmailValue('');
       loadLeads();
@@ -151,7 +153,9 @@ export default function AdminLeads() {
       });
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error || 'Error al reenviar credenciales');
-      setActionMessage('Credenciales reenviadas correctamente');
+      setActionMessage(result.emailSent === true
+        ? 'El servicio de correo confirmó el envío de las credenciales.'
+        : 'La contraseña ya se actualizó, pero no se pudo confirmar el envío. No repitas la operación: generaría otra contraseña. Contacta a soporte para verificar el envío.');
       setResendLead(null);
     } catch (err: any) {
       setActionMessage(err.message || 'Error al reenviar credenciales');
@@ -195,6 +199,12 @@ export default function AdminLeads() {
         <h1 className="text-2xl font-bold text-gray-900">Pipeline Global de Leads</h1>
         <p className="text-gray-500 mt-1">Todos los leads de todos los ejecutivos de cuenta</p>
       </div>
+
+      {actionMessage && !fixEmailLead && !resendLead && (
+        <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {actionMessage}
+        </div>
+      )}
 
       {/* Status Summary */}
       <div className="flex gap-2 flex-wrap">

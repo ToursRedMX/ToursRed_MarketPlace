@@ -89,7 +89,7 @@ export default function ExecutiveLeads() {
   const [editingLead, setEditingLead] = useState<AgencyLead | null>(null);
   const [form, setForm] = useState<typeof EMPTY_LEAD>({ ...EMPTY_LEAD });
   const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; rfc?: string }>({});
   const [fieldStatus, setFieldStatus] = useState<{ email?: 'checking' | 'ok' | 'error'; rfc?: 'checking' | 'ok' | 'error' }>({});
   const debounceTimerRef = useRef<{ email?: ReturnType<typeof setTimeout>; rfc?: ReturnType<typeof setTimeout> }>({});
@@ -398,7 +398,12 @@ export default function ExecutiveLeads() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Error al convertir el lead.');
 
-      setMessage({ type: 'success', text: `Agencia "${lead.agency_name}" registrada exitosamente. Se enviaron las credenciales y la contraseña temporal al email.` });
+      setMessage({
+        type: result.emailSent === true ? 'success' : 'warning',
+        text: result.emailSent === true
+          ? `Agencia "${lead.agency_name}" registrada. El servicio de correo confirmó el envío de las credenciales.`
+          : `Agencia "${lead.agency_name}" registrada, pero no se pudo confirmar el envío de las credenciales. No repitas el registro. Contacta a soporte para verificar el envío.`,
+      });
       setShowConvertModal(null);
       resetConvertForm();
       loadLeads();
@@ -463,7 +468,9 @@ export default function ExecutiveLeads() {
       });
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error || 'Error al corregir el correo');
-      setActionMessage('Correo corregido y credenciales reenviadas correctamente');
+      setActionMessage(result.emailSent === true
+        ? 'Correo corregido. El servicio de correo confirmó el envío de las credenciales.'
+        : 'El correo y la contraseña ya se actualizaron, pero no se pudo confirmar el envío. No repitas la corrección. Contacta a soporte para verificar el envío.');
       setFixEmailLead(null);
       setFixEmailValue('');
       loadLeads();
@@ -491,7 +498,9 @@ export default function ExecutiveLeads() {
       });
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error || 'Error al reenviar credenciales');
-      setActionMessage('Credenciales reenviadas correctamente');
+      setActionMessage(result.emailSent === true
+        ? 'El servicio de correo confirmó el envío de las credenciales.'
+        : 'La contraseña ya se actualizó, pero no se pudo confirmar el envío. No repitas la operación: generaría otra contraseña. Contacta a soporte para verificar el envío.');
       setResendLead(null);
     } catch (err: any) {
       setActionMessage(err.message || 'Error al reenviar credenciales');
@@ -533,8 +542,14 @@ export default function ExecutiveLeads() {
         </button>
       </div>
 
+      {actionMessage && !fixEmailLead && !resendLead && (
+        <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {actionMessage}
+        </div>
+      )}
+
       {message && (
-        <div className={`rounded-lg px-4 py-3 text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+        <div className={`rounded-lg px-4 py-3 text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : message.type === 'warning' ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
           {message.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
           {message.text}
           <button onClick={() => setMessage(null)} className="ml-auto"><X className="h-4 w-4" /></button>
