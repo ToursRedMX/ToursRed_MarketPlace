@@ -9,10 +9,15 @@ const corsHeaders = {
 };
 
 interface EmailRequest {
-  referrerEmail: string;
-  referrerName: string;
   referredName: string;
   referralCode: string;
+  /**
+   * El front todavia los manda, pero se IGNORAN: el destinatario y su nombre
+   * salen de la base a partir del codigo de referido. Ver el comentario de A-1
+   * mas abajo. Estan declarados para dejar claro que se reciben y no se usan.
+   */
+  referrerEmail?: string;
+  referrerName?: string;
 }
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
@@ -34,14 +39,60 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { referrerEmail, referrerName, referredName, referralCode }: EmailRequest = await req.json();
+    const { referredName, referralCode }: EmailRequest = await req.json();
 
-    if (!referrerEmail || !referredName || !referralCode) {
+    if (!referredName || !referralCode) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing required fields" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // A-1 (auditoria 05-sep-2026): esta funcion se llama durante el alta, antes
+    // de que exista sesion, asi que no puede exigir autenticacion. Lo que si se
+    // puede es dejar de creerle al llamador a QUIEN le manda el correo:
+    // referrerEmail y referrerName venian en el cuerpo, o sea que cualquiera
+    // podia usar el SMTP y el dominio de ToursRed para escribirle a la
+    // direccion que quisiera. Ahora el destinatario sale del codigo de
+    // referido: si el codigo no existe, no se manda nada.
+    const { data: codigo } = await supabase
+      .from("referral_codes")
+      .select("user_id")
+      .eq("code", referralCode.trim().toLowerCase())
+      .maybeSingle();
+
+    if (!codigo?.user_id) {
+      console.warn(`send-referral-signup-notification: codigo ${referralCode} inexistente`);
+      return new Response(
+        JSON.stringify({ success: false, error: "Codigo de referido invalido" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: referidor } = await supabase
+      .from("users")
+      .select("email, first_name, last_name")
+      .eq("id", codigo.user_id)
+      .maybeSingle();
+
+    if (!referidor?.email) {
+      return new Response(
+        JSON.stringify({ success: false, error: "El referidor no tiene correo registrado" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const referrerEmail = referidor.email as string;
+    const referrerName =
+      [referidor.first_name, referidor.last_name].filter(Boolean).join(" ").trim() || referrerEmail;
+
+    // referredName sigue viniendo del cuerpo (es el nombre que acaba de teclear
+    // quien se registra) y va dentro del HTML del correo: se escapa.
+    const escapeHtml = (s: string): string =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const referredNameSeguro = escapeHtml(String(referredName));
+    const referralCodeSeguro = escapeHtml(String(referralCode));
 
     const [{ data: emailSettings }, { data: platformSettings }] = await Promise.all([
       supabase.from("email_settings").select("smtp_api_key, contact_email").maybeSingle(),
@@ -88,13 +139,13 @@ Deno.serve(async (req: Request) => {
                       Hola <strong>${referrerName}</strong>,
                     </p>
                     <p style="margin: 0 0 24px 0; color: #374151; font-size: 16px; line-height: 26px;">
-                      ¡Excelentes noticias! <strong>${referredName}</strong> acaba de registrarse en ToursRed usando tu código de referido <strong style="color: #dc2626;">${referralCode}</strong>.
+                      ¡Excelentes noticias! <strong>${referredNameSeguro}</strong> acaba de registrarse en ToursRed usando tu código de referido <strong style="color: #dc2626;">${referralCodeSeguro}</strong>.
                     </p>
 
                     <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; margin: 24px 0; border-radius: 4px;">
                       <p style="margin: 0 0 8px 0; color: #92400e; font-size: 15px; font-weight: 600;">Estado: Pendiente de primera reserva</p>
                       <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 22px;">
-                        Cuando <strong>${referredName}</strong> complete su primera reserva, ¡ambos recibirán <strong>5,000 puntos ToursRed</strong>!
+                        Cuando <strong>${referredNameSeguro}</strong> complete su primera reserva, ¡ambos recibirán <strong>5,000 puntos ToursRed</strong>!
                       </p>
                     </div>
 

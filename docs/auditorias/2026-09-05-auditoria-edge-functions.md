@@ -15,16 +15,17 @@ migraciones SQL, funciones de Netlify, y la superficie de `_shared/contractDocDe
 
 ## Estado de la remediación (actualizado 07-sep-2026)
 
-Este documento nació como solo-lectura. Después se atacaron los hallazgos, y **dos cosas
-cambiaron respecto de lo que se escribió el 05-sep**: A-3 resultó falso positivo, y C-1
-resultó bastante más grande de lo documentado. Ambas correcciones están abajo, en su
-sección, con la evidencia.
+Este documento nació como solo-lectura. Después se atacaron los hallazgos, y **tres cosas
+cambiaron respecto de lo que se escribió el 05-sep**: A-3 resultó falso positivo, C-1
+resultó bastante más grande de lo documentado, y A-1 resultó a la vez más chico (5 de las
+44 sí tenían guard) y más grande (hay 7 funciones `send-*` más, con `verify_jwt = true`,
+igual de alcanzables). Las tres correcciones están abajo, en su sección, con la evidencia.
 
 | Hallazgo | Estado | Dónde |
 |---|---|---|
 | C-1 | **Corregido** (y reescrito: eran 4 palancas, no 1) | `a90237d` |
 | C-2 | **Corregido** — el webhook falla cerrado | `bed5563` |
-| A-1 | Pendiente | — |
+| A-1 | **Corregido** (y corregido el conteo: eran 39 de 44 sin control, y hay 7 más igual de expuestas con `verify_jwt = true`) | ver más abajo |
 | A-2 | **Corregido** — exige dueño/agencia/staff/admin o service role | `bed5563` |
 | A-3 | **FALSO POSITIVO** — retirado del conteo | — |
 | M-1 | Pendiente | — |
@@ -351,6 +352,77 @@ líneas: `process-payment-plan-tour-deadline/index.ts:81-91`.
 frontend con sesión de usuario. Si alguna lo es, cerrarla con "solo service role" la
 rompería, y hay que decidir caso por caso. Ese inventario es el primer paso del arreglo.
 
+### Corrección del 08-sep-2026: el inventario cambió el hallazgo — CORREGIDO
+
+La *Nota honesta* de arriba decía que el inventario de llamadores era el primer paso.
+Se hizo, y cambió tres cosas del hallazgo tal como estaba escrito.
+
+**1. No eran 44 sin ningún control: eran 39 de esas 44** (y 42 contando las 7 del punto
+siguiente). Cinco de las 44 sí tenían guard y la
+frase "la única coincidencia con `Authorization` es la línea de CORS" era falsa para
+ellas: `send-booking-confirmation` (getUser + comparación contra service role),
+`send-gift-card-email` (getUser + rol + propiedad + tope de 3 reenvíos en 24 h),
+`send-verification-email`, `send-welcome-email` y `send-contact-email` (Turnstile,
+aunque opcional — eso es M-1).
+
+**2. Faltaban 7.** El filtro de la auditoría fue `verify_jwt = false`, pero eso no es
+lo que determina si una función es alcanzable — es justo lo que dice la *Nota
+metodológica* de este mismo documento. Hay 7 funciones `send-*` con `verify_jwt = true`
+y la llave publicable las alcanza igual: `send-membership-payment-failed`,
+`send-newsletter-broadcast`, `send-partial-cancellation-notification-admin`,
+`send-partial-cancellation-notification-traveler`, `send-payout-confirmation`,
+`send-staff-invitation`, `send-tour-mass-message`. De ellas, 4 ya tenían guard.
+
+**3. "Cerrarlas con solo service role" habría roto seis caminos vivos.** El inventario
+(grep sobre `src/`, `supabase/functions/` y `supabase/migrations/`, mirando la cabecera
+real de cada llamada, no el nombre de la función) encontró:
+
+| Lo que se encontró | Dónde |
+|---|---|
+| 5 llamadas edge→edge **sin ninguna cabecera `Authorization`** | `resend-agency-credentials`, `fix-agency-email`, `convert-lead-to-agency`, `create-executive-user`, `manage-membership-subscription` |
+| 3 llamadas edge→edge con la **anon key** | `process-receptivo-slot-cancellation` (×2), `process-slot-reschedule-request` |
+| 3 crons de Postgres que mandan el service role en el header **`apikey`**, no en `Authorization` | `process_expired_slot_reschedules`, `process_membership_renewal_reminders` |
+| 1 trigger de Postgres que manda la **publishable key** | `notify_executive_by_email` |
+| 4 llamadas del front sin sesión (llave publicable o nada) a funciones de admin | `AdminAgencies.tsx`, `AdminTicketDetail.tsx` (×3) |
+| 4 funciones llamadas desde el front **cuando todavía no hay sesión** | contacto, cotizaciones, recuperar contraseña, alta con código de referido |
+
+**Cómo quedaron.** Cuatro grupos:
+
+- **Solo service role (31 funciones).** `requireServiceRole` de `_shared/auth.ts`. El
+  guard se extendió para aceptar el service role también en el header `apikey`, porque
+  es como lo mandan los crons de Postgres desde la migración `20260821212354`.
+- **Usuario autenticado o admin (8 funciones).** `requireUser` / `requireAdmin`. Las 3
+  llamadas del front que mandaban la llave publicable ahora mandan la sesión.
+- **Llamadores arreglados (12 sitios en 9 archivos).** Los edge que llamaban sin
+  cabecera o con anon key ahora mandan el `SERVICE_ROLE_KEY`; los 4 del front mandan la
+  sesión del admin.
+- **Públicas de verdad (4 funciones).** No pueden exigir autenticación porque se llaman
+  antes de que exista sesión. Se acotaron de otra forma:
+  - `send-contact-email`: el destinatario es el buzón propio de ToursRed
+    (`email_settings.contact_email`). **No es un relay**; su pendiente es M-1.
+  - `send-password-reset`: el destinatario debe existir en `users` y el contenido es un
+    código generado por la función. **No es un relay**; se le puso tope de 3 códigos por
+    correo por hora, después de la respuesta genérica anti-enumeración para no filtrar
+    qué correos existen.
+  - `send-referral-signup-notification`: **sí era un relay** — `referrerEmail` y
+    `referrerName` venían en el cuerpo. Ahora el destinatario sale de `referral_codes`
+    → `users` a partir del código; si el código no existe, no se manda nada.
+  - `send-inquiry-email`: **sí era un relay** — manda copia de confirmación a la
+    dirección del cuerpo. Es un formulario público de landing y no se puede cerrar sin
+    Turnstile (M-1); mientras tanto, tope de 3 cotizaciones por correo por hora.
+
+**Un bug encontrado de paso.** `send-gift-card-email` sí tenía guard, pero hacía
+`getUser(token)` con el token que le llega, y los 5 webhooks de pago la llaman con el
+`SERVICE_ROLE_KEY`, que no tiene usuario detrás. O sea: **el correo de una tarjeta de
+regalo pagada nunca salía** — respondía 401. Corregido aceptando al llamador interno.
+
+**Lo que falta y por qué.** `send-executive-notification` quedó con guard de service
+role, pero su único llamador (`notify_executive_by_email`, un trigger) manda la
+publishable key. La migración que lo cambia al `service_role_key` del Vault está escrita
+(`20260908180000_notify_executive_by_email_usa_service_key.sql`) pero **no aplicada**:
+va antes de desplegar esa función, o hay una ventana en la que el trigger llama con una
+credencial que la función ya rechaza.
+
 ---
 
 ## A-2. `generate-booking-qr-token` emite el token de check-in de cualquier reserva, sin autenticación
@@ -605,7 +677,7 @@ El orden es por riesgo sobre el lanzamiento del 21 de septiembre, no por dificul
 | 1 | **C-2** — verificar que `STRIPE_WEBHOOK_SECRET` esté en los 3 ambientes | Crítico | ✅ resuelto: hoy hay un solo ambiente y la variable existe |
 | 2 | **C-1** — que el servidor fije el precio | Crítico | ✅ `a90237d` |
 | 3 | **C-2** — hacer que el webhook de Stripe falle cerrado, como el de PayPal | Crítico | ✅ `bed5563` |
-| 4 | **A-1** — inventariar las ~44 `send-*` y cerrarlas con el guard de service role | Alto | **pendiente** — medio (el inventario es el trabajo) |
+| 4 | **A-1** — inventariar las ~44 `send-*` y cerrarlas con el guard de service role | Alto | **hecho 08-sep-2026** — el inventario era, en efecto, el trabajo |
 | 5 | ~~**A-3**~~ | ~~Alto~~ | ❌ falso positivo, retirado |
 | 6 | **A-2** — exigir dueño/agencia/admin en `generate-booking-qr-token` | Alto | ✅ `bed5563` |
 | 7 | **M-1** — Turnstile obligatorio y rate limit por IP en el formulario de contacto | Medio | **pendiente** — bajo |

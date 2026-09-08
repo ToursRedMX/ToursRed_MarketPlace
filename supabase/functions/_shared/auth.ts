@@ -41,9 +41,48 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  * No es un refactor masivo: sustituir un guard que hoy funciona por uno nuevo
  * sin comprobar a sus llamadores es exactamente como se rompen los caminos de
  * pago.
+ *
+ * El 08-sep-2026 se adopto en las funciones send-* al cerrar A-1. El primer
+ * paso NO fue tocar codigo: fue levantar el inventario de llamadores reales de
+ * cada una (grep sobre src/, supabase/functions/ y supabase/migrations/) y
+ * clasificarlas por como las llaman de verdad. Salieron cuatro grupos, y varias
+ * sorpresas que habrian roto caminos vivos si se hubiera aplicado
+ * "solo service role" a todas:
+ *
+ *   - 5 funciones edge llamaban a otra send-* SIN ninguna cabecera
+ *     Authorization (resend-agency-credentials, fix-agency-email,
+ *     convert-lead-to-agency, create-executive-user,
+ *     manage-membership-subscription).
+ *   - 3 llamadas edge->edge mandaban la ANON key
+ *     (process-receptivo-slot-cancellation, process-slot-reschedule-request).
+ *   - 3 crons de Postgres mandan el service role en el header `apikey`, no en
+ *     Authorization; uno mandaba la publishable key.
+ *   - 4 se llaman desde el front con la llave publicable porque no hay sesion
+ *     (formulario de contacto, cotizaciones, recuperar contrasena, alta con
+ *     codigo de referido): esas no pueden exigir autenticacion y se acotaron de
+ *     otra forma.
  */
 
-type ClienteAdmin = ReturnType<typeof createClient>;
+/**
+ * El cliente admin lo crea este modulo, no lo recibe.
+ *
+ * La primera version lo recibia como parametro, y eso obligaba a que la funcion
+ * que llama al guard y este archivo importen la MISMA version de supabase-js.
+ * No es el caso: la mitad del repo importa @2 y la otra mitad @2.39.6, asi que
+ * pasar el cliente daba un TS2345 por tipos estructuralmente distintos. Crearlo
+ * aqui evita el problema de raiz y de paso quita una linea repetida en cada
+ * funcion que adopta el guard.
+ *
+ * Es un cliente sin sesion: solo se usa para resolver el JWT del llamador y
+ * leer users.role.
+ */
+function clienteAdmin() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+}
 
 const corsPorDefecto = {
   "Access-Control-Allow-Origin": "*",
@@ -81,11 +120,30 @@ function leerBearer(req: Request): string {
   return (req.headers.get("Authorization") ?? "").replace("Bearer ", "").trim();
 }
 
-function esServiceRoleKey(bearer: string): boolean {
+/**
+ * Las llamadas que salen de Postgres (net.http_post en triggers y crons) NO
+ * mandan Authorization: mandan la credencial en el header `apikey`. Es la forma
+ * que exige el formato nuevo de llaves de Supabase (sb_secret_/sb_publishable_),
+ * que el gateway rechaza en Authorization: Bearer. Ver la migracion
+ * 20260821212354_fix_pg_net_calls_use_apikey_header_for_new_key_format_compat.
+ *
+ * Por eso el guard mira los dos sitios. No es un relajo del control: la
+ * comparacion sigue siendo contra el SERVICE_ROLE_KEY exacto.
+ */
+function leerApikey(req: Request): string {
+  return (req.headers.get("apikey") ?? "").trim();
+}
+
+function esServiceRoleKey(credencial: string): boolean {
   const clave = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   // La comparacion con cadena vacia siempre seria verdadera si la variable
-  // faltara y el bearer viniera vacio: por eso se exige longitud en los dos.
-  return Boolean(clave) && bearer.length > 0 && bearer === clave;
+  // faltara y la credencial viniera vacia: por eso se exige longitud en las dos.
+  return Boolean(clave) && credencial.length > 0 && credencial === clave;
+}
+
+/** true si el service role viene por Authorization o por apikey. */
+function llamadaInterna(req: Request): boolean {
+  return esServiceRoleKey(leerBearer(req)) || esServiceRoleKey(leerApikey(req));
 }
 
 /**
@@ -99,9 +157,7 @@ function esServiceRoleKey(bearer: string): boolean {
  * rompe con un 401.
  */
 export function requireServiceRole(req: Request, { recurso, cors }: OpcionesBase): ResultadoAuth {
-  const bearer = leerBearer(req);
-
-  if (!esServiceRoleKey(bearer)) {
+  if (!llamadaInterna(req)) {
     console.warn(`${recurso}: llamada sin service role, rechazada`);
     return { ok: false, response: json({ error: "No autorizado" }, 401, cors) };
   }
@@ -116,20 +172,20 @@ export function requireServiceRole(req: Request, { recurso, cors }: OpcionesBase
  * usuario, asi que getUser no devuelve a nadie y termina en 401.
  */
 export async function requireUser(
-  admin: ClienteAdmin,
   req: Request,
   { recurso, cors }: OpcionesBase,
 ): Promise<ResultadoAuth> {
-  const bearer = leerBearer(req);
-
-  if (esServiceRoleKey(bearer)) {
+  if (llamadaInterna(req)) {
     return { ok: true, llamador: { esServiceRole: true, esAdmin: true, userId: null } };
   }
+
+  const bearer = leerBearer(req);
 
   if (!bearer) {
     return { ok: false, response: json({ error: "No autenticado" }, 401, cors) };
   }
 
+  const admin = clienteAdmin();
   const { data: { user }, error } = await admin.auth.getUser(bearer);
   if (error || !user) {
     console.warn(`${recurso}: bearer sin usuario detras, rechazado`);
@@ -142,11 +198,10 @@ export async function requireUser(
 
 /** Exige admin o super_admin (o service role). */
 export async function requireAdmin(
-  admin: ClienteAdmin,
   req: Request,
   { recurso, cors }: OpcionesBase,
 ): Promise<ResultadoAuth> {
-  const previo = await requireUser(admin, req, { recurso, cors });
+  const previo = await requireUser(req, { recurso, cors });
   if (!previo.ok) return previo;
 
   if (!previo.llamador.esAdmin) {
@@ -165,11 +220,10 @@ export async function requireAdmin(
  * guarda nada.
  */
 export async function requireOwnerOrAdmin(
-  admin: ClienteAdmin,
   req: Request,
   { ownerUserId, recurso, cors }: OpcionesBase & { ownerUserId: string | null | undefined },
 ): Promise<ResultadoAuth> {
-  const previo = await requireUser(admin, req, { recurso, cors });
+  const previo = await requireUser(req, { recurso, cors });
   if (!previo.ok) return previo;
 
   const { esServiceRole, esAdmin, userId } = previo.llamador;
@@ -181,7 +235,7 @@ export async function requireOwnerOrAdmin(
   return { ok: false, response: json({ error: "No tienes permiso sobre este recurso" }, 403, cors) };
 }
 
-async function tieneRolAdmin(admin: ClienteAdmin, userId: string): Promise<boolean> {
+async function tieneRolAdmin(admin: ReturnType<typeof clienteAdmin>, userId: string): Promise<boolean> {
   const { data } = await admin.from("users").select("role").eq("id", userId).maybeSingle();
   // Nota (igual que en cfdiAuth.ts): el super_admin real del esquema es la
   // columna booleana users.is_super_admin. Aqui no se consulta porque es una

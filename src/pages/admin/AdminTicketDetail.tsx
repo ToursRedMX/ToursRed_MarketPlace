@@ -110,12 +110,14 @@ const AdminTicketDetail: React.FC = () => {
     if (!ticket) return;
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      // send-support-ticket-updated exige admin desde A-1: la llave publicable
+      // no identifica a nadie, hay que mandar la sesión.
+      const { data: { session } } = await supabase.auth.getSession();
       await fetch(`${supabaseUrl}/functions/v1/send-support-ticket-updated`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Authorization': `Bearer ${session?.access_token ?? ''}`,
         },
         body: JSON.stringify({
           folio: ticket.folio,
@@ -252,12 +254,13 @@ const AdminTicketDetail: React.FC = () => {
       if (agent?.email) {
         try {
           const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+          // send-support-ticket-agent-assigned exige admin desde A-1.
+          const { data: { session } } = await supabase.auth.getSession();
           await fetch(`${supabaseUrl}/functions/v1/send-support-ticket-agent-assigned`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Authorization': `Bearer ${session?.access_token ?? ''}`,
             },
             body: JSON.stringify({
               folio: ticket.folio,
@@ -337,12 +340,13 @@ const AdminTicketDetail: React.FC = () => {
       // Always send email when there is a solicitante_email
       if (ticketSolicitanteEmail) {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseServiceKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        // send-support-ticket-updated exige admin desde A-1.
+        const { data: { session } } = await supabase.auth.getSession();
         await fetch(`${supabaseUrl}/functions/v1/send-support-ticket-updated`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Authorization': `Bearer ${session?.access_token ?? ''}`,
           },
           body: JSON.stringify({
             folio: ticketFolio,

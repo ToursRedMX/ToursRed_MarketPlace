@@ -292,11 +292,17 @@ const AdminAgencies: React.FC = () => {
           }
 
           // Enviar email de aprobación (fire-and-forget)
+          // send-agency-approval exige admin desde A-1: hay que mandar la sesión,
+          // no la llave publicable (que no identifica a nadie).
+          const { data: { session: sesionAprobacion } } = await supabase.auth.getSession();
           fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-agency-approval`,
             {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sesionAprobacion?.access_token ?? ''}`,
+              },
               body: JSON.stringify({
                 agencyName: agency.name,
                 contactEmail: agency.contact_email,

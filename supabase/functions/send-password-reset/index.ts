@@ -113,6 +113,29 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // A-1 (auditoria 05-sep-2026): esta funcion tiene que seguir siendo publica
+    // —quien recupera su contrasena no tiene sesion— y no es un relay abierto,
+    // porque el destinatario debe existir en users y el contenido es un codigo
+    // generado aqui. Lo que si permitia era bombardear a un usuario conocido con
+    // correos ilimitados. Tope: 3 codigos por correo por hora.
+    //
+    // Va DESPUES de la respuesta generica anti-enumeracion, asi que un atacante
+    // no puede usar el 429 para distinguir correos registrados de los que no.
+    const haceUnaHora = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: codigosRecientes } = await supabase
+      .from("password_reset_codes")
+      .select("id", { count: "exact", head: true })
+      .eq("email", email)
+      .gte("created_at", haceUnaHora);
+
+    if ((codigosRecientes ?? 0) >= 3) {
+      console.warn(`send-password-reset: ${email} supero 3 codigos en 1h, no se manda otro`);
+      return new Response(
+        JSON.stringify({ success: true, message: GENERIC_MSG }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
     const code = generateCode();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 

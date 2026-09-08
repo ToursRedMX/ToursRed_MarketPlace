@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
+import { requireUser } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +29,12 @@ Deno.serve(async (req: Request) => {
       headers: corsHeaders,
     });
   }
+
+  // A-1 (auditoria 05-sep-2026): esta funcion manda correo con el dominio y el
+  // SMTP de ToursRed. Se llama desde el front con la sesion del usuario y desde
+  // otras funciones con el service role; sin guard era alcanzable sin cuenta.
+  const guard = await requireUser(req, { recurso: "send-booking-request-notification", cors: corsHeaders });
+  if (!guard.ok) return guard.response;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

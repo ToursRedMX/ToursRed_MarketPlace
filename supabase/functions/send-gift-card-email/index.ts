@@ -44,20 +44,35 @@ Deno.serve(async (req: Request) => {
       });
     }
     const token = authHeader.replace("Bearer ", "");
-    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } }
-    });
-    const { data: { user } } = await supabaseUser.auth.getUser(token);
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+    // Los 5 webhooks de pago llaman aqui con el SERVICE_ROLE_KEY cuando se paga
+    // una tarjeta de regalo (stripe, conekta, openpay, mercadopago, paypal).
+    // Ese token NO tiene usuario detras, asi que getUser devolvia null y el
+    // guard respondia 401: el correo de la tarjeta comprada nunca salia. El
+    // service role es el llamador interno y pasa como maxima autoridad.
+    const esLlamadaInterna = token.length > 0 && token === supabaseServiceKey;
+
+    let rolLlamador = "service_role";
+    let userId: string | null = null;
+
+    if (!esLlamadaInterna) {
+      const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } }
       });
-    }
-    const { data: caller } = await supabaseUser.from("users").select("role").eq("id", user.id).maybeSingle();
-    if (!caller || !["admin", "super_admin", "traveler", "agency_owner"].includes(caller.role)) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const { data: { user } } = await supabaseUser.auth.getUser(token);
+      if (!user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: caller } = await supabaseUser.from("users").select("role").eq("id", user.id).maybeSingle();
+      if (!caller || !["admin", "super_admin", "traveler", "agency_owner"].includes(caller.role)) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      rolLlamador = caller.role as string;
+      userId = user.id;
     }
 
     const { giftCardId, sendToRecipient = true, sendToPurchaser = true }: SendGiftCardEmailRequest = await req.json();
@@ -72,9 +87,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (caller.role === "traveler") {
+    if (rolLlamador === "traveler") {
       const { data: gc } = await supabase.from("gift_cards").select("purchaser_user_id").eq("id", giftCardId).maybeSingle();
-      if (!gc || gc.purchaser_user_id !== user.id) {
+      if (!gc || gc.purchaser_user_id !== userId) {
         return new Response(JSON.stringify({ error: "Not authorized for this gift card" }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
