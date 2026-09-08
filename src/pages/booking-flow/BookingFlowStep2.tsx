@@ -92,11 +92,18 @@ const BookingFlowStep2: React.FC = () => {
 
     const loadUserProfileAndInit = async () => {
       try {
-        const { data: userData } = await supabase
+        const { data: userData, error: errUser } = await supabase
           .from('users')
           .select('first_name, last_name, email, phone_number, date_of_birth, curp, passport_number, is_foreign_traveler, emergency_contact_name, emergency_contact_phone')
           .eq('id', user.id)
           .maybeSingle();
+
+        if (errUser) {
+          // F-1: sin esto el formulario aparecia en blanco y el viajero volvia
+          // a teclear datos que ya tenia guardados, sin saber por que.
+          console.error('[Step2] no se pudo leer el perfil:', errUser);
+          setGlobalError('No pudimos cargar tus datos guardados. Puedes continuar escribiendolos, o recargar la pagina para reintentar.');
+        }
 
         setUserProfile(userData);
 

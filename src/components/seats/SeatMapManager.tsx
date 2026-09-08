@@ -65,7 +65,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
     setSlotsLoading(true);
     try {
       const today = new Date().toISOString().split('T')[0];
-      const { data } = await supabase
+      const { data, error: errSlots } = await supabase
         .from('tour_slots')
         .select('id, slot_date, departure_time, capacity, booked_count, status')
         .eq('tour_id', tourId)
@@ -74,6 +74,13 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
         .order('slot_date', { ascending: true })
         .order('departure_time', { ascending: true })
         .limit(60);
+      if (errSlots) {
+        // F-1: antes, un fallo aqui dejaba la lista vacia y la agencia no podia
+        // distinguirlo de "este tour aun no tiene salidas".
+        console.error('[SeatMapManager] no se pudieron leer las salidas:', errSlots);
+        setError('No se pudieron cargar las salidas del tour. Recarga la pagina.');
+        return;  // el finally apaga slotsLoading
+      }
       setSlots(data || []);
     } finally {
       setSlotsLoading(false);
@@ -217,12 +224,21 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
     try {
       if (isReceptivo && blockModal.blockAllSlots) {
         const today = new Date().toISOString().split('T')[0];
-        const { data: allSlots } = await supabase
+        const { data: allSlots, error: errAllSlots } = await supabase
           .from('tour_slots')
           .select('id')
           .eq('tour_id', tourId)
           .neq('status', 'cancelado')
           .gte('slot_date', today);
+
+        if (errAllSlots) {
+          // F-1: sin esto, slotIds quedaba vacio y el bloqueo terminaba
+          // "con exito" sin haber bloqueado un solo asiento.
+          console.error('[SeatMapManager] no se pudieron leer las salidas a bloquear:', errAllSlots);
+          setError('No se pudieron leer las salidas del tour, asi que no se bloqueo nada. Intenta de nuevo.');
+          setBlockModal(prev => ({ ...prev, isSubmitting: false }));
+          return;
+        }
 
         const slotIds = (allSlots || []).map((s: any) => s.id);
         let blockedCount = 0;

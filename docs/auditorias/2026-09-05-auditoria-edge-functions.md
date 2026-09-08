@@ -28,9 +28,11 @@ igual de alcanzables). Las tres correcciones están abajo, en su sección, con l
 | A-1 | **Corregido** (y corregido el conteo: eran 39 de 44 sin control, y hay 7 más igual de expuestas con `verify_jwt = true`) | ver más abajo |
 | A-2 | **Corregido** — exige dueño/agencia/staff/admin o service role | `bed5563` |
 | A-3 | **FALSO POSITIVO** — retirado del conteo | — |
-| M-1 | Pendiente | — |
+| M-1 | **Corregido en código** — pendiente de desplegar y de una confirmación (ver más abajo) | ver más abajo |
 | M-2 | **Corregido** — el helper falla cerrado, y el hallazgo se quedó corto: los toggles de MFA están **encendidos** en producción, así que era un bypass vivo, no latente | ver más abajo |
-| M-3, M-5, M-6 | Pendiente (decisiones de arquitectura) | — |
+| M-6 | **Corregido en código** — y el hallazgo se quedó corto por partida doble: 6 de los sitios eran correctos, y en los otros 20 el `catch` ni siquiera era el problema | ver más abajo |
+| M-3 | **Cerrado como decisión** — OpenPay no ofrece firma ni Basic auth para webhooks; la mitigación existente es la defensa disponible | ver más abajo |
+| M-5 | Pendiente (decisión de arquitectura) | — |
 | M-4 | **Corregido** — guard de service role en los dos crons | `bed5563` |
 
 **Conteo corregido: 10 hallazgos reales en este documento** (2 críticos, 2 altos,
@@ -42,10 +44,15 @@ Las otras dos tienen ahora su propia tabla de estado, verificada contra el códi
 
 | Auditoría | Cerrados | Abiertos | Total |
 |---|---|---|---|
-| Edge functions (este documento) | C-1, C-2, A-1, A-2, M-2, M-4 | M-1, M-3, M-5, M-6 | 6 / 10 |
-| Postgres | A-1, M-2 | M-1, M-3, M-4 | 2 / 5 |
-| Frontend | F-2, F-3, F-4, F-5, F-6 | F-1 | 5 / 6 |
-| **Total** | **14** | **7** | **21** |
+| Edge functions (este documento) | C-1, C-2, A-1, A-2, M-1, M-2, M-4, M-6 | M-5 | 9 / 10 |
+| — de esos, M-3 se cierra como decisión: el panel de OpenPay no ofrece ni firma ni Basic auth; la re-consulta del cargo es la defensa disponible | | | |
+| Postgres | A-1, M-1, M-2, M-3, M-4 | — | **5 / 5** |
+| Frontend | F-2, F-3, F-4, F-5, F-6 | F-1 (tier 1 corregido, contador puesto; 247 sitios abiertos) | 5 / 6 |
+| **Total** | **19** | **2** | **21** |
+
+> Este total se calcula sumando las filas de arriba, no de memoria. El 08-sep-2026
+> estuvo mal (decía 14/7) porque se incrementó a mano sin recontar; las filas ya
+> sumaban uno menos.
 
 Durante la remediación aparecieron hallazgos nuevos que no estaban en esta auditoría;
 se documentan al final, en *Hallazgos surgidos durante la remediación*.
@@ -623,6 +630,72 @@ if (turnstile_token) {          // ← si no lo mandas, no se verifica nada
 (el token de un solo uso que no se resetea, en los 6 consumidores del front). **Este es
 otro, del lado del servidor**, y no está en el backlog. Vale la pena atenderlos juntos.
 
+### Corregido el 08-sep-2026 — y estaba activo de verdad
+
+Lo primero que comprobé antes de tocar nada:
+
+```sql
+select turnstile_auth_enabled from platform_settings;  -- true
+```
+
+**El captcha está encendido en producción.** O sea que el front sí lo exige y el
+servidor no, que es literalmente el fail-open descrito. No era un riesgo para "cuando lo
+activen".
+
+#### Los dos problemas del hallazgo, y un tercero que apareció leyendo el código
+
+**1. El captcha se saltaba no mandándolo.** `if (turnstile_token) { ... }` hacía que la
+protección actuara sólo contra quien decidía someterse a ella. Ahora **la decisión la
+toma el servidor**, leyendo la misma palanca que lee el front
+(`platform_settings.turnstile_auth_enabled`, vía `useTurnstileEnabled`). La presencia del
+token ya no decide nada.
+
+Y si esa consulta falla, se **exige** el captcha. Lo contrario sería el mismo fail-open
+con otro disfraz: bastaría con tumbar esa lectura.
+
+**2. El rate limit se reiniciaba cambiando una letra del email.** Ahora limita por las
+dos cosas: 3 por email y 10 por IP en una hora. El límite por IP es más holgado a
+propósito — una oficina, una universidad o una red móvil comparten IP, y no se trata de
+castigar a quien está detrás de un NAT. La IP ya se registraba en la tabla; simplemente
+no se usaba.
+
+**3. (No estaba en el hallazgo) El cuerpo de la petición a Cloudflare se armaba
+concatenando cadenas:**
+
+```ts
+body: `secret=${turnstileSecret}&response=${turnstile_token}`,
+```
+
+El token viene del cliente. Un `&` dentro de él permitía inyectar parámetros en la
+petición a Cloudflare. Se cambió a `URLSearchParams`, que escapa, y de paso se añade
+`remoteip`, que Cloudflare recomienda.
+
+#### Qué pasa si Cloudflare no responde
+
+No se deja pasar. Mismo criterio que el helper de AAL2 tras M-2: si no se puede
+verificar, se bloquea.
+
+#### Lo que hay que confirmar ANTES de desplegar
+
+Si `turnstile_auth_enabled` está en `true` y **`TURNSTILE_SECRET_KEY` no está
+configurado** en los secretos de Edge Functions, esta versión devuelve **503** y el
+formulario de contacto deja de funcionar. Es el comportamiento correcto —la palanca está
+encendida y no hay con qué verificar—, pero hay que saberlo antes, no después.
+
+No se puede comprobar desde aquí: no hay forma de leer los secretos de Edge Functions por
+API. Hay que mirarlo en el panel de Supabase.
+
+La *site key* (`0x4AAAAAAEPafX7zzdCsVdYB`) está hardcodeada en `TurnstileWidget.tsx`, y
+**eso está bien**: las site keys de Turnstile son públicas por diseño, viajan en el HTML.
+No es un hallazgo.
+
+#### Lo que NO cubre esto
+
+`claude.md` documenta un problema distinto y del lado del cliente: el token de un solo
+uso que no se resetea, en los 6 consumidores del front (`LoginPage`, `SignupPage`,
+`AgencySignupFormBody`, `ChangePasswordSection`, `MaintenanceAdminPage`, `ContactPage`).
+Sigue abierto y es independiente de esto.
+
 ## M-2. `aal2Check` falla abierto: si no puede verificar el MFA, deja pasar
 
 **Archivo:** `supabase/functions/_shared/aal2Check.ts:34-37,63-65`
@@ -730,6 +803,52 @@ OpenPay** enviando webhooks falsos, y escribir libremente en la tabla de log
 `openpay_webhook_events`; (b) depende de que *todos* los caminos futuros re-consulten,
 sin nada que lo imponga. Si OpenPay ofrece firma, agregarla es defensa en profundidad barata.
 
+### Cerrado el 08-sep-2026 — OpenPay no ofrece con qué firmar
+
+Se revisó el panel de OpenPay donde está dado de alta el webhook. La pantalla de
+configuración tiene **sólo URL, identificador y eventos asociados**: no hay campos de
+usuario y contraseña, ni secreto de firma, ni nada equivalente al `whsec_` de Stripe.
+
+El `verification_code` que la función ya maneja (`:76`) **no es una firma por petición**:
+es el código de un solo uso del alta del webhook, que OpenPay manda una vez para
+verificar que la URL es tuya.
+
+Conclusión: **no hay un mecanismo de autenticación de webhooks que activar.** Lo que el
+hallazgo pedía —"si OpenPay ofrece firma, agregarla es defensa en profundidad barata"—
+resulta que no existe.
+
+Eso convierte la mitigación que ya está escrita en la defensa correcta, no en un parche:
+la función **re-consulta el cargo contra la API de OpenPay** (`:170-181`) en vez de creerle
+al payload, valida el estado (`:196`), toma los importes de la respuesta de la API
+(`:208-215`) y tiene control de idempotencia (`:225-245`). Un webhook falsificado no
+puede inventar un cobro que la API de OpenPay no confirme.
+
+#### Los dos endurecimientos que sí quedan disponibles
+
+Ninguno es urgente, y los dos requieren tocar el panel de OpenPay, no el código:
+
+| Opción | Qué cierra |
+|---|---|
+| **Secreto en la URL** — registrar el webhook como `.../openpay-webhook?k=<secreto-largo>` y rechazar lo que no lo traiga | El ruido de terceros que descubran el endpoint, y la escritura libre en `openpay_webhook_events` |
+| **Rechazar el ambiente equivocado** — el payload trae `payment_method.url` apuntando a `sandbox-api.openpay.mx` o al de producción | Que un cobro de pruebas confirme una reserva real |
+
+#### Para la lista de lanzamiento (21-sep-2026)
+
+Al revisar esto se midió el tráfico real: **55 webhooks recibidos**, y **41 traen
+`sandbox`** en el payload. Eso es normal y esperado — hoy no existe ambiente productivo,
+éste es el único que hay.
+
+Pero el día que se conecte OpenPay productivo, si se sigue con un solo proyecto de
+Supabase, la segunda opción de la tabla deja de ser opcional: se comprobó que un cobro de
+prueba con la tarjeta de test de Amex (`345678XXXXX0007`) llegó a **confirmar una reserva,
+registrar $5,206.84 como cobrado, crear una fila de comisión y timbrar CFDIs**. En pruebas
+eso es exactamente lo que debe pasar; en producción, con un webhook de sandbox llegando
+al mismo proyecto, no.
+
+Los datos de prueba que quedan en la base —reservas confirmadas, `payment_transactions`,
+comisiones y CFDIs de tarjetas de test— van a ensuciar los primeros reportes reales si no
+se limpian o marcan antes de abrir.
+
 ## M-4. Dos crons son disparables por cualquiera
 
 **Archivos:** `expire-supplement-approvals/index.ts`,
@@ -774,6 +893,65 @@ Es **exactamente la misma categoría** que `claude.md` ya documenta para
 después —cuando ya se cobró o ya se timbró—. La observación que hace el backlog aplica
 igual aquí: la pregunta no es "fallar o no fallar", sino **qué se hace visible en el
 momento**.
+
+### M-6, corregido el 08-sep-2026 — el hallazgo se quedó corto por partida doble
+
+**1. Seis de los sitios que conté estaban bien.** Son `try { JSON.parse(errorBody) } catch {}`
+alrededor del cuerpo de error de una API de pagos, y en todos el error ya fue a
+`console.error` y hay un mensaje de respaldo. Que el parseo falle sólo significa "usa el
+mensaje genérico". Ahí tragar es lo correcto y se dejaron intactos:
+`create-conekta-order`, `create-conekta-tokenization-checkout`, `process-supplement-payment`,
+`purchase-post-booking-extras`, `process-payment-plan-installment`, `capture-paypal-order`.
+
+**2. En los otros 20, el `catch` ni siquiera era el problema.** Y esto es peor que lo que
+describí:
+
+```ts
+EdgeRuntime.waitUntil(
+  supabase.functions.invoke("send-cfdi-email", { ... }).catch(() => {})
+);
+```
+
+**Ni `fetch()` ni `functions.invoke()` rechazan la promesa cuando la respuesta es 4xx o
+5xx.** `fetch` sólo rechaza si falla la red; `invoke` resuelve con `{ data, error }` y
+nunca lanza.
+
+O sea que ese `.catch(() => {})` no estaba tragando el error: **el error nunca llegaba
+ahí**. Si `send-cfdi-email` devolvía 500 —el viajero no recibió su CFDI—, la promesa se
+resolvía correctamente y nadie miraba el resultado. El `catch` era decorativo y el camino
+de fallo que importa no se comprobaba en absoluto.
+
+Es la misma trampa que ya mordió a este repo en `c968c1d`, donde `.rpc().catch()`
+reventaba los 5 webhooks de pago porque `PostgrestFilterBuilder` es *thenable* pero no es
+una `Promise`. Tercera vez que aparece la misma familia de error.
+
+#### El arreglo
+
+`_shared/falloSilencioso.ts`, con tres funciones que **no lanzan nunca** (se usan dentro
+de `EdgeRuntime.waitUntil`, donde una excepción no la recoge nadie):
+
+| | |
+|---|---|
+| `vigilarRespuesta(res, ctx)` | mira `res.ok` — lo que faltaba tras un `fetch` |
+| `vigilarResultado(r, ctx)` | mira `r.error` — lo que faltaba tras un `invoke` |
+| `registrarFallo(ctx, e)` | `console.error` + una fila en `public.audit_errors` |
+
+Se diseñó para **encadenar y no para envolver**, de modo que aplicarlo a los 20 sitios
+fuera un cambio de una línea en cada uno y no una reestructuración de 20 bloques.
+
+El rastro en `audit_errors` es el mismo criterio que se aplicó del lado de SQL en M-4:
+no se trata de fallar o no fallar, sino de que el fallo se haga visible en el momento. Y
+`registrarFallo` escribe vía REST con su propio `try/catch`, así que dejar el rastro nunca
+puede romper el flujo que se intentaba salvar.
+
+#### Alcance y verificación
+
+20 sitios en 15 funciones. `eslint`: **78 problemas antes y 78 después** en los archivos
+tocados, cero agregados —hubo que corregir dos cosas para llegar ahí: importar en cada
+función sólo los helpers que usa, y tipar los parámetros de los lambdas, que si no
+entraban como `implicit any`.
+
+**Al mergear hay que desplegar las 15 funciones**, más `send-contact-email` por M-1.
 
 ---
 

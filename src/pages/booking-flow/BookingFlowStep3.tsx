@@ -55,6 +55,10 @@ const BookingFlowStep3: React.FC = () => {
 
   const [holdTimer, setHoldTimer] = useState<number | null>(null);
   const [holdError, setHoldError] = useState('');
+  // F-1: las lecturas de abajo caian en un `catch {}` marcado "non-critical".
+  // No lo eran: alimentan la comision de servicio, la membresia y el cupo de
+  // los servicios opcionales.
+  const [loadError, setLoadError] = useState('');
   const [isHoldingSeats, setIsHoldingSeats] = useState(false);
   const holdIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -68,10 +72,14 @@ const BookingFlowStep3: React.FC = () => {
     if (!tour) return;
     const loadSettings = async () => {
       try {
-        const { data } = await supabase
+        const { data, error: errSettings } = await supabase
           .from('platform_settings')
           .select('service_charge_percentage, optional_service_commission_percentage, travel_insurance_price_per_day_per_traveler, travel_insurance_enabled')
           .maybeSingle();
+        if (errSettings) {
+          console.error('[Step3] no se pudo leer platform_settings:', errSettings);
+          setLoadError('No pudimos confirmar la comision de servicio. Los importes mostrados pueden no ser los correctos: recarga la pagina.');
+        }
         if (data) {
           setServiceChargePct(data.service_charge_percentage || 10);
           setOptionalServiceCommissionPct(data.optional_service_commission_percentage || 15);
@@ -80,8 +88,9 @@ const BookingFlowStep3: React.FC = () => {
             setInsurancePricePerDay(data.travel_insurance_price_per_day_per_traveler);
           }
         }
-      } catch {
-        // non-critical
+      } catch (e) {
+        console.error('[Step3] fallo la carga de ajustes:', e);
+        setLoadError('No pudimos cargar la configuracion de precios. Recarga la pagina antes de continuar.');
       }
     };
     loadSettings();
@@ -92,12 +101,16 @@ const BookingFlowStep3: React.FC = () => {
     if (!user || !tour) return;
     const loadUserState = async () => {
       try {
-        const { data: memData } = await supabase
+        const { data: memData, error: errMem } = await supabase
           .from('memberships')
           .select('status, current_period_end')
           .eq('user_id', user.id)
           .in('status', ['active', 'cancelled'])
           .maybeSingle();
+        if (errMem) {
+          console.error('[Step3] no se pudo leer la membresia:', errMem);
+          setLoadError('No pudimos verificar tu membresia. Si eres socio, tus beneficios podrian no aplicarse: recarga la pagina.');
+        }
         const isActive = !!memData && (
           memData.status === 'active' ||
           (memData.status === 'cancelled' && memData.current_period_end && new Date(memData.current_period_end) > new Date())
@@ -108,11 +121,17 @@ const BookingFlowStep3: React.FC = () => {
         // usaba en ningun lado: este paso es asientos y extras. Quien los
         // muestra y aplica es BookingFlowStep4, con su propio estado.
 
-        const { data: userData } = await supabase
+        const { data: userData, error: errUser } = await supabase
           .from('users')
           .select('no_show_count, is_foreign_traveler')
           .eq('id', user.id)
           .maybeSingle();
+        if (errUser) {
+          // is_foreign_traveler influye en el tratamiento fiscal, asi que un
+          // valor por defecto silencioso no es inocuo.
+          console.error('[Step3] no se pudo leer el perfil del viajero:', errUser);
+          setLoadError('No pudimos cargar tu perfil. Recarga la pagina antes de continuar.');
+        }
         setNoShowCount(userData?.no_show_count || 0);
         setIsHighRisk((userData?.no_show_count || 0) > 3);
         setIsForeignTraveler(userData?.is_foreign_traveler ?? false);
@@ -144,8 +163,14 @@ const BookingFlowStep3: React.FC = () => {
 
         const idsWithCap = data.filter(s => s.max_capacity !== null).map(s => s.id);
         if (idsWithCap.length > 0) {
-          const { data: capData } = await supabase
+          const { data: capData, error: errCap } = await supabase
             .rpc('get_optional_services_capacity', { p_service_ids: idsWithCap });
+          if (errCap) {
+            // Sin cupos, la UI deja elegir servicios que ya estan llenos y el
+            // fallo aparece hasta el final del checkout.
+            console.error('[Step3] no se pudo leer el cupo de servicios opcionales:', errCap);
+            setLoadError('No pudimos verificar la disponibilidad de los servicios adicionales. Recarga la pagina.');
+          }
           if (capData) {
             setServiceCapacities(capData.map((c: any) => ({
               serviceId: c.service_id,
@@ -423,6 +448,13 @@ const BookingFlowStep3: React.FC = () => {
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             {holdError}
+          </div>
+        )}
+
+        {loadError && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-sm flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            {loadError}
           </div>
         )}
 

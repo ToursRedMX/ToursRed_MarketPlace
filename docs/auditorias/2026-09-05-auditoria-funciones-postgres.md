@@ -22,10 +22,10 @@ comprobó* dice con qué.
 | Hallazgo | Estado | Dónde | Cómo se comprobó |
 |---|---|---|---|
 | A-1 — `search_path = ''` dejó rotas 4 funciones (y con ellas el alta de reseñas) | **Corregido** | `20260908150000_reparar_funciones_con_search_path_vacio.sql`, aplicada | La migración está en el repo y en `supabase_migrations.schema_migrations` |
-| M-1 — la migración masiva de `search_path` dejó una trampa para el futuro | Pendiente | — | La migración de A-1 repara las 4 funciones rotas, pero **no añade barrera** que impida que la próxima función caiga igual |
+| M-1 — la migración masiva de `search_path` dejó una trampa para el futuro | **Corregido** — barrera de CI | `scripts/check-search-path.mjs` + `.github/workflows/search-path-guard.yml` | La base está limpia hoy (246 `SECURITY DEFINER`, **cero** sin `search_path`); la guardia impide que entre la próxima. Probada contra un archivo con 4 violaciones reales y contra uno limpio |
 | M-2 — `deduct_points` valida el saldo sobre una lectura sin bloquear | **Corregido** (y el hallazgo estaba mal dimensionado: eran 4 funciones, y el daño no estaba acotado) | `20260908055006_bloquear_billetera_de_puntos_antes_de_validar_saldo.sql`, aplicada | Ver la sección de M-2 más abajo |
-| M-3 — `refresh_commission_record` no valida quién la llama | Pendiente | — | Ninguna migración posterior al 05-sep la toca |
-| M-4 — el patrón de `snapshot_booking_tax` está en tres funciones, no en una | Pendiente | — | Las dos migraciones que la tocan (`20260901064051`, `20260903035817`) son **anteriores** a la auditoría |
+| M-3 — `refresh_commission_record` no valida quién la llama | **Corregido y aplicado** — y el hallazgo se quedó corto: estaba expuesta a **PUBLIC y `anon`**, no sólo a `authenticated` | `20260908190712_revocar_refresh_commission_record_de_public.sql`, aplicada | `has_function_privilege` da `false` para `anon` y `authenticated`, `true` para `service_role` y `postgres` — el mismo perfil que `create_commission_record` |
+| M-4 — el patrón de `snapshot_booking_tax` está en tres funciones, no en una | **Corregido y aplicado** — las tres escriben en `audit_errors`; el cobro sigue pasando, a propósito | `20260908191141_snapshot_tax_deja_rastro_en_audit_errors.sql`, aplicada | Longitudes tras aplicar: 2 056 / 1 833 / 1 978, exactamente las que predijo el ensayo en seco. Conservan `RAISE WARNING`, `compute_tax_snapshot`, `search_path` y sus tres triggers |
 
 **2 corregidos de 5.**
 
@@ -322,6 +322,75 @@ fila, porque el recálculo lo pisa.
 Destaca porque es la excepción: la migración
 `20260820204143_add_authorization_checks_to_security_definer_functions.sql` le agregó
 chequeos de autorización a sus funciones hermanas. A esta se le pasó.
+
+### Investigado el 08-sep-2026 — y el arreglo obvio habría roto producción
+
+**La exposición era mayor de lo que escribí.** El hallazgo decía "cualquier usuario
+autenticado". El ACL real:
+
+```
+=X/postgres            <- PUBLIC
+postgres=X/postgres
+anon=X/postgres
+authenticated=X/postgres
+service_role=X/postgres
+```
+
+Estaba abierta a **PUBLIC y a `anon`**. Un visitante sin cuenta, con la llave publicable,
+podía forzar el recálculo de la fila de comisiones de cualquier reserva.
+
+#### La trampa: copiar el patrón de las funciones hermanas la habría roto
+
+La reacción natural es aplicar lo que hizo
+`20260820204143_add_authorization_checks_to_security_definer_functions.sql` con sus
+hermanas:
+
+```sql
+IF auth.uid() IS NOT NULL AND NOT public.is_admin_user() THEN
+  RAISE EXCEPTION 'Acceso no autorizado';
+END IF;
+```
+
+**Eso habría tumbado las reservas en producción.** `auth.uid()` lee
+`request.jwt.claims`, que es una GUC de sesión; `SECURITY DEFINER` cambia el *rol de base
+de datos*, no esa GUC. Dentro de un trigger disparado por un viajero, `auth.uid()` sigue
+devolviendo al viajero. El chequeo lanzaría excepción en cada `INSERT` sobre
+`booking_optional_services`, `booking_supplements` y
+`booking_payment_plan_transactions`, abortando la transacción de negocio completa.
+
+Ese es el motivo de que el hallazgo se resuelva con un `REVOKE` y no con un chequeo.
+
+#### Por qué revocar es seguro, y la prueba está en la propia base
+
+Nadie la llama directamente: `grep` en `src/` y en `supabase/functions/` da cero. Sus
+cinco llamadores viven dentro de la base y todos son `SECURITY DEFINER` propiedad de
+`postgres`, así que la invocan con los privilegios de `postgres`.
+
+La demostración de que un trigger no necesita el `GRANT`:
+
+| Función | Trigger sobre | ACL |
+|---|---|---|
+| `create_commission_record` | **`bookings`** | `postgres`, `service_role` — sin `authenticated`, sin PUBLIC |
+| `refresh_commission_record` | (la llaman 4 triggers) | PUBLIC, `anon`, `authenticated`, `service_role` |
+
+`create_commission_record` se dispara en **cada reserva que crea un viajero** y no tiene
+permiso para `authenticated`. Funciona. El mecanismo de triggers no comprueba `EXECUTE`
+sobre la función que dispara.
+
+La migración conserva `service_role`, igual que esas hermanas, y termina con un bloque de
+verificación que **falla ruidosamente** si el ACL no quedó como se espera.
+
+#### Aplicada el 08-sep-2026
+
+Ledger 876 → **877 aplicadas, 877 archivos**, sin desfase. Supabase le asignó la versión
+`20260908190712` y el archivo se renombró para que coincidan. ACL resultante:
+
+```
+postgres=X/postgres | service_role=X/postgres
+```
+
+Idéntico al de `create_commission_record`. Comprobado con `has_function_privilege`:
+`anon` y `authenticated` en `false`; `service_role` y `postgres` en `true`.
 
 ## M-4. El patrón de `snapshot_booking_tax` está en tres funciones, no en una
 

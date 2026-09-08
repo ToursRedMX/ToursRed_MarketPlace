@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -368,7 +369,7 @@ Deno.serve(async (req: Request) => {
             response_deadline: responseDeadline,
             capacity_sufficient: capacitySufficient,
           }),
-        }).catch(() => {})
+        }).then((res: Response) => vigilarRespuesta(res, "process-slot-reschedule-request -> send-slot-reschedule-notification")).catch((e: unknown) => registrarFallo("process-slot-reschedule-request -> send-slot-reschedule-notification", e))
       );
     });
 

@@ -59,6 +59,10 @@ const BookingFlowStep4: React.FC = () => {
   const [discountApplied, setDiscountApplied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  // F-1: si alguna de las lecturas de abajo falla, el checkout seguia con
+  // valores por defecto —comision del 10%, sin membresia, saldo en 0— y el
+  // viajero pagaba de mas sin enterarse. Ahora se le dice.
+  const [loadError, setLoadError] = useState('');
   const [remainingExemption, setRemainingExemption] = useState(0);
   const [monthlyExemptionLimit, setMonthlyExemptionLimit] = useState(500);
   // El servidor topa puntos y wallet; si difiere de lo que calculo el cliente,
@@ -71,10 +75,14 @@ const BookingFlowStep4: React.FC = () => {
     if (!tour || !user) return;
     const load = async () => {
       try {
-        const { data: settings } = await supabase
+        const { data: settings, error: errSettings } = await supabase
           .from('platform_settings')
           .select('service_charge_percentage, travel_insurance_price_per_day_per_traveler')
           .maybeSingle();
+        if (errSettings) {
+          console.error('[Step4] no se pudo leer platform_settings:', errSettings);
+          setLoadError('No pudimos confirmar la comision de servicio. El total mostrado puede no ser el correcto: recarga la pagina antes de pagar.');
+        }
         if (settings) {
           setServiceChargePct(settings.service_charge_percentage || 10);
           if (settings.travel_insurance_price_per_day_per_traveler != null) {
@@ -82,12 +90,16 @@ const BookingFlowStep4: React.FC = () => {
           }
         }
 
-        const { data: memData } = await supabase
+        const { data: memData, error: errMem } = await supabase
           .from('memberships')
           .select('status, current_period_end')
           .eq('user_id', user.id)
           .in('status', ['active', 'cancelled'])
           .maybeSingle();
+        if (errMem) {
+          console.error('[Step4] no se pudo leer la membresia:', errMem);
+          setLoadError('No pudimos verificar tu membresia. Si eres socio, tus beneficios podrian no estar aplicados: recarga la pagina.');
+        }
         const isActive = !!memData && (
           memData.status === 'active' ||
           (memData.status === 'cancelled' && memData.current_period_end && new Date(memData.current_period_end) > new Date())
@@ -108,22 +120,34 @@ const BookingFlowStep4: React.FC = () => {
           }
         }
 
-        const { data: walletData } = await supabase
+        const { data: walletData, error: errWallet } = await supabase
           .from('toursred_cash_wallets')
           .select('balance')
           .eq('user_id', user.id)
           .eq('is_active', true)
           .maybeSingle();
+        if (errWallet) {
+          console.error('[Step4] no se pudo leer el monedero:', errWallet);
+          setLoadError('No pudimos leer tu saldo. Si tienes dinero en el monedero, ahora aparece en cero: recarga la pagina antes de pagar.');
+        }
         setWalletBalance(walletData?.balance || 0);
 
-        const { data: pointsData } = await supabase
+        const { data: pointsData, error: errPoints } = await supabase
           .from('toursred_points_wallets')
           .select('balance')
           .eq('user_id', user.id)
           .maybeSingle();
+        if (errPoints) {
+          console.error('[Step4] no se pudieron leer los puntos:', errPoints);
+          setLoadError('No pudimos leer tus puntos. Si tienes saldo, ahora aparece en cero: recarga la pagina antes de pagar.');
+        }
         setPointsBalance(pointsData?.balance || 0);
-      } catch {
-        // non-critical
+      } catch (e) {
+        // Antes este catch estaba vacio con un "// non-critical". No lo era:
+        // se traga el fallo de las cinco lecturas de arriba, incluida la del
+        // precio.
+        console.error('[Step4] fallo la carga de datos del checkout:', e);
+        setLoadError('No pudimos cargar todos tus datos. El total y tus saldos pueden no ser correctos: recarga la pagina antes de pagar.');
       } finally {
         setIsLoadingSettings(false);
       }
@@ -667,6 +691,13 @@ const BookingFlowStep4: React.FC = () => {
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             {createError}
+          </div>
+        )}
+
+        {loadError && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-sm flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            {loadError}
           </div>
         )}
 

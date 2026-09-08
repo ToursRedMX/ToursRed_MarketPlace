@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
+import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -499,7 +500,7 @@ Deno.serve(async (req: Request) => {
     EdgeRuntime.waitUntil(
       supabase.functions.invoke("send-cfdi-email", {
         body: { cfdi_invoice_id: cfdiRecord.id, recipient_type: "traveler" },
-      }).catch(() => {})
+      }).then((r: unknown) => vigilarResultado(r, "generate-cancellation-commission-cfdi -> send-cfdi-email")).catch((e: unknown) => registrarFallo("generate-cancellation-commission-cfdi -> send-cfdi-email", e))
     );
 
     return new Response(
