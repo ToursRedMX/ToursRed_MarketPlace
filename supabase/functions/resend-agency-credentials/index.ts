@@ -157,6 +157,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", agency.account_executive_id)
       .maybeSingle();
 
+    let emailSent = false;
     try {
       const executiveName = execData
         ? `${execData.first_name} ${execData.last_name || ""}`.trim()
@@ -169,7 +170,8 @@ Deno.serve(async (req: Request) => {
         .eq("converted_agency_id", agency.id)
         .maybeSingle();
 
-      await fetch(`${supabaseUrl}/functions/v1/send-agency-credentials`, {
+      const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-agency-credentials`, {
+        signal: AbortSignal.timeout(15000),
         method: "POST",
         // send-agency-credentials exige service role desde A-1: manda la
         // contrasena temporal por correo y antes era disparable sin credencial.
@@ -187,14 +189,21 @@ Deno.serve(async (req: Request) => {
           executiveName,
         }),
       });
-    } catch (emailErr) {
-      console.error("Failed to resend credentials email:", emailErr);
+      // Require acknowledgement from the sender, not just HTTP success.
+      const emailResult = await emailResponse.json();
+      emailSent = emailResponse.ok && emailResult?.success === true;
+      if (!emailSent) {
+        console.error("Agency credentials email not confirmed", { status: emailResponse.status });
+      }
+    } catch {
+      console.error("Agency credentials email not confirmed: request failed or invalid response");
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Credenciales reenviadas al correo de la agencia",
+        emailSent,
+        message: emailSent ? "Envío de credenciales confirmado" : "Credenciales actualizadas; envío no confirmado",
         email: agency.contact_email,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
