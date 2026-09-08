@@ -13,6 +13,27 @@ cada nombre, y sobre ese conjunto corrí los análisis.
 
 ---
 
+## Estado de la remediación (actualizado 08-sep-2026)
+
+Este documento nació como solo-lectura. La tabla se verificó hallazgo por hallazgo
+contra el código y el ledger de migraciones, no de memoria; la columna *Cómo se
+comprobó* dice con qué.
+
+| Hallazgo | Estado | Dónde | Cómo se comprobó |
+|---|---|---|---|
+| A-1 — `search_path = ''` dejó rotas 4 funciones (y con ellas el alta de reseñas) | **Corregido** | `20260908150000_reparar_funciones_con_search_path_vacio.sql`, aplicada | La migración está en el repo y en `supabase_migrations.schema_migrations` |
+| M-1 — la migración masiva de `search_path` dejó una trampa para el futuro | Pendiente | — | La migración de A-1 repara las 4 funciones rotas, pero **no añade barrera** que impida que la próxima función caiga igual |
+| M-2 — `deduct_points` valida el saldo sobre una lectura sin bloquear | Pendiente | — | Ninguna migración posterior al 05-sep toca `deduct_points` |
+| M-3 — `refresh_commission_record` no valida quién la llama | Pendiente | — | Ninguna migración posterior al 05-sep la toca |
+| M-4 — el patrón de `snapshot_booking_tax` está en tres funciones, no en una | Pendiente | — | Las dos migraciones que la tocan (`20260901064051`, `20260903035817`) son **anteriores** a la auditoría |
+
+**1 corregido de 5.**
+
+De los cuatro pendientes, el que yo atacaría primero es **M-2**: es dinero (puntos de
+lealtad) y una lectura sin bloqueo se explota con dos peticiones simultáneas.
+
+---
+
 ## Advertencia de método que vale para todo el documento
 
 **No pude verificar el estado vivo de la base.** El conector de Supabase no está
