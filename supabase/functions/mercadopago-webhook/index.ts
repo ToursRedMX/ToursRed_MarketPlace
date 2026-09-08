@@ -364,8 +364,12 @@ Deno.serve(async (req: Request) => {
         } catch (cfdiErr) { console.error("Error triggering insurance CFDI (MP):", cfdiErr); }
 
         // Accounting entry for insurance (fire and forget)
-        supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: externalReference })
-          .catch((e) => console.error("Error creating insurance accounting entry (MP):", e));
+        EdgeRuntime.waitUntil(
+          (async () => {
+            const { error } = await supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: externalReference });
+            if (error) console.error("Error creating insurance accounting entry (MP):", error.message);
+          })()
+        );
 
         return new Response(JSON.stringify({ received: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -419,8 +423,12 @@ Deno.serve(async (req: Request) => {
         } catch (cfdiErr) { console.error("Error triggering optional service CFDI (MP):", cfdiErr); }
 
         // Accounting entry for optional service (fire and forget)
-        supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: externalReference })
-          .catch((e) => console.error("Error creating optional service accounting entry (MP):", e));
+        EdgeRuntime.waitUntil(
+          (async () => {
+            const { error } = await supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: externalReference });
+            if (error) console.error("Error creating optional service accounting entry (MP):", error.message);
+          })()
+        );
 
         return new Response(JSON.stringify({ received: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -496,8 +504,12 @@ Deno.serve(async (req: Request) => {
           ).catch((err) => console.error("Error triggering supplement CFDI (MP webhook):", err));
 
           // Accounting entry for supplement (fire and forget)
-          supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: externalReference })
-            .catch((e) => console.error("Error creating supplement accounting entry (MP):", e));
+          EdgeRuntime.waitUntil(
+            (async () => {
+              const { error } = await supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: externalReference });
+              if (error) console.error("Error creating supplement accounting entry (MP):", error.message);
+            })()
+          );
         }
         return new Response(JSON.stringify({ received: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
