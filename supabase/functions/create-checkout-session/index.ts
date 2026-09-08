@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9";
+import { origenParaRedirigir, urlDeRetornoSegura } from "../_shared/cors.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -282,8 +283,11 @@ Deno.serve(async (req) => {
 
     const sessionConfig: any = {
       customer: customerId,
-      success_url: success_url || `${req.headers.get("origin")}/booking-success?booking_id=${bookingId}`,
-      cancel_url: cancel_url || `${req.headers.get("origin")}/booking-cancel?booking_id=${bookingId}`,
+      // Estas dos venian del CUERPO de la peticion sin ninguna validacion:
+      // quien llamaba podia fijar a donde se devuelve al viajero despues de
+      // pagar. Ahora solo se aceptan si cuelgan de un origen de la lista.
+      success_url: urlDeRetornoSegura(success_url) ?? `${origenParaRedirigir(req)}/booking-success?booking_id=${bookingId}`,
+      cancel_url: urlDeRetornoSegura(cancel_url) ?? `${origenParaRedirigir(req)}/booking-cancel?booking_id=${bookingId}`,
       metadata: {
         booking_id: bookingId,
         membership_purchased: addMembership ? 'true' : 'false',

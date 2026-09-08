@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { origenParaRedirigir } from "../_shared/cors.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -201,7 +202,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const origin = req.headers.get("origin") || "https://toursred.com";
+    const origin = origenParaRedirigir(req);
     const base = isSandbox
       ? "https://api-m.sandbox.paypal.com"
       : "https://api-m.paypal.com";

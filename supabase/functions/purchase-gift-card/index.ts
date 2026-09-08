@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@22.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
+import { origenParaRedirigir } from "../_shared/cors.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -199,7 +200,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "";
+      const origin = origenParaRedirigir(req);
 
       return new Response(
         JSON.stringify({
@@ -289,8 +290,8 @@ Deno.serve(async (req: Request) => {
       },
       line_items: lineItems,
       mode: "payment",
-      success_url: `${req.headers.get("origin")}/gift-card/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.get("origin")}/gift-cards`,
+      success_url: `${origenParaRedirigir(req)}/gift-card/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origenParaRedirigir(req)}/gift-cards`,
       metadata: {
         gift_card_id: giftCard.id,
         gift_card_code: code,

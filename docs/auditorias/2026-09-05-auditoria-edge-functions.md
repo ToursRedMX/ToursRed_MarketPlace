@@ -32,7 +32,7 @@ igual de alcanzables). Las tres correcciones están abajo, en su sección, con l
 | M-2 | **Corregido** — el helper falla cerrado, y el hallazgo se quedó corto: los toggles de MFA están **encendidos** en producción, así que era un bypass vivo, no latente | ver más abajo |
 | M-6 | **Corregido en código** — y el hallazgo se quedó corto por partida doble: 6 de los sitios eran correctos, y en los otros 20 el `catch` ni siquiera era el problema | ver más abajo |
 | M-3 | **Cerrado como decisión** — OpenPay no ofrece firma ni Basic auth para webhooks; la mitigación existente es la defensa disponible | ver más abajo |
-| M-5 | Pendiente (decisión de arquitectura) | — |
+| M-5 | **Corregido** — y el hallazgo se quedó corto: la cabecera CORS valía poco, pero 9 funciones armaban la URL de retorno del pago con el `Origin` del atacante | ver más abajo |
 | M-4 | **Corregido** — guard de service role en los dos crons | `bed5563` |
 
 **Conteo corregido: 10 hallazgos reales en este documento** (2 críticos, 2 altos,
@@ -44,7 +44,7 @@ Las otras dos tienen ahora su propia tabla de estado, verificada contra el códi
 
 | Auditoría | Cerrados | Abiertos | Total |
 |---|---|---|---|
-| Edge functions (este documento) | C-1, C-2, A-1, A-2, M-1, M-2, M-4, M-6 | M-5 | 9 / 10 |
+| Edge functions (este documento) | C-1, C-2, A-1, A-2, M-1, M-2, M-4, M-5, M-6 | — | **10 / 10** |
 | — de esos, M-3 se cierra como decisión: el panel de OpenPay no ofrece ni firma ni Basic auth; la re-consulta del cargo es la defensa disponible | | | |
 | Postgres | A-1, M-1, M-2, M-3, M-4 | — | **5 / 5** |
 | Frontend | F-2, F-3, F-4, F-5, F-6 | F-1 (tier 1 corregido, contador puesto; 247 sitios abiertos) | 5 / 6 |
@@ -880,6 +880,93 @@ el punto donde una allowlist de orígenes daría defensa en profundidad barata y
 Como es un valor idéntico copiado 171 veces, es también el ejemplo más claro del
 problema estructural: **no hay un módulo compartido de CORS**, igual que no hay uno de auth.
 
+### M-5, corregido el 08-sep-2026 — el hallazgo apuntaba al síntoma barato y se le escapó el caro
+
+El hallazgo tiene razón en el hecho y se queda corto en la consecuencia. Al ir a
+implementar la allowlist salió una cosa que no estaba reportada y que sí es explotable.
+
+**Lo que el hallazgo dice, y por qué vale poco.** Cambiar la cabecera
+`Access-Control-Allow-Origin` de `*` a una lista es defensa en profundidad honesta, pero
+casi no cierra nada: con `*` el navegador no manda cookies, y el JWT de Supabase vive en
+`localStorage`, que un origen ajeno no puede leer. Una web maliciosa sólo consigue hacer
+peticiones **sin autenticar**, que es exactamente lo que ya puede hacer desde cualquier
+servidor sin pasar por el navegador de nadie. El agujero real de A-1/A-4 era la falta de
+guard, y eso ya se cerró.
+
+**Lo que no dice, y sí es un agujero.** Nueve funciones armaban las URLs de retorno del
+pago con el header `Origin`:
+
+```ts
+success_url: `${req.headers.get("origin")}/booking-success?booking_id=${bookingId}`,
+```
+
+`Origin` lo pone quien llama. Con `curl -H "Origin: https://falso.com"` se crea una sesión
+de Stripe/PayPal/Conekta/Openpay cuya pantalla de "gracias por tu compra" vive en el
+dominio del atacante. **El cobro es real y la confirmación es falsa.** Es un redirect
+abierto metido dentro del flujo de pago.
+
+Cinco de esas nueve tenían además un fallback a `Referer`, que es peor: mismo control del
+atacante, y recortado con `.split("/").slice(0, 3)`, que no valida absolutamente nada.
+
+Y `create-checkout-session` aceptaba `success_url` y `cancel_url` **directamente del
+cuerpo de la petición**, sin mirarlos siquiera.
+
+#### El arreglo
+
+`_shared/cors.ts` — el módulo compartido que el hallazgo pedía, pero sirviendo a los dos
+usos:
+
+| | |
+|---|---|
+| `origenPermitido(origen)` | devuelve el origen si está en la lista, si no `null` |
+| `corsHeaders(req)` | eco del origen permitido + `Vary: Origin` |
+| `origenParaRedirigir(req)` | **nunca devuelve un valor del atacante**: o uno de la lista, o `https://toursred.com` |
+| `urlDeRetornoSegura(url)` | valida una URL que vino en el cuerpo; `null` si no cuelga de un origen permitido |
+
+Dos detalles que no son adorno:
+
+- **`Vary: Origin` es obligatorio** con una allowlist de eco. Sin él, cualquier caché
+  intermedia puede servirle a un origen la respuesta generada para otro, y la lista deja
+  de servir para nada.
+
+- **La comparación se hace sobre `new URL(x).origin`, no con `startsWith`.**
+  `https://toursred.com.evil.io` empieza igual que el dominio bueno.
+
+**Orígenes permitidos** (los definió Axel el 08-sep-2026):
+`toursred.com`, `toursred.com.mx`, `toursredmx.netlify.app`. Se añadieron además las
+variantes `www.` de los dos dominios propios y el patrón de previews de Netlify
+(`deploy-preview-N--toursredmx.netlify.app`, sólo de este proyecto), porque sin ellos se
+rompen la www y el flujo de revisar un PR contra el backend real. Quitar cualquiera de los
+dos grupos son unas líneas en `_shared/cors.ts`.
+
+#### Lo que se cambió y lo que no
+
+Se cambiaron las **9 funciones que arman URLs de retorno de pago**:
+`create-checkout-session`, `create-paypal-order`, `create-conekta-order`,
+`purchase-gift-card`, `create-membership-subscription`, `purchase-post-booking-extras`,
+`process-supplement-payment`, `process-payment-plan-installment`,
+`test-openpay-3ds-charge`.
+
+**No se tocó la cabecera CORS de las 171 funciones**, y es una decisión, no un olvido: el
+valor de seguridad es casi nulo (arriba), mientras que una allowlist equivocada en la
+cabecera **rompe funcionalidad de golpe** —la función responde y el navegador tira la
+respuesta—. Equivocarse en la lista de redirección, en cambio, sólo manda al viajero al
+dominio principal. Redesplegar 106 funciones llamadas desde navegador a dos semanas de las
+UAT, por una defensa en profundidad, es mala relación riesgo/beneficio. Queda para después
+de las UAT, con la lista ya confirmada contra la realidad.
+
+#### La guardia
+
+`scripts/check-origin-header.mjs`, dentro del job `lint` (que ya es check requerido, así
+que no se agrega un check nuevo que pueda quedarse en *Waiting for status*). Bloquea
+cualquier lectura cruda de `Origin`/`Referer` en `supabase/functions/`. **Nace en 0**
+—medido sobre 181 archivos—, así que bloquea de verdad; no es un contador como el de F-1.
+Escape explícito: marcar la línea con `origen-crudo-ok`.
+
+La guardia se ganó el sueldo el mismo día que se escribió: encontró
+`test-openpay-3ds-charge`, que se le escapó al grep manual porque escribía `Origin` y
+`Referer` con mayúscula. Eran 9, no 8.
+
 ## M-6. Errores tragados en silencio en el camino fiscal y de pagos
 
 Al menos 15 funciones tienen `catch` vacíos o `.catch(() => {})`, concentrados
@@ -997,7 +1084,7 @@ El orden es por riesgo sobre el lanzamiento del 21 de septiembre, no por dificul
 | 7 | **M-1** — Turnstile obligatorio y rate limit por IP en el formulario de contacto | Medio | **pendiente** — bajo |
 | 8 | **M-4** — guard de service role en los dos crons abiertos | Medio | ✅ `bed5563` |
 | 9 | **M-2** — el helper de AAL2 falla cerrado | Medio | **hecho** (08-sep-2026) |
-| 10 | **M-3, M-5, M-6** — decisiones de arquitectura, no parches sueltos | Medio | **pendiente** — a discutir |
+| 10 | **M-3, M-5, M-6** — decisiones de arquitectura, no parches sueltos | Medio | **cerrados** — M-3 como decisión (OpenPay no ofrece firma), M-5 y M-6 con módulo compartido y guardia en CI |
 
 **El punto 1 va primero por relación costo/beneficio:** es una consulta al dashboard, no
 un cambio de código, y descarta (o confirma) el peor escenario de todos.

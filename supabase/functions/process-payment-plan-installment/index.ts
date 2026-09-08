@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@22.3.0";
 import { isConfigured as isOpenpayConfigured, getDashboardUrl, getMerchantId, createOrReuseCustomer as createOrReuseOpenpayCustomer, createSpeiCharge, createCashCharge, createCardCheckoutCharge } from "../_shared/openpay.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { origenParaRedirigir } from "../_shared/cors.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -387,7 +388,7 @@ Deno.serve(async (req: Request) => {
         });
       }
       const stripe = new Stripe(stripeKey, { apiVersion: "2026-06-24.dahlia" });
-      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
 
       const lineItems: any[] = [{
         price_data: {
@@ -444,7 +445,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
       const notificationUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`;
 
       // Path (a): No payment_id → create Checkout Pro preference for redirect flow
@@ -622,7 +623,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const origin = req.headers.get("origin") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
       const successUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking.id}&status=success&context=payment_plan_installment`;
       const failureUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking.id}&status=failure&context=payment_plan_installment`;
       const cancelUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking.id}&status=cancel&context=payment_plan_installment`;
@@ -768,7 +769,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const origin = req.headers.get("origin") || "https://toursred.com";
+      const origin = origenParaRedirigir(req);
       const successUrlOp = `${origin}/payment-pending/${plan_id}?context=payment_plan_installment`;
       const orderIdOp = `payment_plan_installment_${plan_id}_${Date.now()}`;
       const roundedAmtPp = Math.round(totalToPay * 100) / 100;
