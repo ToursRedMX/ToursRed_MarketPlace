@@ -31,7 +31,8 @@ igual de alcanzables). Las tres correcciones están abajo, en su sección, con l
 | M-1 | **Corregido en código** — pendiente de desplegar y de una confirmación (ver más abajo) | ver más abajo |
 | M-2 | **Corregido** — el helper falla cerrado, y el hallazgo se quedó corto: los toggles de MFA están **encendidos** en producción, así que era un bypass vivo, no latente | ver más abajo |
 | M-6 | **Corregido en código** — y el hallazgo se quedó corto por partida doble: 6 de los sitios eran correctos, y en los otros 20 el `catch` ni siquiera era el problema | ver más abajo |
-| M-3, M-5 | Pendiente (decisiones de arquitectura) | — |
+| M-3 | **Cerrado como decisión** — OpenPay no ofrece firma ni Basic auth para webhooks; la mitigación existente es la defensa disponible | ver más abajo |
+| M-5 | Pendiente (decisión de arquitectura) | — |
 | M-4 | **Corregido** — guard de service role en los dos crons | `bed5563` |
 
 **Conteo corregido: 10 hallazgos reales en este documento** (2 críticos, 2 altos,
@@ -801,6 +802,52 @@ medios por dos razones: (a) el atacante puede **forzar consultas arbitrarias a l
 OpenPay** enviando webhooks falsos, y escribir libremente en la tabla de log
 `openpay_webhook_events`; (b) depende de que *todos* los caminos futuros re-consulten,
 sin nada que lo imponga. Si OpenPay ofrece firma, agregarla es defensa en profundidad barata.
+
+### Cerrado el 08-sep-2026 — OpenPay no ofrece con qué firmar
+
+Se revisó el panel de OpenPay donde está dado de alta el webhook. La pantalla de
+configuración tiene **sólo URL, identificador y eventos asociados**: no hay campos de
+usuario y contraseña, ni secreto de firma, ni nada equivalente al `whsec_` de Stripe.
+
+El `verification_code` que la función ya maneja (`:76`) **no es una firma por petición**:
+es el código de un solo uso del alta del webhook, que OpenPay manda una vez para
+verificar que la URL es tuya.
+
+Conclusión: **no hay un mecanismo de autenticación de webhooks que activar.** Lo que el
+hallazgo pedía —"si OpenPay ofrece firma, agregarla es defensa en profundidad barata"—
+resulta que no existe.
+
+Eso convierte la mitigación que ya está escrita en la defensa correcta, no en un parche:
+la función **re-consulta el cargo contra la API de OpenPay** (`:170-181`) en vez de creerle
+al payload, valida el estado (`:196`), toma los importes de la respuesta de la API
+(`:208-215`) y tiene control de idempotencia (`:225-245`). Un webhook falsificado no
+puede inventar un cobro que la API de OpenPay no confirme.
+
+#### Los dos endurecimientos que sí quedan disponibles
+
+Ninguno es urgente, y los dos requieren tocar el panel de OpenPay, no el código:
+
+| Opción | Qué cierra |
+|---|---|
+| **Secreto en la URL** — registrar el webhook como `.../openpay-webhook?k=<secreto-largo>` y rechazar lo que no lo traiga | El ruido de terceros que descubran el endpoint, y la escritura libre en `openpay_webhook_events` |
+| **Rechazar el ambiente equivocado** — el payload trae `payment_method.url` apuntando a `sandbox-api.openpay.mx` o al de producción | Que un cobro de pruebas confirme una reserva real |
+
+#### Para la lista de lanzamiento (21-sep-2026)
+
+Al revisar esto se midió el tráfico real: **55 webhooks recibidos**, y **41 traen
+`sandbox`** en el payload. Eso es normal y esperado — hoy no existe ambiente productivo,
+éste es el único que hay.
+
+Pero el día que se conecte OpenPay productivo, si se sigue con un solo proyecto de
+Supabase, la segunda opción de la tabla deja de ser opcional: se comprobó que un cobro de
+prueba con la tarjeta de test de Amex (`345678XXXXX0007`) llegó a **confirmar una reserva,
+registrar $5,206.84 como cobrado, crear una fila de comisión y timbrar CFDIs**. En pruebas
+eso es exactamente lo que debe pasar; en producción, con un webhook de sandbox llegando
+al mismo proyecto, no.
+
+Los datos de prueba que quedan en la base —reservas confirmadas, `payment_transactions`,
+comisiones y CFDIs de tarjetas de test— van a ensuciar los primeros reportes reales si no
+se limpian o marcan antes de abrir.
 
 ## M-4. Dos crons son disparables por cualquiera
 
