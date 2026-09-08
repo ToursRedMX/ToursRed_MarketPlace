@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9";
-import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
+import { registrarFallo, vigilarRespuesta, vigilarResultado } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -392,7 +392,7 @@ Deno.serve(async (req: Request) => {
 
         if (traveler?.email) {
           // In-app notification
-          await supabase.from("notifications").insert({
+          await Promise.resolve(supabase.from("notifications").insert({
             user_id: booking.user_id,
             type: "payment_plan_auto_cancelled",
             title: `Reserva cancelada por falta de pago — ${tour.name}`,
@@ -403,7 +403,8 @@ Deno.serve(async (req: Request) => {
               cancellation_id: cancellationRecord.id,
               refund_amount: refundAmount,
             },
-          }).catch((e) => console.error(`Error inserting notification for booking ${booking.id}:`, e));
+          })).then((r: unknown) => vigilarResultado(r, "process-payment-plan-tour-deadline -> notifications", { booking_id: booking.id }))
+            .catch((e: unknown) => registrarFallo("process-payment-plan-tour-deadline -> notifications", e, { booking_id: booking.id }));
 
           // Email notification
           // Email notification via existing cancellation notification function
