@@ -580,32 +580,48 @@ Deno.serve(async (req: Request) => {
               await supabase.from("booking_supplements").update({
                 status: "paid", payment_provider: "paypal", updated_at: new Date().toISOString(),
               }).eq("id", referenceId);
-              supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: referenceId })
-                .catch((e) => console.error("Error creating supplement accounting entry (PayPal already captured):", e));
+              EdgeRuntime.waitUntil(
+                (async () => {
+                  const { error } = await supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: referenceId });
+                  if (error) console.error("Error creating supplement accounting entry (PayPal already captured):", error.message);
+                })()
+              );
             } else if (context === "extras" && referenceId) {
               const extrasType = orderDetails.purchase_units?.[0]?.custom_id || "insurance";
               if (extrasType === "optional_service") {
                 await supabase.from("booking_optional_services").update({
                   paid_at: new Date().toISOString(), payment_method: "paypal",
                 }).eq("id", referenceId);
-                supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: referenceId })
-                  .catch((e) => console.error("Error creating optional service accounting entry (PayPal already captured):", e));
+                EdgeRuntime.waitUntil(
+                  (async () => {
+                    const { error } = await supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: referenceId });
+                    if (error) console.error("Error creating optional service accounting entry (PayPal already captured):", error.message);
+                  })()
+                );
               } else {
                 await supabase.from("bookings").update({
                   travel_insurance_included: true,
                   travel_insurance_cost: parseFloat(orderDetails.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0"),
                   updated_at: new Date().toISOString(),
                 }).eq("id", referenceId);
-                supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: referenceId })
-                  .catch((e) => console.error("Error creating insurance accounting entry (PayPal already captured):", e));
+                EdgeRuntime.waitUntil(
+                  (async () => {
+                    const { error } = await supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: referenceId });
+                    if (error) console.error("Error creating insurance accounting entry (PayPal already captured):", error.message);
+                  })()
+                );
               }
             } else if (context === "payment_plan_installment" && referenceId) {
               const { data: planTx } = await supabase.from("booking_payment_plan_transactions")
                 .select("id").eq("plan_id", referenceId).eq("payment_provider", "paypal")
                 .order("created_at", { ascending: false }).limit(1).maybeSingle();
               if (planTx?.id) {
-                supabase.rpc("create_accounting_entry_for_payment_plan_installment", { p_installment_tx_id: planTx.id })
-                  .catch((e) => console.error("Error creating payment plan installment accounting entry (PayPal already captured):", e));
+                EdgeRuntime.waitUntil(
+                  (async () => {
+                    const { error } = await supabase.rpc("create_accounting_entry_for_payment_plan_installment", { p_installment_tx_id: planTx.id });
+                    if (error) console.error("Error creating payment plan installment accounting entry (PayPal already captured):", error.message);
+                  })()
+                );
               }
             } else if (referenceId) {
               await confirmBooking(supabase, referenceId, paypalTransactionId, orderDetails);
@@ -693,8 +709,12 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({ booking_supplement_id: referenceId, payment_form: "04" }),
           }).catch((e) => console.error("Error triggering supplement CFDI (PayPal):", e))
         );
-        supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: referenceId })
-          .catch((e) => console.error("Error creating supplement accounting entry (PayPal):", e));
+        EdgeRuntime.waitUntil(
+          (async () => {
+            const { error } = await supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: referenceId });
+            if (error) console.error("Error creating supplement accounting entry (PayPal):", error.message);
+          })()
+        );
 
       } else if (context === "extras" && referenceId) {
         const extrasType = captureData.purchase_units?.[0]?.custom_id || "insurance";
@@ -719,8 +739,12 @@ Deno.serve(async (req: Request) => {
               body: JSON.stringify({ booking_optional_service_id: referenceId, payment_form: "04" }),
             }).catch((e) => console.error("Error triggering optional service CFDI (PayPal):", e))
           );
-          supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: referenceId })
-            .catch((e) => console.error("Error creating optional service accounting entry (PayPal):", e));
+          EdgeRuntime.waitUntil(
+            (async () => {
+              const { error } = await supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: referenceId });
+              if (error) console.error("Error creating optional service accounting entry (PayPal):", error.message);
+            })()
+          );
         } else {
           await supabase.from("bookings").update({
             travel_insurance_included: true,
@@ -743,8 +767,12 @@ Deno.serve(async (req: Request) => {
               body: JSON.stringify({ booking_id: referenceId, payment_form: "04" }),
             }).catch((e) => console.error("Error triggering insurance CFDI (PayPal):", e))
           );
-          supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: referenceId })
-            .catch((e) => console.error("Error creating insurance accounting entry (PayPal):", e));
+          EdgeRuntime.waitUntil(
+            (async () => {
+              const { error } = await supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: referenceId });
+              if (error) console.error("Error creating insurance accounting entry (PayPal):", error.message);
+            })()
+          );
         }
 
       } else if (context === "payment_plan_installment" && referenceId) {
@@ -780,8 +808,12 @@ Deno.serve(async (req: Request) => {
           .select("id").eq("plan_id", planId).eq("payment_provider", "paypal")
           .order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (planTx?.id) {
-          supabase.rpc("create_accounting_entry_for_payment_plan_installment", { p_installment_tx_id: planTx.id })
-            .catch((e) => console.error("Error creating payment plan installment accounting entry (PayPal):", e));
+          EdgeRuntime.waitUntil(
+            (async () => {
+              const { error } = await supabase.rpc("create_accounting_entry_for_payment_plan_installment", { p_installment_tx_id: planTx.id });
+              if (error) console.error("Error creating payment plan installment accounting entry (PayPal):", error.message);
+            })()
+          );
         }
 
       } else if (referenceId) {
