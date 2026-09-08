@@ -28,7 +28,7 @@ igual de alcanzables). Las tres correcciones están abajo, en su sección, con l
 | A-1 | **Corregido** (y corregido el conteo: eran 39 de 44 sin control, y hay 7 más igual de expuestas con `verify_jwt = true`) | ver más abajo |
 | A-2 | **Corregido** — exige dueño/agencia/staff/admin o service role | `bed5563` |
 | A-3 | **FALSO POSITIVO** — retirado del conteo | — |
-| M-1 | Pendiente | — |
+| M-1 | **Corregido en código** — pendiente de desplegar y de una confirmación (ver más abajo) | ver más abajo |
 | M-2 | **Corregido** — el helper falla cerrado, y el hallazgo se quedó corto: los toggles de MFA están **encendidos** en producción, así que era un bypass vivo, no latente | ver más abajo |
 | M-3, M-5, M-6 | Pendiente (decisiones de arquitectura) | — |
 | M-4 | **Corregido** — guard de service role en los dos crons | `bed5563` |
@@ -626,6 +626,72 @@ if (turnstile_token) {          // ← si no lo mandas, no se verifica nada
 **Relación con el backlog.** `claude.md` ya documenta un problema distinto con Turnstile
 (el token de un solo uso que no se resetea, en los 6 consumidores del front). **Este es
 otro, del lado del servidor**, y no está en el backlog. Vale la pena atenderlos juntos.
+
+### Corregido el 08-sep-2026 — y estaba activo de verdad
+
+Lo primero que comprobé antes de tocar nada:
+
+```sql
+select turnstile_auth_enabled from platform_settings;  -- true
+```
+
+**El captcha está encendido en producción.** O sea que el front sí lo exige y el
+servidor no, que es literalmente el fail-open descrito. No era un riesgo para "cuando lo
+activen".
+
+#### Los dos problemas del hallazgo, y un tercero que apareció leyendo el código
+
+**1. El captcha se saltaba no mandándolo.** `if (turnstile_token) { ... }` hacía que la
+protección actuara sólo contra quien decidía someterse a ella. Ahora **la decisión la
+toma el servidor**, leyendo la misma palanca que lee el front
+(`platform_settings.turnstile_auth_enabled`, vía `useTurnstileEnabled`). La presencia del
+token ya no decide nada.
+
+Y si esa consulta falla, se **exige** el captcha. Lo contrario sería el mismo fail-open
+con otro disfraz: bastaría con tumbar esa lectura.
+
+**2. El rate limit se reiniciaba cambiando una letra del email.** Ahora limita por las
+dos cosas: 3 por email y 10 por IP en una hora. El límite por IP es más holgado a
+propósito — una oficina, una universidad o una red móvil comparten IP, y no se trata de
+castigar a quien está detrás de un NAT. La IP ya se registraba en la tabla; simplemente
+no se usaba.
+
+**3. (No estaba en el hallazgo) El cuerpo de la petición a Cloudflare se armaba
+concatenando cadenas:**
+
+```ts
+body: `secret=${turnstileSecret}&response=${turnstile_token}`,
+```
+
+El token viene del cliente. Un `&` dentro de él permitía inyectar parámetros en la
+petición a Cloudflare. Se cambió a `URLSearchParams`, que escapa, y de paso se añade
+`remoteip`, que Cloudflare recomienda.
+
+#### Qué pasa si Cloudflare no responde
+
+No se deja pasar. Mismo criterio que el helper de AAL2 tras M-2: si no se puede
+verificar, se bloquea.
+
+#### Lo que hay que confirmar ANTES de desplegar
+
+Si `turnstile_auth_enabled` está en `true` y **`TURNSTILE_SECRET_KEY` no está
+configurado** en los secretos de Edge Functions, esta versión devuelve **503** y el
+formulario de contacto deja de funcionar. Es el comportamiento correcto —la palanca está
+encendida y no hay con qué verificar—, pero hay que saberlo antes, no después.
+
+No se puede comprobar desde aquí: no hay forma de leer los secretos de Edge Functions por
+API. Hay que mirarlo en el panel de Supabase.
+
+La *site key* (`0x4AAAAAAEPafX7zzdCsVdYB`) está hardcodeada en `TurnstileWidget.tsx`, y
+**eso está bien**: las site keys de Turnstile son públicas por diseño, viajan en el HTML.
+No es un hallazgo.
+
+#### Lo que NO cubre esto
+
+`claude.md` documenta un problema distinto y del lado del cliente: el token de un solo
+uso que no se resetea, en los 6 consumidores del front (`LoginPage`, `SignupPage`,
+`AgencySignupFormBody`, `ChangePasswordSection`, `MaintenanceAdminPage`, `ContactPage`).
+Sigue abierto y es independiente de esto.
 
 ## M-2. `aal2Check` falla abierto: si no puede verificar el MFA, deja pasar
 
