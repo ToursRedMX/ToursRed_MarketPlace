@@ -23,14 +23,18 @@ comprobó* dice con qué.
 |---|---|---|---|
 | A-1 — `search_path = ''` dejó rotas 4 funciones (y con ellas el alta de reseñas) | **Corregido** | `20260908150000_reparar_funciones_con_search_path_vacio.sql`, aplicada | La migración está en el repo y en `supabase_migrations.schema_migrations` |
 | M-1 — la migración masiva de `search_path` dejó una trampa para el futuro | Pendiente | — | La migración de A-1 repara las 4 funciones rotas, pero **no añade barrera** que impida que la próxima función caiga igual |
-| M-2 — `deduct_points` valida el saldo sobre una lectura sin bloquear | Pendiente | — | Ninguna migración posterior al 05-sep toca `deduct_points` |
+| M-2 — `deduct_points` valida el saldo sobre una lectura sin bloquear | **Corregido** (y el hallazgo estaba mal dimensionado: eran 4 funciones, y el daño no estaba acotado) | `20260908055006_bloquear_billetera_de_puntos_antes_de_validar_saldo.sql`, aplicada | Ver la sección de M-2 más abajo |
 | M-3 — `refresh_commission_record` no valida quién la llama | Pendiente | — | Ninguna migración posterior al 05-sep la toca |
 | M-4 — el patrón de `snapshot_booking_tax` está en tres funciones, no en una | Pendiente | — | Las dos migraciones que la tocan (`20260901064051`, `20260903035817`) son **anteriores** a la auditoría |
 
-**1 corregido de 5.**
+**2 corregidos de 5.**
 
-De los cuatro pendientes, el que yo atacaría primero es **M-2**: es dinero (puntos de
-lealtad) y una lectura sin bloqueo se explota con dos peticiones simultáneas.
+De los tres pendientes, el que yo atacaría primero es **M-4**: el patrón duplicado en
+tres funciones es el mismo tipo de deuda que hizo que M-2 fuera cuatro funciones y no
+una.
+
+Durante la remediación de M-2 apareció un hallazgo nuevo que no estaba en esta
+auditoría; se documenta al final, en *Hallazgos surgidos durante la remediación*.
 
 ---
 
@@ -220,6 +224,15 @@ carrera **no puede producir un saldo negativo** — la segunda transacción viol
 aborta. El síntoma no es pérdida de dinero sino un error 500 sin manejar en la cara del
 usuario, en un momento de compra.
 
+> **Corrección del 08-sep-2026 — este párrafo era falso.** Comprobado contra la base
+> viva: el `CHECK` ya **no** es `balance >= 0`. La migración `20260717193939` lo relajó
+> a **`CHECK (balance >= -100000)`** a propósito, para permitir clawback de puntos al
+> cancelar. La consecuencia no buscada es que la carrera **sí puede sobregirar**: el
+> usuario gasta puntos que no tiene, hasta 100,000 en negativo. No es un 500, es
+> pérdida real. El error de la auditoría fue leer el `CREATE TABLE` original y no el
+> estado vivo — exactamente la trampa que este mismo documento advierte en su
+> *Advertencia de método*.
+
 También sin bloqueo queda el guard de duplicados (`SELECT 1 FROM ... WHERE reference_id =
 p_reference_id`): dos llamadas simultáneas con la misma referencia pueden pasarlo las dos
 y descontar dos veces, si el saldo alcanza.
@@ -239,6 +252,52 @@ IF v_new_balance < 0 THEN RAISE EXCEPTION ...; END IF;                 -- ← gu
 
 La wallet de **dinero** está blindada; la de **puntos** no. Es el mismo patrón que
 encontré en las Edge Functions: dos caminos equivalentes, uno revisado a fondo y el otro no.
+
+### Cómo quedó — CORREGIDO el 08-sep-2026
+
+**No era una función, eran cuatro.** De las 13 que tocan el saldo de puntos, sólo
+importan las que **validan contra una lectura previa**, o sea los descuentos. Las de
+abono (`award_*`, `refund_*`) hacen `SET balance = balance + x`, que es atómico en
+Postgres: no pierden updates y no necesitan bloqueo.
+
+| Función | Llamadores | Qué se hizo |
+|---|---|---|
+| `deduct_points` | 4 Edge Functions | `FOR UPDATE` |
+| `deduct_points_for_booking` | **los 5 webhooks de pago** | `FOR UPDATE` |
+| `deduct_points_for_partial_cancellation` | `process-partial-cancellation` | `FOR UPDATE` |
+| `redeem_points_for_booking` | **ninguno**, y sin guard de duplicado | **eliminada** |
+
+La más expuesta era la segunda: la llaman los webhooks de pago, que **reintentan por
+diseño**. Ese es literalmente el escenario de concurrencia.
+
+**El arreglo es una línea por función**, insertada justo después de resolver la
+billetera:
+
+```sql
+PERFORM 1 FROM public.toursred_points_wallets WHERE id = v_wallet_id FOR UPDATE;
+```
+
+Cierra las dos carreras sin mover el resto del cuerpo: la lectura del saldo que ya
+existía más abajo ahora ocurre con el lock tomado, y el guard de duplicado también, así
+que la segunda llamada espera, despierta, y ve la fila que insertó la primera.
+
+`redeem_points_for_booking` se eliminó en vez de arreglarse: no la llamaba nadie —ni el
+front, ni las Edge Functions, ni otra función SQL, ni un trigger— y su `proacl` era
+`{postgres, service_role}`, o sea que el navegador no podía invocarla ni intentándolo.
+Era código muerto en el camino del dinero, la misma trampa que F-2 en la auditoría de
+frontend.
+
+**Verificación.** Las tres definiciones crecieron **exactamente 292 caracteres** cada
+una —lo que mide el bloque insertado—, con el `FOR UPDATE` por delante del guard de
+duplicado y de la lectura del saldo en las tres. Y una prueba de ejecución real, en una
+transacción revertida: descontó 10 puntos (10,544 → 10,534) y la **segunda llamada con
+la misma referencia no descontó**. El saldo volvió a 10,544 al revertir.
+
+**Lo que NO se hizo:** un índice único sobre `(reference_id, reference_type)` para las
+transacciones `redeemed`. Con el lock puesto el guard ya es correcto, y un índice único
+en el camino de un webhook de pago convertiría cualquier caso legítimo no previsto en un
+500. Hay 7 filas `redeemed` con referencia y 0 duplicados, así que se puede crear cuando
+se quiera.
 
 ## M-3. `refresh_commission_record` no valida quién la llama
 
@@ -411,3 +470,58 @@ se repite y conviene desconfiar de los barridos automáticos:
 Seis de mis siete sospechas iniciales eran falsas. **Una ausencia en un barrido automático
 no es evidencia de nada hasta que se lee el archivo** — misma lección que anoté en la
 auditoría de Edge Functions, y esta vez se cumplió seis veces seguidas.
+
+---
+
+# Hallazgos surgidos durante la remediación
+
+## R-1. Los cuatro llamadores de `deduct_points` fallan, y el error se traga
+
+Salió al **ejecutar** `deduct_points` para validar el arreglo de M-2, no al leerla. Es
+justo lo que la lectura estática no puede ver.
+
+`deduct_points` se llama desde cuatro Edge Functions. **Las cuatro fallan**, por dos
+causas distintas:
+
+| Llamador | Qué manda | Por qué falla |
+|---|---|---|
+| `approve-booking:220` | `p_points: booking.points_used` | El parámetro se llama **`p_amount`**. La firma es `deduct_points(p_user_id, p_amount, p_description, p_reference_id, p_reference_type)`, así que PostgREST no resuelve la función — **CORREGIDO el 08-sep-2026** |
+| `process-payment-plan-tour-deadline:327` | `p_reference_type: "payment_plan_auto_cancel"` | No está en el `CHECK` de `reference_type` |
+| `process-agency-booking-cancellation:243` | `p_reference_type: "agency_booking_cancellation"` | Ídem |
+| `process-tour-cancellation:257` | `p_reference_type: "tour_cancellation"` | Ídem — el whitelist tiene `traveler_cancellation` y `admin_cancellation`, pero no ése |
+
+El `CHECK` vivo permite: `booking`, `adjustment`, `promotion`, `referral`,
+`booking_partial_cancellation`, `supplement_payment`, `supplement`, `payment_plan`,
+`optional_service_payment`, `insurance_payment`, `post_booking_extra`,
+`admin_cancellation`, `traveler_cancellation`, `membership`, `featured_slot`,
+`expiration`.
+
+**Ni siquiera el valor por defecto de la propia función sirve:** la firma declara
+`p_reference_type text DEFAULT 'general'`, y `'general'` tampoco está en el whitelist.
+Cualquier llamada que se apoye en el default revienta.
+
+**La evidencia en los datos lo confirma.** No existe una sola fila con
+`reference_type` = `tour_cancellation`, `agency_booking_cancellation`,
+`payment_plan_auto_cancel` ni `general`. Los tipos que sí aparecen son los que escriben
+otras funciones.
+
+**Por qué nadie lo notó.** Los cuatro llamadores hacen lo mismo con el error:
+
+```ts
+if (deductErr) console.error("Error deducting points (tour cancellation):", deductErr);
+```
+
+Es M-6 de la auditoría de Edge Functions —errores tragados en silencio— con consecuencia
+contable: **la reversión de puntos al cancelar nunca ha ocurrido**. El viajero conserva
+puntos que se le otorgaron por una reserva que después se canceló.
+
+**Estado.** El `p_points` de `approve-booking` era un error plano y **ya está
+corregido**: ahora manda `p_amount`. Comprobado llamando a `deduct_points` con
+argumentos **por nombre** —igual que hace PostgREST— en una transacción revertida:
+resolvió y descontó (10,544 → 10,519), y el saldo volvió a 10,544 al revertir. Era el
+único `p_points` del repo.
+
+Los otros tres siguen **documentados y sin corregir**. Lo que hay que decidir antes:
+si los tres `reference_type` que faltan se agregan al `CHECK`, o si los llamadores deben
+usar los que ya existen (`admin_cancellation` / `traveler_cancellation`). Es una decisión
+de semántica contable, no de código.

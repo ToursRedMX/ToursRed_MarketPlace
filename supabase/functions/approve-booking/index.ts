@@ -217,9 +217,15 @@ Deno.serve(async (req: Request) => {
 
       // Descontar puntos si se usaron
       if (booking.points_used > 0) {
+        // El parametro se llama p_amount, no p_points. Con el nombre mal,
+        // PostgREST no resuelve la funcion —busca una firma que no existe— y
+        // la llamada falla SIEMPRE. Como el error solo se registra en consola
+        // (abajo), el canje de puntos al aprobar una reserva nunca se aplico.
+        // Detectado el 08-sep-2026 al ejecutar deduct_points para validar M-2;
+        // ver R-1 en docs/auditorias/2026-09-05-auditoria-funciones-postgres.md.
         const { error: pointsError } = await supabase.rpc("deduct_points", {
           p_user_id: booking.user_id,
-          p_points: booking.points_used,
+          p_amount: booking.points_used,
           p_description: `Canje de puntos para reserva ${booking_id}`,
           p_reference_id: booking_id,
           p_reference_type: "booking",
