@@ -486,9 +486,9 @@ causas distintas:
 | Llamador | Qué manda | Por qué falla |
 |---|---|---|
 | `approve-booking:220` | `p_points: booking.points_used` | El parámetro se llama **`p_amount`**. La firma es `deduct_points(p_user_id, p_amount, p_description, p_reference_id, p_reference_type)`, así que PostgREST no resuelve la función — **CORREGIDO el 08-sep-2026** |
-| `process-payment-plan-tour-deadline:327` | `p_reference_type: "payment_plan_auto_cancel"` | No está en el `CHECK` de `reference_type` |
-| `process-agency-booking-cancellation:243` | `p_reference_type: "agency_booking_cancellation"` | Ídem |
-| `process-tour-cancellation:257` | `p_reference_type: "tour_cancellation"` | Ídem — el whitelist tiene `traveler_cancellation` y `admin_cancellation`, pero no ése |
+| `process-payment-plan-tour-deadline:327` | `p_reference_type: "payment_plan_auto_cancel"` | No estaba en el `CHECK` de `reference_type` — **CORREGIDO el 08-sep-2026** |
+| `process-agency-booking-cancellation:243` | `p_reference_type: "agency_booking_cancellation"` | Ídem — **CORREGIDO el 08-sep-2026** |
+| `process-tour-cancellation:257` | `p_reference_type: "tour_cancellation"` | Ídem — **CORREGIDO el 08-sep-2026** |
 
 El `CHECK` vivo permite: `booking`, `adjustment`, `promotion`, `referral`,
 `booking_partial_cancellation`, `supplement_payment`, `supplement`, `payment_plan`,
@@ -521,7 +521,36 @@ argumentos **por nombre** —igual que hace PostgREST— en una transacción rev
 resolvió y descontó (10,544 → 10,519), y el saldo volvió a 10,544 al revertir. Era el
 único `p_points` del repo.
 
-Los otros tres siguen **documentados y sin corregir**. Lo que hay que decidir antes:
-si los tres `reference_type` que faltan se agregan al `CHECK`, o si los llamadores deben
-usar los que ya existen (`admin_cancellation` / `traveler_cancellation`). Es una decisión
-de semántica contable, no de código.
+### Los otros tres — CORREGIDO el 08-sep-2026
+
+Axel confirmó la decisión de producto: **si se cancela el tour, al viajero se le quitan
+los puntos** que ganó por esa reserva.
+
+Se amplió el `CHECK` con los tres valores
+(`20260908061655_reference_types_de_cancelacion_para_puntos.sql`, aplicada) en vez de
+cambiar los llamadores, por tres razones:
+
+1. **Los nombres que ya eligieron distinguen el motivo** — cancelación del tour,
+   cancelación de una reserva por la agencia, auto-cancelación por plan de pagos no
+   liquidado. Aplanarlos a `admin_cancellation` pierde esa granularidad para conciliar.
+2. **Ampliar el `CHECK` no despliega nada**; cambiar los llamadores obligaría a
+   redesplegar tres Edge Functions.
+3. **Es lo que ya se hizo antes**: `admin_cancellation`, `traveler_cancellation`,
+   `membership`, `featured_slot` y `expiration` tampoco estaban en el `CREATE TABLE`
+   original.
+
+**El alcance se verificó, no se supuso.** Barrido completo de los `reference_type` del
+repo: hay 13 que el `CHECK` no permitía, pero **10 van a `update_wallet_balance` o
+`process_cancellation_refund`**, que escriben en la billetera de **dinero** — tabla
+distinta, y comprobado que no tiene ningún `CHECK` sobre `reference_type`. Los que
+rompían eran exactamente estos 3.
+
+**Lo que no cambió:** el `type` sigue siendo `redeemed`, no `clawback`. Es el patrón que
+ya funciona — la única fila de cancelación que existía (`traveler_cancellation`) también
+es `redeemed`. En este esquema `redeemed` es el movimiento real de saldo y `clawback` es
+el marcador de auditoría con `amount = 0` que inserta `_shared/pointsTraceability.ts`.
+
+**Verificación:** prueba de ejecución real en transacción revertida, llamando a
+`deduct_points` con los tres `reference_type`: los tres descontaron (10,544 → 10,529,
+3 × 5 pts) y el saldo volvió a 10,544 al revertir. Antes de la migración, los tres
+reventaban con violación de `CHECK`.
