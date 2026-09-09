@@ -84,7 +84,10 @@ import { join } from "node:path";
 //        disponible estando tomado.
 //    29  09-sep: soporte, referidos, terminos, dashboard y paneles de
 //        ejecutivo. Aqui salio la guardia de RFC unico que se saltaba.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 29);
+//     0  09-sep: cerrado. Ya no queda ninguna. De aqui en adelante la
+//        guardia no tolera nada: cualquier consulta nueva sin manejo de
+//        error falla el check.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 0);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 

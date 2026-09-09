@@ -335,11 +335,15 @@ const SignupPage: React.FC = () => {
             });
 
             try {
-              const { data: referrerData } = await supabase
+              const { data: referrerData, error: errorReferidor } = await supabase
                 .from('users')
                 .select('email, first_name, last_name')
                 .eq('id', referralValidation.referrer_id)
                 .single();
+
+              // Sin esto no se manda el aviso a quien refirio; el alta si se
+              // completa, asi que no cortamos el registro por esto.
+              if (errorReferidor) console.error('SignupPage: no se pudo leer al referidor para avisarle', errorReferidor);
 
               if (referrerData) {
                 const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-referral-signup-notification`, {

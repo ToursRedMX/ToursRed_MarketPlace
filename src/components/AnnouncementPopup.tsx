@@ -38,13 +38,17 @@ const AnnouncementPopup: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
-      const { data: row } = await supabase
+      const { data: row, error } = await supabase
         .from('platform_settings')
         .select(
           'announcement_active, announcement_title, announcement_message, announcement_cta_text, announcement_activated_at'
         )
         .limit(1)
         .maybeSingle();
+
+      // Es el aviso de la home: si falla no se muestra y ya.
+      if (error) console.error('AnnouncementPopup: no se pudo leer el aviso', error);
+
       if (row) {
         setData(row as AnnouncementData);
         evaluateVisibility(row as AnnouncementData);

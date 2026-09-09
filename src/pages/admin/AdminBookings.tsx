@@ -1423,6 +1423,7 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
   const [refundServiceCharge, setRefundServiceCharge] = useState(false);
 
   const [realTotalPaid, setRealTotalPaid] = useState(0);
+  const [errorTotalPagado, setErrorTotalPagado] = useState(false);
 
   // Two-phase flow for original_payment_method
   const [bookingCancelled, setBookingCancelled] = useState(false);
@@ -1464,8 +1465,18 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.rpc('get_booking_total_paid', { p_booking_id: booking.id });
-      if (!cancelled) setRealTotalPaid(Number(data) || 0);
+      const { data, error } = await supabase.rpc('get_booking_total_paid', { p_booking_id: booking.id });
+
+      // Este numero alimenta totalPaidByTraveler, del que sale el monto
+      // sugerido de reembolso. Un error lo dejaba en 0 sin decir nada: el
+      // admin veria "Pagado por viajero: $0.00" y reembolsaria de menos.
+      if (error) {
+        console.error('AdminBookings: no se pudo leer el total pagado de la reserva', error);
+        if (!cancelled) setErrorTotalPagado(true);
+        return;
+      }
+
+      if (!cancelled) { setErrorTotalPagado(false); setRealTotalPaid(Number(data) || 0); }
     })();
     return () => { cancelled = true; };
   }, [booking.id]);
@@ -1854,7 +1865,12 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><span className="text-gray-500">Tour:</span> <span className="font-medium text-gray-800">{booking.tours?.name}</span></div>
               <div><span className="text-gray-500">Viajero:</span> <span className="font-medium text-gray-800">{booking.users ? `${booking.users.first_name} ${booking.users.last_name}` : '—'}</span></div>
-              <div><span className="text-gray-500">Pagado por viajero:</span> <span className="font-medium text-gray-800">{formatCurrencyMXN(totalPaidByTraveler)}</span></div>
+              <div>
+                <span className="text-gray-500">Pagado por viajero:</span>{' '}
+                {errorTotalPagado
+                  ? <span className="font-medium text-red-600">no disponible — no pudimos leerlo</span>
+                  : <span className="font-medium text-gray-800">{formatCurrencyMXN(totalPaidByTraveler)}</span>}
+              </div>
               <div><span className="text-gray-500">Seguro:</span> <span className="font-medium text-gray-800">{insuranceCost > 0 ? formatCurrencyMXN(insuranceCost) : 'N/A'}</span></div>
               {optionalServicesRefundable > 0 && (
                 <div><span className="text-gray-500">Opcionales reembolsables:</span> <span className="font-medium text-gray-800">{formatCurrencyMXN(optionalServicesRefundable)}</span></div>

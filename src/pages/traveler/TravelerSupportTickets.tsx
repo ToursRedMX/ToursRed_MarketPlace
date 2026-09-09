@@ -24,7 +24,7 @@ const TravelerSupportTickets: React.FC = () => {
   const fetchTickets = async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('support_tickets')
       .select(`
         *,
@@ -33,6 +33,10 @@ const TravelerSupportTickets: React.FC = () => {
       `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
+
+    // "No tienes tickets" a alguien que si abrio uno y espera respuesta.
+    if (error) console.error('TravelerSupportTickets: no se pudieron leer los tickets', error);
+
     const list = data ?? [];
     setTickets(list);
     setLoading(false);

@@ -51,11 +51,15 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
   const getAgencyId = async (): Promise<string | null> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('agencies')
       .select('id')
       .eq('user_id', user.id)
       .maybeSingle();
+
+    // Sin agencia la subida se guarda en otra ruta o falla mas adelante.
+    if (error) console.error('ImageUploader: no se pudo leer la agencia del usuario', error);
+
     return data?.id ?? null;
   };
 

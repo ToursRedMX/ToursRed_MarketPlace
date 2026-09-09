@@ -108,9 +108,13 @@ const BookingFlowStep4: React.FC = () => {
 
         if (isActive) {
           try {
-            const { data: exemptData } = await supabase.rpc('get_remaining_service_fee_exemption', {
+            const { data: exemptData, error: errorExencion } = await supabase.rpc('get_remaining_service_fee_exemption', {
               p_user_id: user.id,
             });
+
+            // Es el beneficio de membresia sobre el cargo por servicio. Si no
+            // se lee, no se aplica en pantalla; el backend recalcula al cobrar.
+            if (errorExencion) console.error('BookingFlowStep4: no se pudo leer la exencion restante', errorExencion);
             if (exemptData && typeof exemptData === 'object' && 'remaining' in exemptData) {
               setRemainingExemption(exemptData.remaining || 0);
               setMonthlyExemptionLimit(exemptData.monthly_limit || 500);

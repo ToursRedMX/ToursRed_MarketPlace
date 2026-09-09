@@ -46,7 +46,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
   const [paymentSuccess, setPaymentSuccess] = useState('');
 
   const fetchPlan = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('booking_payment_plans')
       .select(`
         id, booking_id, mode, total_plan_amount, total_amount_paid, pending_balance, status, paid_100_pct_at_booking,
@@ -56,6 +56,10 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
       `)
       .eq('booking_id', bookingId)
       .maybeSingle();
+
+    // Sin plan, el viajero no ve sus parcialidades ni sus fechas de pago y
+    // parece que no tiene ninguna programada.
+    if (error) console.error('PaymentPlanCalendar: no se pudo leer el plan de pagos', error);
 
     if (data) {
       const sortedInstallments = [...(data.booking_payment_plan_installments || [])].sort(

@@ -115,11 +115,16 @@ const AdminUsers: React.FC = () => {
 
       const staffWithPermissions = await Promise.all(
         (usersData || []).map(async (user) => {
-          const { data: permsData } = await supabase
+          const { data: permsData, error: errorPermisos } = await supabase
             .from('admin_permissions')
             .select('can_manage_agencies, can_manage_users, can_manage_travelers, can_manage_destinations, can_manage_categories, can_manage_departure_points, can_manage_reviews, can_manage_messages, can_manage_inquiries, can_manage_settings, can_manage_memberships, can_manage_points, can_manage_discount_codes, can_view_audit_log, can_view_audit_sensitive_data, can_export_audit_log, can_cancel_bookings')
             .eq('user_id', user.id)
             .maybeSingle();
+
+          // Los permisos se pintan como casillas: un error los mostraria
+          // todos apagados y el admin podria "reactivarlos" sin saber que
+          // ya estaban puestos.
+          if (errorPermisos) throw errorPermisos;
 
           return {
             ...user,

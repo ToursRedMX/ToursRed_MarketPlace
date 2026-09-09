@@ -94,10 +94,14 @@ const AgencyPublicProfile: React.FC = () => {
       if (toursError) throw toursError;
       setTours(toursData || []);
 
-      const { count } = await supabase
+      const { count, error: errorResenas } = await supabase
         .from('agency_reviews')
         .select('*', { count: 'exact', head: true })
         .eq('agency_id', agencyData.id);
+
+      // "0 reseñas" en el perfil publico de una agencia que si tiene.
+      if (errorResenas) console.error('AgencyPublicProfile: no se pudieron contar las reseñas', errorResenas);
+
       setReviewCount(count || 0);
     } catch (err: any) {
       console.error('Error cargando datos de agencia:', err);

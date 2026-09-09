@@ -173,12 +173,16 @@ const AgencyDashboard: React.FC = () => {
 
       if (toursEnPreventa.length > 0) {
         const tourIdsEnPreventa = toursEnPreventa.map((t: any) => t.id);
-        const { data: preventaBookings } = await supabase
+        const { data: preventaBookings, error: errorPreventa } = await supabase
           .from('bookings')
           .select('tour_id, preventa_comision_descuento')
           .in('tour_id', tourIdsEnPreventa)
           .eq('es_reserva_preventa', true)
           .not('status', 'eq', 'cancelled');
+
+        // Las estadisticas de preventa saldrian en cero: la agencia creeria
+        // que su preventa no ha vendido nada.
+        if (errorPreventa) throw errorPreventa;
 
         const statsMap: Record<string, { count: number; ahorro: number }> = {};
         for (const b of preventaBookings || []) {

@@ -58,10 +58,14 @@ export default function AdminEjecutivos() {
   const loadExecutives = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data: execs } = await supabase
+      const { data: execs, error: errorEjecutivos } = await supabase
         .from('account_executives_safe')
         .select('id, user_id, first_name, last_name, email, phone, is_active, notes, hired_at, terminated_at, created_at, facturapi_configured, facturapi_organization_id, facturapi_configured_at')
         .order('created_at', { ascending: false });
+
+      // Sin esto, un error termina en una lista vacia que se lee como "no hay
+      // ejecutivos de cuenta".
+      if (errorEjecutivos) throw errorEjecutivos;
 
       if (!execs) { setExecutives([]); return; }
 

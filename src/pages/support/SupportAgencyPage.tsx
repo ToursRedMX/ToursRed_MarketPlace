@@ -34,11 +34,15 @@ const SupportAgencyPage: React.FC = () => {
       setSubcategories((subsRes.data ?? []).filter(s => s.aplica_a?.includes('agency')));
 
       if (agencyId) {
-        const { data: agency } = await supabase
+        const { data: agency, error } = await supabase
           .from('agencies')
           .select('name')
           .eq('id', agencyId)
           .maybeSingle();
+
+        // Solo el nombre que se muestra en el encabezado.
+        if (error) console.error('SupportAgencyPage: no se pudo leer el nombre de la agencia', error);
+
         if (agency) setAgencyName(agency.name);
       }
     };

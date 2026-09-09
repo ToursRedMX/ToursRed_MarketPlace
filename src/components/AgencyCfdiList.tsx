@@ -63,7 +63,7 @@ const AgencyCfdiList: React.FC<Props> = ({ agencyId }) => {
   const fetchInvoices = async () => {
     setIsLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('cfdi_invoices')
         .select(`
           *,
@@ -73,6 +73,9 @@ const AgencyCfdiList: React.FC<Props> = ({ agencyId }) => {
         .eq('agency_id', agencyId)
         .order('created_at', { ascending: false })
         .limit(100);
+
+      // Sin facturas, la agencia cree que no le han timbrado ninguna.
+      if (error) console.error('AgencyCfdiList: no se pudieron leer los CFDI', error);
 
       if (data) setInvoices(data as CfdiInvoice[]);
     } finally {

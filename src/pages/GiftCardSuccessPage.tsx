@@ -64,9 +64,12 @@ export default function GiftCardSuccessPage() {
 
     // Sin fila: o es un invitado sin cuenta (RLS) o la tarjeta no existe.
     // get-gift-card-status distingue los dos casos sin exponer el codigo.
-    const { data: estado } = await supabase.functions.invoke('get-gift-card-status', {
+    const { data: estado, error: errorInvocacion } = await supabase.functions.invoke('get-gift-card-status', {
       body: { gift_card_id: giftCardId },
     });
+
+    // Se sigue sondeando, pero que quede rastro de por que no avanza.
+    if (errorInvocacion) console.error('GiftCardSuccessPage: fallo get-gift-card-status', errorInvocacion);
 
     if (!estado || estado.error || !estado.payment_status) return false;
 

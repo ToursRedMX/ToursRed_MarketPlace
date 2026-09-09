@@ -203,11 +203,14 @@ const VerifyEmailPage: React.FC = () => {
         throw new Error('Sesión expirada');
       }
 
-      const { data: userData } = await supabase
+      const { data: userData, error: errorUsuario } = await supabase
         .from('users')
         .select('first_name, last_name')
         .eq('id', user.id)
         .single();
+
+      // Solo personaliza el saludo del correo de verificacion.
+      if (errorUsuario) console.error('VerifyEmailPage: no se pudo leer el nombre del usuario', errorUsuario);
 
       const userName = userData
         ? `${userData.first_name || ''} ${userData.last_name || ''}`.trim()
