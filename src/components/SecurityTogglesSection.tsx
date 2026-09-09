@@ -11,21 +11,41 @@ export const SecurityTogglesSection: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [hasMfa, setHasMfa] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
-      const { data } = await supabase
+      const { data, error: errorSettings } = await supabase
         .from('platform_settings')
         .select('mfa_required_for_admins, mfa_required_for_accountant, passkeys_enabled')
         .maybeSingle();
+
+      // Si no podemos leer, los `?? false` pintarian los tres interruptores
+      // de seguridad en "apagado" aunque esten encendidos. Mostrar el estado
+      // equivocado de un control de seguridad es peor que no mostrar nada.
+      if (errorSettings) {
+        console.error('SecurityTogglesSection: no se pudo leer platform_settings', errorSettings);
+        setLoadError('No pudimos leer la configuracion de seguridad. Lo que ves abajo podria no ser el estado real, asi que no mostramos los interruptores.');
+        return;
+      }
+
       setMfaAdmins(data?.mfa_required_for_admins ?? false);
       setMfaAccountant(data?.mfa_required_for_accountant ?? false);
       setPasskeysEnabled(data?.passkeys_enabled ?? false);
 
-      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const { data: factors, error: errorFactores } = await supabase.auth.mfa.listFactors();
+      if (errorFactores) {
+        console.error('SecurityTogglesSection: no se pudieron listar los factores MFA', errorFactores);
+        setLoadError('No pudimos verificar si tienes MFA configurado. Recarga antes de cambiar estos ajustes.');
+        return;
+      }
+
       setHasMfa((factors?.totp ?? []).some((f: any) => f.status === 'verified'));
-    } catch {
+    } catch (err: any) {
+      console.error('SecurityTogglesSection: fallo al cargar la configuracion', err);
+      setLoadError('No pudimos leer la configuracion de seguridad.');
     } finally {
       setLoading(false);
     }
@@ -72,6 +92,22 @@ export const SecurityTogglesSection: React.FC = () => {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-6">
+        <div className="flex items-start gap-2 text-amber-700 text-sm bg-amber-50 rounded-lg p-3">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" /> {loadError}
+        </div>
+        <button
+          onClick={loadSettings}
+          className="mt-4 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+        >
+          Reintentar
+        </button>
       </div>
     );
   }

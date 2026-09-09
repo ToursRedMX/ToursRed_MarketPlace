@@ -59,7 +59,9 @@ import { join } from "node:path";
 //   175  09-sep: src/lib/supabase.ts completo — busqueda por destino,
 //        manifiesto de pasajeros, borrado de categorias y las cuatro
 //        lecturas de la politica de cancelacion.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 175);
+//   166  09-sep: los componentes de seguridad — mantenimiento, ajustes de
+//        MFA, passkeys y el panel de interruptores de seguridad.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 166);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 

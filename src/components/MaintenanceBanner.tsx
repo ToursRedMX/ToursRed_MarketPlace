@@ -14,11 +14,14 @@ const MaintenanceBanner: React.FC = () => {
     if (!isSuperAdmin) return;
 
     const load = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('platform_settings')
         .select('id, maintenance_mode')
         .limit(1)
         .maybeSingle();
+      if (error) {
+        console.error('MaintenanceBanner: no se pudo leer platform_settings', error);
+      }
       if (data) {
         setSettingsId(data.id);
         setMaintenanceMode(data.maintenance_mode);

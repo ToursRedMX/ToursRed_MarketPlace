@@ -19,11 +19,15 @@ const MaintenanceAdminPage: React.FC = () => {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return;
-      const { data: profile } = await supabase
+      const { data: profile, error: errorPerfil } = await supabase
         .from('users')
         .select('is_super_admin')
         .eq('id', session.user.id)
         .maybeSingle();
+      // Falla cerrado a proposito: sin lectura no hay redireccion.
+      if (errorPerfil) {
+        console.error('MaintenanceAdminPage: no se pudo leer el perfil', errorPerfil);
+      }
       if (profile?.is_super_admin) {
         navigate('/admin', { replace: true });
       }
@@ -53,11 +57,17 @@ const MaintenanceAdminPage: React.FC = () => {
       }
 
       // Verify the user is actually super admin
-      const { data: profile } = await supabase
+      const { data: profile, error: errorPerfil } = await supabase
         .from('users')
         .select('is_super_admin')
         .eq('id', data.session.user.id)
         .maybeSingle();
+
+      // Tambien falla cerrado: si no podemos comprobar el rol, se niega el
+      // acceso y se cierra la sesion.
+      if (errorPerfil) {
+        console.error('MaintenanceAdminPage: no se pudo verificar el super admin', errorPerfil);
+      }
 
       if (!profile?.is_super_admin) {
         await supabase.auth.signOut();

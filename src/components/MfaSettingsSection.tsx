@@ -67,10 +67,20 @@ export const MfaSettingsSection: React.FC = () => {
 
   const loadRecoveryCodesRemaining = useCallback(async () => {
     try {
-      const { count } = await supabase
+      const { count, error: errorCodigos } = await supabase
         .from('mfa_recovery_codes')
         .select('id', { count: 'exact', head: true })
         .is('used_at', null);
+
+      // Un 0 falso le diria al usuario que se quedo sin codigos de
+      // recuperacion y lo empujaria a regenerarlos, invalidando los buenos.
+      // null es "no sabemos", que es la verdad.
+      if (errorCodigos) {
+        console.error('MfaSettingsSection: no se pudieron contar los codigos de recuperacion', errorCodigos);
+        setRecoveryCodesRemaining(null);
+        return;
+      }
+
       setRecoveryCodesRemaining(count ?? 0);
     } catch {
       setRecoveryCodesRemaining(null);
@@ -101,7 +111,11 @@ export const MfaSettingsSection: React.FC = () => {
   // Filtrar sobre `.totp`, que es lo que usa loadFactors(), no encontraria
   // nunca un huerfano y esta limpieza no haria nada.
   const cleanupOrphanFactors = useCallback(async (): Promise<number> => {
-    const { data } = await supabase.auth.mfa.listFactors();
+    const { data, error: errorFactores } = await supabase.auth.mfa.listFactors();
+    if (errorFactores) {
+      console.error('MfaSettingsSection: no se pudieron listar los factores para limpiar huerfanos', errorFactores);
+      return 0;
+    }
     const orphans = (data?.all ?? []).filter(
       (f) => f.factor_type === 'totp' && f.status !== 'verified',
     );

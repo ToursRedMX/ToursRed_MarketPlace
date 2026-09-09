@@ -37,10 +37,13 @@ export const PasskeySettingsSection: React.FC = () => {
 
   const loadToggle = useCallback(async () => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('platform_settings')
         .select('passkeys_enabled')
         .maybeSingle();
+      if (error) {
+        console.error('PasskeySettingsSection: no se pudo leer passkeys_enabled', error);
+      }
       setPasskeysEnabled(data?.passkeys_enabled ?? false);
     } catch {
       setPasskeysEnabled(false);
