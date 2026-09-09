@@ -13,7 +13,7 @@ migraciones SQL, funciones de Netlify, y la superficie de `_shared/contractDocDe
 
 ---
 
-## Estado de la remediación (actualizado 07-sep-2026)
+## Estado de la remediación (actualizado 09-sep-2026)
 
 Este documento nació como solo-lectura. Después se atacaron los hallazgos, y **tres cosas
 cambiaron respecto de lo que se escribió el 05-sep**: A-3 resultó falso positivo, C-1
@@ -23,12 +23,12 @@ igual de alcanzables). Las tres correcciones están abajo, en su sección, con l
 
 | Hallazgo | Estado | Dónde |
 |---|---|---|
-| C-1 | **Corregido** (y reescrito: eran 4 palancas, no 1) | `a90237d` |
+| C-1 | **Cerrado, las dos mitades** — el checkout ya no acepta el monto del cliente (`a90237d`), y el webhook ya no confirma sin mirar cuánto entró (`edc5016`) | `a90237d`, `edc5016` |
 | C-2 | **Corregido** — el webhook falla cerrado | `bed5563` |
 | A-1 | **Corregido** (y corregido el conteo: eran 39 de 44 sin control, y hay 7 más igual de expuestas con `verify_jwt = true`) | ver más abajo |
 | A-2 | **Corregido** — exige dueño/agencia/staff/admin o service role | `bed5563` |
 | A-3 | **FALSO POSITIVO** — retirado del conteo | — |
-| M-1 | **Corregido en código** — pendiente de desplegar y de una confirmación (ver más abajo) | ver más abajo |
+| M-1 | **Corregido y desplegado** (`send-contact-email` v82); la confirmación que faltaba —que `TURNSTILE_SECRET_KEY` existe— ya está hecha | ver más abajo |
 | M-2 | **Corregido** — el helper falla cerrado, y el hallazgo se quedó corto: los toggles de MFA están **encendidos** en producción, así que era un bypass vivo, no latente | ver más abajo |
 | M-6 | **Corregido en código** — y el hallazgo se quedó corto por partida doble: 6 de los sitios eran correctos, y en los otros 20 el `catch` ni siquiera era el problema | ver más abajo |
 | M-3 | **Cerrado como decisión** — OpenPay no ofrece firma ni Basic auth para webhooks; la mitigación existente es la defensa disponible | ver más abajo |
@@ -38,7 +38,7 @@ igual de alcanzables). Las tres correcciones están abajo, en su sección, con l
 **Conteo corregido: 10 hallazgos reales en este documento** (2 críticos, 2 altos,
 6 medios), no 11. Sumando las otras dos auditorías, **21 en total, no 22.**
 
-### Marcador global de las tres auditorías (08-sep-2026)
+### Marcador global de las tres auditorías (09-sep-2026)
 
 Las otras dos tienen ahora su propia tabla de estado, verificada contra el código.
 
@@ -47,8 +47,9 @@ Las otras dos tienen ahora su propia tabla de estado, verificada contra el códi
 | Edge functions (este documento) | C-1, C-2, A-1, A-2, M-1, M-2, M-4, M-5, M-6 | — | **10 / 10** |
 | — de esos, M-3 se cierra como decisión: el panel de OpenPay no ofrece ni firma ni Basic auth; la re-consulta del cargo es la defensa disponible | | | |
 | Postgres | A-1, M-1, M-2, M-3, M-4, **y C-1**, un crítico que no estaba en la auditoría: `confirm_booking_paid_with_wallet` confirmaba reservas sin cobrarlas. Lo destapó la guardia de autorización de este documento | — | **5 / 5 + 1** |
-| Frontend | F-2, F-3, F-4, F-5, F-6 | F-1 (tier 1 corregido, contador puesto; 247 sitios abiertos) | 5 / 6 |
-| **Total** | **19** | **2** | **21** |
+| Frontend | F-1, F-2, F-3, F-4, F-5, F-6 | — | **6 / 6** |
+| — F-1 pasó de 262 sitios a **0**, y `scripts/check-supabase-errors.mjs` quedó con la línea base en cero: cualquier consulta nueva que ignore su error rompe CI | | | |
+| **Total** | **21** | **0** | **21** |
 
 > Este total se calcula sumando las filas de arriba, no de memoria. El 08-sep-2026
 > estuvo mal (decía 14/7) porque se incrementó a mano sin recontar; las filas ya
@@ -246,13 +247,60 @@ silencio** — el descuento ya se dio en Stripe y no hay error que ver.
 El punto 4 es una alarma para detectar bugs propios del front, **no** la defensa. Si
 algún día estorba, se puede subir la tolerancia o quitarlo sin reabrir nada.
 
-**Lo que sigue pendiente de C-1:** la segunda mitad —que el webhook confirme sin comparar
-lo cobrado contra `deposit_amount`, como sí hace `capture-paypal-order:116-131`—. Con lo
-anterior arreglado ya no es explotable desde fuera (habría que fabricar la sesión de
-Stripe, lo que exige la secret key), así que esa capa protege contra bugs propios, no
-contra un atacante. Tocar la confirmación de reservas (OXXO, transferencia, pagos
-parciales, descuentos) tiene riesgo real de romper confirmaciones legítimas y merece su
-propio pase revisado.
+### La segunda mitad de C-1 — cerrada el 09-sep-2026 (`edc5016`, PR #178)
+
+Faltaba que el webhook comparara lo cobrado contra el anticipo antes de confirmar. Con la
+primera mitad arreglada ya no era explotable desde fuera (habría que fabricar la sesión de
+Stripe, lo que exige la secret key), así que esta capa protege contra bugs propios — que es
+exactamente como falló la primera vez.
+
+**No se copió la regla de `capture-paypal-order:116-131`, aunque este documento lo proponía.**
+Copiarla literal rompe confirmaciones legítimas, y eso no es una opinión: se simuló contra
+las **26 reservas confirmadas que no son de PayPal** (07-jul a 05-sep-2026).
+
+- La regla de PayPal (`totalPaid < deposit_amount - 0.5`) no suma puntos ni ToursRed Cash.
+  En **TRG-E5BGCYW29XY** el viajero pagó 4,706.84 con tarjeta y 562.61 en puntos sobre un
+  anticipo de 5,149.50: la habría dejado sin confirmar.
+- La alternativa "obvia" —exigir `amount_due_now`— tampoco sirve: incluye `membership_cost`,
+  que se cobra por otra vía, e incluye los extras completos cuando el checkout sólo cobra
+  los que siguen sin pagar. Habría bloqueado **2 de las 6** confirmaciones de Stripe.
+
+Lo que quedó, en `_shared/coberturaDePago.ts`, son dos reglas separadas:
+
+- **Bloquea** si `pagado + puntos/100 + cash < deposit_amount - 0.5`. El anticipo es el piso,
+  corregido por billetera porque `deposit_amount` es bruto y lo que cobra el procesador ya
+  viene neto. Simulada contra las 26, sólo marca **TRG-PZKEAXWBZIV** (07-jul), que está
+  `confirmed` / `succeeded` con cero transacciones y sin `payment_intent`. O sea, marca justo
+  lo que se busca.
+- **Avisa** (pero confirma) si `pagado < amount_due_now - membership_cost - 0.5`. El dinero ya
+  entró; negarse a confirmar sería peor. Queda el rastro en `audit_errors`.
+
+Detalles que no se ven en el diff y conviene no perder:
+
+- El helper recibe el `payment_intent` de este cobro para **no contarlo dos veces** cuando
+  Stripe reintenta el webhook. Sin eso, en el reintento la fila del intento anterior ya está
+  en `payment_transactions` y se sumaría además del monto del evento: un cobro corto pasaría.
+- El filtro de esa fila va en JS y **no con `.neq()`**: en PostgREST, `neq` sobre una columna
+  NULL descarta la fila, y los cobros de OpenPay, MercadoPago o Conekta tienen
+  `stripe_payment_intent_id` en NULL. Con `.neq()` se perderían y el total quedaría por debajo
+  del real — justo la dirección que bloquea reservas legítimas.
+- Si no se puede leer la reserva, **confirma igual** y marca `noVerificable`. El cobro ya se
+  hizo; dejar una reserva pagada sin confirmar por un parpadeo de la base es peor.
+
+Cuando bloquea, el webhook registra la transacción (idempotente), deja la reserva en
+`processing` y anota `stripe-webhook/cobertura-insuficiente` en `audit_errors`.
+
+**Verificación:** `node scripts/test-cobertura-pago.mjs` — 13 casos, todos con números reales
+de reservas del proyecto, no inventados. Se probó por mutación: romper el piso hace fallar la
+suite. **Desplegado** en `stripe-webhook` (v246/247), byte a byte igual a `main`.
+
+**Durante el UAT conviene mirar esto:**
+
+```sql
+select attempted_at, error_message, raw_payload from public.audit_errors
+where error_message like 'stripe-webhook/cobertura%'
+   or error_message like 'stripe-webhook/cobro-menor%';
+```
 
 **Nota de alcance:** no revisé si alguna política RLS o algún trigger en `bookings`
 frena esto aguas abajo. Lo dudo por cómo está escrito el webhook (usa service role, que
@@ -675,26 +723,37 @@ petición a Cloudflare. Se cambió a `URLSearchParams`, que escapa, y de paso se
 No se deja pasar. Mismo criterio que el helper de AAL2 tras M-2: si no se puede
 verificar, se bloquea.
 
-#### Lo que hay que confirmar ANTES de desplegar
+#### Lo que había que confirmar antes de desplegar — confirmado el 09-sep-2026
 
 Si `turnstile_auth_enabled` está en `true` y **`TURNSTILE_SECRET_KEY` no está
 configurado** en los secretos de Edge Functions, esta versión devuelve **503** y el
 formulario de contacto deja de funcionar. Es el comportamiento correcto —la palanca está
-encendida y no hay con qué verificar—, pero hay que saberlo antes, no después.
+encendida y no hay con qué verificar—, pero había que saberlo antes, no después.
 
-No se puede comprobar desde aquí: no hay forma de leer los secretos de Edge Functions por
-API. Hay que mirarlo en el panel de Supabase.
+No se puede leer un secreto de Edge Functions por API, pero **no hace falta el panel**: la
+propia función lo delata. Llamada sin token, `send-contact-email` (v82, desplegada)
+devuelve **403 `CAPTCHA_REQUERIDO`**. Si el secreto faltara devolvería **503
+`CAPTCHA_NO_CONFIGURADO`**. O sea: el secreto está puesto y el fail-open está cerrado.
+
+El mismo truco sirve para `STRIPE_WEBHOOK_SECRET` (C-2): el webhook responde **400** por
+falta de firma; si el secreto no existiera, el código devuelve **500** antes de llegar a
+mirar la firma. Vale más que una captura del panel, porque mide lo que corre.
 
 La *site key* (`0x4AAAAAAEPafX7zzdCsVdYB`) está hardcodeada en `TurnstileWidget.tsx`, y
 **eso está bien**: las site keys de Turnstile son públicas por diseño, viajan en el HTML.
 No es un hallazgo.
 
-#### Lo que NO cubre esto
+#### Lo que NO cubría esto — cerrado aparte el 09-sep-2026 (PR #180)
 
-`claude.md` documenta un problema distinto y del lado del cliente: el token de un solo
+`claude.md` documentaba un problema distinto y del lado del cliente: el token de un solo
 uso que no se resetea, en los 6 consumidores del front (`LoginPage`, `SignupPage`,
 `AgencySignupFormBody`, `ChangePasswordSection`, `MaintenanceAdminPage`, `ContactPage`).
-Sigue abierto y es independiente de esto.
+
+**Axel lo reprodujo en producción el 09-sep**: con la contraseña equivocada al primer
+intento, el segundo intento —ya con la contraseña correcta— era rechazado por el captcha.
+Los tokens de Turnstile son de un solo uso, y Supabase los manda a `siteverify` **antes**
+de mirar las credenciales; el intento fallido quemaba el token y el reintento reenviaba el
+mismo. En el preview de #180 ya no pasa. El detalle está en la auditoría de frontend.
 
 ## M-2. `aal2Check` falla abierto: si no puede verificar el MFA, deja pasar
 
@@ -1040,6 +1099,12 @@ entraban como `implicit any`.
 
 **Al mergear hay que desplegar las 15 funciones**, más `send-contact-email` por M-1.
 
+> **Desplegadas.** Verificado el 09-sep-2026 contra la lista de versiones de Supabase: de
+> las 126 funciones que tocó la remediación, **ninguna quedó por detrás de su último
+> cambio**. Ojo al comparar fechas a mano: `f190ce9` es un *squash* cuyo asunto dice "Merge
+> pull request #40", y por ahí entraron al repo muchos de estos archivos, así que un
+> `git log -1` sobre ellos da una fecha engañosa y produce falsos "sin desplegar".
+
 ---
 
 # Lo que está bien hecho
@@ -1076,12 +1141,12 @@ El orden es por riesgo sobre el lanzamiento del 21 de septiembre, no por dificul
 | # | Hallazgo | Severidad | Esfuerzo estimado |
 |---|---|---|---|
 | 1 | **C-2** — verificar que `STRIPE_WEBHOOK_SECRET` esté en los 3 ambientes | Crítico | ✅ resuelto: hoy hay un solo ambiente y la variable existe |
-| 2 | **C-1** — que el servidor fije el precio | Crítico | ✅ `a90237d` |
+| 2 | **C-1** — que el servidor fije el precio | Crítico | ✅ `a90237d` (checkout) + `edc5016` (el webhook ya no confirma sin mirar cuánto entró) |
 | 3 | **C-2** — hacer que el webhook de Stripe falle cerrado, como el de PayPal | Crítico | ✅ `bed5563` |
 | 4 | **A-1** — inventariar las ~44 `send-*` y cerrarlas con el guard de service role | Alto | **hecho 08-sep-2026** — el inventario era, en efecto, el trabajo |
 | 5 | ~~**A-3**~~ | ~~Alto~~ | ❌ falso positivo, retirado |
 | 6 | **A-2** — exigir dueño/agencia/admin en `generate-booking-qr-token` | Alto | ✅ `bed5563` |
-| 7 | **M-1** — Turnstile obligatorio y rate limit por IP en el formulario de contacto | Medio | ✅ corregido — el servidor decide si exige el captcha, y hay rate limit por correo y por IP |
+| 7 | **M-1** — Turnstile obligatorio y rate limit por IP en el formulario de contacto | Medio | ✅ corregido y **desplegado** (v82); `TURNSTILE_SECRET_KEY` confirmado por el 403 de la propia función |
 | 8 | **M-4** — guard de service role en los dos crons abiertos | Medio | ✅ `bed5563` |
 | 9 | **M-2** — el helper de AAL2 falla cerrado | Medio | **hecho** (08-sep-2026) |
 | 10 | **M-3, M-5, M-6** — decisiones de arquitectura, no parches sueltos | Medio | **cerrados** — M-3 como decisión (OpenPay no ofrece firma), M-5 y M-6 con módulo compartido y guardia en CI |
@@ -1193,6 +1258,21 @@ citas se leyeron directamente del árbol en la rama auditada.
   usuario. Ese inventario hay que hacerlo antes de cerrarlas.
 - **Nada se probó en ejecución.** Toda la auditoría es lectura estática. C-1 y C-2 tienen
   arriba un procedimiento concreto para confirmarlos en staging.
+
+> **Al 09-sep-2026, tres de estos cuatro ya no aplican:**
+>
+> - `STRIPE_WEBHOOK_SECRET` **sí está configurada**, y no hizo falta el dashboard: el
+>   webhook responde **400** por falta de firma, y si el secreto no existiera el código
+>   devolvería **500** antes de llegar a mirarla. Lo mismo con `TURNSTILE_SECRET_KEY`, vía
+>   el 403 de `send-contact-email` (ver M-1).
+> - El inventario de las `send-*` **está hecho** — era, en efecto, el trabajo (ver A-1), y
+>   `scripts/check-edge-guards.mjs` lo mantiene: hoy reporta **0 huecos**.
+> - Ya no todo es lectura estática: la segunda mitad de C-1 se midió contra las 26 reservas
+>   confirmadas reales y tiene suite (`scripts/test-cobertura-pago.mjs`), y el token
+>   quemado de Turnstile se reprodujo en producción antes de arreglarlo.
+>
+> **Sigue sin comprobarse** si alguna política RLS o algún trigger en `bookings` frena C-1
+> aguas abajo.
 
 **Correcciones de hipótesis propias.** Van dos, y las dos son del mismo tipo.
 

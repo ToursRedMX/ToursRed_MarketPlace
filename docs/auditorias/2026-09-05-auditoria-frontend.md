@@ -11,7 +11,7 @@ código además de huecos de seguridad**, por pedido explícito.
 
 ---
 
-## Estado de la remediación (actualizado 08-sep-2026)
+## Estado de la remediación (actualizado 09-sep-2026)
 
 Este documento nació como solo-lectura. La tabla se verificó hallazgo por hallazgo
 contra `src/` tal como está hoy, no de memoria; la columna *Cómo se comprobó* dice con
@@ -19,17 +19,37 @@ qué.
 
 | Hallazgo | Estado | Dónde | Cómo se comprobó |
 |---|---|---|---|
-| F-1 — la mitad de las consultas ignoran el error y renderizan vacío | **Triage hecho, tier 1 corregido, contador puesto** — 262 → 247 sitios | 8 archivos de `src/` + `scripts/check-supabase-errors.mjs` + paso en `lint.yml` | Ver *Triage y primera tanda* al final de F-1 |
+| F-1 — la mitad de las consultas ignoran el error y renderizan vacío | **Cerrado** — 262 → **0** sitios | #146, #173, #174, #176 + `scripts/check-supabase-errors.mjs` con línea base en **0** | `node scripts/check-supabase-errors.mjs` devuelve `encontradas 0`. Ver *Cómo se cerró* al final de F-1 |
 | F-2 — 60 líneas de cobro con Stripe que nunca se ejecutan | **Corregido** | #146 | `grep -rn 'createStripeCheckout' src/` no devuelve nada |
 | F-3 — consultas que se ejecutan y cuyo resultado se descarta | **Corregido** | — | Los tres estados de `BookingFlowStep3` ya no existen; en `AgencyFinancials.tsx:79-81` hay un comentario que documenta por qué se quitó `commissionRecords` del estado |
 | F-4 — el check de `lint` no puede salir rojo | **Corregido** | #146 + branch protection | `lint` corre con `--strict` y falla si el conteo sube; el 08-sep se agregó como **check requerido** (junto con `smoke`) |
 | F-5 — `xlsx` se instala desde un tarball de CDN, no desde npm | **Cerrado como decisión consciente** — la recomendación estaba al revés | README, sección *Requisitos del build* | Ver la corrección al final de F-5 |
 | F-6 — HTML sin sanitizar de contenido administrable | **Corregido** | `src/utils/sanitizeHtml.ts` + los 9 sitios | Ver *Cómo quedó* al final de F-6 |
 
-**5 de 6 cerrados** (4 corregidos + F-5 documentado como decisión).
+**6 de 6 cerrados** (5 corregidos + F-5 documentado como decisión).
 
-Queda **F-1** solo: 247 de 498 consultas a Supabase no piden `error`. Es el de mayor
-impacto y el más caro, porque el trabajo real es el triage.
+La línea base de la guardia quedó en **0**: de aquí en adelante cualquier consulta nueva
+que ignore su `error` falla el check `lint`. Eso convierte F-1 de deuda tolerada en regla.
+
+### Hallazgo posterior, corregido: el token de Turnstile se reenviaba quemado
+
+No estaba en esta auditoría —venía documentado en `claude.md` desde el 02-sep— pero es
+del mismo tipo que F-1 y se cerró en la misma tanda, así que queda anotado aquí.
+
+El token de Turnstile es de un solo uso y Supabase lo manda a siteverify **antes** de
+mirar las credenciales, así que un intento fallido de contraseña lo gasta. Nada lo
+reponía: el token quemado se quedaba en el estado del componente y el siguiente intento
+lo reenviaba tal cual. El usuario corregía su contraseña, volvía a fallar, y el error que
+veía era de captcha.
+
+**Confirmado en vivo el 09-sep-2026** comparando el deploy preview del PR contra la
+versión desplegada: con la contraseña equivocada y luego la correcta, la versión de
+entonces rechazaba el segundo intento y el preview dejaba entrar. Es la reproducción
+end-to-end que `claude.md` daba por pendiente desde el 02-sep.
+
+Corregido en #180, replicando el patrón que ya usaban `ExoticcaPage`, `MegaTravelPage` y
+`NefertariTravelPage`: un contador `captchaAttempt` como `key` del widget, incrementado
+en el `finally` de cada intento. Alcance: los 6 consumidores que faltaban.
 
 ---
 
@@ -183,9 +203,12 @@ no bloqueante: no se le impide pagar, pero se le dice que recargue antes.
 pintaba **nada**. Ahora, si hubo error, muestra el aviso con un botón de
 reintentar.
 
-#### Lo que queda, y por qué es un contador y no una guardia en cero
+#### Lo que quedaba tras el tier 1, y por qué entonces fue un contador y no una guardia en cero
 
-Quedan **247 sitios**. Arreglarlos de golpe sería un cambio enorme e irrevisable,
+> **Superado.** Lo de abajo describe el estado del 07-sep-2026, cuando sólo estaba hecho
+> el tier 1. Hoy la línea base es **0**; ver *Cómo se cerró F-1* al final de esta sección.
+
+Quedaban **247 sitios**. Arreglarlos de golpe sería un cambio enorme e irrevisable,
 y una parte son intencionales: un banner de mantenimiento que no se pinta, un
 contador que no aparece. Fallar en silencio ahí es lo correcto.
 
@@ -203,6 +226,48 @@ bajar la línea base si baja, y con `--lista` enumera los sitios.
 `typecheck`: **446 errores antes y 446 después** (comparados ignorando el número
 de línea, porque las inserciones los corren). `eslint`: **67 antes y 67 después**
 en los 8 archivos tocados. Cero agregados en ambos.
+
+### Cómo se cerró F-1 — 262 → 0 (09-sep-2026)
+
+El contador no se quedó de contador. Se bajó en cuatro pases revisables, no de golpe:
+
+| Pase | Qué entró | Sitios |
+|---|---|---|
+| Tier 1 | los que mienten con dinero o con permisos | 262 → 247 |
+| Tier 2 (`91aa2a9`, PR #173) | el resto de los caminos de pago, fiscal y de reservas | 247 → 191 |
+| Tier 3 (`239483a`, PR #174) | paneles de agencia y de admin | 191 → 145 |
+| Cierre (`a53b486`, PR #176) | todo lo demás, incluidos los "intencionales" | 145 → **0** |
+
+**La línea base quedó en 0**, así que la guardia dejó de ser un contador y es una guardia:
+cualquier consulta nueva que ignore su error rompe CI. `node scripts/check-supabase-errors.mjs`
+responde `encontradas 0 / linea base 0`.
+
+**Los "intencionales" no se dejaron pasar, se hicieron explícitos.** Un banner de
+mantenimiento que no se pinta sigue sin pintarse — pero ahora el `if (error)` está escrito,
+con su comentario, en vez de ser un `error` sin leer que parece un descuido.
+
+#### Las tres formas del bug, por si vuelve
+
+Buscar sólo "consultas sin `if (error)`" se queda corto. Los tres patrones que aparecieron:
+
+1. **`=== false` sobre una lectura que falló.** `null === false` es `false`, así que el guard
+   **se salta solo**. Es la familia más traicionera: el código *parece* que valida.
+2. **`?? true`, `count ?? 0`, `data ? 'ocupado' : 'libre'`.** Una lectura fallida no da pantalla
+   vacía: da **la respuesta contraria**. La forma de ternario es invisible a un triage por
+   forma — hay que leerla.
+3. **El fallo literalmente invisible**, tipo `if (lista.length === 0) return null;`.
+
+#### El peor de todos: `AgencyTours.tsx`
+
+`handleEdit` cargaba servicios opcionales, suplementos y horarios del tour, e ignoraba el
+error de esas lecturas. Si una fallaba, el editor abría **como si el tour no tuviera esos
+registros** — y `handleSubmit` reconcilia contra lo cargado con un `toDelete`. Es decir: abrir
+el editor con la base parpadeando y guardar **borraba** los opcionales del tour. Ahora
+`handleEdit` acumula `fallosDeCarga` y, si hay alguno, **el editor no abre**.
+
+En `AdminBookings.tsx`, la guardia de reembolso duplicado también fallaba abierta, y el total
+pagado mostraba **$0.00** cuando la consulta fallaba; ahora dice "no disponible — no pudimos
+leerlo", que es la verdad.
 
 ---
 
