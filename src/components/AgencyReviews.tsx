@@ -86,25 +86,30 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
     if (!user) return;
 
     try {
-      const { data: existingReview } = await supabase
+      const { data: existingReview, error: errorResenaPrevia } = await supabase
         .from('agency_reviews')
         .select('id')
         .eq('agency_id', agencyId)
         .eq('traveler_id', user.id)
         .maybeSingle();
 
+      // Sin esta comprobacion se ofreceria el formulario a quien ya reseño.
+      if (errorResenaPrevia) throw errorResenaPrevia;
+
       if (existingReview) {
         setHasReviewed(true);
         return;
       }
 
-      const { data: completedBookings } = await supabase
+      const { data: completedBookings, error: errorReservas } = await supabase
         .from('bookings')
         .select('id')
         .eq('agency_id', agencyId)
         .eq('user_id', user.id)
         .eq('status', 'confirmed')
         .limit(1);
+
+      if (errorReservas) throw errorReservas;
 
       setCanReview((completedBookings || []).length > 0);
     } catch (err) {
@@ -129,7 +134,7 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
       setIsSubmitting(true);
       setError('');
 
-      const { data: booking } = await supabase
+      const { data: booking, error: errorReserva } = await supabase
         .from('bookings')
         .select('id')
         .eq('agency_id', agencyId)
@@ -137,6 +142,14 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
         .eq('status', 'confirmed')
         .limit(1)
         .maybeSingle();
+
+      // "No tienes reserva confirmada" y "no pudimos comprobarlo" no son lo
+      // mismo, y al viajero que si la tiene el primero le suena a error suyo.
+      if (errorReserva) {
+        console.error('No se pudo comprobar la reserva para reseñar:', errorReserva);
+        setError('No pudimos verificar tu reserva en este momento. Intenta de nuevo.');
+        return;
+      }
 
       if (!booking) {
         setError('Necesitas una reserva confirmada para reseñar');

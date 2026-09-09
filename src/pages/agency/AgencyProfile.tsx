@@ -145,8 +145,12 @@ const AgencyProfile: React.FC = () => {
       setAgency(agencyWithStats);
 
       // Buscar ejecutivo asignado via RPC (RLS de account_executives bloquea consulta directa)
-      const { data: execData } = await supabase
+      const { data: execData, error: errorEjecutivo } = await supabase
         .rpc('get_my_agency_executive');
+
+      // Sin esto, un error se ve igual que "no tienes ejecutivo asignado".
+      if (errorEjecutivo) console.error('No se pudo leer el ejecutivo asignado:', errorEjecutivo);
+
       if (execData && execData.length > 0) {
         setExecutive(execData[0]);
       } else {
@@ -154,7 +158,7 @@ const AgencyProfile: React.FC = () => {
       }
 
       // Buscar contrato firmado (documento más reciente de tipo contrato_agencia)
-      const { data: contractDoc } = await supabase
+      const { data: contractDoc, error: errorContrato } = await supabase
         .from('agency_documents')
         .select('storage_path, file_name')
         .eq('agency_id', agencyData.id)
@@ -163,6 +167,9 @@ const AgencyProfile: React.FC = () => {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      // Un error aqui le dice a la agencia que NO tiene contrato firmado.
+      if (errorContrato) throw errorContrato;
 
       if (contractDoc?.storage_path) {
         setContractInfo({ folio: contractDoc.file_name?.replace('.pdf', '') || 'firmado', storagePath: contractDoc.storage_path });
@@ -391,12 +398,21 @@ const AgencyProfile: React.FC = () => {
     if (slugDebounceTimer) clearTimeout(slugDebounceTimer);
     slugDebounceTimer = setTimeout(async () => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('agencies')
           .select('id')
           .ilike('custom_slug', value)
           .neq('id', agency!.id)
           .maybeSingle();
+
+        // Ojo con el ternario: sin revisar el error, una consulta caida
+        // devolvia data null y el slug se marcaba como DISPONIBLE aunque
+        // estuviera tomado. 'idle' es "todavia no sabemos".
+        if (error) {
+          console.error('No se pudo comprobar la disponibilidad del slug:', error);
+          setSlugStatus('idle');
+          return;
+        }
 
         setSlugStatus(data ? 'taken' : 'available');
       } catch {

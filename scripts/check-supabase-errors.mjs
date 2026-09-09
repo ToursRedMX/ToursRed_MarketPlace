@@ -79,7 +79,10 @@ import { join } from "node:path";
 //    69  09-sep: triage del resto por forma peligrosa — la guardia de
 //        reembolso duplicado, los cuatro callbacks de OAuth, y los que
 //        confundian "no hay" con "no pudimos leer".
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 69);
+//    48  09-sep: perfiles, resenas, prospectos y newsletter. Aqui salio el
+//        cobro que se saltaba el saldo restante y el slug que se marcaba
+//        disponible estando tomado.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 48);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 
