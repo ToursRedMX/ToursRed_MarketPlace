@@ -189,9 +189,15 @@ const TourCatalogPage: React.FC = () => {
   useEffect(() => {
     const fetchPopularDestinations = async () => {
       try {
-        const { data: destinations } = await supabase.from('destinations').select('id, name').eq('is_active', true).order('name');
+        // F-1: este carrusel es un adorno. Si no carga, no se pinta y ya — es
+        // el "silencio legitimo" que documenta check-supabase-errors.mjs. Lo
+        // que faltaba era poder VERLO: sin rastro, "no salen los destinos
+        // populares" no se distingue de "no hay destinos con tours".
+        const { data: destinations, error: errorDestinos } = await supabase.from('destinations').select('id, name').eq('is_active', true).order('name');
+        if (errorDestinos) console.warn('TourCatalogPage: no se pudieron leer los destinos populares', errorDestinos);
         if (!destinations?.length) return;
-        const { data: tourDestinations } = await supabase.from('tour_destinations').select('destination_id').in('destination_id', destinations.map(d => d.id));
+        const { data: tourDestinations, error: errorConteoDestinos } = await supabase.from('tour_destinations').select('destination_id').in('destination_id', destinations.map(d => d.id));
+        if (errorConteoDestinos) console.warn('TourCatalogPage: no se pudo contar los tours por destino', errorConteoDestinos);
         const counts = (tourDestinations || []).reduce((acc: Record<string, number>, td: any) => { acc[td.destination_id] = (acc[td.destination_id] || 0) + 1; return acc; }, {});
         setPopularDestinations(
           destinations.map(d => ({ ...d, tour_count: counts[d.id] || 0 }))
@@ -205,9 +211,13 @@ const TourCatalogPage: React.FC = () => {
   useEffect(() => {
     const fetchPopularDeparturePoints = async () => {
       try {
-        const { data: points } = await supabase.from('departure_points').select('id, name, city, municipality').eq('is_active', true).order('name');
+        // F-1: mismo caso que los destinos populares — adorno, silencio
+        // legitimo, pero ahora diagnosticable.
+        const { data: points, error: errorPuntos } = await supabase.from('departure_points').select('id, name, city, municipality').eq('is_active', true).order('name');
+        if (errorPuntos) console.warn('TourCatalogPage: no se pudieron leer los puntos de salida populares', errorPuntos);
         if (!points?.length) return;
-        const { data: tourPoints } = await supabase.from('tour_departure_points').select('departure_point_id').in('departure_point_id', points.map(p => p.id));
+        const { data: tourPoints, error: errorConteoPuntos } = await supabase.from('tour_departure_points').select('departure_point_id').in('departure_point_id', points.map(p => p.id));
+        if (errorConteoPuntos) console.warn('TourCatalogPage: no se pudo contar los tours por punto de salida', errorConteoPuntos);
         const counts = (tourPoints || []).reduce((acc: Record<string, number>, tp: any) => { acc[tp.departure_point_id] = (acc[tp.departure_point_id] || 0) + 1; return acc; }, {});
         setPopularDeparturePoints(
           points.map(p => ({ ...p, tour_count: counts[p.id] || 0 }))

@@ -76,11 +76,18 @@ const TravelerWallet: React.FC = () => {
           (transactionsData || []).map(async (transaction) => {
             if (transaction.reference_id) {
               if (transaction.reference_type === 'booking') {
-                const { data: booking } = await supabase
+                const { data: booking, error: errorReserva } = await supabase
                   .from('bookings')
                   .select('booking_code')
                   .eq('id', transaction.reference_id)
                   .maybeSingle();
+
+                // F-1: degradacion cosmetica —el importe del movimiento es
+                // correcto, solo falta el codigo de reserva— pero sin rastro
+                // no se distingue de "esta transaccion no tiene reserva".
+                if (errorReserva) {
+                  console.error('TravelerWallet: no se pudo leer el codigo de reserva', errorReserva);
+                }
 
                 if (booking?.booking_code) {
                   return {
@@ -89,11 +96,18 @@ const TravelerWallet: React.FC = () => {
                   };
                 }
               } else if (transaction.reference_type === 'booking_cancellation') {
-                const { data: booking } = await supabase
+                const { data: booking, error: errorReserva } = await supabase
                   .from('bookings')
                   .select('booking_code')
                   .eq('id', transaction.reference_id)
                   .maybeSingle();
+
+                // F-1: degradacion cosmetica —el importe del movimiento es
+                // correcto, solo falta el codigo de reserva— pero sin rastro
+                // no se distingue de "esta transaccion no tiene reserva".
+                if (errorReserva) {
+                  console.error('TravelerWallet: no se pudo leer el codigo de reserva', errorReserva);
+                }
 
                 if (booking?.booking_code) {
                   return {
@@ -102,12 +116,16 @@ const TravelerWallet: React.FC = () => {
                   };
                 }
               } else if (transaction.reference_type === 'tour_cancellation') {
-                const { data: bookings } = await supabase
+                const { data: bookings, error: errorReservasCanceladas } = await supabase
                   .from('bookings')
                   .select('booking_code, cancelled_at')
                   .eq('user_id', transaction.user_id)
                   .eq('agency_cancellation_id', transaction.reference_id)
                   .order('cancelled_at', { ascending: true });
+
+                if (errorReservasCanceladas) {
+                  console.error('TravelerWallet: no se pudieron leer las reservas canceladas', errorReservasCanceladas);
+                }
 
                 if (bookings && bookings.length > 0) {
                   const transactionTime = new Date(transaction.created_at).getTime();
@@ -127,11 +145,18 @@ const TravelerWallet: React.FC = () => {
                   }
                 }
               } else if (transaction.reference_type === 'reschedule_rejection') {
-                const { data: booking } = await supabase
+                const { data: booking, error: errorReserva } = await supabase
                   .from('bookings')
                   .select('booking_code')
                   .eq('id', transaction.reference_id)
                   .maybeSingle();
+
+                // F-1: degradacion cosmetica —el importe del movimiento es
+                // correcto, solo falta el codigo de reserva— pero sin rastro
+                // no se distingue de "esta transaccion no tiene reserva".
+                if (errorReserva) {
+                  console.error('TravelerWallet: no se pudo leer el codigo de reserva', errorReserva);
+                }
 
                 if (booking?.booking_code) {
                   return {
