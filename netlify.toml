@@ -1,5 +1,5 @@
 [build]
-command = "npx vite build"
+command = "SENTRY_RELEASE=${COMMIT_REF:-local} VITE_SENTRY_RELEASE=${COMMIT_REF:-local} npx vite build"
 publish = "dist"
 # Netlify construye en CADA push. Los PR que solo tocan supabase/ o
 # .github/ no cambian el sitio, asi que no hace falta gastar un build.
