@@ -26,12 +26,11 @@ comprobó* dice con qué.
 | M-2 — `deduct_points` valida el saldo sobre una lectura sin bloquear | **Corregido** (y el hallazgo estaba mal dimensionado: eran 4 funciones, y el daño no estaba acotado) | `20260908055006_bloquear_billetera_de_puntos_antes_de_validar_saldo.sql`, aplicada | Ver la sección de M-2 más abajo |
 | M-3 — `refresh_commission_record` no valida quién la llama | **Corregido y aplicado** — y el hallazgo se quedó corto: estaba expuesta a **PUBLIC y `anon`**, no sólo a `authenticated` | `20260908190712_revocar_refresh_commission_record_de_public.sql`, aplicada | `has_function_privilege` da `false` para `anon` y `authenticated`, `true` para `service_role` y `postgres` — el mismo perfil que `create_commission_record` |
 | M-4 — el patrón de `snapshot_booking_tax` está en tres funciones, no en una | **Corregido y aplicado** — las tres escriben en `audit_errors`; el cobro sigue pasando, a propósito | `20260908191141_snapshot_tax_deja_rastro_en_audit_errors.sql`, aplicada | Longitudes tras aplicar: 2 056 / 1 833 / 1 978, exactamente las que predijo el ensayo en seco. Conservan `RAISE WARNING`, `compute_tax_snapshot`, `search_path` y sus tres triggers |
+| **C-1 — `confirm_booking_paid_with_wallet` confirmaba reservas sin cobrarlas** (hallazgo NUEVO, no estaba en esta auditoría) | **Corregido y aplicado** | `20260909030735_confirm_booking_paid_with_wallet_exige_cobertura.sql`, aplicada | Probado en vivo: la llamada con 0 y 0 sobre la reserva que lo explotó devuelve `Pago insuficiente: se aportaron 0.00 de 6050.00 exigidos`. Simulado antes de escribirlo contra las 5 reservas de esa vía: las 4 legítimas pasan con sobrante 0.00 |
 
-**2 corregidos de 5.**
-
-De los tres pendientes, el que yo atacaría primero es **M-4**: el patrón duplicado en
-tres funciones es el mismo tipo de deuda que hizo que M-2 fuera cuatro funciones y no
-una.
+**5 corregidos de 5**, más **C-1**, que no estaba en esta auditoría y es el más grave
+de todos: lo encontró la guardia de autorización de Edge Functions al obligar a
+clasificar función por función. Ver su sección al final.
 
 Durante la remediación de M-2 apareció un hallazgo nuevo que no estaba en esta
 auditoría; se documenta al final, en *Hallazgos surgidos durante la remediación*.
@@ -430,6 +429,124 @@ END;
 Un `BEGIN` anidado que escribe el fallo en una tabla dedicada, y que a su vez no puede
 romper la transacción de negocio. Es el patrón exacto que le falta a las tres
 `snapshot_*_tax`, ya escrito, probado y en producción, a unas migraciones de distancia.
+
+---
+
+# CRÍTICO — encontrado el 09-sep-2026, fuera del alcance original
+
+## C-1. `confirm_booking_paid_with_wallet` confirmaba la reserva sin comprobar que se hubiera pagado
+
+**Cómo apareció.** No lo buscaba. Salió al construir la línea base de
+`scripts/check-edge-guards.mjs`, que obliga a clasificar las 171 Edge Functions una por
+una; de ahí a revisar `confirm-booking-wallet-payment`, y de ahí al RPC que invoca. Es el
+argumento a favor de esa guardia mejor que cualquiera que yo pudiera escribir.
+
+**El defecto.** La función descontaba condicionalmente y confirmaba incondicionalmente:
+
+```sql
+IF p_cash_to_use   > 0 THEN ...descontar cash...   END IF;
+IF p_points_to_use > 0 THEN ...descontar puntos... END IF;
+
+-- Paso 4, sin ningún IF:
+UPDATE bookings SET payment_status='succeeded', status='confirmed', ...
+```
+
+Con `0` y `0` se saltaba los dos descuentos y confirmaba igual, estampando
+`payment_method = 'toursred_points'` porque ése es el valor por defecto de la variable.
+Y con **1 peso** en una reserva de 5,500 también confirmaba: nadie comprobaba que lo
+aportado *cubriera* el precio.
+
+Su único llamador, `confirm-booking-wallet-payment`, valida sesión y dueño pero pasa
+`p_points_to_use || 0, p_cash_to_use || 0` directo — y **se salta el step-up de MFA justo
+cuando ambos son cero**, porque su condición es *"sólo exigir step-up si de verdad se está
+gastando wallet o puntos"*.
+
+**Resultado: cualquier viajero con sesión podía confirmar su propia reserva pagando cero.**
+
+### Ocurrió
+
+`TRG-JKVNKEXK4AD`, 31-jul-2026. Depósito 5,500, confirmada **6 segundos** después de
+crearse, sin movimiento de puntos, sin movimiento de cash y sin fila en
+`payment_transactions`. La bitácora lo muestra completo:
+
+| hora | acción | actor |
+|---|---|---|
+| 03:58:19 | `BOOKING_CREATED` — `draft`, `payment_status: pending` | el viajero |
+| 03:58:24 | `BOOKING_STATUS_CHANGED` → `pending` | el viajero |
+| 03:58:25 | `BOOKING_CONFIRMED` → `confirmed` | el viajero |
+| 03:58:26 | `UPDATE` → `payment_method: toursred_points`, `succeeded`, correo enviado | `system` |
+
+Arrastró asiento reservado, correo de confirmación, `commission_amount` 1,100 y
+`platform_revenue` 1,650 asentados, y un CFDI timbrado por 6,050 — de prueba, porque
+`platform_settings.pac_sandbox_mode = true`. Con el PAC en producción habría sido un
+comprobante real por una venta que no existió.
+
+La reserva se canceló el 09-sep (`admin_cancelled`); los triggers
+`trg_cancel_commissions_on_booking_cancel` y `trg_release_seats_on_cancellation` pasaron
+la comisión a `voided` y liberaron el asiento.
+
+### Por qué el revoke del 22-ago no lo tapó
+
+`20260822034332` revocó el `EXECUTE` a `anon`/`authenticated`. Eso cerraba un bypass
+**distinto**: el chequeo interno de dueño (`IF auth.uid() IS NOT NULL AND ...`) no se
+activaba en una llamada anónima, porque ahí `auth.uid()` es null. Aquello tapó el acceso
+directo desde el navegador; **este bug de lógica quedó intacto** y siguió alcanzable por
+la Edge Function durante 18 días más.
+
+Es el mismo patrón que M-3 de este documento y que M-2 de la auditoría de Edge: se
+corrige la puerta y se deja la lógica. Tapar el acceso no es lo mismo que arreglar la
+función.
+
+### La regla que se impone
+
+```
+puntos/100 + cash + pagos de pasarela ya registrados  >=  exigible - 0.5
+```
+
+El exigible sale de `amount_due_now + points_used/100 + toursred_cash_used` — esa columna
+ya viene con puntos y cash restados, así que volver a sumarlos devuelve el bruto—, y
+cuando es null (29 de las 45 reservas, todas anteriores al 25-ago) se reconstruye con la
+fórmula del backfill de `20260825042629`.
+
+**Los descuentos no se restan**, y conviene que quede escrito: `create_booking_atomic:464`
+ya calcula `v_deposit_amount` sobre `v_base_tour_price_discounted`. Restarlos otra vez
+sería contarlos dos veces.
+
+**No se rechaza el `0/0` a secas.** `BookingFlowStep4.tsx:527` usa
+`isWalletOnly = srvIsFullWallet || srvAmountToCharge === 0`, de modo que una reserva que
+no cobra nada —un código de descuento del 100%— llama a este mismo endpoint con puntos y
+cash en cero. Si de verdad no se debe nada, el exigible da 0 y la regla la deja pasar.
+La "mitigación rápida" de rechazar el `0/0` habría roto ese flujo legítimo; se descartó
+por eso.
+
+### Cómo se validó antes de tocar nada
+
+Se simuló el predicado contra las 5 reservas que existían pagadas por esta vía:
+
+| reserva | exigible | cubierto | veredicto |
+|---|---|---|---|
+| `TRG-R0QF6GNR4C6` | 3,604.65 | 3,604.65 | pasa |
+| `TRG-8XBODT0ZXAQ` | 475.00 | 475.00 | pasa |
+| **`TRG-JKVNKEXK4AD`** | **6,050.00** | **0.00** | **bloquea** |
+| `TRG-0DS33SAOP81` | 5,500.00 | 5,500.00 | pasa |
+| `TRG-DD03QDV8DCH` | 500.00 | 500.00 | pasa |
+
+Las 4 legítimas con sobrante exactamente `0.00`. Y el cuerpo de la función se tomó de
+`pg_get_functiondef` sobre la base **viva**, no del archivo del repo: la definición viva
+traía la lógica de `v_is_full_wallet` del fix del 24-ago que el archivo original no tenía
+—exactamente la advertencia de método que abre este documento—.
+
+### También
+
+`confirm-booking-wallet-payment` devolvía **200 con `{success:false}`** cuando el RPC
+rechazaba. Ahora devuelve 400 y deja rastro en `audit_errors` con el patrón de M-4: un
+rechazo por cobertura insuficiente es una señal que hay que poder ver después, no un
+`console.log` que se pierde.
+
+### Lo que queda por comprobar
+
+Se verificó que el arreglo **rechaza** lo que debe rechazar. Que siga **aceptando** lo
+legítimo sólo se comprueba con una reserva real pagada 100% con ToursRed Cash. Pendiente.
 
 ---
 

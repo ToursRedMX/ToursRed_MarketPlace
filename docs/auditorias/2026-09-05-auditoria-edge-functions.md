@@ -46,7 +46,7 @@ Las otras dos tienen ahora su propia tabla de estado, verificada contra el códi
 |---|---|---|---|
 | Edge functions (este documento) | C-1, C-2, A-1, A-2, M-1, M-2, M-4, M-5, M-6 | — | **10 / 10** |
 | — de esos, M-3 se cierra como decisión: el panel de OpenPay no ofrece ni firma ni Basic auth; la re-consulta del cargo es la defensa disponible | | | |
-| Postgres | A-1, M-1, M-2, M-3, M-4 | — | **5 / 5** |
+| Postgres | A-1, M-1, M-2, M-3, M-4, **y C-1**, un crítico que no estaba en la auditoría: `confirm_booking_paid_with_wallet` confirmaba reservas sin cobrarlas. Lo destapó la guardia de autorización de este documento | — | **5 / 5 + 1** |
 | Frontend | F-2, F-3, F-4, F-5, F-6 | F-1 (tier 1 corregido, contador puesto; 247 sitios abiertos) | 5 / 6 |
 | **Total** | **19** | **2** | **21** |
 
@@ -1081,7 +1081,7 @@ El orden es por riesgo sobre el lanzamiento del 21 de septiembre, no por dificul
 | 4 | **A-1** — inventariar las ~44 `send-*` y cerrarlas con el guard de service role | Alto | **hecho 08-sep-2026** — el inventario era, en efecto, el trabajo |
 | 5 | ~~**A-3**~~ | ~~Alto~~ | ❌ falso positivo, retirado |
 | 6 | **A-2** — exigir dueño/agencia/admin en `generate-booking-qr-token` | Alto | ✅ `bed5563` |
-| 7 | **M-1** — Turnstile obligatorio y rate limit por IP en el formulario de contacto | Medio | **pendiente** — bajo |
+| 7 | **M-1** — Turnstile obligatorio y rate limit por IP en el formulario de contacto | Medio | ✅ corregido — el servidor decide si exige el captcha, y hay rate limit por correo y por IP |
 | 8 | **M-4** — guard de service role en los dos crons abiertos | Medio | ✅ `bed5563` |
 | 9 | **M-2** — el helper de AAL2 falla cerrado | Medio | **hecho** (08-sep-2026) |
 | 10 | **M-3, M-5, M-6** — decisiones de arquitectura, no parches sueltos | Medio | **cerrados** — M-3 como decisión (OpenPay no ofrece firma), M-5 y M-6 con módulo compartido y guardia en CI |
@@ -1122,7 +1122,9 @@ Lo que cerraría la llave, en orden de rendimiento:
    `generate-booking-qr-token` ni `create-checkout-session` — sustituir un guard que hoy
    funciona por uno nuevo sin volver a comprobar sus llamadores es justo como se rompen
    los caminos de pago. El resto se adopta función por función.
-2. **Un `_shared/cors.ts`**, para que el header no se copie 171 veces. → pendiente.
+2. **Un `_shared/cors.ts`**, para que el header no se copie 171 veces. → **Hecho el 08-sep-2026**
+   con M-5, aunque sirviendo sobre todo al otro uso: validar el origen con el que se arman
+   las URLs de retorno de pago.
 3. **Un check en CI** que falle si una función nueva no invoca ningún guard. El repo ya
    tiene el precedente exacto y funcionando: `scripts/check-edge-types.mjs` con línea
    base, que falla solo ante errores *nuevos*. La misma técnica sirve aquí: línea base de
