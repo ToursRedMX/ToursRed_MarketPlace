@@ -10,9 +10,18 @@
  * codigo leia una columna que la consulta nunca traia y ni tsc ni el runtime
  * decian nada.
  *
- * Por que linea base y no "cero errores": hay 380 errores preexistentes. Exigir
- * cero seria pedir una limpieza de semanas antes de tener cualquier red. La
- * linea base da la red HOY: los errores viejos se toleran, uno NUEVO falla.
+ * Por que linea base y no "cero errores": cuando esto se escribio habia 380
+ * errores preexistentes, y exigir cero habria pedido una limpieza de semanas
+ * antes de tener cualquier red. La linea base daba la red desde el dia uno: los
+ * errores viejos se toleraban, uno NUEVO fallaba.
+ *
+ * Desde el 08-sep-2026 la linea base esta VACIA: se limpiaron los 380. O sea
+ * que hoy el mecanismo equivale a "cero errores" — cualquier error de tipos en
+ * supabase/functions/ rompe el check. El mecanismo de linea base se conserva a
+ * proposito: si algun dia hay que absorber una tanda grande (un salto de
+ * version de supabase-js, por ejemplo), `--update` vuelve a dar la red sin
+ * apagar el check. Mantenerla vacia es lo deseable; llenarla es una decision
+ * consciente, no el estado normal.
  *
  * Por que la firma no incluye linea ni columna: si la incluyera, agregar una
  * linea en blanco arriba convertiria 30 errores viejos en 30 "nuevos". La firma
