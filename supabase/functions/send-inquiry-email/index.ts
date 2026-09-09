@@ -18,6 +18,7 @@ const corsHeaders = {
 };
 
 interface InquiryData {
+  turnstile_token?: string;
   name: string;
   email: string;
   phone: string;
@@ -44,7 +45,9 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const inquiryData: InquiryData = await req.json();
-    const { name, email, phone, destination, travel_date, num_people, tour_code, message, source, user_id } = inquiryData;
+    const { name, email: rawEmail, turnstile_token, phone, destination, travel_date, num_people, tour_code, message, source, user_id } = inquiryData;
+
+    const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
 
     if (!name || !email || !phone || !destination || !num_people) {
       return new Response(
@@ -56,20 +59,49 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // A-1 (auditoria 05-sep-2026): es un formulario publico de landing, asi que
-    // no puede exigir sesion. Pero manda una copia de confirmacion a la
-    // direccion que venga en el cuerpo, y eso la convertia en un relay abierto
-    // con el dominio y el SMTP de ToursRed, sin tope. El tope va aqui: 3
-    // cotizaciones por correo por hora, contadas sobre las filas que la propia
-    // funcion inserta. No sustituye a Turnstile (M-1), lo acota mientras tanto.
+    // The server decides whether CAPTCHA applies; omitting the token cannot bypass it.
+    const { data: captchaSettings, error: captchaSettingsError } = await supabase
+      .from("platform_settings").select("turnstile_auth_enabled").maybeSingle();
+    if (captchaSettingsError || typeof captchaSettings?.turnstile_auth_enabled !== "boolean") {
+      return new Response(JSON.stringify({ error: "Verificacion de seguridad no disponible" }), {
+        status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (captchaSettings.turnstile_auth_enabled) {
+      const secret = Deno.env.get("TURNSTILE_SECRET_KEY");
+      if (!secret) return new Response(JSON.stringify({ error: "Verificacion de seguridad no disponible" }), { status: 503, headers: corsHeaders });
+      if (typeof turnstile_token !== "string" || !turnstile_token || turnstile_token.length > 2048) {
+        return new Response(JSON.stringify({ error: "Completa la verificacion de seguridad" }), { status: 400, headers: corsHeaders });
+      }
+      try {
+        const verification = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+          method: "POST",
+          body: new URLSearchParams({ secret, response: turnstile_token }),
+          signal: AbortSignal.timeout(10000),
+          redirect: "error",
+        });
+        if (!verification.ok) throw new Error("Captcha unavailable");
+        const result = await verification.json();
+        if (result?.success !== true) {
+          return new Response(JSON.stringify({ error: "Verificacion invalida o expirada. Intenta de nuevo." }), { status: 400, headers: corsHeaders });
+        }
+      } catch {
+        return new Response(JSON.stringify({ error: "Verificacion de seguridad no disponible" }), { status: 503, headers: corsHeaders });
+      }
+    }
+
+    // Keep the per-address limit in addition to CAPTCHA.
     const haceUnaHora = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count: recientes } = await supabase
+    const { count: recientes, error: rateError } = await supabase
       .from("international_tour_inquiries")
       .select("id", { count: "exact", head: true })
       .eq("email", email)
       .gte("created_at", haceUnaHora);
 
-    if ((recientes ?? 0) >= 3) {
+    if (rateError || recientes === null) {
+      return new Response(JSON.stringify({ error: "No fue posible verificar el limite de solicitudes" }), { status: 503, headers: corsHeaders });
+    }
+    if (recientes >= 3) {
       console.warn(`send-inquiry-email: ${email} supero 3 cotizaciones en 1h, rechazado`);
       return new Response(
         JSON.stringify({ error: "Demasiadas solicitudes. Intenta de nuevo en una hora." }),

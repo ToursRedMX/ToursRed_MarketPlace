@@ -60,27 +60,6 @@
       "nombre": "capture-paypal-order",
       "motivo": "publica",
       "nota": "Su control es la API de PayPal: confirma con el reference_id que devuelve PayPal, no con el bookingId del cliente, y compara el importe capturado. Es el hallazgo A-3, retirado como falso positivo el 07-sep-2026."
-    },
-
-    {
-      "nombre": "generate-credit-note-for-item-cancellation",
-      "motivo": "pendiente",
-      "nota": "verify_jwt = true, o sea cualquier usuario logueado puede emitir una nota de credito. Sus unicos llamadores reales son cancel-optional-service y cancel-individual-supplement, y ambos la invocan con service role, asi que un requireServiceRole no romperia a nadie."
-    },
-    {
-      "nombre": "substitute-cfdi-for-partial-cancellation",
-      "motivo": "pendiente",
-      "nota": "verify_jwt = true: cualquier usuario logueado puede sustituir un CFDI. Su unico llamador es process-partial-cancellation, con service role."
-    },
-    {
-      "nombre": "sync-booking-to-accounting",
-      "motivo": "pendiente",
-      "nota": "verify_jwt = false y sin guard: escribe asientos contables. La llaman cuatro webhooks con service role y tambien AdminContabilidad desde el navegador con JWT de usuario, asi que el arreglo no es un requireServiceRole a secas: hay que aceptar service role O admin."
-    },
-    {
-      "nombre": "send-inquiry-email",
-      "motivo": "pendiente",
-      "nota": "verify_jwt = false. Manda correo a una direccion que viene del cuerpo (to: [email]), que es la categoria de A-1. Tiene rate limit pero no Turnstile: es el mismo caso que send-contact-email antes de M-1, y la remediacion de M-1 no lo cubrio."
     }
   ]
 }

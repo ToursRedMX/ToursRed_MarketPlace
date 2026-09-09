@@ -1,3 +1,5 @@
+import TurnstileWidget from '../../components/TurnstileWidget';
+import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Info, X, Loader, AlertCircle, MessageSquare, RotateCcw } from 'lucide-react';
@@ -9,6 +11,9 @@ const IFRAME_URL = 'https://nefertaritravel.com.mx/sg/?iframe=yes';
 
 const NefertariTravelPage: React.FC = () => {
   const { user } = useAuth();
+  const { turnstileEnabled, loading: captchaLoading } = useTurnstileEnabled();
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -64,6 +69,10 @@ const NefertariTravelPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (captchaLoading || (turnstileEnabled && !turnstileToken)) {
+      setError('Completa la verificacion de seguridad');
+      return;
+    }
     setError('');
     setIsLoading(true);
 
@@ -98,6 +107,7 @@ const NefertariTravelPage: React.FC = () => {
           },
           body: JSON.stringify({
             ...formData,
+            turnstile_token: turnstileToken,
             user_id: user?.id || null,
             source: 'nefertari_travel'
           }),
@@ -128,6 +138,8 @@ const NefertariTravelPage: React.FC = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al enviar la cotizacion');
     } finally {
+      setTurnstileToken('');
+      setCaptchaAttempt(value => value + 1);
       setIsLoading(false);
     }
   };
@@ -402,6 +414,10 @@ const NefertariTravelPage: React.FC = () => {
                 />
               </div>
 
+              {turnstileEnabled && (
+                <TurnstileWidget key={captchaAttempt} onToken={setTurnstileToken} className="mt-6" />
+              )}
+
               <div className="mt-6 flex justify-end gap-x-4">
                 <button
                   type="button"
@@ -414,7 +430,7 @@ const NefertariTravelPage: React.FC = () => {
                 <button
                   type="submit"
                   className="px-6 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-x-2"
-                  disabled={isLoading}
+                  disabled={isLoading || captchaLoading || (turnstileEnabled && !turnstileToken)}
                 >
                   {isLoading ? (
                     <>

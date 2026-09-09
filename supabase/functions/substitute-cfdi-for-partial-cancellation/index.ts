@@ -1,3 +1,4 @@
+import { requireServiceRole } from "../_shared/auth.ts";
 import { calculateTaxBreakdown, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.108.2";
@@ -198,6 +199,9 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
+
+  const auth = requireServiceRole(req, { recurso: "substitute-cfdi-for-partial-cancellation", cors: corsHeaders });
+  if (!auth.ok) return auth.response;
 
   try {
     const supabase = createClient(
