@@ -13,6 +13,22 @@ function evaluate(source, globals = {}) {
   return context.exports;
 }
 const helper = evaluate(readFileSync(new URL('_shared/aal2Check.ts', root), 'utf8'));
+
+// El harness borra las lineas de import y corre el handler en un VM, asi que
+// todo lo que el archivo importe tiene que llegar como global o revienta con un
+// ReferenceError. Estos dos se evaluan de verdad, no se sustituyen por un doble:
+// son deterministas y asi la prueba ejercita el codigo que se despliega.
+//
+// `env.ts` llama a Deno.env.get cuando se INVOCA, no al definirse, asi que
+// necesita el mismo stub de Deno que reciben los handlers.
+const denoStub = {
+  env: { get: (key) => (key === 'SENTRY_BACKEND_DSN' ? undefined : 'test-value') },
+  serve() {},
+};
+const compartidos = {
+  ...evaluate(readFileSync(new URL('_shared/errores.ts', root), 'utf8')),
+  ...evaluate(readFileSync(new URL('_shared/env.ts', root), 'utf8'), { Deno: denoStub }),
+};
 const ok = (data) => ({ data, error: null });
 const cases = [];
 for (const required of [false, 'false']) cases.push({ responses: [ok(required)], allowed: true });
@@ -85,6 +101,7 @@ for (const dir of readdirSync(root, { withFileTypes: true })) {
     });
     evaluate(source.replace(/^import\s[^\n]*\n/gm, ''), {
       ...helper,
+      ...compartidos,
       authorizeCfdiRequest: async () => ({ allowed: true, caller: { isServiceRole: false, isAdmin: true, userId: 'caller' } }),
       createClient: (_url, _key, options) => client(options),
       Deno: { env: { get: (key) => key === 'SENTRY_BACKEND_DSN' ? undefined : 'test-value' }, serve(fn) { handler = fn; } },
