@@ -242,12 +242,17 @@ Deno.serve(async (req: Request) => {
     let customerId: string | null = null;
 
     if (context === "booking" || context === "supplement") {
-      const { data: userRecord } = await supabase
+      const { data: userRecord, error: userRecordError } = await supabase
         .from("users")
         .select("id, first_name, last_name, email, phone_number")
         .eq("id", user.id)
         .maybeSingle();
 
+      if (userRecordError || !userRecord) {
+        return new Response(JSON.stringify({ error: "No fue posible verificar el cliente de OpenPay" }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       if (userRecord) {
         try {
           customerId = await createOrReuseCustomer(supabase, userRecord.id, {
@@ -258,6 +263,9 @@ Deno.serve(async (req: Request) => {
           });
         } catch (e) {
           console.error("createOrReuseCustomer error:", e);
+          return new Response(JSON.stringify({ error: "No fue posible preparar el cliente de OpenPay" }), {
+            status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
       }
     }
