@@ -392,18 +392,31 @@ export const getTours = async (filters: any = {}) => {
 
     // Si hay filtro de destino, buscar tours por la tabla de relaciones
     if (filters.destination) {
-      const { data: matchingDestinations } = await supabase
+      const { data: matchingDestinations, error: errorDestinos } = await supabase
         .from('destinations')
         .select('id')
         .ilike('name', `%${filters.destination}%`);
 
+      // Si la busqueda de destinos falla, seguir con la lista vacia le diria
+      // al viajero "no hay tours en Cancun" cuando en realidad no pudimos
+      // consultar. Preferimos avisar del error.
+      if (errorDestinos) {
+        console.error('❌ Error buscando destinos:', errorDestinos);
+        throw errorDestinos;
+      }
+
       if (matchingDestinations && matchingDestinations.length > 0) {
         const destinationIds = matchingDestinations.map(d => d.id);
 
-        const { data: tourDestinations } = await supabase
+        const { data: tourDestinations, error: errorTourDestinos } = await supabase
           .from('tour_destinations')
           .select('tour_id')
           .in('destination_id', destinationIds);
+
+        if (errorTourDestinos) {
+          console.error('❌ Error buscando tour_destinations:', errorTourDestinos);
+          throw errorTourDestinos;
+        }
 
         if (tourDestinations && tourDestinations.length > 0) {
           tourIdsByDestination = tourDestinations.map(td => td.tour_id);
@@ -1162,10 +1175,16 @@ export const getUserBookings = async (userId: string) => {
 
     // OPTIMIZED: Get all payment transactions in ONE query instead of N queries
     const bookingIds = bookings.map(b => b.id);
-    const { data: allTransactions } = await supabase
+    const { data: allTransactions, error: errorTransacciones } = await supabase
       .from('payment_transactions')
       .select('booking_id, payment_method_type, created_at')
       .in('booking_id', bookingIds);
+
+    // Solo completa el metodo de pago cuando la reserva no lo trae: si falla,
+    // la lista se pinta igual con el metodo en blanco. Lo dejamos anotado.
+    if (errorTransacciones) {
+      console.error('❌ Error leyendo payment_transactions para el metodo de pago:', errorTransacciones);
+    }
 
     // Group transactions by booking_id and get the most recent
     const transactionsByBooking: Record<string, any> = {};
@@ -1226,10 +1245,16 @@ export const getUserPastBookings = async (userId: string) => {
     if (error || !bookings) return { data: bookings, error };
 
     const bookingIds = bookings.map((b: any) => b.id);
-    const { data: allTransactions } = await supabase
+    const { data: allTransactions, error: errorTransacciones } = await supabase
       .from('payment_transactions')
       .select('booking_id, payment_method_type, created_at')
       .in('booking_id', bookingIds);
+
+    // Solo completa el metodo de pago cuando la reserva no lo trae: si falla,
+    // la lista se pinta igual con el metodo en blanco. Lo dejamos anotado.
+    if (errorTransacciones) {
+      console.error('❌ Error leyendo payment_transactions para el metodo de pago:', errorTransacciones);
+    }
 
     const transactionsByBooking: Record<string, any> = {};
     (allTransactions || []).forEach((tx: any) => {
@@ -1262,10 +1287,16 @@ export const getUserCancelledBookings = async (userId: string) => {
     if (error || !bookings) return { data: bookings, error };
 
     const bookingIds = bookings.map((b: any) => b.id);
-    const { data: allTransactions } = await supabase
+    const { data: allTransactions, error: errorTransacciones } = await supabase
       .from('payment_transactions')
       .select('booking_id, payment_method_type, created_at')
       .in('booking_id', bookingIds);
+
+    // Solo completa el metodo de pago cuando la reserva no lo trae: si falla,
+    // la lista se pinta igual con el metodo en blanco. Lo dejamos anotado.
+    if (errorTransacciones) {
+      console.error('❌ Error leyendo payment_transactions para el metodo de pago:', errorTransacciones);
+    }
 
     const transactionsByBooking: Record<string, any> = {};
     (allTransactions || []).forEach((tx: any) => {
@@ -1304,10 +1335,16 @@ export const getAgencyBookings = async (agencyId: string) => {
 
     // OPTIMIZED: Get all payment transactions in ONE query instead of N queries
     const bookingIds = bookings.map(b => b.id);
-    const { data: allTransactions } = await supabase
+    const { data: allTransactions, error: errorTransacciones } = await supabase
       .from('payment_transactions')
       .select('booking_id, payment_method_type, created_at')
       .in('booking_id', bookingIds);
+
+    // Solo completa el metodo de pago cuando la reserva no lo trae: si falla,
+    // la lista se pinta igual con el metodo en blanco. Lo dejamos anotado.
+    if (errorTransacciones) {
+      console.error('❌ Error leyendo payment_transactions para el metodo de pago:', errorTransacciones);
+    }
 
     // Group transactions by booking_id and get the most recent
     const transactionsByBooking: Record<string, any> = {};
@@ -1384,11 +1421,19 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
 
     const bookingsWithTravelers = await Promise.all(
       (bookings || []).map(async (booking) => {
-        const { data: travelersRaw } = await supabase
+        const { data: travelersRaw, error: errorViajeros } = await supabase
           .from('booking_travelers')
           .select('*')
           .eq('booking_id', booking.id)
           .order('created_at', { ascending: true });
+
+        // Sin esta lectura el manifiesto se arma solo con los count_* y a cada
+        // pasajero le pone el nombre del titular: la agencia veria una lista
+        // completa pero con nombres equivocados. Mejor fallar visible.
+        if (errorViajeros) {
+          console.error('❌ Error leyendo booking_travelers del manifiesto:', errorViajeros);
+          throw errorViajeros;
+        }
 
         // Build travelers list from count_* fields (source of truth) using booking_travelers data when available
         const categoryMap: { key: string; label: string; count: number }[] = [
@@ -1425,13 +1470,17 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
 
         let paymentMethod = booking.payment_method || null;
         if (!paymentMethod) {
-          const { data: transaction } = await supabase
+          const { data: transaction, error: errorTransaccion } = await supabase
             .from('payment_transactions')
             .select('payment_method_type')
             .eq('booking_id', booking.id)
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
+
+          if (errorTransaccion) {
+            console.error('❌ Error leyendo el metodo de pago de la reserva:', errorTransaccion);
+          }
 
           paymentMethod = transaction?.payment_method_type || null;
         }
@@ -1766,11 +1815,22 @@ export const updateTourCategory = async (
 export const deleteTourCategory = async (id: string) => {
   try {
     // Verificar si hay tours usando esta categoría
-    const { data: tours } = await supabase
+    const { data: tours, error: errorTours } = await supabase
       .from('tours')
       .select('id')
       .contains('category', [id])
       .limit(1);
+
+    // Si no podemos comprobar que la categoria este libre, no la borramos:
+    // antes, un error dejaba `tours` en null, se saltaba la guardia y la
+    // categoria se eliminaba dejando tours huerfanos.
+    if (errorTours) {
+      console.error('❌ Error verificando tours de la categoria:', errorTours);
+      return {
+        data: null,
+        error: { message: 'No pudimos verificar si la categoria tiene tours asociados. Intenta de nuevo.' }
+      };
+    }
 
     if (tours && tours.length > 0) {
       return {
@@ -1901,11 +1961,19 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
   // deposit — adding deposit_amount on top would double-count it.
   let installmentsPaid = 0;
   if (booking.has_payment_plan) {
-    const { data: installments } = await supabase
+    const { data: installments, error: errorParcialidades } = await supabase
       .from('booking_payment_plan_installments')
       .select('installment_number, amount_paid')
       .eq('booking_id', booking.id)
       .in('status', ['paid', 'partially_paid']);
+
+    // Sin las parcialidades pagadas el principal queda subestimado y el
+    // reembolso se calcularia sobre menos dinero del que el viajero puso.
+    if (errorParcialidades) {
+      console.error('❌ Error leyendo las parcialidades del plan de pagos:', errorParcialidades);
+      throw new Error('No pudimos leer tus pagos para calcular la politica de cancelacion. Intenta de nuevo en unos minutos.');
+    }
+
     for (const inst of (installments || [])) {
       if ((inst as any).installment_number > 1) {
         installmentsPaid += Number((inst as any).amount_paid || 0);
@@ -1913,30 +1981,50 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
     }
 
     // Add service charges from completed payment plan transactions
-    const { data: ppTransactions } = await supabase
+    const { data: ppTransactions, error: errorPpTransacciones } = await supabase
       .from('booking_payment_plan_transactions')
       .select('service_charge')
       .eq('booking_id', booking.id)
       .eq('status', 'completed');
+
+    if (errorPpTransacciones) {
+      console.error('❌ Error leyendo los cargos por servicio del plan de pagos:', errorPpTransacciones);
+      throw new Error('No pudimos leer tus pagos para calcular la politica de cancelacion. Intenta de nuevo en unos minutos.');
+    }
+
     for (const tx of (ppTransactions || [])) {
       originalServiceCharge += Number((tx as any).service_charge || 0);
     }
   }
   const principalPaid = originalDepositAmount + installmentsPaid;
 
-  const { data: platformSettings } = await supabase
+  const { data: platformSettings, error: errorSettings } = await supabase
     .from('platform_settings')
     .select('agency_commission_percentage')
     .single();
 
+  // El 15% es solo un respaldo; si la lectura falla y la comision real es
+  // otra, el reparto entre agencia y plataforma sale mal. No adivinamos.
+  if (errorSettings) {
+    console.error('❌ Error leyendo la comision de plataforma:', errorSettings);
+    throw new Error('No pudimos calcular la politica de cancelacion en este momento. Intenta de nuevo en unos minutos.');
+  }
+
   const commissionRate = (platformSettings?.agency_commission_percentage || 15) / 100;
 
   // Fetch optional services for this booking (to show refund info in modal)
-  const { data: optionalServicesData } = await supabase
+  const { data: optionalServicesData, error: errorServicios } = await supabase
     .from('booking_optional_services')
     .select('subtotal, tour_optional_service_id, tour_optional_services(is_refundable)')
     .eq('booking_id', booking.id)
     .eq('is_cancelled', false);
+
+  // Si falla, los servicios opcionales se mostrarian como 0 reembolsable y el
+  // viajero aceptaria una politica que no refleja lo que pago por sus extras.
+  if (errorServicios) {
+    console.error('❌ Error leyendo los servicios opcionales de la reserva:', errorServicios);
+    throw new Error('No pudimos leer tus servicios adicionales para calcular la politica de cancelacion. Intenta de nuevo en unos minutos.');
+  }
 
   let optionalServicesRefundable = 0;
   let optionalServicesNonRefundable = 0;

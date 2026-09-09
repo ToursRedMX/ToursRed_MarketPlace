@@ -54,7 +54,12 @@ import { join } from "node:path";
 //   191  09-sep: tier 3 — el camino completo del viajero, que es el que van a
 //        recorrer las UAT: facturas, reservas, billetera, pago exitoso,
 //        detalle y catalogo de tours, y el formulario de reserva. 43 sitios.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 188);
+//   188  09-sep: MfaGate dejaba de exigir el segundo factor si fallaba la
+//        lectura de platform_settings.
+//   175  09-sep: src/lib/supabase.ts completo — busqueda por destino,
+//        manifiesto de pasajeros, borrado de categorias y las cuatro
+//        lecturas de la politica de cancelacion.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 175);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 
