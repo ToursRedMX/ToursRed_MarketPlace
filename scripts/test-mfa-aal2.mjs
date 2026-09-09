@@ -85,6 +85,7 @@ for (const dir of readdirSync(root, { withFileTypes: true })) {
     });
     evaluate(source.replace(/^import\s[^\n]*\n/gm, ''), {
       ...helper,
+      authorizeCfdiRequest: async () => ({ allowed: true, caller: { isServiceRole: false, isAdmin: true, userId: 'caller' } }),
       createClient: (_url, _key, options) => client(options),
       Deno: { env: { get: (key) => key === 'SENTRY_BACKEND_DSN' ? undefined : 'test-value' }, serve(fn) { handler = fn; } },
       Sentry: { captureException() {} },
@@ -102,5 +103,5 @@ for (const dir of readdirSync(root, { withFileTypes: true })) {
     integrations++;
   }
 }
-assert.equal(consumers, 13, 'Update coverage when MFA consumers change');
+assert.equal(consumers, 14, 'Update coverage when MFA consumers change');
 console.log(`MFA: ${cases.length} helper cases and ${integrations} handler cases across ${consumers} consumers passed.`);

@@ -1,3 +1,5 @@
+import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
+import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -27,6 +29,18 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Admin-only browser action; internal payment consumers keep service access.
+    const auth = await authorizeCfdiRequest(supabase, req, { resource: "sincronizacion contable de reserva" });
+    if (!auth.allowed) return auth.response;
+    if (!auth.caller.isServiceRole) {
+      const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: req.headers.get("Authorization")! } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const aal2 = await checkAal2Required(userClient);
+      if (!aal2.allowed) return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores", aal2.code);
+    }
 
     const { booking_id } = await req.json();
     if (!booking_id) {
