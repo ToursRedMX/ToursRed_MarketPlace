@@ -1,0 +1,86 @@
+{
+  "_comentario": [
+    "Linea base de scripts/check-edge-guards.mjs, medida el 09-sep-2026 sobre 171",
+    "Edge Functions. Cada entrada declara por que esta funcion no toma una decision",
+    "de autorizacion propia.",
+    "",
+    "  motivo 'publica'   -- es publica a proposito, o su control es de otro tipo",
+    "                        (la API del proveedor, un codigo secreto en el cuerpo).",
+    "                        No lleva guard y esta bien.",
+    "",
+    "  motivo 'pendiente' -- hueco real, todavia sin arreglar. Se imprime en voz",
+    "                        alta en cada corrida para que no se vuelva paisaje.",
+    "",
+    "Al ponerle guard a una 'pendiente', se borra su entrada de aqui.",
+    "Anadir una entrada nueva es una decision consciente que se ve en el diff."
+  ],
+  "medida": "2026-09-09",
+  "funciones": [
+    {
+      "nombre": "check-login-risk",
+      "motivo": "publica",
+      "nota": "Corre ANTES del login, cuando por definicion no hay sesion que exigir."
+    },
+    {
+      "nombre": "send-password-reset",
+      "motivo": "publica",
+      "nota": "Recuperacion de contrasena: quien la usa es justamente quien no puede entrar."
+    },
+    {
+      "nombre": "verify-reset-code",
+      "motivo": "publica",
+      "nota": "Segundo paso de la recuperacion de contrasena. Su control es el codigo."
+    },
+    {
+      "nombre": "subscribe-newsletter",
+      "motivo": "publica",
+      "nota": "Alta al boletin desde el sitio publico."
+    },
+    {
+      "nombre": "unsubscribe-newsletter",
+      "motivo": "publica",
+      "nota": "Baja del boletin. Tiene que funcionar desde el enlace de un correo, sin sesion."
+    },
+    {
+      "nombre": "validate-referral-code",
+      "motivo": "publica",
+      "nota": "Valida un codigo de referido durante el alta, cuando aun no hay usuario."
+    },
+    {
+      "nombre": "get-gift-card-status",
+      "motivo": "publica",
+      "nota": "Consulta de saldo de gift card. Su control es conocer el codigo de la tarjeta."
+    },
+    {
+      "nombre": "send-referral-signup-notification",
+      "motivo": "publica",
+      "nota": "La llama SignupPage durante el registro, sin sesion. No es un relay abierto: verifica que el codigo exista (404 si no), escapa el HTML con escapeHtml, y el destinatario sale de la base (el referidor), no del cuerpo."
+    },
+    {
+      "nombre": "capture-paypal-order",
+      "motivo": "publica",
+      "nota": "Su control es la API de PayPal: confirma con el reference_id que devuelve PayPal, no con el bookingId del cliente, y compara el importe capturado. Es el hallazgo A-3, retirado como falso positivo el 07-sep-2026."
+    },
+
+    {
+      "nombre": "generate-credit-note-for-item-cancellation",
+      "motivo": "pendiente",
+      "nota": "verify_jwt = true, o sea cualquier usuario logueado puede emitir una nota de credito. Sus unicos llamadores reales son cancel-optional-service y cancel-individual-supplement, y ambos la invocan con service role, asi que un requireServiceRole no romperia a nadie."
+    },
+    {
+      "nombre": "substitute-cfdi-for-partial-cancellation",
+      "motivo": "pendiente",
+      "nota": "verify_jwt = true: cualquier usuario logueado puede sustituir un CFDI. Su unico llamador es process-partial-cancellation, con service role."
+    },
+    {
+      "nombre": "sync-booking-to-accounting",
+      "motivo": "pendiente",
+      "nota": "verify_jwt = false y sin guard: escribe asientos contables. La llaman cuatro webhooks con service role y tambien AdminContabilidad desde el navegador con JWT de usuario, asi que el arreglo no es un requireServiceRole a secas: hay que aceptar service role O admin."
+    },
+    {
+      "nombre": "send-inquiry-email",
+      "motivo": "pendiente",
+      "nota": "verify_jwt = false. Manda correo a una direccion que viene del cuerpo (to: [email]), que es la categoria de A-1. Tiene rate limit pero no Turnstile: es el mismo caso que send-contact-email antes de M-1, y la remediacion de M-1 no lo cubrio."
+    }
+  ]
+}
