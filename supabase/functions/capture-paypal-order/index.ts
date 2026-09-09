@@ -104,7 +104,7 @@ async function activateGiftCard(supabase: any, giftCardId: string, paypalTransac
 async function confirmBooking(supabase: any, bookingId: string, paypalTransactionId: string | null, captureData?: any) {
   const { data: existingBooking } = await supabase
     .from("bookings")
-    .select("payment_status, deposit_amount, user_id, toursred_cash_used, points_used")
+      .select("payment_status, deposit_amount, amount_due_now, membership_cost, user_id, toursred_cash_used, points_used")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -124,7 +124,10 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
     .eq("payment_processor", "paypal");
   const alreadyPaid = (priorPaypalPayments || []).reduce((sum: number, tx: any) => sum + Number(tx.amount || 0), 0);
   const totalPaid = alreadyPaid + capturedAmount;
-  const requiredAmount = Number(existingBooking?.deposit_amount || 0);
+  const requiredAmount = Math.max(
+    Number(existingBooking?.deposit_amount || 0),
+    Number(existingBooking?.amount_due_now || 0) - Number(existingBooking?.membership_cost || 0),
+  );
 
   if (totalPaid < requiredAmount - 0.5) {
     await supabase.from("bookings").update({ payment_status: "processing" }).eq("id", bookingId);
@@ -486,6 +489,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (context !== "gift_card") {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const authClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+      const { data: { user } } = await authClient.auth.getUser();
+      if (!user) return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     let paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID");
     let paypalClientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
     let isSandbox = Deno.env.get("PAYPAL_SANDBOX") === "true";
@@ -524,6 +535,7 @@ Deno.serve(async (req: Request) => {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
+        "PayPal-Request-Id": `capture_${orderId}`,
       },
     });
 

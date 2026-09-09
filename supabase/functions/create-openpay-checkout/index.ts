@@ -11,6 +11,7 @@ import {
   createSpeiCharge,
   createCashCharge,
 } from "../_shared/openpay.ts";
+import { urlDeRetornoSegura } from "../_shared/cors.ts";
 import * as Sentry from "npm:@sentry/deno@9";
 import { mensajeDeError } from "../_shared/errores.ts";
 
@@ -111,7 +112,7 @@ Deno.serve(async (req: Request) => {
     if (context === "booking") {
       const { data: booking, error: bookingErr } = await supabase
         .from("bookings")
-        .select("amount_due_now, deposit_amount, user_id")
+        .select("amount_due_now, deposit_amount, membership_cost, user_id")
         .eq("id", bookingId)
         .maybeSingle();
 
@@ -144,9 +145,10 @@ Deno.serve(async (req: Request) => {
       // amount_due_now es el exigible del primer cobro que calculo create_booking_atomic
       // (anticipo + cargo por servicio + extras + seguro + membresia - puntos - wallet).
       // deposit_amount es solo el anticipo del tour y deja fuera cargos y extras.
-      const dueNow = booking.amount_due_now != null
-        ? Number(booking.amount_due_now)
-        : Number(booking.deposit_amount);
+      const dueNow = Math.max(
+        Number(booking.deposit_amount || 0),
+        Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0),
+      );
       const remainingBalance = dueNow - alreadyPaid;
 
       if (remainingBalance <= 0) {
@@ -237,7 +239,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const siteUrl = Deno.env.get("SITE_URL") || "https://toursred.com";
-    const successUrl = redirectUrl || (
+    const successUrl = urlDeRetornoSegura(redirectUrl) || (
       context === "gift_card"
         ? `${siteUrl}/gift-card-success`
         : context === "supplement"

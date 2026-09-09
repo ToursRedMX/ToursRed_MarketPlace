@@ -291,12 +291,22 @@ Deno.serve(async (req) => {
       success_url: urlDeRetornoSegura(success_url) ?? `${origenParaRedirigir(req)}/booking-success?booking_id=${bookingId}`,
       cancel_url: urlDeRetornoSegura(cancel_url) ?? `${origenParaRedirigir(req)}/booking-cancel?booking_id=${bookingId}`,
       metadata: {
+        // El cliente solo puede aportar claves auxiliares. Los identificadores
+        // y descuentos que usa el webhook siempre los fija el servidor abajo.
+        ...Object.fromEntries(
+          Object.entries(metadata as Record<string, unknown>).filter(
+            ([key]) => ![
+              'booking_id', 'gift_card_id', 'membership_purchased',
+              'membership_plan', 'toursred_cash_used', 'points_used',
+              'payment_for', 'booking_supplement_id', 'type',
+            ].includes(key),
+          ),
+        ),
         booking_id: bookingId,
         membership_purchased: addMembership ? 'true' : 'false',
         membership_plan: membershipPlan,
         toursred_cash_used: cashSolicitado.toString(),
         points_used: puntosSolicitados.toString(),
-        ...metadata,
       },
     };
 
@@ -338,7 +348,6 @@ Deno.serve(async (req) => {
       const priceId = membershipPlan === 'monthly' ? monthlyPriceId : annualPriceId;
 
       sessionConfig.mode = "subscription";
-      sessionConfig.payment_method_types = ['card'];
       sessionConfig.line_items = [
         {
           price: priceId,
@@ -436,7 +445,6 @@ Deno.serve(async (req) => {
       }
 
       sessionConfig.mode = "payment";
-      sessionConfig.payment_method_types = ['card', 'oxxo', 'customer_balance'];
       sessionConfig.payment_method_options = {
         customer_balance: {
           funding_type: 'bank_transfer',
@@ -448,15 +456,20 @@ Deno.serve(async (req) => {
       sessionConfig.line_items = lineItems;
       sessionConfig.payment_intent_data = {
         metadata: {
+          ...Object.fromEntries(
+            Object.entries(metadata as Record<string, unknown>).filter(
+              ([key]) => !['booking_id', 'toursred_cash_used', 'points_used'].includes(key),
+            ),
+          ),
           booking_id: bookingId,
           toursred_cash_used: cashSolicitado.toString(),
           points_used: puntosSolicitados.toString(),
-          ...metadata,
         },
       };
     }
 
-    const session = await stripe.checkout.sessions.create(sessionConfig);
+    const idempotencyKey = `checkout_${bookingId}_${addMembership ? membershipPlan : 'booking'}_${cashSolicitado}_${puntosSolicitados}`;
+    const session = await stripe.checkout.sessions.create(sessionConfig, { idempotencyKey });
 
     return new Response(
       JSON.stringify({

@@ -611,8 +611,9 @@ const BookingFlowStep4: React.FC = () => {
           }
         );
         if (!resp.ok) throw new Error('Error al crear la orden de PayPal');
-        const { approvalUrl } = await resp.json();
-        window.location.href = approvalUrl;
+        const { url } = await resp.json();
+        if (!url) throw new Error('PayPal no devolvió la URL de aprobación');
+        window.location.href = url;
         return;
       }
 

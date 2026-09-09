@@ -79,7 +79,7 @@ Deno.serve(async (req: Request) => {
     if (context === "booking_deposit" || context === "booking") {
       const { data: booking, error: bookingErr } = await supabase
         .from("bookings")
-        .select("deposit_amount, user_id")
+        .select("deposit_amount, amount_due_now, membership_cost, user_id")
         .eq("id", booking_id)
         .maybeSingle();
 
@@ -103,7 +103,8 @@ Deno.serve(async (req: Request) => {
         .eq("status", "succeeded");
 
       const alreadyPaid = (alreadySucceeded || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
-      const remainingBalance = Number(booking.deposit_amount) - alreadyPaid;
+      const requiredNow = Math.max(Number(booking.deposit_amount || 0), Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0));
+      const remainingBalance = requiredNow - alreadyPaid;
 
       if (remainingBalance <= 0) {
         return jsonResponse({ error: "Esta reserva ya está pagada en su totalidad" }, 400);
@@ -231,7 +232,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Check for existing pending order for this booking + line
-    const idempotencyKey = `${booking_id}_${context}_${charge_reference_id || "deposit"}_${Date.now()}`;
+    const idempotencyKey = `${booking_id}_${context}_${charge_reference_id || "deposit"}`;
     const { data: existingPending } = await supabase
       .from("payment_transactions")
       .select("id, conekta_order_id")
@@ -372,6 +373,7 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
         "Accept": "application/vnd.conekta-v2.2.0+json",
         "Authorization": `Bearer ${conektaPrivateKey}`,
+        "Idempotency-Key": idempotencyKey,
         "X-Conekta-Client-Info": '{"name":"toursred","version":"1.0.0"}',
       },
       body: JSON.stringify(orderPayload),

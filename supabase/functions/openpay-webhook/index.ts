@@ -238,6 +238,24 @@ Deno.serve(async (req: Request) => {
         const chargeAmount = numeroOCero(verifiedApiCharge.amount);
         const paymentMethodType = verifiedApiCharge.method || "card";
 
+        const { data: pendingCharge } = await supabase
+          .from("payment_transactions")
+          .select("id, amount, status")
+          .eq("payment_processor", "openpay")
+          .eq("charge_reference_id", chargeReferenceId)
+          .eq("charge_context", chargeContext === "booking" ? "booking_deposit" : chargeContext)
+          .eq("status", "pending")
+          .maybeSingle();
+        if (pendingCharge && Math.abs(chargeAmount - Number(pendingCharge.amount || 0)) > 0.5) {
+          console.error(`OpenPay charge amount mismatch for ${chargeReferenceId}: ${chargeAmount} vs ${pendingCharge.amount}`);
+          if (webhookEventId) await supabase.from("openpay_webhook_events").update({
+            processing_status: "requiere_conciliacion_manual",
+            processing_error: `Amount mismatch: ${chargeAmount} vs ${pendingCharge.amount}`,
+            processed_at: new Date().toISOString(),
+          }).eq("id", webhookEventId);
+          return new Response("OK", { status: 200, headers: corsHeaders });
+        }
+
         // Determine payment_form for CFDI
         const paymentForm = paymentMethodType === "card" ? "04" : paymentMethodType === "bank_account" ? "03" : "01";
 
@@ -296,17 +314,16 @@ Deno.serve(async (req: Request) => {
 
           const { data: booking } = await supabase
             .from("bookings")
-            .select("amount_due_now, deposit_amount, total_price, user_payment, payment_status, status")
+              .select("amount_due_now, deposit_amount, membership_cost, total_price, user_payment, payment_status, status")
             .eq("id", bookingId)
             .maybeSingle();
 
           if (booking) {
             // Confirmar contra el exigible real. Con deposit_amount se confirmaba la
             // reserva cobrando de menos (quedaban fuera cargo por servicio y extras).
-            const requiredAmount = Number(booking.amount_due_now)
-              || Number(booking.deposit_amount)
-              || Number(booking.total_price)
-              || 0;
+            const requiredAmount = booking.amount_due_now != null
+              ? Math.max(Number(booking.deposit_amount || 0), Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0))
+              : Number(booking.deposit_amount || booking.total_price || 0);
             const newUserPayment = Math.max(0, Number(booking.user_payment || 0) - chargeAmount);
 
             if (totalPaid >= requiredAmount) {
@@ -929,6 +946,15 @@ async function awardExtraPointsOpenpay(supabase: any, bookingId: string, subtota
     if (!activeMembership) return;
     const pointsEarned = Math.floor(subtotal);
     if (pointsEarned <= 0) return;
+    const { data: alreadyAwarded } = await supabase
+      .from("toursred_points_transactions")
+      .select("id")
+      .eq("reference_id", referenceId)
+      .eq("reference_type", referenceType)
+      .eq("type", "earned")
+      .limit(1)
+      .maybeSingle();
+    if (alreadyAwarded) return;
     const { data: walletId } = await supabase.rpc("get_or_create_points_wallet", { p_user_id: booking.user_id });
     if (!walletId) return;
     const { data: pWallet } = await supabase.from("toursred_points_wallets").select("id, balance, total_earned").eq("id", walletId).maybeSingle();

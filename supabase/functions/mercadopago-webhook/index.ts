@@ -61,6 +61,8 @@ async function verifyMercadoPagoSignature(
   }
 
   if (!ts || !v1) return false;
+  const timestamp = Number(ts);
+  if (!Number.isFinite(timestamp) || Math.abs(Date.now() / 1000 - timestamp) > 300) return false;
 
   const manifest = [
     dataId ? `id:${dataId};` : "",
@@ -84,7 +86,10 @@ async function verifyMercadoPagoSignature(
   const hashArray = Array.from(new Uint8Array(signature));
   const computed = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
-  return computed === v1;
+  if (computed.length !== v1.length) return false;
+  let difference = 0;
+  for (let i = 0; i < computed.length; i++) difference |= computed.charCodeAt(i) ^ v1.charCodeAt(i);
+  return difference === 0;
 }
 
 Deno.serve(async (req: Request) => {
@@ -341,6 +346,10 @@ Deno.serve(async (req: Request) => {
 
       if (pendingInsurance) {
         const insAmount = Number(payment.transaction_amount || payment.amount || 0);
+        if (Math.abs(insAmount - Number(pendingInsurance.amount || 0)) > 0.5) {
+          console.error(`Mercado Pago insurance amount mismatch: ${insAmount} vs ${pendingInsurance.amount}`);
+          return new Response(JSON.stringify({ received: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
         const insFee = Array.isArray(payment.fee_details)
           ? payment.fee_details.filter((fd: any) => fd.type === "mercadopago_fee").reduce((s: number, fd: any) => s + parseFloat(fd.amount || "0"), 0)
           : 0;
@@ -394,6 +403,13 @@ Deno.serve(async (req: Request) => {
 
       if (pendingOptService) {
         const optAmount = Number(pendingOptService.total_paid || pendingOptService.subtotal || 0);
+        const { data: pendingOptTx } = await supabase.from("payment_transactions")
+          .select("id, amount").eq("charge_context", "optional_service")
+          .eq("charge_reference_id", externalReference).eq("status", "pending").maybeSingle();
+        if (pendingOptTx && Math.abs(Number(payment.transaction_amount || payment.amount || 0) - Number(pendingOptTx.amount || optAmount)) > 0.5) {
+          console.error(`Mercado Pago optional service amount mismatch for ${externalReference}`);
+          return new Response(JSON.stringify({ received: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
         const optFee = Array.isArray(payment.fee_details)
           ? payment.fee_details.filter((fd: any) => fd.type === "mercadopago_fee").reduce((s: number, fd: any) => s + parseFloat(fd.amount || "0"), 0)
           : 0;
@@ -525,7 +541,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: booking } = await supabase
         .from("bookings")
-        .select("id, user_id, payment_status, deposit_amount, toursred_cash_used, points_used")
+        .select("id, user_id, payment_status, deposit_amount, amount_due_now, membership_cost, toursred_cash_used, points_used")
         .eq("id", externalReference)
         .maybeSingle();
 
@@ -566,7 +582,10 @@ Deno.serve(async (req: Request) => {
         }
 
         // Incremental payment check: sum all confirmed MP payments and compare to deposit_amount
-        const depositAmount = Number(booking.deposit_amount || 0);
+        const depositAmount = Math.max(
+          Number(booking.deposit_amount || 0),
+          Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0),
+        );
         const { data: priorPayments } = await supabase
           .from("payment_transactions")
           .select("amount")
