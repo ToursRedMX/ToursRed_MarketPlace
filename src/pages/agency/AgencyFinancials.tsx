@@ -27,6 +27,7 @@ const AgencyFinancials: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (resolvedAgencyId) {
@@ -81,11 +82,15 @@ const AgencyFinancials: React.FC = () => {
       // guardarlo ademas en estado, porque commissionRecords no se leia en
       // ningun lado (el panel no muestra el desglose por comision).
 
-      const { data: penaltiesData } = await supabase
+      const { data: penaltiesData, error: errorPenalizaciones } = await supabase
         .from('cancellation_penalty_records')
         .select('*, tours(name, start_date)')
         .eq('agency_id', agencyId)
         .order('created_at', { ascending: false });
+
+      // Sin esto, un fallo deja el bloque de penalizaciones vacio y la agencia
+      // cree que no le descontaron nada.
+      if (errorPenalizaciones) throw errorPenalizaciones;
 
       setPenaltyRecords(penaltiesData || []);
 
@@ -202,6 +207,7 @@ const AgencyFinancials: React.FC = () => {
 
     } catch (error) {
       console.error('Error fetching financial data:', error);
+      setLoadError(error instanceof Error ? error.message : 'No pudimos cargar tu informacion financiera. Recarga la pagina.');
     } finally {
       setIsLoading(false);
     }
@@ -246,11 +252,14 @@ const AgencyFinancials: React.FC = () => {
     if (!agencyId) return;
 
     try {
-      const { data: agencyData } = await supabase
+      const { data: agencyData, error: errorAgencia } = await supabase
         .from('agencies')
         .select('name, email, phone')
         .eq('id', agencyId)
         .single();
+
+      // Un estado de cuenta que sale con "Agencia: N/A" se archiva igual.
+      if (errorAgencia) throw errorAgencia;
 
       const doc = new jsPDF();
 
@@ -340,11 +349,13 @@ const AgencyFinancials: React.FC = () => {
     if (!agencyId) return;
 
     try {
-      const { data: agencyData } = await supabase
+      const { data: agencyData, error: errorAgencia } = await supabase
         .from('agencies')
         .select('name, email, phone')
         .eq('id', agencyId)
         .single();
+
+      if (errorAgencia) throw errorAgencia;
 
       let bookingsQuery = supabase
         .from('bookings')
@@ -370,10 +381,13 @@ const AgencyFinancials: React.FC = () => {
       const usersMap = new Map();
 
       if (userIds.length > 0) {
-        const { data: usersData } = await supabase
+        const { data: usersData, error: errorUsuarios } = await supabase
           .from('users')
           .select('id, first_name, last_name, email')
           .in('id', userIds);
+
+        // Un export a medias se ve completo: mejor no generarlo.
+        if (errorUsuarios) throw errorUsuarios;
 
         usersData?.forEach(u => usersMap.set(u.id, u));
       }
@@ -382,10 +396,12 @@ const AgencyFinancials: React.FC = () => {
       const travelersMap = new Map<string, any[]>();
 
       if (bookingIds.length > 0) {
-        const { data: travelersData } = await supabase
+        const { data: travelersData, error: errorViajeros } = await supabase
           .from('booking_travelers')
           .select('*')
           .in('booking_id', bookingIds);
+
+        if (errorViajeros) throw errorViajeros;
 
         travelersData?.forEach(traveler => {
           if (!travelersMap.has(traveler.booking_id)) {
@@ -395,10 +411,14 @@ const AgencyFinancials: React.FC = () => {
         });
       }
 
-      const { data: commissionRecordsData } = await supabase
+      const { data: commissionRecordsData, error: errorComisiones } = await supabase
         .from('commission_records')
         .select('*')
         .eq('agency_id', agencyId);
+
+      // Sin comisiones, el Excel sale con las columnas de dinero en blanco
+      // pero con todas las reservas: parece un reporte valido y no lo es.
+      if (errorComisiones) throw errorComisiones;
 
       const commissionMap = new Map(
         commissionRecordsData?.map(cr => [cr.booking_id, cr]) || []
@@ -636,6 +656,13 @@ const AgencyFinancials: React.FC = () => {
           Gestiona y monitorea tus ingresos, comisiones y pagos
         </p>
       </div>
+
+      {loadError && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-900">Las cifras de abajo pueden estar incompletas</p>
+          <p className="mt-1 text-sm text-amber-800">{loadError}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">

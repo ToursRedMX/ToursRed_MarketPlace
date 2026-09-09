@@ -66,7 +66,9 @@ import { join } from "node:path";
 //        getSession() que dejaba tres llamadas sin Authorization.
 //   145  09-sep: la pantalla de contabilidad. Ahi un cero por error de
 //        lectura se ve igual que un cero de verdad.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 145);
+//   132  09-sep: el lado de la agencia — estado financiero (incluidos los
+//        exports a PDF y Excel) y la pantalla de reservas.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 132);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 

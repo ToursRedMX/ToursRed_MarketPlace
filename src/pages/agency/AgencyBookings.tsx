@@ -97,11 +97,15 @@ const AgencyBookings: React.FC = () => {
       setIsLoading(true);
       setError('');
 
-      const { data: agencyMeta } = await supabase
+      const { data: agencyMeta, error: errorAgencia } = await supabase
         .from('agencies')
         .select('name')
         .eq('id', currentAgencyId)
         .maybeSingle();
+
+      if (errorAgencia) {
+        console.error('No se pudo leer el nombre de la agencia:', errorAgencia);
+      }
 
       setAgencyId(currentAgencyId);
       setAgencyName(agencyMeta?.name ?? '');
@@ -124,10 +128,14 @@ const AgencyBookings: React.FC = () => {
 
       if (allBookings.length > 0) {
         const ids = allBookings.map((b: any) => b.id);
-        const { data: optSvcs } = await supabase
+        const { data: optSvcs, error: errorOpcionales } = await supabase
           .from('booking_optional_services')
           .select(`*, tour_optional_services(name, is_refundable)`)
           .in('booking_id', ids);
+
+        // Si esto falla, las reservas se ven sin extras y la agencia no
+        // entrega servicios que el viajero ya pago.
+        if (errorOpcionales) throw errorOpcionales;
 
         if (optSvcs) {
           const grouped: Record<string, any[]> = {};
@@ -138,11 +146,15 @@ const AgencyBookings: React.FC = () => {
           setBookingOptionalServices(grouped);
         }
 
-        const { data: suppData } = await supabase
+        const { data: suppData, error: errorSuplementos } = await supabase
           .from('booking_supplements')
           .select(`*, tour_supplements(name, is_cancellable, requires_approval)`)
           .in('booking_id', ids)
           .order('requested_at', { ascending: false });
+
+        // Hay suplementos que requieren aprobacion: si no aparecen, la agencia
+        // nunca los aprueba y el viajero se queda esperando.
+        if (errorSuplementos) throw errorSuplementos;
 
         if (suppData) {
           const groupedSupp: Record<string, any[]> = {};
@@ -164,12 +176,20 @@ const AgencyBookings: React.FC = () => {
       if (!toursError && toursData) {
         const toursWithBookings = await Promise.all(
           toursData.map(async (tour) => {
-            const { count } = await supabase
+            const { count, error: errorConteo } = await supabase
               .from('bookings')
               .select('id', { count: 'exact', head: true })
               .eq('tour_id', tour.id)
               .in('status', ['confirmed', 'completed', 'pending'])
               .in('approval_status', ['approved', 'pending']);
+
+            // El filtro de abajo esconde los tours con 0 reservas. Un error
+            // leido como 0 haria desaparecer un tour que si las tiene, asi que
+            // ante la duda lo dejamos visible.
+            if (errorConteo) {
+              console.error(`No se pudo contar las reservas del tour ${tour.id}:`, errorConteo);
+              return { ...tour, bookingsCount: 1 };
+            }
 
             return { ...tour, bookingsCount: count || 0 };
           })
@@ -413,12 +433,16 @@ const AgencyBookings: React.FC = () => {
         if (!toursError && toursData) {
           const toursWithBookings = await Promise.all(
             toursData.map(async (tour) => {
-              const { count } = await supabase
+              const { count, error: errorConteo } = await supabase
                 .from('bookings')
                 .select('id', { count: 'exact', head: true })
                 .eq('tour_id', tour.id)
                 .in('status', ['confirmed', 'completed', 'pending'])
                 .in('approval_status', ['approved', 'pending']);
+              if (errorConteo) {
+                console.error(`No se pudo contar las reservas del tour ${tour.id}:`, errorConteo);
+                return { ...tour, bookingsCount: 1 };
+              }
               return { ...tour, bookingsCount: count || 0 };
             })
           );
@@ -592,11 +616,15 @@ const AgencyBookings: React.FC = () => {
     if (!agencyId) return;
 
     try {
-      const { data: existingReview } = await supabase
+      const { data: existingReview, error: errorResena } = await supabase
         .from('traveler_reviews')
         .select('*')
         .eq('booking_id', booking.id)
         .maybeSingle();
+
+      // Abrir el modal como si no hubiera resena previa lleva a duplicarla o
+      // a pisar la que ya existe.
+      if (errorResena) throw errorResena;
 
       setReviewModal({
         open: true,
@@ -605,11 +633,7 @@ const AgencyBookings: React.FC = () => {
       });
     } catch (err) {
       console.error('Error checking for existing review:', err);
-      setReviewModal({
-        open: true,
-        booking,
-        existingReview: null
-      });
+      setError('No pudimos comprobar si ya calificaste a este viajero. Intenta de nuevo.');
     }
   };
 
@@ -633,11 +657,20 @@ const AgencyBookings: React.FC = () => {
   const handleSendMessage = async (booking: Booking) => {
     if (!booking.users?.id || !agencyId) return;
 
-    const { data: existingConversation } = await supabase
+    const { data: existingConversation, error: errorConversacion } = await supabase
       .from('conversations')
       .select('id')
       .or(`and(user1_id.eq.${agencyId},user2_id.eq.${booking.users.id}),and(user1_id.eq.${booking.users.id},user2_id.eq.${agencyId})`)
       .maybeSingle();
+
+    // Sin esta comprobacion, un error manda a "conversacion nueva" y duplica
+    // el hilo que ya existia con ese viajero.
+    if (errorConversacion) {
+      console.error('No se pudo buscar la conversacion existente:', errorConversacion);
+      setError('No pudimos abrir la conversacion. Intenta de nuevo.');
+      handleCloseContactModal();
+      return;
+    }
 
     if (existingConversation) {
       navigate(`/messages?conversation=${existingConversation.id}`);
