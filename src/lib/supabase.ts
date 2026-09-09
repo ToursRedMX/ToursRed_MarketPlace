@@ -239,17 +239,39 @@ export const signIn = async (email: string, password: string, captchaToken?: str
 
     if (error) throw error;
 
-    // Verificar si el usuario está activo
+    // Verificar si el usuario está activo.
+    //
+    // FALLA CERRADO desde el 09-sep-2026. Antes, si esta lectura fallaba, se
+    // dejaba rastro en consola y se seguía de largo: una cuenta bloqueada
+    // entraba con sólo tumbar esta consulta. Se reintenta una vez —un parpadeo
+    // no debe echar a nadie— y si aún así no se puede comprobar, no se entra.
     if (data.user) {
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('is_active')
-        .eq('id', data.user.id)
-        .maybeSingle();
+      let userData: { is_active: boolean | null } | null = null;
+      let userError: { message?: string } | null = null;
+
+      for (let intento = 0; intento < 2; intento++) {
+        const respuesta = await supabase
+          .from('users')
+          .select('is_active')
+          .eq('id', data.user.id)
+          .maybeSingle();
+
+        userData = respuesta.data;
+        userError = respuesta.error;
+
+        if (!userError) break;
+        if (intento === 0) await new Promise((r) => setTimeout(r, 300));
+      }
 
       if (userError) {
-        console.error('❌ Error verificando estado del usuario:', userError);
-      } else if (userData && userData.is_active === false) {
+        console.error('❌ No se pudo verificar si la cuenta está activa; no se permite entrar:', userError);
+        await supabase.auth.signOut();
+        throw new Error('VERIFICACION_NO_DISPONIBLE');
+      }
+
+      // `userData === null` sin error es otra cosa: la fila aún no existe (alta
+      // en curso). Una cuenta bloqueada sí tiene fila, con is_active en false.
+      if (userData && userData.is_active === false) {
         // Usuario bloqueado, cerrar sesión inmediatamente
         await supabase.auth.signOut();
         throw new Error('USUARIO_BLOQUEADO');

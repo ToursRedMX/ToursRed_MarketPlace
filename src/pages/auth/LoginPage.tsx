@@ -76,12 +76,18 @@ const LoginPage: React.FC = () => {
   const searchParams = new URLSearchParams(location.search);
   const redirectUrl = searchParams.get('redirect');
   const isBlocked = searchParams.get('blocked') === 'true';
+  // El acceso se negó porque no se pudo comprobar el estado de la cuenta, NO
+  // porque esté bloqueada. Son cosas distintas y el mensaje tiene que decirlo:
+  // culpar al usuario de una caída nuestra le hace pensar que lo bloqueamos.
+  const verificacionFallida = searchParams.get('verificacion') === 'fallida';
   const from = location.state?.from?.pathname || '/';
 
   const [error, setError] = useState(
     isBlocked
       ? 'Su cuenta ha sido bloqueada. Para mayor información contáctenos.'
-      : ''
+      : verificacionFallida
+        ? 'No pudimos verificar el estado de tu cuenta en este momento. Vuelve a intentar en unos minutos.'
+        : ''
   );
 
   useEffect(() => {
@@ -171,6 +177,8 @@ const LoginPage: React.FC = () => {
     } catch (err: any) {
       if (err.message === 'USUARIO_BLOQUEADO') {
         setError('Su cuenta ha sido bloqueada. Para mayor información contáctenos.');
+      } else if (err.message === 'VERIFICACION_NO_DISPONIBLE') {
+        setError('No pudimos verificar el estado de tu cuenta en este momento. Vuelve a intentar en unos minutos.');
       } else {
         // Generic message — anti-enumeration
         setError('Credenciales incorrectas. Por favor verifica tu correo y contraseña.');

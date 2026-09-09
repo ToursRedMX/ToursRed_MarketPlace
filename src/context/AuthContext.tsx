@@ -184,6 +184,36 @@ export const useAuth = () => useContext(AuthContext);
 
 const ROLE_CACHE_TTL = 5 * 60 * 1000;
 
+/**
+ * Errores que NO deben caer en el catch generico de `updateAuthState`, porque
+ * ese catch deja pasar al usuario con el rol cacheado o con TRAVELER. Si uno de
+ * estos llega ahi, el fallo se convierte en un acceso concedido.
+ */
+const ERROR_USUARIO_BLOQUEADO = 'Usuario bloqueado';
+const ERROR_VERIFICACION_NO_DISPONIBLE = 'Verificacion de cuenta no disponible';
+
+/** Reintentos de la lectura del perfil antes de negar el acceso. */
+const REINTENTOS_PERFIL = 2;
+const ESPERA_REINTENTO_MS = 300;
+
+const esperar = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Cierra la sesion y manda al login. El `signOut` va en su propio try porque
+ * tambien pega a la red: si esto se llama justo porque la red esta caida, no
+ * puede quedarse a medias — la redireccion tiene que ocurrir igual.
+ */
+const cerrarSesionYRedirigir = async (destino: string) => {
+  try {
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.error('AuthContext: signOut fallo al denegar el acceso', err);
+  }
+  if (typeof window !== 'undefined') {
+    window.location.href = destino;
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<any | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
@@ -316,35 +346,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const metadataRole = authUser.user_metadata?.role;
 
     try {
-      const { data: profile, error: errorPerfil } = await supabase
-        .from('users')
-        .select('role, email_verified, is_active, must_change_password')
-        .eq('id', authUser.id)
-        .maybeSingle();
-
-      // F-1, y este NO falla cerrado: si la lectura falla, `profile` llega null,
-      // el bloque de abajo no corre, y con el se saltan el chequeo de
-      // `is_active === false` (cuenta bloqueada) y el de must_change_password.
-      // El usuario entra con el rol de su metadata.
+      // F-1 — FALLA CERRADO desde el 09-sep-2026 (decision de Axel).
       //
-      // AQUI SOLO SE DEJA RASTRO. Denegar el acceso cuando esta lectura falla
-      // es la correccion de fondo, pero cambia el camino de login de TODOS: si
-      // la consulta falla de forma general, cerrar la sesion a todo el mundo es
-      // peor que la ventana que se cierra. Pendiente de decidir con Axel.
-      if (errorPerfil) {
-        console.error(
-          'AuthContext: no se pudo leer el perfil; NO se comprobo is_active ni must_change_password',
-          errorPerfil,
-        );
+      // Esta es la unica lectura que comprueba `is_active === false`, o sea si
+      // la cuenta esta bloqueada. Antes, si fallaba, `profile` llegaba null, el
+      // bloque de abajo no corria, y el usuario entraba con el rol de su
+      // metadata: bastaba con tumbar esta consulta para saltarse el bloqueo.
+      //
+      // Ahora se reintenta y, si aun asi no se puede leer, se niega el acceso.
+      // El costo esta medido y es real: si la consulta falla de forma general,
+      // nadie entra. Por eso los reintentos — un parpadeo no debe echar a nadie
+      // — y por eso el mensaje distingue "no pudimos verificar" de "estas
+      // bloqueado": no es lo mismo y el usuario no tiene por que cargar con la
+      // culpa de una caida nuestra.
+      let profile: {
+        role: string | null;
+        email_verified: boolean | null;
+        is_active: boolean | null;
+        must_change_password: boolean | null;
+      } | null = null;
+      let errorPerfil: { message?: string } | null = null;
+
+      for (let intento = 0; intento <= REINTENTOS_PERFIL; intento++) {
+        const respuesta = await supabase
+          .from('users')
+          .select('role, email_verified, is_active, must_change_password')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        profile = respuesta.data;
+        errorPerfil = respuesta.error;
+
+        if (!errorPerfil) break;
+
+        if (intento < REINTENTOS_PERFIL) {
+          // Backoff corto: 300ms, 600ms. En el peor caso agrega ~0.9s, y solo
+          // en el camino que ya iba a fallar.
+          await esperar(ESPERA_REINTENTO_MS * (intento + 1));
+        }
       }
 
+      if (errorPerfil) {
+        console.error(
+          `AuthContext: no se pudo leer el perfil tras ${REINTENTOS_PERFIL + 1} intentos; ` +
+            'se niega el acceso porque no se puede comprobar is_active',
+          errorPerfil,
+        );
+        Sentry.captureException(errorPerfil, {
+          tags: { area: 'auth', causa: 'perfil-ilegible' },
+          extra: { userId: authUser.id, intentos: REINTENTOS_PERFIL + 1 },
+        });
+        await cerrarSesionYRedirigir('/login?verificacion=fallida');
+        throw new Error(ERROR_VERIFICACION_NO_DISPONIBLE);
+      }
+
+      // Ojo: `profile === null` SIN error es otra cosa —la fila no existe—, y
+      // ahi se sigue de largo a proposito. Es el caso del alta, donde el
+      // usuario de auth existe antes que su fila en `users`. Una cuenta
+      // bloqueada nunca llega aqui: su fila existe, con is_active en false.
       if (profile) {
         if (profile.is_active === false) {
-          await supabase.auth.signOut();
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login?blocked=true';
-          }
-          throw new Error('Usuario bloqueado');
+          await cerrarSesionYRedirigir('/login?blocked=true');
+          throw new Error(ERROR_USUARIO_BLOQUEADO);
         }
 
         setMustChangePassword(profile.must_change_password === true);
@@ -357,7 +420,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { role, emailVerified };
       }
     } catch (err: any) {
-      if (err.message === 'Usuario bloqueado') throw err;
+      // Los dos centinelas tienen que salir de aqui intactos. Si caen en el
+      // fallback de abajo, el usuario entra con el rol de su metadata y la
+      // denegacion se deshace sola.
+      if (
+        err?.message === ERROR_USUARIO_BLOQUEADO ||
+        err?.message === ERROR_VERIFICACION_NO_DISPONIBLE
+      ) {
+        throw err;
+      }
       if (metadataRole && Object.values(UserRole).includes(metadataRole as UserRole)) {
         setCachedRole(authUser.id, metadataRole as UserRole);
         return { role: metadataRole as UserRole, emailVerified: true };
@@ -731,7 +802,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearAuthCache();
       }
     } catch (err: any) {
-      if (err.message === 'Usuario bloqueado') return;
+      // Mismo motivo que en `determineUserRole`: el fallback de abajo concede
+      // el rol cacheado o TRAVELER, asi que una denegacion que llegue hasta
+      // aqui se convertiria en un acceso concedido.
+      if (
+        err?.message === ERROR_USUARIO_BLOQUEADO ||
+        err?.message === ERROR_VERIFICACION_NO_DISPONIBLE
+      ) {
+        return;
+      }
       if (authUser) {
         if (authUser.email === 'admin@toursred.com') {
           setUserRole(UserRole.ADMIN);
