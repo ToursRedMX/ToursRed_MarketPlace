@@ -1,3 +1,105 @@
+-- confirm_booking_paid_with_wallet: exigir que lo aportado cubra lo exigible
+-- antes de confirmar la reserva.
+--
+-- ============================================================================
+-- EL AGUJERO
+-- ============================================================================
+--
+-- La funcion descontaba condicionalmente y confirmaba INCONDICIONALMENTE:
+--
+--     IF p_cash_to_use   > 0 THEN ...descontar cash...   END IF;
+--     IF p_points_to_use > 0 THEN ...descontar puntos... END IF;
+--
+--     -- Paso 4, sin ningun IF:
+--     UPDATE bookings SET payment_status='succeeded', status='confirmed', ...
+--
+-- Llamandola con 0 y 0 se saltaba los dos descuentos y confirmaba igual,
+-- estampando payment_method = 'toursred_points' porque ese es el valor por
+-- defecto de la variable. Y con 1 peso en una reserva de 5,500 tambien
+-- confirmaba: nadie comprobaba que lo aportado CUBRIERA el precio.
+--
+-- Su unico llamador, la Edge Function confirm-booking-wallet-payment, valida
+-- sesion y dueno pero pasa `p_points_to_use || 0, p_cash_to_use || 0` directo,
+-- y ademas se salta el step-up de MFA justo cuando ambos son cero
+-- ("Solo exigir step-up si de verdad se esta gastando wallet o puntos").
+--
+-- Resultado: cualquier viajero con sesion podia confirmar SU PROPIA reserva
+-- pagando cero. Ocurrio una vez en este ambiente: TRG-JKVNKEXK4AD, 31-jul-2026,
+-- 5,500 de deposito, confirmada 6 segundos despues de crearse, sin movimiento
+-- de puntos, sin movimiento de cash y sin fila en payment_transactions.
+--
+-- Arrastra ademas: asiento reservado, correo de confirmacion, commission_amount
+-- 1,100 y platform_revenue 1,650 asentados, y —desde que se le agrego el bloque
+-- de CFDI a la Edge Function— el timbrado de un comprobante fiscal por el monto
+-- completo con forma de pago SAT 05.
+--
+-- HISTORIA. El 22-ago se revoco el EXECUTE a anon/authenticated
+-- (20260822034332), que cerraba un bypass DISTINTO: el chequeo interno de dueno
+-- ("IF auth.uid() IS NOT NULL AND ...") no se activaba en una llamada anonima.
+-- Aquello tapo el acceso directo desde el navegador; este bug de logica quedo
+-- intacto y sigue alcanzable por la Edge Function.
+--
+-- ============================================================================
+-- LA REGLA QUE SE IMPONE
+-- ============================================================================
+--
+--     puntos/100 + cash + pagos de pasarela ya registrados  >=  exigible - 0.5
+--
+-- El exigible se obtiene por dos caminos, en este orden:
+--
+--   1. amount_due_now + points_used/100 + toursred_cash_used
+--      amount_due_now es el numero que la propia create_booking_atomic se
+--      comprometio a cobrar (columna creada el 25-ago), y YA viene con puntos y
+--      cash restados; volver a sumarlos devuelve el bruto. Se lee ANTES del
+--      Paso 4, que es quien sobrescribe esas dos columnas.
+--
+--   2. Si amount_due_now es null (29 de las 45 reservas de hoy, todas anteriores
+--      al 25-ago), se reconstruye por componentes con la misma formula del
+--      backfill de aquella migracion:
+--        deposito + cargo por servicio + opcionales + seguro + membresia
+--
+--      Los descuentos NO se restan aqui: create_booking_atomic ya calcula
+--      v_deposit_amount y v_base_service_charge sobre el precio YA descontado
+--      (v_base_tour_price_discounted), asi que restarlos otra vez seria
+--      contarlos dos veces.
+--
+--      Los opcionales con paid_at NO NULL se excluyen: son extras cobrados por
+--      su propia via y contarlos seria cobrarlos dos veces. En el instante en
+--      que corre este check los opcionales del checkout tienen paid_at null,
+--      asi que si entran, que es lo correcto.
+--
+-- La tolerancia de 0.5 es la misma que ya usa capture-paypal-order:128.
+--
+-- POR QUE NO SE RECHAZA "0 y 0" A SECAS. Porque hay un caso legitimo:
+-- BookingFlowStep4.tsx:527 usa `isWalletOnly = srvIsFullWallet || srvAmountToCharge === 0`,
+-- de modo que una reserva que no cobra nada —un codigo de descuento del 100%,
+-- por ejemplo— llama a este mismo endpoint con puntos y cash en cero. Si de
+-- verdad no se debe nada, el exigible da 0 y la regla la deja pasar. Rechazar
+-- el 0/0 por si mismo habria roto ese flujo.
+--
+-- ============================================================================
+-- VERIFICACION ANTES DE APLICAR
+-- ============================================================================
+--
+-- Se simulo el predicado contra las 5 reservas que existen hoy pagadas por esta
+-- via. Las 4 legitimas pasan con sobrante exactamente 0.00; la fraudulenta se
+-- bloquea por -6,050.00:
+--
+--   TRG-R0QF6GNR4C6  24-jul  exigible 3,604.65  cubierto 3,604.65   pasa
+--   TRG-8XBODT0ZXAQ  30-jul  exigible   475.00  cubierto   475.00   pasa
+--   TRG-JKVNKEXK4AD  31-jul  exigible 6,050.00  cubierto     0.00   BLOQUEA
+--   TRG-0DS33SAOP81  25-ago  exigible 5,500.00  cubierto 5,500.00   pasa
+--   TRG-DD03QDV8DCH  28-ago  exigible   500.00  cubierto   500.00   pasa
+--
+-- El cuerpo de abajo se tomo de pg_get_functiondef sobre la base VIVA, no del
+-- archivo del repo: la definicion viva trae la logica de v_is_full_wallet del
+-- fix del 24-ago (20260824204208) que el archivo original no tenia.
+--
+-- CREATE OR REPLACE reemplaza TODOS los atributos, incluidas las clausulas SET,
+-- por eso `SET search_path TO 'public'` va explicito. Los permisos (postgres y
+-- service_role) los conserva CREATE OR REPLACE; NO se vuelve a otorgar a
+-- authenticated, que es justo lo que se revoco el 22-ago.
+
 CREATE OR REPLACE FUNCTION public.confirm_booking_paid_with_wallet(
   p_booking_id uuid,
   p_points_to_use integer,

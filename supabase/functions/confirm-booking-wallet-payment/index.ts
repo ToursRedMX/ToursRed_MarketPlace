@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
+import { registrarFallo } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -125,6 +126,24 @@ Deno.serve(async (req: Request) => {
           body: JSON.stringify({ booking_id: p_booking_id }),
         }).catch((e) => console.error("Error syncing booking to accounting (wallet):", e))
       );
+    }
+
+    // Un rechazo del RPC devolvia 200 con { success:false }. El front lo detecta
+    // por walletData.error, pero cualquier otro consumidor —o una metrica de
+    // errores HTTP— lo lee como exito. Y sobre todo: un rechazo por cobertura
+    // insuficiente es una senal que hay que poder ver despues, no un log que se
+    // pierde. Se registra en audit_errors con el mismo patron de M-4/M-6.
+    if (!(rpcResult as { success?: boolean })?.success) {
+      const motivo = (rpcResult as { error?: string })?.error ?? "sin detalle";
+      await registrarFallo("confirm-booking-wallet-payment/rechazado", motivo, {
+        booking_id: p_booking_id,
+        user_id: user.id,
+        p_points_to_use: p_points_to_use ?? 0,
+        p_cash_to_use: p_cash_to_use ?? 0,
+      });
+      return new Response(JSON.stringify(rpcResult), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify(rpcResult), {

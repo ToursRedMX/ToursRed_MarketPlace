@@ -106,6 +106,14 @@ jobs:
       - name: Nadie lee Origin/Referer crudo en Edge Functions
         run: node scripts/check-origin-header.mjs
 
+      # Tercer punto de las recomendaciones estructurales de la auditoria de Edge
+      # Functions, el unico que quedaba. Los otros dos (_shared/auth.ts y
+      # _shared/cors.ts) bajan el costo de ponerse el guard; solo este impide que
+      # la funcion 172 nazca sin el. Linea base con motivo escrito por entrada:
+      # ver scripts/edge-guards-linea-base.json.
+      - name: Ninguna Edge Function nueva sin guard de autorizacion
+        run: node scripts/check-edge-guards.mjs
+
       - name: Run ESLint (el veredicto lo da el paso siguiente)
         run: |
           # bash corre con -e: sin set +e, eslint saliendo != 0 aborta el step.
