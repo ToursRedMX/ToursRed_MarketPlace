@@ -740,3 +740,121 @@ el marcador de auditoría con `amount = 0` que inserta `_shared/pointsTraceabili
 `deduct_points` con los tres `reference_type`: los tres descontaron (10,544 → 10,529,
 3 × 5 pts) y el saldo volvió a 10,544 al revertir. Antes de la migración, los tres
 reventaban con violación de `CHECK`.
+
+---
+
+## C-2. Bloquear a un usuario era un control sólo del navegador — CORREGIDO en `20260909220350` (pendiente de aplicar)
+
+No estaba en esta auditoría. Apareció el 09-sep-2026 al ir a cerrar una pregunta
+mucho más chica: por qué el atajo por correo de `admin@toursred.com` en
+`AuthContext` se salta el chequeo de cuenta bloqueada.
+
+**Lo que se encontró al tirar del hilo.** `users.is_active = false` es lo que
+escribe el panel al bloquear una cuenta, y **nadie lo miraba del lado del
+servidor**. Ni RLS, ni los helpers de rol, ni las Edge Functions:
+
+```sql
+-- current_user_has_role, como estaba (20260527231929)
+SELECT EXISTS (
+  SELECT 1 FROM public.users
+  WHERE id = auth.uid() AND role = ANY (check_roles)   -- y nada más
+);
+```
+
+De esa función y de `current_user_is_admin` cuelgan las políticas de **18
+migraciones**. Con eso, bloquear a alguien era:
+
+1. Un control **del navegador**, aplicado en el login y en cada cambio de estado
+   de sesión. Quien hablara con PostgREST directo con su token no se detenía.
+2. **Sin efecto sobre el token ya emitido**: nada revoca la sesión al bloquear, y
+   el cliente corre con `autoRefreshToken: true`. Un usuario ya logueado al que
+   se bloquea conserva un token que se renueva solo.
+
+El arreglo del front (PR #183) cerró el único control que existía, y por eso
+valió más de lo que parecía. Esto pone el segundo.
+
+**Descartado por el camino, y vale anotarlo:** hubo una política de RLS que
+confiaba en `auth.jwt() -> 'user_metadata' ->> 'role'`
+(`20260528041140_fix_bookings_rls_use_jwt_no_recursion.sql`). Eso **sí** habría
+sido escalada de privilegios, porque `user_metadata` lo escribe el propio usuario
+con `auth.updateUser()`. La reemplazaron por `current_user_has_role` **cuatro
+minutos después**, el mismo día (`20260528041600`). Está muerta. Se anota porque
+se descartó mirándola, no asumiéndola.
+
+### El error que se cometió escribiendo la migración, y cómo salió
+
+La primera versión tenía el seguro —"no apliques esto si dejaría sin acceso al
+único super admin"— en un bloque `DO`, y el resto en sentencias sueltas.
+Aplicada en autocommit, statement por statement, que es como puede acabar
+aplicándose desde el editor SQL del panel:
+
+```
+ERROR:  Abortada: hay 1 super admin(s) con is_active = false...
+UPDATE 0
+ALTER TABLE          ← se ejecutó igual
+ALTER TABLE          ← se ejecutó igual
+CREATE FUNCTION      ← se ejecutó igual
+```
+
+**El seguro disparaba y todo lo demás corría de todas formas.** El escenario que
+el seguro existe para evitar ocurría con la válvula "funcionando". Por eso la
+migración entera vive hoy dentro de un solo bloque `DO`: es **una** sentencia, y
+un `RAISE EXCEPTION` deshace lo que hizo sin depender de que quien la aplique la
+envuelva en una transacción.
+
+Salió porque se probó. No se veía leyendo el archivo.
+
+### `IS DISTINCT FROM false`, y cuánto protege de verdad
+
+La columna nació `boolean DEFAULT true` **sin** `NOT NULL` (`20251229171833`).
+Con `= true`, una fila en NULL quedaría fuera: el mismo error que persigue toda
+esta auditoría —tratar "no se sabe" como "no"— pero en SQL y con el acceso de una
+persona real de por medio.
+
+Dicho eso, hay que ser honesto sobre el mérito: **quien salva a las filas
+existentes es la normalización**, que corre antes en el mismo bloque y deja la
+columna en `NOT NULL`. Después de eso, `= true` daría hoy el mismo resultado. El
+operador vale como segunda capa, para el día en que alguien quite esa
+restricción.
+
+La primera versión de la prueba caía justo en esa trampa: decía probar el
+operador y **pasaba igual con `= true`**, porque comprobaba el caso NULL después
+de que la migración lo hubiera normalizado. Ahora reintroduce un NULL a la fuerza.
+
+### Lo que esta migración NO toca, a propósito
+
+La política de lectura de `users` deja al usuario leer **su propia fila** por su
+primera rama, `(SELECT auth.uid()) = id`, que no pasa por estos helpers. Hay que
+conservarlo: si un bloqueado no pudiera leer su fila, el front recibiría cero
+filas **sin error**, lo leería como "el alta va en curso" y lo dejaría pasar con
+el rol de su metadata. Endurecer esa política reabriría por detrás lo que #183
+acaba de cerrar.
+
+### Verificación
+
+`scripts/test-is-active-rls.sql` y `scripts/test-is-active-rls-guardia.sql`,
+corriendo la migración **real** contra un Postgres 16 de verdad sobre una copia
+mínima del esquema. 11 + 4 comprobaciones. La segunda se aplica **sin
+transacción** a propósito: es el peor caso, y es el que destapó lo de la
+atomicidad.
+
+Probadas por mutación:
+
+| Mutación | Resultado |
+|---|---|
+| `IS DISTINCT FROM false` → `= true` | 🔴 el usuario con NULL pierde su rol |
+| Quitar el seguro del super admin | 🔴 la migración modifica la tabla pese a deber abortar |
+
+Ambas corren en CI, dentro del job `lint`, contra un servicio de Postgres 16.
+
+### Lo que queda abierto
+
+- **La migración NO está aplicada.** Requiere autorización explícita de Axel en
+  el momento, y confirmar antes contra la base cuántas filas tienen `is_active`
+  en `false` o `NULL` hoy.
+- **Revocar la sesión al bloquear** sigue sin hacerse. Con esta migración el
+  token deja de dar acceso a datos, pero sigue siendo un token válido.
+- **El atajo por correo de `admin@toursred.com`** en `AuthContext:324` y `:815`
+  sigue en pie: esa cuenta no pasa por el chequeo de `is_active` en el front. Con
+  esta migración aplicada el daño baja mucho —vería el panel, pero sin datos—,
+  aunque conviene quitarlo. Es la única cuenta de super admin de la plataforma.
