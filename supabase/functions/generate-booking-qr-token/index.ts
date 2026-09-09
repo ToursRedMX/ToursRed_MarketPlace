@@ -8,6 +8,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Forma real de la fila del .select() de la reserva. Se declara a mano porque
+// el cliente no lleva el tipo Database y supabase-js tipa los embeds to-one
+// como arreglo; en runtime PostgREST devuelve un objeto.
+type ReservaQr = {
+  id: string;
+  user_id: string;
+  agency_id: string;
+  tour: { start_date: string | null } | null;
+  agency: { user_id: string } | null;
+};
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -86,6 +97,7 @@ Deno.serve(async (req: Request) => {
       .from("bookings")
       .select("id, user_id, agency_id, tour:tours(start_date), agency:agencies(user_id)")
       .eq("id", booking_id)
+      .returns<ReservaQr[]>()
       .maybeSingle();
 
     if (bookingError || !booking) {
@@ -147,6 +159,16 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ success: true, token: existing.token, qr_url: qrUrl }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // tours.start_date es nullable. Sin este guard, `new Date(null)` daba
+    // Invalid Date, expires_at salia NaN y el INSERT de abajo fallaba con un
+    // error de Postgres que no decia nada de la fecha faltante.
+    if (!booking.tour?.start_date) {
+      return new Response(
+        JSON.stringify({ error: "El tour de esta reserva no tiene fecha de inicio" }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

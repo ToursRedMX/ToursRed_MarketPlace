@@ -8,6 +8,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Forma real de la fila del .select() de la reserva. Se declara a mano porque
+// el cliente no lleva el tipo Database y supabase-js tipa los embeds to-one
+// como arreglo; en runtime PostgREST devuelve un objeto.
+type ReservaCobroWallet = {
+  id: string;
+  user_id: string;
+  agency_id: string;
+  total_price: number;
+  deposit_amount: number;
+  wallet_charged_at_checkin: number;
+  status: string;
+  membership_service_fee_saved: number | null;
+  agency: { id: string; name: string; user_id: string } | null;
+};
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -69,11 +84,16 @@ Deno.serve(async (req: Request) => {
     // Obtener la reserva
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
+      // membership_service_fee_saved faltaba en el select y mas abajo se lee
+      // para acumular el ahorro: `(booking.membership_service_fee_saved || 0)`
+      // daba siempre 0, asi que el ahorro previo se PISABA en vez de sumarse.
       .select(`
         id, user_id, agency_id, total_price, deposit_amount, wallet_charged_at_checkin, status,
+        membership_service_fee_saved,
         agency:agencies(id, name, user_id)
       `)
       .eq("id", booking_id)
+      .returns<ReservaCobroWallet[]>()
       .maybeSingle();
 
     if (bookingError || !booking) {
@@ -83,7 +103,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const isAgencyOwner = (booking.agency as any)?.user_id === user.id;
+    const isAgencyOwner = booking.agency?.user_id === user.id;
 
     let isAuthorizedStaff = false;
     if (!isAgencyOwner && !isAdmin) {

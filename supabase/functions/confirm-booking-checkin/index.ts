@@ -17,6 +17,33 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Forma real de la fila del .select() de la reserva. Se declara a mano porque
+// el cliente no lleva el tipo Database y supabase-js tipa los embeds to-one
+// como arreglo; en runtime PostgREST devuelve un objeto. Lista solo las
+// columnas que el select pide.
+type ReservaCheckin = {
+  id: string;
+  user_id: string;
+  agency_id: string;
+  status: string;
+  booking_code: string;
+  dispute_hold_at: string | null;
+  tour: { name: string; start_date: string | null } | null;
+  traveler: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    no_show_count: number;
+  } | null;
+  agency: {
+    id: string;
+    name: string;
+    user_id: string;
+    contact_email: string;
+  } | null;
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -101,6 +128,7 @@ Deno.serve(async (req: Request) => {
         agency:agencies(id, name, user_id, contact_email)
       `)
       .eq("id", tokenRecord.booking_id)
+      .returns<ReservaCheckin[]>()
       .maybeSingle();
 
     if (bookingError || !booking) {

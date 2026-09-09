@@ -57,7 +57,10 @@ Deno.serve(async (req: Request) => {
     // Look up the most recent unused, non-expired code for this email
     const { data: resetCode, error: codeError } = await supabase
       .from("password_reset_codes")
-      .select("id, user_id, expires_at, used, failed_attempts")
+      // `code` faltaba en el select y el codigo de abajo lo compara igual:
+      // resetCode.code era undefined, la comparacion nunca casaba y TODO intento
+      // de reset devolvia "Codigo incorrecto" ademas de gastar un intento.
+      .select("id, user_id, code, expires_at, used, failed_attempts")
       .eq("email", email)
       .order("created_at", { ascending: false })
       .limit(1)

@@ -29,7 +29,11 @@ async function cancelStampedCfds(
     .select("id")
     .eq("booking_id", bookingId)
     .in("invoice_type", ["booking", "booking_installment"])
-    .eq("status", "stamped");
+    .eq("status", "stamped")
+    // El cliente llega tipado como ReturnType<typeof createClient> (Database=any),
+    // y con eso supabase-js resuelve la fila a never: cfdi.id no compilaba. Se
+    // declara la forma que el select realmente pide.
+    .returns<{ id: string }[]>();
 
   for (const cfdi of stampedCfds || []) {
     try {

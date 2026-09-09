@@ -132,6 +132,14 @@ Deno.serve(async (req: Request) => {
 
     // ── RESIGN: initiate commission amendment for an active agency ───────────
     if (action === "resign") {
+      // El guard de arriba ya devolvio 400 si no venia la comision, pero esta
+      // escrito como `action === "resign" && (...)` y TS no angosta el tipo a
+      // traves de esa forma. Repetirlo aqui deja el invariante explicito en el
+      // bloque y evita meter un "!" a ciegas sobre un dato que viene del body.
+      if (newCommissionPct === undefined || newCommissionPct === null) {
+        return new Response(JSON.stringify({ error: "Se requiere new_commission_percentage para resign" }), { status: 400, headers: corsHeaders });
+      }
+
       const { data: agency } = await supabase
         .from("agencies")
         .select("id, user_id, razon_social, rfc, representante_legal_nombre, name, contact_email, commission_percentage, onboarding_status, street, exterior_number, interior_number, colony, city, state, postal_code, country")

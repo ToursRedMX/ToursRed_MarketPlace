@@ -1057,7 +1057,11 @@ Deno.serve(async (req) => {
         if (paymentStatus === 'paid') {
           const { data: booking, error: bookingFetchError } = await supabase
             .from('bookings')
-            .select('tour_id, travelers_count')
+            // user_id faltaba en el select y mas abajo se lee dos veces: el
+            // audit log de BOOKING_CONFIRMED se guardaba con p_actor_id nulo y
+            // el fallback del user_id de la membresia de carrito mixto quedaba
+            // en undefined.
+            .select('tour_id, travelers_count, user_id')
             .eq('id', bookingId)
             .single();
 

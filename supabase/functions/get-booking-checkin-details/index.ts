@@ -8,6 +8,53 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Forma real de la fila del .select() de abajo. Se declara a mano porque el
+// cliente no lleva el tipo Database: supabase-js parsea el string del select y,
+// sin conocer la cardinalidad, tipa los embeds to-one como arreglo. En runtime
+// PostgREST devuelve un objeto. El tipo lista SOLO las columnas que el select
+// pide, a proposito: si alguien lee una columna que la consulta no trajo, tiene
+// que fallar aqui y no en produccion.
+type ReservaCheckinDetalle = {
+  id: string;
+  booking_code: string;
+  status: string;
+  total_price: number;
+  deposit_amount: number;
+  travelers_count: number;
+  count_adultos: number | null;
+  count_ninos: number | null;
+  count_infantes: number | null;
+  count_adultos_mayores: number | null;
+  count_mascotas: number | null;
+  checkin_status: string | null;
+  checkin_at: string | null;
+  selected_seats: unknown[] | null;
+  user_id: string;
+  agency_id: string;
+  wallet_charged_at_checkin: number;
+  tour: {
+    id: string;
+    name: string;
+    destination: string;
+    start_date: string | null;
+    end_date: string | null;
+  } | null;
+  traveler: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone_number: string | null;
+  } | null;
+  agency: {
+    id: string;
+    name: string;
+    user_id: string;
+    contact_email: string;
+    contact_phone: string | null;
+  } | null;
+};
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -100,6 +147,7 @@ Deno.serve(async (req: Request) => {
         agency:agencies(id, name, user_id, contact_email, contact_phone)
       `)
       .eq("id", tokenRecord.booking_id)
+      .returns<ReservaCheckinDetalle[]>()
       .maybeSingle();
 
     if (bookingError || !booking) {

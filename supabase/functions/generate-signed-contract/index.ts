@@ -4,6 +4,7 @@ import PdfPrinter from "npm:pdfmake@0.2.20/js/printer.js";
 import { Buffer } from "node:buffer";
 import { ROBOTO_NORMAL_B64, ROBOTO_BOLD_B64, ROBOTO_ITALICS_B64, ROBOTO_BOLDITALICS_B64 } from "../_shared/robotoFonts.ts";
 import { buildSignedContractDocDefinition } from "../_shared/contractDocDefinition.ts";
+import type { ContractData, AnexoBData } from "../_shared/contractDocDefinition.ts";
 import * as Sentry from "npm:@sentry/deno@9";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
@@ -97,7 +98,10 @@ Deno.serve(async (req)=>{
     });
     const sd = signing_data;
     // Build ContractData
-    const contractData = {
+    // specialCommissionClause se agregaba despues con una asignacion sobre el
+    // literal, que no la declaraba: TS la rechazaba y el campo dependia de que
+    // nadie congelara el objeto. Va en el mismo literal, condicionada.
+    const contractData: ContractData = {
       razonSocial: sd.razonSocial,
       rfcAgencia: sd.rfcAgencia,
       domicilioFiscal: sd.domicilioFiscal,
@@ -108,11 +112,11 @@ Deno.serve(async (req)=>{
       fechaMes: sd.fechaMes,
       fechaAnio: sd.fechaAnio,
       versionContrato: sd.versionContrato,
-      commissionPercentage: sd.commissionPercentage
+      commissionPercentage: sd.commissionPercentage,
+      ...(sd.specialCommissionClause
+        ? { specialCommissionClause: sd.specialCommissionClause }
+        : {})
     };
-    if (sd.specialCommissionClause) {
-      contractData.specialCommissionClause = sd.specialCommissionClause;
-    }
     // ── Generate PDF ──────────────────────────────────────────────────────
     // First pass: generate without hash to get bytes, then compute hash,
     // then regenerate with hash in Anexo B.

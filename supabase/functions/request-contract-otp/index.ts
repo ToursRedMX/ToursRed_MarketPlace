@@ -35,6 +35,9 @@ async function sendOtpEmail(
   const { data: emailSettings } = await supabase
     .from("email_settings")
     .select("smtp_api_key, contact_email")
+    // El cliente llega como ReturnType<typeof createClient> (Database=any) y con
+    // eso supabase-js resuelve la fila a never. Se declara lo que el select pide.
+    .returns<{ smtp_api_key: string | null; contact_email: string | null }[]>()
     .maybeSingle();
 
   const smtpApiKey = emailSettings?.smtp_api_key;
