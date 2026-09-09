@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -491,7 +492,7 @@ Red de Agencias de Viajes Aliadas
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: "Error al procesar la cotización", details: error.message }),
+      JSON.stringify({ error: "Error al procesar la cotización", details: mensajeDeError(error) }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

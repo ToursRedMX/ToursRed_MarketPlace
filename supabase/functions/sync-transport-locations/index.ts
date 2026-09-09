@@ -267,7 +267,37 @@ Deno.serve(async (req)=>{
     });
   }
 });
-function buildOverpassQuery(city, system) {
+/**
+ * Formas que consumen los helpers de abajo.
+ *
+ * OJO: NO se pudieron verificar contra el esquema. NINGUNA de las cinco tablas
+ * que usa esta funcion existe en la base — `cities`, `transport_systems`,
+ * `osm_sync_logs`, `departure_locations` ni `featured_pois` (revisado el
+ * 08-sep-2026 en information_schema, en todos los schemas). O sea que la
+ * funcion no puede funcionar hoy: revienta en la primera consulta. Los campos
+ * de abajo salen de lo que el propio codigo lee, no del esquema.
+ */
+type CiudadTransporte = {
+  id: string;
+  name: string;
+  state: string;
+  bbox_south: number;
+  bbox_west: number;
+  bbox_north: number;
+  bbox_east: number;
+};
+
+type SistemaTransporte = {
+  name: string;
+  system_type: string;
+  /** Mapa de tag de OSM -> valor o lista de valores. */
+  osm_query: Record<string, string | string[]>;
+};
+
+/** Etiquetas crudas de un nodo de OpenStreetMap. */
+type TagsOsm = Record<string, string | undefined>;
+
+function buildOverpassQuery(city: CiudadTransporte, system: SistemaTransporte) {
   const bbox = `${city.bbox_south},${city.bbox_west},${city.bbox_north},${city.bbox_east}`;
   const osmQuery = system.osm_query;
   const queries = [];
@@ -282,7 +312,7 @@ function buildOverpassQuery(city, system) {
   }
   return `[out:json][timeout:25];(${queries.join('')});out body;>;out skel qt;`;
 }
-function buildAddress(tags, city) {
+function buildAddress(tags: TagsOsm, city: CiudadTransporte) {
   const parts = [];
   if (tags['addr:street']) {
     parts.push(tags['addr:street']);
@@ -297,7 +327,7 @@ function buildAddress(tags, city) {
   parts.push(city.state);
   return parts.join(', ');
 }
-function buildAliases(tags) {
+function buildAliases(tags: TagsOsm) {
   const aliases = [];
   if (tags['alt_name']) {
     aliases.push(tags['alt_name']);
@@ -316,7 +346,7 @@ function buildAliases(tags) {
   }
   return aliases;
 }
-function buildDescription(tags, system) {
+function buildDescription(tags: TagsOsm, system: SistemaTransporte) {
   const parts = [
     system.name
   ];

@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import { isConfigured, getCharge, getChargeMerchant } from "../_shared/openpay.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -186,7 +187,7 @@ Deno.serve(async (req: Request) => {
           if (webhookEventId) {
             await supabase.from("openpay_webhook_events").update({
               processing_status: "requiere_conciliacion_manual",
-              processing_error: `API verification failed: ${verifyErr.message}`,
+              processing_error: `API verification failed: ${mensajeDeError(verifyErr)}`,
               processed_at: new Date().toISOString(),
             }).eq("id", webhookEventId);
           }
@@ -752,7 +753,7 @@ Deno.serve(async (req: Request) => {
       if (webhookEventId) {
         await supabase.from("openpay_webhook_events").update({
           processing_status: "requiere_conciliacion_manual",
-          processing_error: `API verification failed: ${verifyErr.message}`,
+          processing_error: `API verification failed: ${mensajeDeError(verifyErr)}`,
           processed_at: new Date().toISOString(),
         }).eq("id", webhookEventId);
       }
@@ -883,7 +884,7 @@ Deno.serve(async (req: Request) => {
         console.error("Accounting entry failed for topup", topup.id, ":", acctError.message);
       }
     } catch (acctErr) {
-      console.error("Accounting entry exception for topup", topup.id, ":", acctErr.message);
+      console.error("Accounting entry exception for topup", topup.id, ":", mensajeDeError(acctErr));
     }
 
     if (webhookEventId) {
@@ -909,7 +910,7 @@ Deno.serve(async (req: Request) => {
     if (webhookEventId) {
       await supabase.from("openpay_webhook_events").update({
         processing_status: "error",
-        processing_error: `Unexpected error: ${err.message}`,
+        processing_error: `Unexpected error: ${mensajeDeError(err)}`,
         processed_at: new Date().toISOString(),
       }).eq("id", webhookEventId);
     }

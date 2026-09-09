@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.108.2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -122,7 +123,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: err.message || "Error interno del servidor" }),
+      JSON.stringify({ error: mensajeDeError(err) || "Error interno del servidor" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

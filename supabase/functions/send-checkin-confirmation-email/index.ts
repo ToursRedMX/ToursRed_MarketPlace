@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -310,7 +311,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: "Error interno del servidor", details: error.message }),
+      JSON.stringify({ error: "Error interno del servidor", details: mensajeDeError(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -5,6 +5,7 @@ import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 import { verificarCoberturaDePago } from "../_shared/coberturaDePago.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 // Se nombra el tipo del cliente para no sumar mas `any` a un archivo que ya
 // tiene varios. Se importa en vez de derivarlo con ReturnType<typeof
@@ -75,7 +76,7 @@ async function getStripeProcessorFee(stripe: any, paymentIntentId: string): Prom
       return { fee, net };
     }
   } catch (e) {
-    console.error('Error fetching Stripe processor fee:', e.message);
+    console.error('Error fetching Stripe processor fee:', mensajeDeError(e));
   }
   return null;
 }
@@ -299,12 +300,12 @@ Deno.serve(async (req) => {
         event = await stripe.webhooks.constructEventAsync(body, signature, endpointSecret);
         console.log("✅ Webhook signature verified successfully");
       } catch (err) {
-        console.error(`❌ Webhook signature verification failed: ${err.message}`);
+        console.error(`❌ Webhook signature verification failed: ${mensajeDeError(err)}`);
         console.log("💡 Tip: Make sure STRIPE_WEBHOOK_SECRET matches the secret from your Stripe dashboard");
         return new Response(
           JSON.stringify({
             success: false,
-            error: `Webhook Error: ${err.message}`,
+            error: `Webhook Error: ${mensajeDeError(err)}`,
             hint: "Check that STRIPE_WEBHOOK_SECRET is correctly configured"
           }),
           {
@@ -358,7 +359,7 @@ Deno.serve(async (req) => {
 
         return { type: paymentMethodType, cardFunding: null };
       } catch (error) {
-        console.error(`Error retrieving payment method: ${error.message}`);
+        console.error(`Error retrieving payment method: ${mensajeDeError(error)}`);
         return { type: 'unknown', cardFunding: null };
       }
     };
@@ -1830,7 +1831,7 @@ Deno.serve(async (req) => {
             else paymentMethodType = rawType;
           }
         } catch (error) {
-          console.error(`Error retrieving payment method: ${error.message}`);
+          console.error(`Error retrieving payment method: ${mensajeDeError(error)}`);
        }
 
         if (transactionType === 'gift_card' && giftCardId) {
@@ -3274,7 +3275,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Unknown error'
+        error: mensajeDeError(error) || 'Unknown error'
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

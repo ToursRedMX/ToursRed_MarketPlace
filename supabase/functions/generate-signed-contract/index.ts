@@ -7,6 +7,7 @@ import { buildSignedContractDocDefinition } from "../_shared/contractDocDefiniti
 import type { ContractData, AnexoBData } from "../_shared/contractDocDefinition.ts";
 import { envRequerida } from "../_shared/env.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -30,10 +31,25 @@ const fonts = {
     bolditalics: Buffer.from(ROBOTO_BOLDITALICS_B64, "base64")
   }
 };
-async function pdfDocToBytes(pdfDoc) {
-  const chunks = [];
-  return new Promise((resolve, reject)=>{
-    pdfDoc.on("data", (chunk)=>chunks.push(chunk));
+/**
+ * Superficie del documento de pdfkit que devuelve printer.createPdfKitDocument.
+ * Solo se usan estos tres metodos; pedir el tipo completo obligaria a traer los
+ * tipos de pdfkit, que este bundle no carga.
+ */
+type DocumentoPdf = {
+  on(evento: "data", cb: (chunk: Uint8Array) => void): unknown;
+  on(evento: "error", cb: (err: unknown) => void): unknown;
+  on(evento: "end", cb: () => void): unknown;
+  end(): void;
+};
+
+// El Promise no llevaba parametro de tipo, asi que pdfBytes salia `unknown` y
+// contagiaba tres errores mas abajo: el upload a Storage (que espera FileBody)
+// y los dos `pdfBytes.length`.
+async function pdfDocToBytes(pdfDoc: DocumentoPdf): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  return new Promise<Uint8Array>((resolve, reject)=>{
+    pdfDoc.on("data", (chunk: Uint8Array)=>chunks.push(chunk));
     pdfDoc.on("error", reject);
     pdfDoc.on("end", ()=>{
       const totalLen = chunks.reduce((acc, c)=>acc + c.length, 0);
@@ -48,7 +64,7 @@ async function pdfDocToBytes(pdfDoc) {
     pdfDoc.end();
   });
 }
-async function sha256Hex(bytes) {
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(buf)).map((b)=>b.toString(16).padStart(2, "0")).join("");
 }
@@ -199,7 +215,7 @@ Deno.serve(async (req)=>{
     }
     return new Response(JSON.stringify({
       error: "Error interno del servidor",
-      detail: String(err?.message || err)
+      detail: mensajeDeError(err)
     }), {
       status: 500,
       headers: {

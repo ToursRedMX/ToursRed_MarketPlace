@@ -7,6 +7,7 @@ import {
   createCodiCharge,
 } from "../_shared/openpay.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -197,11 +198,11 @@ Deno.serve(async (req: Request) => {
     } catch (err) {
       await supabase.from("openpay_wallet_topups").update({
         status: "failed",
-        error_message: err.message,
+        error_message: mensajeDeError(err),
       }).eq("id", topupId);
 
       return new Response(
-        JSON.stringify({ error: err.message }),
+        JSON.stringify({ error: mensajeDeError(err) }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -253,11 +254,11 @@ Deno.serve(async (req: Request) => {
       await supabase.from("openpay_wallet_topups").update({
         openpay_customer_id: customerId,
         status: "failed",
-        error_message: err.message,
+        error_message: mensajeDeError(err),
       }).eq("id", topupId);
 
       return new Response(
-        JSON.stringify({ error: err.message }),
+        JSON.stringify({ error: mensajeDeError(err) }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

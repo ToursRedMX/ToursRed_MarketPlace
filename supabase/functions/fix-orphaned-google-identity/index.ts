@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 import { envRequerida } from "../_shared/env.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -80,7 +81,7 @@ Deno.serve(async (req)=>{
     }
     return new Response(JSON.stringify({
       success: false,
-      error: err.message
+      error: mensajeDeError(err)
     }), {
       status: 500,
       headers: {

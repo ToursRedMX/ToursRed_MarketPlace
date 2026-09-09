@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.39.6';
 import Stripe from 'npm:stripe@22.3.0';
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -222,7 +223,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: error.message || 'Failed to manage subscription' }),
+      JSON.stringify({ error: mensajeDeError(error) || 'Failed to manage subscription' }),
       {
         status: 400,
         headers: {

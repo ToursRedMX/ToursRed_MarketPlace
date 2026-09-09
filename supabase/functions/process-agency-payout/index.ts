@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9";
 import { envRequerida } from "../_shared/env.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -155,7 +156,7 @@ Deno.serve(async (req)=>{
     }
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || 'Internal server error'
+      error: mensajeDeError(error) || 'Internal server error'
     }), {
       status: 400,
       headers: {
