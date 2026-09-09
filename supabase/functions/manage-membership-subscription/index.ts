@@ -18,7 +18,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 200,
@@ -211,6 +211,21 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    // Inalcanzable hoy: el guard de arriba ya rechaza cualquier action que no
+    // sea cancel/reactivate/upgrade. Se deja porque sin este return el handler
+    // terminaba sin devolver nada si alguien agrega una accion a la lista y
+    // olvida su rama, y Deno responde a un undefined con un 500 pelado.
+    return new Response(
+      JSON.stringify({ error: `Acción no soportada: ${action}` }),
+      {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
   } catch (error) {
     console.error('Error managing membership subscription:', error);
     if (sentryDsn) {

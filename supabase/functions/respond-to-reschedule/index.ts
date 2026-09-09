@@ -17,7 +17,7 @@ if (sentryDsn) {
   });
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
@@ -414,6 +414,25 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    // Sin este else, un `response` que no fuera "accepted" ni "rejected" caia
+    // al final del handler sin devolver nada. La validacion de arriba solo
+    // comprueba `!response`, asi que cualquier otro texto llegaba hasta aqui:
+    // Deno recibia undefined en vez de una Response y contestaba un 500 pelado,
+    // sin JSON y sin explicacion.
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'El campo "response" debe ser "accepted" o "rejected"',
+      }),
+      {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
   } catch (error: any) {
     console.error("❌❌❌ ERROR GENERAL:", error);

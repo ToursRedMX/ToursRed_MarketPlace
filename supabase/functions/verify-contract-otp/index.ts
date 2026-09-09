@@ -34,7 +34,9 @@ async function hashOtp(otp: string): Promise<string> {
 }
 
 // deno-lint-ignore no-explicit-any
-async function pdfDocToBytes(pdfDoc: any): Promise<Uint8Array> {
+// Uint8Array<ArrayBuffer>: el default generico es ArrayBufferLike y
+// crypto.subtle.digest pide BufferSource, que exige ArrayBuffer.
+async function pdfDocToBytes(pdfDoc: any): Promise<Uint8Array<ArrayBuffer>> {
   const chunks: Uint8Array[] = [];
   return new Promise((resolve, reject) => {
     pdfDoc.on("data",  (chunk: Uint8Array) => chunks.push(chunk));
@@ -225,7 +227,7 @@ Deno.serve(async (req: Request) => {
     // ── Generación de PDF, hash y subida a Storage ───────────────────────────
     // TODO en un solo try/catch. Si algo falla aquí, NO se actualiza
     // contract_acceptances.status ni agencies.onboarding_status.
-    let pdfBytes: Uint8Array;
+    let pdfBytes: Uint8Array<ArrayBuffer>;
     let documentHash: string;
     let storagePath: string;
 

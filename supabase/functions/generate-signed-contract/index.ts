@@ -46,9 +46,9 @@ type DocumentoPdf = {
 // El Promise no llevaba parametro de tipo, asi que pdfBytes salia `unknown` y
 // contagiaba tres errores mas abajo: el upload a Storage (que espera FileBody)
 // y los dos `pdfBytes.length`.
-async function pdfDocToBytes(pdfDoc: DocumentoPdf): Promise<Uint8Array> {
+async function pdfDocToBytes(pdfDoc: DocumentoPdf): Promise<Uint8Array<ArrayBuffer>> {
   const chunks: Uint8Array[] = [];
-  return new Promise<Uint8Array>((resolve, reject)=>{
+  return new Promise<Uint8Array<ArrayBuffer>>((resolve, reject)=>{
     pdfDoc.on("data", (chunk: Uint8Array)=>chunks.push(chunk));
     pdfDoc.on("error", reject);
     pdfDoc.on("end", ()=>{
@@ -64,7 +64,9 @@ async function pdfDocToBytes(pdfDoc: DocumentoPdf): Promise<Uint8Array> {
     pdfDoc.end();
   });
 }
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
+// Uint8Array<ArrayBuffer>: el default generico es ArrayBufferLike y
+// crypto.subtle.digest pide BufferSource, que exige un ArrayBuffer de verdad.
+async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(buf)).map((b)=>b.toString(16).padStart(2, "0")).join("");
 }

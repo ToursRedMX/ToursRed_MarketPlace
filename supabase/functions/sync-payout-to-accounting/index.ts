@@ -8,6 +8,35 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Forma real de la fila del .select() de abajo. `agencies` y el `users` anidado
+// son embeds to-one (agency_id y agencies.user_id son FKs), asi que PostgREST
+// devuelve objetos; supabase-js los infiere como arreglo. Antes se corregia con
+// un `as {...}` sobre payout.agencies, que TS marcaba como conversion insegura
+// (TS2352) porque el tipo de origen era un arreglo. Es la MISMA forma de antes,
+// solo que declarada donde se hace la consulta y no despues.
+type PayoutContable = {
+  id: string;
+  amount: number;
+  platform_commission_amount: number | null;
+  net_amount: number | null;
+  status: string;
+  created_at: string;
+  payment_date: string;
+  notes: string | null;
+  payout_code: string | null;
+  bank_reference: string | null;
+  bill_number: string | null;
+  agencies: {
+    id: string;
+    user_id: string;
+    rfc?: string;
+    razon_social?: string;
+    regimen_fiscal?: string;
+    postal_code?: string;
+    users: { email?: string; first_name?: string; last_name?: string } | null;
+  } | null;
+};
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -85,6 +114,7 @@ Deno.serve(async (req: Request) => {
           users (email, first_name, last_name))
       `)
       .eq("id", payout_id)
+      .returns<PayoutContable[]>()
       .maybeSingle();
 
     if (error || !payout) {
@@ -93,10 +123,17 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const agency = payout.agencies as {
-      id: string; user_id: string; rfc?: string; razon_social?: string; regimen_fiscal?: string; postal_code?: string;
-      users: { email?: string; first_name?: string; last_name?: string };
-    };
+    const agency = payout.agencies;
+
+    // El `as {...}` que habia aqui afirmaba de paso que la agencia siempre
+    // viene; PostgREST devuelve null en el embed si la fila no esta visible.
+    // Sin la agencia no hay contacto contable que crear, asi que se corta con
+    // un mensaje en vez de reventar mas abajo en `agency.id`.
+    if (!agency) {
+      return new Response(JSON.stringify({ error: "Payout sin agencia asociada" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const { data: existingAgencyLog } = await supabase
       .from("accounting_sync_log")
@@ -139,7 +176,7 @@ Deno.serve(async (req: Request) => {
     const grossAmount = totalPayout + commissionAmount;
     const reference = payout.payout_code || payout.bank_reference || payout_id;
     // bill_number es el número de factura proveedor para Zoho Books — evita errores de formato
-    const billNumber = (payout as any).bill_number || null;
+    const billNumber = payout.bill_number || null;
 
     const journalRes = await supabase.functions.invoke("sync-to-accounting", {
       body: {

@@ -100,7 +100,12 @@ ${polizas.join("\n")}
 }
 
 // Simple ZIP builder (stored, no compression) usando Web APIs
-async function buildZip(files: { name: string; content: string }[]): Promise<Uint8Array> {
+// Uint8Array<ArrayBuffer>, no Uint8Array a secas: desde que el tipo es
+// generico, el default es Uint8Array<ArrayBufferLike> y BodyInit exige que el
+// buffer sea un ArrayBuffer de verdad, asi que `new Response(zipBytes)` no
+// compilaba. Todos los buffers de aqui salen de `new Uint8Array(n)`, que ya es
+// Uint8Array<ArrayBuffer>; solo faltaba decirlo.
+async function buildZip(files: { name: string; content: string }[]): Promise<Uint8Array<ArrayBuffer>> {
   const encoder = new TextEncoder();
   const localHeaders: Uint8Array[] = [];
   const centralHeaders: Uint8Array[] = [];
@@ -179,7 +184,7 @@ async function buildZip(files: { name: string; content: string }[]): Promise<Uin
   const centralStart = offset;
   const centralSize = centralHeaders.reduce((s, a) => s + a.length, 0);
 
-  function concat2(...arrays: Uint8Array[]): Uint8Array {
+  function concat2(...arrays: Uint8Array[]): Uint8Array<ArrayBuffer> {
     const len = arrays.reduce((s, a) => s + a.length, 0);
     const out = new Uint8Array(len);
     let pos = 0;

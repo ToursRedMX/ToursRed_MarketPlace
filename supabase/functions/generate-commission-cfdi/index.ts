@@ -11,6 +11,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Forma real de la fila del .select() del payout. `agencies` es un embed
+// to-one (agency_id es FK), asi que PostgREST devuelve un objeto, pero
+// supabase-js lo infiere como arreglo. Antes se corregia con un `as {...}`
+// despues de la consulta, que TS marcaba como conversion insegura (TS2352)
+// porque el origen era un arreglo. Misma forma, declarada donde toca.
+type PayoutComision = {
+  id: string;
+  net_amount: number | null;
+  platform_commission_amount: number | null;
+  payout_code: string | null;
+  agencies: {
+    id: string;
+    rfc?: string;
+    razon_social?: string;
+    regimen_fiscal?: string;
+    postal_code?: string;
+  } | null;
+};
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -175,6 +194,7 @@ Deno.serve(async (req: Request) => {
         agencies (id, rfc, razon_social, regimen_fiscal, postal_code)
       `)
       .eq("id", payout_id)
+      .returns<PayoutComision[]>()
       .maybeSingle();
 
     if (payoutError || !payout) {
@@ -205,13 +225,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const agency = payout.agencies as {
-      id: string;
-      rfc?: string;
-      razon_social?: string;
-      regimen_fiscal?: string;
-      postal_code?: string;
-    };
+    const agency = payout.agencies;
 
     if (!agency?.rfc || !agency?.razon_social) {
       return new Response(

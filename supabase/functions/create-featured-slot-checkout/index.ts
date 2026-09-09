@@ -19,6 +19,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Forma real de la fila del .select() del slot. Los tres embeds son to-one
+// (plan_id, agency_id y tour_id son FKs), asi que PostgREST devuelve un objeto,
+// pero supabase-js los infiere como arreglo. Antes se tapaba con
+// `as Record<string, unknown>`, que ademas de ser una conversion insegura
+// (TS2352) obligaba a un segundo cast en cada lectura: `plan?.price as number`.
+type SlotDestacado = {
+  id: string;
+  agency_id: string;
+  plan_id: string;
+  status: string;
+  total_amount: number | null;
+  featured_plans: { name: string; price: number } | null;
+  agencies: { name: string; user_id: string } | null;
+  tours: { name: string } | null;
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -72,6 +88,7 @@ Deno.serve(async (req: Request) => {
       `)
       .eq("id", slot_id)
       .eq("status", "pending_payment")
+      .returns<SlotDestacado[]>()
       .maybeSingle();
 
     if (slotErr || !slot) {
@@ -82,19 +99,19 @@ Deno.serve(async (req: Request) => {
     }
 
     // Ensure the calling user belongs to this agency
-    const agency = slot.agencies as Record<string, unknown>;
-    if ((agency?.user_id as string) !== user.id) {
+    const agency = slot.agencies;
+    if (agency?.user_id !== user.id) {
       return new Response(
         JSON.stringify({ error: "Forbidden" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const plan = slot.featured_plans as Record<string, unknown>;
-    const tour = slot.tours as Record<string, unknown>;
-    const baseAmount = Number(slot.total_amount ?? (plan?.price as number) ?? 0);
-    const planName = (plan?.name as string) ?? "Plan Destacado";
-    const tourName = (tour?.name as string) ?? "Tour";
+    const plan = slot.featured_plans;
+    const tour = slot.tours;
+    const baseAmount = Number(slot.total_amount ?? plan?.price ?? 0);
+    const planName = plan?.name ?? "Plan Destacado";
+    const tourName = tour?.name ?? "Tour";
     const description = `Tour Destacado — ${tourName} (${planName})`;
 
     // Apply discount code if provided
