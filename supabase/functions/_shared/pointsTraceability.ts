@@ -1,5 +1,13 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
+// Solo se usa .from(). Pedir el SupabaseClient completo obligaba a que los
+// parametros genericos coincidieran exactamente: los llamadores construyen su
+// cliente con createClient(url, key), que infiere SupabaseClient<any, ...>,
+// mientras que el tipo sin argumentos usa los valores por defecto (unknown en
+// las versiones nuevas) — y any no es asignable a unknown en esa posicion.
+// Mismo patron que ZohoClient en zohoAccessToken.ts y AdminClient en cfdiAuth.ts.
+export type PointsClient = Pick<SupabaseClient, "from">;
+
 const CHARGE_CONTEXT_TO_REFERENCE_TYPE: Record<string, string> = {
   booking_deposit: "booking",
   payment_plan_installment: "payment_plan",
@@ -22,7 +30,7 @@ const CHARGE_CONTEXT_TO_REFERENCE_TYPE: Record<string, string> = {
  * @param cancellationLabel  "administrativa" | "self-service" | "automatica" — used in description text
  */
 export async function markPointsAsClawedBack(
-  supabase: SupabaseClient,
+  supabase: PointsClient,
   bookingId: string,
   cancellationId: string | null,
   cancellationLabel: "administrativa" | "self-service" | "automatica",

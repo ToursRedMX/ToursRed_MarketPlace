@@ -1,11 +1,16 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9";
 
 async function cancelStampedCfds(
-  supabase: ReturnType<typeof createClient>,
+  // Solo se usan .from() y .functions.invoke(). Pedir el cliente completo
+  // exigia que los genericos coincidieran exactamente con los del cliente que
+  // se pasa, y no coincidian: createClient(url, key) infiere
+  // SupabaseClient<any, ...> y el tipo sin argumentos usa los valores por
+  // defecto. Mismo patron que ZohoClient en zohoAccessToken.ts.
+  supabase: Pick<SupabaseClient, "from" | "functions">,
   bookingId: string,
   cancellationId: string
 ): Promise<void> {

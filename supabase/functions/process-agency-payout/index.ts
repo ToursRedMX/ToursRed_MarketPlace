@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { envRequerida } from "../_shared/env.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -25,7 +26,7 @@ Deno.serve(async (req)=>{
     });
   }
   try {
-    const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    const supabase = createClient(envRequerida("SUPABASE_URL"), envRequerida("SUPABASE_SERVICE_ROLE_KEY"));
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       throw new Error("No authorization header");
@@ -44,7 +45,7 @@ Deno.serve(async (req)=>{
     // not the service-role client: requires_aal2_check()/has_aal2() read auth.uid()/
     // auth.jwt(), which resolve to NULL under a service-role session and silently
     // no-op the check.
-    const userClient = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_ANON_KEY"), {
+    const userClient = createClient(envRequerida("SUPABASE_URL"), envRequerida("SUPABASE_ANON_KEY"), {
       global: { headers: { Authorization: authHeader } }
     });
     const aal2 = await checkAal2Required(userClient);
@@ -110,11 +111,11 @@ Deno.serve(async (req)=>{
         }
       ]);
       try {
-        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-payout-notification`, {
+        await fetch(`${envRequerida("SUPABASE_URL")}/functions/v1/send-payout-notification`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+            'Authorization': `Bearer ${envRequerida("SUPABASE_SERVICE_ROLE_KEY")}`
           },
           body: JSON.stringify({
             payout_id: payoutId,

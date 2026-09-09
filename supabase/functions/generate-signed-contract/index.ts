@@ -5,6 +5,7 @@ import { Buffer } from "node:buffer";
 import { ROBOTO_NORMAL_B64, ROBOTO_BOLD_B64, ROBOTO_ITALICS_B64, ROBOTO_BOLDITALICS_B64 } from "../_shared/robotoFonts.ts";
 import { buildSignedContractDocDefinition } from "../_shared/contractDocDefinition.ts";
 import type { ContractData, AnexoBData } from "../_shared/contractDocDefinition.ts";
+import { envRequerida } from "../_shared/env.ts";
 import * as Sentry from "npm:@sentry/deno@9";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
@@ -64,7 +65,7 @@ Deno.serve(async (req)=>{
       status: 401,
       headers: corsHeaders
     });
-    const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    const supabase = createClient(envRequerida("SUPABASE_URL"), envRequerida("SUPABASE_SERVICE_ROLE_KEY"));
     const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authErr || !user) return new Response(JSON.stringify({
       error: "No autorizado"

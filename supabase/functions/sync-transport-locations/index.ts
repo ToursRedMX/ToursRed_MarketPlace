@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.39.6';
 import * as Sentry from "npm:@sentry/deno@9";
+import { envRequerida } from "../_shared/env.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -22,8 +23,8 @@ Deno.serve(async (req)=>{
     });
   }
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseUrl = envRequerida('SUPABASE_URL');
+    const supabaseServiceKey = envRequerida('SUPABASE_SERVICE_ROLE_KEY');
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     // Verify admin access
     const authHeader = req.headers.get('Authorization');

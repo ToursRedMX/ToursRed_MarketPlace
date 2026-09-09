@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
@@ -30,7 +30,10 @@ async function sendOtpEmail(
   email: string,
   otp: string,
   folio: string,
-  supabase: ReturnType<typeof createClient>
+  // Solo se usa .from(). `ReturnType<typeof createClient>` exige que los
+  // genericos coincidan exactamente con los del cliente que se pasa, y no
+  // coincidian. Mismo patron que ZohoClient en zohoAccessToken.ts.
+  supabase: Pick<SupabaseClient, "from">
 ): Promise<void> {
   const { data: emailSettings } = await supabase
     .from("email_settings")
