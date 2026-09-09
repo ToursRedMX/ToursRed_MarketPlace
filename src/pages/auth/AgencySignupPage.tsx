@@ -22,6 +22,7 @@ const AgencySignupPage: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const { turnstileEnabled } = useTurnstileEnabled();
   const [activeTermsVersion, setActiveTermsVersion] = useState<{ version_number: number; published_at: string } | null>(null);
   const [formData, setFormData] = useState<AgencyFormData>(defaultAgencyFormData);
@@ -193,6 +194,13 @@ const AgencySignupPage: React.FC = () => {
     } catch (err: any) {
       setError(err.message || 'Ocurrió un error durante el registro');
     } finally {
+      // El token de Turnstile es de un solo uso y Supabase lo manda a
+      // siteverify ANTES de mirar las credenciales, asi que un intento fallido
+      // lo gasta. Sin esto, el token quemado se quedaba en el estado y el
+      // siguiente intento lo reenviaba. Cambiar el `key` remonta el widget y
+      // emite uno nuevo.
+      setTurnstileToken('');
+      setCaptchaAttempt(value => value + 1);
       setIsLoading(false);
     }
   };
@@ -218,6 +226,7 @@ const AgencySignupPage: React.FC = () => {
       submitLabel="Registrar Agencia"
       turnstileToken={turnstileEnabled ? turnstileToken : ''}
       onTurnstileToken={turnstileEnabled ? setTurnstileToken : undefined}
+      captchaAttempt={captchaAttempt}
     />
   );
 };

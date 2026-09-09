@@ -96,6 +96,12 @@ interface Props {
   submitLabel?: string;
   turnstileToken?: string;
   onTurnstileToken?: (token: string) => void;
+  /**
+   * Contador que remonta el widget de Turnstile. El token es de un solo uso y
+   * un intento fallido lo gasta, asi que el padre lo incrementa al cerrar cada
+   * intento para que se emita uno nuevo. Sin esto se reenvia el token quemado.
+   */
+  captchaAttempt?: number;
 }
 
 const inputClass =
@@ -122,6 +128,7 @@ const AgencySignupFormBody: React.FC<Props> = ({
   submitLabel,
   turnstileToken,
   onTurnstileToken,
+  captchaAttempt,
 }) => {
   const identifierUnavailable =
     curpAvailability.isAvailable === false ||
@@ -664,7 +671,7 @@ const AgencySignupFormBody: React.FC<Props> = ({
             {/* ── Turnstile ────────────────────────────────────────────── */}
             {onTurnstileToken && (
               <div className="flex justify-center">
-                <TurnstileWidget onToken={onTurnstileToken} />
+                <TurnstileWidget key={captchaAttempt} onToken={onTurnstileToken} />
               </div>
             )}
 

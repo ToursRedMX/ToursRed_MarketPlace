@@ -63,6 +63,7 @@ const LoginPage: React.FC = () => {
   const [isLinkedinLoading, setIsLinkedinLoading] = useState(false);
   const [ipBlocked, setIpBlocked] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const { turnstileEnabled } = useTurnstileEnabled();
   const [oauthToggles, setOauthToggles] = useState<OAuthToggles>({ google: true, azure: true, x: false, facebook: false, linkedin: false });
   const [passkeysEnabled, setPasskeysEnabled] = useState(false);
@@ -176,6 +177,15 @@ const LoginPage: React.FC = () => {
         recordFailedLogin(err.message ?? 'unknown');
       }
     } finally {
+      // El token de Turnstile es de un solo uso y Supabase lo manda a
+      // siteverify ANTES de mirar las credenciales, asi que un intento fallido
+      // lo gasta. Sin esto, el token quemado se quedaba en el estado y el
+      // siguiente intento lo reenviaba: el usuario corregia su contraseña y
+      // seguia viendo un error de captcha. Cambiar el `key` remonta el widget y
+      // emite uno nuevo — mismo patron que ya usan las tres paginas
+      // internacionales.
+      setTurnstileToken('');
+      setCaptchaAttempt(value => value + 1);
       setIsLoading(false);
     }
   };
@@ -326,7 +336,7 @@ const LoginPage: React.FC = () => {
 
             {(turnstileEnabled || turnstileToken) && (
               <div className="flex justify-center">
-                <TurnstileWidget onToken={setTurnstileToken} />
+                <TurnstileWidget key={captchaAttempt} onToken={setTurnstileToken} />
               </div>
             )}
 
@@ -375,6 +385,9 @@ const LoginPage: React.FC = () => {
                     console.error('[passkey] signInWithPasskey failed:', err);
                     setError('No se pudo iniciar sesion con clave de acceso.');
                   } finally {
+                    // Mismo motivo que en handleSubmit: el intento gasta el token.
+                    setTurnstileToken('');
+                    setCaptchaAttempt(value => value + 1);
                     setIsPasskeyLoading(false);
                   }
                 }}
