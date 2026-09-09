@@ -15,11 +15,14 @@ const dsn = import.meta.env.VITE_SENTRY_DSN;
 Sentry.init({
   dsn,
   enabled: !!dsn,
+  environment: import.meta.env.MODE,
+  release: import.meta.env.VITE_SENTRY_RELEASE || undefined,
   tunnel: '/sentry-tunnel',
   integrations: [
     Sentry.browserTracingIntegration(),
     Sentry.replayIntegration({
       maskAllText: true,
+      maskAllInputs: true,
       blockAllMedia: true,
     }),
   ],
@@ -27,13 +30,21 @@ Sentry.init({
   replaysSessionSampleRate: 0.05,
   replaysOnErrorSampleRate: 1.0,
   beforeSend(event) {
+    // Never send credentials or full request payloads to telemetry.
+    if (event.request) {
+      if (event.request.headers) {
+        delete event.request.headers.authorization;
+        delete event.request.headers.cookie;
+        delete event.request.headers.apikey;
+      }
+      delete event.request.data;
+    }
     const IGNORED_PATTERNS = [
       'ResizeObserver loop',
       'chrome-extension://',
       'moz-extension://',
       'safari-extension://',
       'top.GLOBALS',
-      'Non-Error promise rejection captured',
     ];
     const value = event.exception?.values?.[0];
     if (value) {
@@ -41,6 +52,11 @@ Sentry.init({
       for (const pattern of IGNORED_PATTERNS) {
         if (msg.includes(pattern)) return null;
       }
+    }
+    // Normalize unhandled rejections instead of dropping all of them. Only
+    // truly empty values are ignored; rejected promises may contain real bugs.
+    if (event.exception?.values?.[0]?.value === 'Non-Error promise rejection captured') {
+      event.exception.values[0].value = 'Unhandled promise rejection';
     }
     return event;
   },

@@ -13,6 +13,9 @@ if (hasSentryToken) {
       project: process.env.SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,
       telemetry: false,
+      release: process.env.SENTRY_RELEASE
+        ? { name: process.env.SENTRY_RELEASE }
+        : undefined,
       sourcemaps: {
         filesToDeleteAfterUpload: ['dist/**/*.js.map'],
       },

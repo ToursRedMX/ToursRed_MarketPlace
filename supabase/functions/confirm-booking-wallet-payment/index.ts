@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 import { registrarFallo } from "../_shared/falloSilencioso.ts";
+import { reportEdgeError } from "../_shared/sentry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,11 +110,14 @@ Deno.serve(async (req: Request) => {
                 Authorization: `Bearer ${supabaseServiceKey}`,
               },
               body: JSON.stringify({ booking_id: p_booking_id, payment_form: "05" }),
-            }).catch((e) => console.error("Error triggering booking CFDI (wallet):", e))
+            }).catch(async (e) => {
+              await reportEdgeError(e, "trigger-booking-cfdi");
+            })
           );
         }
       } catch (e) {
         console.error("Error resolving CFDI settings (wallet):", e);
+        await reportEdgeError(e, "resolve-cfdi-settings");
       }
 
       EdgeRuntime.waitUntil(
@@ -124,7 +128,9 @@ Deno.serve(async (req: Request) => {
             Authorization: `Bearer ${supabaseServiceKey}`,
           },
           body: JSON.stringify({ booking_id: p_booking_id }),
-        }).catch((e) => console.error("Error syncing booking to accounting (wallet):", e))
+        }).catch(async (e) => {
+          await reportEdgeError(e, "sync-booking-to-accounting");
+        })
       );
     }
 
@@ -150,6 +156,7 @@ Deno.serve(async (req: Request) => {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    await reportEdgeError(err, "handler");
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

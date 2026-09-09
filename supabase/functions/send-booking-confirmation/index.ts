@@ -8,6 +8,7 @@ if (sentryDsn) {
   Sentry.init({
     dsn: sentryDsn,
     environment: Deno.env.get("SUPABASE_URL")?.includes("localhost") ? "development" : "production",
+    release: Deno.env.get("SENTRY_RELEASE"),
     tracesSampleRate: 0.1,
   });
 }
