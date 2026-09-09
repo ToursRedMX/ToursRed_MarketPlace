@@ -346,7 +346,7 @@ Deno.serve(async (req: Request) => {
 
     // Crear asiento contable (fire and forget)
     EdgeRuntime.waitUntil(
-      supabase.rpc("create_accounting_entry_for_featured_slot", { p_slot_id: slot_id }).then(() => {}).then((r: unknown) => vigilarResultado(r, "generate-featured-slot-cfdi -> create_accounting_entry_for_featured_slot")).catch((e: unknown) => registrarFallo("generate-featured-slot-cfdi -> create_accounting_entry_for_featured_slot", e))
+      Promise.resolve(supabase.rpc("create_accounting_entry_for_featured_slot", { p_slot_id: slot_id })).then((r: unknown) => vigilarResultado(r, "generate-featured-slot-cfdi -> create_accounting_entry_for_featured_slot")).catch((e: unknown) => registrarFallo("generate-featured-slot-cfdi -> create_accounting_entry_for_featured_slot", e))
     );
 
     return new Response(

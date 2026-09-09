@@ -72,9 +72,9 @@ Deno.serve(async (req: Request) => {
 
     // Fallback: el filtro .not(...) con subquery no siempre es soportado en client.
     // Usamos SQL directo para mayor fiabilidad.
-    const { data: orphanRows, error: sqlError } = await supabaseAdmin.rpc(
+    const { data: orphanRows, error: sqlError } = await Promise.resolve(supabaseAdmin.rpc(
       "exec_sql_get_orphan_agencies" as never
-    ).catch(() => ({ data: null, error: { message: "rpc_not_found" } }));
+    )).catch(() => ({ data: null, error: { message: "rpc_not_found" } }));
 
     let orphanList: { id: string; email: string; created_at: string }[] = [];
 

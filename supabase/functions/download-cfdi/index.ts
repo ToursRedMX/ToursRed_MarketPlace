@@ -116,18 +116,25 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { data: settings } = await supabaseAdmin
+    const { data: settings, error: settingsError } = await supabaseAdmin
       .from("platform_settings")
       .select("pac_organization_id")
       .maybeSingle();
 
-    const { data: secrets } = await supabaseAdmin
+    const { data: secrets, error: secretsError } = await supabaseAdmin
       .from("platform_secrets")
       .select("pac_api_key_encrypted")
       .maybeSingle();
     const pacApiKey = secrets?.pac_api_key_encrypted || null;
 
-    if (!pacApiKey) {
+    if (settingsError || secretsError) {
+      return new Response(JSON.stringify({ error: "No se pudo consultar la configuracion del PAC", code: "PAC_CONFIG_UNAVAILABLE" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!settings || !pacApiKey) {
       return new Response(JSON.stringify({ error: "Proveedor PAC no configurado" }), {
         status: 422,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
