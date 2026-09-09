@@ -10,10 +10,22 @@ const source = readFileSync(new URL('../netlify/edge-functions/sentry-tunnel.ts'
 let calls = [];
 let upstreamStatus = 200;
 let upstreamFailure = false;
-const context = { exports: {}, URL, Response, TextDecoder, fetch: async (url, options) => {
+let upstreamBody = '{}';
+let upstreamWait = false;
+let timeoutPhase = 0;
+let phase = 0;
+const context = { exports: {}, URL, Response, Headers, TextDecoder, AbortSignal: {
+  timeout(ms) {
+    assert.equal(ms, 15000);
+    const controller = new AbortController();
+    if (++phase === timeoutPhase) setTimeout(() => controller.abort(new DOMException('Timed out', 'TimeoutError')), 5);
+    return controller.signal;
+  },
+}, fetch: async (url, options) => {
   calls.push({ url, options });
   if (upstreamFailure) throw new TypeError('Network failure or redirect rejected');
-  return new Response('{}', { status: upstreamStatus });
+  if (upstreamWait) await new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true }));
+  return new Response(upstreamBody, { status: upstreamStatus, headers: { 'Retry-After': '60', 'X-Sentry-Rate-Limits': '60:error:organization' } });
 } };
 vm.runInNewContext(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -50,6 +62,8 @@ for (const status of [200, 202, 429, 500]) {
   const response = await send(binary);
   assert.equal(response.status, status);
   assert.equal(await response.text(), '{}');
+  assert.equal(response.headers.get('Retry-After'), '60');
+  assert.equal(response.headers.get('X-Sentry-Rate-Limits'), '60:error:organization');
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, `https://${host}/api/${project}/envelope/`);
   assert.equal(calls[0].options.method, 'POST');
@@ -61,4 +75,65 @@ calls = [];
 upstreamFailure = true;
 assert.equal((await send(binary)).status, 502);
 assert.equal(calls.length, 1, 'No fallback destination or retry');
-console.log(`Sentry tunnel: ${invalid.length + 5} cases passed; no real network requests.`);
+upstreamFailure = false;
+upstreamStatus = 200;
+let extra = 0;
+for (const method of ['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']) {
+  calls = [];
+  const response = await handler(new Request('https://example.test', { method }));
+  assert.equal(response.status, 405);
+  assert.equal(response.headers.get('Allow'), 'POST');
+  assert.equal(calls.length, 0);
+  extra++;
+}
+const max = 20 * 1024 * 1024;
+for (const [body, length, expected] of [
+  [binary, String(max + 1), 413], [binary, 'bad', 400],
+  [Buffer.alloc(max + 1), null, 413], [Buffer.alloc(max + 1), '1', 413],
+  [Buffer.alloc(8193, 32), null, 413],
+  [envelope({ dsn }, Buffer.alloc(max - envelope({ dsn }, Buffer.alloc(0)).length)), null, 200],
+]) {
+  calls = [];
+  const response = await handler(new Request('https://example.test', {
+    method: 'POST', body, headers: length === null ? {} : { 'Content-Length': length },
+  }));
+  assert.equal(response.status, expected);
+  assert.equal(calls.length, expected === 200 ? 1 : 0);
+  extra++;
+}
+// Streams are bounded even without a length header; cancellation stops the producer.
+for (const mode of ['oversize', 'broken', 'stalled']) {
+  let cancelled = false;
+  let reads = 0;
+  phase = 0;
+  timeoutPhase = mode === 'stalled' ? 1 : 0;
+  const stream = new ReadableStream({
+    pull(controller) {
+      reads++;
+      if (mode === 'broken') controller.error(new Error('upload failed'));
+      else if (mode === 'oversize') controller.enqueue(new Uint8Array(1024 * 1024));
+    },
+    cancel() { cancelled = true; },
+  });
+  calls = [];
+  const response = await handler(new Request('https://example.test', { method: 'POST', body: stream, duplex: 'half' }));
+  assert.equal(response.status, mode === 'oversize' ? 413 : mode === 'stalled' ? 408 : 400);
+  assert.equal(calls.length, 0);
+  if (mode !== 'broken') assert.equal(cancelled, true);
+  if (mode === 'oversize') assert.ok(reads <= 23);
+  extra++;
+}
+for (const duringBody of [false, true]) {
+  phase = 0;
+  timeoutPhase = 2;
+  upstreamWait = !duringBody;
+  upstreamBody = duringBody ? new ReadableStream({ pull() {} }) : '{}';
+  assert.equal((await send(binary)).status, 504);
+  extra++;
+}
+timeoutPhase = 0;
+upstreamWait = false;
+upstreamBody = Buffer.alloc(64 * 1024 + 1);
+assert.equal((await send(binary)).status, 502);
+extra++;
+console.log(`Sentry tunnel: ${invalid.length + 5 + extra} cases passed; no real network requests.`);
