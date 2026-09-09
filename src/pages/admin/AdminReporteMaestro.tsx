@@ -106,6 +106,11 @@ const AdminReporteMaestro: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
+    // Cada bloque de abajo suma una categoria (reservas, membresias, tarjetas
+    // de regalo, suplementos...) al mismo arreglo `collected`, y de ahi salen
+    // los totales y el export a Excel. Si una consulta falla en silencio, esa
+    // categoria desaparece y el reporte se ve completo con la cifra
+    // equivocada: por eso todas lanzan y preferimos no mostrar reporte.
     const collected: MasterRow[] = [];
 
     try {
@@ -114,13 +119,14 @@ const AdminReporteMaestro: React.FC = () => {
 
       // 1. Reservas pagadas
       if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: bookings } = await supabase
+        const { data: bookings, error: errorBookings } = await supabase
           .from('bookings')
           .select('id, booking_code, paid_at, total_price, platform_revenue, service_charge, travel_insurance_cost, travel_insurance_included, payment_method, agencies(name), tours(name)')
           .eq('payment_status', 'succeeded')
           .gte('paid_at', desde)
           .lte('paid_at', hasta)
           .order('paid_at', { ascending: false });
+        if (errorBookings) throw errorBookings;
 
         (bookings ?? []).forEach((b: any) => {
           collected.push({
@@ -167,12 +173,13 @@ const AdminReporteMaestro: React.FC = () => {
 
       // 2. Membresías
       if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: mems } = await supabase
+        const { data: mems, error: errorMems } = await supabase
           .from('memberships')
           .select('id, plan_type, price_paid, renewal_amount, start_date, users(first_name, last_name, email)')
           .gte('start_date', desde)
           .lte('start_date', hasta)
           .order('start_date', { ascending: false });
+        if (errorMems) throw errorMems;
 
         (mems ?? []).forEach((m: any) => {
           const amount = Number(m.price_paid ?? m.renewal_amount ?? 0);
@@ -193,13 +200,14 @@ const AdminReporteMaestro: React.FC = () => {
 
       // 3. Tarjetas de regalo
       if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: gcs } = await supabase
+        const { data: gcs, error: errorGcs } = await supabase
           .from('gift_cards')
           .select('id, code, amount, purchased_at, purchaser_name, purchaser_email, payment_provider')
           .eq('payment_status', 'paid')
           .gte('purchased_at', desde)
           .lte('purchased_at', hasta)
           .order('purchased_at', { ascending: false });
+        if (errorGcs) throw errorGcs;
 
         (gcs ?? []).forEach((g: any) => {
           collected.push({
@@ -218,13 +226,14 @@ const AdminReporteMaestro: React.FC = () => {
 
       // 4. Suplementos de reserva (booking_supplements)
       if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: supls } = await supabase
+        const { data: supls, error: errorSupls } = await supabase
           .from('booking_supplements')
           .select('id, total_paid, paid_at, bookings(booking_code, agencies(name)), tour_supplements(name)')
           .eq('status', 'paid')
           .gte('paid_at', desde)
           .lte('paid_at', hasta)
           .order('paid_at', { ascending: false });
+        if (errorSupls) throw errorSupls;
 
         (supls ?? []).forEach((s: any) => {
           const monto = Number(s.total_paid ?? 0);
@@ -244,7 +253,7 @@ const AdminReporteMaestro: React.FC = () => {
 
       // 5. Servicios opcionales de reserva (booking_optional_services)
       if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: opts } = await supabase
+        const { data: opts, error: errorOpts } = await supabase
           .from('booking_optional_services')
           .select('id, subtotal, bookings!inner(booking_code, paid_at, agencies(name)), tour_optional_services(name)')
           .eq('is_cancelled', false)
@@ -252,6 +261,7 @@ const AdminReporteMaestro: React.FC = () => {
           .gte('bookings.paid_at', desde)
           .lte('bookings.paid_at', hasta)
           .order('bookings(paid_at)', { ascending: false });
+        if (errorOpts) throw errorOpts;
 
         (opts ?? []).forEach((o: any) => {
           const monto = Number(o.subtotal ?? 0);
@@ -271,12 +281,13 @@ const AdminReporteMaestro: React.FC = () => {
 
       // 6. Cobros en checkin (wallet_checkin_charges)
       if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: checkins } = await supabase
+        const { data: checkins, error: errorCheckins } = await supabase
           .from('wallet_checkin_charges')
           .select('id, amount_charged, service_charge_applied, created_at, bookings(booking_code, agencies(name), tours(name))')
           .gte('created_at', desde)
           .lte('created_at', hasta)
           .order('created_at', { ascending: false });
+        if (errorCheckins) throw errorCheckins;
 
         (checkins ?? []).forEach((c: any) => {
           const monto = Number(c.amount_charged ?? 0);
@@ -296,13 +307,14 @@ const AdminReporteMaestro: React.FC = () => {
 
       // 7. Tours destacados (ingresos de agencias por posicionamiento)
       if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: featured } = await supabase
+        const { data: featured, error: errorFeatured } = await supabase
           .from('featured_tour_slots')
           .select('id, total_amount, payment_confirmed_at, agencies(name), tours(name), featured_plans(name)')
           .not('payment_confirmed_at', 'is', null)
           .gte('payment_confirmed_at', desde)
           .lte('payment_confirmed_at', hasta)
           .order('payment_confirmed_at', { ascending: false });
+        if (errorFeatured) throw errorFeatured;
 
         (featured ?? []).forEach((f: any) => {
           const monto = Number(f.total_amount ?? 0);
@@ -341,10 +353,11 @@ const AdminReporteMaestro: React.FC = () => {
         // Get totals per entry from lines
         const entryIds = (manualEntries ?? []).map((e: any) => e.id);
         if (entryIds.length > 0) {
-          const { data: lines } = await supabase
+          const { data: lines, error: errorLines } = await supabase
             .from('accounting_entry_lines')
             .select('accounting_entry_id, debit, credit')
             .in('accounting_entry_id', entryIds);
+          if (errorLines) throw errorLines;
 
           const totals: Record<string, { debit: number; credit: number }> = {};
           (lines ?? []).forEach((l: any) => {
@@ -373,12 +386,13 @@ const AdminReporteMaestro: React.FC = () => {
 
       // 9. Pagos a agencias (egresos)
       if (filters.tipo === 'todos' || filters.tipo === 'egreso') {
-        const { data: payouts } = await supabase
+        const { data: payouts, error: errorPayouts } = await supabase
           .from('agency_payouts')
           .select('id, payout_code, payment_date, amount, net_amount, payment_method, agencies(name)')
           .gte('payment_date', desde.substring(0, 10))
           .lte('payment_date', hasta.substring(0, 10))
           .order('payment_date', { ascending: false });
+        if (errorPayouts) throw errorPayouts;
 
         (payouts ?? []).forEach((p: any) => {
           collected.push({
@@ -397,13 +411,14 @@ const AdminReporteMaestro: React.FC = () => {
 
       // 10. Comisiones de ejecutivos (egresos)
       if (filters.tipo === 'todos' || filters.tipo === 'egreso') {
-        const { data: comms } = await supabase
+        const { data: comms, error: errorComms } = await supabase
           .from('executive_commissions')
           .select('id, amount, commission_type, paid_at, created_at, agencies(name), account_executives(first_name, last_name)')
           .eq('status', 'paid')
           .gte('paid_at', desde)
           .lte('paid_at', hasta)
           .order('paid_at', { ascending: false });
+        if (errorComms) throw errorComms;
 
         (comms ?? []).forEach((c: any) => {
           const monto = Number(c.amount ?? 0);
@@ -424,13 +439,14 @@ const AdminReporteMaestro: React.FC = () => {
 
       // 11. Penalidades por cancelacion (ingresos para plataforma)
       if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: penalties } = await supabase
+        const { data: penalties, error: errorPenalties } = await supabase
           .from('cancellation_penalty_records')
           .select('id, platform_amount, gross_penalty, created_at, agencies(name)')
           .in('status', ['paid', 'processed'])
           .gte('created_at', desde)
           .lte('created_at', hasta)
           .order('created_at', { ascending: false });
+        if (errorPenalties) throw errorPenalties;
 
         (penalties ?? []).forEach((p: any) => {
           const monto = Number(p.platform_amount ?? p.gross_penalty ?? 0);
@@ -452,7 +468,9 @@ const AdminReporteMaestro: React.FC = () => {
       collected.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
       setRows(collected);
     } catch (err: any) {
-      setError(err.message ?? 'Error al cargar el reporte');
+      console.error('AdminReporteMaestro: no se pudo armar el reporte', err);
+      setError((err?.message ?? 'Error al cargar el reporte') + ' — el reporte no se muestra porque estaria incompleto.');
+      setRows([]);
     } finally {
       setLoading(false);
     }

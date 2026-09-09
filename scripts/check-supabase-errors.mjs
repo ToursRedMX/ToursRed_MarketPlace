@@ -70,7 +70,9 @@ import { join } from "node:path";
 //        exports a PDF y Excel) y la pantalla de reservas.
 //   120  09-sep: el editor de tours. Ahi una lectura fallida se convertia
 //        en un borrado al guardar.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 120);
+//   109  09-sep: el reporte maestro. Once consultas que suman al mismo
+//        total; cualquiera que falle deja el reporte completo y mal.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 109);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 
