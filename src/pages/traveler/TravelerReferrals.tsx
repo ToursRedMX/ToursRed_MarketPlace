@@ -88,11 +88,14 @@ const TravelerReferralsPage: React.FC = () => {
         const completed = relationshipsResult.data?.filter(r => r.status === 'completed').length || 0;
         const pending = relationshipsResult.data?.filter(r => r.status === 'pending').length || 0;
 
-        const { data: bonusData } = await supabase
+        const { data: bonusData, error: errorBonos } = await supabase
           .from('referral_bonuses')
           .select('points_amount')
           .eq('user_id', user.id)
           .eq('status', 'awarded');
+
+        // Sin esto, los puntos ganados por referidos salen en 0.
+        if (errorBonos) throw errorBonos;
 
         const totalPointsEarned = bonusData?.reduce((sum, b) => sum + b.points_amount, 0) || 0;
 
@@ -141,11 +144,15 @@ const TravelerReferralsPage: React.FC = () => {
 
     setIsCheckingCode(true);
     try {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('referral_codes')
         .select('*', { count: 'exact', head: true })
         .ilike('code', code.trim().toLowerCase())
         .neq('user_id', user?.id || '');
+
+      // `count === 0` ya falla cerrado con count null (marca no disponible),
+      // pero sin rastro no hay forma de saber por que.
+      if (error) console.error('No se pudo comprobar la disponibilidad del codigo de referido:', error);
 
       setCodeAvailable(count === 0);
     } catch {

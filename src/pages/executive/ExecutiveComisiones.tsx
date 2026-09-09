@@ -128,11 +128,15 @@ export default function ExecutiveComisiones() {
     if (!accountExecutiveInfo?.executiveId) return;
     setIsLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('executive_commissions')
         .select('*, agencies(name)')
         .eq('executive_id', accountExecutiveInfo.executiveId)
         .order('created_at', { ascending: false });
+
+      // Una lista vacia le dice al ejecutivo que no le deben nada.
+      if (error) console.error('ExecutiveComisiones: no se pudieron leer las comisiones', error);
+
       setCommissions((data || []) as Commission[]);
     } finally { setIsLoading(false); }
   }, [accountExecutiveInfo?.executiveId]);
@@ -142,11 +146,15 @@ export default function ExecutiveComisiones() {
   useEffect(() => {
     const loadExecInfo = async () => {
       if (!accountExecutiveInfo?.executiveId) return;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('account_executives_safe')
         .select('tax_rfc, facturapi_configured')
         .eq('id', accountExecutiveInfo.executiveId)
         .maybeSingle();
+
+      // Falla cerrado: sin datos queda "no configurado" y no se puede facturar.
+      if (error) console.error('ExecutiveComisiones: no se pudo leer la configuracion fiscal', error);
+
       setExecutiveRfc(data?.tax_rfc || null);
       setFacturApiConfigured(data?.facturapi_configured || false);
     };

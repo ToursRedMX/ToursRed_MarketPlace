@@ -82,7 +82,9 @@ import { join } from "node:path";
 //    48  09-sep: perfiles, resenas, prospectos y newsletter. Aqui salio el
 //        cobro que se saltaba el saldo restante y el slug que se marcaba
 //        disponible estando tomado.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 48);
+//    29  09-sep: soporte, referidos, terminos, dashboard y paneles de
+//        ejecutivo. Aqui salio la guardia de RFC unico que se saltaba.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 29);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 
