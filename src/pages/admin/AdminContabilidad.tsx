@@ -197,32 +197,45 @@ const AdminContabilidad: React.FC = () => {
     if (!confirm(`Iniciar sincronizacion masiva de ${BULK_LABELS[type]}? Este proceso puede tardar varios minutos.`)) return;
 
     let records: { id: string }[] = [];
+    let errorConsulta: unknown = null;
 
     if (type === 'agencies') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('agencies')
         .select('id')
         .eq('is_active', true);
       records = data || [];
+      errorConsulta = error;
     } else if (type === 'travelers') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('users')
         .select('id')
         .eq('role', 'traveler')
         .not('rfc', 'is', null);
       records = data || [];
+      errorConsulta = error;
     } else if (type === 'bookings') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('bookings')
         .select('id')
         .eq('status', 'confirmed');
       records = data || [];
+      errorConsulta = error;
     } else if (type === 'payouts') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('agency_payouts')
         .select('id')
         .eq('status', 'completed');
       records = data || [];
+      errorConsulta = error;
+    }
+
+    // Sin esto, una consulta caida deja records vacio y el panel dice "no hay
+    // nada que sincronizar", que no es lo mismo que "no pudimos consultar".
+    if (errorConsulta) {
+      console.error('Error consultando los registros a sincronizar:', errorConsulta);
+      showMessage('error', 'No pudimos consultar los registros a sincronizar. Intenta de nuevo.');
+      return;
     }
 
     if (records.length === 0) {

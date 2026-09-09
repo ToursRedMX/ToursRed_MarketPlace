@@ -61,7 +61,10 @@ import { join } from "node:path";
 //        lecturas de la politica de cancelacion.
 //   166  09-sep: los componentes de seguridad — mantenimiento, ajustes de
 //        MFA, passkeys y el panel de interruptores de seguridad.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 166);
+//   154  09-sep: pagos a agencias, conciliacion de OpenPay y el sync
+//        contable. Aqui salio ademas la destructuracion mala de
+//        getSession() que dejaba tres llamadas sin Authorization.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 154);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 
