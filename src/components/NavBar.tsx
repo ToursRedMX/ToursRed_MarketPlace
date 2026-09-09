@@ -133,12 +133,16 @@ const NavBar: React.FC = () => {
     const fetchGarbageCount = async () => {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 7);
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('bookings')
         .select('id', { count: 'exact', head: true })
         .in('status', ['pending', 'cancelled'])
         .eq('payment_status', 'pending')
         .lt('created_at', cutoff.toISOString());
+
+      // Es el contador del badge de limpieza: si falla no se pinta y ya.
+      if (error) console.error('NavBar: no se pudo contar las reservas basura', error);
+
       setGarbageBookingsCount(count ?? 0);
     };
     fetchGarbageCount();

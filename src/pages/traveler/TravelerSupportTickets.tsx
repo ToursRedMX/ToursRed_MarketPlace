@@ -67,11 +67,15 @@ const TravelerSupportTickets: React.FC = () => {
   const submitComment = async () => {
     if (!selectedTicket || !newComment.trim() || !user) return;
     setSubmittingComment(true);
-    const { data: profile } = await supabase
+    const { data: profile, error: errorPerfil } = await supabase
       .from('users')
       .select('first_name, last_name')
       .eq('id', user.id)
       .maybeSingle();
+
+    // Solo decide con que nombre se firma el comentario; sin el, queda el correo.
+    if (errorPerfil) console.error('TravelerSupportTickets: no se pudo leer el nombre del viajero', errorPerfil);
+
     const authorName = profile ? `${profile.first_name} ${profile.last_name}` : user.email;
 
     await supabase.from('support_ticket_comments').insert({

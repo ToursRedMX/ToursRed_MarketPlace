@@ -209,8 +209,12 @@ export default function AgencyStaff() {
     setFoundUser(null);
     setUserNotFound(false);
     try {
-      const { data: results } = await supabase
+      const { data: results, error: errorBusqueda } = await supabase
         .rpc('search_user_by_email_for_staff', { p_email: emailSearch.trim().toLowerCase() });
+
+      // "No encontramos ese correo" y "no pudimos buscarlo" no son lo mismo.
+      if (errorBusqueda) throw errorBusqueda;
+
       const data = results?.[0] ?? null;
       if (!data) {
         setUserNotFound(true);

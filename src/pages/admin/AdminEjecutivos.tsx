@@ -165,7 +165,14 @@ export default function AdminEjecutivos() {
     setReassignModal(exec);
     setSelectedAgencies([]);
     setReassignTarget('');
-    const { data } = await supabase.from('agencies').select('id, name, is_approved, registered_by_executive').eq('account_executive_id', exec.id).order('name');
+    const { data, error } = await supabase.from('agencies').select('id, name, is_approved, registered_by_executive').eq('account_executive_id', exec.id).order('name');
+
+    // Una lista vacia por error se lee como "este ejecutivo no tiene agencias".
+    if (error) {
+      console.error('AdminEjecutivos: no se pudieron leer las agencias del ejecutivo', error);
+      setMessage({ type: 'error', text: 'No pudimos cargar las agencias de este ejecutivo. Cierra y vuelve a abrir.' });
+    }
+
     setExecutiveAgencies(data || []);
   };
 

@@ -76,7 +76,10 @@ import { join } from "node:path";
 //        extras, suplementos, plan de pagos, membresia y destacados.
 //    83  09-sep: firma de enmiendas, alta de agencias, mensajeria y el
 //        avatar de la barra superior.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 83);
+//    69  09-sep: triage del resto por forma peligrosa — la guardia de
+//        reembolso duplicado, los cuatro callbacks de OAuth, y los que
+//        confundian "no hay" con "no pudimos leer".
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 69);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 

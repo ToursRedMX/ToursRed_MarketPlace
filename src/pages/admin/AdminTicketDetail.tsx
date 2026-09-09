@@ -231,11 +231,16 @@ const AdminTicketDetail: React.FC = () => {
 
     // Notify agency if assigned
     if (agencyChanged && newAgencyId) {
-      const { data: agencyUser } = await supabase
+      const { data: agencyUser, error: errorAgencia } = await supabase
         .from('agencies')
         .select('user_id')
         .eq('id', newAgencyId)
         .maybeSingle();
+
+      // Sin el user_id no se manda la notificacion y el ticket se queda
+      // asignado sin que la agencia se entere.
+      if (errorAgencia) console.error('AdminTicketDetail: no se pudo leer el usuario de la agencia para notificarla', errorAgencia);
+
       if (agencyUser?.user_id) {
         const agency = agencies.find(a => a.id === newAgencyId);
         await supabase.from('notifications').insert({

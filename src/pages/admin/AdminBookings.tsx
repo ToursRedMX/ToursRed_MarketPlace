@@ -1661,12 +1661,20 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adm
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No hay sesión activa');
 
-      const { data: existingRefund } = await supabase
+      const { data: existingRefund, error: errorReembolsoPrevio } = await supabase
         .from('payment_refunds')
         .select('id')
         .eq('payment_transaction_id', txId)
         .eq('status', 'succeeded')
         .maybeSingle();
+
+      // Esta es la guardia contra reembolsar dos veces el mismo cobro. Si la
+      // consulta falla, existingRefund queda en null, la guardia se salta y se
+      // inserta un segundo reembolso: dinero que sale dos veces.
+      if (errorReembolsoPrevio) {
+        console.error('No se pudo comprobar si el pago ya tiene reembolso:', errorReembolsoPrevio);
+        throw new Error('No pudimos comprobar si este pago ya fue reembolsado. No se registro nada, intenta de nuevo.');
+      }
 
       if (existingRefund) {
         throw new Error('Ya existe un reembolso registrado para este pago');
