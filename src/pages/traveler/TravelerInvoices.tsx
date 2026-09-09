@@ -63,168 +63,194 @@ const TravelerInvoices: React.FC = () => {
   const [invoices, setInvoices] = useState<CfdiInvoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'stamped' | 'pending' | 'error' | 'cancelled'>('all');
+  // F-1: esta pantalla lista COMPROBANTES FISCALES y no tenia un solo manejo de
+  // error. Si cualquiera de las 14 consultas fallaba, la lista salia corta y
+  // parecia completa: el sintoma es "no aparece mi factura", que en un CFDI es
+  // un problema de soporte, no una molestia. Ahora, si algo falla, se dice.
+  const [cargaIncompleta, setCargaIncompleta] = useState(false);
 
   const fetchInvoices = async () => {
     if (!user) return;
+    const userId = user.id;
     setIsLoading(true);
+    setCargaIncompleta(false);
+
+    // Se anota cada consulta que falla. No se corta la carga: mas vale mostrar
+    // las facturas que si se pudieron leer y avisar de que faltan, que no
+    // mostrar nada.
+    const fallos: string[] = [];
+
+    // Cada factura se filtra consultando a quien pertenece su reserva o
+    // membresia. Este patron estaba repetido siete veces, y en las siete se
+    // ignoraba el error: al fallar, `data` llegaba null, la comparacion daba
+    // false y la factura DEL PROPIO VIAJERO se descartaba en silencio. Falla
+    // cerrado —nunca muestra una factura ajena, que es lo importante— pero
+    // esconde las suyas, y eso hay que decirlo.
+    const esDelViajero = async (tabla: 'bookings' | 'memberships', id: string) => {
+      const { data, error } = await supabase
+        .from(tabla)
+        .select('user_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (error) {
+        console.error(`TravelerInvoices: no se pudo verificar el dueno en ${tabla}`, error);
+        fallos.push(tabla);
+        return false;
+      }
+      return data?.user_id === userId;
+    };
+
     try {
       // Facturas de reservas del viajero
-      const { data: bookingInvoices } = await supabase
+      const { data: bookingInvoices, error: error_bookingInvoices } = await supabase
         .from('cfdi_invoices')
         .select(`id, invoice_type, uuid_fiscal, folio, serie, receptor_rfc, subtotal, iva_amount, total, status, xml_url, pdf_url, stamped_at, created_at, booking_id, membership_id, bookings(booking_code, travel_insurance_included, travel_insurance_cost, tours(name))`)
         .eq('invoice_type', 'booking')
         .order('created_at', { ascending: false })
         .limit(100);
+      if (error_bookingInvoices) {
+        console.error('TravelerInvoices: fallo la consulta de facturas de reservas', error_bookingInvoices);
+        fallos.push('reservas');
+      }
 
       const bookingMine: CfdiInvoice[] = [];
       if (bookingInvoices) {
         await Promise.all(
           bookingInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            const { data: booking } = await supabase
-              .from('bookings')
-              .select('user_id')
-              .eq('id', inv.booking_id)
-              .maybeSingle();
-            if (booking?.user_id === user.id) bookingMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) bookingMine.push(inv as CfdiInvoice);
           })
         );
       }
 
       // Facturas de membresías del viajero
-      const { data: membershipInvoices } = await supabase
+      const { data: membershipInvoices, error: error_membershipInvoices } = await supabase
         .from('cfdi_invoices')
         .select(`id, invoice_type, uuid_fiscal, folio, serie, receptor_rfc, subtotal, iva_amount, total, status, xml_url, pdf_url, stamped_at, created_at, booking_id, membership_id`)
         .eq('invoice_type', 'membership')
         .order('created_at', { ascending: false })
         .limit(50);
+      if (error_membershipInvoices) {
+        console.error('TravelerInvoices: fallo la consulta de facturas de membresias', error_membershipInvoices);
+        fallos.push('membresias');
+      }
 
       const membershipMine: CfdiInvoice[] = [];
       if (membershipInvoices) {
         await Promise.all(
           membershipInvoices.map(async (inv) => {
             if (!inv.membership_id) return;
-            const { data: mem } = await supabase
-              .from('memberships')
-              .select('user_id')
-              .eq('id', inv.membership_id)
-              .maybeSingle();
-            if (mem?.user_id === user.id) membershipMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('memberships', inv.membership_id)) membershipMine.push(inv as CfdiInvoice);
           })
         );
       }
 
       // Facturas de cobros en check-in del viajero
-      const { data: checkinInvoices } = await supabase
+      const { data: checkinInvoices, error: error_checkinInvoices } = await supabase
         .from('cfdi_invoices')
         .select(`id, invoice_type, uuid_fiscal, folio, serie, receptor_rfc, subtotal, iva_amount, total, status, xml_url, pdf_url, stamped_at, created_at, booking_id, membership_id, checkin_charge_id, bookings(booking_code, travel_insurance_included, travel_insurance_cost, tours(name))`)
         .eq('invoice_type', 'checkin_wallet')
         .order('created_at', { ascending: false })
         .limit(100);
+      if (error_checkinInvoices) {
+        console.error('TravelerInvoices: fallo la consulta de facturas de cobros en check-in', error_checkinInvoices);
+        fallos.push('cobros en check-in');
+      }
 
       const checkinMine: CfdiInvoice[] = [];
       if (checkinInvoices) {
         await Promise.all(
           checkinInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            const { data: booking } = await supabase
-              .from('bookings')
-              .select('user_id')
-              .eq('id', inv.booking_id)
-              .maybeSingle();
-            if (booking?.user_id === user.id) checkinMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) checkinMine.push(inv as CfdiInvoice);
           })
         );
       }
 
       // Facturas de suplementos del viajero
-      const { data: supplementInvoices } = await supabase
+      const { data: supplementInvoices, error: error_supplementInvoices } = await supabase
         .from('cfdi_invoices')
         .select(`id, invoice_type, uuid_fiscal, folio, serie, receptor_rfc, subtotal, iva_amount, total, status, xml_url, pdf_url, stamped_at, created_at, booking_id, membership_id, checkin_charge_id, booking_supplement_id, booking_supplements(tour_supplements(name)), bookings(booking_code, travel_insurance_included, travel_insurance_cost, tours(name))`)
         .eq('invoice_type', 'supplement')
         .order('created_at', { ascending: false })
         .limit(100);
+      if (error_supplementInvoices) {
+        console.error('TravelerInvoices: fallo la consulta de facturas de suplementos', error_supplementInvoices);
+        fallos.push('suplementos');
+      }
 
       const supplementMine: CfdiInvoice[] = [];
       if (supplementInvoices) {
         await Promise.all(
           supplementInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            const { data: booking } = await supabase
-              .from('bookings')
-              .select('user_id')
-              .eq('id', inv.booking_id)
-              .maybeSingle();
-            if (booking?.user_id === user.id) supplementMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) supplementMine.push(inv as CfdiInvoice);
           })
         );
       }
 
       // Facturas de seguro post-reserva del viajero
-      const { data: insuranceInvoices } = await supabase
+      const { data: insuranceInvoices, error: error_insuranceInvoices } = await supabase
         .from('cfdi_invoices')
         .select(`id, invoice_type, uuid_fiscal, folio, serie, receptor_rfc, subtotal, iva_amount, total, status, xml_url, pdf_url, stamped_at, created_at, booking_id, membership_id, checkin_charge_id, booking_supplement_id, booking_optional_service_id, bookings(booking_code, travel_insurance_included, travel_insurance_cost, tours(name))`)
         .eq('invoice_type', 'post_booking_insurance')
         .order('created_at', { ascending: false })
         .limit(100);
+      if (error_insuranceInvoices) {
+        console.error('TravelerInvoices: fallo la consulta de facturas de seguro post-reserva', error_insuranceInvoices);
+        fallos.push('seguro post-reserva');
+      }
 
       const insuranceMine: CfdiInvoice[] = [];
       if (insuranceInvoices) {
         await Promise.all(
           insuranceInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            const { data: booking } = await supabase
-              .from('bookings')
-              .select('user_id')
-              .eq('id', inv.booking_id)
-              .maybeSingle();
-            if (booking?.user_id === user.id) insuranceMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) insuranceMine.push(inv as CfdiInvoice);
           })
         );
       }
 
       // Facturas de servicios opcionales del viajero
-      const { data: optionalInvoices } = await supabase
+      const { data: optionalInvoices, error: error_optionalInvoices } = await supabase
         .from('cfdi_invoices')
         .select(`id, invoice_type, uuid_fiscal, folio, serie, receptor_rfc, subtotal, iva_amount, total, status, xml_url, pdf_url, stamped_at, created_at, booking_id, membership_id, checkin_charge_id, booking_supplement_id, booking_optional_service_id, bookings(booking_code, travel_insurance_included, travel_insurance_cost, tours(name))`)
         .eq('invoice_type', 'optional_service')
         .order('created_at', { ascending: false })
         .limit(100);
+      if (error_optionalInvoices) {
+        console.error('TravelerInvoices: fallo la consulta de facturas de servicios opcionales', error_optionalInvoices);
+        fallos.push('servicios opcionales');
+      }
 
       const optionalMine: CfdiInvoice[] = [];
       if (optionalInvoices) {
         await Promise.all(
           optionalInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            const { data: booking } = await supabase
-              .from('bookings')
-              .select('user_id')
-              .eq('id', inv.booking_id)
-              .maybeSingle();
-            if (booking?.user_id === user.id) optionalMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) optionalMine.push(inv as CfdiInvoice);
           })
         );
       }
 
       // Facturas de parcialidades de plan de pago del viajero
-      const { data: installmentInvoices } = await supabase
+      const { data: installmentInvoices, error: error_installmentInvoices } = await supabase
         .from('cfdi_invoices')
         .select(`id, invoice_type, uuid_fiscal, folio, serie, receptor_rfc, subtotal, iva_amount, total, status, xml_url, pdf_url, stamped_at, created_at, booking_id, membership_id, installment_id, bookings(booking_code, tours(name)), booking_payment_plan_installments(label, installment_number)`)
         .eq('invoice_type', 'booking_installment')
         .order('created_at', { ascending: false })
         .limit(100);
+      if (error_installmentInvoices) {
+        console.error('TravelerInvoices: fallo la consulta de facturas de parcialidades', error_installmentInvoices);
+        fallos.push('parcialidades');
+      }
 
       const installmentMine: CfdiInvoice[] = [];
       if (installmentInvoices) {
         await Promise.all(
           installmentInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            const { data: booking } = await supabase
-              .from('bookings')
-              .select('user_id')
-              .eq('id', inv.booking_id)
-              .maybeSingle();
-            if (booking?.user_id === user.id) installmentMine.push(inv as unknown as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) installmentMine.push(inv as unknown as CfdiInvoice);
           })
         );
       }
@@ -233,6 +259,12 @@ const TravelerInvoices: React.FC = () => {
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
       setInvoices(all);
+      setCargaIncompleta(fallos.length > 0);
+    } catch (e) {
+      // Antes no habia catch: una excepcion dejaba la lista como estuviera,
+      // sin decir nada.
+      console.error('TravelerInvoices: excepcion cargando las facturas', e);
+      setCargaIncompleta(true);
     } finally {
       setIsLoading(false);
     }
@@ -271,6 +303,22 @@ const TravelerInvoices: React.FC = () => {
           Actualizar
         </button>
       </div>
+
+      {cargaIncompleta && (
+        <div className="mb-6 flex items-start gap-3 rounded-lg border border-warning-200 bg-warning-50 p-4">
+          <AlertCircle className="h-5 w-5 flex-shrink-0 text-warning-600 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-warning-800">
+              No pudimos cargar todas tus facturas
+            </p>
+            <p className="text-warning-700 mt-0.5">
+              Puede que falte alguna en la lista. Usa <strong>Actualizar</strong> para
+              intentarlo de nuevo. Si sigue faltando una factura que esperas ver,
+              escríbenos y la revisamos.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2 mb-6 flex-wrap">
         {(['all', 'stamped', 'pending', 'error', 'cancelled'] as const).map((f) => (

@@ -181,10 +181,18 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
     const fetchCommissionRates = async () => {
       try {
         // Leer settings de plataforma
-        const { data: platformData } = await supabase
+        // F-1: si esta falla, `platformData` llega null, el `if` no corre y el
+        // formulario se queda con el cargo por servicio POR DEFECTO en vez del
+        // configurado. Es la misma familia que ya se corrigio en
+        // BookingFlowStep3 (tier 1): no pinta vacio, COBRA MAL.
+        const { data: platformData, error: errorAjustes } = await supabase
           .from('platform_settings')
           .select('service_charge_percentage, agency_commission_percentage, optional_service_commission_percentage, travel_insurance_price_per_day_per_traveler, travel_insurance_enabled')
           .maybeSingle();
+
+        if (errorAjustes) {
+          console.error('BookingForm: no se pudieron leer los ajustes de plataforma; se usara el cargo por servicio por defecto', errorAjustes);
+        }
 
         if (platformData) {
           setServiceChargePercentage(platformData.service_charge_percentage);
@@ -311,12 +319,17 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
           setPointsWalletActive(false);
         } else {
           setPointsBalance(data?.balance || 0);
-          const { data: memData } = await supabase
+          // F-1: falla cerrado —la membresia se considera inactiva y el viajero
+          // no puede usar sus puntos—, pero en silencio.
+          const { data: memData, error: errorMembresia } = await supabase
             .from('memberships')
             .select('status, current_period_end')
             .eq('user_id', user.id)
             .in('status', ['active', 'cancelled'])
             .maybeSingle();
+          if (errorMembresia) {
+            console.error('BookingForm: no se pudo leer la membresia', errorMembresia);
+          }
           const membershipStillActive = !!memData && (
             memData.status === 'active' ||
             (memData.status === 'cancelled' && memData.current_period_end && new Date(memData.current_period_end) > new Date())
@@ -433,8 +446,13 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
 
         const capacityMap: Record<string, number | null> = {};
         if (serviceIdsWithCap.length > 0) {
-          const { data: capData } = await supabase
+          // F-1: si falla, el mapa queda vacio y la capacidad de cada servicio
+          // cae a null, que el render trata como "sin limite".
+          const { data: capData, error: errorCapacidad } = await supabase
             .rpc('get_optional_services_capacity', { p_service_ids: serviceIdsWithCap });
+          if (errorCapacidad) {
+            console.error('BookingForm: no se pudo leer la capacidad de los servicios opcionales', errorCapacidad);
+          }
           if (capData) {
             capData.forEach((row: any) => {
               capacityMap[row.service_id] = row.available_capacity;

@@ -18,6 +18,10 @@ const BookingSuccessPage: React.FC = () => {
   const [error, setError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [realTotalPaid, setRealTotalPaid] = useState(0);
+  // F-1: si la consulta del total pagado falla, `Number(null) || 0` daba 0 y la
+  // pantalla de PAGO EXITOSO decia "Total pagado: $0" justo despues de cobrar.
+  // Con esta bandera se muestra un guion en vez de una cifra falsa.
+  const [totalPagadoDesconocido, setTotalPagadoDesconocido] = useState(false);
   const { user, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
@@ -87,27 +91,43 @@ const BookingSuccessPage: React.FC = () => {
       setTour(bookingData.tours);
 
       // Fetch the real total paid from payment_transactions + wallet + points
-      const { data: totalPaidResult } = await supabase
+      const { data: totalPaidResult, error: errorTotalPagado } = await supabase
         .rpc('get_booking_total_paid', { p_booking_id: bookingId });
+      if (errorTotalPagado) {
+        console.error('BookingSuccessPage: no se pudo leer el total pagado', errorTotalPagado);
+      }
+      setTotalPagadoDesconocido(Boolean(errorTotalPagado));
       setRealTotalPaid(Number(totalPaidResult) || 0);
 
       // Fetch optional services (pickup, language, traditional) for this booking
-      const { data: optServices } = await supabase
+      // F-1: si falla, el resumen de la reserva sale sin los servicios
+      // contratados (pickup, idioma) y el viajero cree que no los pidio.
+      const { data: optServices, error: errorOpcionales } = await supabase
         .from('booking_optional_services')
         .select('id, service_kind, description, subtotal, total_paid, service_charge, is_cancelled')
         .eq('booking_id', bookingId)
         .eq('is_cancelled', false)
         .order('created_at', { ascending: true });
+      if (errorOpcionales) {
+        console.error('BookingSuccessPage: no se pudieron leer los servicios opcionales', errorOpcionales);
+      }
       setOptionalServices(optServices || []);
 
       // Get payment method from payment_transactions
-      const { data: paymentTransaction } = await supabase
+      // F-1: aqui el fallo degrada de forma aceptable —el procesador cae a
+      // bookings.payment_provider, como dice el comentario de abajo— pero sin
+      // rastro no se distingue de "esta reserva no tuvo transaccion".
+      const { data: paymentTransaction, error: errorTransaccion } = await supabase
         .from('payment_transactions')
         .select('payment_method_type, payment_processor')
         .eq('booking_id', bookingId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      if (errorTransaccion) {
+        console.error('BookingSuccessPage: no se pudo leer la transaccion de pago', errorTransaccion);
+      }
 
       // El procesador cae de vuelta a bookings.payment_provider, que sigue
       // poblado aunque la reserva no tenga transaccion registrada (pagos 100%
@@ -523,7 +543,9 @@ const BookingSuccessPage: React.FC = () => {
                   <div className="border-t border-gray-200 pt-2 mt-2">
                     <div className="flex justify-between text-lg font-bold">
                       <span className="text-green-600">Total Pagado:</span>
-                      <span className="text-green-600">{formatCurrencyMXN(realTotalPaid)}</span>
+                      <span className="text-green-600">
+                        {totalPagadoDesconocido ? '—' : formatCurrencyMXN(realTotalPaid)}
+                      </span>
                     </div>
                     {((Number(booking.points_used) > 0) || (Number(booking.toursred_cash_used) > 0)) && (
                       <div className="text-xs text-gray-500 mt-1 text-right">
