@@ -384,7 +384,7 @@ const AccountingPage: React.FC = () => {
     setCompareBalanceSheet(cbs.data ?? []);
     setCompareIncome(cis.data ?? []);
     setLoadingReports(false);
-  }, [year, month, showCompare, compareYear, compareMonth]);
+  }, [year, month, showCompare, compareYear, compareMonth, anotarFallo]);
 
   // ── Load manual entries
   const loadManualEntries = useCallback(async () => {
@@ -459,7 +459,7 @@ const AccountingPage: React.FC = () => {
     setInsuranceCommissionsTotal(periodCommissions.reduce((s, c) => s + Number(c.amount), 0));
 
     setLoadingInsurance(false);
-  }, [year, month]);
+  }, [year, month, anotarFallo]);
 
   // ── Load ledger lines for a specific account
   const loadLedgerLines = useCallback(async (accountCode: string) => {

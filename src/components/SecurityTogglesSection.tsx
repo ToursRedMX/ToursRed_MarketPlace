@@ -43,7 +43,7 @@ export const SecurityTogglesSection: React.FC = () => {
       }
 
       setHasMfa((factors?.totp ?? []).some((f: any) => f.status === 'verified'));
-    } catch (err: any) {
+    } catch (err) {
       console.error('SecurityTogglesSection: fallo al cargar la configuracion', err);
       setLoadError('No pudimos leer la configuracion de seguridad.');
     } finally {
