@@ -806,8 +806,7 @@ Deno.serve(async (req: Request) => {
         paymentMethodMetadataPp.spei_pdf_url = `${getDashboardUrl()}/spei-pdf/${getMerchantId()}/${chargeOp.id}`;
       } else if (openpay_method === "cash") {
         if (chargeOp.payment_method?.reference) paymentMethodMetadataPp.reference = chargeOp.payment_method.reference;
-        if (chargeOp.payment_method?.store) paymentMethodMetadataPp.store = chargeOp.payment_method.store;
-        if (chargeOp.payment_method?.expiry_date) paymentMethodMetadataPp.expiry_date = chargeOp.payment_method.expiry_date;
+        if (chargeOp.due_date) paymentMethodMetadataPp.expiry_date = chargeOp.due_date;
         if (chargeOp.payment_method?.barcode_url) paymentMethodMetadataPp.barcode_url = chargeOp.payment_method.barcode_url;
         if (chargeOp.payment_method?.reference) paymentMethodMetadataPp.cash_pdf_url = `${getDashboardUrl()}/paynet-pdf/${getMerchantId()}/${chargeOp.payment_method.reference}`;
       }

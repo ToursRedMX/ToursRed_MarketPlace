@@ -19,13 +19,13 @@ const CHARGE_CONTEXT_TO_REFERENCE_TYPE: Record<string, string> = {
  * @param supabase     Service-role Supabase client
  * @param bookingId    The booking UUID
  * @param cancellationId  The booking_cancellations.id (or null if unavailable)
- * @param cancellationLabel  "administrativa" | "self-service" — used in description text
+ * @param cancellationLabel  "administrativa" | "self-service" | "automatica" — used in description text
  */
 export async function markPointsAsClawedBack(
   supabase: SupabaseClient,
   bookingId: string,
   cancellationId: string | null,
-  cancellationLabel: "administrativa" | "self-service",
+  cancellationLabel: "administrativa" | "self-service" | "automatica",
 ): Promise<void> {
   try {
     // 1. Fetch all succeeded payment transactions for this booking

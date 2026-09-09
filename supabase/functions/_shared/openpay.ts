@@ -71,6 +71,7 @@ export interface OpenPayCustomer {
 }
 
 export interface OpenPayPaymentMethod {
+  url?: string | null;
   type: string;
   agreement?: string;
   clabe?: string;
@@ -83,6 +84,7 @@ export interface OpenPayPaymentMethod {
 }
 
 export interface OpenPayCharge {
+  due_date?: string | null;
   id: string;
   authorization: string | null;
   operation_type: string;

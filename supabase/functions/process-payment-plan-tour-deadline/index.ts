@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9";
 import { registrarFallo, vigilarRespuesta, vigilarResultado } from "../_shared/falloSilencioso.ts";
@@ -20,24 +20,30 @@ if (sentryDsn) {
 }
 
 async function cancelStampedCfds(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Pick<SupabaseClient, "from" | "functions">,
   bookingId: string,
   cancellationId: string
 ): Promise<void> {
-  const { data: stampedCfds } = await supabase
+  const { data: stampedCfds, error: cfdiError } = await supabase
     .from("cfdi_invoices")
     .select("id")
     .eq("booking_id", bookingId)
     .in("invoice_type", ["booking", "booking_installment", "supplement", "insurance", "optional_service", "checkin_wallet"])
     .eq("status", "stamped");
 
+  if (cfdiError) {
+    await registrarFallo("tour-deadline: consultar CFDIs", cfdiError, { booking_id: bookingId });
+    return;
+  }
+
   for (const cfdi of stampedCfds || []) {
     try {
-      await supabase.functions.invoke("cancel-cfdi", {
+      const result = await supabase.functions.invoke("cancel-cfdi", {
         body: { cfdi_invoice_id: cfdi.id, motivo: "03", cancellation_id: cancellationId },
       });
+      await vigilarResultado(result, "tour-deadline -> cancel-cfdi", { cfdi_invoice_id: cfdi.id, booking_id: bookingId });
     } catch (e) {
-      console.error(`Error cancelling CFDI ${cfdi.id} for booking ${bookingId}:`, e);
+      await registrarFallo("tour-deadline -> cancel-cfdi", e, { cfdi_invoice_id: cfdi.id, booking_id: bookingId });
     }
   }
 }
@@ -131,11 +137,16 @@ Deno.serve(async (req: Request) => {
       const tour = booking.tours as any;
 
       // Check payment plan status
-      const { data: plan } = await supabase
+      const { data: plan, error: planError } = await supabase
         .from("booking_payment_plans")
         .select("id, status")
         .eq("booking_id", booking.id)
         .maybeSingle();
+
+      if (planError) {
+        await registrarFallo("tour-deadline: consultar plan", planError, { booking_id: booking.id });
+        continue;
+      }
 
       if (!plan || plan.status === "completed" || plan.status === "cancelled" || plan.status === "defaulted") {
         // defaulted plans are handled by process_payment_plan_deadlines; we only act on active plans
@@ -232,11 +243,16 @@ Deno.serve(async (req: Request) => {
         // ── Step 1: Calculate totalPaid (principal, no service charges) ──────
         let totalPaid = Number(booking.deposit_amount || 0);
 
-        const { data: installments } = await supabase
+        const { data: installments, error: installmentsError } = await supabase
           .from("booking_payment_plan_installments")
           .select("installment_number, amount_paid")
           .eq("booking_id", booking.id)
           .in("status", ["paid", "partially_paid"]);
+
+        if (installmentsError) {
+          await registrarFallo("tour-deadline: consultar abonos", installmentsError, { booking_id: booking.id });
+          continue;
+        }
 
         for (const inst of (installments || [])) {
           if ((inst as any).installment_number > 1) {
@@ -249,11 +265,16 @@ Deno.serve(async (req: Request) => {
         // ── Step 2: Calculate totalServiceCharge (informational only) ────────
         let totalServiceCharge = Number(booking.service_charge || 0);
 
-        const { data: ppTransactions } = await supabase
+        const { data: ppTransactions, error: transactionsError } = await supabase
           .from("booking_payment_plan_transactions")
           .select("service_charge")
           .eq("booking_id", booking.id)
           .eq("status", "completed");
+
+        if (transactionsError) {
+          await registrarFallo("tour-deadline: consultar cargos", transactionsError, { booking_id: booking.id });
+          continue;
+        }
 
         for (const tx of (ppTransactions || [])) {
           totalServiceCharge += Number((tx as any).service_charge || 0);
