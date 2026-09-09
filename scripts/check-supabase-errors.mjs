@@ -43,10 +43,15 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-// Medido el 08-sep-2026, despues de arreglar los 15 sitios de tier 1
-// (flujo de reserva, mapa de asientos, facturas del viajero, documentos de
-// agencia). Antes de eso eran 262.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 247);
+// Historial de bajadas:
+//   262  medicion inicial (05-sep-2026)
+//   247  08-sep: tier 1 — flujo de reserva, mapa de asientos, facturas del
+//        viajero, documentos de agencia
+//   234  09-sep: tier 2 — los dos archivos que cortan TODO el producto
+//        (src/lib/supabase.ts y src/context/AuthContext.tsx) mas los mensajes
+//        de las dos pantallas de alta. Ver el commit para el detalle: dos de
+//        esos sitios no pintaban vacio, CONCEDIAN de mas.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 234);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 
