@@ -28,7 +28,14 @@ const MAX_AMOUNT = 50000;
 
 interface CreateTopupRequest {
   amount: number;
-  payment_method_type: "spei";
+  /**
+   * Lo que MANDA el cliente, no lo que aceptamos: sale de `req.json()` y no
+   * hay nada que garantice su valor. Estaba declarado como el literal "spei",
+   * y con eso TS daba por imposible el `=== "codi"` de abajo (TS2367) y
+   * angostaba el `!== "spei"` a never — o sea, marcaba como muerta la unica
+   * validacion que protege este endpoint. Se valida abajo, en runtime.
+   */
+  payment_method_type: string;
 }
 
 Deno.serve(async (req: Request) => {

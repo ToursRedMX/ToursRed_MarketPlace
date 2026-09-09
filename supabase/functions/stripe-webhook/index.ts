@@ -1046,9 +1046,30 @@ Deno.serve(async (req) => {
         let paymentIntentId: string | null = session.payment_intent as string | null;
         if (!paymentIntentId && session.mode === 'subscription' && session.invoice) {
           try {
-            const invoice = await stripe.invoices.retrieve(session.invoice as string);
-            paymentIntentId = invoice.payment_intent as string | null;
-            console.log(`Retrieved payment_intent ${paymentIntentId} from invoice ${session.invoice}`);
+            // La API Basil (2025-03-31) elimino `payment_intent` del objeto
+            // Invoice, y aqui corremos 2026-06-24.dahlia: `invoice.payment_intent`
+            // devolvia undefined SIEMPRE, asi que en modo suscripcion nunca se
+            // recuperaba el PaymentIntent. Consecuencia en cadena:
+            // bookings.payment_intent_id quedaba null y getStripeProcessorFee()
+            // recibia null, tiraba dentro de su try y dejaba processor_fee en 0.
+            //
+            // La ruta oficial post-Basil es la lista invoice.payments, donde
+            // cada entrada trae payment.payment_intent (string o el objeto
+            // expandido, segun el expand que se pida).
+            const invoice = await stripe.invoices.retrieve(session.invoice as string, {
+              expand: ['payments'],
+            });
+            const pagoConIntent = invoice.payments?.data.find(
+              (p) => p.payment?.type === 'payment_intent' && p.payment?.payment_intent
+            );
+            const intent = pagoConIntent?.payment?.payment_intent;
+            paymentIntentId = typeof intent === 'string' ? intent : intent?.id ?? null;
+
+            if (paymentIntentId) {
+              console.log(`Retrieved payment_intent ${paymentIntentId} from invoice ${session.invoice}`);
+            } else {
+              console.warn(`Invoice ${session.invoice} sin payment_intent en invoice.payments`);
+            }
           } catch (invoiceErr: any) {
             console.error(`Error retrieving invoice for payment_intent: ${invoiceErr.message}`);
           }
@@ -1737,8 +1758,17 @@ Deno.serve(async (req) => {
             metadata: session
           });
 
-        // Fetch real processor fee from Stripe and update transaction
-        const stripeFee = await getStripeProcessorFee(stripe, paymentIntentId);
+        // Fetch real processor fee from Stripe and update transaction.
+        // paymentIntentId puede ser null (una sesion en modo suscripcion cuya
+        // invoice no traiga pago). Antes se pasaba igual y la llamada tiraba
+        // dentro del try de getStripeProcessorFee, que devolvia null sin decir
+        // por que; ahora se salta explicitamente y queda en el log.
+        const stripeFee = paymentIntentId
+          ? await getStripeProcessorFee(stripe, paymentIntentId)
+          : null;
+        if (!paymentIntentId) {
+          console.warn(`Sin payment_intent para la reserva ${bookingId}: no se registra processor_fee`);
+        }
         if (stripeFee) {
           await supabase
             .from('payment_transactions')
