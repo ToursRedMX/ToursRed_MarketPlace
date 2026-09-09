@@ -48,10 +48,16 @@ const TourDetailPage: React.FC = () => {
   // Load categories from database
   useEffect(() => {
     const loadCategories = async () => {
-      const { data } = await supabase
+      // F-1: si falla, el mapa de categorias queda vacio y el tour se muestra
+      // con el slug crudo en vez del nombre de su categoria.
+      const { data, error: errorCategorias } = await supabase
         .from('tour_categories')
         .select('slug, name')
         .eq('is_active', true);
+
+      if (errorCategorias) {
+        console.error('TourDetailPage: no se pudieron leer las categorias', errorCategorias);
+      }
 
       if (data) {
         const map: { [key: string]: string } = {};
@@ -146,11 +152,18 @@ const TourDetailPage: React.FC = () => {
         }
 
         // Obtener información de la agencia y verificar propiedad
-        const { data: agencyData } = await supabase
+        // F-1: si falla, `agencyData` llega null y no se marca al dueno del
+        // tour. Falla cerrado —la agencia no ve sus controles de edicion— pero
+        // el sintoma es "no puedo editar mi propio tour" sin rastro.
+        const { data: agencyData, error: errorAgencia } = await supabase
           .from('agencies')
           .select('id, user_id')
           .eq('id', data.agency_id)
           .single();
+
+        if (errorAgencia) {
+          console.error('TourDetailPage: no se pudo leer la agencia del tour', errorAgencia);
+        }
 
         if (agencyData) {
           setAgencyUserId(agencyData.user_id);
@@ -181,12 +194,20 @@ const TourDetailPage: React.FC = () => {
   const checkIfSaved = async () => {
     if (!user || !tour) return;
 
-    const { data } = await supabase
+    // F-1: si falla, el tour aparece como NO guardado aunque lo este, y el
+    // viajero lo vuelve a guardar. Es el mismo caso que ya se corrigio en
+    // TourCard (tier 1).
+    const { data, error: errorGuardado } = await supabase
       .from('saved_tours')
       .select('id')
       .eq('user_id', user.id)
       .eq('tour_id', tour.id)
       .maybeSingle();
+
+    if (errorGuardado) {
+      console.error('TourDetailPage: no se pudo comprobar si el tour esta guardado', errorGuardado);
+      return;
+    }
 
     setIsSaved(!!data);
   };

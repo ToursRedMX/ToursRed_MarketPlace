@@ -440,11 +440,17 @@ const TravelerBookings: React.FC = () => {
         }
 
         // Load supplements for all bookings
-        const { data: suppData } = await supabase
+        // F-1: si falla, el viajero ve sus reservas SIN los suplementos que ya
+        // solicito, y puede pedirlos otra vez.
+        const { data: suppData, error: errorSuplementos } = await supabase
           .from('booking_supplements')
           .select(`*, tour_supplements(name, description, price, is_cancellable, requires_approval)`)
           .in('booking_id', ids)
           .order('requested_at', { ascending: false });
+
+        if (errorSuplementos) {
+          console.error('TravelerBookings: no se pudieron leer los suplementos de las reservas', errorSuplementos);
+        }
 
         if (suppData) {
           const groupedSupp: Record<string, any[]> = {};
@@ -460,12 +466,17 @@ const TravelerBookings: React.FC = () => {
           activeList.filter((b: any) => ['confirmed', 'pending'].includes(b.status)).map((b: any) => b.tour_id)
         )];
         if (activeTourIds.length > 0) {
-          const { data: tourSupData } = await supabase
+          // F-1: si falla, la reserva aparece sin suplementos disponibles.
+          const { data: tourSupData, error: errorCatalogo } = await supabase
             .from('tour_supplements')
             .select('*')
             .in('tour_id', activeTourIds)
             .eq('is_active', true)
             .order('display_order');
+
+          if (errorCatalogo) {
+            console.error('TravelerBookings: no se pudo leer el catalogo de suplementos', errorCatalogo);
+          }
 
           if (tourSupData) {
             const groupedTourSup: Record<string, any[]> = {};
@@ -564,7 +575,13 @@ const TravelerBookings: React.FC = () => {
       setCancelledBookings(data || []);
       if (data && data.length > 0) {
         const cancelledIds = data.map((b: any) => b.id);
-        const { data: cancelledPaidRes } = await supabase.rpc('get_booking_total_paid_batch', { p_booking_ids: cancelledIds });
+        // F-1: si falla, el total pagado de una reserva cancelada se queda en 0,
+        // que es justo el numero que el viajero mira para saber cuanto le
+        // tienen que reembolsar.
+        const { data: cancelledPaidRes, error: errorPagadoCanceladas } = await supabase.rpc('get_booking_total_paid_batch', { p_booking_ids: cancelledIds });
+        if (errorPagadoCanceladas) {
+          console.error('TravelerBookings: no se pudo leer el total pagado de las reservas canceladas', errorPagadoCanceladas);
+        }
         if (cancelledPaidRes) {
           setTotalPaidByBooking(prev => {
             const updated = { ...prev };
@@ -762,11 +779,17 @@ const TravelerBookings: React.FC = () => {
 
   const handleOpenReviewModal = async (booking: Booking) => {
     try {
-      const { data: existingReview } = await supabase
+      // F-1: si esta lectura falla, `existingReview` llega null, el modal se abre
+      // como si el viajero no hubiera resenado, y puede mandar una duplicada.
+      // Sin poder comprobarlo, no se abre en modo "nueva resena": el catch de
+      // abajo ya avisa por consola.
+      const { data: existingReview, error: errorResena } = await supabase
         .from('agency_reviews')
         .select('*')
         .eq('booking_id', booking.id)
         .maybeSingle();
+
+      if (errorResena) throw errorResena;
 
       setReviewModal({
         open: true,
@@ -1344,11 +1367,19 @@ const TravelerBookings: React.FC = () => {
         }
       }
 
-      const { data: walletData } = await supabase
+      // F-1: si esta lectura fallaba, el modal de pago se abria diciendo saldo
+      // 0 con dinero en la billetera. Se avisa, pero NO se bloquea: el viajero
+      // puede seguir pagando con tarjeta mientras el saldo no se pueda leer.
+      const { data: walletData, error: errorBilletera } = await supabase
         .from('toursred_cash_wallets')
         .select('balance')
         .eq('user_id', user?.id)
         .maybeSingle();
+
+      if (errorBilletera) {
+        console.error('TravelerBookings: no se pudo leer el saldo de ToursRed Cash', errorBilletera);
+        alert('No pudimos consultar tu saldo de ToursRed Cash. Aparecerá en cero; puedes pagar con tarjeta o cerrar y volver a intentarlo.');
+      }
 
       const walletBalance = walletData?.balance || 0;
 
@@ -1770,20 +1801,36 @@ const TravelerBookings: React.FC = () => {
   };
 
   const handleOpenSupplementRequest = async (booking: Booking, supplement: any) => {
-    const { data: walletData } = await supabase
+    // F-1: estas tres consultas ignoraban el error y caian a `?? 0`. El
+    // resultado no era una pantalla vacia, era un NUMERO FALSO en una pantalla
+    // de pago: saldo 0 con dinero en la billetera, o capacidad 0 —"agotado"—
+    // en un suplemento disponible. Ahora, si no se pudo leer, se dice.
+    const { data: walletData, error: errorBilletera } = await supabase
       .from('toursred_cash_wallets')
       .select('balance')
       .eq('user_id', user!.id)
       .maybeSingle();
 
-    const { data: pointsData } = await supabase
+    const { data: pointsData, error: errorPuntos } = await supabase
       .from('toursred_points_wallets')
       .select('balance')
       .eq('user_id', user!.id)
       .maybeSingle();
 
-    const { data: capData } = await supabase
+    const { data: capData, error: errorCapacidad } = await supabase
       .rpc('get_supplement_available_capacity', { p_supplement_id: supplement.id });
+
+    let avisoDeCarga = '';
+    if (errorBilletera || errorPuntos) {
+      console.error('TravelerBookings: no se pudo leer el saldo', errorBilletera || errorPuntos);
+      avisoDeCarga = 'No pudimos consultar tu saldo de ToursRed Cash y puntos. Los verás en cero hasta que se recupere; puedes pagar con tarjeta o volver a intentarlo.';
+    }
+    if (errorCapacidad) {
+      console.error('TravelerBookings: no se pudo leer la capacidad del suplemento', errorCapacidad);
+      avisoDeCarga = avisoDeCarga
+        ? `${avisoDeCarga} Tampoco pudimos confirmar la disponibilidad.`
+        : 'No pudimos confirmar la disponibilidad de este servicio. Vuelve a intentarlo en unos segundos.';
+    }
 
     setSupplementPaymentModal({
       open: true,
@@ -1792,7 +1839,7 @@ const TravelerBookings: React.FC = () => {
       quantity: 1,
       availableCapacity: capData ?? 0,
       isProcessing: false,
-      error: '',
+      error: avisoDeCarga,
       walletBalance: walletData?.balance ?? 0,
       pointsBalance: pointsData?.balance ?? 0,
       pointsValueMxn: Math.floor((pointsData?.balance ?? 0) / 100),
@@ -1802,17 +1849,24 @@ const TravelerBookings: React.FC = () => {
   };
 
   const handlePayExistingSupplement = async (bs: any, booking: Booking) => {
-    const { data: walletData } = await supabase
+    // F-1: mismo caso que arriba — saldo falso en una pantalla de pago.
+    const { data: walletData, error: errorBilletera } = await supabase
       .from('toursred_cash_wallets')
       .select('balance')
       .eq('user_id', user!.id)
       .maybeSingle();
 
-    const { data: pointsData } = await supabase
+    const { data: pointsData, error: errorPuntos } = await supabase
       .from('toursred_points_wallets')
       .select('balance')
       .eq('user_id', user!.id)
       .maybeSingle();
+
+    let avisoDeCarga = '';
+    if (errorBilletera || errorPuntos) {
+      console.error('TravelerBookings: no se pudo leer el saldo', errorBilletera || errorPuntos);
+      avisoDeCarga = 'No pudimos consultar tu saldo de ToursRed Cash y puntos. Los verás en cero hasta que se recupere; puedes pagar con tarjeta o volver a intentarlo.';
+    }
 
     setSupplementsModal(prev => ({ ...prev, open: false, cancelQty: {} }));
     setSupplementDirectPayModal({
@@ -1820,7 +1874,7 @@ const TravelerBookings: React.FC = () => {
       bookingSupplement: bs,
       booking,
       isProcessing: false,
-      error: '',
+      error: avisoDeCarga,
       walletBalance: walletData?.balance ?? 0,
       pointsBalance: pointsData?.balance ?? 0,
       pointsValueMxn: Math.floor((pointsData?.balance ?? 0) / 100),
@@ -1933,11 +1987,16 @@ const TravelerBookings: React.FC = () => {
   };
 
   const refreshExtrasModalBos = async (bookingId: string) => {
-    const { data: bosData } = await supabase
+    // F-1: si falla, la reserva aparece sin sus servicios opcionales.
+    const { data: bosData, error: errorOpcionales } = await supabase
       .from('booking_optional_services')
       .select('id, tour_optional_service_id, quantity, subtotal, is_cancelled, tour_optional_services(is_refundable)')
       .eq('booking_id', bookingId);
     const newExistingBos: Record<string, { id: string; quantity: number; subtotal: number; is_cancelled: boolean; is_refundable: boolean }> = {};
+    if (errorOpcionales) {
+      console.error('TravelerBookings: no se pudieron leer los servicios opcionales', errorOpcionales);
+    }
+
     for (const bos of bosData || []) {
       newExistingBos[bos.tour_optional_service_id] = {
         id: bos.id,
@@ -1987,11 +2046,17 @@ const TravelerBookings: React.FC = () => {
 
       // Si el booking no tiene costo de seguro guardado, calcularlo desde platform_settings
       if (!alreadyBought && insuranceCost === 0) {
-        const { data: settingsRow } = await supabase
+        // F-1: si falla, pricePerDay queda en 0 y el seguro deja de ofrecerse o
+        // aparece sin costo. Es la misma familia que el cargo por servicio que
+        // caia a un 10% por defecto (tier 1).
+        const { data: settingsRow, error: errorAjustes } = await supabase
           .from('platform_settings')
           .select('travel_insurance_price_per_day_per_traveler')
           .limit(1)
           .maybeSingle();
+        if (errorAjustes) {
+          console.error('TravelerBookings: no se pudo leer el precio del seguro; no se ofrecera', errorAjustes);
+        }
         const pricePerDay = Number(settingsRow?.travel_insurance_price_per_day_per_traveler || 0);
         insurancePricePerDay = pricePerDay;
         if (pricePerDay > 0) {

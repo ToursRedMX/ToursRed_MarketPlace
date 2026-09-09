@@ -51,7 +51,10 @@ import { join } from "node:path";
 //        (src/lib/supabase.ts y src/context/AuthContext.tsx) mas los mensajes
 //        de las dos pantallas de alta. Ver el commit para el detalle: dos de
 //        esos sitios no pintaban vacio, CONCEDIAN de mas.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 234);
+//   191  09-sep: tier 3 — el camino completo del viajero, que es el que van a
+//        recorrer las UAT: facturas, reservas, billetera, pago exitoso,
+//        detalle y catalogo de tours, y el formulario de reserva. 43 sitios.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 191);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 
