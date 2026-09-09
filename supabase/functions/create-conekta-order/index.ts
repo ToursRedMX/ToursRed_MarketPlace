@@ -86,7 +86,11 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "Reserva no encontrada" }, 404);
       }
 
-      if (booking.user_id !== user.id) {
+      // `user` solo es null en el contexto gift_card, que no entra aqui, pero
+      // TS no puede seguir esa relacion entre dos variables. Con `user?.id` la
+      // comparacion falla CERRADA si algun dia se llegara sin usuario: undefined
+      // nunca va a ser igual a un booking.user_id, asi que responde 403.
+      if (booking.user_id !== user?.id) {
         return jsonResponse({ error: "No tienes permiso sobre esta reserva" }, 403);
       }
 
@@ -132,7 +136,8 @@ Deno.serve(async (req: Request) => {
         .eq("id", supplement.booking_id)
         .maybeSingle();
 
-      if (!suppBooking || suppBooking.user_id !== user.id) {
+      // Mismo caso que arriba: `user?.id` deja la comparacion fallando cerrada.
+      if (!suppBooking || suppBooking.user_id !== user?.id) {
         return jsonResponse({ error: "No tienes permiso sobre este suplemento" }, 403);
       }
 

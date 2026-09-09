@@ -120,7 +120,11 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      if (booking.user_id !== user.id) {
+      // `user` solo es null en el contexto gift_card, que no entra aqui, pero
+      // TS no puede seguir esa relacion entre dos variables. Con `user?.id` la
+      // comparacion falla CERRADA si algun dia se llegara sin usuario: undefined
+      // nunca va a ser igual a un booking.user_id, asi que responde 403.
+      if (booking.user_id !== user?.id) {
         return new Response(
           JSON.stringify({ error: "No tienes permiso sobre esta reserva" }),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -184,7 +188,8 @@ Deno.serve(async (req: Request) => {
         .eq("id", supplement.booking_id)
         .maybeSingle();
 
-      if (!suppBooking || suppBooking.user_id !== user.id) {
+      // Mismo caso que arriba: `user?.id` deja la comparacion fallando cerrada.
+      if (!suppBooking || suppBooking.user_id !== user?.id) {
         return new Response(
           JSON.stringify({ error: "No tienes permiso sobre este suplemento" }),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -242,6 +247,16 @@ Deno.serve(async (req: Request) => {
     let customerId: string | null = null;
 
     if (context === "booking" || context === "supplement") {
+      // Aqui no alcanza con `user?.id`: se usa como filtro de la consulta, y un
+      // `.eq("id", undefined)` no filtra nada. El guard hace explicita la
+      // precondicion del bloque (ninguno de estos dos contextos es anonimo).
+      if (!user) {
+        return new Response(
+          JSON.stringify({ error: "No autorizado" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
       const { data: userRecord, error: userRecordError } = await supabase
         .from("users")
         .select("id, first_name, last_name, email, phone_number")

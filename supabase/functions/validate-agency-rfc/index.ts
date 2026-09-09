@@ -79,7 +79,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const baseUrl = settings.pac_sandbox_mode
+    // `settings` viene de un maybeSingle() y puede ser null; leerlo directo
+    // tumbaba toda la validacion de RFC con un TypeError. Ojo: las dos ramas
+    // del ternario apuntan a la misma URL, asi que hoy el valor no cambia nada
+    // — se deja tal cual porque cambiarlo es decision de la integracion con el
+    // PAC, no de este arreglo de tipos.
+    const baseUrl = settings?.pac_sandbox_mode
       ? "https://www.facturapi.io/v2"
       : "https://www.facturapi.io/v2";
 
