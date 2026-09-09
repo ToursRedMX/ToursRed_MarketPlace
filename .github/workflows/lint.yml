@@ -104,8 +104,19 @@ jobs:
       - name: Verify deadline cancellation and OpenPay metadata
         run: node scripts/test-deadline-openpay.mjs
 
-      # F-1 de la auditoria de frontend. Contador, no guardia en cero: son 247
-      # sitios y una parte son intencionales. No exige bajar, impide subir.
+      # Segunda mitad de C-1: que el webhook no confirme sin mirar cuanto entro.
+      # Los casos son reservas reales del proyecto, no inventadas.
+      - name: Verify payment coverage before confirming a booking
+        run: node scripts/test-cobertura-pago.mjs
+
+      # El chequeo de cuenta bloqueada (is_active) debe fallar cerrado en los
+      # dos caminos: el login por contrasena y AuthContext.
+      - name: Verify blocked-account check fails closed
+        run: node scripts/test-auth-falla-cerrado.mjs
+
+      # F-1 de la auditoria de frontend. Desde el 09-sep-2026 la linea base es
+      # CERO: dejo de ser un contador y es una guardia. Cualquier consulta nueva
+      # que ignore su error rompe este check.
       # Va aqui dentro y no en un job aparte a proposito: `lint` ya es check
       # requerido y corre en todos los PR, asi que no se agrega un check nuevo
       # que pueda quedarse en "Waiting for status to be reported".
