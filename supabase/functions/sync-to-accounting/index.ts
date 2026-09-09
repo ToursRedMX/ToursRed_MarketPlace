@@ -1,5 +1,6 @@
+import { getZohoAccessToken } from "../_shared/zohoAccessToken.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 
 const corsHeaders = {
@@ -195,70 +196,7 @@ function mapRegimenToZoho(regimen: string): string {
 // ZOHO BOOKS ADAPTER
 // =============================================
 
-async function getZohoAccessToken(supabase: ReturnType<typeof createClient>): Promise<{ token: string; apiDomain: string }> {
-  const { data: tokenRow } = await supabase
-    .from("zoho_oauth_tokens")
-    .select("access_token, refresh_token, access_token_expires_at, api_domain")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!tokenRow) throw new Error("No Zoho OAuth token found. Please authorize Zoho Books in Admin Settings.");
-
-  const expiresAt = new Date(tokenRow.access_token_expires_at).getTime();
-  const nowMs = Date.now();
-  const bufferMs = 5 * 60 * 1000;
-
-  if (expiresAt - nowMs > bufferMs) {
-    return { token: tokenRow.access_token, apiDomain: tokenRow.api_domain };
-  }
-
-  const { data: settingsRow } = await supabase
-    .from("platform_settings")
-    .select("zoho_client_id, zoho_region")
-    .maybeSingle();
-  const { data: secretsRow } = await supabase
-    .from("platform_secrets")
-    .select("zoho_client_secret")
-    .maybeSingle();
-  const settings = { zoho_client_id: settingsRow?.zoho_client_id, zoho_region: settingsRow?.zoho_region, zoho_client_secret: secretsRow?.zoho_client_secret };
-
-  if (!settings?.zoho_client_id || !settings?.zoho_client_secret) {
-    throw new Error("Zoho client credentials not configured.");
-  }
-
-  const region = settings.zoho_region || "com";
-  const tokenUrl = `https://accounts.zoho.${region}/oauth/v2/token`;
-
-  const body = new URLSearchParams({
-    refresh_token: tokenRow.refresh_token,
-    client_id: settings.zoho_client_id,
-    client_secret: settings.zoho_client_secret,
-    grant_type: "refresh_token",
-  });
-
-  const res = await fetch(tokenUrl, { method: "POST", body });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Zoho token refresh failed: ${err}`);
-  }
-
-  const data = await res.json();
-  if (!data.access_token) throw new Error(`Zoho token refresh returned no access_token: ${JSON.stringify(data)}`);
-
-  const newExpiry = new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString();
-  const newApiDomain = data.api_domain ?? tokenRow.api_domain;
-
-  await supabase.from("zoho_oauth_tokens").update({
-    access_token: data.access_token,
-    access_token_expires_at: newExpiry,
-    api_domain: newApiDomain,
-  }).eq("refresh_token", tokenRow.refresh_token);
-
-  return { token: data.access_token, apiDomain: newApiDomain };
-}
-
-function createZohoBooksAdapter(supabase: ReturnType<typeof createClient>, orgId: string): AccountingAdapter {
+function createZohoBooksAdapter(supabase: SupabaseClient, orgId: string): AccountingAdapter {
   async function zhFetch(path: string, method: string, body?: unknown): Promise<unknown> {
     const { token, apiDomain } = await getZohoAccessToken(supabase);
     const separator = path.includes("?") ? "&" : "?";
@@ -1076,7 +1014,7 @@ function createQuickBooksAdapter(_config: { clientId: string; clientSecret: stri
 // =============================================
 async function getAdapter(
   provider: string,
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   settings: Record<string, string>
 ): Promise<AccountingAdapter> {
   switch (provider) {
@@ -1105,7 +1043,7 @@ async function getAdapter(
 // SYNC LOG HELPERS
 // =============================================
 async function logSync(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   provider: string,
   recordType: string,
   recordId: string,
@@ -1132,7 +1070,7 @@ async function logSync(
   return data?.id ?? "";
 }
 
-async function incrementRetryCount(supabase: ReturnType<typeof createClient>, provider: string, recordType: string, recordId: string) {
+async function incrementRetryCount(supabase: SupabaseClient, provider: string, recordType: string, recordId: string) {
   const { error } = await supabase.rpc("increment_accounting_sync_retry_count" as never, {
     p_provider: provider,
     p_record_type: recordType,

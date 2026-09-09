@@ -1,3 +1,4 @@
+import { getZohoAccessToken, type ZohoClient } from "../_shared/zohoAccessToken.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -118,47 +119,12 @@ async function facturapiStamp(apiKey: string, organizationId: string, request: C
 }
 
 async function zohoBooksStamp(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ZohoClient,
   orgId: string,
   request: CfdiRequest,
   sandboxMode: boolean
 ): Promise<CfdiResult> {
-  const { data: tokenRow } = await supabase
-    .from("zoho_oauth_tokens")
-    .select("access_token, refresh_token, access_token_expires_at, api_domain")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!tokenRow) throw new Error("Zoho OAuth token not found.");
-
-  let accessToken = tokenRow.access_token;
-  let apiDomain = tokenRow.api_domain;
-  const expiresAt = new Date(tokenRow.access_token_expires_at).getTime();
-
-  if (expiresAt - Date.now() < 5 * 60 * 1000) {
-    const { data: ps } = await supabase.from("platform_settings").select("zoho_client_id, zoho_client_secret, zoho_region").maybeSingle();
-    if (!ps?.zoho_client_id || !ps?.zoho_client_secret) throw new Error("Zoho client credentials not configured.");
-    const region = ps.zoho_region || "com";
-    const refreshRes = await fetch(`https://accounts.zoho.${region}/oauth/v2/token`, {
-      method: "POST",
-      body: new URLSearchParams({
-        refresh_token: tokenRow.refresh_token,
-        client_id: ps.zoho_client_id,
-        client_secret: ps.zoho_client_secret,
-        grant_type: "refresh_token",
-      }),
-    });
-    if (!refreshRes.ok) throw new Error("Zoho token refresh failed");
-    const rd = await refreshRes.json();
-    accessToken = rd.access_token;
-    apiDomain = rd.api_domain ?? apiDomain;
-    await supabase.from("zoho_oauth_tokens").update({
-      access_token: accessToken,
-      access_token_expires_at: new Date(Date.now() + (rd.expires_in ?? 3600) * 1000).toISOString(),
-      api_domain: apiDomain,
-    }).eq("refresh_token", tokenRow.refresh_token);
-  }
+  const { token: accessToken, apiDomain } = await getZohoAccessToken(supabase);
 
   const baseUrl = `${apiDomain}/books/v3`;
   const headers = { Authorization: `Zoho-oauthtoken ${accessToken}`, "Content-Type": "application/json" };

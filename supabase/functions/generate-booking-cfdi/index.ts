@@ -1,3 +1,4 @@
+import { getZohoAccessToken, type ZohoClient } from "../_shared/zohoAccessToken.ts";
 import { calculateTaxBreakdown, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -264,59 +265,12 @@ async function facturapiStamp(
 // Zoho Books Mexico edition stamps via SW Sapien internally.
 // =============================================
 async function zohoBooksStamp(
-  supabaseClient: ReturnType<typeof createClient>,
+  supabaseClient: ZohoClient,
   orgId: string,
   request: CfdiRequest,
   sandboxMode: boolean
 ): Promise<CfdiResult> {
-  const { data: tokenRow } = await supabaseClient
-    .from("zoho_oauth_tokens")
-    .select("access_token, refresh_token, access_token_expires_at, api_domain")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!tokenRow) throw new Error("Zoho OAuth token not found. Connect Zoho Books in Admin Settings.");
-
-  const expiresAt = new Date(tokenRow.access_token_expires_at).getTime();
-  let accessToken = tokenRow.access_token;
-  let apiDomain = tokenRow.api_domain;
-
-  if (expiresAt - Date.now() < 5 * 60 * 1000) {
-    const { data: platformSettings } = await supabaseClient
-      .from("platform_settings")
-      .select("zoho_client_id, zoho_client_secret, zoho_region")
-      .maybeSingle();
-
-    if (!platformSettings?.zoho_client_id || !platformSettings?.zoho_client_secret) {
-      throw new Error("Zoho client credentials not configured.");
-    }
-
-    const region = platformSettings.zoho_region || "com";
-    const refreshBody = new URLSearchParams({
-      refresh_token: tokenRow.refresh_token,
-      client_id: platformSettings.zoho_client_id,
-      client_secret: platformSettings.zoho_client_secret,
-      grant_type: "refresh_token",
-    });
-
-    const refreshRes = await fetch(`https://accounts.zoho.${region}/oauth/v2/token`, {
-      method: "POST",
-      body: refreshBody,
-    });
-
-    if (!refreshRes.ok) throw new Error("Zoho token refresh failed");
-    const refreshData = await refreshRes.json();
-    accessToken = refreshData.access_token;
-    apiDomain = refreshData.api_domain ?? apiDomain;
-    const newExpiry = new Date(Date.now() + (refreshData.expires_in ?? 3600) * 1000).toISOString();
-
-    await supabaseClient.from("zoho_oauth_tokens").update({
-      access_token: accessToken,
-      access_token_expires_at: newExpiry,
-      api_domain: apiDomain,
-    }).eq("refresh_token", tokenRow.refresh_token);
-  }
+  const { token: accessToken, apiDomain } = await getZohoAccessToken(supabaseClient);
 
   const baseUrl = `${apiDomain}/books/v3`;
   const headers = {
@@ -383,7 +337,7 @@ async function stampCfdi(
   orgId: string,
   request: CfdiRequest,
   sandboxMode: boolean,
-  supabaseClient?: ReturnType<typeof createClient>
+  supabaseClient?: ZohoClient
 ): Promise<CfdiResult> {
   switch (provider) {
     case "zoho_books":
