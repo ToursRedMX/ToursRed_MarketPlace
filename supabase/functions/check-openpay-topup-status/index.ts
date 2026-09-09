@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import { isConfigured, getCharge } from "../_shared/openpay.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -155,7 +156,7 @@ Deno.serve(async (req: Request) => {
                   console.error("Accounting entry failed for topup", topup.id, ":", acctError.message);
                 }
               } catch (acctErr) {
-                console.error("Accounting entry exception for topup", topup.id, ":", acctErr.message);
+                console.error("Accounting entry exception for topup", topup.id, ":", mensajeDeError(acctErr));
               }
 
               return new Response(

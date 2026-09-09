@@ -2,11 +2,45 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
+
+// Forma real de la fila que devuelve el .select() de abajo.
+//
+// Por que se declara a mano: el cliente se crea sin el tipo Database, asi que
+// supabase-js infiere el select parseando el string y, al no conocer la
+// cardinalidad de las relaciones, tipa CADA embed como arreglo. En runtime
+// PostgREST devuelve un OBJETO para los embeds to-one (los tres de aqui lo
+// son: bookings.tour_id, bookings.user_id y bookings.agency_id son FKs).
+// Sin esto, leer `booking.tour.name` era un error de tipos sobre codigo correcto.
+type ReservaCheckin = {
+  id: string;
+  booking_code: string;
+  total_price: number;
+  deposit_amount: number;
+  travelers_count: number;
+  checkin_at: string | null;
+  tour: {
+    name: string;
+    destination: string;
+    start_date: string | null;
+    end_date: string | null;
+  } | null;
+  traveler: {
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+  } | null;
+  agency: {
+    name: string;
+    contact_email: string;
+    contact_phone: string | null;
+  } | null;
 };
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
@@ -53,12 +87,43 @@ Deno.serve(async (req: Request) => {
         agency:agencies(name, contact_email, contact_phone)
       `)
       .eq("id", booking_id)
+      .returns<ReservaCheckin[]>()
       .maybeSingle();
 
     if (bookingError || !booking) {
       return new Response(
         JSON.stringify({ error: "Reserva no encontrada" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Los tres embeds pueden venir en null si la FK lo esta o si RLS los oculta.
+    // Antes el codigo los leia directo y un null reventaba con un TypeError a
+    // media plantilla: 500 sin explicacion. Aqui se dice cual falta.
+    const { tour, traveler, agency } = booking;
+    const faltantes = [
+      tour ? null : "tour",
+      traveler ? null : "viajero",
+      agency ? null : "agencia",
+    ].filter((f): f is string => f !== null);
+
+    if (!tour || !traveler || !agency) {
+      console.error(
+        `[send-checkin-confirmation-email] reserva ${booking_id} sin ${faltantes.join(", ")}`,
+      );
+      return new Response(
+        JSON.stringify({
+          error: `Reserva incompleta: falta ${faltantes.join(", ")}`,
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!traveler.email) {
+      console.error(`[send-checkin-confirmation-email] reserva ${booking_id} sin email del viajero`);
+      return new Response(
+        JSON.stringify({ success: false, message: "El viajero no tiene email registrado" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -74,7 +139,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const formatDate = (dateString: string) => {
+    // Las fechas del tour son nullables en la tabla; sin fecha se muestra un
+    // guion en vez de "Invalid Date".
+    const formatDate = (dateString: string | null | undefined) => {
+      if (!dateString) return "—";
       const date = new Date(dateString);
       return date.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
     };
@@ -131,7 +199,7 @@ Deno.serve(async (req: Request) => {
     <div class="content">
       <div class="badge">${isPartial ? 'CHECK-IN PARCIAL' : 'CHECK-IN COMPLETO'}</div>
 
-      <p>Estimado/a <strong>${booking.traveler.first_name} ${booking.traveler.last_name}</strong>,</p>
+      <p>Estimado/a <strong>${traveler.first_name} ${traveler.last_name}</strong>,</p>
 
       <p>${isPartial
         ? 'Tu asistencia al tour ha sido registrada. Sin embargo, se reportó que no todos los viajeros de tu reserva se presentaron.'
@@ -152,19 +220,19 @@ Deno.serve(async (req: Request) => {
         <div class="section-title">Detalles del Tour</div>
         <div class="info-row">
           <span class="info-label">Tour:</span>
-          <span class="info-value">${booking.tour.name}</span>
+          <span class="info-value">${tour.name}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Destino:</span>
-          <span class="info-value">${booking.tour.destination}</span>
+          <span class="info-value">${tour.destination}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Fecha de inicio:</span>
-          <span class="info-value">${formatDate(booking.tour.start_date)}</span>
+          <span class="info-value">${formatDate(tour.start_date)}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Fecha de finalización:</span>
-          <span class="info-value">${formatDate(booking.tour.end_date)}</span>
+          <span class="info-value">${formatDate(tour.end_date)}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Total de viajeros:</span>
@@ -176,21 +244,21 @@ Deno.serve(async (req: Request) => {
         <div class="section-title">Agencia</div>
         <div class="info-row">
           <span class="info-label">Nombre:</span>
-          <span class="info-value">${booking.agency.name}</span>
+          <span class="info-value">${agency.name}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Email:</span>
-          <span class="info-value">${booking.agency.contact_email}</span>
+          <span class="info-value">${agency.contact_email}</span>
         </div>
-        ${booking.agency.contact_phone ? `
+        ${agency.contact_phone ? `
         <div class="info-row">
           <span class="info-label">Teléfono:</span>
-          <span class="info-value">${booking.agency.contact_phone}</span>
+          <span class="info-value">${agency.contact_phone}</span>
         </div>
         ` : ''}
       </div>
 
-      <p style="margin-top: 30px;">¡Esperamos que hayas disfrutado tu tour con <strong>${booking.agency.name}</strong>!</p>
+      <p style="margin-top: 30px;">¡Esperamos que hayas disfrutado tu tour con <strong>${agency.name}</strong>!</p>
       <p><strong>El equipo de ToursRed</strong></p>
     </div>
     <div class="footer">
@@ -203,11 +271,11 @@ Deno.serve(async (req: Request) => {
 
     const emailPayload = {
       api_key: emailSettings.smtp_api_key,
-      to: [booking.traveler.email],
+      to: [traveler.email],
       sender: emailSettings.contact_email,
       subject: isPartial
-        ? `Check-in Parcial Registrado - ${booking.tour.name}`
-        : `Asistencia Confirmada - ${booking.tour.name}`,
+        ? `Check-in Parcial Registrado - ${tour.name}`
+        : `Asistencia Confirmada - ${tour.name}`,
       html_body: emailHtml,
     };
 
@@ -243,7 +311,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: "Error interno del servidor", details: error.message }),
+      JSON.stringify({ error: "Error interno del servidor", details: mensajeDeError(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

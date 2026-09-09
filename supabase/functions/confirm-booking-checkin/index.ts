@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -15,6 +16,33 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
+
+// Forma real de la fila del .select() de la reserva. Se declara a mano porque
+// el cliente no lleva el tipo Database y supabase-js tipa los embeds to-one
+// como arreglo; en runtime PostgREST devuelve un objeto. Lista solo las
+// columnas que el select pide.
+type ReservaCheckin = {
+  id: string;
+  user_id: string;
+  agency_id: string;
+  status: string;
+  booking_code: string;
+  dispute_hold_at: string | null;
+  tour: { name: string; start_date: string | null } | null;
+  traveler: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    no_show_count: number;
+  } | null;
+  agency: {
+    id: string;
+    name: string;
+    user_id: string;
+    contact_email: string;
+  } | null;
 };
 
 Deno.serve(async (req: Request) => {
@@ -101,6 +129,7 @@ Deno.serve(async (req: Request) => {
         agency:agencies(id, name, user_id, contact_email)
       `)
       .eq("id", tokenRecord.booking_id)
+      .returns<ReservaCheckin[]>()
       .maybeSingle();
 
     if (bookingError || !booking) {
@@ -244,7 +273,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: "Error interno del servidor", details: error.message }),
+      JSON.stringify({ error: "Error interno del servidor", details: mensajeDeError(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

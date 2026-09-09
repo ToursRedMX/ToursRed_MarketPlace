@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import { isConfigured, getCharge, getChargeMerchant } from "../_shared/openpay.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -186,7 +187,7 @@ Deno.serve(async (req: Request) => {
           if (webhookEventId) {
             await supabase.from("openpay_webhook_events").update({
               processing_status: "requiere_conciliacion_manual",
-              processing_error: `API verification failed: ${verifyErr.message}`,
+              processing_error: `API verification failed: ${mensajeDeError(verifyErr)}`,
               processed_at: new Date().toISOString(),
             }).eq("id", webhookEventId);
           }
@@ -206,17 +207,34 @@ Deno.serve(async (req: Request) => {
           return new Response("OK", { status: 200, headers: corsHeaders });
         }
 
-        const feeDetails = verifiedApiCharge.fee_details || [];
-        const processorFee = Array.isArray(feeDetails)
-          ? feeDetails.reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
-          : 0;
-        const feeBase = Array.isArray(feeDetails)
-          ? feeDetails.filter((fd: any) => fd.type !== "tax").reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
-          : 0;
-        const feeIva = Array.isArray(feeDetails)
-          ? feeDetails.filter((fd: any) => fd.type === "tax").reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
-          : 0;
-        const chargeAmount = parseFloat(verifiedApiCharge.amount || "0");
+        // OpenPay manda la comision en `fee: { amount, tax }`, donde `amount`
+        // es la comision SIN IVA y `tax` es el IVA. Lo que habia aqui leia
+        // `fee_details`, que es un campo de MERCADOPAGO y OpenPay nunca manda:
+        // el arreglo salia siempre vacio, asi que processor_fee,
+        // processor_fee_base y processor_fee_iva se guardaban en 0 y
+        // net_amount quedaba igual al bruto. Confirmado el 08-sep-2026 contra
+        // los payloads reales de openpay_webhook_events y contra las 5 filas
+        // de payment_transactions con payment_processor='openpay', todas con
+        // processor_fee = 0 (las 11 de mercadopago si traen comision).
+        //
+        // Esas 5 filas viejas NO se recalculan aqui; el raw_payload con el fee
+        // real sigue en openpay_webhook_events si se decide hacer el backfill.
+        const numeroOCero = (v: unknown): number => {
+          const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+          return Number.isFinite(n) ? n : 0;
+        };
+
+        const feeBase = numeroOCero(verifiedApiCharge.fee?.amount);
+        const feeIva = numeroOCero(verifiedApiCharge.fee?.tax);
+        const processorFee = parseFloat((feeBase + feeIva).toFixed(2));
+
+        if (!verifiedApiCharge.fee) {
+          console.warn(
+            `[openpay-webhook] cargo ${transaction.id} sin objeto fee; se registra comision 0`,
+          );
+        }
+
+        const chargeAmount = numeroOCero(verifiedApiCharge.amount);
         const paymentMethodType = verifiedApiCharge.method || "card";
 
         // Determine payment_form for CFDI
@@ -735,7 +753,7 @@ Deno.serve(async (req: Request) => {
       if (webhookEventId) {
         await supabase.from("openpay_webhook_events").update({
           processing_status: "requiere_conciliacion_manual",
-          processing_error: `API verification failed: ${verifyErr.message}`,
+          processing_error: `API verification failed: ${mensajeDeError(verifyErr)}`,
           processed_at: new Date().toISOString(),
         }).eq("id", webhookEventId);
       }
@@ -866,7 +884,7 @@ Deno.serve(async (req: Request) => {
         console.error("Accounting entry failed for topup", topup.id, ":", acctError.message);
       }
     } catch (acctErr) {
-      console.error("Accounting entry exception for topup", topup.id, ":", acctErr.message);
+      console.error("Accounting entry exception for topup", topup.id, ":", mensajeDeError(acctErr));
     }
 
     if (webhookEventId) {
@@ -892,7 +910,7 @@ Deno.serve(async (req: Request) => {
     if (webhookEventId) {
       await supabase.from("openpay_webhook_events").update({
         processing_status: "error",
-        processing_error: `Unexpected error: ${err.message}`,
+        processing_error: `Unexpected error: ${mensajeDeError(err)}`,
         processed_at: new Date().toISOString(),
       }).eq("id", webhookEventId);
     }

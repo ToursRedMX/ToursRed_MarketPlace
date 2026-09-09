@@ -101,6 +101,22 @@ export interface OpenPayCharge {
   currency: string;
   payment_method: OpenPayPaymentMethod | null;
   customer_id?: string;
+  /**
+   * Comision que cobra OpenPay. Solo viene en los cargos ya liquidados
+   * (charge.succeeded); en charge.created y transaction.expired no existe.
+   *
+   * Forma verificada el 08-sep-2026 contra los payloads reales guardados en
+   * openpay_webhook_events: `amount` es la comision SIN IVA y `tax` es el IVA
+   * (236.81 x 0.16 = 37.89 en los tres cargos revisados). No confundir con
+   * `fee_details`, que es de MercadoPago y OpenPay nunca manda.
+   */
+  fee?: {
+    amount?: number | null;
+    tax?: number | null;
+    currency?: string | null;
+    surcharge?: number | null;
+    base_commission?: number | null;
+  } | null;
 }
 
 // ── Create or reuse customer ─────────────────────────

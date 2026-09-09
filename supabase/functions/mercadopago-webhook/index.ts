@@ -17,7 +17,13 @@ if (sentryDsn) {
   });
 }
 
-async function getMercadoPagoPaymentForm(payment: any): string {
+// Estaba declarada `async ... : string`, que es una contradiccion (TS1064) y
+// no es cosmetica: en runtime gana el `async`, asi que devolvia una Promise. Los
+// cuatro llamadores la usan sin await dentro de un JSON.stringify, y
+// `JSON.stringify({ payment_form: unaPromise })` da `{"payment_form":{}}` — o
+// sea que la forma de pago del CFDI viajaba como objeto vacio en vez del codigo
+// del SAT. El cuerpo no tiene ningun await, asi que sobra el `async`.
+function getMercadoPagoPaymentForm(payment: any): string {
   const paymentType = payment?.payment_type_id || payment?.payment_type || "";
   const cardTags = Array.isArray(payment?.card?.tags) ? payment.card.tags : [];
   if (paymentType === "ticket" || paymentType === "atm") return "01";

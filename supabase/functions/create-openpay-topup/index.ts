@@ -7,6 +7,7 @@ import {
   createCodiCharge,
 } from "../_shared/openpay.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -28,7 +29,14 @@ const MAX_AMOUNT = 50000;
 
 interface CreateTopupRequest {
   amount: number;
-  payment_method_type: "spei";
+  /**
+   * Lo que MANDA el cliente, no lo que aceptamos: sale de `req.json()` y no
+   * hay nada que garantice su valor. Estaba declarado como el literal "spei",
+   * y con eso TS daba por imposible el `=== "codi"` de abajo (TS2367) y
+   * angostaba el `!== "spei"` a never — o sea, marcaba como muerta la unica
+   * validacion que protege este endpoint. Se valida abajo, en runtime.
+   */
+  payment_method_type: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -190,11 +198,11 @@ Deno.serve(async (req: Request) => {
     } catch (err) {
       await supabase.from("openpay_wallet_topups").update({
         status: "failed",
-        error_message: err.message,
+        error_message: mensajeDeError(err),
       }).eq("id", topupId);
 
       return new Response(
-        JSON.stringify({ error: err.message }),
+        JSON.stringify({ error: mensajeDeError(err) }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -246,11 +254,11 @@ Deno.serve(async (req: Request) => {
       await supabase.from("openpay_wallet_topups").update({
         openpay_customer_id: customerId,
         status: "failed",
-        error_message: err.message,
+        error_message: mensajeDeError(err),
       }).eq("id", topupId);
 
       return new Response(
-        JSON.stringify({ error: err.message }),
+        JSON.stringify({ error: mensajeDeError(err) }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

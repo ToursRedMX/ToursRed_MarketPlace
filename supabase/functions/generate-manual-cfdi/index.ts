@@ -374,18 +374,22 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", cfdiRecord.id);
 
+    // PostgrestBuilder es un thenable, no un Promise: su .then() devuelve
+    // PromiseLike y EdgeRuntime.waitUntil pide Promise. Se envuelve con
+    // Promise.resolve, que es el patron que ya usan generate-featured-slot-cfdi
+    // y process-agency-booking-cancellation.
     EdgeRuntime.waitUntil(
-      supabase.rpc("create_accounting_entry_for_manual_cfdi", {
+      Promise.resolve(supabase.rpc("create_accounting_entry_for_manual_cfdi", {
         p_cfdi_invoice_id: cfdiRecord.id,
-      }).then(({ error }) => { if (error) console.error("Error asiento contable:", error); })
+      })).then(({ error }) => { if (error) console.error("Error asiento contable:", error); })
     );
 
     if (body.recipient_id) {
       EdgeRuntime.waitUntil(
-        supabase
+        Promise.resolve(supabase
           .from("manual_cfdi_recipients")
           .update({ updated_at: new Date().toISOString() })
-          .eq("id", body.recipient_id)
+          .eq("id", body.recipient_id))
           .then(() => {})
       );
     }

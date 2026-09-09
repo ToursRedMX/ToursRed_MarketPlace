@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,7 +58,10 @@ Deno.serve(async (req: Request) => {
     // Look up the most recent unused, non-expired code for this email
     const { data: resetCode, error: codeError } = await supabase
       .from("password_reset_codes")
-      .select("id, user_id, expires_at, used, failed_attempts")
+      // `code` faltaba en el select y el codigo de abajo lo compara igual:
+      // resetCode.code era undefined, la comparacion nunca casaba y TODO intento
+      // de reset devolvia "Codigo incorrecto" ademas de gastar un intento.
+      .select("id, user_id, code, expires_at, used, failed_attempts")
       .eq("email", email)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -198,7 +202,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || "Error interno del servidor"
+        error: mensajeDeError(error) || "Error interno del servidor"
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

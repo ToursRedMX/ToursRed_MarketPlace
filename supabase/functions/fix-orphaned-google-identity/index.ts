@@ -1,6 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { envRequerida } from "../_shared/env.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,12 +28,12 @@ Deno.serve(async (req)=>{
   }
   // Require valid JWT from admin/super_admin
   const authHeader = req.headers.get("Authorization");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceKey = envRequerida("SUPABASE_SERVICE_ROLE_KEY");
   if (authHeader === `Bearer ${serviceKey}`) {
     // Internal service call — allowed
   } else if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.replace("Bearer ", "");
-    const supabaseUser = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_ANON_KEY"), {
+    const supabaseUser = createClient(envRequerida("SUPABASE_URL"), envRequerida("SUPABASE_ANON_KEY"), {
       global: { headers: { Authorization: `Bearer ${token}` } }
     });
     const { data: { user } } = await supabaseUser.auth.getUser(token);
@@ -53,7 +55,7 @@ Deno.serve(async (req)=>{
   }
   try {
     // Use service role key internally to access auth schema
-    const supabaseAdmin = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    const supabaseAdmin = createClient(envRequerida("SUPABASE_URL"), envRequerida("SUPABASE_SERVICE_ROLE_KEY"));
     // Delete orphaned identities: identity exists but the user was deleted from auth.users
     const { data, error } = await supabaseAdmin.rpc("cleanup_orphaned_identities");
     if (error) throw error;
@@ -79,7 +81,7 @@ Deno.serve(async (req)=>{
     }
     return new Response(JSON.stringify({
       success: false,
-      error: err.message
+      error: mensajeDeError(err)
     }), {
       status: 500,
       headers: {

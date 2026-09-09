@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -194,7 +195,7 @@ Deno.serve(async (req: Request) => {
         );
         results.recipientSent = true;
       } catch (error) {
-        results.errors.push(`Failed to send to recipient: ${error.message}`);
+        results.errors.push(`Failed to send to recipient: ${mensajeDeError(error)}`);
       }
     }
 
@@ -211,7 +212,7 @@ Deno.serve(async (req: Request) => {
         );
         results.purchaserSent = true;
       } catch (error) {
-        results.errors.push(`Failed to send to purchaser: ${error.message}`);
+        results.errors.push(`Failed to send to purchaser: ${mensajeDeError(error)}`);
       }
     }
 
@@ -266,7 +267,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: mensajeDeError(error) || "Internal server error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

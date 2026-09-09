@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9";
 
@@ -33,7 +33,12 @@ function err(message: string) {
 }
 
 async function cancelStampedCfds(
-  supabase: ReturnType<typeof createClient>,
+  // Solo se usan .from() y .functions.invoke(). Pedir el cliente completo
+  // exigia que los genericos coincidieran exactamente con los del cliente que
+  // se pasa, y no coincidian: createClient(url, key) infiere
+  // SupabaseClient<any, ...> y el tipo sin argumentos usa los valores por
+  // defecto. Mismo patron que ZohoClient en zohoAccessToken.ts.
+  supabase: Pick<SupabaseClient, "from" | "functions">,
   bookingId: string,
   cancellationId: string
 ): Promise<void> {
@@ -42,7 +47,11 @@ async function cancelStampedCfds(
     .select("id")
     .eq("booking_id", bookingId)
     .in("invoice_type", ["booking", "booking_installment", "supplement", "insurance", "optional_service", "checkin_wallet"])
-    .eq("status", "stamped");
+    .eq("status", "stamped")
+    // El cliente llega tipado como ReturnType<typeof createClient> (Database=any),
+    // y con eso supabase-js resuelve la fila a never: cfdi.id no compilaba. Se
+    // declara la forma que el select realmente pide.
+    .returns<{ id: string }[]>();
 
   for (const cfdi of stampedCfds || []) {
     try {

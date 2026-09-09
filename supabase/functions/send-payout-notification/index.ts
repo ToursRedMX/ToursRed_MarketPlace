@@ -2,6 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { envRequerida } from "../_shared/env.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -32,7 +34,7 @@ Deno.serve(async (req)=>{
   const guard = requireServiceRole(req, { recurso: "send-payout-notification", cors: corsHeaders });
   if (!guard.ok) return guard.response;
   try {
-    const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    const supabase = createClient(envRequerida("SUPABASE_URL"), envRequerida("SUPABASE_SERVICE_ROLE_KEY"));
     const { payout_id, agency_email, agency_name, amount, reference, commission_count } = await req.json();
     if (!payout_id || !agency_email || !agency_name || !amount) {
       throw new Error("Missing required fields");
@@ -185,7 +187,7 @@ Deno.serve(async (req)=>{
     }
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || "Internal server error"
+      error: mensajeDeError(error) || "Internal server error"
     }), {
       status: 400,
       headers: {

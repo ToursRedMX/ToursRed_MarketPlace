@@ -20,7 +20,53 @@
  * 3. Los saltos de página (pageBreak: "before") solo se agregaron antes de 
  *    "CLAUSULAS" y "ANEXO A" — puedes agregar más si alguna cláusula queda 
  *    partida de forma incómoda entre páginas, una vez que veas el render.
- */ const styles = {
+ */
+
+/**
+ * Datos de la agencia que alimentan el cuerpo del contrato.
+ *
+ * Los campos son exactamente los que el docDefinition de abajo lee: si se
+ * agrega uno aqui, hay que usarlo abajo, y si se lee uno abajo, tiene que
+ * estar aqui. `approve-agency-documents` y `verify-contract-otp` ya importaban
+ * este nombre como tipo, pero el archivo no lo exportaba (TS2305).
+ */
+export interface ContractData {
+  razonSocial: string;
+  rfcAgencia: string;
+  domicilioFiscal: string;
+  representanteLegal: string;
+  emailContacto: string;
+  folioContrato: string;
+  fechaDia: string | number;
+  fechaMes: string;
+  fechaAnio: string | number;
+  versionContrato: string;
+  commissionPercentage: number | string;
+  /** Solo si la agencia negocio una comision distinta a la estandar. */
+  specialCommissionClause?: string;
+}
+
+/**
+ * Evidencia de la aceptacion electronica que se imprime en el Anexo B.
+ *
+ * `hashDocumento` es opcional a proposito: el PDF se genera dos veces —la
+ * primera sin hash para poder calcularlo sobre los bytes resultantes— y en esa
+ * primera pasada el Anexo B imprime la leyenda de "disponible en el registro".
+ */
+export interface AnexoBData {
+  contractFolio: string;
+  contractVersion: string;
+  razonSocial: string;
+  rfcAgencia: string;
+  emailAceptacion: string;
+  fechaHoraAceptacion: string;
+  ipAceptacion: string;
+  userAgentAceptacion: string;
+  otpEstatus: string;
+  hashDocumento?: string | null;
+}
+
+const styles = {
   coverBrand: {
     fontSize: 10,
     bold: true,
@@ -155,7 +201,7 @@
     font: "Courier"
   }
 };
-function coverPage(data) {
+function coverPage(data: ContractData) {
   return [
     {
       text: "TOURSRED",
@@ -269,7 +315,7 @@ function coverPage(data) {
     }
   ];
 }
-function signatureBlock(data) {
+function signatureBlock(data: ContractData) {
   return {
     columns: [
       {
@@ -342,8 +388,8 @@ function signatureBlock(data) {
     ]
   };
 }
-function anexoB(a) {
-  const row = (label, value, pending = false)=>[
+function anexoB(a: AnexoBData) {
+  const row = (label: string, value: string, pending = false)=>[
       {
         text: label,
         style: "evidenceLabel",
@@ -408,7 +454,7 @@ function anexoB(a) {
 /**
  * Genera el docDefinition para el contrato PRE-firma (el que la agencia 
  * revisa antes de dar clic en "Firmar"). No incluye Anexo B.
- */ export function buildContractDocDefinition(data) {
+ */ export function buildContractDocDefinition(data: ContractData) {
   return {
     pageSize: "LETTER",
     pageMargins: [
@@ -421,7 +467,7 @@ function anexoB(a) {
       font: "Roboto"
     },
     styles,
-    footer: (currentPage, pageCount)=>({
+    footer: (currentPage: number, pageCount: number)=>({
         text: `${data.folioContrato} — Página ${currentPage} de ${pageCount}`,
         alignment: "center",
         fontSize: 7,
@@ -8279,7 +8325,7 @@ function anexoB(a) {
 /**
  * Genera el docDefinition para el contrato FIRMADO (con Anexo B lleno).
  * Se usa en verify-contract-otp después de validar el OTP.
- */ export function buildSignedContractDocDefinition(data, anexo) {
+ */ export function buildSignedContractDocDefinition(data: ContractData, anexo: AnexoBData) {
   const base = buildContractDocDefinition(data);
   return {
     ...base,

@@ -10,6 +10,40 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Forma real de la fila del .select() del slot. Los embeds (featured_plans,
+// agencies y el users anidado) son to-one, asi que PostgREST devuelve objetos;
+// supabase-js los infiere como arreglo. Antes se tapaba con
+// `as Record<string, unknown>` — conversion insegura (TS2352) que ademas
+// obligaba a un segundo cast en CADA lectura (`agency?.rfc as string`), o sea
+// que ningun nombre de columna estaba realmente verificado.
+type SlotFacturable = {
+  id: string;
+  agency_id: string;
+  plan_id: string;
+  status: string;
+  subtotal: number | null;
+  tax_amount: number | null;
+  total_amount: number | null;
+  payment_confirmed_at: string | null;
+  featured_plans: { name: string; duration_days: number; price: number } | null;
+  agencies: {
+    id: string;
+    name: string;
+    user_id: string;
+    rfc: string | null;
+    razon_social: string | null;
+    regimen_fiscal: string | null;
+    postal_code: string | null;
+    users: {
+      rfc: string | null;
+      razon_social: string | null;
+      regimen_fiscal: string | null;
+      uso_cfdi: string | null;
+      codigo_postal_fiscal: string | null;
+    } | null;
+  } | null;
+};
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -158,6 +192,7 @@ Deno.serve(async (req: Request) => {
       `)
       .eq("id", slot_id)
       .eq("status", "active")
+      .returns<SlotFacturable[]>()
       .maybeSingle();
 
     if (slotError || !slot) {
@@ -197,9 +232,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const agency = slot.agencies as Record<string, unknown>;
-    const plan = slot.featured_plans as Record<string, unknown>;
-    const agencyUser = (agency?.users as Record<string, unknown>) || {};
+    const agency = slot.agencies;
+    const plan = slot.featured_plans;
+    const agencyUser = agency?.users ?? null;
 
     // Determinar datos fiscales del receptor (agencia)
     const fallbackCP = settings.pac_issuer_postal_code || "";
@@ -215,9 +250,9 @@ Deno.serve(async (req: Request) => {
     let receptorUsoCfdi: string;
     let receptorCP: string;
 
-    const agencyRfc = (agency?.rfc as string) || "";
-    const agencyRazon = (agency?.razon_social as string) || (agency?.name as string) || "";
-    const agencyCP = (agency?.postal_code as string) || "";
+    const agencyRfc = agency?.rfc || "";
+    const agencyRazon = agency?.razon_social || agency?.name || "";
+    const agencyCP = agency?.postal_code || "";
 
     if (!agencyCP) {
       return new Response(
@@ -229,8 +264,8 @@ Deno.serve(async (req: Request) => {
     if (agencyRfc && agencyRfc.length >= 12) {
       receptorRfc = agencyRfc;
       receptorNombre = agencyRazon;
-      receptorRegimen = (agency?.regimen_fiscal as string) || (agencyUser?.regimen_fiscal as string) || "626";
-      receptorUsoCfdi = (agencyUser?.uso_cfdi as string) || "G03";
+      receptorRegimen = agency?.regimen_fiscal || agencyUser?.regimen_fiscal || "626";
+      receptorUsoCfdi = agencyUser?.uso_cfdi || "G03";
       receptorCP = agencyCP;
     } else {
       receptorRfc = "XAXX010101000";
@@ -243,7 +278,7 @@ Deno.serve(async (req: Request) => {
     const total = Number(slot.total_amount ?? plan?.price ?? 0);
     const subtotal = Math.round((total / 1.16) * 1000000) / 1000000;
 
-    const planName = (plan?.name as string) || "Tour Destacado";
+    const planName = plan?.name || "Tour Destacado";
     const serie = ((settings.cfdi_serie_booking || "A") + "D");
 
     const cfdiRequest: CfdiRequest = {

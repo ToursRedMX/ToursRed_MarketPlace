@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -286,7 +287,7 @@ Para darte de baja visita: ${unsubscribeLink}
     return new Response(
       JSON.stringify({
         error: "Error al procesar la suscripción",
-        details: error.message
+        details: mensajeDeError(error)
       }),
       {
         status: 500,

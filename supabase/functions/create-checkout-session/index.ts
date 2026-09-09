@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9";
 import { origenParaRedirigir, urlDeRetornoSegura } from "../_shared/cors.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -481,7 +482,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || "An unexpected error occurred",
+        error: mensajeDeError(error) || "An unexpected error occurred",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

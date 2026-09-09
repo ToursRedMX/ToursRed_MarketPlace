@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import type { ContractData, AnexoBData } from "../_shared/contractDocDefinition.ts";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -33,7 +34,9 @@ async function hashOtp(otp: string): Promise<string> {
 }
 
 // deno-lint-ignore no-explicit-any
-async function pdfDocToBytes(pdfDoc: any): Promise<Uint8Array> {
+// Uint8Array<ArrayBuffer>: el default generico es ArrayBufferLike y
+// crypto.subtle.digest pide BufferSource, que exige ArrayBuffer.
+async function pdfDocToBytes(pdfDoc: any): Promise<Uint8Array<ArrayBuffer>> {
   const chunks: Uint8Array[] = [];
   return new Promise((resolve, reject) => {
     pdfDoc.on("data",  (chunk: Uint8Array) => chunks.push(chunk));
@@ -224,7 +227,7 @@ Deno.serve(async (req: Request) => {
     // ── Generación de PDF, hash y subida a Storage ───────────────────────────
     // TODO en un solo try/catch. Si algo falla aquí, NO se actualiza
     // contract_acceptances.status ni agencies.onboarding_status.
-    let pdfBytes: Uint8Array;
+    let pdfBytes: Uint8Array<ArrayBuffer>;
     let documentHash: string;
     let storagePath: string;
 
@@ -398,6 +401,6 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return new Response(JSON.stringify({ error: "Error interno del servidor", detail: String(err?.message || err) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Error interno del servidor", detail: mensajeDeError(err) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

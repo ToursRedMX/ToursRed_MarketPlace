@@ -5,6 +5,7 @@ import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 import { verificarCoberturaDePago } from "../_shared/coberturaDePago.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 // Se nombra el tipo del cliente para no sumar mas `any` a un archivo que ya
 // tiene varios. Se importa en vez de derivarlo con ReturnType<typeof
@@ -75,7 +76,7 @@ async function getStripeProcessorFee(stripe: any, paymentIntentId: string): Prom
       return { fee, net };
     }
   } catch (e) {
-    console.error('Error fetching Stripe processor fee:', e.message);
+    console.error('Error fetching Stripe processor fee:', mensajeDeError(e));
   }
   return null;
 }
@@ -299,12 +300,12 @@ Deno.serve(async (req) => {
         event = await stripe.webhooks.constructEventAsync(body, signature, endpointSecret);
         console.log("✅ Webhook signature verified successfully");
       } catch (err) {
-        console.error(`❌ Webhook signature verification failed: ${err.message}`);
+        console.error(`❌ Webhook signature verification failed: ${mensajeDeError(err)}`);
         console.log("💡 Tip: Make sure STRIPE_WEBHOOK_SECRET matches the secret from your Stripe dashboard");
         return new Response(
           JSON.stringify({
             success: false,
-            error: `Webhook Error: ${err.message}`,
+            error: `Webhook Error: ${mensajeDeError(err)}`,
             hint: "Check that STRIPE_WEBHOOK_SECRET is correctly configured"
           }),
           {
@@ -358,7 +359,7 @@ Deno.serve(async (req) => {
 
         return { type: paymentMethodType, cardFunding: null };
       } catch (error) {
-        console.error(`Error retrieving payment method: ${error.message}`);
+        console.error(`Error retrieving payment method: ${mensajeDeError(error)}`);
         return { type: 'unknown', cardFunding: null };
       }
     };
@@ -1046,9 +1047,30 @@ Deno.serve(async (req) => {
         let paymentIntentId: string | null = session.payment_intent as string | null;
         if (!paymentIntentId && session.mode === 'subscription' && session.invoice) {
           try {
-            const invoice = await stripe.invoices.retrieve(session.invoice as string);
-            paymentIntentId = invoice.payment_intent as string | null;
-            console.log(`Retrieved payment_intent ${paymentIntentId} from invoice ${session.invoice}`);
+            // La API Basil (2025-03-31) elimino `payment_intent` del objeto
+            // Invoice, y aqui corremos 2026-06-24.dahlia: `invoice.payment_intent`
+            // devolvia undefined SIEMPRE, asi que en modo suscripcion nunca se
+            // recuperaba el PaymentIntent. Consecuencia en cadena:
+            // bookings.payment_intent_id quedaba null y getStripeProcessorFee()
+            // recibia null, tiraba dentro de su try y dejaba processor_fee en 0.
+            //
+            // La ruta oficial post-Basil es la lista invoice.payments, donde
+            // cada entrada trae payment.payment_intent (string o el objeto
+            // expandido, segun el expand que se pida).
+            const invoice = await stripe.invoices.retrieve(session.invoice as string, {
+              expand: ['payments'],
+            });
+            const pagoConIntent = invoice.payments?.data.find(
+              (p) => p.payment?.type === 'payment_intent' && p.payment?.payment_intent
+            );
+            const intent = pagoConIntent?.payment?.payment_intent;
+            paymentIntentId = typeof intent === 'string' ? intent : intent?.id ?? null;
+
+            if (paymentIntentId) {
+              console.log(`Retrieved payment_intent ${paymentIntentId} from invoice ${session.invoice}`);
+            } else {
+              console.warn(`Invoice ${session.invoice} sin payment_intent en invoice.payments`);
+            }
           } catch (invoiceErr: any) {
             console.error(`Error retrieving invoice for payment_intent: ${invoiceErr.message}`);
           }
@@ -1057,7 +1079,11 @@ Deno.serve(async (req) => {
         if (paymentStatus === 'paid') {
           const { data: booking, error: bookingFetchError } = await supabase
             .from('bookings')
-            .select('tour_id, travelers_count')
+            // user_id faltaba en el select y mas abajo se lee dos veces: el
+            // audit log de BOOKING_CONFIRMED se guardaba con p_actor_id nulo y
+            // el fallback del user_id de la membresia de carrito mixto quedaba
+            // en undefined.
+            .select('tour_id, travelers_count, user_id')
             .eq('id', bookingId)
             .single();
 
@@ -1733,8 +1759,17 @@ Deno.serve(async (req) => {
             metadata: session
           });
 
-        // Fetch real processor fee from Stripe and update transaction
-        const stripeFee = await getStripeProcessorFee(stripe, paymentIntentId);
+        // Fetch real processor fee from Stripe and update transaction.
+        // paymentIntentId puede ser null (una sesion en modo suscripcion cuya
+        // invoice no traiga pago). Antes se pasaba igual y la llamada tiraba
+        // dentro del try de getStripeProcessorFee, que devolvia null sin decir
+        // por que; ahora se salta explicitamente y queda en el log.
+        const stripeFee = paymentIntentId
+          ? await getStripeProcessorFee(stripe, paymentIntentId)
+          : null;
+        if (!paymentIntentId) {
+          console.warn(`Sin payment_intent para la reserva ${bookingId}: no se registra processor_fee`);
+        }
         if (stripeFee) {
           await supabase
             .from('payment_transactions')
@@ -1796,7 +1831,7 @@ Deno.serve(async (req) => {
             else paymentMethodType = rawType;
           }
         } catch (error) {
-          console.error(`Error retrieving payment method: ${error.message}`);
+          console.error(`Error retrieving payment method: ${mensajeDeError(error)}`);
        }
 
         if (transactionType === 'gift_card' && giftCardId) {
@@ -3240,7 +3275,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Unknown error'
+        error: mensajeDeError(error) || 'Unknown error'
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

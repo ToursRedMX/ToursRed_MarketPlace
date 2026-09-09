@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -307,7 +308,7 @@ Este mensaje fue enviado desde el formulario de contacto de ToursRed.
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: "Error al enviar el email", details: error.message }),
+      JSON.stringify({ error: "Error al enviar el email", details: mensajeDeError(error) }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

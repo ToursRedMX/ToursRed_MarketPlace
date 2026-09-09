@@ -1,11 +1,33 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
+
+// Forma real de la fila del .select() de la reserva. Se declara a mano porque
+// el cliente no lleva el tipo Database y supabase-js tipa los embeds to-one
+// como arreglo; en runtime PostgREST devuelve un objeto.
+type ReservaCobroWallet = {
+  id: string;
+  user_id: string;
+  agency_id: string;
+  total_price: number;
+  deposit_amount: number;
+  wallet_charged_at_checkin: number;
+  status: string;
+  payment_status: string | null;
+  agency: { id: string; name: string; user_id: string } | null;
+  traveler: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+  } | null;
 };
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
@@ -76,6 +98,7 @@ Deno.serve(async (req: Request) => {
         traveler:users!bookings_user_id_fkey(id, first_name, last_name, email)
       `)
       .eq("id", booking_id)
+      .returns<ReservaCobroWallet[]>()
       .maybeSingle();
 
     if (bookingError || !booking) {
@@ -329,7 +352,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: "Error interno del servidor", details: error.message }),
+      JSON.stringify({ error: "Error interno del servidor", details: mensajeDeError(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
