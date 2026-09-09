@@ -68,7 +68,9 @@ import { join } from "node:path";
 //        lectura se ve igual que un cero de verdad.
 //   132  09-sep: el lado de la agencia — estado financiero (incluidos los
 //        exports a PDF y Excel) y la pantalla de reservas.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 132);
+//   120  09-sep: el editor de tours. Ahi una lectura fallida se convertia
+//        en un borrado al guardar.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 120);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 
