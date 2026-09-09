@@ -83,6 +83,9 @@ jobs:
       - name: Verify CFDI PAC configuration failures
         run: node scripts/test-cfdi-pac-config.mjs
 
+      - name: Verify shared Zoho OAuth handling
+        run: node scripts/test-zoho-access-token.mjs
+
       # F-1 de la auditoria de frontend. Contador, no guardia en cero: son 247
       # sitios y una parte son intencionales. No exige bajar, impide subir.
       # Va aqui dentro y no en un job aparte a proposito: `lint` ya es check
