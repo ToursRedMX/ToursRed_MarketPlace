@@ -58,6 +58,23 @@ jobs:
   lint:
     runs-on: ubuntu-latest
 
+    # Postgres para las pruebas de migraciones. Va colgado de `lint` y no en un
+    # job aparte por lo mismo que los demas checks de este archivo: `lint` ya es
+    # requerido y corre en todos los PR, asi que no se agrega un check nuevo que
+    # pueda quedarse en "Waiting for status to be reported".
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -113,6 +130,20 @@ jobs:
       # dos caminos: el login por contrasena y AuthContext.
       - name: Verify blocked-account check fails closed
         run: node scripts/test-auth-falla-cerrado.mjs
+
+      # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
+      # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
+      # aplica SIN transaccion a proposito, porque asi fue como se descubrio que
+      # el seguro no era atomico.
+      - name: Verify is_active is enforced by the RLS helpers
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS rls_ok;" -c "CREATE DATABASE rls_ok;"
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS rls_guardia;" -c "CREATE DATABASE rls_guardia;"
+          cd scripts
+          psql -h localhost -U postgres -d rls_ok -v ON_ERROR_STOP=1 -f test-is-active-rls.sql
+          psql -h localhost -U postgres -d rls_guardia -v ON_ERROR_STOP=1 -f test-is-active-rls-guardia.sql
 
       # F-1 de la auditoria de frontend. Desde el 09-sep-2026 la linea base es
       # CERO: dejo de ser un contador y es una guardia. Cualquier consulta nueva
