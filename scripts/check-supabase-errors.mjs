@@ -64,7 +64,9 @@ import { join } from "node:path";
 //   154  09-sep: pagos a agencias, conciliacion de OpenPay y el sync
 //        contable. Aqui salio ademas la destructuracion mala de
 //        getSession() que dejaba tres llamadas sin Authorization.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 154);
+//   145  09-sep: la pantalla de contabilidad. Ahi un cero por error de
+//        lectura se ve igual que un cero de verdad.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 145);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 
