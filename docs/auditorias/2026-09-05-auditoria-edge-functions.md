@@ -1126,11 +1126,53 @@ Lo que cerraría la llave, en orden de rendimiento:
 3. **Un check en CI** que falle si una función nueva no invoca ningún guard. El repo ya
    tiene el precedente exacto y funcionando: `scripts/check-edge-types.mjs` con línea
    base, que falla solo ante errores *nuevos*. La misma técnica sirve aquí: línea base de
-   las ~81 funciones abiertas de hoy, y que no crezca. → **pendiente.**
+   las ~81 funciones abiertas de hoy, y que no crezca. → **Hecho el 09-sep-2026** en
+   `scripts/check-edge-guards.mjs` + `scripts/edge-guards-linea-base.json`, dentro del
+   job `lint`.
 
 Ese tercer punto es el que convierte esta auditoría en algo que no hay que repetir en seis
-meses, **y sigue sin hacerse.** Los puntos 1 y 2 bajan el costo de ponerse el guard; solo
-el 3 impide que la función 172 nazca sin él.
+meses. Los puntos 1 y 2 bajan el costo de ponerse el guard; solo el 3 impide que la
+función 172 nazca sin él.
+
+### La guardia del punto 3, y lo que encontró al nacer (09-sep-2026)
+
+**El número de "~81 funciones abiertas" de este documento no se sostuvo al medirlo.**
+Salía de contar funciones sin `verify_jwt` o sin helper compartido; medido contra el
+código, **158 de las 171 toman alguna decisión de autorización** y solo 13 no. La
+diferencia es que en este repo el guard está escrito de tres formas distintas y todas
+valen: los helpers de `_shared/auth.ts`, la comparación del bearer a mano
+(`notify-ops-refund-failed`, `process-payment-refund`,
+`process-payment-plan-tour-deadline`, `facturapi-webhook`), y controles que no son de
+sesión pero sí de autorización — la firma del webhook, el captcha de Turnstile, o la
+re-consulta del cargo contra la API de OpenPay, que fue la decisión de M-3.
+
+**Lo que la guardia NO comprueba, y conviene que esté escrito:** que el guard sea
+*correcto*. Detecta que la función mira quién llama, no que decida bien. Un
+`auth.getUser()` cuyo resultado se ignora cuenta como guard aquí. Es un piso, no un techo.
+
+**La línea base lleva un motivo por entrada, y no es cosmético.** Nueve de las trece son
+públicas a propósito (recuperación de contraseña, alta y baja del boletín, validación de
+código de referido, consulta de gift card, `check-login-risk`, y
+`send-referral-signup-notification`, que sí valida el código, escapa el HTML y saca el
+destinatario de la base). Una lista pelada las mezclaría con las otras cuatro, que son
+huecos de verdad y que la guardia imprime en voz alta en cada corrida:
+
+| función | `verify_jwt` | qué permite hoy |
+|---|---|---|
+| `generate-credit-note-for-item-cancellation` | `true` | cualquier usuario logueado emite una nota de crédito |
+| `substitute-cfdi-for-partial-cancellation` | `true` | cualquier usuario logueado sustituye un CFDI |
+| `sync-booking-to-accounting` | `false` | **cualquiera**, sin sesión, escribe asientos contables |
+| `send-inquiry-email` | `false` | manda correo a una dirección tomada del cuerpo; es la categoría de A-1, con rate limit pero sin Turnstile |
+
+Las dos primeras son las más limpias de cerrar: sus únicos llamadores reales
+(`cancel-optional-service`, `cancel-individual-supplement`, `process-partial-cancellation`)
+las invocan con service role, así que un `requireServiceRole` no rompe a nadie.
+`sync-booking-to-accounting` no admite ese arreglo directo: además de cuatro webhooks la
+llama `AdminContabilidad` desde el navegador con JWT de usuario, así que tiene que aceptar
+service role **o** admin.
+
+**Estos cuatro no estaban en la auditoría original.** Aparecieron al construir la línea
+base, que es exactamente para lo que sirve el punto 3.
 
 ---
 
