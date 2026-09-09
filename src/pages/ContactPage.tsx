@@ -18,6 +18,7 @@ const ContactPage: React.FC = () => {
     message: string;
   }>({ type: null, message: '' });
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const { turnstileEnabled } = useTurnstileEnabled();
 
   const contactFormPersistence = useFormPersistence(
@@ -84,6 +85,15 @@ const ContactPage: React.FC = () => {
         message: 'Hubo un error al enviar tu mensaje. Por favor, intenta nuevamente.',
       });
     } finally {
+      // El token de Turnstile es de un solo uso y Supabase lo manda a
+      // siteverify ANTES de mirar las credenciales, asi que un intento fallido
+      // lo gasta. Sin esto, el token quemado se quedaba en el estado y el
+      // siguiente intento lo reenviaba: el usuario corregia su contraseña y
+      // seguia viendo un error de captcha. Cambiar el `key` remonta el widget y
+      // emite uno nuevo — mismo patron que ya usan las tres paginas
+      // internacionales.
+      setTurnstileToken('');
+      setCaptchaAttempt(value => value + 1);
       setIsSubmitting(false);
     }
   };
@@ -157,7 +167,7 @@ const ContactPage: React.FC = () => {
             {turnstileEnabled && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Verificación de seguridad</label>
-                <TurnstileWidget onToken={setTurnstileToken} />
+                <TurnstileWidget key={captchaAttempt} onToken={setTurnstileToken} />
               </div>
             )}
             <button

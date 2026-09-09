@@ -13,6 +13,7 @@ const MaintenanceAdminPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const { turnstileEnabled } = useTurnstileEnabled();
 
   // If already logged in as super admin, redirect immediately
@@ -79,6 +80,15 @@ const MaintenanceAdminPage: React.FC = () => {
     } catch {
       setError('Ocurrió un error inesperado. Intenta de nuevo.');
     } finally {
+      // El token de Turnstile es de un solo uso y Supabase lo manda a
+      // siteverify ANTES de mirar las credenciales, asi que un intento fallido
+      // lo gasta. Sin esto, el token quemado se quedaba en el estado y el
+      // siguiente intento lo reenviaba: el usuario corregia su contraseña y
+      // seguia viendo un error de captcha. Cambiar el `key` remonta el widget y
+      // emite uno nuevo — mismo patron que ya usan las tres paginas
+      // internacionales.
+      setTurnstileToken('');
+      setCaptchaAttempt(value => value + 1);
       setIsLoading(false);
     }
   };
@@ -145,7 +155,7 @@ const MaintenanceAdminPage: React.FC = () => {
 
             {(turnstileEnabled || turnstileToken) && (
               <div className="flex justify-center">
-                <TurnstileWidget onToken={setTurnstileToken} />
+                <TurnstileWidget key={captchaAttempt} onToken={setTurnstileToken} />
               </div>
             )}
 
