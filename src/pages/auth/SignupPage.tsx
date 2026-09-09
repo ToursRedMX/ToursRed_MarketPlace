@@ -245,6 +245,18 @@ const SignupPage: React.FC = () => {
         if (error.message === 'PASAPORTE_DUPLICADO') {
           throw new Error('Este número de pasaporte ya se encuentra asociado a otra cuenta. Si ya tienes una cuenta, por favor inicia sesión.');
         }
+        // F-1: signUp ahora distingue "esta duplicado" de "no se pudo
+        // comprobar si esta duplicado". Antes, un fallo de la consulta se leia
+        // como "esta libre" y el registro seguia adelante, metiendo el
+        // duplicado. Ahora se detiene, y el mensaje tiene que decir que es
+        // temporal: el usuario no hizo nada mal.
+        if (
+          error.message === 'NO_SE_PUDO_VERIFICAR_CURP' ||
+          error.message === 'NO_SE_PUDO_VERIFICAR_PASAPORTE' ||
+          error.message === 'NO_SE_PUDO_VERIFICAR_CORREO'
+        ) {
+          throw new Error('No pudimos validar tus datos en este momento. Por favor intenta de nuevo en unos segundos.');
+        }
         if (isLeakedPasswordError(error.message)) {
           throw new Error('Esta contraseña ha sido expuesta en brechas de datos conocidas y no puede usarse. Por favor elige una contraseña diferente y más segura.');
         }
