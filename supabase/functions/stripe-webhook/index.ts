@@ -4,6 +4,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2.39.6";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
+import { verificarCoberturaDePago } from "../_shared/coberturaDePago.ts";
 
 // Se nombra el tipo del cliente para no sumar mas `any` a un archivo que ya
 // tiene varios. Se importa en vez de derivarlo con ReturnType<typeof
@@ -1079,6 +1080,78 @@ Deno.serve(async (req) => {
             break;
           }
 
+          // ── C-1, segunda mitad: no confirmar sin mirar cuanto entro ──
+          const cobertura = await verificarCoberturaDePago(
+            supabase,
+            bookingId,
+            (session.amount_total ?? 0) / 100,
+            paymentIntentId,
+          );
+
+          if (cobertura.detalle.noVerificable) {
+            await registrarFallo(
+              "stripe-webhook/cobertura-no-verificable",
+              "No se pudo leer la reserva para comprobar la cobertura; se confirma igual porque el cobro ya se hizo",
+              cobertura.detalle,
+            );
+          }
+
+          if (!cobertura.suficiente) {
+            // Se deja en `processing` en vez de confirmar, igual que hace
+            // capture-paypal-order con un pago parcial. El dinero SI entro, asi
+            // que la transaccion se registra aqui —el insert de mas abajo no se
+            // alcanza por el `break`— para que no desaparezca de la conciliacion.
+            // `payment_transactions` no tiene indice unico por
+            // stripe_payment_intent_id, asi que un reintento del webhook
+            // duplicaria la fila. Se comprueba antes de insertar.
+            const { data: yaRegistrado } = await supabase
+              .from('payment_transactions')
+              .select('id')
+              .eq('stripe_payment_intent_id', paymentIntentId)
+              .limit(1);
+
+            if (!yaRegistrado || yaRegistrado.length === 0) {
+              await supabase.from('payment_transactions').insert({
+                booking_id: bookingId,
+                stripe_payment_intent_id: paymentIntentId,
+                payment_processor: 'stripe',
+                amount: (session.amount_total ?? 0) / 100,
+                currency: session.currency,
+                status: 'succeeded',
+                payment_method_type: paymentMethod,
+                net_amount: (session.amount_total ?? 0) / 100,
+                processor_fee: 0,
+                charge_context: 'booking_deposit',
+                charge_reference_id: bookingId,
+                metadata: session,
+              });
+            }
+
+            await supabase
+              .from('bookings')
+              .update({ payment_status: 'processing', payment_intent_id: paymentIntentId })
+              .eq('id', bookingId);
+
+            await registrarFallo(
+              "stripe-webhook/cobertura-insuficiente",
+              `Cobro por debajo del anticipo: cubierto ${cobertura.cubierto} de ${cobertura.piso} exigidos. La reserva queda en processing, sin confirmar.`,
+              { ...cobertura.detalle, origen: 'checkout.session.completed' },
+            );
+
+            console.error(`Booking ${bookingId} NOT confirmed: covered ${cobertura.cubierto} < deposit ${cobertura.piso}`);
+            break;
+          }
+
+          if (cobertura.sospechosa) {
+            // Por encima del anticipo pero por debajo de lo esperado. Se
+            // confirma —el dinero esta— y queda el rastro para revisarlo.
+            await registrarFallo(
+              "stripe-webhook/cobro-menor-al-esperado",
+              `Entraron ${cobertura.pagado} y se esperaban ${cobertura.esperado}. Se confirma porque supera el anticipo.`,
+              { ...cobertura.detalle, origen: 'checkout.session.completed' },
+            );
+          }
+
           const { error: bookingError } = await supabase
             .from('bookings')
             .update({
@@ -1845,6 +1918,48 @@ Deno.serve(async (req) => {
         }
 
         if (bookingId) {
+          // ── C-1, segunda mitad: misma comprobacion que en
+          // checkout.session.completed. Esta rama confirmaba sin mirar ni la
+          // disponibilidad ni el monto.
+          const coberturaPi = await verificarCoberturaDePago(
+            supabase,
+            bookingId,
+            (paymentIntent.amount_received ?? paymentIntent.amount ?? 0) / 100,
+            paymentIntent.id,
+          );
+
+          if (coberturaPi.detalle.noVerificable) {
+            await registrarFallo(
+              "stripe-webhook/cobertura-no-verificable",
+              "No se pudo leer la reserva para comprobar la cobertura; se confirma igual porque el cobro ya se hizo",
+              { ...coberturaPi.detalle, origen: 'payment_intent.succeeded' },
+            );
+          }
+
+          if (!coberturaPi.suficiente) {
+            await supabase
+              .from('bookings')
+              .update({ payment_status: 'processing', payment_intent_id: paymentIntent.id })
+              .eq('id', bookingId);
+
+            await registrarFallo(
+              "stripe-webhook/cobertura-insuficiente",
+              `Cobro por debajo del anticipo: cubierto ${coberturaPi.cubierto} de ${coberturaPi.piso} exigidos. La reserva queda en processing, sin confirmar.`,
+              { ...coberturaPi.detalle, origen: 'payment_intent.succeeded' },
+            );
+
+            console.error(`Booking ${bookingId} NOT confirmed from payment_intent.succeeded: covered ${coberturaPi.cubierto} < deposit ${coberturaPi.piso}`);
+            break;
+          }
+
+          if (coberturaPi.sospechosa) {
+            await registrarFallo(
+              "stripe-webhook/cobro-menor-al-esperado",
+              `Entraron ${coberturaPi.pagado} y se esperaban ${coberturaPi.esperado}. Se confirma porque supera el anticipo.`,
+              { ...coberturaPi.detalle, origen: 'payment_intent.succeeded' },
+            );
+          }
+
           const { error: bookingError } = await supabase
             .from('bookings')
             .update({
