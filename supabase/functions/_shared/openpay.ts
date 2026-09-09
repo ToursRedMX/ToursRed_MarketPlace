@@ -1,4 +1,32 @@
-import { createClient } from "npm:@supabase/supabase-js@2.39.6";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import type { SupabaseClient as LegacySupabaseClient } from "npm:@supabase/supabase-js@2.39.6";
+
+type OpenPayClient = Pick<SupabaseClient, "from"> | Pick<LegacySupabaseClient, "from">;
+
+// Minimal database contract shared by consumers using different SDK versions.
+interface OpenPayDatabase {
+  from(table: "users"): {
+    select(columns: "openpay_customer_id"): {
+      eq(column: "id", value: string): {
+        maybeSingle(): PromiseLike<{
+          data: unknown;
+          error: unknown;
+        }>;
+      };
+    };
+    update(values: { openpay_customer_id: string }): {
+      eq(column: "id", value: string): {
+        is(column: "openpay_customer_id", value: null): PromiseLike<{ error: unknown }>;
+      };
+    };
+  };
+}
+
+function persistedCustomerId(value: unknown): string | null {
+  if (!value || typeof value !== "object" || !("openpay_customer_id" in value)) return null;
+  const id = value.openpay_customer_id;
+  return typeof id === "string" && id.trim() ? id : null;
+}
 
 // ── OpenPay API client (server-side only) ────────────────────────
 
@@ -76,27 +104,33 @@ export interface OpenPayCharge {
 // ── Create or reuse customer ─────────────────────────
 
 export async function createOrReuseCustomer(
-  supabase: ReturnType<typeof createClient>,
+  supabase: OpenPayClient,
   userId: string,
   userRecord: { first_name?: string; last_name?: string; email: string; phone_number?: string }
 ): Promise<string> {
+  // Both SDK versions implement this query subset. Normalize their incompatible
+  // generic builders at this boundary; database results remain unknown/validated.
+  const database = supabase as unknown as OpenPayDatabase;
   // Check if customer already exists
-  const { data: existing } = await supabase
+  const { data: existing, error: lookupError } = await database
     .from("users")
     .select("openpay_customer_id")
     .eq("id", userId)
     .maybeSingle();
 
-  if (existing?.openpay_customer_id) {
-    return existing.openpay_customer_id;
+  if (lookupError || !existing) {
+    throw new Error("No fue posible verificar el cliente de OpenPay");
   }
+
+  const existingId = persistedCustomerId(existing);
+  if (existingId) return existingId;
 
   // Create new customer in OpenPay
   const baseUrl = getBaseUrl();
   const merchantId = getMerchantId();
   const auth = getAuthHeader();
 
-  const customerBody: OpenPayCustomer = {
+  const customerBody: Omit<OpenPayCustomer, "id"> = {
     name: userRecord.first_name || "Cliente",
     last_name: userRecord.last_name || undefined,
     email: userRecord.email,
@@ -120,26 +154,30 @@ export async function createOrReuseCustomer(
     throw new Error(customer.description || "No fue posible crear el cliente en OpenPay");
   }
 
+  if (!customer || typeof customer.id !== "string" || !customer.id.trim()) {
+    throw new Error("Respuesta de cliente OpenPay invalida");
+  }
+
   // Save customer ID — handle race condition with unique constraint
-  const { error: updateError } = await supabase
+  const { error: updateError } = await database
     .from("users")
     .update({ openpay_customer_id: customer.id })
     .eq("id", userId)
     .is("openpay_customer_id", null);
 
+  // A concurrent update can affect zero rows without returning an error.
+  // Always use the persisted ID, including when another request won the race.
+  const { data: refetched, error: readError } = await database
+    .from("users")
+    .select("openpay_customer_id")
+    .eq("id", userId)
+    .maybeSingle();
+  const savedId = persistedCustomerId(refetched);
+  if (!readError && savedId) return savedId;
   if (updateError) {
-    // Another request may have already set it — re-read
-    const { data: refetched } = await supabase
-      .from("users")
-      .select("openpay_customer_id")
-      .eq("id", userId)
-      .maybeSingle();
-    if (refetched?.openpay_customer_id) {
-      return refetched.openpay_customer_id;
-    }
+    throw new Error("No fue posible guardar el cliente de OpenPay");
   }
-
-  return customer.id;
+  throw new Error("No fue posible confirmar el cliente de OpenPay");
 }
 
 // ── Create SPEI bank charge ────────────────────────
