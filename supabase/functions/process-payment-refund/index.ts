@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9";
 
@@ -28,7 +29,7 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const expectedAuth = `Bearer ${serviceKey}`;
 
-    if (authHeader !== expectedAuth) {
+    if (!serviceKey || !authHeader) {
       return new Response(
         JSON.stringify({ error: "Unauthorized: service role key required" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -39,6 +40,35 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_URL")!,
       serviceKey
     );
+
+    let authenticatedAdminId: string | null = null;
+    if (authHeader !== expectedAuth) {
+      const token = authHeader.replace(/^Bearer(?:\s+|$)/i, "").trim();
+      if (!token) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+      const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+      if (userError || !user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+
+      const unavailable = () => new Response(JSON.stringify({ error: "No fue posible verificar los permisos de reembolso" }), { status: 503, headers: corsHeaders });
+      const forbidden = () => new Response(JSON.stringify({ error: "No tienes permiso para procesar reembolsos" }), { status: 403, headers: corsHeaders });
+      const { data: admin, error: adminError } = await supabase.from("users")
+        .select("role, is_super_admin").eq("id", user.id).maybeSingle();
+      if (adminError) return unavailable();
+      if (admin?.role !== "admin") return forbidden();
+      if (admin.is_super_admin !== true) {
+        const { data: permissions, error: permissionsError } = await supabase.from("admin_permissions")
+          .select("can_cancel_bookings").eq("user_id", user.id).maybeSingle();
+        if (permissionsError) return unavailable();
+        if (permissions?.can_cancel_bookings !== true) return forbidden();
+      }
+
+      const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const aal2 = await checkAal2Required(userClient);
+      if (!aal2.allowed) return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores", aal2.code);
+      authenticatedAdminId = user.id;
+    }
 
     const {
       booking_id,
@@ -209,7 +239,7 @@ Deno.serve(async (req: Request) => {
         status: "pending",
         idempotency_key: idempotencyKey,
         requested_by: requested_by,
-        created_by_user_id: created_by_user_id || null,
+        created_by_user_id: authenticatedAdminId || created_by_user_id || null,
       })
       .select("id")
       .single();
@@ -256,20 +286,22 @@ Deno.serve(async (req: Request) => {
           : 0;
 
       } else if (processor === "paypal") {
-        const paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID");
+        let paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID");
         let paypalClientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
         let isSandbox = Deno.env.get("PAYPAL_SANDBOX") === "true";
 
-        const { data: settings } = await supabase
+        const { data: settings, error: settingsError } = await supabase
           .from("platform_settings")
           .select("paypal_client_id, paypal_sandbox")
           .maybeSingle();
+        if (settingsError) throw new Error("No fue posible verificar la configuracion de PayPal");
         if (!paypalClientId && settings?.paypal_client_id) paypalClientId = settings.paypal_client_id;
         if (!paypalClientSecret) {
-          const { data: secrets } = await supabase
+          const { data: secrets, error: secretsError } = await supabase
             .from("platform_secrets")
             .select("paypal_client_secret")
             .maybeSingle();
+          if (secretsError) throw new Error("No fue posible verificar las credenciales de PayPal");
           if (secrets?.paypal_client_secret) paypalClientSecret = secrets.paypal_client_secret;
         }
         if (settings?.paypal_sandbox !== undefined && settings?.paypal_sandbox !== null) isSandbox = settings.paypal_sandbox;

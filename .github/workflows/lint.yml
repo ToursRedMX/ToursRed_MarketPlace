@@ -92,6 +92,12 @@ jobs:
       - name: Verify OpenPay customer persistence
         run: node scripts/test-openpay-customer.mjs
 
+      - name: Verify PayPal refund configuration
+        run: node scripts/test-paypal-refund-config.mjs
+
+      - name: Verify refund authorization
+        run: node scripts/test-refund-authorization.mjs
+
       # F-1 de la auditoria de frontend. Contador, no guardia en cero: son 247
       # sitios y una parte son intencionales. No exige bajar, impide subir.
       # Va aqui dentro y no en un job aparte a proposito: `lint` ya es check

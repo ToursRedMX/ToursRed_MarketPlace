@@ -102,5 +102,5 @@ for (const dir of readdirSync(root, { withFileTypes: true })) {
     integrations++;
   }
 }
-assert.equal(consumers, 12, 'Update coverage when MFA consumers change');
+assert.equal(consumers, 13, 'Update coverage when MFA consumers change');
 console.log(`MFA: ${cases.length} helper cases and ${integrations} handler cases across ${consumers} consumers passed.`);
