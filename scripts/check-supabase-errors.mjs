@@ -74,7 +74,9 @@ import { join } from "node:path";
 //        total; cualquiera que falle deja el reporte completo y mal.
 //   100  09-sep: las pantallas de "ya pague, que paso" — retorno de pago,
 //        extras, suplementos, plan de pagos, membresia y destacados.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 100);
+//    83  09-sep: firma de enmiendas, alta de agencias, mensajeria y el
+//        avatar de la barra superior.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 83);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 

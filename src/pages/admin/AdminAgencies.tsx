@@ -173,17 +173,21 @@ const AdminAgencies: React.FC = () => {
         (agenciesData || []).map(async (agency) => {
           try {
             // OPTIMIZED: Count only IDs instead of all columns
-            const { count: tourCount } = await supabase
+            const { count: tourCount, error: errorTours } = await supabase
               .from('tours')
               .select('id', { count: 'exact', head: true })
               .eq('agency_id', agency.id);
 
+            if (errorTours) console.error(`❌ Error contando tours de ${agency.name}:`, errorTours);
+
             // OPTIMIZED: Count only IDs instead of all columns
-            const { count: bookingCount } = await supabase
+            const { count: bookingCount, error: errorReservas } = await supabase
               .from('bookings')
               .select('id', { count: 'exact', head: true })
               .eq('agency_id', agency.id)
               .neq('status', 'draft');
+
+            if (errorReservas) console.error(`❌ Error contando reservas de ${agency.name}:`, errorReservas);
 
             // Calcular ingresos totales (suma de agency_net_amount de commission_records)
             const { data: commissionData, error: commissionError } = await supabase
@@ -231,10 +235,13 @@ const AdminAgencies: React.FC = () => {
       const execIds = [...new Set(agenciesWithStats.map((a: any) => a.account_executive_id).filter(Boolean))];
       const execNameMap: Record<string, string> = {};
       if (execIds.length > 0) {
-        const { data: execs } = await supabase
+        const { data: execs, error: errorEjecutivos } = await supabase
           .from('account_executives')
           .select('id, first_name, last_name')
           .in('id', execIds);
+
+        // Solo afecta el nombre que se pinta en la columna del ejecutivo.
+        if (errorEjecutivos) console.error('❌ Error leyendo los ejecutivos de cuenta:', errorEjecutivos);
         (execs || []).forEach((e: any) => { execNameMap[e.id] = `${e.first_name} ${e.last_name}`; });
       }
 
@@ -282,11 +289,13 @@ const AdminAgencies: React.FC = () => {
             executiveName = (agency as any)._executive_name;
             // Buscar email del ejecutivo
             try {
-              const { data: execData } = await supabase
+              const { data: execData, error: errorEmailEjecutivo } = await supabase
                 .from('account_executives')
                 .select('email')
                 .eq('id', (agency as any).account_executive_id)
                 .maybeSingle();
+              // Sin el correo, el ejecutivo no se entera de la aprobacion.
+              if (errorEmailEjecutivo) console.error('❌ Error leyendo el correo del ejecutivo:', errorEmailEjecutivo);
               if (execData?.email) executiveEmail = execData.email;
             } catch { /* ignorar */ }
           }
@@ -445,12 +454,23 @@ const AdminAgencies: React.FC = () => {
 
       if (commissionPctChanged) {
         // Check if agency already has a signed contract
-        const { data: signedContract } = await supabase
+        const { data: signedContract, error: errorContrato } = await supabase
           .from('contract_acceptances')
           .select('id')
           .eq('agency_id', selectedAgency.id)
           .eq('status', 'signed')
           .maybeSingle();
+
+        // Sin esta comprobacion, un error dejaba signedContract en null y el
+        // codigo se iba por la rama "no tiene contrato firmado — guardar
+        // directo": se le cambiaba la comision a una agencia CON contrato
+        // firmado, saltandose la refirma.
+        if (errorContrato) {
+          console.error('AdminAgencies: no se pudo comprobar el contrato firmado', errorContrato);
+          setError('No pudimos comprobar si la agencia tiene contrato firmado. No se guardo el cambio de comision.');
+          setIsUpdating(null);
+          return;
+        }
 
         if (signedContract && newCommissionPct !== null) {
           // Must go through resign flow — show modal, do NOT save silently

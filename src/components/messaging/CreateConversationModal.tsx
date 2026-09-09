@@ -93,14 +93,19 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
       // Fetch bookings if user is agency or traveler
       if (isAgency) {
         // Get bookings for agency's tours
-        const { data: agencyData } = await supabase
+        const { data: agencyData, error: errorAgencia } = await supabase
           .from('agencies')
           .select('id')
           .eq('user_id', user?.id)
           .single();
 
+        // Estas listas alimentan los desplegables para elegir a quien
+        // escribirle: vacias por un error, el usuario no puede iniciar la
+        // conversacion y no sabe por que.
+        if (errorAgencia) throw errorAgencia;
+
         if (agencyData) {
-          const { data: bookingsData } = await supabase
+          const { data: bookingsData, error: errorReservas } = await supabase
             .from('bookings')
             .select(`
               id,
@@ -109,19 +114,23 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
             `)
             .eq('agency_id', agencyData.id);
 
+          if (errorReservas) throw errorReservas;
+
           setBookings(bookingsData || []);
         }
 
         // Get agency's tours
-        const { data: toursData } = await supabase
+        const { data: toursData, error: errorTours } = await supabase
           .from('tours')
           .select('id, name, destination')
           .eq('agency_id', agencyData?.id);
 
+        if (errorTours) throw errorTours;
+
         setTours(toursData || []);
       } else if (isTraveler) {
         // Get user's bookings
-        const { data: bookingsData } = await supabase
+        const { data: bookingsData, error: errorReservasViajero } = await supabase
           .from('bookings')
           .select(`
             id,
@@ -129,6 +138,8 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
             tours(id, name, destination)
           `)
           .eq('user_id', user?.id);
+
+        if (errorReservasViajero) throw errorReservasViajero;
 
         setBookings(bookingsData || []);
       }
