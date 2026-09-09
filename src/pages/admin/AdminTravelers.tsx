@@ -111,11 +111,15 @@ export default function AdminTravelers() {
 
       const travelersWithDetails = await Promise.all(
         (travelersData || []).map(async (traveler) => {
-          const { data: bookingsData } = await supabase
+          const { data: bookingsData, error: errorReservas } = await supabase
             .from('bookings')
             .select('total_price, service_charge, created_at, payment_status, status')
             .eq('user_id', traveler.id)
             .neq('status', 'draft');
+
+          // Las columnas de "reservas" y "gastado" saldrian en 0 para un
+          // viajero que si tiene historial.
+          if (errorReservas) throw errorReservas;
 
           const totalBookings = bookingsData?.length || 0;
           const totalSpent = bookingsData?.reduce((sum, b) => sum + Number(b.total_price || 0), 0) || 0;
@@ -124,18 +128,24 @@ export default function AdminTravelers() {
             ? [...bookingsData].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at
             : null;
 
-          const { data: membershipData } = await supabase
+          const { data: membershipData, error: errorMembresia } = await supabase
             .from('memberships')
             .select('status, plan_type')
             .eq('user_id', traveler.id)
             .eq('status', 'active')
             .maybeSingle();
 
-          const { data: walletData } = await supabase
+          // Un error se veria como "no tiene membresia".
+          if (errorMembresia) throw errorMembresia;
+
+          const { data: walletData, error: errorBilletera } = await supabase
             .from('toursred_cash_wallets')
             .select('balance')
             .eq('user_id', traveler.id)
             .maybeSingle();
+
+          // Y este como saldo cero en su billetera.
+          if (errorBilletera) throw errorBilletera;
 
           return {
             ...traveler,

@@ -81,11 +81,15 @@ const AgencySupportTickets: React.FC = () => {
     setSubmittingComment(true);
     let authorName = user.email as string;
     if (agencyId) {
-      const { data: agency } = await supabase
+      const { data: agency, error: errorAgencia } = await supabase
         .from('agencies')
         .select('name')
         .eq('id', agencyId)
         .maybeSingle();
+
+      // Solo decide con que nombre se firma el comentario; sin el, queda el correo.
+      if (errorAgencia) console.error('AgencySupportTickets: no se pudo leer el nombre de la agencia', errorAgencia);
+
       if (agency?.name) authorName = agency.name;
     }
 

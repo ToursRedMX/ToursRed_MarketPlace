@@ -77,11 +77,18 @@ export default function ReviewForm({
         reviewData.agency_id = revieweeId;
         reviewData.traveler_id = user.id;
       } else {
-        const { data: agencyData } = await supabase
+        const { data: agencyData, error: errorAgencia } = await supabase
           .from('agencies')
           .select('id')
           .eq('user_id', user.id)
           .single();
+
+        // Falla cerrado, pero con el mensaje equivocado: "Agencia no
+        // encontrada" cuando lo que paso fue que no se pudo leer.
+        if (errorAgencia) {
+          console.error('ReviewForm: no se pudo leer la agencia', errorAgencia);
+          throw new Error('No pudimos verificar tu agencia. Intenta de nuevo.');
+        }
 
         if (!agencyData) throw new Error('Agencia no encontrada');
 

@@ -215,11 +215,14 @@ const TravelerDashboard: React.FC = () => {
       if (referralData) {
         setReferralCode(referralData.code);
 
-        const { data: bonusData } = await supabase
+        const { data: bonusData, error: errorBonos } = await supabase
           .from('referral_bonuses')
           .select('points_amount')
           .eq('user_id', user.id)
           .eq('status', 'awarded');
+
+        // Los puntos ganados por referidos saldrian en cero.
+        if (errorBonos) throw errorBonos;
 
         const totalPointsFromReferrals = bonusData?.reduce((sum, b) => sum + b.points_amount, 0) || 0;
 

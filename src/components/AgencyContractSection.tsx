@@ -85,9 +85,11 @@ const AgencyContractSection: React.FC<Props> = ({
 
     const urls: Record<string, string> = {};
     await Promise.all(list.map(async (doc) => {
-      const { data } = await supabase.storage
+      const { data, error } = await supabase.storage
         .from('agency-documents')
         .createSignedUrl(doc.storage_path, 3600);
+      // Sin URL firmada el documento aparece sin enlace para abrirlo.
+      if (error) console.error('AgencyContractSection: no se pudo firmar la URL del documento', error);
       if (data?.signedUrl) urls[doc.id] = data.signedUrl;
     }));
     setSignedUrls(urls);

@@ -102,25 +102,43 @@ const AdminOpenPayConciliation: React.FC = () => {
     setIsProcessing(true);
     setActionResult(null);
     try {
-      const { data: topup } = await supabase
+      const { data: topup, error: errorRecarga } = await supabase
         .from('openpay_wallet_topups')
         .select('*')
         .eq('id', topupId)
         .single();
+
+      // "Recarga no encontrada" y "no pudimos leerla" no son lo mismo: la
+      // segunda no debe hacer creer al admin que el registro no existe.
+      if (errorRecarga) {
+        console.error('Error leyendo la recarga a acreditar:', errorRecarga);
+        setActionResult('No pudimos leer la recarga. Intenta de nuevo.');
+        return;
+      }
 
       if (!topup) {
         setActionResult('Recarga no encontrada');
         return;
       }
 
-      const { data: session } = await supabase.auth.getSession();
+      // OJO: getSession() devuelve { data: { session } }. Destructurar
+      // `data` como `session` dejaba `session.access_token` en undefined y la
+      // llamada salia SIN cabecera Authorization, asi que la funcion respondia
+      // 401 "No authorization header" siempre.
+      const { data: { session }, error: errorSesion } = await supabase.auth.getSession();
+      if (errorSesion || !session?.access_token) {
+        console.error('No se pudo obtener la sesion para acreditar la recarga:', errorSesion);
+        setActionResult('No pudimos verificar tu sesion. Vuelve a iniciar sesion e intenta de nuevo.');
+        return;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-credit-wallet-topup`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             topup_id: topup.id,
@@ -294,14 +312,24 @@ const AdminOpenPayConciliation: React.FC = () => {
 
       const idempotencyKey = providerChargeId || `manual_event_${selectedEvent.id}`;
 
-      const { data: session } = await supabase.auth.getSession();
+      // OJO: getSession() devuelve { data: { session } }. Destructurar
+      // `data` como `session` dejaba `session.access_token` en undefined y la
+      // llamada salia SIN cabecera Authorization, asi que la funcion respondia
+      // 401 "No authorization header" siempre.
+      const { data: { session }, error: errorSesion } = await supabase.auth.getSession();
+      if (errorSesion || !session?.access_token) {
+        console.error('No se pudo obtener la sesion para acreditar la recarga:', errorSesion);
+        setActionResult('No pudimos verificar tu sesion. Vuelve a iniciar sesion e intenta de nuevo.');
+        return;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-credit-wallet-topup`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             topup_id: topupId,

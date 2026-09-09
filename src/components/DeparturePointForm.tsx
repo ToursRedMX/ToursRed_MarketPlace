@@ -32,11 +32,15 @@ const DeparturePointForm: React.FC<DeparturePointFormProps> = ({ onClose, onSucc
     if (formData.name.length < 2 || formData.city.length < 2) return;
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .rpc('search_departure_points', {
           search_query: `${formData.name} ${formData.city}`,
           limit_count: 5
         });
+
+      // Esta busqueda es la que avisa "ya existe un punto parecido". Si falla
+      // en silencio, no avisa y se crea el duplicado.
+      if (error) throw error;
 
       if (data && data.length > 0) {
         const similarPoints = data.filter((point: any) => {

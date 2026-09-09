@@ -20,12 +20,27 @@ const MaintenanceGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    const load = async () => {
-      const { data } = await supabase
+    const leerSettings = async () =>
+      supabase
         .from('platform_settings')
         .select('maintenance_mode, maintenance_message')
         .limit(1)
         .maybeSingle();
+
+    const load = async () => {
+      let { data, error } = await leerSettings();
+
+      // Un error aqui deja el sitio abierto durante el mantenimiento. Es el
+      // menor de los dos males —el contrario tumbaria el sitio entero por un
+      // parpadeo de red— pero al menos reintentamos una vez y lo registramos.
+      if (error) {
+        console.error('MaintenanceGate: no se pudo leer platform_settings, reintentando', error);
+        ({ data, error } = await leerSettings());
+        if (error) {
+          console.error('MaintenanceGate: el reintento tambien fallo, el sitio queda abierto', error);
+        }
+      }
+
       setMaintenance(data ?? { maintenance_mode: false, maintenance_message: '' });
       setSettingsLoading(false);
     };

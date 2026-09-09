@@ -81,6 +81,7 @@ const AdminPayouts: React.FC = () => {
   const [showPenaltyModal, setShowPenaltyModal] = useState(false);
   const [isCreatingCommissions, setIsCreatingCommissions] = useState(false);
   const [creationMessage, setCreationMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPayoutData();
@@ -89,6 +90,7 @@ const AdminPayouts: React.FC = () => {
   const fetchPayoutData = async () => {
     try {
       setIsLoading(true);
+      setLoadError(null);
       if (view === 'by-agency') {
         await fetchAgencyView();
       } else if (view === 'by-tour') {
@@ -98,6 +100,7 @@ const AdminPayouts: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching payout data:', error);
+      setLoadError(error instanceof Error ? error.message : 'No pudimos cargar los pagos pendientes. Recarga la pagina.');
     } finally {
       setIsLoading(false);
     }
@@ -109,14 +112,21 @@ const AdminPayouts: React.FC = () => {
       supabase.from('cancellation_penalty_records').select('*, agencies!inner(id, name)').eq('status', 'pending'),
     ]);
     if (commissionsRes.error) throw commissionsRes.error;
+    // Sin las penalizaciones el resumen por agencia muestra el total a pagar
+    // sin los descuentos, que es de mas.
+    if (penaltiesRes.error) throw penaltiesRes.error;
 
     const agencyIds = [...new Set([
       ...(commissionsRes.data || []).map((r: any) => r.agency_id),
       ...(penaltiesRes.data || []).map((r: any) => r.agency_id),
     ])];
 
-    const { data: payoutSchedules } = await supabase
+    const { data: payoutSchedules, error: errorCalendarios } = await supabase
       .from('payout_schedules').select('*').in('agency_id', agencyIds);
+
+    // Sin los calendarios, cada agencia se pintaria como "nunca se le ha
+    // pagado" y con frecuencia semanal por defecto, que invita a pagar dos veces.
+    if (errorCalendarios) throw errorCalendarios;
 
     const scheduleMap = new Map(payoutSchedules?.map(s => [s.agency_id, s]) || []);
     const agencyMap = new Map<string, AgencyPayoutSummary>();
@@ -277,6 +287,19 @@ const AdminPayouts: React.FC = () => {
         <h1 className="text-3xl font-bold text-gray-900">Gestión de Pagos</h1>
         <p className="mt-2 text-gray-600">Administra y procesa pagos a agencias</p>
       </div>
+
+      {loadError && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="text-sm text-red-800">
+              <p className="font-medium mb-1">Los datos de abajo pueden estar incompletos</p>
+              <p>{loadError}</p>
+              <button onClick={fetchPayoutData} className="mt-2 font-medium text-red-700 underline">Reintentar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="flex gap-4 mb-6 flex-wrap">
@@ -705,6 +728,7 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
   const formatCurrency = (amount: number) => formatCurrencyMXN(amount);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'check' | 'paypal' | 'mercadopago' | 'other'>('bank_transfer');
   const [billNumber, setBillNumber] = useState('');
   const [notes, setNotes] = useState('');
@@ -715,11 +739,16 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
   useEffect(() => {
     const loadPaymentDetails = async () => {
       if (!isOpen) return;
+      setLoadError(null);
       try {
         let query = supabase.from('commission_records').select('*, agencies!inner(id, name), tours!inner(id, name)').eq('status', 'pending');
 
         if (slotId) {
-          const { data: slotBookings } = await supabase.from('bookings').select('id').eq('slot_id', slotId);
+          const { data: slotBookings, error: errorReservasSalida } = await supabase.from('bookings').select('id').eq('slot_id', slotId);
+          // Si esta lectura falla, bookingIds queda vacio y el `if` de abajo se
+          // salta el filtro entero: el modal mostraria TODAS las comisiones
+          // pendientes de la agencia en vez de las de esta salida.
+          if (errorReservasSalida) throw errorReservasSalida;
           const bookingIds = (slotBookings || []).map((b: any) => b.id);
           if (bookingIds.length > 0) {
             query = query.in('booking_id', bookingIds);
@@ -735,7 +764,9 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
 
         let penaltyQuery = supabase.from('cancellation_penalty_records').select('*, agencies!inner(id, name)').eq('status', 'pending');
         if (agencyId) penaltyQuery = penaltyQuery.eq('agency_id', agencyId);
-        const { data: penalties } = await penaltyQuery;
+        const { data: penalties, error: errorPenalizaciones } = await penaltyQuery;
+        // Sin penalizaciones el total sale sin descuentos: se le pagaria de mas.
+        if (errorPenalizaciones) throw errorPenalizaciones;
 
         // Los sumandos vienen limpios de la BD (numeric con 2 decimales), pero
         // acumularlos con reduce() en coma flotante deja residuo: los 7 registros
@@ -767,6 +798,7 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
         });
       } catch (error) {
         console.error('Error fetching payment details:', error);
+        setLoadError(error instanceof Error ? error.message : 'No pudimos cargar el detalle del pago. Cierra y vuelve a abrir.');
       }
     };
     loadPaymentDetails();
@@ -835,10 +867,15 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
 
           // Trigger CFDI generation if PAC is configured
           try {
-            const { data: cfdiSettings } = await supabase
+            const { data: cfdiSettings, error: errorCfdiSettings } = await supabase
               .from('platform_settings')
               .select('pac_provider')
               .maybeSingle();
+            // Si esto falla se salta el timbrado del CFDI de comision sin que
+            // nadie se entere; el pago ya quedo registrado.
+            if (errorCfdiSettings) {
+              console.error('No se pudo leer el PAC configurado, no se genero el CFDI de comision:', errorCfdiSettings);
+            }
             if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== 'none' && result.payout_id) {
               if (paymentDetails.records?.length > 0) {
                 await supabase.functions.invoke('generate-commission-cfdi', {
@@ -985,6 +1022,13 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
               </button>
             </div>
           </div>
+        ) : loadError ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-red-800"><p className="font-medium mb-1">No se pudo calcular el pago:</p><p>{loadError}</p></div>
+            </div>
+          </div>
         ) : (
           <div className="flex items-center justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-blue-600" /></div>
         )}
@@ -1013,7 +1057,14 @@ const ProcessPenaltyModal: React.FC<ProcessPenaltyModalProps> = ({ isOpen, penal
   useEffect(() => {
     const load = async () => {
       if (!isOpen || penaltyIds.length === 0) return;
-      const { data } = await supabase.from('cancellation_penalty_records').select('*, agencies(name), tours(name)').in('id', penaltyIds);
+      const { data, error } = await supabase.from('cancellation_penalty_records').select('*, agencies(name), tours(name)').in('id', penaltyIds);
+      // Sin registros el modal mostraria un total de 0 y dejaria confirmar un
+      // pago vacio que igual marca las penalizaciones como procesadas.
+      if (error) {
+        console.error('Error cargando el detalle de penalizaciones:', error);
+        setErrorMessage('No pudimos cargar el detalle de las penalizaciones. Cierra y vuelve a abrir.');
+        return;
+      }
       const total = data?.reduce((s, r) => s + Number(r.agency_net_amount), 0) || 0;
       setDetails({ records: data, total, agencyName: data?.[0]?.agencies?.name || '' });
     };

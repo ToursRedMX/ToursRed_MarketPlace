@@ -68,7 +68,7 @@ export default function AdminEjecutivosComisiones() {
   const loadCommissions = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('executive_commissions')
         .select(`
           id, executive_id, agency_id, commission_type, amount,
@@ -80,6 +80,9 @@ export default function AdminEjecutivosComisiones() {
           agencies(name)
         `)
         .order('created_at', { ascending: false });
+
+      // Una lista vacia aqui dice "no hay comisiones por pagar".
+      if (error) throw error;
       setCommissions((data as any[]) || []);
     } finally {
       setIsLoading(false);

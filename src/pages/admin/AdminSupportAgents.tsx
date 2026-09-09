@@ -33,18 +33,24 @@ const AdminSupportAgents: React.FC = () => {
 
   const load = async () => {
     setLoading(true);
-    const { data: permsData } = await supabase
+    const { data: permsData, error: errorPermisos } = await supabase
       .from('support_agent_permissions')
       .select(`*, user:users!support_agent_permissions_user_id_fkey(id, first_name, last_name, email)`)
       .order('created_at', { ascending: false });
 
+    // Una lista vacia aqui se lee como "no hay agentes de soporte con
+    // permisos", que es lo contrario de lo que conviene creer.
+    if (errorPermisos) console.error('AdminSupportAgents: no se pudieron leer los permisos', errorPermisos);
+
     const existingUserIds = new Set((permsData ?? []).map((p: any) => p.user_id));
 
-    const { data: admins } = await supabase
+    const { data: admins, error: errorAdmins } = await supabase
       .from('users')
       .select('id, first_name, last_name, email')
       .eq('role', 'admin')
       .order('first_name');
+
+    if (errorAdmins) console.error('AdminSupportAgents: no se pudieron leer los admins', errorAdmins);
 
     setAgents(permsData ?? []);
     setAdminUsers((admins ?? []).filter(u => !existingUserIds.has(u.id)));

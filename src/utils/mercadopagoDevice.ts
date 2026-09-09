@@ -73,10 +73,14 @@ function initSdk(): Promise<void> {
 
     if (typeof window === 'undefined' || !window.MercadoPago) return;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('platform_settings')
       .select('mercadopago_public_key')
       .maybeSingle();
+
+    // Sin la llave no se genera el device id de MercadoPago, que es lo que
+    // usan para el antifraude: el cobro puede salir con mas friccion.
+    if (error) console.error('mercadopagoDevice: no se pudo leer la llave publica', error);
 
     const publicKey = data?.mercadopago_public_key;
     if (!publicKey) return;

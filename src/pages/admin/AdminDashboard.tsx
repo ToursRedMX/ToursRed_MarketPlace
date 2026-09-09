@@ -105,13 +105,16 @@ const AdminDashboard: React.FC = () => {
       ]);
 
       // Obtener agencias activas (OPTIMIZED: only count IDs)
-      const { count: activeAgenciesCount } = await supabase
+      const { count: activeAgenciesCount, error: errorAgencias } = await supabase
         .from('agencies')
         .select('id', { count: 'exact', head: true })
         .eq('is_active', true);
 
+      // Las tarjetas del dashboard mostrarian 0 agencias activas.
+      if (errorAgencias) console.error('AdminDashboard: no se pudieron contar las agencias activas', errorAgencias);
+
       // Obtener actividad reciente (últimas 10 acciones)
-      const { data: recentBookings } = await supabase
+      const { data: recentBookings, error: errorRecientes } = await supabase
         .from('bookings')
         .select(`
           id,
@@ -124,6 +127,10 @@ const AdminDashboard: React.FC = () => {
         .neq('status', 'draft')
         .order('created_at', { ascending: false })
         .limit(5);
+
+      // La lista de "actividad reciente" saldria vacia, como si no hubiera
+      // pasado nada en la plataforma.
+      if (errorRecientes) console.error('AdminDashboard: no se pudo leer la actividad reciente', errorRecientes);
 
       setStats({
         totalUsers: usersResult.count || 0,

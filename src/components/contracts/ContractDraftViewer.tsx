@@ -31,13 +31,17 @@ const ContractDraftViewer: React.FC<Props> = ({ agencyId }) => {
 
         if (agencyErr || !agency) { setError('No se pudieron obtener los datos de la agencia'); return; }
 
-        const { data: acceptance } = await supabase
+        const { data: acceptance, error: errorAceptacion } = await supabase
           .from('contract_acceptances')
           .select('folio_contrato, contract_version')
           .eq('agency_id', agencyId)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        // Sin esto el borrador sale con folio "—" y version 1.0 por defecto,
+        // que en un contrato no es un detalle cosmetico.
+        if (errorAceptacion) throw errorAceptacion;
 
         const now = new Date();
         const folio = acceptance?.folio_contrato ?? '—';

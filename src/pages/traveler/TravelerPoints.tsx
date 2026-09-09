@@ -40,12 +40,16 @@ const TravelerPointsPage: React.FC = () => {
       if (!user) return;
 
       try {
-        const { data: membershipData } = await supabase
+        const { data: membershipData, error: errorMembresia } = await supabase
           .from('memberships')
           .select('status')
           .eq('user_id', user.id)
           .eq('status', 'active')
           .maybeSingle();
+
+        // Falla cerrado (queda sin membresia, que muestra menos beneficios),
+        // pero sin rastro el viajero no entiende por que.
+        if (errorMembresia) console.error('TravelerPoints: no se pudo leer la membresia', errorMembresia);
 
         setHasMembership(!!membershipData);
 

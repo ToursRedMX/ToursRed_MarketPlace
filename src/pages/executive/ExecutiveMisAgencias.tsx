@@ -47,7 +47,7 @@ export default function ExecutiveMisAgencias() {
     if (!accountExecutiveInfo?.executiveId) return;
     setIsLoading(true);
     try {
-      const { data: agenciesData } = await supabase
+      const { data: agenciesData, error: errorAgencias } = await supabase
         .from('agencies')
         .select(`
           id, name, contact_email, contact_phone, is_approved, is_active,
@@ -57,6 +57,10 @@ export default function ExecutiveMisAgencias() {
         `)
         .eq('account_executive_id', accountExecutiveInfo.executiveId)
         .order('created_at', { ascending: false });
+
+      // "No tienes agencias asignadas" es lo peor que le puedes decir a un
+      // ejecutivo cuyo sueldo depende de esa cartera.
+      if (errorAgencias) throw errorAgencias;
 
       if (!agenciesData) { setAgencies([]); return; }
 

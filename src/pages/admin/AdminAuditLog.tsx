@@ -153,7 +153,12 @@ const AdminAuditLog: React.FC = () => {
       if (appliedFilters.date_to) params.p_date_to = appliedFilters.date_to + 'T23:59:59';
       if (appliedFilters.severity) params.p_severity = appliedFilters.severity;
 
-      const { data } = await supabase.rpc(rpc, params);
+      const { data, error } = await supabase.rpc(rpc, params);
+
+      // Sin esto, un error terminaba en un `return` mudo: el admin daba clic
+      // en exportar, no pasaba nada y no habia forma de saber por que.
+      if (error) throw error;
+
       if (!data?.length) return;
 
       const cols = ['created_at', 'severity', 'action', 'target_table', 'target_id', 'actor_email', 'actor_role', 'ip_masked', 'country', 'country_code', 'city', 'correlation_id', 'error_message'];

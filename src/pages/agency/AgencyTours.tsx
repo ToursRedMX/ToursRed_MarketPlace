@@ -591,7 +591,7 @@ const AgencyTours: React.FC = () => {
     setIsLoadingFinished(true);
     try {
       const today = new Date().toISOString().split('T')[0];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('tours')
         .select(`*, agencies(id, name, rating, commission_rate)`)
         .eq('agency_id', resolvedAgencyId)
@@ -599,10 +599,11 @@ const AgencyTours: React.FC = () => {
         .lt('end_date', today)
         .order('end_date', { ascending: false })
         .limit(100);
+      if (error) throw error;
       setFinishedTours((data as Tour[]) || []);
       setFinishedLoaded(true);
-    } catch {
-      // silent
+    } catch (err) {
+      console.error('No se pudieron cargar los tours finalizados:', err);
     } finally {
       setIsLoadingFinished(false);
     }
@@ -757,6 +758,13 @@ const AgencyTours: React.FC = () => {
   };
 
   const handleEdit = async (tour: Tour) => {
+    // Lo que no se pudo leer aqui NO puede quedarse como lista vacia: al
+    // guardar, el formulario borra de la BD todo lo que no trae (ver
+    // handleSubmit, los bloques `toDelete`). Un fallo de lectura silencioso
+    // se convertiria en un borrado de los servicios, suplementos u horarios
+    // del tour. Si algo falla, no abrimos el editor.
+    const fallosDeCarga: string[] = [];
+
     // Calcular fecha límite por defecto (14 días antes del inicio)
     const defaultDeadline = new Date(tour.start_date);
     defaultDeadline.setDate(defaultDeadline.getDate() - 14);
@@ -938,11 +946,13 @@ const AgencyTours: React.FC = () => {
 
     // Load optional services for this tour
     try {
-      const { data: servicesData } = await supabase
+      const { data: servicesData, error: errorServicios } = await supabase
         .from('tour_optional_services')
         .select('*')
         .eq('tour_id', tour.id)
         .order('display_order');
+
+      if (errorServicios) throw errorServicios;
 
       if (servicesData) {
         setOptionalServices(servicesData.map(s => ({
@@ -962,15 +972,18 @@ const AgencyTours: React.FC = () => {
     } catch (err) {
       console.error('Error loading optional services:', err);
       setOptionalServices([]);
+      fallosDeCarga.push('los servicios opcionales');
     }
 
     // Load supplements for this tour
     try {
-      const { data: supplementsData } = await supabase
+      const { data: supplementsData, error: errorSuplementos } = await supabase
         .from('tour_supplements')
         .select('*')
         .eq('tour_id', tour.id)
         .order('display_order');
+
+      if (errorSuplementos) throw errorSuplementos;
 
       if (supplementsData) {
         setSupplements(supplementsData.map((s: any) => ({
@@ -991,17 +1004,20 @@ const AgencyTours: React.FC = () => {
     } catch (err) {
       console.error('Error loading supplements:', err);
       setSupplements([]);
+      fallosDeCarga.push('los suplementos');
     }
 
     // Load schedules for receptivo tours
     if (tour.tour_type === 'receptivo') {
       try {
-        const { data: schedulesData } = await supabase
+        const { data: schedulesData, error: errorHorarios } = await supabase
           .from('tour_schedules')
           .select('*')
           .eq('tour_id', tour.id)
           .order('display_order', { ascending: true })
           .order('departure_time', { ascending: true });
+
+        if (errorHorarios) throw errorHorarios;
 
         if (schedulesData) {
           setSchedulesDraft(schedulesData.map(s => ({
@@ -1018,20 +1034,37 @@ const AgencyTours: React.FC = () => {
       } catch (err) {
         console.error('Error loading schedules:', err);
         setSchedulesDraft([]);
+        fallosDeCarga.push('los horarios');
       }
     } else {
       setSchedulesDraft([]);
     }
 
     if (tour.tour_type === 'excursion') {
-      const { count } = await supabase
+      const { count, error: errorConteo } = await supabase
         .from('bookings')
         .select('*', { count: 'exact', head: true })
         .eq('tour_id', tour.id)
         .in('status', ['confirmed', 'pending']);
-      setEditingTourHasActiveBookings((count || 0) > 0);
+
+      // Esta bandera es la que bloquea los campos sensibles (fechas, cupo,
+      // precios) cuando el tour ya tiene gente. Un error leido como 0 los
+      // desbloquearia, asi que ante la duda asumimos que si tiene reservas.
+      if (errorConteo) {
+        console.error('No se pudo contar las reservas activas del tour:', errorConteo);
+        setEditingTourHasActiveBookings(true);
+      } else {
+        setEditingTourHasActiveBookings((count || 0) > 0);
+      }
     } else {
       setEditingTourHasActiveBookings(false);
+    }
+
+    if (fallosDeCarga.length > 0) {
+      setError(
+        `No pudimos cargar ${fallosDeCarga.join(' ni ')} de este tour. No abrimos el editor porque al guardar se borraria lo que no aparezca en el formulario. Intenta de nuevo en unos segundos.`
+      );
+      return;
     }
 
     setEditingTour(tour);
@@ -1247,10 +1280,15 @@ const AgencyTours: React.FC = () => {
       };
 
       // Obtener los destinos del tour original para copiarlos
-      const { data: originalDestinations } = await supabase
+      const { data: originalDestinations, error: errorDestinos } = await supabase
         .from('tour_destinations')
         .select('destination_id')
         .eq('tour_id', duplicatingTour.id);
+
+      // Sin destinos el tour duplicado no aparece en ninguna busqueda por
+      // destino y nadie se entera hasta que no vende.
+      if (errorDestinos) throw errorDestinos;
+
       const destinationIds = (originalDestinations || []).map((d: any) => d.destination_id);
 
       // Crear el nuevo tour
@@ -1481,7 +1519,7 @@ const AgencyTours: React.FC = () => {
   const handleSelectSlot = async (slot: any) => {
     setReceptivoActionsModal(prev => ({ ...prev, selectedSlot: slot, bookingsInSlot: 0, bookingsCountInSlot: 0 }));
 
-    const { data: bookingsData } = await supabase
+    const { data: bookingsData, error: errorReservas } = await supabase
       .from('bookings')
       .select('travelers_count')
       .eq('tour_id', receptivoActionsModal.tour?.id || '')
@@ -1489,6 +1527,14 @@ const AgencyTours: React.FC = () => {
       .eq('selected_time', slot.departure_time)
       .in('status', ['confirmed', 'pending'])
       .is('cancelled_at', null);
+
+    // Un 0 falso hace creer que la salida va vacia y se puede cancelar o
+    // reprogramar con pasajeros dentro.
+    if (errorReservas) {
+      console.error('No se pudieron contar los pasajeros de la salida:', errorReservas);
+      setError('No pudimos comprobar cuantos pasajeros tiene esta salida. Recarga antes de cancelarla o reprogramarla.');
+      return;
+    }
 
     const totalTravelers = (bookingsData || []).reduce((sum, b) => sum + (b.travelers_count || 0), 0);
     setReceptivoActionsModal(prev => ({
@@ -2229,10 +2275,13 @@ const AgencyTours: React.FC = () => {
       if (editingTour) {
         // Para tours existentes: actualizar de forma inteligente
         // 1. Obtener puntos existentes
-        const { data: existingPoints } = await supabase
+        const { data: existingPoints, error: errorPuntos } = await supabase
           .from('tour_departure_points')
           .select('departure_point_id, display_order')
           .eq('tour_id', tourId);
+
+        // Falla del lado seguro: sin la lista existente no se borra nada.
+        if (errorPuntos) console.error('No se pudieron leer los puntos de salida actuales:', errorPuntos);
 
         const existingPointIds = new Set(existingPoints?.map(p => p.departure_point_id) || []);
         const newPointIds = new Set(uniquePoints.map(p => p.id));
@@ -2326,10 +2375,13 @@ const AgencyTours: React.FC = () => {
       // Save optional services
       const validServices = optionalServices.filter(s => s.name.trim() && s.price_per_person);
       if (editingTour) {
-        const { data: existingServices } = await supabase
+        const { data: existingServices, error: errorServiciosActuales } = await supabase
           .from('tour_optional_services')
           .select('id')
           .eq('tour_id', tourId);
+
+        // Falla del lado seguro: sin la lista existente no se borra nada.
+        if (errorServiciosActuales) console.error('No se pudieron leer los servicios opcionales actuales:', errorServiciosActuales);
 
         const existingIds = new Set(existingServices?.map(s => s.id) || []);
         const incomingIds = new Set(validServices.filter(s => s.id).map(s => s.id!));
@@ -2379,10 +2431,13 @@ const AgencyTours: React.FC = () => {
       // Save supplements
       const validSupplements = supplements.filter(s => s.name.trim() && s.price);
       if (editingTour) {
-        const { data: existingSupplements } = await supabase
+        const { data: existingSupplements, error: errorSuplementosActuales } = await supabase
           .from('tour_supplements')
           .select('id')
           .eq('tour_id', tourId);
+
+        // Falla del lado seguro: sin la lista existente no se borra nada.
+        if (errorSuplementosActuales) console.error('No se pudieron leer los suplementos actuales:', errorSuplementosActuales);
 
         const existingSupIds = new Set(existingSupplements?.map((s: any) => s.id) || []);
         const incomingSupIds = new Set(validSupplements.filter(s => s.id).map(s => s.id!));
@@ -2440,10 +2495,13 @@ const AgencyTours: React.FC = () => {
             // Sync completo: actualizar existentes, insertar nuevos, eliminar los que ya no estan en el draft
             const draftIds = schedulesDraft.filter(s => s.id).map(s => s.id as string);
 
-            const { data: currentSchedules } = await supabase
+            const { data: currentSchedules, error: errorHorariosActuales } = await supabase
               .from('tour_schedules')
               .select('id')
               .eq('tour_id', tourId);
+
+            // Falla del lado seguro: sin la lista existente no se borra nada.
+            if (errorHorariosActuales) console.error('No se pudieron leer los horarios actuales:', errorHorariosActuales);
 
             const toDelete = (currentSchedules || [])
               .map((r: any) => r.id)
@@ -2554,7 +2612,9 @@ const AgencyTours: React.FC = () => {
         // Después de crear, pasar a modo edición para configurar promociones grupales
         localStorage.removeItem(DRAFT_KEY);
         setIsCreating(false);
-        const { data: freshTour } = await supabase.from('tours').select('*').eq('id', createdTour.id).single();
+        const { data: freshTour, error: errorFresco } = await supabase.from('tours').select('*').eq('id', createdTour.id).single();
+        // Si falla se sigue con el tour recien creado, que ya tenemos en mano.
+        if (errorFresco) console.error('No se pudo releer el tour recien creado:', errorFresco);
         setEditingTour(freshTour || createdTour);
         if (tourType === 'receptivo') {
           setReceptivoTab('horarios');

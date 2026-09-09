@@ -92,21 +92,34 @@ const AdminBroadcastMessages: React.FC = () => {
   const fetchRecipientCount = async (aud: Audience) => {
     setRecipientPreview(null);
     const roles = aud === 'travelers' ? ['traveler'] : aud === 'agencies' ? ['agency'] : ['traveler', 'agency'];
-    const { count } = await supabase
+    const { count, error } = await supabase
       .from('users')
       .select('id', { count: 'exact', head: true })
       .in('role', roles)
       .eq('is_active', true);
+
+    // "0 destinatarios activos" antes de un envio masivo es peor que no
+    // mostrar nada: se queda en null, que es el estado de "aun no lo se".
+    if (error) {
+      console.error('AdminBroadcastMessages: no se pudo contar los destinatarios', error);
+      setRecipientPreview(null);
+      return;
+    }
+
     setRecipientPreview(count ?? 0);
   };
 
   const fetchHistory = async () => {
     setIsLoadingHistory(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('admin_broadcast_messages')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(50);
+
+    // Un historial vacio por error se lee como "nunca se ha enviado nada".
+    if (error) console.error('AdminBroadcastMessages: no se pudo leer el historial de envios', error);
+
     setHistory(data || []);
     setIsLoadingHistory(false);
   };

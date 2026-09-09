@@ -54,7 +54,40 @@ import { join } from "node:path";
 //   191  09-sep: tier 3 — el camino completo del viajero, que es el que van a
 //        recorrer las UAT: facturas, reservas, billetera, pago exitoso,
 //        detalle y catalogo de tours, y el formulario de reserva. 43 sitios.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 191);
+//   188  09-sep: MfaGate dejaba de exigir el segundo factor si fallaba la
+//        lectura de platform_settings.
+//   175  09-sep: src/lib/supabase.ts completo — busqueda por destino,
+//        manifiesto de pasajeros, borrado de categorias y las cuatro
+//        lecturas de la politica de cancelacion.
+//   166  09-sep: los componentes de seguridad — mantenimiento, ajustes de
+//        MFA, passkeys y el panel de interruptores de seguridad.
+//   154  09-sep: pagos a agencias, conciliacion de OpenPay y el sync
+//        contable. Aqui salio ademas la destructuracion mala de
+//        getSession() que dejaba tres llamadas sin Authorization.
+//   145  09-sep: la pantalla de contabilidad. Ahi un cero por error de
+//        lectura se ve igual que un cero de verdad.
+//   132  09-sep: el lado de la agencia — estado financiero (incluidos los
+//        exports a PDF y Excel) y la pantalla de reservas.
+//   120  09-sep: el editor de tours. Ahi una lectura fallida se convertia
+//        en un borrado al guardar.
+//   109  09-sep: el reporte maestro. Once consultas que suman al mismo
+//        total; cualquiera que falle deja el reporte completo y mal.
+//   100  09-sep: las pantallas de "ya pague, que paso" — retorno de pago,
+//        extras, suplementos, plan de pagos, membresia y destacados.
+//    83  09-sep: firma de enmiendas, alta de agencias, mensajeria y el
+//        avatar de la barra superior.
+//    69  09-sep: triage del resto por forma peligrosa — la guardia de
+//        reembolso duplicado, los cuatro callbacks de OAuth, y los que
+//        confundian "no hay" con "no pudimos leer".
+//    48  09-sep: perfiles, resenas, prospectos y newsletter. Aqui salio el
+//        cobro que se saltaba el saldo restante y el slug que se marcaba
+//        disponible estando tomado.
+//    29  09-sep: soporte, referidos, terminos, dashboard y paneles de
+//        ejecutivo. Aqui salio la guardia de RFC unico que se saltaba.
+//     0  09-sep: cerrado. Ya no queda ninguna. De aqui en adelante la
+//        guardia no tolera nada: cualquier consulta nueva sin manejo de
+//        error falla el check.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 0);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 

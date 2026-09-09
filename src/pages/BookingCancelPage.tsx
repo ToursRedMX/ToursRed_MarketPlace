@@ -22,7 +22,13 @@ const BookingCancelPage: React.FC = () => {
     try {
       setIsLoading(true);
 
-      const { data: session } = await supabase.auth.getSession();
+      // Mismo error que en la conciliacion de OpenPay: getSession() devuelve
+      // { data: { session } }, asi que esto dejaba accessToken en undefined y
+      // process-payment-cancellation respondia 401 sin liberar la reserva.
+      const { data: { session }, error: errorSesion } = await supabase.auth.getSession();
+      if (errorSesion) {
+        console.error('No se pudo leer la sesion para procesar la cancelacion:', errorSesion);
+      }
       const accessToken = session?.access_token;
 
       const response = await fetch(

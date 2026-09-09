@@ -65,10 +65,13 @@ export default function AdminGiftCards() {
     // Fetch redeemed_by user emails
     const redeemedIds = cards.filter(c => c.redeemed_by).map(c => c.redeemed_by as string);
     if (redeemedIds.length > 0) {
-      const { data: users } = await supabase
+      const { data: users, error: errorUsuarios } = await supabase
         .from('users')
         .select('id, email')
         .in('id', redeemedIds);
+
+      // Solo completa el correo de quien canjeo la tarjeta.
+      if (errorUsuarios) console.error('AdminGiftCards: no se pudieron leer los correos de canje', errorUsuarios);
 
       if (users) {
         const userMap = new Map(users.map(u => [u.id, u.email]));

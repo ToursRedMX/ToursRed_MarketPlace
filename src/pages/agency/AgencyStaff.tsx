@@ -192,13 +192,18 @@ export default function AgencyStaff() {
 
   const fetchPendingInvitations = async () => {
     if (!agencyId) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('agency_staff_invitations')
       .select('id, invited_email, title, permissions, expires_at, created_at')
       .eq('agency_id', agencyId)
       .eq('status', 'pending')
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false });
+
+    // Sin invitaciones pendientes a la vista, la agencia vuelve a invitar a
+    // alguien que ya tenia invitacion.
+    if (error) console.error('AgencyStaff: no se pudieron leer las invitaciones pendientes', error);
+
     setPendingInvitations(data || []);
   };
 
@@ -209,8 +214,12 @@ export default function AgencyStaff() {
     setFoundUser(null);
     setUserNotFound(false);
     try {
-      const { data: results } = await supabase
+      const { data: results, error: errorBusqueda } = await supabase
         .rpc('search_user_by_email_for_staff', { p_email: emailSearch.trim().toLowerCase() });
+
+      // "No encontramos ese correo" y "no pudimos buscarlo" no son lo mismo.
+      if (errorBusqueda) throw errorBusqueda;
+
       const data = results?.[0] ?? null;
       if (!data) {
         setUserNotFound(true);

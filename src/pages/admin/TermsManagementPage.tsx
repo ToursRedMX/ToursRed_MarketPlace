@@ -219,11 +219,15 @@ const TermsManagementPage: React.FC = () => {
   const PAGE_SIZE = 50;
 
   const loadVersions = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('terms_versions')
       .select('*')
       .order('terms_type')
       .order('version_number', { ascending: false });
+
+    // Sin versiones, la pantalla se ve como si no hubiera terminos publicados.
+    if (error) console.error('TermsManagementPage: no se pudieron leer las versiones', error);
+
     if (data) {
       setVersions({
         traveler: data.filter(v => v.terms_type === 'traveler'),
@@ -233,9 +237,13 @@ const TermsManagementPage: React.FC = () => {
   }, []);
 
   const loadAcceptanceCounts = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('terms_acceptances')
       .select('terms_version_id');
+
+    // Los contadores de aceptaciones saldrian en cero.
+    if (error) console.error('TermsManagementPage: no se pudieron contar las aceptaciones', error);
+
     if (data) {
       const counts: Record<string, number> = {};
       for (const row of data) {

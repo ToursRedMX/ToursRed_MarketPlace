@@ -272,9 +272,13 @@ const AdminSettings: React.FC = () => {
     setIsCheckingOdoo(true);
     setOdooHealthy(null);
     try {
-      const { data } = await supabase.functions.invoke('sync-to-accounting', {
+      const { data, error } = await supabase.functions.invoke('sync-to-accounting', {
         body: { action: 'health_check' },
       });
+
+      // Falla cerrado (queda "no sano"), pero sin rastro no hay diagnostico.
+      if (error) console.error('AdminSettings: fallo el health check contable', error);
+
       setOdooHealthy(data?.healthy === true);
     } catch {
       setOdooHealthy(false);

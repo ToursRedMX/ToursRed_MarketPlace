@@ -633,7 +633,7 @@ const AdminCfdiManual: React.FC = () => {
   useEffect(() => {
     if (cfdiType !== 'P' || ppdSearch.length < 3) { setPpdList([]); return; }
     const load = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('cfdi_invoices')
         .select('id, uuid_fiscal, folio, serie, receptor_rfc, receptor_razon_social, receptor_regimen_fiscal, receptor_uso_cfdi, receptor_codigo_postal, total, stamped_at')
         .eq('status', 'stamped')
@@ -641,6 +641,11 @@ const AdminCfdiManual: React.FC = () => {
         .ilike('receptor_rfc', `%${ppdSearch}%`)
         .order('stamped_at', { ascending: false })
         .limit(20);
+
+      // Sin resultados, el buscador de PPD parece decir "no hay facturas con
+      // ese RFC" cuando en realidad no pudo consultarlas.
+      if (error) console.error('AdminCfdiManual: no se pudieron buscar los CFDI PPD', error);
+
       if (data) setPpdList(data as PpdInvoice[]);
     };
     load();

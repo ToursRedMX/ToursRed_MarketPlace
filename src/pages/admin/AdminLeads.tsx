@@ -54,15 +54,21 @@ export default function AdminLeads() {
   const loadLeads = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error: errorLeads } = await supabase
         .from('agency_leads')
         .select('*')
         .order('created_at', { ascending: false });
 
-      const { data: execs } = await supabase
+      // Una lista vacia aqui se lee como "no hay prospectos", que es justo lo
+      // contrario de lo que un panel de prospeccion deberia decir.
+      if (errorLeads) throw errorLeads;
+
+      const { data: execs, error: errorEjecutivos } = await supabase
         .from('account_executives')
         .select('id, first_name, last_name')
         .eq('is_active', true);
+
+      if (errorEjecutivos) throw errorEjecutivos;
 
       const execMap = new Map((execs || []).map(e => [e.id, `${e.first_name} ${e.last_name || ''}`.trim()]));
       setExecutives((execs || []).map(e => ({ id: e.id, name: `${e.first_name} ${e.last_name || ''}`.trim() })));
@@ -70,10 +76,12 @@ export default function AdminLeads() {
       const convertedIds = (data || []).filter(l => l.converted_agency_id).map(l => l.converted_agency_id);
       let agencyMap = new Map<string, { onboarding_status: string; name: string }>();
       if (convertedIds.length > 0) {
-        const { data: agenciesData } = await supabase
+        const { data: agenciesData, error: errorAgencias } = await supabase
           .from('agencies')
           .select('id, onboarding_status, name')
           .in('id', convertedIds);
+
+        if (errorAgencias) throw errorAgencias;
         agencyMap = new Map((agenciesData || []).map(a => [a.id, { onboarding_status: a.onboarding_status, name: a.name }]));
       }
 

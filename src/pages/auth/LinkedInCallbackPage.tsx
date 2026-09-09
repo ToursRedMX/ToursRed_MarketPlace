@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
-async function redirectForUser(user: any, navigate: (path: string, opts?: any) => void) {
+async function redirectForUser(
+  user: any,
+  navigate: (path: string, opts?: any) => void,
+  alFallar: (mensaje: string) => void,
+) {
   const isLinkedinProvider =
     user.app_metadata?.provider === 'linkedin_oidc' ||
     (user.identities ?? []).some((i: any) => i.provider === 'linkedin_oidc');
@@ -10,11 +14,20 @@ async function redirectForUser(user: any, navigate: (path: string, opts?: any) =
   if (isLinkedinProvider) {
     const onboardingCompleted = user.user_metadata?.onboarding_completed;
     if (!onboardingCompleted) {
-      const { data: existingProfile } = await supabase
+      const { data: existingProfile, error: errorPerfil } = await supabase
         .from('users')
         .select('id, role, profile_picture_url')
         .eq('id', user.id)
         .maybeSingle();
+
+      // Sin esto, un error de lectura se interpretaba como "no tiene perfil" y
+      // mandaba a un usuario YA registrado al alta ("¿eres viajero o
+      // agencia?"). Preferimos pedirle que lo intente de nuevo.
+      if (errorPerfil) {
+        console.error('No se pudo leer el perfil al volver del proveedor:', errorPerfil);
+        alFallar('No pudimos verificar tu cuenta. Por favor intenta de nuevo.');
+        return;
+      }
 
       if (existingProfile) {
         // User linked LinkedIn to an existing account — save avatar if not set yet
@@ -56,7 +69,7 @@ const LinkedInCallbackPage: React.FC = () => {
       if (done) return;
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
         done = true;
-        redirectForUser(session.user, navigate);
+        redirectForUser(session.user, navigate, setError);
       }
     });
 
@@ -65,7 +78,7 @@ const LinkedInCallbackPage: React.FC = () => {
       if (done) return;
       if (session?.user) {
         done = true;
-        redirectForUser(session.user, navigate);
+        redirectForUser(session.user, navigate, setError);
       }
     });
 

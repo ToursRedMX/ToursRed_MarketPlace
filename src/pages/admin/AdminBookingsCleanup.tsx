@@ -91,11 +91,16 @@ const AdminBookingsCleanup: React.FC = () => {
   }, [threshold]);
 
   const fetchLogs = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('booking_cleanup_logs')
       .select('id, deleted_count, deleted_at, criteria')
       .order('deleted_at', { ascending: false })
       .limit(10);
+
+    // Sin historial parece que nunca se ha corrido una limpieza, lo que
+    // invita a correr otra.
+    if (error) console.error('AdminBookingsCleanup: no se pudo leer el historial', error);
+
     if (data) {
       setLogs(data);
       if (data.length > 0) setLastCleanup({ count: data[0].deleted_count, at: data[0].deleted_at });

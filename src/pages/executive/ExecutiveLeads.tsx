@@ -182,18 +182,25 @@ export default function ExecutiveLeads() {
     if (!accountExecutiveInfo?.executiveId) return;
     setIsLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error: errorLeads } = await supabase
         .from('agency_leads')
         .select('*')
         .eq('executive_id', accountExecutiveInfo.executiveId)
         .order('created_at', { ascending: false });
 
+      // "No tienes prospectos" es justo lo contrario de lo que un panel de
+      // prospeccion deberia decir cuando la consulta se cayo.
+      if (errorLeads) throw errorLeads;
+
       const convertedIds = (data || []).filter(l => l.converted_agency_id).map(l => l.converted_agency_id);
       if (convertedIds.length > 0) {
-        const { data: agenciesData } = await supabase
+        const { data: agenciesData, error: errorAgencias } = await supabase
           .from('agencies')
           .select('id, onboarding_status, name')
           .in('id', convertedIds);
+
+        if (errorAgencias) throw errorAgencias;
+
         const agencyMap = new Map((agenciesData || []).map(a => [a.id, a]));
         const enriched = (data || []).map(l => ({
           ...l,

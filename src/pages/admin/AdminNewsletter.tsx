@@ -52,14 +52,22 @@ const AdminNewsletter: React.FC = () => {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const fetchCounts = useCallback(async () => {
-    const { count: active } = await supabase
+    const { count: active, error: errorActivos } = await supabase
       .from('newsletter_subscriptions')
       .select('id', { count: 'exact', head: true })
       .eq('active', true);
-    const { count: inactive } = await supabase
+    const { count: inactive, error: errorInactivos } = await supabase
       .from('newsletter_subscriptions')
       .select('id', { count: 'exact', head: true })
       .eq('active', false);
+
+    // Cero suscriptores por un error de lectura se ve igual que cero de
+    // verdad, y de ahi sale la decision de mandar o no una campaña.
+    if (errorActivos || errorInactivos) {
+      console.error('AdminNewsletter: no se pudieron contar los suscriptores', errorActivos ?? errorInactivos);
+      return;
+    }
+
     setActiveCount(active ?? 0);
     setInactiveCount(inactive ?? 0);
   }, []);
@@ -84,11 +92,15 @@ const AdminNewsletter: React.FC = () => {
 
   const fetchBroadcasts = useCallback(async () => {
     setLoadingBroadcasts(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('newsletter_broadcasts')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(30);
+
+    // Un historial vacio se lee como "nunca se ha enviado nada".
+    if (error) console.error('AdminNewsletter: no se pudo leer el historial de campañas', error);
+
     setBroadcasts(data ?? []);
     setLoadingBroadcasts(false);
   }, []);

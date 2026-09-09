@@ -171,11 +171,14 @@ const TravelersInfoPage: React.FC = () => {
     const countAdultosMayores = bookingData.count_adultos_mayores || 0;
     const countMascotas = bookingData.count_mascotas || 0;
 
-    const { data: userData } = await supabase
+    const { data: userData, error: errorUsuario } = await supabase
       .from('users')
       .select('first_name, last_name, email, phone_number, date_of_birth, curp, passport_number, is_foreign_traveler, emergency_contact_name, emergency_contact_phone')
       .eq('id', user?.id)
       .maybeSingle();
+
+    // Solo prellena los datos del titular; sin ellos hay que capturarlos a mano.
+    if (errorUsuario) console.error('No se pudieron leer los datos del titular para prellenar:', errorUsuario);
 
     if (userData) {
       setUserProfile({
@@ -189,11 +192,15 @@ const TravelersInfoPage: React.FC = () => {
 
     let promoDiscountPct = 0;
     if ((bookingData as any).promotion_id && Number((bookingData as any).promo_discount_amount) > 0) {
-      const { data: promoData } = await supabase
+      const { data: promoData, error: errorPromo } = await supabase
         .from('tour_promotions')
         .select('promotion_type, group_discount_percentage')
         .eq('id', (bookingData as any).promotion_id)
         .maybeSingle();
+
+      // Sin la promocion, el descuento por viajero sale en 0 aunque la reserva
+      // si traiga promo_discount_amount: el desglose no cuadraria.
+      if (errorPromo) throw errorPromo;
       if (promoData?.promotion_type === 'grupo_precio_fijo' && promoData.group_discount_percentage) {
         promoDiscountPct = Number(promoData.group_discount_percentage) / 100;
       }
@@ -599,12 +606,20 @@ const TravelersInfoPage: React.FC = () => {
       const toursRedCashUsed = booking?.toursred_cash_used || 0;
 
       // Check if there are prior successful payments for this booking
-      const { data: priorPayments } = await supabase
+      const { data: priorPayments, error: errorPagosPrevios } = await supabase
         .from('payment_transactions')
         .select('id, status, charge_context')
         .eq('booking_id', bookingId)
         .eq('charge_context', 'booking_deposit')
         .eq('status', 'succeeded');
+
+      // hasPriorPayment decide si se cobra el anticipo inicial o el saldo
+      // restante. Un error se leia como "no ha pagado nada" y volveria a
+      // cobrar el anticipo en vez del saldo: se le cobra de menos.
+      if (errorPagosPrevios) {
+        console.error('No se pudieron leer los pagos previos de la reserva:', errorPagosPrevios);
+        throw new Error('No pudimos verificar tus pagos anteriores. Intenta de nuevo en unos segundos.');
+      }
 
       const hasPriorPayment = !!(priorPayments && priorPayments.length > 0);
 

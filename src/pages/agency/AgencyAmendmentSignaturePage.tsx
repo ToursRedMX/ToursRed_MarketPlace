@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Ligature as FileSignature, Send, CheckCircle, RefreshCw, AlertCircle, FileText, ExternalLink, Percent } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
-type Stage = 'loading' | 'no_amendment' | 'intro' | 'otp_sent' | 'signed';
+type Stage = 'loading' | 'no_amendment' | 'error_carga' | 'intro' | 'otp_sent' | 'signed';
 
 const AgencyAmendmentSignaturePage: React.FC = () => {
   const navigate   = useNavigate();
@@ -16,6 +16,7 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
   const [pdfUrl, setPdfUrl]         = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [proposedPct, setProposedPct] = useState<number | null>(null);
+  const [pctNoDisponible, setPctNoDisponible] = useState(false);
   const [agencyName, setAgencyName] = useState('');
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [folio, setFolio]         = useState<string | null>(null);
@@ -23,10 +24,19 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const { data: agencyRow } = await supabase
+      const { data: agencyRow, error: errorAgencia } = await supabase
         .from('agencies')
         .select('id, name, pending_amendment_id, onboarding_status')
         .maybeSingle();
+
+      // Sin esto, un error de lectura le decia a la agencia "Sin enmiendas
+      // pendientes" —con palomita verde— cuando en realidad si tiene una
+      // esperando firma y nunca la firmaria.
+      if (errorAgencia) {
+        console.error('AgencyAmendmentSignaturePage: no se pudo leer la agencia', errorAgencia);
+        if (!cancelled) setStage('error_carga');
+        return;
+      }
 
       if (!agencyRow?.pending_amendment_id) {
         if (!cancelled) setStage('no_amendment');
@@ -35,12 +45,19 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
       if (!cancelled) setAgencyName(agencyRow.name ?? '');
 
       // Load proposed commission from the pending acceptance
-      const { data: acceptance } = await supabase
+      const { data: acceptance, error: errorAceptacion } = await supabase
         .from('contract_acceptances')
         .select('commission_percentage_proposed')
         .eq('agency_id', agencyRow.id)
         .eq('status', 'pending')
         .maybeSingle();
+
+      // Este es el numero que la agencia esta aceptando. Si no se pudo leer,
+      // el bloque simplemente no se pintaba y firmaba sin verlo.
+      if (errorAceptacion) {
+        console.error('AgencyAmendmentSignaturePage: no se pudo leer la comision propuesta', errorAceptacion);
+        if (!cancelled) setPctNoDisponible(true);
+      }
 
       if (!cancelled && acceptance?.commission_percentage_proposed != null) {
         setProposedPct(acceptance.commission_percentage_proposed);
@@ -48,7 +65,7 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
 
       // Load amendment PDF
       setPdfLoading(true);
-      const { data: docRow } = await supabase
+      const { data: docRow, error: errorDocumento } = await supabase
         .from('agency_documents')
         .select('storage_path')
         .eq('agency_id', agencyRow.id)
@@ -57,10 +74,19 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
         .eq('status', 'pending_review')
         .maybeSingle();
 
+      // Los dos caen en el aviso de "no se pudo cargar la vista previa" que ya
+      // existe abajo; aqui solo dejamos rastro para poder diagnosticarlo.
+      if (errorDocumento) {
+        console.error('AgencyAmendmentSignaturePage: no se pudo leer el documento de la enmienda', errorDocumento);
+      }
+
       if (!cancelled && docRow?.storage_path) {
-        const { data: signedData } = await supabase.storage
+        const { data: signedData, error: errorFirmada } = await supabase.storage
           .from('agency-documents')
           .createSignedUrl(docRow.storage_path, 1800);
+        if (errorFirmada) {
+          console.error('AgencyAmendmentSignaturePage: no se pudo firmar la URL del PDF', errorFirmada);
+        }
         if (!cancelled && signedData?.signedUrl) {
           setPdfUrl(signedData.signedUrl);
         }
@@ -71,7 +97,10 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
       }
     };
 
-    load().catch(() => { if (!cancelled) setStage('no_amendment'); });
+    load().catch((err) => {
+      console.error('AgencyAmendmentSignaturePage: fallo al cargar la enmienda', err);
+      if (!cancelled) setStage('error_carga');
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -125,6 +154,23 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (stage === 'error_carga') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 max-w-md w-full p-8 text-center">
+          <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">No pudimos cargar tu enmienda</h2>
+          <p className="text-gray-500 text-sm mb-6">
+            Esto no quiere decir que no tengas una pendiente: la consulta fallo. Recarga la pagina en unos segundos.
+          </p>
+          <button onClick={() => window.location.reload()} className="btn btn-primary">
+            Reintentar
+          </button>
+        </div>
       </div>
     );
   }
@@ -202,6 +248,18 @@ const AgencyAmendmentSignaturePage: React.FC = () => {
 
         <div className="p-6 space-y-6">
           {/* Info de la enmienda */}
+          {pctNoDisponible && proposedPct == null && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-amber-900">No pudimos mostrar la nueva comisión</p>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  Recarga la página antes de firmar: el porcentaje que estás aceptando viene en el documento.
+                </p>
+              </div>
+            </div>
+          )}
+
           {proposedPct != null && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
               <Percent className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />

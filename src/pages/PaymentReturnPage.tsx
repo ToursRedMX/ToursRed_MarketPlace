@@ -404,11 +404,16 @@ export default function PaymentReturnPage() {
         for (let i = 0; i < 10; i++) {
           await new Promise(r => setTimeout(r, 5000));
           try {
-            const { data: booking } = await supabase
+            const { data: booking, error: errorReserva } = await supabase
               .from("bookings")
               .select("payment_status, status")
               .eq("id", bookingId)
               .maybeSingle();
+
+            // Seguimos sondeando (el webhook aun puede llegar), pero dejamos
+            // rastro: si esto falla siempre, la pantalla termina en "pendiente"
+            // sin que nadie sepa por que.
+            if (errorReserva) console.error('PaymentReturnPage: no se pudo leer la reserva mientras se sondeaba', errorReserva);
 
             if (booking?.payment_status === 'succeeded') {
               setStatus('success');
@@ -452,11 +457,16 @@ export default function PaymentReturnPage() {
         for (let i = 0; i < 10; i++) {
           await new Promise(r => setTimeout(r, 5000));
           try {
-            const { data: booking } = await supabase
+            const { data: booking, error: errorReserva } = await supabase
               .from("bookings")
               .select("payment_status, status")
               .eq("id", bookingId)
               .maybeSingle();
+
+            // Seguimos sondeando (el webhook aun puede llegar), pero dejamos
+            // rastro: si esto falla siempre, la pantalla termina en "pendiente"
+            // sin que nadie sepa por que.
+            if (errorReserva) console.error('PaymentReturnPage: no se pudo leer la reserva mientras se sondeaba', errorReserva);
 
             if (booking?.payment_status === 'succeeded') {
               setStatus('success');

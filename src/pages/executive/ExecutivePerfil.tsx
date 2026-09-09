@@ -108,11 +108,18 @@ export default function ExecutivePerfil() {
       if (!accountExecutiveInfo?.executiveId) return;
       setIsLoading(true);
       try {
-        const { data } = await supabase
+        const { data, error: errorPerfil } = await supabase
           .from('account_executives_safe')
           .select('id, first_name, last_name, email, phone, profile_photo_url, tax_name, tax_rfc, tax_address, tax_zip, tax_regimen_fiscal, tax_withhold_isr, bank_beneficiary, bank_name, bank_account_number, bank_clabe, facturapi_configured, facturapi_organization_id, facturapi_configured_at')
           .eq('id', accountExecutiveInfo.executiveId)
           .maybeSingle();
+
+        // Sin perfil, el formulario sale vacio y savePersonal ni siquiera
+        // corre (regresa temprano por !profile): parece que no hay datos.
+        if (errorPerfil) {
+          console.error('ExecutivePerfil: no se pudo leer el perfil', errorPerfil);
+          showMsg('error', 'No pudimos cargar tu perfil. Recarga la pagina.', 'personal');
+        }
 
         if (data) {
           setProfile(data as ExecutiveProfile);
@@ -131,9 +138,11 @@ export default function ExecutivePerfil() {
           setBankClabe(data.bank_clabe || '');
 
           if (data.profile_photo_url) {
-            const { data: signed } = await supabase.storage
+            const { data: signed, error: errorFoto } = await supabase.storage
               .from('executive-avatars')
               .createSignedUrl(data.profile_photo_url, 3600);
+            // Solo el avatar: si falla no se pinta.
+            if (errorFoto) console.error('ExecutivePerfil: no se pudo firmar la URL del avatar', errorFoto);
             if (signed?.signedUrl) setPhotoUrl(signed.signedUrl);
           }
         }
@@ -156,7 +165,8 @@ export default function ExecutivePerfil() {
         .upload(path, file, { upsert: true, cacheControl: '3600' });
       if (uploadError) throw uploadError;
       await supabase.from('account_executives').update({ profile_photo_url: path }).eq('id', profile.id);
-      const { data: signed } = await supabase.storage.from('executive-avatars').createSignedUrl(path, 3600);
+      const { data: signed, error: errorFirmada } = await supabase.storage.from('executive-avatars').createSignedUrl(path, 3600);
+      if (errorFirmada) console.error('ExecutivePerfil: no se pudo firmar la URL de la foto nueva', errorFirmada);
       if (signed?.signedUrl) setPhotoUrl(signed.signedUrl);
       showMsg('success', 'Foto de perfil actualizada.', 'photo');
     } catch (e: any) {

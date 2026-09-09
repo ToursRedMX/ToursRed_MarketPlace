@@ -272,38 +272,72 @@ const AccountingPage: React.FC = () => {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Una cifra contable en cero por un error de lectura se ve igual que una
+  // cifra en cero de verdad. Cuando una consulta falla lo decimos arriba de
+  // la pantalla en vez de dejar que el contador lea un reporte incompleto.
+  const [erroresCarga, setErroresCarga] = useState<string[]>([]);
+  const anotarFallo = useCallback((que: string, error: unknown) => {
+    console.error(`AccountingPage: no se pudo cargar ${que}`, error);
+    setErroresCarga(prev => (prev.includes(que) ? prev : [...prev, que]));
+  }, []);
+
   // ── Load accounts
   const loadAccounts = useCallback(async () => {
     setLoadingAccounts(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('chart_of_accounts')
       .select('*')
       .order('code');
+    if (error) anotarFallo('el catalogo de cuentas', error);
     setAccounts(data ?? []);
     setLoadingAccounts(false);
-  }, []);
+  }, [anotarFallo]);
 
   // ── Load account balances for catalog
   const loadAccountBalances = useCallback(async () => {
     setLoadingBalances(true);
-    const { data } = await supabase.rpc('get_account_balances_full', { p_year: year, p_month: month });
+    const { data, error } = await supabase.rpc('get_account_balances_full', { p_year: year, p_month: month });
+    if (error) anotarFallo('los saldos por cuenta', error);
     setAccountBalances(data ?? []);
     setLoadingBalances(false);
-  }, [year, month]);
+  }, [year, month, anotarFallo]);
 
   const handleDeleteAccount = async (account: ChartAccount) => {
     setDeletingAccount(true);
     // Check for movements
-    const { count } = await supabase
+    const { count, error: errorMovimientos } = await supabase
       .from('accounting_entry_lines')
       .select('id', { count: 'exact', head: true })
       .eq('account_code', account.code);
+
+    // Con `count ?? 0` un error se leia como "no tiene movimientos" y la
+    // cuenta se BORRABA en vez de desactivarse. Sin poder comprobarlo no se
+    // toca nada.
+    if (errorMovimientos) {
+      console.error('AccountingPage: no se pudo comprobar si la cuenta tiene movimientos', errorMovimientos);
+      showToast('No pudimos comprobar si la cuenta tiene movimientos. No se elimino nada.', false);
+      setDeletingAccount(false);
+      return;
+    }
+
     if ((count ?? 0) > 0) {
       // Has movements — only deactivate
-      await supabase.from('chart_of_accounts').update({ is_active: false }).eq('id', account.id);
+      const { error: errorDesactivar } = await supabase.from('chart_of_accounts').update({ is_active: false }).eq('id', account.id);
+      if (errorDesactivar) {
+        console.error('AccountingPage: no se pudo desactivar la cuenta', errorDesactivar);
+        showToast('No se pudo desactivar la cuenta', false);
+        setDeletingAccount(false);
+        return;
+      }
       showToast('Cuenta desactivada (tiene movimientos registrados)');
     } else {
-      await supabase.from('chart_of_accounts').delete().eq('id', account.id);
+      const { error: errorBorrar } = await supabase.from('chart_of_accounts').delete().eq('id', account.id);
+      if (errorBorrar) {
+        console.error('AccountingPage: no se pudo eliminar la cuenta', errorBorrar);
+        showToast('No se pudo eliminar la cuenta', false);
+        setDeletingAccount(false);
+        return;
+      }
       showToast('Cuenta eliminada');
     }
     setDeleteConfirm(null);
@@ -315,15 +349,16 @@ const AccountingPage: React.FC = () => {
   // ── Load entries for period (all sources including manual)
   const loadEntries = useCallback(async () => {
     setLoadingEntries(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('accounting_entries')
       .select('id, entry_number, entry_type, entry_date, period_year, period_month, description, source_type, is_posted, created_at')
       .eq('period_year', year)
       .eq('period_month', month)
       .order('entry_date', { ascending: true });
+    if (error) anotarFallo('las polizas del periodo', error);
     setEntries(data ?? []);
     setLoadingEntries(false);
-  }, [year, month]);
+  }, [year, month, anotarFallo]);
 
   // ── Load reports (balance, income, trial)
   const loadReports = useCallback(async () => {
@@ -332,38 +367,48 @@ const AccountingPage: React.FC = () => {
       supabase.rpc('get_trial_balance', { p_year: year, p_month: month }),
       supabase.rpc('get_balance_sheet', { p_year: year, p_month: month }),
       supabase.rpc('get_income_statement', { p_from_year: year, p_from_month: month, p_to_year: year, p_to_month: month }),
-      showCompare ? supabase.rpc('get_balance_sheet', { p_year: compareYear, p_month: compareMonth }) : Promise.resolve({ data: [] }),
-      showCompare ? supabase.rpc('get_income_statement', { p_from_year: compareYear, p_from_month: compareMonth, p_to_year: compareYear, p_to_month: compareMonth }) : Promise.resolve({ data: [] }),
+      showCompare ? supabase.rpc('get_balance_sheet', { p_year: compareYear, p_month: compareMonth }) : Promise.resolve({ data: [], error: null }),
+      showCompare ? supabase.rpc('get_income_statement', { p_from_year: compareYear, p_from_month: compareMonth, p_to_year: compareYear, p_to_month: compareMonth }) : Promise.resolve({ data: [], error: null }),
     ]);
+    // Estos tres SON los estados financieros: si alguno falla, el reporte se
+    // pintaria en ceros y parece un periodo sin movimientos.
+    if (tb.error) anotarFallo('la balanza de comprobacion', tb.error);
+    if (bs.error) anotarFallo('el balance general', bs.error);
+    if (is_.error) anotarFallo('el estado de resultados', is_.error);
+    if (cbs.error) anotarFallo('el balance general comparativo', cbs.error);
+    if (cis.error) anotarFallo('el estado de resultados comparativo', cis.error);
+
     setTrialBalance(tb.data ?? []);
     setBalanceSheet(bs.data ?? []);
     setIncomeStatement(is_.data ?? []);
     setCompareBalanceSheet(cbs.data ?? []);
     setCompareIncome(cis.data ?? []);
     setLoadingReports(false);
-  }, [year, month, showCompare, compareYear, compareMonth]);
+  }, [year, month, showCompare, compareYear, compareMonth, anotarFallo]);
 
   // ── Load manual entries
   const loadManualEntries = useCallback(async () => {
     setLoadingManual(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('accounting_entries')
       .select('id, entry_number, entry_type, entry_date, period_year, period_month, description, source_type, is_posted, created_at')
       .eq('source_type', 'manual')
       .eq('period_year', year)
       .eq('period_month', month)
       .order('entry_date', { ascending: false });
+    if (error) anotarFallo('las polizas manuales', error);
     setManualEntries(data ?? []);
     setLoadingManual(false);
-  }, [year, month]);
+  }, [year, month, anotarFallo]);
 
   // ── Load gift card accounting summary
   const loadGcSummary = useCallback(async () => {
     setLoadingGcSummary(true);
-    const { data } = await supabase.rpc('get_gift_card_accounting_summary');
+    const { data, error } = await supabase.rpc('get_gift_card_accounting_summary');
+    if (error) anotarFallo('el resumen de tarjetas de regalo', error);
     setGcSummary(data ?? null);
     setLoadingGcSummary(false);
-  }, []);
+  }, [anotarFallo]);
 
   // ── Load insurance data
   const loadInsuranceData = useCallback(async () => {
@@ -390,6 +435,11 @@ const AccountingPage: React.FC = () => {
         .eq('accounting_entries.period_year', year)
         .eq('accounting_entries.period_month', month),
     ]);
+    if (settlementsRes.error) anotarFallo('las liquidaciones de seguros', settlementsRes.error);
+    if (commissionsRes.error) anotarFallo('las comisiones de seguros', commissionsRes.error);
+    if (liabilityRes.error) anotarFallo('el pasivo de seguros (201.01)', liabilityRes.error);
+    if (spreadRes.error) anotarFallo('el spread de seguros (401.02)', spreadRes.error);
+
     setInsuranceSettlements(settlementsRes.data ?? []);
     setInsuranceCommissions(commissionsRes.data ?? []);
 
@@ -409,12 +459,12 @@ const AccountingPage: React.FC = () => {
     setInsuranceCommissionsTotal(periodCommissions.reduce((s, c) => s + Number(c.amount), 0));
 
     setLoadingInsurance(false);
-  }, [year, month]);
+  }, [year, month, anotarFallo]);
 
   // ── Load ledger lines for a specific account
   const loadLedgerLines = useCallback(async (accountCode: string) => {
     setLoadingLedger(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('accounting_entry_lines')
       .select('debit, credit, description, accounting_entries!inner(entry_number, entry_date, period_year, period_month, is_posted)')
       .eq('account_code', accountCode)
@@ -422,6 +472,7 @@ const AccountingPage: React.FC = () => {
       .eq('accounting_entries.period_month', month)
       .eq('accounting_entries.is_posted', true)
       .order('accounting_entries(entry_date)', { ascending: true });
+    if (error) anotarFallo(`el auxiliar de la cuenta ${accountCode}`, error);
     const rows = (data ?? []).map((r: any) => ({
       entry_date: r.accounting_entries.entry_date,
       entry_number: r.accounting_entries.entry_number,
@@ -431,7 +482,7 @@ const AccountingPage: React.FC = () => {
     }));
     setLedgerLines(rows);
     setLoadingLedger(false);
-  }, [year, month]);
+  }, [year, month, anotarFallo]);
 
   const handleConfirmEntry = async (id: string) => {
     setConfirmingId(id);
@@ -532,12 +583,15 @@ const AccountingPage: React.FC = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('accounting_access_invitations')
         .select('permissions')
         .eq('email', user.email)
         .eq('status', 'accepted')
         .maybeSingle();
+      // Falla cerrado: sin permisos leidos, accountantPerms queda en null y
+      // los `=== true` de arriba niegan. Solo dejamos rastro.
+      if (error) console.error('AccountingPage: no se pudieron leer los permisos del contador', error);
       if (data?.permissions) setAccountantPerms(data.permissions as Record<string, boolean>);
     })();
   }, [isAccountant]);
@@ -550,11 +604,13 @@ const AccountingPage: React.FC = () => {
     }
     setExpandedEntry(entryId);
     if (!entryLines[entryId]) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('accounting_entry_lines')
         .select('*')
         .eq('entry_id', entryId)
         .order('line_number');
+      // Una poliza sin renglones se ve como una poliza vacia, no como un error.
+      if (error) anotarFallo('el detalle de una poliza', error);
       setEntryLines(prev => ({ ...prev, [entryId]: data ?? [] }));
     }
   };
@@ -754,6 +810,18 @@ const AccountingPage: React.FC = () => {
       )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+
+        {erroresCarga.length > 0 && (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-900">
+                <p className="font-semibold mb-1">Las cifras de esta pantalla pueden estar incompletas</p>
+                <p>No pudimos cargar: {erroresCarga.join(', ')}. Recarga la pagina antes de tomar decisiones o exportar.</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── OVERVIEW ── */}
         {activeTab === 'overview' && (

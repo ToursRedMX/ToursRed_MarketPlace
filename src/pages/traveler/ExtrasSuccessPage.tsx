@@ -40,7 +40,7 @@ const ExtrasSuccessPage: React.FC = () => {
 
   const pollInsurance = async (bId: string, attempt: number) => {
     try {
-      const { data } = await supabase
+      const { data, error: errorReserva } = await supabase
         .from('bookings')
         .select(`
           id, booking_code, travel_insurance_included, travel_insurance_cost,
@@ -49,6 +49,20 @@ const ExtrasSuccessPage: React.FC = () => {
         `)
         .eq('id', bId)
         .maybeSingle();
+
+      // Decirle "Reserva no encontrada" a alguien que acaba de pagar porque la
+      // consulta fallo es el peor mensaje posible. Un error no es un "no
+      // existe": se reintenta y, si se acaban los intentos, se dice la verdad.
+      if (errorReserva) {
+        console.error('ExtrasSuccessPage: no se pudo leer la reserva', errorReserva);
+        if (attempt < MAX_POLL_ATTEMPTS) {
+          setTimeout(() => pollInsurance(bId, attempt + 1), POLL_INTERVAL_MS);
+        } else {
+          setError('No pudimos confirmar tu pago en este momento. Si el cargo se hizo, lo veras en tus reservas en unos minutos y te llegara el correo de confirmacion.');
+          setIsLoading(false);
+        }
+        return;
+      }
 
       if (!data) { setError('Reserva no encontrada'); setIsLoading(false); return; }
 
@@ -72,7 +86,7 @@ const ExtrasSuccessPage: React.FC = () => {
 
   const pollOptionalService = async (bos: string, attempt: number) => {
     try {
-      const { data } = await supabase
+      const { data, error: errorServicio } = await supabase
         .from('booking_optional_services')
         .select(`
           id, quantity, unit_price, subtotal, created_at,
@@ -85,11 +99,15 @@ const ExtrasSuccessPage: React.FC = () => {
         .eq('id', bos)
         .maybeSingle();
 
-      if (!data) {
+      if (errorServicio) {
+        console.error('ExtrasSuccessPage: no se pudo leer el servicio opcional', errorServicio);
+      }
+
+      if (errorServicio || !data) {
         if (attempt < MAX_POLL_ATTEMPTS) {
           setTimeout(() => pollOptionalService(bos, attempt + 1), POLL_INTERVAL_MS);
         } else {
-          setError('Servicio no encontrado');
+          setError(errorServicio ? 'No pudimos confirmar tu pago en este momento. Si el cargo se hizo, lo veras en tus reservas en unos minutos y te llegara el correo de confirmacion.' : 'Servicio no encontrado');
           setIsLoading(false);
         }
         return;

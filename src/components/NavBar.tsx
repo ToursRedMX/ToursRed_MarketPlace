@@ -41,16 +41,20 @@ const NavBar: React.FC = () => {
 
       if (isAccountExecutive && accountExecutiveInfo?.executiveId) {
         // Ejecutivos: leer profile_photo_url desde account_executives y generar URL firmada
-        const { data } = await supabase
+        const { data, error: errorFoto } = await supabase
           .from('account_executives')
           .select('profile_photo_url')
           .eq('id', accountExecutiveInfo.executiveId)
           .maybeSingle();
 
+        // Todo este bloque es la foto del avatar: si falla no se pinta y ya.
+        if (errorFoto) console.error('NavBar: no se pudo leer la foto del ejecutivo', errorFoto);
+
         if (data?.profile_photo_url) {
-          const { data: signed } = await supabase.storage
+          const { data: signed, error: errorUrlFirmada } = await supabase.storage
             .from('executive-avatars')
             .createSignedUrl(data.profile_photo_url, 3600);
+          if (errorUrlFirmada) console.error('NavBar: no se pudo firmar la URL del avatar', errorUrlFirmada);
           setProfilePicture(signed?.signedUrl || null);
         } else {
           setProfilePicture(null);
@@ -58,11 +62,13 @@ const NavBar: React.FC = () => {
         return;
       }
 
-      const { data } = await supabase
+      const { data, error: errorPerfil } = await supabase
         .from('users')
         .select('profile_picture_url')
         .eq('id', user.id)
         .maybeSingle();
+
+      if (errorPerfil) console.error('NavBar: no se pudo leer la foto de perfil', errorPerfil);
 
       setProfilePicture(data?.profile_picture_url || null);
     };
@@ -84,9 +90,10 @@ const NavBar: React.FC = () => {
             async (payload) => {
               const path = payload.new?.profile_photo_url;
               if (path) {
-                const { data: signed } = await supabase.storage
+                const { data: signed, error: errorUrlFirmada } = await supabase.storage
                   .from('executive-avatars')
                   .createSignedUrl(path, 3600);
+                if (errorUrlFirmada) console.error('NavBar: no se pudo firmar la URL del avatar', errorUrlFirmada);
                 setProfilePicture(signed?.signedUrl || null);
               } else {
                 setProfilePicture(null);
@@ -126,12 +133,16 @@ const NavBar: React.FC = () => {
     const fetchGarbageCount = async () => {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 7);
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('bookings')
         .select('id', { count: 'exact', head: true })
         .in('status', ['pending', 'cancelled'])
         .eq('payment_status', 'pending')
         .lt('created_at', cutoff.toISOString());
+
+      // Es el contador del badge de limpieza: si falla no se pinta y ya.
+      if (error) console.error('NavBar: no se pudo contar las reservas basura', error);
+
       setGarbageBookingsCount(count ?? 0);
     };
     fetchGarbageCount();

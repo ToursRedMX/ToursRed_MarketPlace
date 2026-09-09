@@ -68,11 +68,15 @@ const AdminTicketDetail: React.FC = () => {
 
     let ticketData = ticketRes.data;
     if (ticketData?.ticket_relacionado_id) {
-      const { data: related } = await supabase
+      const { data: related, error: errorRelacionado } = await supabase
         .from('support_tickets')
         .select('id, folio')
         .eq('id', ticketData.ticket_relacionado_id)
         .maybeSingle();
+
+      // Solo el folio del ticket relacionado: sin el, no se pinta el enlace.
+      if (errorRelacionado) console.error('AdminTicketDetail: no se pudo leer el ticket relacionado', errorRelacionado);
+
       if (related) ticketData = { ...ticketData, ticket_relacionado: related };
     }
 
@@ -99,7 +103,9 @@ const AdminTicketDetail: React.FC = () => {
 
   const getActorName = async () => {
     if (!user) return 'Administrador';
-    const { data } = await supabase.from('users').select('first_name, last_name').eq('id', user.id).maybeSingle();
+    const { data, error } = await supabase.from('users').select('first_name, last_name').eq('id', user.id).maybeSingle();
+    // Solo decide el nombre con el que se firma la accion en el historial.
+    if (error) console.error('AdminTicketDetail: no se pudo leer el nombre del actor', error);
     return data ? `${data.first_name} ${data.last_name}` : 'Administrador';
   };
 
@@ -231,11 +237,16 @@ const AdminTicketDetail: React.FC = () => {
 
     // Notify agency if assigned
     if (agencyChanged && newAgencyId) {
-      const { data: agencyUser } = await supabase
+      const { data: agencyUser, error: errorAgencia } = await supabase
         .from('agencies')
         .select('user_id')
         .eq('id', newAgencyId)
         .maybeSingle();
+
+      // Sin el user_id no se manda la notificacion y el ticket se queda
+      // asignado sin que la agencia se entere.
+      if (errorAgencia) console.error('AdminTicketDetail: no se pudo leer el usuario de la agencia para notificarla', errorAgencia);
+
       if (agencyUser?.user_id) {
         const agency = agencies.find(a => a.id === newAgencyId);
         await supabase.from('notifications').insert({
@@ -364,7 +375,13 @@ const AdminTicketDetail: React.FC = () => {
   };
 
   const getAttachmentUrl = async (path: string) => {
-    const { data } = await supabase.storage.from('support-attachments').createSignedUrl(path, 3600);
+    const { data, error } = await supabase.storage.from('support-attachments').createSignedUrl(path, 3600);
+    // Sin URL firmada el clic en el adjunto no hacia absolutamente nada.
+    if (error) {
+      console.error('AdminTicketDetail: no se pudo firmar la URL del adjunto', error);
+      alert('No pudimos abrir el adjunto. Intenta de nuevo.');
+      return;
+    }
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   };
 

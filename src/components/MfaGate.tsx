@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Shield, ShieldCheck, KeyRound, Smartphone, AlertTriangle, Loader2, ArrowRight } from 'lucide-react';
 
-type GateState = 'loading' | 'not_required' | 'needs_enrollment' | 'needs_challenge' | 'passed';
+type GateState = 'loading' | 'not_required' | 'needs_enrollment' | 'needs_challenge' | 'passed' | 'error';
 
 export interface MfaGateProps {
   children: React.ReactNode;
@@ -35,10 +35,20 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
     }
 
     try {
-      const { data: settings } = await supabase
+      const { data: settings, error: errorSettings } = await supabase
         .from('platform_settings')
         .select('mfa_required_for_admins, mfa_required_for_accountant')
         .maybeSingle();
+
+      // Si no podemos leer la configuracion no sabemos si el MFA es obligatorio.
+      // Asumir que no lo es abriria el panel de administracion sin segundo factor,
+      // asi que bloqueamos y pedimos reintentar.
+      if (errorSettings) {
+        console.error('MfaGate: no se pudo leer platform_settings', errorSettings);
+        setError('No pudimos verificar la configuracion de seguridad. Reintenta en unos segundos.');
+        setState('error');
+        return;
+      }
 
       const adminToggle = settings?.mfa_required_for_admins ?? false;
       const accountantToggle = settings?.mfa_required_for_accountant ?? false;
@@ -51,7 +61,14 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
         return;
       }
 
-      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const { data: factors, error: errorFactors } = await supabase.auth.mfa.listFactors();
+      if (errorFactors) {
+        console.error('MfaGate: no se pudieron listar los factores MFA', errorFactors);
+        setError('No pudimos verificar tu autenticacion en dos pasos. Reintenta en unos segundos.');
+        setState('error');
+        return;
+      }
+
       const totpFactors = (factors?.totp ?? []).filter((f: any) => f.status === 'verified');
 
       if (totpFactors.length === 0) {
@@ -60,11 +77,24 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const aal = (session?.user as any)?.aal ?? session?.user?.aud;
-      const jwtAal = session?.access_token
-        ? JSON.parse(atob(session.access_token.split('.')[1]))?.aal
-        : 'aal1';
+      const { data: { session }, error: errorSession } = await supabase.auth.getSession();
+      if (errorSession) {
+        console.error('MfaGate: no se pudo leer la sesion', errorSession);
+        setError('No pudimos verificar tu sesion. Reintenta en unos segundos.');
+        setState('error');
+        return;
+      }
+
+      // Un token ilegible no es prueba de aal2: ante la duda pedimos el codigo.
+      let jwtAal = 'aal1';
+      if (session?.access_token) {
+        try {
+          jwtAal = JSON.parse(atob(session.access_token.split('.')[1]))?.aal ?? 'aal1';
+        } catch (errorToken) {
+          console.error('MfaGate: no se pudo leer el aal del token', errorToken);
+          jwtAal = 'aal1';
+        }
+      }
 
       if (jwtAal === 'aal2') {
         setState('passed');
@@ -72,8 +102,12 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
       }
 
       setState('needs_challenge');
-    } catch {
-      setState('not_required');
+    } catch (err: any) {
+      // Cualquier fallo inesperado tambien bloquea: antes caia en 'not_required'
+      // y dejaba entrar al panel sin segundo factor.
+      console.error('MfaGate: fallo al verificar el estado de MFA', err);
+      setError('No pudimos verificar tu autenticacion en dos pasos. Reintenta en unos segundos.');
+      setState('error');
     }
   }, [user, isAdmin, isAccountant, isSuperAdmin]);
 
@@ -135,7 +169,8 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
     setError('');
     setIsSubmitting(true);
     try {
-      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const { data: factors, error: errorFactors } = await supabase.auth.mfa.listFactors();
+      if (errorFactors) throw errorFactors;
       const verifiedFactor = (factors?.totp ?? []).find((f: any) => f.status === 'verified');
       if (!verifiedFactor) {
         setState('needs_enrollment');
@@ -182,6 +217,34 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
 
   if (state === 'loading' || state === 'not_required' || state === 'passed') {
     return <>{children}</>;
+  }
+
+  if (state === 'error') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-200 px-4 py-8">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mb-4 mx-auto">
+            <AlertTriangle className="w-8 h-8 text-amber-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900">No pudimos verificar tu seguridad</h1>
+          <p className="text-slate-500 mt-2 text-sm">
+            {error || 'No pudimos verificar tu autenticacion en dos pasos. Reintenta en unos segundos.'}
+          </p>
+          <button
+            onClick={() => { setError(''); setState('loading'); checkMfaStatus(); }}
+            className="mt-6 w-full flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-blue-700 transition-colors"
+          >
+            Reintentar
+          </button>
+          <button
+            onClick={async () => { await supabase.auth.signOut(); }}
+            className="mt-4 w-full text-sm text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            Cerrar sesion
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

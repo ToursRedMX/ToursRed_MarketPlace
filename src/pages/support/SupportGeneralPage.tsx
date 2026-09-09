@@ -40,8 +40,17 @@ const SupportGeneralPage: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
-      const { data: cats } = await supabase.from('support_categories').select('*').eq('activa', true).order('nombre');
-      const { data: subs } = await supabase.from('support_subcategories').select('*').eq('activa', true).order('nombre');
+      const { data: cats, error: errorCategorias } = await supabase.from('support_categories').select('*').eq('activa', true).order('nombre');
+      const { data: subs, error: errorSubcategorias } = await supabase.from('support_subcategories').select('*').eq('activa', true).order('nombre');
+
+      // Sin categorias el formulario de soporte no se puede enviar y parece
+      // que no hay temas disponibles.
+      if (errorCategorias || errorSubcategorias) {
+        console.error('SupportGeneralPage: no se pudieron cargar las categorias', errorCategorias ?? errorSubcategorias);
+        setError('No pudimos cargar los temas de soporte. Recarga la pagina.');
+        return;
+      }
+
       setCategories(cats ?? []);
       // Include 'agency' categories in addition to 'general' for the general page
       // so that APEL-type appeals (aplica_a = ['agency']) show here when redirected

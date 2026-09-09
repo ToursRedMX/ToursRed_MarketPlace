@@ -263,7 +263,9 @@ const TravelerProfile: React.FC = () => {
       let totalSpent = 0;
       if (spentResult.data && spentResult.data.length > 0) {
         const paidIds = spentResult.data.map((b: any) => b.id);
-        const { data: batchResult } = await supabase.rpc('get_booking_total_paid_batch', { p_booking_ids: paidIds });
+        const { data: batchResult, error: errorPagado } = await supabase.rpc('get_booking_total_paid_batch', { p_booking_ids: paidIds });
+        // Sin esto, el "total gastado" del viajero sale en 0.
+        if (errorPagado) throw errorPagado;
         if (batchResult) {
           totalSpent = (batchResult as any[]).reduce((sum, row) => sum + (Number(row.total_paid) || 0), 0);
         }
@@ -326,13 +328,20 @@ const TravelerProfile: React.FC = () => {
       // Validar RFC unico antes de guardar
       const rfcToSave = editForm.rfc?.trim().toUpperCase() || null;
       if (rfcToSave && rfcToSave !== profile?.rfc?.toUpperCase()) {
-        const { data: rfcExists } = await supabase
+        const { data: rfcExists, error: errorRfc } = await supabase
           .from('users')
           .select('id, first_name, last_name')
           .eq('role', 'traveler')
           .eq('rfc', rfcToSave)
           .neq('id', user.id)
           .maybeSingle();
+
+        // Esta es la guardia de RFC unico: si la lectura falla, rfcExists
+        // queda en null, la guardia se salta y se guarda un RFC repetido.
+        if (errorRfc) {
+          console.error('No se pudo verificar si el RFC ya esta en uso:', errorRfc);
+          throw new Error('No pudimos verificar tu RFC en este momento. Intenta de nuevo.');
+        }
 
         if (rfcExists) {
           const ownerName = [rfcExists.first_name, rfcExists.last_name].filter(Boolean).join(' ') || 'otro viajero';
