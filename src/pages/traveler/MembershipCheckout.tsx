@@ -30,6 +30,7 @@ export default function MembershipCheckout() {
   const [hasMembership, setHasMembership] = useState(false);
   const [checkingMembership, setCheckingMembership] = useState(true);
   const [stripeMembershipsEnabled, setStripeMembershipsEnabled] = useState<boolean | null>(null);
+  const [errorVerificacion, setErrorVerificacion] = useState('');
 
   useEffect(() => {
     checkExistingMembership();
@@ -39,25 +40,42 @@ export default function MembershipCheckout() {
   const checkExistingMembership = async () => {
     if (!user) return;
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('memberships')
         .select('id')
         .eq('user_id', user.id)
         .eq('status', 'active')
         .maybeSingle();
+
+      // Si no podemos comprobar si ya tiene membresia, dejarlo pasar significa
+      // cobrarle una segunda. Preferimos pedirle que lo intente de nuevo.
+      if (error) throw error;
+
       if (data) setHasMembership(true);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('MembershipCheckout: no se pudo comprobar la membresia activa', err);
+      setErrorVerificacion('No pudimos comprobar si ya tienes una membresia activa. Intenta de nuevo en unos segundos para no arriesgar un cobro duplicado.');
     } finally {
       setCheckingMembership(false);
     }
   };
 
   const checkStripeEnabled = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('platform_settings')
       .select('stripe_memberships_enabled')
       .maybeSingle();
+
+    // El `?? true` daba por habilitado el cobro cuando no se podia leer el
+    // interruptor. Si esta apagado a proposito, el viajero llegaria hasta la
+    // pasarela para que ahi truene.
+    if (error) {
+      console.error('MembershipCheckout: no se pudo leer stripe_memberships_enabled', error);
+      setErrorVerificacion('No pudimos verificar la disponibilidad del pago de membresias. Intenta de nuevo en unos segundos.');
+      setStripeMembershipsEnabled(false);
+      return;
+    }
+
     setStripeMembershipsEnabled(data?.stripe_memberships_enabled ?? true);
   };
 
@@ -70,6 +88,27 @@ export default function MembershipCheckout() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (errorVerificacion) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+          <div className="h-16 w-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="h-8 w-8 text-amber-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">No pudimos verificar tu cuenta</h2>
+          <p className="text-gray-600 text-sm mb-6">{errorVerificacion}</p>
+          <button
+            onClick={() => navigate('/traveler/membership')}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Volver a Membresías
+          </button>
+        </div>
       </div>
     );
   }

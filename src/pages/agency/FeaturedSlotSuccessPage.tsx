@@ -73,7 +73,7 @@ const FeaturedSlotSuccessPage: React.FC = () => {
   };
 
   const poll = async (attempts = 0) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('featured_tour_slots')
       .select(`
         status, total_amount, starts_at, expires_at,
@@ -82,6 +82,10 @@ const FeaturedSlotSuccessPage: React.FC = () => {
       `)
       .eq('id', slotId!)
       .maybeSingle();
+
+    // Se sigue sondeando por si el webhook aun no llega, pero que quede rastro:
+    // sin esto la pantalla se queda 20 segundos y termina sin explicacion.
+    if (error) console.error('FeaturedSlotSuccessPage: no se pudo leer el slot destacado', error);
 
     if (data?.status === 'active') {
       setSlot({

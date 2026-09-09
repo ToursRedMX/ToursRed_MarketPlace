@@ -72,7 +72,9 @@ import { join } from "node:path";
 //        en un borrado al guardar.
 //   109  09-sep: el reporte maestro. Once consultas que suman al mismo
 //        total; cualquiera que falle deja el reporte completo y mal.
-const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 109);
+//   100  09-sep: las pantallas de "ya pague, que paso" — retorno de pago,
+//        extras, suplementos, plan de pagos, membresia y destacados.
+const LINEA_BASE = Number(process.env.BASELINE_SUPABASE_ERRORS ?? 100);
 
 const DESTR = /const\s*\{([^}]*)\}\s*=\s*await\s+supabase\b/gm;
 

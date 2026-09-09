@@ -27,7 +27,7 @@ const SupplementSuccessPage: React.FC = () => {
 
   const pollForPaidStatus = async (supplementId: string, attempt: number) => {
     try {
-      const { data } = await supabase
+      const { data, error: errorSuplemento } = await supabase
         .from('booking_supplements')
         .select(`
           id, status, quantity, unit_price, service_charge, membership_exemption_used,
@@ -40,6 +40,19 @@ const SupplementSuccessPage: React.FC = () => {
         `)
         .eq('id', supplementId)
         .maybeSingle();
+
+      // Un error de lectura no es un "no existe": se reintenta antes de
+      // decirle nada raro a quien acaba de pagar.
+      if (errorSuplemento) {
+        console.error('SupplementSuccessPage: no se pudo leer el suplemento', errorSuplemento);
+        if (attempt < MAX_POLL_ATTEMPTS) {
+          setTimeout(() => pollForPaidStatus(supplementId, attempt + 1), POLL_INTERVAL_MS);
+        } else {
+          setError('No pudimos confirmar tu pago en este momento. Si el cargo se hizo, lo veras en tus reservas en unos minutos y te llegara el correo de confirmacion.');
+          setIsLoading(false);
+        }
+        return;
+      }
 
       if (!data) {
         setError('Suplemento no encontrado');

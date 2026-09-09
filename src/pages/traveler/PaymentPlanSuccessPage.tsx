@@ -27,7 +27,7 @@ const PaymentPlanSuccessPage: React.FC = () => {
 
   const pollForUpdatedPlan = async (planId: string, attempt: number) => {
     try {
-      const { data } = await supabase
+      const { data, error: errorPlan } = await supabase
         .from('booking_payment_plans')
         .select(`
           id, status, total_plan_amount, total_amount_paid, pending_balance, updated_at,
@@ -38,6 +38,17 @@ const PaymentPlanSuccessPage: React.FC = () => {
         `)
         .eq('id', planId)
         .maybeSingle();
+
+      if (errorPlan) {
+        console.error('PaymentPlanSuccessPage: no se pudo leer el plan de pago', errorPlan);
+        if (attempt < MAX_POLL_ATTEMPTS) {
+          setTimeout(() => pollForUpdatedPlan(planId, attempt + 1), POLL_INTERVAL_MS);
+        } else {
+          setError('No pudimos confirmar tu pago en este momento. Si el cargo se hizo, lo veras en tus reservas en unos minutos y te llegara el correo de confirmacion.');
+          setIsLoading(false);
+        }
+        return;
+      }
 
       if (!data) {
         setError('Plan de pago no encontrado');
@@ -52,6 +63,12 @@ const PaymentPlanSuccessPage: React.FC = () => {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      // Sin esta lectura no hay "pago reciente" y la pantalla se queda
+      // reintentando hasta agotar los intentos aunque el cobro si haya pasado.
+      if (recentTx.error) {
+        console.error('PaymentPlanSuccessPage: no se pudo leer la ultima transaccion del plan', recentTx.error);
+      }
 
       const hasRecentPayment = recentTx.data && Date.now() - new Date(recentTx.data.created_at).getTime() < 5 * 60 * 1000;
 
