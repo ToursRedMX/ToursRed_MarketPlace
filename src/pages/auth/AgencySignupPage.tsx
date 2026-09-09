@@ -84,6 +84,12 @@ const AgencySignupPage: React.FC = () => {
       const { data, error: signUpError, profileData, isExistingUser } = await signUp(email, password, UserRole.AGENCY, {}, turnstileToken || undefined);
 
       if (signUpError) {
+        // F-1: signUp se detiene si no puede comprobar que el correo ya exista,
+        // en vez de seguir como si estuviera libre. Aqui no aplican los de CURP
+        // ni pasaporte (esta alta pasa profileData vacio), pero el del correo si.
+        if (signUpError.message === 'NO_SE_PUDO_VERIFICAR_CORREO') {
+          throw new Error('No pudimos validar tus datos en este momento. Por favor intenta de nuevo en unos segundos.');
+        }
         if (isLeakedPasswordError(signUpError.message)) {
           throw new Error('Esta contraseña ha sido expuesta en brechas de datos conocidas y no puede usarse. Por favor elige una contraseña diferente y más segura.');
         }

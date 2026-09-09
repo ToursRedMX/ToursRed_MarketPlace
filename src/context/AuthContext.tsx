@@ -316,11 +316,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const metadataRole = authUser.user_metadata?.role;
 
     try {
-      const { data: profile } = await supabase
+      const { data: profile, error: errorPerfil } = await supabase
         .from('users')
         .select('role, email_verified, is_active, must_change_password')
         .eq('id', authUser.id)
         .maybeSingle();
+
+      // F-1, y este NO falla cerrado: si la lectura falla, `profile` llega null,
+      // el bloque de abajo no corre, y con el se saltan el chequeo de
+      // `is_active === false` (cuenta bloqueada) y el de must_change_password.
+      // El usuario entra con el rol de su metadata.
+      //
+      // AQUI SOLO SE DEJA RASTRO. Denegar el acceso cuando esta lectura falla
+      // es la correccion de fondo, pero cambia el camino de login de TODOS: si
+      // la consulta falla de forma general, cerrar la sesion a todo el mundo es
+      // peor que la ventana que se cierra. Pendiente de decidir con Axel.
+      if (errorPerfil) {
+        console.error(
+          'AuthContext: no se pudo leer el perfil; NO se comprobo is_active ni must_change_password',
+          errorPerfil,
+        );
+      }
 
       if (profile) {
         if (profile.is_active === false) {
@@ -417,11 +433,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (isOAuthProvider && (metaOnboarding === false || metaOnboarding === null || metaOnboarding === undefined)) {
           // Check if profile exists in users table
-          const { data: existingProfile } = await supabase
+          const { data: existingProfile, error: errorPerfilExistente } = await supabase
             .from('users')
             .select('id, role')
             .eq('id', authUser.id)
             .maybeSingle();
+
+          // F-1: falla cerrado (se manda al onboarding otra vez), pero en
+          // silencio. Con el log, un "me vuelve a pedir el onboarding" en UAT
+          // deja de ser un misterio.
+          if (errorPerfilExistente) {
+            console.error('AuthContext: no se pudo leer el perfil OAuth existente', errorPerfilExistente);
+          }
 
           if (!existingProfile) {
             // New OAuth user — needs onboarding; OAuth providers always verify email
@@ -443,11 +466,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Query is_super_admin primero — es la mas critica
           let isSA = false;
           try {
-            const { data: saData } = await supabase
+            const { data: saData, error: errorSuperAdmin } = await supabase
               .from('users')
               .select('is_super_admin')
               .eq('id', authUser.id)
               .maybeSingle();
+            // F-1: falla cerrado — degrada a admin normal, que es lo seguro.
+            // Sin este log, el sintoma en UAT es "soy super admin y no veo X".
+            if (errorSuperAdmin) {
+              console.error('AuthContext: no se pudo leer is_super_admin', errorSuperAdmin);
+            }
             isSA = saData?.is_super_admin || false;
           } catch {
             // Si falla, asumir que no es super admin pero mantener rol admin
@@ -457,11 +485,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // Query admin_permissions por separado para no bloquear el rol
           try {
-            const { data: permsData } = await supabase
+            const { data: permsData, error: errorPermisosAdmin } = await supabase
               .from('admin_permissions')
               .select('*')
               .eq('user_id', authUser.id)
               .maybeSingle();
+
+            // F-1: falla cerrado — el admin se queda sin permisos. Seguro, pero
+            // el sintoma en UAT es "no puedo entrar a nada" sin rastro.
+            if (errorPermisosAdmin) {
+              console.error('AuthContext: no se pudieron leer los permisos de admin', errorPermisosAdmin);
+            }
 
             if (!isSA && permsData) {
               const p = permsData;
@@ -504,18 +538,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAccountExecutiveInfo(null);
           // Cargar permisos contables desde admin_permissions si existen
           try {
-            const { data: acctPerms } = await supabase
+            // F-1: el error se ignoraba y los `?? true` CONCEDIAN el permiso
+            // cuando la lectura fallaba: `acctPerms` llegaba null y el contador
+            // se quedaba con ver contabilidad y exportar XML del SAT sin que
+            // nadie lo hubiera autorizado. No poder leer un permiso no es lo
+            // mismo que tenerlo. Los `?? true` se conservan para el caso
+            // legitimo de "no hay fila en admin_permissions", que es el
+            // contador sin restricciones; lo que cambia es el caso de ERROR.
+            const { data: acctPerms, error: errorPermisosContables } = await supabase
               .from('admin_permissions')
               .select('can_view_accounting, can_export_sat_xml, can_manage_chart_of_accounts')
               .eq('user_id', authUser.id)
               .maybeSingle();
-            setAccountantPermissions({
-              canViewAccounting: acctPerms?.can_view_accounting ?? true,
-              canExportSatXml: acctPerms?.can_export_sat_xml ?? true,
-              canManageChartOfAccounts: acctPerms?.can_manage_chart_of_accounts ?? false,
-            });
-          } catch {
-            setAccountantPermissions({ canViewAccounting: true, canExportSatXml: true, canManageChartOfAccounts: false });
+
+            if (errorPermisosContables) {
+              console.error('AuthContext: no se pudieron leer los permisos contables', errorPermisosContables);
+              setAccountantPermissions({
+                canViewAccounting: false,
+                canExportSatXml: false,
+                canManageChartOfAccounts: false,
+              });
+            } else {
+              setAccountantPermissions({
+                canViewAccounting: acctPerms?.can_view_accounting ?? true,
+                canExportSatXml: acctPerms?.can_export_sat_xml ?? true,
+                canManageChartOfAccounts: acctPerms?.can_manage_chart_of_accounts ?? false,
+              });
+            }
+          } catch (e) {
+            // Misma regla que arriba, por la otra puerta: si esto revienta,
+            // tampoco se pudo leer el permiso, asi que tampoco se concede.
+            // Antes este catch otorgaba ver contabilidad y exportar XML del SAT.
+            console.error('AuthContext: excepcion leyendo los permisos contables', e);
+            setAccountantPermissions({ canViewAccounting: false, canExportSatXml: false, canManageChartOfAccounts: false });
           }
           setAllStaffInfo([]);
           setAccountExecutiveInfo(null);
@@ -529,11 +584,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setNeedsTermsAcceptance(false);
           // Cargar info del ejecutivo
           try {
-            const { data: execData } = await supabase
+            const { data: execData, error: errorEjecutivo } = await supabase
               .from('account_executives')
               .select('id, first_name, last_name, email, is_active')
               .eq('user_id', authUser.id)
               .maybeSingle();
+            // F-1: falla cerrado — el ejecutivo se queda sin su ficha.
+            if (errorEjecutivo) {
+              console.error('AuthContext: no se pudo leer la ficha del ejecutivo', errorEjecutivo);
+            }
             if (execData) {
               setAccountExecutiveInfo({
                 executiveId: execData.id,
@@ -582,11 +641,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setNeedsTermsAcceptance(false);
           }
 
-          const { count } = await supabase
+          const { count, error: errorStaff } = await supabase
             .from('agency_staff')
             .select('id', { count: 'exact', head: true })
             .eq('user_id', authUser.id)
             .eq('is_active', true);
+
+          // F-1: falla cerrado — el staff de agencia no ve su agencia. Es de
+          // los que mas ruido va a hacer en UAT si no deja rastro.
+          if (errorStaff) {
+            console.error('AuthContext: no se pudo contar el staff de agencia', errorStaff);
+          }
 
           if (count && count > 0) {
             const staff = await loadStaffInfo(authUser.id);
@@ -628,11 +693,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // Verificar si la agencia está aprobada / en qué etapa de onboarding está
           try {
-            const { data: agencyData } = await supabase
+            const { data: agencyData, error: errorAgencia } = await supabase
               .from('agencies')
               .select('is_approved, onboarding_status')
               .eq('user_id', authUser.id)
               .maybeSingle();
+            // F-1: falla cerrado — la agencia aparece como no aprobada.
+            if (errorAgencia) {
+              console.error('AuthContext: no se pudo leer el estado de la agencia', errorAgencia);
+            }
             const onboardingStatus = agencyData?.onboarding_status ?? 'pending_documents';
             setIsAgencyApproved(onboardingStatus === 'active' && agencyData?.is_approved === true);
           } catch {

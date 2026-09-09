@@ -73,11 +73,20 @@ export const signUp = async (
     console.log('🔐 Registrando usuario con email:', email, 'y rol:', role);
 
     // Check if user already exists
-    const { data: existingUser } = await supabase
+    //
+    // F-1: antes se ignoraba el error. Si esta lectura falla, `existingUser`
+    // llega null y el flujo sigue como si el correo estuviera libre, mandando a
+    // signUp a alguien que ya existe. No se puede continuar sin saberlo.
+    const { data: existingUser, error: errorUsuarioExistente } = await supabase
       .from('users')
       .select('id, email')
       .eq('email', email)
       .maybeSingle();
+
+    if (errorUsuarioExistente) {
+      console.error('signUp: no se pudo comprobar si el correo ya existe', errorUsuarioExistente);
+      throw new Error('NO_SE_PUDO_VERIFICAR_CORREO');
+    }
 
     let isExistingUser = false;
 
@@ -104,8 +113,17 @@ export const signUp = async (
 
     // Check if CURP already exists for this role using security-definer RPC (works for anon)
     if (profileData.curp) {
-      const { data: curpAvailable } = await supabase
+      // F-1: el error se ignoraba, y la comparacion es `=== false`. Si el RPC
+      // falla, `curpAvailable` es null, `null === false` es false, y el chequeo
+      // de duplicado SE SALTA: un CURP repetido entra a la base. No poder
+      // verificar la unicidad no es lo mismo que que este libre.
+      const { data: curpAvailable, error: errorCurp } = await supabase
         .rpc('check_curp_available', { p_curp: profileData.curp.toUpperCase(), p_role: role });
+
+      if (errorCurp) {
+        console.error('signUp: no se pudo verificar la unicidad del CURP', errorCurp);
+        throw new Error('NO_SE_PUDO_VERIFICAR_CURP');
+      }
 
       if (curpAvailable === false) {
         console.log('⚠️ CURP ya existe en la base de datos para este rol');
@@ -115,8 +133,14 @@ export const signUp = async (
 
     // Check if passport number already exists using security-definer RPC (works for anon)
     if (role === UserRole.TRAVELER && profileData.passport_number) {
-      const { data: passportAvailable } = await supabase
+      // F-1: mismo caso que el CURP de arriba.
+      const { data: passportAvailable, error: errorPasaporte } = await supabase
         .rpc('check_passport_available', { p_passport: profileData.passport_number.toUpperCase() });
+
+      if (errorPasaporte) {
+        console.error('signUp: no se pudo verificar la unicidad del pasaporte', errorPasaporte);
+        throw new Error('NO_SE_PUDO_VERIFICAR_PASAPORTE');
+      }
 
       if (passportAvailable === false) {
         console.log('⚠️ Número de pasaporte ya existe en la base de datos');
@@ -858,7 +882,9 @@ export const trackFeaturedBooking = async (slotId: string) => {
 
 export const joinFeaturedWaitlist = async (tourId: string, planId: string, agencyId: string) => {
   try {
-    const { data: existing } = await supabase
+    // F-1: si esta lectura falla, `existing` llega null y la agencia se apunta
+    // dos veces a la misma lista de espera.
+    const { data: existing, error: errorExistente } = await supabase
       .from('featured_tour_waitlist')
       .select('id')
       .eq('tour_id', tourId)
@@ -866,15 +892,27 @@ export const joinFeaturedWaitlist = async (tourId: string, planId: string, agenc
       .in('status', ['waiting', 'notified'])
       .maybeSingle();
 
+    if (errorExistente) {
+      console.error('joinFeaturedWaitlist: no se pudo comprobar si ya estaba en la lista', errorExistente);
+      return { error: new Error('No se pudo verificar tu lugar en la lista de espera. Intenta de nuevo.') };
+    }
+
     if (existing) return { error: new Error('Ya estás en la lista de espera para este tour') };
 
-    const { data: last } = await supabase
+    // F-1: si esta falla, la posicion se calcula desde cero y colisiona con
+    // la de otra agencia que ya estaba en la lista.
+    const { data: last, error: errorUltima } = await supabase
       .from('featured_tour_waitlist')
       .select('position')
       .eq('tour_id', tourId)
       .order('position', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (errorUltima) {
+      console.error('joinFeaturedWaitlist: no se pudo leer la ultima posicion', errorUltima);
+      return { error: new Error('No se pudo asignar tu lugar en la lista de espera. Intenta de nuevo.') };
+    }
 
     const nextPosition = ((last as any)?.position ?? 0) + 1;
     const { error } = await supabase
