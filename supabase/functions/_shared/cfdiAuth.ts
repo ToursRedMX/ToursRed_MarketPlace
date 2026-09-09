@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 /**
  * Autorizacion compartida para las funciones que timbran CFDIs.
@@ -24,7 +24,7 @@ const corsHeadersForResponses = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-type AdminClient = ReturnType<typeof createClient>;
+type AdminClient = Pick<SupabaseClient, "auth" | "from">;
 
 export interface CfdiCaller {
   isServiceRole: boolean;
@@ -60,43 +60,54 @@ export async function authorizeCfdiRequest(
   req: Request,
   { ownerUserId, resource }: { ownerUserId?: string | null; resource: string },
 ): Promise<CfdiAuthOutcome> {
-  const bearer = (req.headers.get("Authorization") ?? "").replace("Bearer ", "").trim();
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer(?:\s+|$)/i, "").trim();
+  if (!bearer) {
+    return { allowed: false, response: jsonResponse({ error: "No autorizado" }, 401) };
+  }
 
   if (bearer.length > 0 && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
     return { allowed: true, caller: { isServiceRole: true, isAdmin: true, userId: null } };
   }
 
-  // La llave publicable cae aqui: es un JWT valido del proyecto pero no de un
-  // usuario, asi que getUser no devuelve nadie y termina en 401.
-  const { data: { user: caller }, error: callerErr } = await admin.auth.getUser(bearer);
-  if (callerErr || !caller) {
-    return { allowed: false, response: jsonResponse({ error: "No autorizado" }, 401) };
+  try {
+    // La llave publicable cae aqui: es un JWT valido del proyecto pero no de un
+    // usuario, asi que getUser no devuelve nadie y termina en 401.
+    const { data: { user: caller }, error: callerErr } = await admin.auth.getUser(bearer);
+    if (callerErr || !caller) {
+      return { allowed: false, response: jsonResponse({ error: "No autorizado" }, 401) };
+    }
+
+    const { data: callerProfile, error: profileError } = await admin
+      .from("users")
+      .select("role")
+      .eq("id", caller.id)
+      .maybeSingle();
+
+    if (profileError) {
+      return { allowed: false, response: jsonResponse({ error: "No se pudo verificar la autorizacion", code: "CFDI_AUTH_UNAVAILABLE" }, 503) };
+    }
+
+    // El super_admin real de este esquema es la columna booleana users.is_super_admin,
+    // no este valor de role; aqui no hace falta consultarla porque es una escalacion
+    // sobre admin (create-admin-user, delete-auth-user), no una via alterna para serlo.
+    const isAdmin = callerProfile?.role === "admin" || callerProfile?.role === "super_admin";
+    if (isAdmin) {
+      return { allowed: true, caller: { isServiceRole: false, isAdmin: true, userId: caller.id } };
+    }
+
+    if (ownerUserId && ownerUserId === caller.id) {
+      return { allowed: true, caller: { isServiceRole: false, isAdmin: false, userId: caller.id } };
+    }
+
+    console.warn(
+      `CFDI denegado: usuario ${caller.id} intento timbrar ${resource}` +
+        (ownerUserId ? ` (dueno ${ownerUserId})` : " (requiere admin)")
+    );
+    return {
+      allowed: false,
+      response: jsonResponse({ error: "No tienes permiso sobre este recurso" }, 403),
+    };
+  } catch {
+    return { allowed: false, response: jsonResponse({ error: "No se pudo verificar la autorizacion", code: "CFDI_AUTH_UNAVAILABLE" }, 503) };
   }
-
-  const { data: callerProfile } = await admin
-    .from("users")
-    .select("role")
-    .eq("id", caller.id)
-    .maybeSingle();
-
-  // El super_admin real de este esquema es la columna booleana users.is_super_admin,
-  // no este valor de role; aqui no hace falta consultarla porque es una escalacion
-  // sobre admin (create-admin-user, delete-auth-user), no una via alterna para serlo.
-  const isAdmin = callerProfile?.role === "admin" || callerProfile?.role === "super_admin";
-  if (isAdmin) {
-    return { allowed: true, caller: { isServiceRole: false, isAdmin: true, userId: caller.id } };
-  }
-
-  if (ownerUserId && ownerUserId === caller.id) {
-    return { allowed: true, caller: { isServiceRole: false, isAdmin: false, userId: caller.id } };
-  }
-
-  console.warn(
-    `CFDI denegado: usuario ${caller.id} intento timbrar ${resource}` +
-      (ownerUserId ? ` (dueno ${ownerUserId})` : " (requiere admin)")
-  );
-  return {
-    allowed: false,
-    response: jsonResponse({ error: "No tienes permiso sobre este recurso" }, 403),
-  };
 }

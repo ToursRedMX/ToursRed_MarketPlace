@@ -1,4 +1,6 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+
+type UserClient = Pick<SupabaseClient, "auth">;
 
 interface StepUpResult {
   verified: boolean;
@@ -16,6 +18,7 @@ export async function checkStepUp(
   supabaseUrl: string,
   userId: string
 ): Promise<StepUpResult> {
+  if (!userId) return { verified: false, reason: "STEP_UP_REQUIRED" };
   try {
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const now = new Date().toISOString();
@@ -30,7 +33,7 @@ export async function checkStepUp(
     if (error) {
       return { verified: false, reason: "Error verifying recent authentication" };
     }
-    if (data && data.length > 0) {
+    if (Array.isArray(data) && data.some(row => row && typeof row.id === "string" && row.id.length > 0)) {
       return { verified: true };
     }
     return { verified: false, reason: "STEP_UP_REQUIRED" };
@@ -40,13 +43,14 @@ export async function checkStepUp(
 }
 
 export async function checkUserHasMfa(
-  userClient: ReturnType<typeof createClient>,
+  userClient: UserClient,
   userId: string
 ): Promise<boolean> {
   try {
-    const { data: factorsData } = await userClient.auth.mfa.listFactors();
-    const verifiedTotp = (factorsData?.totp ?? []).filter((f: any) => f.status === "verified");
-    return verifiedTotp.length > 0;
+    if (!userId) return false;
+    const { data: factorsData, error } = await userClient.auth.mfa.listFactors();
+    if (error || !Array.isArray(factorsData?.totp)) return false;
+    return factorsData.totp.some(factor => factor && factor.status === "verified");
   } catch {
     return false;
   }
@@ -73,7 +77,7 @@ export function mfaRequiredResponse() {
 }
 
 export async function enforceStepUp(
-  userClient: ReturnType<typeof createClient>,
+  userClient: UserClient,
   serviceRoleKey: string,
   supabaseUrl: string,
   userId: string
