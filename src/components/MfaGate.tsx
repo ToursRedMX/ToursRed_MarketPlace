@@ -20,7 +20,6 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [factorId, setFactorId] = useState<string>('');
-  const [challengeId, setChallengeId] = useState<string>('');
 
   const checkMfaStatus = useCallback(async () => {
     if (!user) {
@@ -101,6 +100,7 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
         return;
       }
 
+      setFactorId('');
       setState('needs_challenge');
     } catch (err: any) {
       // Cualquier fallo inesperado tambien bloquea: antes caia en 'not_required'
@@ -177,13 +177,23 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
         return;
       }
 
-      const { data, error: challengeError } = await supabase.auth.mfa.challenge({
-        factorId: verifiedFactor.id,
-      });
-      if (challengeError) throw challengeError;
-
+      // OJO: aqui NO se crea el challenge, a proposito.
+      //
+      // Antes se creaba en este punto y su id se guardaba en el estado. Como
+      // el estado sobrevive a que la pantalla vuelva a pedir MFA, la vista se
+      // saltaba el boton —habia `challengeId`— y mandaba `verify` contra un
+      // challenge YA CONSUMIDO. Medido en los logs de auth el 10-sep-2026:
+      //
+      //     19:16:34  POST /challenge  200
+      //     19:16:42  POST /verify     200   <- entro
+      //     19:57:21  POST /verify     422   <- sin challenge nuevo
+      //     19:57:36  POST /verify     422   <- sin challenge nuevo
+      //
+      // Dos `verify` seguidos sin un solo `challenge` en medio. GoTrue
+      // responde "Challenge and verify IP addresses mismatch", que despista
+      // muchisimo: la IP era 187.190.63.128 en las cuatro peticiones. El
+      // problema nunca fue la IP, era el challenge gastado.
       setFactorId(verifiedFactor.id);
-      setChallengeId(data.id);
     } catch (err: any) {
       setError(err.message || 'Error al iniciar verificacion');
     } finally {
@@ -199,9 +209,22 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
     }
     setIsSubmitting(true);
     try {
+      // Challenge FRESCO en la misma accion que el verify. Un challenge se
+      // consume al usarse, asi que reutilizar uno guardado falla siempre. Es
+      // el mismo orden que ya usaba `verifyEnrollment`, que por eso nunca
+      // tuvo este problema.
+      const { data: challengeData, error: challengeError } =
+        await supabase.auth.mfa.challenge({ factorId });
+      if (challengeError) throw challengeError;
+
+      const challengeIdFresco = challengeData?.id;
+      if (!challengeIdFresco) {
+        throw new Error('No se pudo iniciar la verificacion. Reintenta.');
+      }
+
       const { error: verifyError } = await supabase.auth.mfa.verify({
         factorId,
-        challengeId,
+        challengeId: challengeIdFresco,
         code: challengeCode,
       });
       if (verifyError) throw verifyError;
@@ -213,7 +236,7 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [factorId, challengeId, challengeCode]);
+  }, [factorId, challengeCode]);
 
   if (state === 'loading' || state === 'not_required' || state === 'passed') {
     return <>{children}</>;
@@ -321,7 +344,7 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
 
         {state === 'needs_challenge' && (
           <div className="space-y-4">
-            {!challengeId ? (
+            {!factorId ? (
               <button
                 onClick={startChallenge}
                 disabled={isSubmitting}
