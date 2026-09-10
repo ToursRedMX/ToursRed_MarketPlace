@@ -1,5 +1,46 @@
-1 supabase/functions/create-conekta-order/index.ts|(sin charge_context cerca)
-5 supabase/functions/process-payment-plan-installment/index.ts|payment_plan_installment
-5 supabase/functions/process-supplement-payment/index.ts|supplement
-5 supabase/functions/purchase-post-booking-extras/index.ts|(sin charge_context cerca)
+# Linea base de `scripts/test-comision-procesador.mjs` — 10-sep-2026.
+#
+# Cada renglon es: <cuantos> <archivo>|<charge_context>.
+# Las lineas que empiezan con # son comentario y el script las ignora.
+#
+# POR QUE SE TOLERAN, Y CUALES SON HUECO DE VERDAD
+#
+# Los caminos SINCRONOS insertan `processor_fee: 0` porque en ese momento no
+# conocen la comision: el cobro acaba de ocurrir y hay que preguntarsela al
+# procesador. Quien la rellena es el webhook. Eso NO es un bug por si mismo, es
+# el patron del repo. Lo que decide si una entrada es un hueco real es si el
+# webhook de ESE procesador alcanza la fila que dejo el camino sincrono:
+#
+#   stripe ......... SI. `stripe-webhook` actualiza por
+#                    `stripe_payment_intent_id`, y el update esta FUERA del
+#                    `if (!existingTx)`, asi que toca la fila la haya creado
+#                    quien la haya creado.
+#   mercadopago .... SI, desde el 10-sep-2026. Antes el webhook solo insertaba
+#                    "si no existe" y se iba, dejando el 0 para siempre. Se le
+#                    agrego la rama que actualiza cuando la fila ya esta.
+#   conekta ........ SI. Busca la transaccion y actualiza por su id.
+#   openpay ........ NO del todo. Su update filtra por
+#                    `charge_context = 'booking_deposit'` Y `status = 'pending'`,
+#                    asi que NO alcanza suplementos ni extras. HUECO REAL.
+#   paypal ......... SIN VERIFICAR: no se encontro un update de comision en
+#                    `paypal-webhook`.
+#
+# De estos 11, los de Stripe / MercadoPago / Conekta estan cubiertos; los de
+# OpenPay y PayPal son los que hay que mirar. No se separan por renglon porque
+# la firma es archivo+contexto y cada uno de esos archivos cobra con los cinco.
+#
+# LO QUE LA GUARDIA SI IMPIDE
+#
+# Que aparezca un camino NUEVO que inserte la comision en 0 sin que nadie la
+# rellene. Es exactamente lo que pasaba con `membership` en `stripe-webhook`,
+# el unico hueco de verdad que aparecio al medir: no tenia ningun update que lo
+# alcanzara, y toda membresia cobrada figuraba con neto igual a bruto.
+# Arreglado el 10-sep-2026.
+#
+# Un insert con `status: 'pending'` no cuenta: el cobro no ha ocurrido y el 0 es
+# un marcador legitimo. Por eso `create-conekta-order` ya no aparece aqui.
+#
+3 supabase/functions/process-payment-plan-installment/index.ts|payment_plan_installment
+4 supabase/functions/process-supplement-payment/index.ts|supplement
+3 supabase/functions/purchase-post-booking-extras/index.ts|(sin charge_context cerca)
 1 supabase/functions/stripe-webhook/index.ts|booking_deposit

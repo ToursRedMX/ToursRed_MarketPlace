@@ -55,6 +55,15 @@ for (const archivo of globSync('supabase/functions/*/index.ts').sort()) {
     if (/^\s*(\/\/|\*)/.test(linea)) return;
     insertsRevisados++;
 
+    // Un insert con `status: 'pending'` NO es un hallazgo: el cobro todavia no
+    // ocurrio, asi que la comision no se puede saber y el 0 es un marcador
+    // legitimo que el webhook rellena al confirmarse. Sin esta exclusion la
+    // guardia acusa al patron normal del repo — que es lo que hacia en su
+    // primera version, con `create-conekta-order` y el checkout de Conekta de
+    // `process-supplement-payment`.
+    const alrededor = lineas.slice(Math.max(0, i - 10), i + 10).join('\n');
+    if (/status:\s*["']pending["']/.test(alrededor)) return;
+
     // La ventana cuenta lineas de CODIGO, no comentarios ni blancos. Sin esto,
     // alargar un comentario dentro de la ventana empuja el `.update` fuera y la
     // guardia canta un falso positivo — paso al escribirla: el arreglo de

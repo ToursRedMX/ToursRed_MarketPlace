@@ -626,6 +626,30 @@ Deno.serve(async (req: Request) => {
               metadata: payment,
             });
             console.log(`payment_transactions record created for MP payment ${notificationId} (webhook), fee=${mpFee}`);
+          } else if (mpFee > 0) {
+            // La fila ya existia: la creo un camino SINCRONO
+            // (process-supplement-payment, purchase-post-booking-extras,
+            // process-payment-plan-installment), que la inserta con
+            // `processor_fee: 0` porque en ese momento no conoce la comision.
+            //
+            // Hasta el 10-sep-2026 este webhook se limitaba a NO insertar y se
+            // iba, asi que ese 0 se quedaba para siempre y el neto figuraba
+            // igual al bruto. Stripe no tiene el problema porque su update va
+            // por payment intent y fuera del `if`; aqui hacia falta esta rama.
+            //
+            // Solo se escribe si la comision es > 0: sobrescribir una comision
+            // ya buena con un 0 --si MercadoPago no la manda en este evento--
+            // seria peor que no tocar nada.
+            const { error: feeErr } = await supabase
+              .from("payment_transactions")
+              .update({ processor_fee: mpFee, net_amount: mpAmount - mpFee })
+              .eq("id", existingTx.id);
+
+            if (feeErr) {
+              console.error(`Error actualizando la comision de MP ${notificationId}:`, feeErr);
+            } else {
+              console.log(`payment_transactions ${existingTx.id}: comision de MP actualizada a ${mpFee}`);
+            }
           }
         } catch (txErr) {
           console.error("Error inserting payment_transactions (MP webhook):", txErr);
