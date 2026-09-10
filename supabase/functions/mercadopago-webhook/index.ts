@@ -2,6 +2,8 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { registrarDisputa } from "../_shared/disputas.ts";
+import { avisosCon } from "../_shared/avisosDePago.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -179,6 +181,43 @@ Deno.serve(async (req: Request) => {
 
     console.log("MercadoPago webhook received:", { notificationType, notificationId, isLiveMode });
 
+    // ── Contracargos ────────────────────────────────────────────
+    // Va ANTES del corte de abajo, que devuelve 200 y descarta todo lo que no
+    // sea `payment`: un topic `chargebacks` se caia ahi sin dejar rastro.
+    if (notificationType === "chargebacks" || notificationType === "chargeback") {
+      const cbId = String(notificationId ?? "");
+      const cb = body?.data ?? {};
+
+      await registrarDisputa(supabase, {
+        procesador: "mercadopago",
+        disputaId: cbId,
+        cobroId: null,
+        // MercadoPago liga el contracargo con uno o mas pagos.
+        pagoId: cb.payments?.[0] != null ? String(cb.payments[0]) : (cb.payment_id != null ? String(cb.payment_id) : null),
+        // MercadoPago maneja unidades, NO centavos.
+        monto: Number(cb.amount ?? 0),
+        moneda: String(cb.currency ?? "MXN"),
+        motivo: cb.reason ?? null,
+        estadoCrudo: String(cb.status ?? notificationType),
+        fase: body?.action === "chargebacks.created" || cb.status === "pending"
+          ? "abierta"
+          : (cb.status === "closed" || cb.status === "settled")
+            ? "cerrada"
+            : "actualizada",
+        resultado: cb.status === "won"
+          ? "ganada"
+          : cb.status === "lost"
+            ? "perdida"
+            : "otro",
+        evidenciaVence: cb.date_documentation_deadline ?? null,
+        tipoEvento: String(body?.action ?? notificationType),
+        payload: body,
+      }, avisosCon(supabase, "webhook de MercadoPago"));
+
+      return new Response(JSON.stringify({ received: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     if (!notificationId || notificationType !== "payment") {
       return new Response(JSON.stringify({ received: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
