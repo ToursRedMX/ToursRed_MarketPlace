@@ -48,7 +48,7 @@
 -- el estado real de produccion, en vez de probar solo la version final.
 \ir ../supabase/migrations/20260910200000_corregir_membresia_y_pasivo_por_comisiones.sql
 -- Y la tercera, que agrega el bloque 19: los gastos de operacion.
-\ir ../supabase/migrations/20260910210000_captura_de_gastos_de_operacion.sql
+\ir ../supabase/migrations/20260910240000_captura_de_gastos_de_operacion.sql
 
 -- Los gastos van DESPUES porque su tabla no existe hasta que corre la
 -- migracion. Se meten con `estado = 'registrado'` a mano, sin pasar por

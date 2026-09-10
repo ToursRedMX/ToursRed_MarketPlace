@@ -42,12 +42,18 @@
 -- POR QUE VA EN UNA MIGRACION APARTE
 -- ============================================================================
 --
--- Lo natural seria corregir 20260910210000, que es de hace un rato. No se hace
--- porque no me consta que siga sin aplicar: si Axel ya corrio `db push`,
--- editarla en su sitio significa que el arreglo NO se aplica nunca -- el
--- registro de migraciones ya la da por corrida -- y el gasto de veinte veces
--- menos se va a produccion en silencio. Una migracion de mas es barata; esa
--- falla no.
+-- Lo natural seria corregir 20260910240000, que es de hace un rato. Cuando esto
+-- se escribio no constaba que siguiera sin aplicar, y editar en su sitio una
+-- migracion ya corrida significa que el arreglo NO se aplica nunca: el registro
+-- de migraciones la da por hecha y el gasto de veinte veces menos se va a
+-- produccion en silencio.
+--
+-- Despues se supo que ninguna de las dos estaba aplicada: el `db push` de Axel
+-- aborto antes de tocar nada, por otra razon (una migracion de disputas
+-- aplicada en produccion que su copia local todavia no tenia). Aun asi se
+-- quedan separadas a proposito: fundirlas borraria del historial que el fallo
+-- existio y como se encontro, que es justo lo que hace falta recordar la
+-- proxima vez que un numero cuadre y sea falso.
 
 -- ---------------------------------------------------------------------------
 -- 1. La garantia dura
@@ -78,7 +84,7 @@ COMMENT ON CONSTRAINT gastos_registrado_con_tipo_de_cambio_real ON public.gastos
 -- ---------------------------------------------------------------------------
 -- El CHECK ya impide el dano, pero un 23514 con el nombre de la restriccion no
 -- le dice a nadie que hacer. La funcion revienta antes, diciendolo con
--- palabras. Lo demas es identico a 20260910210000.
+-- palabras. Lo demas es identico a 20260910240000.
 CREATE OR REPLACE FUNCTION public.registrar_gasto_operacion(p_gasto_id uuid)
 RETURNS uuid
 LANGUAGE plpgsql

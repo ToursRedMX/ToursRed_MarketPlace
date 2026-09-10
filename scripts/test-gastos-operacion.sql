@@ -1,4 +1,4 @@
--- Prueba de `20260910210000_captura_de_gastos_de_operacion.sql`.
+-- Prueba de `20260910240000_captura_de_gastos_de_operacion.sql`.
 --
 -- QUE SE PRUEBA, y sobre todo POR QUE
 --
@@ -35,9 +35,9 @@
 
 \ir ../supabase/migrations/20260910080000_vista_movimientos_financieros.sql
 \ir ../supabase/migrations/20260910200000_corregir_membresia_y_pasivo_por_comisiones.sql
-\ir ../supabase/migrations/20260910210000_captura_de_gastos_de_operacion.sql
+\ir ../supabase/migrations/20260910240000_captura_de_gastos_de_operacion.sql
 -- Y el arreglo del tipo de cambio de relleno de los recurrentes.
-\ir ../supabase/migrations/20260910220000_tipo_de_cambio_pendiente_en_recurrentes.sql
+\ir ../supabase/migrations/20260910250000_tipo_de_cambio_pendiente_en_recurrentes.sql
 
 -- La contable autorizada. Se le da el permiso que la migracion acaba de crear.
 INSERT INTO admin_permissions (user_id, can_view_accounting)

@@ -823,7 +823,7 @@ COMMENT ON VIEW public.vista_movimientos_financieros IS
   'traspaso para el dinero que cambia de dueno sin mover las tres. Se cumple '
   'activo = pasivo + ingreso en cada categoria; la prueba lo exige. La columna '
   'se llama `caja` por compatibilidad, pero es movimiento de activo. Insumo de '
-  '/admin/reporte-maestro. Desde 20260910210000 SI incluye los gastos de '
+  '/admin/reporte-maestro. Desde 20260910240000 SI incluye los gastos de '
   'operacion (bloque 19), en cuanto esten en estado registrado.';
 
 REVOKE ALL ON public.vista_movimientos_financieros FROM PUBLIC;

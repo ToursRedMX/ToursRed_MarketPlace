@@ -308,7 +308,7 @@ const AdminReporteMaestro: React.FC = () => {
 
       {/* El aviso que vivia aqui decia que los gastos de operacion no estaban
           incluidos porque no habia donde capturarlos. Desde el 10-sep-2026 SI
-          los hay: la migracion 20260910210000 agrego la tabla y el bloque 19 de
+          los hay: la migracion 20260910240000 agrego la tabla y el bloque 19 de
           la vista. Lo que queda no es un hueco del reporte sino una condicion
           real -- un gasto en BORRADOR todavia no tiene asiento -- y por eso se
           dice con el numero delante en vez de con un aviso fijo. */}
