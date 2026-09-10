@@ -27,6 +27,13 @@
 \set ON_ERROR_STOP on
 \set QUIET on
 
+-- NOTA SOBRE LAS COMPROBACIONES: todas agregan con `sum()`, incluso cuando el
+-- fixture tiene una sola fila por categoria. No es de adorno. Un
+-- `SELECT caja INTO v ... WHERE categoria = X` sin agregar toma LA PRIMERA
+-- FILA y descarta las demas sin avisar, asi que una mutacion que agregue filas
+-- de mas —por ejemplo dejar pasar un reembolso todavia pendiente— pasaria la
+-- prueba. Se descubrio exactamente asi: la mutacion sobrevivio.
+
 -- Supabase trae estos tres roles de fabrica; un Postgres pelado no. La
 -- migracion les concede permisos y esta bien que lo haga: quien tiene que
 -- parecerse al entorno real es la prueba, no al reves. Sin ellos el `GRANT`
@@ -102,6 +109,12 @@ CREATE TABLE insurance_settlements (
   id uuid PRIMARY KEY, provider_name text, amount numeric,
   reference text, payment_date timestamptz);
 
+CREATE TABLE payment_refunds (
+  id uuid PRIMARY KEY, booking_id uuid, requested_amount numeric,
+  processor_refund_fee numeric, processor_fee_lost numeric,
+  refund_method text, payment_processor text, status text,
+  confirmed_at timestamptz, processed_at timestamptz, created_at timestamptz);
+
 CREATE TABLE payment_disputes (id uuid PRIMARY KEY, amount numeric, created_at timestamptz);
 
 -- ---------------------------------------------------------------------------
@@ -157,6 +170,18 @@ INSERT INTO agency_payouts VALUES
   ('20000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
    2000,'completed','2026-09-07','PAY-1','spei');
 
+-- Reembolso al METODO DE PAGO ORIGINAL: este si sale del banco. Es el caso
+-- excepcional (una disputa de PROFECO, por ejemplo) que se hace desde el panel
+-- de admin. `processor_fee_lost` de 30 esta puesto A PROPOSITO para comprobar
+-- que NO se cuenta: esa comision es la del cobro original y ya se conto cuando
+-- entro el dinero.
+INSERT INTO payment_refunds VALUES
+  ('40000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',
+   1500, 25, 30, 'original_payment_method','stripe','succeeded','2026-09-09',NULL,'2026-09-09'),
+  -- Uno todavia sin confirmar: no ha movido el banco, no debe aparecer.
+  ('40000000-0000-0000-0000-000000000002','b0000000-0000-0000-0000-000000000001',
+   999, 0, 0, 'original_payment_method','stripe','pending',NULL,NULL,'2026-09-09');
+
 -- Tour destacado: ingreso integro, sin pasivo.
 INSERT INTO featured_tour_slots VALUES
   ('30000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
@@ -171,7 +196,7 @@ INSERT INTO featured_tour_slots VALUES
 DO $$
 DECLARE v record;
 BEGIN
-  SELECT caja, pasivo, ingreso INTO v FROM vista_movimientos_financieros
+  SELECT sum(caja) AS caja, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso INTO v FROM vista_movimientos_financieros
    WHERE categoria = 'cobro_booking_deposit';
   IF v.caja <> 5000 OR v.pasivo <> 5000 OR v.ingreso <> 0 THEN
     RAISE EXCEPTION 'FALLO 1: caja=% pasivo=% ingreso=% (esperado 5000/5000/0)', v.caja,v.pasivo,v.ingreso;
@@ -183,7 +208,7 @@ END $$;
 DO $$
 DECLARE v record;
 BEGIN
-  SELECT caja, pasivo, ingreso INTO v FROM vista_movimientos_financieros
+  SELECT sum(caja) AS caja, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso INTO v FROM vista_movimientos_financieros
    WHERE categoria = 'reconocimiento_ingreso';
   IF v.caja <> 0 OR v.pasivo <> -750 OR v.ingreso <> 750 THEN
     RAISE EXCEPTION 'FALLO 2: caja=% pasivo=% ingreso=% (esperado 0/-750/750)', v.caja,v.pasivo,v.ingreso;
@@ -232,7 +257,7 @@ END $$;
 DO $$
 DECLARE v record;
 BEGIN
-  SELECT caja, traspaso INTO v FROM vista_movimientos_financieros
+  SELECT sum(caja) AS caja, sum(traspaso) AS traspaso INTO v FROM vista_movimientos_financieros
    WHERE categoria = 'reembolso_booking_cancellation';
   IF v.caja <> 0 THEN
     RAISE EXCEPTION 'FALLO 6: el reembolso movio caja (%). Se acredita al monedero, no sale del banco.', v.caja;
@@ -247,7 +272,7 @@ END $$;
 DO $$
 DECLARE v record;
 BEGIN
-  SELECT caja, pasivo, ingreso INTO v FROM vista_movimientos_financieros
+  SELECT sum(caja) AS caja, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso INTO v FROM vista_movimientos_financieros
    WHERE categoria = 'pago_agencia';
   IF v.caja <> -2000 OR v.pasivo <> -2000 OR v.ingreso <> 0 THEN
     RAISE EXCEPTION 'FALLO 7: caja=% pasivo=% ingreso=% (esperado -2000/-2000/0)', v.caja,v.pasivo,v.ingreso;
@@ -259,7 +284,7 @@ END $$;
 DO $$
 DECLARE v record;
 BEGIN
-  SELECT caja, pasivo, ingreso INTO v FROM vista_movimientos_financieros
+  SELECT sum(caja) AS caja, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso INTO v FROM vista_movimientos_financieros
    WHERE categoria = 'tour_destacado';
   IF v.caja <> 900 OR v.ingreso <> 900 OR v.pasivo <> 0 THEN
     RAISE EXCEPTION
@@ -267,6 +292,37 @@ BEGIN
       v.caja,v.pasivo,v.ingreso;
   END IF;
   RAISE NOTICE '  tour destacado 900 -> caja 900, ingreso 900, pasivo 0. OK';
+END $$;
+
+\echo '=== Caso 8b: el reembolso a la tarjeta SI sale del banco ==='
+DO $$
+DECLARE v record; v_fee record;
+BEGIN
+  SELECT sum(caja) AS caja, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso, sum(traspaso) AS traspaso INTO v FROM vista_movimientos_financieros
+   WHERE categoria = 'reembolso_metodo_original';
+
+  -- Solo el confirmado. El `pending` de 999 no ha movido nada.
+  IF v.caja <> -1500 THEN
+    RAISE EXCEPTION
+      'FALLO 8b: caja = %, esperado -1500. Si dio -2499 se colo el reembolso pendiente; si dio 0, la via de devolucion a la tarjeta no se esta viendo y ese dinero SI sale del banco.',
+      v.caja;
+  END IF;
+  IF v.pasivo <> -1500 THEN
+    RAISE EXCEPTION 'FALLO 8b: pasivo = %, esperado -1500', v.pasivo;
+  END IF;
+  IF v.traspaso <> 0 THEN
+    RAISE EXCEPTION 'FALLO 8b: esto NO es un traspaso al monedero, y dio traspaso = %', v.traspaso;
+  END IF;
+
+  -- Y la comision POR reembolsar, que es dinero nuevo que sale.
+  SELECT sum(caja) AS caja, sum(ingreso) AS ingreso INTO v_fee FROM vista_movimientos_financieros
+   WHERE categoria = 'comision_por_reembolso';
+  IF v_fee.caja <> -25 OR v_fee.ingreso <> -25 THEN
+    RAISE EXCEPTION
+      'FALLO 8b: la comision por reembolsar dio caja=% ingreso=%, esperado -25/-25. Si dio -55 se sumo processor_fee_lost, que ya se conto al cobrar.',
+      v_fee.caja, v_fee.ingreso;
+  END IF;
+  RAISE NOTICE '  reembolso a tarjeta 1500 -> caja -1500 (no traspaso), mas 25 de comision por reembolsar. OK';
 END $$;
 
 \echo '=== Caso 9: las tablas vacias no rompen la vista ==='
@@ -301,4 +357,4 @@ BEGIN
 END $$;
 
 \echo ''
-\echo 'Vista de movimientos financieros: 10/10 casos OK'
+\echo 'Vista de movimientos financieros: 11/11 casos OK'

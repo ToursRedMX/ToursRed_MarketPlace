@@ -146,6 +146,14 @@ jobs:
       - name: Verify agency commission rates come from configuration
         run: node scripts/test-tasa-comision-agencia.mjs
 
+      # El contrato entre la vista y la pantalla del reporte maestro. Si alguien
+      # renombra una columna de la vista, el front la lee como undefined y pinta
+      # CERO: sin error, sin pantalla roja, solo un numero mas chico. Es el peor
+      # modo de fallo para un reporte financiero, y es el que motivo la
+      # reescritura entera.
+      - name: Verify the master report matches the view it reads
+        run: node scripts/test-reporte-maestro-contrato.mjs
+
       # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
       # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
       # aplica SIN transaccion a proposito, porque asi fue como se descubrio que

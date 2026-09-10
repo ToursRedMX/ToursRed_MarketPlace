@@ -236,9 +236,15 @@ UNION ALL
 --     Sumar `booking_cancellations` + `booking_partial_cancellations` da
 --     $17,532.54, pero el monedero registra $23,096.54: hay 9 reembolsos con
 --     `reference_type = 'booking_cancellation'` que no aparecen en
---     `refund_amount_to_traveler`. Verificado ademas que `payment_refunds`
---     tiene CERO filas, o sea que no existe la via "de vuelta a la tarjeta":
---     todo reembolso pasa por aqui. Una sola fuente, y es la completa.
+--     `refund_amount_to_traveler`. Para el reembolso AL MONEDERO, esta es la
+--     fuente completa.
+--
+--     OJO: no es la unica via de reembolso. La devolucion al metodo de pago
+--     original existe y va en el bloque 12. `payment_refunds` esta vacia hoy
+--     porque esos casos son excepcionales —una disputa de PROFECO que obligue
+--     a devolver a la tarjeta—, no porque la via no exista. Un bloque no se
+--     omite por tener cero filas: ese es justo el error que traia el reporte
+--     viejo al leer `cancellation_penalty_records`.
 --
 --     Lo que esta fuente NO da es el reparto entre lo devuelto y lo retenido
 --     como penalizacion: `booking_cancellations.amount_to_platform` y
@@ -258,7 +264,53 @@ WHERE tct.type::text = 'refund'
 
 UNION ALL
 
--- 12. Reserva pagada con el monedero. LA FILA QUE EVITA CONTAR DOBLE.
+-- 12. Reembolso AL METODO DE PAGO ORIGINAL. Este SI sale del banco.
+--
+--     Lo hace un admin desde el panel (`process-payment-refund`) para los casos
+--     en que devolver al monedero no es opcion: una disputa ante PROFECO que
+--     obligue a regresar el dinero a la misma tarjeta, por ejemplo. Son pocos
+--     —la tabla esta vacia al 10-sep-2026— pero cuando ocurren es dinero que
+--     de verdad se va, y confundirlos con un abono al monedero seria un error
+--     grande sobre un importe grande.
+--
+--     `succeeded` es el estado terminal que ponen los webhooks de Stripe y
+--     PayPal al confirmar la devolucion; `pending`, `processing` y `failed` no
+--     han movido el banco todavia.
+SELECT coalesce(pr.confirmed_at, pr.processed_at, pr.created_at),
+       'reembolso_metodo_original', 'egreso',
+       'Reembolso al metodo de pago original (' || coalesce(pr.refund_method,'sin metodo') || ')',
+       coalesce(b.booking_code, left(pr.id::text, 8)), a.name,
+       coalesce(pr.payment_processor,'(sin procesador)'),
+       -pr.requested_amount, -pr.requested_amount, 0, 0,
+       'payment_refunds', pr.id
+FROM public.payment_refunds pr
+LEFT JOIN public.bookings b ON b.id = pr.booking_id
+LEFT JOIN public.agencies  a ON a.id = b.agency_id
+WHERE pr.status = 'succeeded'
+
+UNION ALL
+
+-- 13. Lo que el procesador cobra POR reembolsar. Dinero nuevo que sale.
+--
+--     Se usa `processor_refund_fee` y NO `processor_fee_lost`: el segundo es la
+--     comision del cobro original, que el procesador se queda al devolver. Esa
+--     ya se conto como gasto en el bloque 2 cuando entro el dinero; volver a
+--     restarla aqui seria contarla dos veces.
+SELECT coalesce(pr.confirmed_at, pr.processed_at, pr.created_at),
+       'comision_por_reembolso', 'egreso',
+       'Comision de ' || coalesce(pr.payment_processor,'procesador') || ' por reembolsar',
+       coalesce(b.booking_code, left(pr.id::text, 8)), a.name,
+       coalesce(pr.payment_processor,'(sin procesador)'),
+       -pr.processor_refund_fee, 0, -pr.processor_refund_fee, 0,
+       'payment_refunds', pr.id
+FROM public.payment_refunds pr
+LEFT JOIN public.bookings b ON b.id = pr.booking_id
+LEFT JOIN public.agencies  a ON a.id = b.agency_id
+WHERE pr.status = 'succeeded' AND coalesce(pr.processor_refund_fee,0) > 0
+
+UNION ALL
+
+-- 14. Reserva pagada con el monedero. LA FILA QUE EVITA CONTAR DOBLE.
 --     Caja cero: ese dinero ya entro cuando se recargo. Solo cambia de
 --     acreedor, del viajero a la agencia.
 SELECT tct.created_at, 'pago_con_monedero', 'ingreso',
@@ -273,7 +325,7 @@ WHERE tct.type::text = 'debit'
 
 UNION ALL
 
--- 13. Comision al ejecutivo de cuenta. Es gasto en cuanto se devenga; solo
+-- 15. Comision al ejecutivo de cuenta. Es gasto en cuanto se devenga; solo
 --     sale del banco cuando se paga.
 SELECT coalesce(ec.paid_at, ec.created_at), 'comision_ejecutivo', 'egreso',
        'Comision de ejecutivo (' || coalesce(ec.commission_type,'sin tipo') || ')',
@@ -286,7 +338,7 @@ LEFT JOIN public.agencies a ON a.id = ec.agency_id
 
 UNION ALL
 
--- 14. Puntos otorgados. No mueven caja pero son un pasivo real y su costo es
+-- 16. Puntos otorgados. No mueven caja pero son un pasivo real y su costo es
 --     ingreso que no se va a percibir. 100 puntos = 1 peso.
 SELECT tpt.created_at, 'puntos_otorgados', 'egreso',
        'Puntos otorgados (' || coalesce(tpt.reference_type,'sin origen') || ')',
@@ -301,7 +353,7 @@ WHERE tpt.type::text = 'earned'
 
 UNION ALL
 
--- 15. Liquidacion a la aseguradora. Cero filas hoy; se incluye por lo mismo
+-- 17. Liquidacion a la aseguradora. Cero filas hoy; se incluye por lo mismo
 --     que el bloque 6.
 SELECT ist.payment_date, 'liquidacion_aseguradora', 'egreso',
        'Liquidacion a ' || coalesce(ist.provider_name,'aseguradora'),
@@ -312,7 +364,7 @@ FROM public.insurance_settlements ist
 
 UNION ALL
 
--- 16. Contracargos por disputa. Cero filas hoy.
+-- 18. Contracargos por disputa. Cero filas hoy.
 SELECT pd.created_at, 'contracargo', 'egreso', 'Contracargo por disputa',
        left(pd.id::text, 8), NULL, NULL,
        -pd.amount, 0, -pd.amount, 0,

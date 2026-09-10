@@ -1,581 +1,289 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
-  FileSpreadsheet, Filter, Search, TrendingUp, TrendingDown,
-  DollarSign, BarChart2, Download, RefreshCw, ChevronDown, ChevronRight,
-  Calendar, Tag, AlertCircle
+  Filter, Search, TrendingUp, TrendingDown, Wallet, Landmark,
+  BarChart2, Download, RefreshCw, Calendar, Tag, AlertCircle, Info,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+/**
+ * Reporte maestro: el log financiero de la plataforma.
+ *
+ * ============================================================================
+ * POR QUE ESTA PANTALLA YA NO CALCULA NADA
+ * ============================================================================
+ *
+ * Hasta el 10-sep-2026 esta pantalla armaba sus filas aqui mismo, con 13
+ * bloques que consultaban 13 tablas y sumaban a mano. Eso permitio tres
+ * errores que no se ven al leer el codigo:
+ *
+ *   * Leia `bookings.platform_revenue` como si fuera el ingreso de la
+ *     plataforma. No lo es: solo trae cargos por servicio, sin la comision.
+ *   * Leia `cancellation_penalty_records`, que tiene CERO filas, mientras los
+ *     reembolsos de verdad viven en otras tablas.
+ *   * Nunca tocaba `payment_transactions`, que es donde esta el dinero.
+ *
+ * Resultado medido: mostraba $335.00 en una ventana donde entraron $10,000.
+ *
+ * Ahora toda la logica vive en `vista_movimientos_financieros` (migracion
+ * 20260910080000), que se prueba contra un Postgres de verdad en
+ * `scripts/test-vista-movimientos.sql`. Aqui solo se consulta y se pinta.
+ *
+ * ============================================================================
+ * LAS CUATRO COLUMNAS
+ * ============================================================================
+ *
+ * Un movimiento de dinero responde TRES preguntas distintas, y el reporte
+ * viejo solo intentaba una. Con un anticipo de $10,000:
+ *
+ *   CAJA     +$10,000  entro al banco
+ *   PASIVO    +$8,500  se le deben a la agencia
+ *   INGRESO   +$1,500  esto si se gano
+ *
+ * Las tres son ciertas a la vez. Sumar solo la primera dice que ToursRed
+ * facturo $10,000; sumar solo la tercera dice $1,500. Ninguna sola esta bien.
+ *
+ * La cuarta, TRASPASO, es para el dinero que cambia de dueno sin mover las
+ * otras tres: pagar una reserva con el monedero, o un reembolso que se
+ * acredita al monedero. Sin ella esos movimientos serian filas de puros ceros.
+ */
 
-type MovementType = 'ingreso' | 'egreso';
-
-type MovementCategory =
-  | 'reserva'
-  | 'seguro_viaje'
-  | 'membresia'
-  | 'tarjeta_regalo'
-  | 'cargo_servicio'
-  | 'suplemento'
-  | 'servicio_opcional'
-  | 'cobro_checkin'
-  | 'tour_destacado'
-  | 'contable_manual'
-  | 'pago_agencia'
-  | 'comision_ejecutivo'
-  | 'penalidad_cancelacion'
-  | 'egreso_manual';
-
-interface MasterRow {
-  id: string;
+interface MovimientoFila {
   fecha: string;
-  tipo: MovementType;
-  categoria: MovementCategory;
+  categoria: string;
+  naturaleza: 'ingreso' | 'egreso';
   descripcion: string;
   referencia: string;
-  monto: number;
-  metodo_pago?: string;
-  entidad?: string;
+  entidad: string | null;
+  metodo: string | null;
+  caja: number;
+  pasivo: number;
+  ingreso: number;
+  traspaso: number;
+  origen_tabla: string;
+  origen_id: string;
 }
 
-interface Filters {
+interface Filtros {
   desde: string;
   hasta: string;
-  tipo: 'todos' | MovementType;
-  categoria: 'todas' | MovementCategory;
+  naturaleza: 'todas' | 'ingreso' | 'egreso';
+  categoria: string;
   busqueda: string;
 }
 
-const CATEGORY_LABELS: Record<MovementCategory, string> = {
-  reserva: 'Reserva',
-  seguro_viaje: 'Seguro de Viaje',
-  membresia: 'Membresia',
-  tarjeta_regalo: 'Tarjeta de Regalo',
-  cargo_servicio: 'Cargo por Servicio',
-  suplemento: 'Suplemento/Extra',
-  servicio_opcional: 'Servicio Opcional',
-  cobro_checkin: 'Cobro en Checkin',
-  tour_destacado: 'Tour Destacado',
-  contable_manual: 'Entrada Contable Manual',
-  pago_agencia: 'Pago a Agencia',
-  comision_ejecutivo: 'Comision Ejecutivo',
-  penalidad_cancelacion: 'Penalidad por Cancelacion',
-  egreso_manual: 'Egreso Manual',
+const ETIQUETAS: Record<string, string> = {
+  cobro_booking_deposit: 'Anticipo de reserva',
+  cobro_payment_plan_installment: 'Cuota de plan de pagos',
+  cobro_membership: 'Membresia',
+  cobro_otro: 'Otro cobro',
+  comision_procesador: 'Comision de procesador',
+  recarga_monedero: 'Recarga de monedero',
+  tarjeta_regalo: 'Tarjeta de regalo',
+  servicio_opcional: 'Servicio opcional',
+  suplemento: 'Suplemento',
+  tour_destacado: 'Tour destacado',
+  reconocimiento_ingreso: 'Comision y cargo por servicio',
+  comision_aseguradora: 'Comision de aseguradora',
+  pago_agencia: 'Liberacion a agencia',
+  pago_con_monedero: 'Pago con monedero',
+  comision_ejecutivo: 'Comision de ejecutivo',
+  puntos_otorgados: 'Puntos otorgados',
+  liquidacion_aseguradora: 'Liquidacion a aseguradora',
+  contracargo: 'Contracargo',
 };
 
-const INCOME_CATEGORIES: MovementCategory[] = [
-  'reserva', 'seguro_viaje', 'membresia', 'tarjeta_regalo',
-  'cargo_servicio', 'suplemento', 'servicio_opcional', 'cobro_checkin', 'tour_destacado', 'contable_manual',
-];
-const EXPENSE_CATEGORIES: MovementCategory[] = [
-  'pago_agencia', 'comision_ejecutivo', 'penalidad_cancelacion', 'egreso_manual',
-];
+const etiqueta = (c: string) =>
+  ETIQUETAS[c] ?? c.replace(/^reembolso_/, 'Reembolso: ').replace(/_/g, ' ');
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const fmtDate = (d: string) => {
-  try { return format(parseISO(d), 'dd/MM/yyyy', { locale: es }); } catch { return d; }
+const money = (n: number) => formatCurrencyMXN(n);
+const fecha = (d: string) => {
+  try { return format(parseISO(d), 'dd/MM/yyyy'); } catch { return d; }
 };
-
-const fmtCurrency = (n: number) => formatCurrencyMXN(n);
-
-const today = () => format(new Date(), 'yyyy-MM-dd');
-const firstOfMonth = () => format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd');
-
-// ─── Component ────────────────────────────────────────────────────────────────
+const hoy = () => format(new Date(), 'yyyy-MM-dd');
+const primeroDelMes = () =>
+  format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd');
 
 const AdminReporteMaestro: React.FC = () => {
-  const [rows, setRows] = useState<MasterRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [filas, setFilas] = useState<MovimientoFila[]>([]);
+  const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
-  const [filters, setFilters] = useState<Filters>({
-    desde: firstOfMonth(),
-    hasta: today(),
-    tipo: 'todos',
+  const [filtros, setFiltros] = useState<Filtros>({
+    desde: primeroDelMes(),
+    hasta: hoy(),
+    naturaleza: 'todas',
     categoria: 'todas',
     busqueda: '',
   });
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  // ── Data loading ────────────────────────────────────────────────────────────
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const cargar = useCallback(async () => {
+    setCargando(true);
     setError('');
-    // Cada bloque de abajo suma una categoria (reservas, membresias, tarjetas
-    // de regalo, suplementos...) al mismo arreglo `collected`, y de ahi salen
-    // los totales y el export a Excel. Si una consulta falla en silencio, esa
-    // categoria desaparece y el reporte se ve completo con la cifra
-    // equivocada: por eso todas lanzan y preferimos no mostrar reporte.
-    const collected: MasterRow[] = [];
-
     try {
-      const desde = filters.desde;
-      const hasta = filters.hasta + 'T23:59:59';
+      const { data, error: errorConsulta } = await supabase
+        .from('vista_movimientos_financieros')
+        .select('*')
+        .gte('fecha', filtros.desde)
+        .lte('fecha', `${filtros.hasta}T23:59:59`)
+        .order('fecha', { ascending: false });
 
-      // 1. Reservas pagadas
-      if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: bookings, error: errorBookings } = await supabase
-          .from('bookings')
-          .select('id, booking_code, paid_at, total_price, platform_revenue, service_charge, travel_insurance_cost, travel_insurance_included, payment_method, agencies(name), tours(name)')
-          .eq('payment_status', 'succeeded')
-          .gte('paid_at', desde)
-          .lte('paid_at', hasta)
-          .order('paid_at', { ascending: false });
-        if (errorBookings) throw errorBookings;
+      // Si esto falla en silencio la pantalla se ve completa con cero
+      // movimientos, que es indistinguible de un periodo sin actividad. Un
+      // reporte financiero vacio por error es peor que no mostrar reporte.
+      if (errorConsulta) throw errorConsulta;
 
-        (bookings ?? []).forEach((b: any) => {
-          collected.push({
-            id: b.id,
-            fecha: b.paid_at,
-            tipo: 'ingreso',
-            categoria: 'reserva',
-            descripcion: `Reserva - ${b.tours?.name ?? 'Tour'}`,
-            referencia: b.booking_code ?? b.id.substring(0, 8),
-            monto: Number(b.platform_revenue ?? b.total_price ?? 0),
-            metodo_pago: b.payment_method,
-            entidad: b.agencies?.name,
-          });
-
-          if (Number(b.service_charge ?? 0) > 0) {
-            collected.push({
-              id: `${b.id}-sc`,
-              fecha: b.paid_at,
-              tipo: 'ingreso',
-              categoria: 'cargo_servicio',
-              descripcion: `Cargo por servicio - ${b.tours?.name ?? 'Tour'}`,
-              referencia: b.booking_code ?? b.id.substring(0, 8),
-              monto: Number(b.service_charge),
-              metodo_pago: b.payment_method,
-              entidad: b.agencies?.name,
-            });
-          }
-
-          if (Number(b.travel_insurance_cost ?? 0) > 0 && b.travel_insurance_included) {
-            collected.push({
-              id: `${b.id}-ins`,
-              fecha: b.paid_at,
-              tipo: 'ingreso',
-              categoria: 'seguro_viaje',
-              descripcion: `Seguro de viaje - ${b.tours?.name ?? 'Tour'}`,
-              referencia: b.booking_code ?? b.id.substring(0, 8),
-              monto: Number(b.travel_insurance_cost),
-              metodo_pago: b.payment_method,
-              entidad: b.agencies?.name,
-            });
-          }
-        });
-      }
-
-      // 2. Membresías
-      if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: mems, error: errorMems } = await supabase
-          .from('memberships')
-          .select('id, plan_type, price_paid, renewal_amount, start_date, users(first_name, last_name, email)')
-          .gte('start_date', desde)
-          .lte('start_date', hasta)
-          .order('start_date', { ascending: false });
-        if (errorMems) throw errorMems;
-
-        (mems ?? []).forEach((m: any) => {
-          const amount = Number(m.price_paid ?? m.renewal_amount ?? 0);
-          if (amount <= 0) return;
-          const user = m.users ? `${m.users.first_name} ${m.users.last_name}` : '';
-          collected.push({
-            id: m.id,
-            fecha: m.start_date,
-            tipo: 'ingreso',
-            categoria: 'membresia',
-            descripcion: `Membresia ${m.plan_type === 'annual' ? 'Anual' : 'Mensual'}`,
-            referencia: m.id.substring(0, 8),
-            monto: amount,
-            entidad: user,
-          });
-        });
-      }
-
-      // 3. Tarjetas de regalo
-      if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: gcs, error: errorGcs } = await supabase
-          .from('gift_cards')
-          .select('id, code, amount, purchased_at, purchaser_name, purchaser_email, payment_provider')
-          .eq('payment_status', 'paid')
-          .gte('purchased_at', desde)
-          .lte('purchased_at', hasta)
-          .order('purchased_at', { ascending: false });
-        if (errorGcs) throw errorGcs;
-
-        (gcs ?? []).forEach((g: any) => {
-          collected.push({
-            id: g.id,
-            fecha: g.purchased_at,
-            tipo: 'ingreso',
-            categoria: 'tarjeta_regalo',
-            descripcion: `Tarjeta de regalo`,
-            referencia: g.code ?? g.id.substring(0, 8),
-            monto: Number(g.amount ?? 0),
-            metodo_pago: g.payment_provider,
-            entidad: g.purchaser_name ?? g.purchaser_email,
-          });
-        });
-      }
-
-      // 4. Suplementos de reserva (booking_supplements)
-      if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: supls, error: errorSupls } = await supabase
-          .from('booking_supplements')
-          .select('id, total_paid, paid_at, bookings(booking_code, agencies(name)), tour_supplements(name)')
-          .eq('status', 'paid')
-          .gte('paid_at', desde)
-          .lte('paid_at', hasta)
-          .order('paid_at', { ascending: false });
-        if (errorSupls) throw errorSupls;
-
-        (supls ?? []).forEach((s: any) => {
-          const monto = Number(s.total_paid ?? 0);
-          if (monto <= 0) return;
-          collected.push({
-            id: s.id,
-            fecha: s.paid_at,
-            tipo: 'ingreso',
-            categoria: 'suplemento',
-            descripcion: `Suplemento - ${s.tour_supplements?.name ?? 'Suplemento'}`,
-            referencia: s.bookings?.booking_code ?? s.id.substring(0, 8),
-            monto,
-            entidad: s.bookings?.agencies?.name,
-          });
-        });
-      }
-
-      // 5. Servicios opcionales de reserva (booking_optional_services)
-      if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: opts, error: errorOpts } = await supabase
-          .from('booking_optional_services')
-          .select('id, subtotal, bookings!inner(booking_code, paid_at, agencies(name)), tour_optional_services(name)')
-          .eq('is_cancelled', false)
-          .eq('bookings.payment_status', 'succeeded')
-          .gte('bookings.paid_at', desde)
-          .lte('bookings.paid_at', hasta)
-          .order('bookings(paid_at)', { ascending: false });
-        if (errorOpts) throw errorOpts;
-
-        (opts ?? []).forEach((o: any) => {
-          const monto = Number(o.subtotal ?? 0);
-          if (monto <= 0) return;
-          collected.push({
-            id: o.id,
-            fecha: o.bookings?.paid_at,
-            tipo: 'ingreso',
-            categoria: 'servicio_opcional',
-            descripcion: `Servicio opcional - ${o.tour_optional_services?.name ?? 'Servicio'}`,
-            referencia: o.bookings?.booking_code ?? o.id.substring(0, 8),
-            monto,
-            entidad: o.bookings?.agencies?.name,
-          });
-        });
-      }
-
-      // 6. Cobros en checkin (wallet_checkin_charges)
-      if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: checkins, error: errorCheckins } = await supabase
-          .from('wallet_checkin_charges')
-          .select('id, amount_charged, service_charge_applied, created_at, bookings(booking_code, agencies(name), tours(name))')
-          .gte('created_at', desde)
-          .lte('created_at', hasta)
-          .order('created_at', { ascending: false });
-        if (errorCheckins) throw errorCheckins;
-
-        (checkins ?? []).forEach((c: any) => {
-          const monto = Number(c.amount_charged ?? 0);
-          if (monto <= 0) return;
-          collected.push({
-            id: c.id,
-            fecha: c.created_at,
-            tipo: 'ingreso',
-            categoria: 'cobro_checkin',
-            descripcion: `Cobro checkin - ${c.bookings?.tours?.name ?? 'Tour'}`,
-            referencia: c.bookings?.booking_code ?? c.id.substring(0, 8),
-            monto,
-            entidad: c.bookings?.agencies?.name,
-          });
-        });
-      }
-
-      // 7. Tours destacados (ingresos de agencias por posicionamiento)
-      if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: featured, error: errorFeatured } = await supabase
-          .from('featured_tour_slots')
-          .select('id, total_amount, payment_confirmed_at, agencies(name), tours(name), featured_plans(name)')
-          .not('payment_confirmed_at', 'is', null)
-          .gte('payment_confirmed_at', desde)
-          .lte('payment_confirmed_at', hasta)
-          .order('payment_confirmed_at', { ascending: false });
-        if (errorFeatured) throw errorFeatured;
-
-        (featured ?? []).forEach((f: any) => {
-          const monto = Number(f.total_amount ?? 0);
-          if (monto <= 0) return;
-          const plan = f.featured_plans?.name ?? 'Plan';
-          collected.push({
-            id: f.id,
-            fecha: f.payment_confirmed_at,
-            tipo: 'ingreso',
-            categoria: 'tour_destacado',
-            descripcion: `Tour destacado - ${plan} - ${f.tours?.name ?? 'Tour'}`,
-            referencia: f.id.substring(0, 8),
-            monto,
-            entidad: f.agencies?.name,
-          });
-        });
-      }
-
-      // 8. Entradas contables manuales (ingresos y egresos)
-      {
-        let query = supabase
-          .from('accounting_entries')
-          .select('id, entry_number, entry_date, description, entry_type, source_type')
-          .eq('source_type', 'manual')
-          .eq('is_posted', true)
-          .gte('entry_date', desde.substring(0, 10))
-          .lte('entry_date', hasta.substring(0, 10))
-          .order('entry_date', { ascending: false });
-
-        if (filters.tipo !== 'todos') {
-          query = query.eq('entry_type', filters.tipo);
-        }
-
-        const { data: manualEntries } = await query;
-
-        // Get totals per entry from lines
-        const entryIds = (manualEntries ?? []).map((e: any) => e.id);
-        if (entryIds.length > 0) {
-          const { data: lines, error: errorLines } = await supabase
-            .from('accounting_entry_lines')
-            .select('accounting_entry_id, debit, credit')
-            .in('accounting_entry_id', entryIds);
-          if (errorLines) throw errorLines;
-
-          const totals: Record<string, { debit: number; credit: number }> = {};
-          (lines ?? []).forEach((l: any) => {
-            if (!totals[l.accounting_entry_id]) totals[l.accounting_entry_id] = { debit: 0, credit: 0 };
-            totals[l.accounting_entry_id].debit += Number(l.debit ?? 0);
-            totals[l.accounting_entry_id].credit += Number(l.credit ?? 0);
-          });
-
-          (manualEntries ?? []).forEach((e: any) => {
-            const t = totals[e.id] ?? { debit: 0, credit: 0 };
-            const isIngreso = e.entry_type === 'ingreso';
-            const monto = isIngreso ? t.credit : t.debit;
-            if (monto <= 0) return;
-            collected.push({
-              id: e.id,
-              fecha: e.entry_date,
-              tipo: isIngreso ? 'ingreso' : 'egreso',
-              categoria: isIngreso ? 'contable_manual' : 'egreso_manual',
-              descripcion: e.description ?? 'Entrada contable manual',
-              referencia: e.entry_number ?? e.id.substring(0, 8),
-              monto,
-            });
-          });
-        }
-      }
-
-      // 9. Pagos a agencias (egresos)
-      if (filters.tipo === 'todos' || filters.tipo === 'egreso') {
-        const { data: payouts, error: errorPayouts } = await supabase
-          .from('agency_payouts')
-          .select('id, payout_code, payment_date, amount, net_amount, payment_method, agencies(name)')
-          .gte('payment_date', desde.substring(0, 10))
-          .lte('payment_date', hasta.substring(0, 10))
-          .order('payment_date', { ascending: false });
-        if (errorPayouts) throw errorPayouts;
-
-        (payouts ?? []).forEach((p: any) => {
-          collected.push({
-            id: p.id,
-            fecha: p.payment_date,
-            tipo: 'egreso',
-            categoria: 'pago_agencia',
-            descripcion: `Pago a agencia - ${p.agencies?.name ?? 'Agencia'}`,
-            referencia: p.payout_code ?? p.id.substring(0, 8),
-            monto: Number(p.net_amount ?? p.amount ?? 0),
-            metodo_pago: p.payment_method,
-            entidad: p.agencies?.name,
-          });
-        });
-      }
-
-      // 10. Comisiones de ejecutivos (egresos)
-      if (filters.tipo === 'todos' || filters.tipo === 'egreso') {
-        const { data: comms, error: errorComms } = await supabase
-          .from('executive_commissions')
-          .select('id, amount, commission_type, paid_at, created_at, agencies(name), account_executives(first_name, last_name)')
-          .eq('status', 'paid')
-          .gte('paid_at', desde)
-          .lte('paid_at', hasta)
-          .order('paid_at', { ascending: false });
-        if (errorComms) throw errorComms;
-
-        (comms ?? []).forEach((c: any) => {
-          const monto = Number(c.amount ?? 0);
-          if (monto <= 0) return;
-          const executive = c.account_executives ? `${c.account_executives.first_name} ${c.account_executives.last_name}` : '';
-          collected.push({
-            id: c.id,
-            fecha: c.paid_at ?? c.created_at,
-            tipo: 'egreso',
-            categoria: 'comision_ejecutivo',
-            descripcion: `Comision ejecutivo - ${c.commission_type ?? 'General'}`,
-            referencia: c.id.substring(0, 8),
-            monto,
-            entidad: executive || c.agencies?.name,
-          });
-        });
-      }
-
-      // 11. Penalidades por cancelacion (ingresos para plataforma)
-      if (filters.tipo === 'todos' || filters.tipo === 'ingreso') {
-        const { data: penalties, error: errorPenalties } = await supabase
-          .from('cancellation_penalty_records')
-          .select('id, platform_amount, gross_penalty, created_at, agencies(name)')
-          .in('status', ['paid', 'processed'])
-          .gte('created_at', desde)
-          .lte('created_at', hasta)
-          .order('created_at', { ascending: false });
-        if (errorPenalties) throw errorPenalties;
-
-        (penalties ?? []).forEach((p: any) => {
-          const monto = Number(p.platform_amount ?? p.gross_penalty ?? 0);
-          if (monto <= 0) return;
-          collected.push({
-            id: p.id,
-            fecha: p.created_at,
-            tipo: 'ingreso',
-            categoria: 'penalidad_cancelacion',
-            descripcion: `Penalidad por cancelacion`,
-            referencia: p.id.substring(0, 8),
-            monto,
-            entidad: p.agencies?.name,
-          });
-        });
-      }
-
-      // Sort all collected rows by date descending
-      collected.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
-      setRows(collected);
-    } catch (err: any) {
-      console.error('AdminReporteMaestro: no se pudo armar el reporte', err);
-      setError((err?.message ?? 'Error al cargar el reporte') + ' — el reporte no se muestra porque estaria incompleto.');
-      setRows([]);
+      setFilas(
+        (data ?? []).map((f: Record<string, unknown>) => ({
+          fecha: String(f.fecha),
+          categoria: String(f.categoria),
+          naturaleza: f.naturaleza === 'egreso' ? 'egreso' : 'ingreso',
+          descripcion: String(f.descripcion ?? ''),
+          referencia: String(f.referencia ?? ''),
+          entidad: (f.entidad as string) ?? null,
+          metodo: (f.metodo as string) ?? null,
+          caja: Number(f.caja ?? 0),
+          pasivo: Number(f.pasivo ?? 0),
+          ingreso: Number(f.ingreso ?? 0),
+          traspaso: Number(f.traspaso ?? 0),
+          origen_tabla: String(f.origen_tabla ?? ''),
+          origen_id: String(f.origen_id ?? ''),
+        })),
+      );
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? `No se pudo cargar el reporte: ${e.message}`
+          : 'No se pudo cargar el reporte.',
+      );
+      setFilas([]);
     } finally {
-      setLoading(false);
+      setCargando(false);
     }
-  }, [filters.desde, filters.hasta, filters.tipo]);
+  }, [filtros.desde, filtros.hasta]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { cargar(); }, [cargar]);
 
-  // ── Derived/filtered data ────────────────────────────────────────────────────
-
-  const filtered = rows.filter((r) => {
-    if (filters.categoria !== 'todas' && r.categoria !== filters.categoria) return false;
-    if (filters.busqueda) {
-      const q = filters.busqueda.toLowerCase();
-      if (
-        !r.descripcion.toLowerCase().includes(q) &&
-        !r.referencia.toLowerCase().includes(q) &&
-        !(r.entidad ?? '').toLowerCase().includes(q)
-      ) return false;
+  const filtradas = useMemo(() => filas.filter((f) => {
+    if (filtros.naturaleza !== 'todas' && f.naturaleza !== filtros.naturaleza) return false;
+    if (filtros.categoria !== 'todas' && f.categoria !== filtros.categoria) return false;
+    if (filtros.busqueda) {
+      const q = filtros.busqueda.toLowerCase();
+      const enAlgunLado =
+        f.descripcion.toLowerCase().includes(q) ||
+        f.referencia.toLowerCase().includes(q) ||
+        etiqueta(f.categoria).toLowerCase().includes(q) ||
+        (f.entidad ?? '').toLowerCase().includes(q);
+      if (!enAlgunLado) return false;
     }
     return true;
-  });
+  }), [filas, filtros.naturaleza, filtros.categoria, filtros.busqueda]);
 
-  const totalIngresos = filtered.filter((r) => r.tipo === 'ingreso').reduce((s, r) => s + r.monto, 0);
-  const totalEgresos = filtered.filter((r) => r.tipo === 'egreso').reduce((s, r) => s + r.monto, 0);
-  const resultado = totalIngresos - totalEgresos;
+  const totales = useMemo(() => filtradas.reduce(
+    (acc, f) => ({
+      caja: acc.caja + f.caja,
+      pasivo: acc.pasivo + f.pasivo,
+      ingreso: acc.ingreso + f.ingreso,
+      traspaso: acc.traspaso + f.traspaso,
+    }),
+    { caja: 0, pasivo: 0, ingreso: 0, traspaso: 0 },
+  ), [filtradas]);
 
-  // ── Export ──────────────────────────────────────────────────────────────────
+  // Las categorias salen de los datos, no de una lista escrita a mano. Asi, el
+  // dia que la vista agregue un concepto, aparece solo en el filtro en vez de
+  // quedarse invisible porque nadie actualizo un arreglo aqui.
+  const categorias = useMemo(
+    () => Array.from(new Set(
+      filas
+        .filter((f) => filtros.naturaleza === 'todas' || f.naturaleza === filtros.naturaleza)
+        .map((f) => f.categoria),
+    )).sort((a, b) => etiqueta(a).localeCompare(etiqueta(b))),
+    [filas, filtros.naturaleza],
+  );
 
-  const exportToExcel = () => {
+  const porCategoria = useMemo(() => {
+    const m = new Map<string, { caja: number; pasivo: number; ingreso: number; traspaso: number }>();
+    for (const f of filtradas) {
+      const a = m.get(f.categoria) ?? { caja: 0, pasivo: 0, ingreso: 0, traspaso: 0 };
+      m.set(f.categoria, {
+        caja: a.caja + f.caja, pasivo: a.pasivo + f.pasivo,
+        ingreso: a.ingreso + f.ingreso, traspaso: a.traspaso + f.traspaso,
+      });
+    }
+    return [...m.entries()].sort((x, y) => Math.abs(y[1].caja) - Math.abs(x[1].caja));
+  }, [filtradas]);
+
+  const exportar = () => {
     const wb = XLSX.utils.book_new();
 
-    // Sheet 1: Summary
-    const summaryData = [
-      ['REPORTE MAESTRO DE INGRESOS Y EGRESOS'],
+    const resumen: (string | number)[][] = [
+      ['REPORTE MAESTRO DE MOVIMIENTOS FINANCIEROS'],
       [''],
-      ['Periodo:', `${fmtDate(filters.desde)} - ${fmtDate(filters.hasta)}`],
+      ['Periodo:', `${fecha(filtros.desde)} - ${fecha(filtros.hasta)}`],
       ['Generado:', format(new Date(), 'dd/MM/yyyy HH:mm')],
       [''],
-      ['RESUMEN'],
-      ['Total Ingresos:', fmtCurrency(totalIngresos)],
-      ['Total Egresos:', fmtCurrency(totalEgresos)],
-      ['Resultado Neto:', fmtCurrency(resultado)],
+      ['LAS TRES CAPAS'],
+      ['Caja (dinero del banco):', money(totales.caja)],
+      ['Pasivo (dinero de terceros):', money(totales.pasivo)],
+      ['Ingreso reconocido:', money(totales.ingreso)],
+      ['Traspasos (cambian de dueno):', money(totales.traspaso)],
       [''],
-      ['INGRESOS POR CATEGORIA'],
-      ...INCOME_CATEGORIES.map((cat) => {
-        const sum = filtered.filter((r) => r.categoria === cat).reduce((s, r) => s + r.monto, 0);
-        return [CATEGORY_LABELS[cat], fmtCurrency(sum)];
-      }),
+      ['NOTA: los gastos de operacion (servicios, renta, marketing) NO estan'],
+      ['incluidos. No existe todavia una tabla donde capturarlos.'],
       [''],
-      ['EGRESOS POR CATEGORIA'],
-      ...EXPENSE_CATEGORIES.map((cat) => {
-        const sum = filtered.filter((r) => r.categoria === cat).reduce((s, r) => s + r.monto, 0);
-        return [CATEGORY_LABELS[cat], fmtCurrency(sum)];
-      }),
+      ['POR CATEGORIA', 'Caja', 'Pasivo', 'Ingreso', 'Traspaso'],
+      ...porCategoria.map(([cat, t]) => [etiqueta(cat), t.caja, t.pasivo, t.ingreso, t.traspaso]),
     ];
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-    wsSummary['!cols'] = [{ wch: 35 }, { wch: 25 }];
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
+    const wsResumen = XLSX.utils.aoa_to_sheet(resumen);
+    wsResumen['!cols'] = [{ wch: 38 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
 
-    // Sheet 2: Detail
-    const detailData: any[][] = [
-      ['Fecha', 'Tipo', 'Categoria', 'Descripcion', 'Referencia', 'Entidad', 'Metodo Pago', 'Monto']
+    const detalle: (string | number)[][] = [
+      ['Fecha', 'Categoria', 'Naturaleza', 'Descripcion', 'Referencia',
+       'Entidad', 'Metodo', 'Caja', 'Pasivo', 'Ingreso', 'Traspaso', 'Origen'],
+      ...filtradas.map((f) => [
+        fecha(f.fecha), etiqueta(f.categoria), f.naturaleza, f.descripcion,
+        f.referencia, f.entidad ?? '', f.metodo ?? '',
+        Number(f.caja.toFixed(2)), Number(f.pasivo.toFixed(2)),
+        Number(f.ingreso.toFixed(2)), Number(f.traspaso.toFixed(2)),
+        f.origen_tabla,
+      ]),
     ];
-    filtered.forEach((r) => {
-      detailData.push([
-        fmtDate(r.fecha),
-        r.tipo === 'ingreso' ? 'Ingreso' : 'Egreso',
-        CATEGORY_LABELS[r.categoria],
-        r.descripcion,
-        r.referencia,
-        r.entidad ?? '',
-        r.metodo_pago ?? '',
-        Number(r.monto.toFixed(2)),
-      ]);
-    });
-    const wsDetail = XLSX.utils.aoa_to_sheet(detailData);
-    wsDetail['!cols'] = [
-      { wch: 12 }, { wch: 10 }, { wch: 22 }, { wch: 40 },
-      { wch: 18 }, { wch: 30 }, { wch: 15 }, { wch: 15 },
+    const wsDetalle = XLSX.utils.aoa_to_sheet(detalle);
+    wsDetalle['!cols'] = [
+      { wch: 12 }, { wch: 26 }, { wch: 11 }, { wch: 38 }, { wch: 18 },
+      { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+      { wch: 14 }, { wch: 26 },
     ];
-    XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle');
+    XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle');
 
-    XLSX.writeFile(wb, `ReporteMaestro_${filters.desde}_${filters.hasta}.xlsx`);
+    XLSX.writeFile(wb, `ReporteMaestro_${filtros.desde}_${filtros.hasta}.xlsx`);
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-
-  const categoriasDisponibles: MovementCategory[] =
-    filters.tipo === 'ingreso' ? INCOME_CATEGORIES :
-    filters.tipo === 'egreso' ? EXPENSE_CATEGORIES :
-    [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES];
+  const tarjetas = [
+    { titulo: 'Caja', valor: totales.caja, ayuda: 'Dinero que entro o salio del banco',
+      Icono: Landmark, color: totales.caja >= 0 ? 'text-emerald-600' : 'text-red-600', fondo: 'bg-emerald-50' },
+    { titulo: 'Ingreso reconocido', valor: totales.ingreso, ayuda: 'Lo que ToursRed gano de verdad',
+      Icono: TrendingUp, color: totales.ingreso >= 0 ? 'text-blue-700' : 'text-red-600', fondo: 'bg-blue-50' },
+    { titulo: 'Pasivo', valor: totales.pasivo, ayuda: 'Dinero de terceros: viajeros y agencias',
+      Icono: Wallet, color: 'text-amber-700', fondo: 'bg-amber-50' },
+    { titulo: 'Traspasos', valor: totales.traspaso, ayuda: 'Cambian de dueno sin mover caja',
+      Icono: TrendingDown, color: 'text-gray-700', fondo: 'bg-gray-100' },
+  ];
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Reporte Maestro de Ingresos y Egresos</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Reporte Maestro de Movimientos Financieros</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Registro consolidado de todos los movimientos financieros de la plataforma
+            Cada movimiento en sus tres capas: caja, pasivo e ingreso
           </p>
         </div>
         <button
-          onClick={exportToExcel}
-          disabled={loading || filtered.length === 0}
+          onClick={exportar}
+          disabled={cargando || filtradas.length === 0}
           className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Download size={16} />
@@ -583,7 +291,20 @@ const AdminReporteMaestro: React.FC = () => {
         </button>
       </div>
 
-      {/* Filters */}
+      {/* Lo que el reporte NO puede mostrar. Va arriba y siempre visible: un
+          hueco conocido que no se anuncia se lee como un cero, y un cero en
+          gastos de operacion es una mentira comoda. */}
+      <div className="mb-6 flex items-start gap-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-4 py-3 text-sm">
+        <Info size={16} className="mt-0.5 flex-shrink-0" />
+        <div>
+          <span className="font-semibold">Los gastos de operacion no estan incluidos.</span>{' '}
+          Servicios (internet, software, hosting), renta, papeleria, viaticos y marketing
+          tienen cuenta en el catalogo contable, pero todavia no existe una pantalla
+          donde capturarlos. Este reporte no los muestra porque no estan registrados
+          en ningun lado, no porque sean cero.
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-xs">
         <div className="flex items-center gap-2 mb-4 text-gray-700 font-medium text-sm">
           <Filter size={15} />
@@ -591,118 +312,62 @@ const AdminReporteMaestro: React.FC = () => {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Desde</label>
-            <input
-              type="date"
-              value={filters.desde}
-              onChange={(e) => setFilters((f) => ({ ...f, desde: e.target.value, categoria: 'todas' }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-            />
+            <label htmlFor="f-desde" className="block text-xs font-medium text-gray-600 mb-1">Desde</label>
+            <input id="f-desde" type="date" value={filtros.desde}
+              onChange={(e) => setFiltros((f) => ({ ...f, desde: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Hasta</label>
-            <input
-              type="date"
-              value={filters.hasta}
-              onChange={(e) => setFilters((f) => ({ ...f, hasta: e.target.value, categoria: 'todas' }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-            />
+            <label htmlFor="f-hasta" className="block text-xs font-medium text-gray-600 mb-1">Hasta</label>
+            <input id="f-hasta" type="date" value={filtros.hasta}
+              onChange={(e) => setFiltros((f) => ({ ...f, hasta: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
-            <select
-              value={filters.tipo}
-              onChange={(e) =>
-                setFilters((f) => ({
-                  ...f,
-                  tipo: e.target.value as Filters['tipo'],
-                  categoria: 'todas',
-                }))
-              }
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="todos">Todos</option>
-              <option value="ingreso">Solo Ingresos</option>
-              <option value="egreso">Solo Egresos</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Categoria</label>
-            <select
-              value={filters.categoria}
-              onChange={(e) => setFilters((f) => ({ ...f, categoria: e.target.value as Filters['categoria'] }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-            >
+            <label htmlFor="f-nat" className="block text-xs font-medium text-gray-600 mb-1">Naturaleza</label>
+            <select id="f-nat" value={filtros.naturaleza}
+              onChange={(e) => setFiltros((f) => ({ ...f, naturaleza: e.target.value as Filtros['naturaleza'], categoria: 'todas' }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
               <option value="todas">Todas</option>
-              {categoriasDisponibles.map((cat) => (
-                <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
-              ))}
+              <option value="ingreso">Entradas</option>
+              <option value="egreso">Salidas</option>
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Buscar</label>
+            <label htmlFor="f-cat" className="block text-xs font-medium text-gray-600 mb-1">Categoria</label>
+            <select id="f-cat" value={filtros.categoria}
+              onChange={(e) => setFiltros((f) => ({ ...f, categoria: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <option value="todas">Todas</option>
+              {categorias.map((c) => <option key={c} value={c}>{etiqueta(c)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="f-buscar" className="block text-xs font-medium text-gray-600 mb-1">Buscar</label>
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Descripcion, referencia..."
-                value={filters.busqueda}
-                onChange={(e) => setFilters((f) => ({ ...f, busqueda: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-              />
+              <input id="f-buscar" type="text" placeholder="Descripcion, referencia, agencia..."
+                value={filtros.busqueda}
+                onChange={(e) => setFiltros((f) => ({ ...f, busqueda: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Total Ingresos</p>
-              <p className="text-2xl font-bold text-emerald-600">{fmtCurrency(totalIngresos)}</p>
-            </div>
-            <div className="p-2 bg-emerald-50 rounded-lg">
-              <TrendingUp size={20} className="text-emerald-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Total Egresos</p>
-              <p className="text-2xl font-bold text-red-600">{fmtCurrency(totalEgresos)}</p>
-            </div>
-            <div className="p-2 bg-red-50 rounded-lg">
-              <TrendingDown size={20} className="text-red-600" />
+        {tarjetas.map(({ titulo, valor, ayuda, Icono, color, fondo }) => (
+          <div key={titulo} className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+            <div className="flex items-start justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">{titulo}</p>
+                <p className={`text-2xl font-bold ${color}`}>{money(valor)}</p>
+                <p className="text-xs text-gray-400 mt-1">{ayuda}</p>
+              </div>
+              <div className={`p-2 rounded-lg ${fondo}`}><Icono size={20} className={color} /></div>
             </div>
           </div>
-        </div>
-        <div className={`bg-white rounded-xl border p-5 shadow-xs ${resultado >= 0 ? 'border-gray-200' : 'border-red-100'}`}>
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Resultado Neto</p>
-              <p className={`text-2xl font-bold ${resultado >= 0 ? 'text-blue-700' : 'text-red-600'}`}>
-                {fmtCurrency(resultado)}
-              </p>
-            </div>
-            <div className={`p-2 rounded-lg ${resultado >= 0 ? 'bg-blue-50' : 'bg-red-50'}`}>
-              <DollarSign size={20} className={resultado >= 0 ? 'text-blue-600' : 'text-red-600'} />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Movimientos</p>
-              <p className="text-2xl font-bold text-gray-800">{filtered.length}</p>
-            </div>
-            <div className="p-2 bg-gray-100 rounded-lg">
-              <BarChart2 size={20} className="text-gray-500" />
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
       {error && (
@@ -712,27 +377,23 @@ const AdminReporteMaestro: React.FC = () => {
         </div>
       )}
 
-      {/* Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <span className="text-sm font-medium text-gray-700">
-            {filtered.length} {filtered.length === 1 ? 'movimiento' : 'movimientos'}
+            {filtradas.length} {filtradas.length === 1 ? 'movimiento' : 'movimientos'}
           </span>
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          <button onClick={cargar} disabled={cargando}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50">
+            <RefreshCw size={13} className={cargando ? 'animate-spin' : ''} />
             Actualizar
           </button>
         </div>
 
-        {loading ? (
+        {cargando ? (
           <div className="flex justify-center py-16">
             <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : filtradas.length === 0 ? (
           <div className="text-center py-16">
             <BarChart2 size={32} className="text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 font-medium">Sin movimientos en el periodo seleccionado</p>
@@ -744,67 +405,50 @@ const AdminReporteMaestro: React.FC = () => {
               <thead>
                 <tr className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   <th className="px-4 py-3 text-left">Fecha</th>
-                  <th className="px-4 py-3 text-left">Tipo</th>
                   <th className="px-4 py-3 text-left">Categoria</th>
                   <th className="px-4 py-3 text-left">Descripcion</th>
                   <th className="px-4 py-3 text-left">Referencia</th>
                   <th className="px-4 py-3 text-left">Entidad</th>
-                  <th className="px-4 py-3 text-right">Monto</th>
+                  <th className="px-4 py-3 text-right">Caja</th>
+                  <th className="px-4 py-3 text-right">Pasivo</th>
+                  <th className="px-4 py-3 text-right">Ingreso</th>
+                  <th className="px-4 py-3 text-right">Traspaso</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
+                {filtradas.map((f) => (
+                  <tr key={`${f.origen_tabla}:${f.origen_id}:${f.categoria}`} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         <Calendar size={12} className="text-gray-400 flex-shrink-0" />
-                        {fmtDate(row.fecha)}
+                        {fecha(f.fecha)}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        row.tipo === 'ingreso'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}>
-                        {row.tipo === 'ingreso' ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                        {row.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}
-                      </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1 text-gray-700">
                         <Tag size={11} className="text-gray-400" />
-                        {CATEGORY_LABELS[row.categoria]}
+                        {etiqueta(f.categoria)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-800 max-w-xs truncate">{row.descripcion}</td>
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">{row.referencia}</td>
-                    <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">{row.entidad ?? '—'}</td>
-                    <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap ${
-                      row.tipo === 'ingreso' ? 'text-emerald-700' : 'text-red-600'
-                    }`}>
-                      {row.tipo === 'egreso' && <span className="text-red-400 mr-0.5">-</span>}
-                      {fmtCurrency(row.monto)}
-                    </td>
+                    <td className="px-4 py-3 text-gray-800 max-w-xs truncate">{f.descripcion}</td>
+                    <td className="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">{f.referencia}</td>
+                    <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">{f.entidad ?? '—'}</td>
+                    <Importe n={f.caja} />
+                    <Importe n={f.pasivo} />
+                    <Importe n={f.ingreso} />
+                    <Importe n={f.traspaso} neutro />
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="bg-gray-50 font-semibold border-t-2 border-gray-200">
                   <td colSpan={5} className="px-4 py-3 text-sm text-gray-700">
-                    Totales ({filtered.length} movimientos)
+                    Totales ({filtradas.length} movimientos)
                   </td>
-                  <td className="px-4 py-3 text-right text-xs text-gray-500">
-                    <span className="text-emerald-600">+{fmtCurrency(totalIngresos)}</span>
-                    {' / '}
-                    <span className="text-red-500">-{fmtCurrency(totalEgresos)}</span>
-                  </td>
-                  <td className={`px-4 py-3 text-right text-base ${resultado >= 0 ? 'text-blue-700' : 'text-red-600'}`}>
-                    {fmtCurrency(resultado)}
-                  </td>
+                  <Importe n={totales.caja} />
+                  <Importe n={totales.pasivo} />
+                  <Importe n={totales.ingreso} />
+                  <Importe n={totales.traspaso} neutro />
                 </tr>
               </tfoot>
             </table>
@@ -812,6 +456,19 @@ const AdminReporteMaestro: React.FC = () => {
         )}
       </div>
     </div>
+  );
+};
+
+/** Una celda de importe. El cero se pinta como raya: en una tabla de cuatro
+ *  columnas donde la mayoria de las filas solo mueve una o dos, un tablero
+ *  lleno de "$0.00" esconde justo lo que importa. */
+const Importe: React.FC<{ n: number; neutro?: boolean }> = ({ n, neutro }) => {
+  if (n === 0) return <td className="px-4 py-3 text-right text-gray-300">—</td>;
+  const color = neutro ? 'text-gray-600' : n > 0 ? 'text-emerald-700' : 'text-red-600';
+  return (
+    <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap ${color}`}>
+      {formatCurrencyMXN(n)}
+    </td>
   );
 };
 

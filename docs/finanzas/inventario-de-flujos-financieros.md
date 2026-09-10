@@ -131,6 +131,7 @@ alimenta todavía.
 | 1 | Liberaciones a agencias | `agency_payouts` | 3 | $121,205.31 | **Sí** |
 | 2 | Reembolso por cancelación total | `booking_cancellations` | 7 | $11,988.04 | No — al monedero |
 | 3 | Reembolso por cancelación parcial | `booking_partial_cancellations` | 1 | $5,544.50 | No — al monedero |
+| 3b | **Reembolso al método de pago original** | `payment_refunds` | **0** | — | **Sí** |
 | 4 | Puntos otorgados | `toursred_points_transactions` | 42 | ≈$1,189.01 | No — pasivo |
 | 5 | Comisiones de procesador | `payment_transactions.processor_fee` | — | $894.79 | **Sí** — subregistrado |
 | 6 | Comisiones a ejecutivos | `executive_commissions` | 3 | $836.25 | **Sí** — solo $100 pagada |
@@ -139,6 +140,23 @@ alimenta todavía.
 | 9 | Liquidación a aseguradora | `insurance_settlements` | **0** | — | **Sí** |
 | 10 | Contracargos por disputa | `payment_disputes` | **0** | — | **Sí** |
 | 11 | Pagos a proveedores (Telcel, Claude, oficina) | **no existe tabla** | — | — | **Sí** |
+
+### Los reembolsos tienen dos vías, no una
+
+La normal manda el dinero al monedero. Pero **existe una función en el panel de
+administración** (`process-payment-refund`) que devuelve al **método de pago
+original**, para los casos en que el monedero no es opción — una disputa ante
+PROFECO que obligue a regresar a la misma tarjeta, por ejemplo.
+
+`payment_refunds` está en cero porque esos casos son excepcionales, **no porque
+la vía no exista**. Y cuando ocurren, ese dinero **sí sale del banco**.
+
+Vale la pena decirlo con todas sus letras porque es la trampa que ya se cayó una
+vez en esta misma auditoría: el reporte viejo leía
+`cancellation_penalty_records` —cero filas— y por eso no veía ningún reembolso.
+**Un concepto no se omite por tener la tabla vacía.** Al escribir la vista se
+estuvo a punto de repetirlo exactamente igual, dando por hecho que "cero filas"
+significaba "no existe la vía".
 
 ---
 
