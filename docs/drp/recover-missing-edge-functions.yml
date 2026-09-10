@@ -60,14 +60,6 @@ jobs:
             process-agency-payout \
             --project-ref huzsedewwzjywcpbkjkm
 
-      - name: Download process-payment
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: |
-          supabase functions download \
-            process-payment \
-            --project-ref huzsedewwzjywcpbkjkm
-
       - name: Download send-payout-notification
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -76,23 +68,13 @@ jobs:
             send-payout-notification \
             --project-ref huzsedewwzjywcpbkjkm
 
-      - name: Download sync-transport-locations
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: |
-          supabase functions download \
-            sync-transport-locations \
-            --project-ref huzsedewwzjywcpbkjkm
-
       - name: Verify recovered functions
         run: |
           FUNCTIONS=(
             "fix-orphaned-google-identity"
             "generate-signed-contract"
             "process-agency-payout"
-            "process-payment"
             "send-payout-notification"
-            "sync-transport-locations"
           )
 
           ERROR_COUNT=0
@@ -130,9 +112,7 @@ jobs:
             fix-orphaned-google-identity \
             generate-signed-contract \
             process-agency-payout \
-            process-payment \
-            send-payout-notification \
-            sync-transport-locations
+            send-payout-notification
           do
             echo ""
             echo "======================================"
@@ -161,9 +141,7 @@ jobs:
             supabase/functions/fix-orphaned-google-identity \
             supabase/functions/generate-signed-contract \
             supabase/functions/process-agency-payout \
-            supabase/functions/process-payment \
-            supabase/functions/send-payout-notification \
-            supabase/functions/sync-transport-locations
+            supabase/functions/send-payout-notification
 
           if git diff --cached --quiet; then
             echo "No changes to commit."
