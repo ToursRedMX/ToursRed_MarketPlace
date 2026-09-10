@@ -119,12 +119,25 @@ casos.push(() => {
   assert.ok(!/>Caja</.test(tsx), "la columna de la tabla no debe seguir llamandose 'Caja'");
 });
 
-// --- 5. El aviso de los gastos de operacion sigue en pantalla ---------------
+// --- 5. El aviso de los gastos de operacion dice la verdad de HOY -----------
 casos.push(() => {
-  // Un hueco conocido que no se anuncia se lee como un cero, y un cero en
-  // gastos de operacion es una mentira comoda.
-  assert.ok(/gastos de operacion no estan incluidos/i.test(tsx),
-    'debe seguir el aviso de que los gastos de operacion no se capturan todavia');
+  // Este caso cambio de sentido el 10-sep-2026 y por eso queda escrito.
+  //
+  // Antes exigia que la pantalla dijera que los gastos NO estaban incluidos:
+  // un hueco conocido que no se anuncia se lee como un cero, y un cero en
+  // gastos de operacion es una mentira comoda. Ese aviso dejo de ser cierto
+  // cuando la migracion 20260910210000 agrego la tabla y el bloque 19 de la
+  // vista, asi que ahora el caso exige lo contrario: que el aviso viejo YA NO
+  // este, porque un aviso que miente al reves cuesta lo mismo.
+  //
+  // Lo que queda por advertir es una condicion real y no un hueco: un gasto en
+  // BORRADOR no tiene asiento y por eso no cuenta.
+  assert.ok(!/gastos de operacion no estan incluidos/i.test(tsx),
+    'el aviso de que los gastos no se capturan ya no es cierto: la tabla existe desde 20260910210000');
+  assert.ok(/borrador/i.test(tsx),
+    'la pantalla debe seguir avisando que los gastos en borrador no cuentan todavia');
+  assert.ok(/\/admin\/gastos/.test(tsx),
+    'debe haber una liga a la pantalla de captura de gastos');
 });
 
 let ok = 0;

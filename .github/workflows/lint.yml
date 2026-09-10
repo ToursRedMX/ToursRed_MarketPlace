@@ -169,6 +169,15 @@ jobs:
       - name: Verify the CFDI reader proposes amounts that add up and belong to us
         run: node scripts/test-cfdi-xml.mjs
 
+      # Tres promesas de la captura de gastos que solo viven en la pantalla y
+      # que ninguna prueba de SQL puede cubrir: que el total en pesos se calcule
+      # pero se pueda EDITAR (el banco aplica su propio tipo de cambio), que el
+      # XML proponga sin bloquear los campos, y que el selector de cuentas
+      # ofrezca solo cuentas de gasto -- si ofreciera Bancos, el trigger de la
+      # base rechazaria el guardado sin que nadie entienda por que.
+      - name: Verify the expense screen keeps its editable-total and propose-only promises
+        run: node scripts/test-pantalla-gastos.mjs
+
       # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
       # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
       # aplica SIN transaccion a proposito, porque asi fue como se descubrio que

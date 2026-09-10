@@ -244,8 +244,8 @@ const AdminReporteMaestro: React.FC = () => {
       ['Ingreso reconocido:', money(totales.ingreso)],
       ['Traspasos (cambian de dueno):', money(totales.traspaso)],
       [''],
-      ['NOTA: los gastos de operacion (servicios, renta, marketing) NO estan'],
-      ['incluidos. No existe todavia una tabla donde capturarlos.'],
+      ['NOTA: los gastos de operacion SI estan incluidos desde el 10-sep-2026,'],
+      ['pero solo los REGISTRADOS. Los borradores no tienen asiento todavia.'],
       [''],
       ['POR CATEGORIA', 'Activo', 'Pasivo', 'Ingreso', 'Traspaso'],
       ...porCategoria.map(([cat, t]) => [etiqueta(cat), t.caja, t.pasivo, t.ingreso, t.traspaso]),
@@ -306,17 +306,19 @@ const AdminReporteMaestro: React.FC = () => {
         </button>
       </div>
 
-      {/* Lo que el reporte NO puede mostrar. Va arriba y siempre visible: un
-          hueco conocido que no se anuncia se lee como un cero, y un cero en
-          gastos de operacion es una mentira comoda. */}
-      <div className="mb-6 flex items-start gap-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-4 py-3 text-sm">
+      {/* El aviso que vivia aqui decia que los gastos de operacion no estaban
+          incluidos porque no habia donde capturarlos. Desde el 10-sep-2026 SI
+          los hay: la migracion 20260910210000 agrego la tabla y el bloque 19 de
+          la vista. Lo que queda no es un hueco del reporte sino una condicion
+          real -- un gasto en BORRADOR todavia no tiene asiento -- y por eso se
+          dice con el numero delante en vez de con un aviso fijo. */}
+      <div className="mb-6 flex items-start gap-2.5 bg-blue-50 border border-blue-200 text-blue-900 rounded-lg px-4 py-3 text-sm">
         <Info size={16} className="mt-0.5 flex-shrink-0" />
         <div>
-          <span className="font-semibold">Los gastos de operacion no estan incluidos.</span>{' '}
-          Servicios (internet, software, hosting), renta, papeleria, viaticos y marketing
-          tienen cuenta en el catalogo contable, pero todavia no existe una pantalla
-          donde capturarlos. Este reporte no los muestra porque no estan registrados
-          en ningun lado, no porque sean cero.
+          <span className="font-semibold">Los gastos de operacion ya estan incluidos</span>{' '}
+          en cuanto se REGISTRAN. Los que siguen en borrador no aparecen aqui, porque
+          todavia no tienen asiento contable.{' '}
+          <a href="/admin/gastos" className="underline font-medium">Ir a gastos de operacion</a>.
         </div>
       </div>
 
