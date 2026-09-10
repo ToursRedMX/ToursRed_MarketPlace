@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 import { cubreElAnticipo } from "../_shared/exigible.ts";
+import { registrarFallo } from "../_shared/falloSilencioso.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -102,6 +103,93 @@ async function activateGiftCard(supabase: any, giftCardId: string, paypalTransac
   );
 }
 
+interface ClienteDeCobros {
+  from(tabla: string): {
+    select(columnas: string): {
+      eq(columna: string, valor: unknown): {
+        maybeSingle(): Promise<{ data: { id?: string } | null }>;
+      };
+    };
+    insert(fila: Record<string, unknown>): Promise<{ error: { message: string } | null }>;
+  };
+}
+
+/** Lo que interesa de la captura de PayPal; el resto del payload se guarda tal cual. */
+interface CapturaPaypal {
+  amount?: { value?: string; currency_code?: string };
+  seller_receivable_breakdown?: { paypal_fee?: { value?: string } };
+  purchase_units?: Array<{ payments?: { captures?: CapturaPaypal[] } }>;
+}
+
+/**
+ * Asienta un cobro de PayPal en `payment_transactions`.
+ *
+ * Existe como funcion —y no copiada en los dos sitios— porque la llaman los DOS
+ * caminos de `confirmBooking`: el que confirma y el que deja la reserva en
+ * `processing` por cobro corto. Si fueran dos copias, la de la rama corta seria
+ * la que se queda vieja, que es justo la que menos se mira.
+ *
+ * Idempotente por `paypal_capture_id`: PayPal reintenta, y esta funcion se
+ * llama dos veces sobre la misma captura cuando un cobro parcial se completa
+ * despues.
+ *
+ * No lanza nunca. Se la llama en caminos donde el dinero YA se cobro: fallar
+ * aqui no debe impedir que la reserva se marque, solo dejar el rastro.
+ */
+async function registrarCobroPaypal(
+  supabase: ClienteDeCobros,
+  bookingId: string,
+  paypalTransactionId: string | null,
+  captureData?: CapturaPaypal,
+): Promise<void> {
+  if (!paypalTransactionId) return;
+  try {
+    const capture = captureData?.purchase_units?.[0]?.payments?.captures?.[0] || captureData;
+    const amountValue = parseFloat(capture?.amount?.value ?? "0");
+    const currencyCode = (capture?.amount?.currency_code || "MXN").toLowerCase();
+    const paypalFee = parseFloat(capture?.seller_receivable_breakdown?.paypal_fee?.value || "0");
+
+    const { data: existingTx } = await supabase
+      .from("payment_transactions")
+      .select("id")
+      .eq("paypal_capture_id", paypalTransactionId)
+      .maybeSingle();
+
+    if (existingTx) return;
+
+    const { error } = await supabase.from("payment_transactions").insert({
+      booking_id: bookingId,
+      paypal_capture_id: paypalTransactionId,
+      payment_processor: "paypal",
+      amount: amountValue,
+      currency: currencyCode,
+      status: "succeeded",
+      payment_method_type: "Tarjeta",
+      charge_context: "booking_deposit",
+      charge_reference_id: bookingId,
+      processor_fee: paypalFee,
+      net_amount: amountValue - paypalFee,
+      metadata: captureData || null,
+    });
+
+    if (error) {
+      await registrarFallo(
+        "capture-paypal-order/no-se-pudo-asentar-el-cobro",
+        `PayPal cobro ${amountValue} en la captura ${paypalTransactionId} y la fila de payment_transactions no se pudo insertar.`,
+        { bookingId, paypalTransactionId, amountValue, motivo: error.message },
+      );
+      return;
+    }
+    console.log(`payment_transactions record created for PayPal capture ${paypalTransactionId}`);
+  } catch (txErr) {
+    await registrarFallo(
+      "capture-paypal-order/no-se-pudo-asentar-el-cobro",
+      `Excepcion al asentar la captura ${paypalTransactionId} de PayPal.`,
+      { bookingId, paypalTransactionId, motivo: String(txErr) },
+    );
+  }
+}
+
 async function confirmBooking(supabase: any, bookingId: string, paypalTransactionId: string | null, captureData?: any, usuarioAutenticado?: string | null) {
   const { data: existingBooking, error: errorReserva } = await supabase
     .from("bookings")
@@ -133,12 +221,19 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
   const capturedAmount = parseFloat(
     (captureData?.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value) ?? captureData?.amount?.value ?? "0"
   );
-  const { data: priorPaypalPayments } = await supabase
+  // `charge_context` NO es opcional en este filtro. Sin el entraban tambien los
+  // cobros de seguro, servicios opcionales, suplementos y cuotas del plan de
+  // pagos, y ese dinero contaba como si fuera anticipo. Esta en los datos: la
+  // reserva 860a587c tiene un `payment_plan_installment` de 2,162.79 que hoy se
+  // suma contra un anticipo de 3,089.70. `_shared/coberturaDePago.ts` filtra
+  // igual; esta consulta se habia quedado atras.
+  const { data: priorPaypalPayments, error: errorPagosPrevios } = await supabase
     .from("payment_transactions")
     .select("amount")
     .eq("booking_id", bookingId)
     .eq("status", "succeeded")
-    .eq("payment_processor", "paypal");
+    .eq("payment_processor", "paypal")
+    .eq("charge_context", "booking_deposit");
   const alreadyPaid = (priorPaypalPayments || []).reduce((sum: number, tx: any) => sum + Number(tx.amount || 0), 0);
   const totalPaid = alreadyPaid + capturedAmount;
   // Ver `_shared/exigible.ts`. El maximo con `amount_due_now` convertia esto en
@@ -148,8 +243,33 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
   const cobertura = cubreElAnticipo(existingBooking, totalPaid);
 
   if (!cobertura.suficiente) {
+    // PayPal YA cobro. Antes esta rama solo marcaba `processing` y volvia: el
+    // dinero quedaba capturado y sin asentar en ningun lado, con un console.log
+    // que nadie lee. Dos consecuencias:
+    //
+    //   1. Un cobro real sin rastro contable.
+    //   2. Peor: DOS pagos parciales nunca se sumaban. Como el primero no
+    //      quedaba registrado, en el segundo `alreadyPaid` volvia a ser 0 y la
+    //      reserva no confirmaba nunca. El viajero pagaba dos veces.
+    //
+    // El webhook de Stripe hace justo esto en el mismo caso.
+    await registrarCobroPaypal(supabase, bookingId, paypalTransactionId, captureData);
     await supabase.from("bookings").update({ payment_status: "processing" }).eq("id", bookingId);
-    console.log(`Partial PayPal payment for booking ${bookingId}: cubierto ${cobertura.cubierto} de ${cobertura.piso} (billetera ${cobertura.billetera}) — marked as processing`);
+    await registrarFallo(
+      "capture-paypal-order/cobertura-insuficiente",
+      `Cobro por debajo del anticipo: cubierto ${cobertura.cubierto} de ${cobertura.piso} exigidos. La reserva queda en processing, sin confirmar.`,
+      {
+        bookingId,
+        capturedAmount,
+        pagadoPrevio: alreadyPaid,
+        billetera: cobertura.billetera,
+        cubierto: cobertura.cubierto,
+        piso: cobertura.piso,
+        faltante: cobertura.faltante,
+        paypalTransactionId,
+        ...(errorPagosPrevios ? { errorLeyendoPagosPrevios: errorPagosPrevios.message } : {}),
+      },
+    );
     return;
   }
 
@@ -225,40 +345,7 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
   }
 
   // Persist payment_transactions record for multi-processor refund support
-  if (paypalTransactionId) {
-    try {
-      const capture = captureData?.purchase_units?.[0]?.payments?.captures?.[0] || captureData;
-      const amountValue = parseFloat(capture?.amount?.value ?? "0");
-      const currencyCode = (capture?.amount?.currency_code || "MXN").toLowerCase();
-      const paypalFee = parseFloat(capture?.seller_receivable_breakdown?.paypal_fee?.value || "0");
-
-      const { data: existingTx } = await supabase
-        .from("payment_transactions")
-        .select("id")
-        .eq("paypal_capture_id", paypalTransactionId)
-        .maybeSingle();
-
-      if (!existingTx) {
-        await supabase.from("payment_transactions").insert({
-          booking_id: bookingId,
-          paypal_capture_id: paypalTransactionId,
-          payment_processor: "paypal",
-          amount: amountValue,
-          currency: currencyCode,
-          status: "succeeded",
-          payment_method_type: "Tarjeta",
-          charge_context: "booking_deposit",
-          charge_reference_id: bookingId,
-          processor_fee: paypalFee,
-          net_amount: amountValue - paypalFee,
-          metadata: captureData || null,
-        });
-        console.log(`payment_transactions record created for PayPal capture ${paypalTransactionId}`);
-      }
-    } catch (txErr) {
-      console.error("Error inserting payment_transactions (PayPal):", txErr);
-    }
-  }
+  await registrarCobroPaypal(supabase, bookingId, paypalTransactionId, captureData);
 
   // Process unpaid optional services (pickup, language, traditional optionals)
   try {
