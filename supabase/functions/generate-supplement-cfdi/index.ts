@@ -1,4 +1,4 @@
-import { calculateTaxBreakdown, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
+﻿import { calculateTaxBreakdown, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -51,6 +51,7 @@ interface CfdiRequest {
   };
   conceptos: CfdiConcepto[];
   payment_form?: string;
+  idempotency_key?: string;
 }
 
 interface CfdiResult {
@@ -80,6 +81,7 @@ async function facturapiStamp(apiKey: string, organizationId: string, request: C
       address,
     },
     use: request.receptor.uso_cfdi,
+    ...(request.idempotency_key ? { idempotency_key: request.idempotency_key } : {}),
     items: request.conceptos.map((c) => ({
       product: {
         description: c.descripcion,
@@ -268,7 +270,7 @@ Deno.serve(async (req: Request) => {
     const issuerPostalCode = settings.pac_issuer_postal_code || "";
     if (!issuerPostalCode) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -303,7 +305,7 @@ Deno.serve(async (req: Request) => {
       if (!agencyData.regimen_fiscal || !agencyData.postal_code) {
         return new Response(
           JSON.stringify({
-            error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
+            error: "La agencia debe completar su rÃ©gimen fiscal y cÃ³digo postal en su expediente antes de poder facturar a cuenta de terceros.",
           }),
           { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -335,7 +337,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Parte exenta: importe COMPLETO (no hay IVA que separar) y con
-    // ACuentaTerceros igual que la gravada — atribucion de ingreso a la
+    // ACuentaTerceros igual que la gravada â€” atribucion de ingreso a la
     // agencia para ISR, independiente de si causa IVA.
     if (suppTaxCfdi.exemptAmount > 0) {
       conceptos.push({
@@ -359,7 +361,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── Guardia de cuadre ────────────────────────────────────────────────────
+    // â”€â”€ Guardia de cuadre â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Verifica que los conceptos reconstruyan lo cobrado ANTES de timbrar. El
     // bug de `cantidad` en suplementos y opcionales (el CFDI amparaba el doble
     // con quantity=2) sobrevivio precisamente porque nada comprobaba esto.
@@ -398,7 +400,7 @@ Deno.serve(async (req: Request) => {
       payment_form: effectivePaymentForm,
     };
 
-    // Create pending CFDI record — reuse cfdi_invoices table with invoice_type='supplement'
+    // Create pending CFDI record â€” reuse cfdi_invoices table with invoice_type='supplement'
     // booking_id field is repurposed to store booking_supplement_id for supplements
     const { data: cfdiRecord, error: insertError } = await supabase
       .from("cfdi_invoices")
@@ -435,11 +437,12 @@ Deno.serve(async (req: Request) => {
       .update({ cfdi_invoice_id: cfdiRecord.id, updated_at: new Date().toISOString() })
       .eq("id", booking_supplement_id);
 
-    // Stamp with PAC (only facturapi for now; zoho follows same pattern as booking CFDI)
+    // Stamp with the configured PAC (Facturapi is the only supported provider).
+    cfdiRequest.idempotency_key = cfdiRecord.id;
     let cfdiResult: CfdiResult;
     try {
       if (settings.pac_provider !== "facturapi") {
-        throw new Error(`PAC ${settings.pac_provider} no soportado aún para suplementos. Usa facturapi.`);
+        throw new Error(`PAC ${settings.pac_provider} no soportado aÃºn para suplementos. Usa facturapi.`);
       }
       cfdiResult = await facturapiStamp(
         pacApiKey!,
@@ -458,7 +461,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    await supabase.from("cfdi_invoices").update({
+    const { error: stampedUpdateError } = await supabase.from("cfdi_invoices").update({
       pac_invoice_id: cfdiResult.pac_invoice_id,
       uuid_fiscal: cfdiResult.uuid_fiscal,
       folio: cfdiResult.folio,
@@ -467,6 +470,7 @@ Deno.serve(async (req: Request) => {
       status: "stamped",
       error_message: null,
     }).eq("id", cfdiRecord.id);
+    if (stampedUpdateError) throw new Error(`No se pudo persistir el CFDI timbrado: ${stampedUpdateError.message}`);
 
     // Send email notification async
     EdgeRuntime.waitUntil(
@@ -496,3 +500,4 @@ Deno.serve(async (req: Request) => {
     });
   }
 });
+

@@ -67,7 +67,8 @@ Deno.serve(async (req: Request) => {
       const { data: existingEntry } = await supabase
         .from("accounting_entries")
         .select("id")
-        .eq("booking_id", booking_id)
+        .eq("source_type", "booking")
+        .eq("source_id", booking_id)
         .maybeSingle();
 
       if (existingEntry?.id) {
@@ -138,7 +139,6 @@ Deno.serve(async (req: Request) => {
       .eq("id", tour.agency_id)
       .maybeSingle();
 
-    // En edición México, Zoho requiere RFC para emitir facturas (CFDI).
     // Reservas de viajeros sin RFC se registran como contacto genérico "PUBLICO EN GENERAL".
     const travelerName = traveler.rfc
       ? (traveler.razon_social || travelerFullName)

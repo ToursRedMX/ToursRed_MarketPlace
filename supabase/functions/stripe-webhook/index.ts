@@ -85,10 +85,8 @@ async function getStripeProcessorFee(stripe: any, paymentIntentId: string): Prom
  * Asiento contable generico. Existe para que las disputas y los payouts no
  * agreguen dos copias mas de la misma logica de numeracion.
  *
- * Ojo con entry_number: se calcula contando los asientos del periodo, asi que
- * dos asientos simultaneos pueden pedir el mismo numero. Es un defecto
- * preexistente de createStripeRefundFeeAccountingEntry que se hereda aqui a
- * proposito, para no cambiar el criterio de numeracion en este cambio.
+ * La creación se delega a una RPC transaccional que asigna folio bajo lock,
+ * valida el balance e impide duplicar el mismo movimiento por origen.
  */
 async function crearAsientoContable(
   supabase: ClienteSupabase,
@@ -100,46 +98,21 @@ async function crearAsientoContable(
     lineas: { account_code: string; description: string; debit: number; credit: number }[];
   },
 ): Promise<string | null> {
-  const hoy = new Date();
-  const year = hoy.getFullYear();
-  const month = hoy.getMonth() + 1;
+  const entryDate = new Date().toISOString().split("T")[0];
+  const { data: entryId, error } = await supabase.rpc("create_accounting_entry_atomic", {
+    p_entry_type: opts.entryType,
+    p_description: opts.descripcion,
+    p_source_type: opts.sourceType,
+    p_source_id: opts.sourceId,
+    p_entry_date: entryDate,
+    p_lines: opts.lineas,
+  });
 
-  const { count } = await supabase
-    .from("accounting_entries")
-    .select("id", { count: "exact", head: true })
-    .eq("period_year", year)
-    .eq("period_month", month);
-
-  const entryNumber = `AS-${year}${String(month).padStart(2, "0")}-${String((count || 0) + 1).padStart(5, "0")}`;
-
-  const { data: entry, error } = await supabase
-    .from("accounting_entries")
-    .insert({
-      entry_number: entryNumber,
-      entry_type: opts.entryType,
-      entry_date: hoy.toISOString().split("T")[0],
-      period_year: year,
-      period_month: month,
-      description: opts.descripcion,
-      source_type: opts.sourceType,
-      source_id: opts.sourceId,
-      is_posted: true,
-      posted_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-
-  if (error || !entry) {
+  if (error) {
     console.error("Error creando asiento contable:", error);
-    return null;
+    throw error;
   }
-
-  const { error: lineasError } = await supabase.from("accounting_entry_lines").insert(
-    opts.lineas.map((l, i) => ({ entry_id: entry.id, line_number: i + 1, ...l })),
-  );
-  if (lineasError) console.error("Error creando lineas del asiento:", lineasError);
-
-  return entry.id;
+  return entryId as string | null;
 }
 
 /** Notificacion en la app para los administradores. */

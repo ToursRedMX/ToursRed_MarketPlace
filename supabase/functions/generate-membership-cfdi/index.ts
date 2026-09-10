@@ -1,5 +1,4 @@
-import { getZohoAccessToken, type ZohoClient } from "../_shared/zohoAccessToken.ts";
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
@@ -46,6 +45,7 @@ interface CfdiRequest {
   receptor: CfdiReceptor;
   conceptos: CfdiConcepto[];
   payment_form?: string;
+  idempotency_key?: string;
 }
 
 interface CfdiResult {
@@ -78,6 +78,7 @@ async function facturapiStamp(apiKey: string, organizationId: string, request: C
     payment_method: "PUE",
     customer,
     use: request.receptor.uso_cfdi,
+    ...(request.idempotency_key ? { idempotency_key: request.idempotency_key } : {}),
     items: request.conceptos.map((c) => ({
       product: {
         description: c.descripcion,
@@ -116,62 +117,6 @@ async function facturapiStamp(apiKey: string, organizationId: string, request: C
     folio: data.folio_number?.toString() ?? "",
     serie: data.series ?? request.serie,
     stamped_at: data.created_at ?? new Date().toISOString(),
-  };
-}
-
-async function zohoBooksStamp(
-  supabase: ZohoClient,
-  orgId: string,
-  request: CfdiRequest,
-  sandboxMode: boolean
-): Promise<CfdiResult> {
-  const { token: accessToken, apiDomain } = await getZohoAccessToken(supabase);
-
-  const baseUrl = `${apiDomain}/books/v3`;
-  const headers = { Authorization: `Zoho-oauthtoken ${accessToken}`, "Content-Type": "application/json" };
-
-  const zohoInvoice: Record<string, unknown> = {
-    customer_id: request.receptor.rfc,
-    reference_number: request.serie,
-    date: new Date().toISOString().split("T")[0],
-    currency_code: "MXN",
-    line_items: request.conceptos.map((c) => {
-      const item: Record<string, unknown> = {
-        name: c.descripcion,
-        description: c.descripcion,
-        quantity: c.cantidad,
-        rate: c.valor_unitario,
-        tax_percentage: 16,
-      };
-      if (c.descuento != null && c.descuento > 0) {
-        item.discount = c.descuento;
-        item.discount_type = "entity_level";
-      }
-      return item;
-    }),
-    is_inclusive_tax: false,
-    notes: sandboxMode ? "[SANDBOX - CFDI de prueba]" : undefined,
-  };
-
-  const res = await fetch(`${baseUrl}/invoices?organization_id=${orgId}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(zohoInvoice),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Zoho Books error ${res.status}: ${err}`);
-  }
-
-  const data = await res.json() as { invoice: { invoice_id: string; invoice_number: string; created_time: string } };
-  const inv = data.invoice;
-  return {
-    pac_invoice_id: inv.invoice_id,
-    uuid_fiscal: inv.invoice_id,
-    folio: inv.invoice_number ?? "",
-    serie: request.serie,
-    stamped_at: inv.created_time ?? new Date().toISOString(),
   };
 }
 
@@ -238,7 +183,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Cargar datos de la membresía
+    // Cargar datos de la membresÃ­a
     const { data: membership, error: memError } = await supabase
       .from("memberships")
       .select("id, user_id, plan_type, status, current_period_start, current_period_end")
@@ -259,7 +204,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", membership.user_id)
       .maybeSingle();
 
-    // Cargar configuración de plataforma
+    // Cargar configuraciÃ³n de plataforma
     const { data: settings } = await supabase
       .from("platform_settings")
       .select("pac_provider, pac_organization_id, cfdi_serie_booking, pac_sandbox_mode, pac_issuer_rfc, membership_monthly_price, membership_annual_price, pac_issuer_postal_code")
@@ -277,15 +222,20 @@ Deno.serve(async (req: Request) => {
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    if (settings.pac_provider !== "facturapi") {
+      return new Response(JSON.stringify({ error: "Facturapi es el Ãºnico PAC habilitado" }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // Determinar precio según plan (precio bruto de catálogo, siempre sin descuento)
+    // Determinar precio segÃºn plan (precio bruto de catÃ¡logo, siempre sin descuento)
     const isAnnual = membership.plan_type === "annual";
     const membershipPrice = isAnnual
       ? Number(settings.membership_annual_price || 999)
       : Number(settings.membership_monthly_price || 99);
 
     // Si se recibe stripe_amount_paid (centavos), calcular el descuento aplicado
-    // Solo aplica al primer pago con cupón; renovaciones no llevan descuento
+    // Solo aplica al primer pago con cupÃ³n; renovaciones no llevan descuento
     const amountPaidMxn = stripe_amount_paid != null ? Math.round(Number(stripe_amount_paid)) / 100 : null;
     const hasDiscount = amountPaidMxn != null && amountPaidMxn < membershipPrice - 0.01;
 
@@ -296,14 +246,14 @@ Deno.serve(async (req: Request) => {
     const descuentoConIva = hasDiscount ? Math.round((membershipPrice - amountPaidMxn!) * 100) / 100 : 0;
     const descuentoBase = descuentoConIva > 0 ? Math.round((descuentoConIva / 1.16) * 1000000) / 1000000 : 0;
 
-    // Monto exacto cobrado al cliente; IVA como complemento → subtotal + iva = total siempre
+    // Monto exacto cobrado al cliente; IVA como complemento â†’ subtotal + iva = total siempre
     const exactTotal = amountPaidMxn ?? membershipPrice;
     const iva = Math.round(exactTotal * 16 / 116 * 100) / 100;
     const subtotal = Math.round((exactTotal - iva) * 100) / 100;
     const total = exactTotal;
 
     if (hasDiscount) {
-      console.log(`CFDI membresía con descuento: precio catálogo $${membershipPrice}, pagado $${amountPaidMxn}, descuento -$${descuentoConIva} MXN, total CFDI $${total} MXN`);
+      console.log(`CFDI membresÃ­a con descuento: precio catÃ¡logo $${membershipPrice}, pagado $${amountPaidMxn}, descuento -$${descuentoConIva} MXN, total CFDI $${total} MXN`);
     }
 
     // Construir receptor siguiendo las reglas del SAT
@@ -321,7 +271,7 @@ Deno.serve(async (req: Request) => {
     const issuerPostalCode = settings.pac_issuer_postal_code || "";
     if (!issuerPostalCode) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -407,6 +357,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Timbrar con PAC
+    cfdiRequest.idempotency_key = cfdiRecord.id;
     let cfdiResult: CfdiResult;
     try {
       if (settings.pac_provider === "facturapi") {
@@ -415,8 +366,6 @@ Deno.serve(async (req: Request) => {
           settings.pac_organization_id || "",
           cfdiRequest
         );
-      } else if (settings.pac_provider === "zoho_books") {
-        cfdiResult = await zohoBooksStamp(supabase, settings.pac_organization_id || "", cfdiRequest, settings.pac_sandbox_mode);
       } else {
         throw new Error(`Unknown PAC provider: ${settings.pac_provider}`);
       }
@@ -433,7 +382,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Actualizar registro con resultado
-    await supabase
+    const { error: stampedUpdateError } = await supabase
       .from("cfdi_invoices")
       .update({
         pac_invoice_id: cfdiResult.pac_invoice_id,
@@ -445,6 +394,7 @@ Deno.serve(async (req: Request) => {
         error_message: null,
       })
       .eq("id", cfdiRecord.id);
+    if (stampedUpdateError) throw new Error(`No se pudo persistir el CFDI timbrado: ${stampedUpdateError.message}`);
 
     // Enviar email (fire and forget)
     EdgeRuntime.waitUntil(
@@ -477,3 +427,5 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+
+

@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 
@@ -33,7 +33,7 @@ async function sendOtpEmail(
   folio: string,
   // Solo se usa .from(). `ReturnType<typeof createClient>` exige que los
   // genericos coincidan exactamente con los del cliente que se pasa, y no
-  // coincidian. Mismo patron que ZohoClient en zohoAccessToken.ts.
+  // coincidian. Mismo patron que cliente administrativo de Supabase.
   supabase: Pick<SupabaseClient, "from">
 ): Promise<void> {
   const { data: emailSettings } = await supabase
@@ -46,7 +46,7 @@ async function sendOtpEmail(
 
   const smtpApiKey = emailSettings?.smtp_api_key;
   if (!smtpApiKey) {
-    console.warn("SMTP API key not configured — OTP stored in DB but email not sent");
+    console.warn("SMTP API key not configured â€” OTP stored in DB but email not sent");
     return;
   }
 
@@ -61,7 +61,7 @@ async function sendOtpEmail(
     body: JSON.stringify({
       sender: fromEmail,
       to: [email],
-      subject: "Código de verificación para firma de contrato — ToursRed",
+      subject: "CÃ³digo de verificaciÃ³n para firma de contrato â€” ToursRed",
       html_body: `<!DOCTYPE html>
 <html>
   <head>
@@ -75,19 +75,19 @@ async function sendOtpEmail(
     </div>
     <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
       <p style="font-size: 16px; margin-bottom: 20px;">
-        Para firmar tu contrato de colaboración con ToursRed, usa el siguiente código de verificación:
+        Para firmar tu contrato de colaboraciÃ³n con ToursRed, usa el siguiente cÃ³digo de verificaciÃ³n:
       </p>
       <div style="background: white; padding: 25px; border-radius: 8px; text-align: center; margin: 30px 0; border: 2px dashed #2d6a9f;">
-        <p style="font-size: 14px; color: #666; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1px;">Código de verificación</p>
+        <p style="font-size: 14px; color: #666; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1px;">CÃ³digo de verificaciÃ³n</p>
         <p style="font-size: 36px; font-weight: bold; color: #1e3a5f; margin: 10px 0; letter-spacing: 8px; font-family: 'Courier New', monospace;">
           ${otp}
         </p>
         <p style="font-size: 12px; color: #999; margin: 10px 0 0 0;">
-          Folio: ${folio} · Expira en 10 minutos
+          Folio: ${folio} Â· Expira en 10 minutos
         </p>
       </div>
       <p style="font-size: 14px; color: #999; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-        Si no solicitaste este código, ignora este correo.
+        Si no solicitaste este cÃ³digo, ignora este correo.
       </p>
     </div>
   </body>
@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
       const mode = isAmendmentFlow ? "pending amendment" : "pending_signature";
       console.error(`Inconsistent state: agency ${agency.id} is ${mode} but has no pending contract_acceptances record`);
       return new Response(
-        JSON.stringify({ error: "Error de estado: no se encontró el registro del contrato. Contacta a soporte." }),
+        JSON.stringify({ error: "Error de estado: no se encontrÃ³ el registro del contrato. Contacta a soporte." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -173,7 +173,7 @@ Deno.serve(async (req: Request) => {
         const minsRemaining = Math.ceil(msRemaining / 60000);
         return new Response(
           JSON.stringify({
-            error: `Demasiados intentos. Espera ${minsRemaining} minuto${minsRemaining !== 1 ? "s" : ""} para solicitar un nuevo código.`,
+            error: `Demasiados intentos. Espera ${minsRemaining} minuto${minsRemaining !== 1 ? "s" : ""} para solicitar un nuevo cÃ³digo.`,
             retry_after_minutes: minsRemaining,
           }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -201,7 +201,7 @@ Deno.serve(async (req: Request) => {
 
     if (updErr) throw updErr;
 
-    // Send OTP via email — non-blocking: if email fails, OTP is still in DB
+    // Send OTP via email â€” non-blocking: if email fails, OTP is still in DB
     const recipientEmail = agency.contact_email ?? user.email ?? "";
     let emailSent = true;
     try {
@@ -215,8 +215,8 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         ok: true,
         message: emailSent
-          ? "Código enviado al correo registrado."
-          : "Código generado. Revisa tu correo o contacta a soporte si no lo recibiste.",
+          ? "CÃ³digo enviado al correo registrado."
+          : "CÃ³digo generado. Revisa tu correo o contacta a soporte si no lo recibiste.",
         folio: existing.folio_contrato,
         email_sent: emailSent,
       }),
@@ -236,3 +236,4 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: "Error interno del servidor" }), { status: 500, headers: corsHeaders });
   }
 });
+

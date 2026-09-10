@@ -107,6 +107,31 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // The internal ERP is the canonical accounting system.  Do not route this
+    // path through the legacy external-provider adapter: the database RPC is
+    // idempotent by (source_type, source_id) and recalculates the payout
+    // amount from the completed payout record.
+    if (settings.accounting_provider === "internal") {
+      const { data: entryId, error: rpcError } = await supabase
+        .rpc("create_accounting_entry_for_payout", { p_payout_id: payout_id });
+
+      if (rpcError) {
+        console.error("Internal payout accounting RPC failed:", rpcError);
+        return new Response(JSON.stringify({ error: rpcError.message }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        provider: "internal",
+        entry_id: entryId,
+        skipped: entryId === null,
+      }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { data: payout, error } = await supabase
       .from("agency_payouts")
       .select(`
@@ -176,7 +201,7 @@ Deno.serve(async (req: Request) => {
     const commissionAmount = Number(payout.platform_commission_amount ?? 0);
     const grossAmount = totalPayout + commissionAmount;
     const reference = payout.payout_code || payout.bank_reference || payout_id;
-    // bill_number es el número de factura proveedor para Zoho Books — evita errores de formato
+    // Referencia fiscal del proveedor, conservada para trazabilidad del payout.
     const billNumber = payout.bill_number || null;
 
     const journalRes = await supabase.functions.invoke("sync-to-accounting", {

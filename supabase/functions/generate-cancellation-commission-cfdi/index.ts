@@ -1,5 +1,4 @@
-import { getZohoAccessToken, type ZohoClient } from "../_shared/zohoAccessToken.ts";
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
@@ -43,6 +42,7 @@ interface CfdiRequest {
   receptor: CfdiReceptor;
   conceptos: CfdiConcepto[];
   payment_form?: string;
+  idempotency_key?: string;
 }
 
 interface CfdiResult {
@@ -73,6 +73,7 @@ async function facturapiStamp(
     payment_method: "PUE",
     customer,
     use: request.receptor.uso_cfdi,
+    ...(request.idempotency_key ? { idempotency_key: request.idempotency_key } : {}),
     items: request.conceptos.map((c) => ({
       product: {
         description: c.descripcion,
@@ -110,51 +111,6 @@ async function facturapiStamp(
     folio: data.folio_number?.toString() ?? "",
     serie: data.series ?? request.serie,
     stamped_at: data.created_at ?? new Date().toISOString(),
-  };
-}
-
-async function zohoBooksStamp(
-  supabaseClient: ZohoClient,
-  orgId: string,
-  request: CfdiRequest
-): Promise<CfdiResult> {
-  const { token: accessToken, apiDomain } = await getZohoAccessToken(supabaseClient);
-
-  const baseUrl = `${apiDomain}/books/v3`;
-  const zohoInvoice: Record<string, unknown> = {
-    customer_id: request.receptor.rfc,
-    reference_number: request.serie,
-    date: new Date().toISOString().split("T")[0],
-    currency_code: "MXN",
-    line_items: request.conceptos.map((c) => ({
-      name: c.descripcion,
-      description: c.descripcion,
-      quantity: c.cantidad,
-      rate: c.valor_unitario,
-      tax_percentage: 16,
-    })),
-    is_inclusive_tax: false,
-  };
-
-  const res = await fetch(`${baseUrl}/invoices?organization_id=${orgId}`, {
-    method: "POST",
-    headers: { Authorization: `Zoho-oauthtoken ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(zohoInvoice),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Zoho Books error ${res.status}: ${err}`);
-  }
-
-  const data = await res.json() as { invoice: { invoice_id: string; invoice_number: string; created_time: string } };
-  const inv = data.invoice;
-  return {
-    pac_invoice_id: inv.invoice_id,
-    uuid_fiscal: inv.invoice_id,
-    folio: inv.invoice_number ?? "",
-    serie: request.serie,
-    stamped_at: inv.created_time ?? new Date().toISOString(),
   };
 }
 
@@ -299,7 +255,7 @@ Deno.serve(async (req: Request) => {
     // If nothing was retained, no replacement CFDI needed
     if (conservedAmount <= 0) {
       return new Response(
-        JSON.stringify({ success: true, message: "No service charge retained — no replacement CFDI needed" }),
+        JSON.stringify({ success: true, message: "No service charge retained â€” no replacement CFDI needed" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -322,6 +278,11 @@ Deno.serve(async (req: Request) => {
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    if (settings.pac_provider !== "facturapi") {
+      return new Response(JSON.stringify({ error: "Facturapi es el Ãºnico PAC habilitado" }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Load traveler for receptor resolution
     const { data: traveler } = await supabase
@@ -336,7 +297,7 @@ Deno.serve(async (req: Request) => {
     const issuerPostalCode = settings.pac_issuer_postal_code || "";
     if (!issuerPostalCode) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -428,13 +389,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // Stamp with PAC
+    cfdiRequest.idempotency_key = cfdiRecord.id;
     let cfdiResult: CfdiResult;
     try {
-      if (settings.pac_provider === "zoho_books") {
-        cfdiResult = await zohoBooksStamp(supabase, settings.pac_organization_id || "", cfdiRequest);
-      } else {
-        cfdiResult = await facturapiStamp(pacApiKey!, settings.pac_organization_id || "", cfdiRequest);
-      }
+      cfdiResult = await facturapiStamp(pacApiKey!, settings.pac_organization_id || "", cfdiRequest);
     } catch (stampError) {
       const stampErrStr = String(stampError);
       console.error(`Replacement CFDI stamping failed: ${stampErrStr}`);
@@ -450,7 +408,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Update CFDI record with stamped data
-    await supabase
+    const { error: stampedUpdateError } = await supabase
       .from("cfdi_invoices")
       .update({
         pac_invoice_id: cfdiResult.pac_invoice_id,
@@ -462,6 +420,7 @@ Deno.serve(async (req: Request) => {
         error_message: null,
       })
       .eq("id", cfdiRecord.id);
+    if (stampedUpdateError) throw new Error(`No se pudo persistir el CFDI timbrado: ${stampedUpdateError.message}`);
 
     // Send email notification (fire and forget)
     EdgeRuntime.waitUntil(
@@ -495,3 +454,5 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+
+

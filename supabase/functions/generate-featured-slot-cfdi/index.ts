@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
@@ -13,7 +13,7 @@ const corsHeaders = {
 // Forma real de la fila del .select() del slot. Los embeds (featured_plans,
 // agencies y el users anidado) son to-one, asi que PostgREST devuelve objetos;
 // supabase-js los infiere como arreglo. Antes se tapaba con
-// `as Record<string, unknown>` — conversion insegura (TS2352) que ademas
+// `as Record<string, unknown>` â€” conversion insegura (TS2352) que ademas
 // obligaba a un segundo cast en CADA lectura (`agency?.rfc as string`), o sea
 // que ningun nombre de columna estaba realmente verificado.
 type SlotFacturable = {
@@ -76,6 +76,7 @@ interface CfdiRequest {
   receptor: CfdiReceptor;
   conceptos: CfdiConcepto[];
   payment_form?: string;
+  idempotency_key?: string;
 }
 
 interface CfdiResult {
@@ -104,6 +105,7 @@ async function facturapiStamp(
       address: { zip: request.receptor.domicilio_fiscal_receptor },
     },
     use: request.receptor.uso_cfdi,
+    ...(request.idempotency_key ? { idempotency_key: request.idempotency_key } : {}),
     items: request.conceptos.map((c) => ({
       product: {
         description: c.descripcion,
@@ -241,7 +243,7 @@ Deno.serve(async (req: Request) => {
     const fallbackCP = settings.pac_issuer_postal_code || "";
     if (!fallbackCP) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -257,7 +259,7 @@ Deno.serve(async (req: Request) => {
 
     if (!agencyCP) {
       return new Response(
-        JSON.stringify({ error: "La agencia no tiene Código Postal configurado en su perfil" }),
+        JSON.stringify({ error: "La agencia no tiene CÃ³digo Postal configurado en su perfil" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -297,7 +299,7 @@ Deno.serve(async (req: Request) => {
           clave_prod_serv: "82101600",
           cantidad: 1,
           clave_unidad: "E48",
-          descripcion: `Servicio de Publicidad Digital — Tour Destacado Plan ${planName}`,
+          descripcion: `Servicio de Publicidad Digital â€” Tour Destacado Plan ${planName}`,
           valor_unitario: subtotal,
         },
       ],
@@ -333,6 +335,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Timbrar con FacturAPI
+    cfdiRequest.idempotency_key = cfdiRecord.id;
     let cfdiResult: CfdiResult;
     try {
       if (settings.pac_provider === "facturapi") {
@@ -361,7 +364,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Actualizar registro con resultado del timbre
-    await supabase
+    const { error: stampedUpdateError } = await supabase
       .from("cfdi_invoices")
       .update({
         pac_invoice_id: cfdiResult.pac_invoice_id,
@@ -373,6 +376,7 @@ Deno.serve(async (req: Request) => {
         error_message: null,
       })
       .eq("id", cfdiRecord.id);
+    if (stampedUpdateError) throw new Error(`No se pudo persistir el CFDI timbrado: ${stampedUpdateError.message}`);
 
     // Vincular CFDI al slot
     await supabase
@@ -409,3 +413,4 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+

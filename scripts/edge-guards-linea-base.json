@@ -57,9 +57,9 @@
       "nota": "La llama SignupPage durante el registro, sin sesion. No es un relay abierto: verifica que el codigo exista (404 si no), escapa el HTML con escapeHtml, y el destinatario sale de la base (el referidor), no del cuerpo."
     },
     {
-      "nombre": "capture-paypal-order",
+      "nombre": "zoho-oauth-connect",
       "motivo": "publica",
-      "nota": "Su control es la API de PayPal: confirma con el reference_id que devuelve PayPal, no con el bookingId del cliente, y compara el importe capturado. Es el hallazgo A-3, retirado como falso positivo el 07-sep-2026."
+      "nota": "Endpoint de compatibilidad para clientes antiguos: Zoho está retirado y la función solo responde 410 sin leer ni modificar credenciales."
     }
   ]
 }

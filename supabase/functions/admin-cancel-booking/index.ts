@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
@@ -25,7 +25,7 @@ async function cancelStampedCfds(
   // exigia que los genericos coincidieran exactamente con los del cliente que
   // se pasa, y no coincidian: createClient(url, key) infiere
   // SupabaseClient<any, ...> y el tipo sin argumentos usa los valores por
-  // defecto. Mismo patron que ZohoClient en zohoAccessToken.ts.
+  // defecto. Mismo patron que cliente administrativo de Supabase.
   supabase: Pick<SupabaseClient, "from" | "functions">,
   bookingId: string,
   cancellationId: string
@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
 
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !user) return err("Token inválido", 401);
+    if (userError || !user) return err("Token invÃ¡lido", 401);
 
     // Verify caller is super_admin or has can_cancel_bookings permission
     const { data: adminUser } = await supabase
@@ -106,7 +106,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // AAL2 (MFA) check — must use a client authenticated with the CALLER's own JWT,
+    // AAL2 (MFA) check â€” must use a client authenticated with the CALLER's own JWT,
     // not the service-role client: requires_aal2_check()/has_aal2() read auth.uid()/
     // auth.jwt(), which resolve to NULL under a service-role session and silently
     // no-op the check.
@@ -138,11 +138,11 @@ Deno.serve(async (req: Request) => {
     if (!reason_for_agency || reason_for_agency.trim().length < 10)
       return err("El motivo para la agencia debe tener al menos 10 caracteres");
     if (!["none", "toursred_cash", "bank_transfer", "original_payment_method"].includes(refund_method))
-      return err("Método de reembolso inválido");
+      return err("MÃ©todo de reembolso invÃ¡lido");
     if (refund_method === "bank_transfer" && (!receipt_base64 || !receipt_filename))
       return err("El comprobante de transferencia es obligatorio");
     if (!["traveler_default", "traveler_profeco_request", "admin_override"].includes(requested_by))
-      return err("requested_by inválido");
+      return err("requested_by invÃ¡lido");
     if (!["prepare", "full"].includes(mode))
       return err("mode debe ser 'prepare' o 'full'");
 
@@ -167,13 +167,13 @@ Deno.serve(async (req: Request) => {
     if (booking.cancelled_at || booking.status === "cancelled")
       return err("Esta reserva ya fue cancelada");
     if (booking.status === "cancellation_processing")
-      return err("Esta reserva ya tiene una cancelación en proceso. Usa admin-finalize-cancellation para completarla.");
+      return err("Esta reserva ya tiene una cancelaciÃ³n en proceso. Usa admin-finalize-cancellation para completarla.");
 
     const tour = (booking as any).tours;
     const agency = (booking as any).agencies;
     const bookingUser = (booking as any).users;
 
-    // Fetch refundable optional services — two-bucket model
+    // Fetch refundable optional services â€” two-bucket model
     // Each optional (pickup, language, traditional) has its own total_paid bucket.
     // Admin cancellations refund ALL optionals regardless of is_refundable.
     const { data: optionalServices } = await supabase
@@ -188,7 +188,7 @@ Deno.serve(async (req: Request) => {
 
     // Calculate total actually paid by traveler.
     // When has_payment_plan, installment 1 ("Anticipo") already represents the
-    // deposit — adding deposit_amount on top would double-count it.
+    // deposit â€” adding deposit_amount on top would double-count it.
     let totalPaidByTraveler = Number(booking.deposit_amount || 0);
 
     if (booking.has_payment_plan) {
@@ -216,7 +216,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Bucket 1: tour refund (totalPaidByTraveler + insurance — NO optionals)
+    // Bucket 1: tour refund (totalPaidByTraveler + insurance â€” NO optionals)
     const tourRefundBucket = Math.round((totalPaidByTraveler + insuranceCost) * 100) / 100;
 
     // Bucket 2: optionals refund (sum of each optional's total_paid)
@@ -248,7 +248,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Two-bucket suggested refund: tour bucket + optionals bucket + supplements
-    // No double refund — optionals are cancelled via cancel_booking_optional_services RPC
+    // No double refund â€” optionals are cancelled via cancel_booking_optional_services RPC
     // and their refund_amount is set there; the tour refund is separate.
     const suggestedRefund = Math.round((tourRefundBucket + optionalsRefundBucket + supplementsRefundable) * 100) / 100;
 
@@ -262,7 +262,7 @@ Deno.serve(async (req: Request) => {
         p_booking_id: booking_id,
         p_refund_amount: Number(refund_amount),
         p_reference_type: "admin_cancellation",
-        p_description: `Reembolso por cancelación administrativa - ${tour?.name || ""}`,
+        p_description: `Reembolso por cancelaciÃ³n administrativa - ${tour?.name || ""}`,
         p_new_status: isPrepare ? "cancellation_processing" : "cancelled",
         p_set_cancelled_at: !isPrepare,
         p_cancellation_type: "admin_cancelled",
@@ -270,11 +270,11 @@ Deno.serve(async (req: Request) => {
       });
 
       if (rpcError || !rpcResult?.success) {
-        return err(rpcError?.message || "Error procesando cancelación atómica");
+        return err(rpcError?.message || "Error procesando cancelaciÃ³n atÃ³mica");
       }
       transactionId = rpcResult.transaction_id || null;
     } else {
-      // No wallet refund — still need atomic status update via RPC
+      // No wallet refund â€” still need atomic status update via RPC
       const { data: rpcResult, error: rpcError } = await supabase.rpc("process_cancellation_refund", {
         p_booking_id: booking_id,
         p_refund_amount: 0,
@@ -287,7 +287,7 @@ Deno.serve(async (req: Request) => {
       });
 
       if (rpcError || !rpcResult?.success) {
-        return err(rpcError?.message || "Error procesando cancelación atómica");
+        return err(rpcError?.message || "Error procesando cancelaciÃ³n atÃ³mica");
       }
     }
 
@@ -309,7 +309,7 @@ Deno.serve(async (req: Request) => {
       receiptFilePath = filePath;
     }
 
-    // Points: 1 peso = 1 punto. In prepare mode, skip — handled in
+    // Points: 1 peso = 1 punto. In prepare mode, skip â€” handled in
     // admin-finalize-cancellation after all refund lines are initiated.
     // For original_payment_method, process-payment-refund does NOT claw back
     // points, so in non-prepare mode we deduct here.
@@ -325,7 +325,7 @@ Deno.serve(async (req: Request) => {
           const { error: deductErr } = await supabase.rpc("deduct_points", {
             p_user_id: booking.user_id,
             p_amount: pointsToDeduct,
-            p_description: `Puntos revertidos por cancelación administrativa - ${tour?.name || ""}`,
+            p_description: `Puntos revertidos por cancelaciÃ³n administrativa - ${tour?.name || ""}`,
             p_reference_id: booking_id,
             p_reference_type: "admin_cancellation",
           });
@@ -341,7 +341,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Cancel optional services and supplements.
-    // In prepare mode, skip — these are handled in admin-finalize-cancellation.
+    // In prepare mode, skip â€” these are handled in admin-finalize-cancellation.
     if (!isPrepare) {
       try {
         await supabase.rpc("cancel_booking_optional_services", {
@@ -407,7 +407,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (acErr || !adminCancellation) {
-      return err("Error registrando cancelación administrativa: " + acErr?.message);
+      return err("Error registrando cancelaciÃ³n administrativa: " + acErr?.message);
     }
 
     // Insert booking_cancellations record for system compatibility
@@ -458,7 +458,7 @@ Deno.serve(async (req: Request) => {
 
     // Cierre de trazabilidad: inserta registros clawback amount=0 por cada
     // fuente de puntos earned, para que un reporte por fuente cuadre.
-    // In prepare mode, skip — handled in admin-finalize-cancellation.
+    // In prepare mode, skip â€” handled in admin-finalize-cancellation.
     if (refund_method !== "original_payment_method" && !isPrepare && pointsDeducted > 0) {
       await markPointsAsClawedBack(supabase, booking_id, cancellationRecord?.id || null, "administrativa");
     }
@@ -473,7 +473,7 @@ Deno.serve(async (req: Request) => {
           p_cancellation_type: "full",
         });
       } catch (accountingError) {
-        console.error("Error generando póliza contable:", accountingError);
+        console.error("Error generando pÃ³liza contable:", accountingError);
       }
 
       if (Number(refund_amount) > 0) {
@@ -624,7 +624,7 @@ Deno.serve(async (req: Request) => {
 
     return ok({
       success: true,
-      message: isPrepare ? "Cancelación preparada. Procede con los reembolsos." : "Reserva cancelada exitosamente",
+      message: isPrepare ? "CancelaciÃ³n preparada. Procede con los reembolsos." : "Reserva cancelada exitosamente",
       admin_cancellation_id: adminCancellation.id,
       refund_method,
       refund_amount: Number(refund_amount) || 0,
@@ -660,3 +660,4 @@ function decode(base64: string): Uint8Array {
   }
   return bytes;
 }
+

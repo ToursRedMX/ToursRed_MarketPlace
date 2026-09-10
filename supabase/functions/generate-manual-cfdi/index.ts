@@ -43,6 +43,7 @@ interface CfdiRequest {
   conceptos: CfdiConcepto[];
   payment_form?: string;
   payment_method?: string;
+  idempotency_key?: string;
   payment_complement?: {
     related_uuid: string;
     num_parcialidad: number;
@@ -151,6 +152,7 @@ async function facturapiStamp(
     payment_method: paymentMethod,
     customer,
     use: request.receptor.uso_cfdi,
+    ...(request.idempotency_key ? { idempotency_key: request.idempotency_key } : {}),
     items: request.conceptos.map((c) => ({
       product: {
         description: c.descripcion,
@@ -340,6 +342,7 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Error al crear registro CFDI: ${insertErr?.message}`);
     }
 
+    cfdiRequest.idempotency_key = cfdiRecord.id;
     let cfdiResult: CfdiResult;
     try {
       if (settings.pac_provider !== "facturapi") {
@@ -362,7 +365,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    await supabase
+    const { error: stampedUpdateError } = await supabase
       .from("cfdi_invoices")
       .update({
         pac_invoice_id: cfdiResult.pac_invoice_id,
@@ -374,6 +377,7 @@ Deno.serve(async (req: Request) => {
         error_message: null,
       })
       .eq("id", cfdiRecord.id);
+    if (stampedUpdateError) throw new Error(`No se pudo persistir el CFDI timbrado: ${stampedUpdateError.message}`);
 
     // PostgrestBuilder es un thenable, no un Promise: su .then() devuelve
     // PromiseLike y EdgeRuntime.waitUntil pide Promise. Se envuelve con

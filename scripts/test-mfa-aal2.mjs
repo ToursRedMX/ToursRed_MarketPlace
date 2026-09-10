@@ -6,7 +6,14 @@ import ts from 'typescript';
 const root = new URL('../supabase/functions/', import.meta.url);
 const quiet = { log() {}, warn() {}, error() {} };
 function evaluate(source, globals = {}) {
-  const context = { exports: {}, Response, Request, Headers, console: quiet, ...globals };
+  const require = (specifier) => {
+    // The Edge Runtime type reference is compile-time only. TypeScript emits
+    // it as a CommonJS require in this Node-based harness, so provide a
+    // harmless module stub instead of attempting to load a jsr: URL.
+    if (specifier === 'jsr:@supabase/functions-js/edge-runtime.d.ts') return {};
+    throw new Error(`Unexpected module in MFA harness: ${specifier}`);
+  };
+  const context = { exports: {}, require, Response, Request, Headers, console: quiet, ...globals };
   vm.runInNewContext(ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText, context);
