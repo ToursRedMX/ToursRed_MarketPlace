@@ -7,6 +7,8 @@ import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts"
 import { verificarCoberturaDePago } from "../_shared/coberturaDePago.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { crearAsientoContable, notificarAdmins, alertarOps, avisosCon } from "../_shared/avisosDePago.ts";
+import { registrarDisputa } from "../_shared/disputas.ts";
 
 // Se nombra el tipo del cliente para no sumar mas `any` a un archivo que ya
 // tiene varios. Se importa en vez de derivarlo con ReturnType<typeof
@@ -80,121 +82,6 @@ async function getStripeProcessorFee(stripe: any, paymentIntentId: string): Prom
     console.error('Error fetching Stripe processor fee:', mensajeDeError(e));
   }
   return null;
-}
-
-/**
- * Asiento contable generico. Existe para que las disputas y los payouts no
- * agreguen dos copias mas de la misma logica de numeracion.
- *
- * La creación se delega a una RPC transaccional que asigna folio bajo lock,
- * valida el balance e impide duplicar el mismo movimiento por origen.
- */
-async function crearAsientoContable(
-  supabase: ClienteSupabase,
-  opts: {
-    entryType: "ingreso" | "egreso" | "diario" | "apertura";
-    descripcion: string;
-    sourceType: string;
-    sourceId: string;
-    lineas: { account_code: string; description: string; debit: number; credit: number }[];
-  },
-): Promise<string | null> {
-  const entryDate = new Date().toISOString().split("T")[0];
-  const { data: entryId, error } = await supabase.rpc("create_accounting_entry_atomic", {
-    p_entry_type: opts.entryType,
-    p_description: opts.descripcion,
-    p_source_type: opts.sourceType,
-    p_source_id: opts.sourceId,
-    p_entry_date: entryDate,
-    p_lines: opts.lineas,
-  });
-
-  if (error) {
-    console.error("Error creando asiento contable:", error);
-    throw error;
-  }
-  return entryId as string | null;
-}
-
-/** Notificacion en la app para los administradores. */
-async function notificarAdmins(
-  supabase: ClienteSupabase,
-  tipo: string,
-  titulo: string,
-  mensaje: string,
-  data: Record<string, unknown>,
-) {
-  const { data: admins } = await supabase
-    .from("users")
-    .select("id")
-    .in("role", ["admin", "super_admin"]);
-
-  if (!admins?.length) {
-    console.warn("No hay administradores a quienes notificar");
-    return;
-  }
-
-  const { error } = await supabase.from("notifications").insert(
-    admins.map((a: { id: string }) => ({
-      user_id: a.id,
-      type: tipo,
-      title: titulo,
-      message: mensaje,
-      data,
-    })),
-  );
-  if (error) console.error("Error notificando a admins:", error);
-}
-
-/**
- * Correo a operaciones, mismo camino que notify-ops-refund-failed: smtp2go con
- * la llave guardada en email_settings.
- */
-async function alertarOps(supabase: ClienteSupabase, asunto: string, filas: [string, string][]) {
-  const { data: emailSettings } = await supabase
-    .from("email_settings")
-    .select("smtp_api_key, sender_email, platform_url")
-    .maybeSingle();
-
-  if (!emailSettings?.smtp_api_key) {
-    console.warn(`Sin smtp_api_key: no se envio la alerta "${asunto}"`);
-    return;
-  }
-
-  const cuerpo = filas
-    .map(
-      ([k, v]) =>
-        `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold;">${k}</td>` +
-        `<td style="padding:8px;border:1px solid #ddd;">${v}</td></tr>`,
-    )
-    .join("");
-
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 640px;">
-      <h2 style="color:#dc2626;">${asunto}</h2>
-      <table style="border-collapse:collapse;width:100%;">${cuerpo}</table>
-      <p style="color:#6b7280;font-size:12px;margin-top:30px;">
-        Mensaje automatico del webhook de Stripe de ToursRed.
-      </p>
-    </div>
-  `;
-
-  try {
-    const res = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: emailSettings.smtp_api_key,
-        to: ["contacto@toursred.com"],
-        sender: emailSettings.sender_email || "contacto@toursred.com",
-        subject: asunto,
-        html_body: html,
-      }),
-    });
-    if (!res.ok) console.error("smtp2go rechazo la alerta:", await res.text());
-  } catch (e) {
-    console.error("Error enviando la alerta a operaciones:", e);
-  }
 }
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
@@ -2821,17 +2708,16 @@ Deno.serve(async (req) => {
 
       // --- Disputas (contracargos) -------------------------------------
       // Los cinco eventos comparten la busqueda y el upsert; lo que cambia es
-      // el efecto. El upsert va sobre stripe_dispute_id porque Stripe reintenta
-      // y un reintento no debe duplicar la alerta ni el asiento.
+      // el efecto. El upsert va sobre (processor, processor_dispute_id) porque
+      // Stripe reintenta y un reintento no debe duplicar la alerta ni el asiento.
       case 'charge.dispute.created':
       case 'charge.dispute.updated':
       case 'charge.dispute.closed':
       case 'charge.dispute.funds_withdrawn':
       case 'charge.dispute.funds_reinstated': {
+        // El efecto vive en _shared/disputas.ts, compartido con los otros
+        // cuatro procesadores. Aqui solo se traduce el vocabulario de Stripe.
         const dispute = event.data.object;
-        const monto = (dispute.amount || 0) / 100;
-        const moneda = (dispute.currency || 'mxn').toUpperCase();
-        const ahora = new Date().toISOString();
 
         const paymentIntentId = typeof dispute.payment_intent === 'string'
           ? dispute.payment_intent
@@ -2840,137 +2726,42 @@ Deno.serve(async (req) => {
           ? dispute.charge
           : dispute.charge?.id ?? null;
 
-        let ptxId: string | null = null;
-        let bookingId: string | null = null;
-        if (paymentIntentId) {
-          const { data: ptx } = await supabase
-            .from('payment_transactions')
-            .select('id, booking_id')
-            .eq('stripe_payment_intent_id', paymentIntentId)
-            .maybeSingle();
-          if (ptx) {
-            ptxId = ptx.id;
-            bookingId = ptx.booking_id;
-          }
-        }
-        if (!ptxId) {
-          console.warn('Disputa ' + dispute.id + ': sin payment_transaction para PI ' + paymentIntentId + '. Se registra sin ligar.');
-        }
+        const fase = event.type === 'charge.dispute.created'
+          ? 'abierta'
+          : event.type === 'charge.dispute.closed'
+            ? 'cerrada'
+            : 'actualizada';
 
-        const vencimiento = dispute.evidence_details?.due_by
-          ? new Date(dispute.evidence_details.due_by * 1000).toISOString()
-          : null;
+        const resultado = dispute.status === 'won'
+          ? 'ganada'
+          : dispute.status === 'lost'
+            ? 'perdida'
+            : 'otro';
 
-        const fila: Record<string, unknown> = {
-          stripe_dispute_id: dispute.id,
-          stripe_charge_id: chargeId,
-          stripe_payment_intent_id: paymentIntentId,
-          amount: monto,
-          currency: dispute.currency || 'mxn',
-          reason: dispute.reason ?? null,
-          status: dispute.status,
-          evidence_due_by: vencimiento,
-          last_event_type: event.type,
-          last_payload: event,
-          updated_at: ahora,
-        };
-        if (ptxId) fila.payment_transaction_id = ptxId;
-        if (bookingId) fila.booking_id = bookingId;
-        if (event.type === 'charge.dispute.funds_withdrawn') fila.funds_withdrawn_at = ahora;
-        if (event.type === 'charge.dispute.funds_reinstated') fila.funds_reinstated_at = ahora;
-        if (event.type === 'charge.dispute.closed') {
-          fila.closed_at = ahora;
-          fila.outcome = dispute.status;
-        }
+        const salida = await registrarDisputa(supabase, {
+          procesador: 'stripe',
+          disputaId: dispute.id,
+          cobroId: chargeId,
+          pagoId: paymentIntentId,
+          // Stripe manda centavos.
+          monto: (dispute.amount || 0) / 100,
+          moneda: dispute.currency || 'mxn',
+          motivo: dispute.reason ?? null,
+          estadoCrudo: dispute.status,
+          fase,
+          resultado,
+          evidenciaVence: dispute.evidence_details?.due_by
+            ? new Date(dispute.evidence_details.due_by * 1000).toISOString()
+            : null,
+          fondosRetirados: event.type === 'charge.dispute.funds_withdrawn',
+          fondosRepuestos: event.type === 'charge.dispute.funds_reinstated',
+          tipoEvento: event.type,
+          payload: event,
+        }, avisosCon(supabase, 'webhook de Stripe'));
 
-        const { data: disputa, error: disputaError } = await supabase
-          .from('payment_disputes')
-          .upsert(fila, { onConflict: 'stripe_dispute_id' })
-          .select('id, booking_id')
-          .single();
-
-        if (disputaError || !disputa) {
-          console.error('Error guardando la disputa ' + dispute.id + ':', disputaError);
+        if (!salida.ok) {
           Sentry.captureException(new Error('No se pudo guardar la disputa ' + dispute.id));
-          break;
         }
-
-        if (event.type === 'charge.dispute.created') {
-          // Bloquea el check-in mientras la disputa este abierta: no se opera un
-          // tour que ya esta en contracargo. Se libera si la disputa se gana.
-          if (bookingId) {
-            await supabase
-              .from('bookings')
-              .update({ dispute_hold_at: ahora })
-              .eq('id', bookingId);
-          }
-
-          const limite = vencimiento
-            ? new Date(vencimiento).toLocaleString('es-MX')
-            : 'sin fecha informada';
-
-          await notificarAdmins(
-            supabase,
-            'payment_dispute_opened',
-            'Disputa de pago abierta',
-            'Se abrio una disputa por $' + monto + ' ' + moneda + '. Fecha limite para responder: ' + limite + '.',
-            {
-              dispute_id: disputa.id,
-              stripe_dispute_id: dispute.id,
-              booking_id: bookingId,
-              evidence_due_by: vencimiento,
-            },
-          );
-
-          await alertarOps(supabase, '[ALERTA] Disputa de pago abierta - $' + monto + ' ' + moneda, [
-            ['Monto', '$' + monto + ' ' + moneda],
-            ['Motivo', dispute.reason || 'no informado'],
-            ['Fecha limite de evidencia', limite],
-            ['Reserva', bookingId || 'no ligada'],
-            ['Dispute ID', dispute.id],
-            ['Payment Intent', paymentIntentId || 'no informado'],
-          ]);
-
-          console.log('Disputa ' + dispute.id + ' registrada; check-in bloqueado para la reserva ' + (bookingId ?? '(ninguna)'));
-        }
-
-        if (event.type === 'charge.dispute.closed') {
-          if (dispute.status === 'won') {
-            if (disputa.booking_id) {
-              await supabase
-                .from('bookings')
-                .update({ dispute_hold_at: null })
-                .eq('id', disputa.booking_id);
-            }
-            console.log('Disputa ' + dispute.id + ' ganada; bloqueo liberado');
-          } else if (dispute.status === 'lost') {
-            // Idempotencia: un reintento de Stripe no debe postear dos veces.
-            const { count: yaPosteado } = await supabase
-              .from('accounting_entries')
-              .select('id', { count: 'exact', head: true })
-              .eq('source_type', 'dispute')
-              .eq('source_id', disputa.id);
-
-            if (yaPosteado && yaPosteado > 0) {
-              console.log('Disputa ' + dispute.id + ' perdida: el asiento ya existia, no se duplica');
-            } else {
-              await crearAsientoContable(supabase, {
-                entryType: 'egreso',
-                descripcion: 'Contracargo perdido (disputa ' + dispute.id + ')',
-                sourceType: 'dispute',
-                sourceId: disputa.id,
-                lineas: [
-                  { account_code: '606.03', description: 'Contracargo por disputa perdida', debit: monto, credit: 0 },
-                  { account_code: '102.03', description: 'Reduccion de saldo - Stripe', debit: 0, credit: monto },
-                ],
-              });
-              console.log('Disputa ' + dispute.id + ' perdida; asiento contable creado por $' + monto);
-            }
-          } else {
-            console.log('Disputa ' + dispute.id + ' cerrada con estado ' + dispute.status + '; sin efecto contable');
-          }
-        }
-
         break;
       }
 

@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { cubreElAnticipo } from "../_shared/exigible.ts";
 import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { registrarDisputa } from "../_shared/disputas.ts";
+import { avisosCon } from "../_shared/avisosDePago.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -129,6 +131,47 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Conekta webhook: type=${eventType}, order=${orderId}, event=${eventId}`);
 
+    // ── Contracargos ────────────────────────────────────────────
+    // Va ANTES del corte por `orderId`: en un contracargo, `data.object.id`
+    // es el id del contracargo, no el de la orden, asi que ese corte lo
+    // habria descartado en silencio.
+    if (eventType.startsWith("charge.chargeback.")) {
+      const cb = eventData;
+      const disputaId = String(cb.id ?? eventId ?? "");
+      if (!disputaId) {
+        console.error("Contracargo de Conekta sin id:", JSON.stringify(cb));
+        return jsonResponse({ received: true });
+      }
+
+      // Conekta maneja centavos, igual que Stripe.
+      const monto = Number(cb.amount ?? 0) / 100;
+
+      await registrarDisputa(supabase, {
+        procesador: "conekta",
+        disputaId,
+        cobroId: cb.charge_id ?? cb.charge ?? null,
+        pagoId: cb.order_id ?? cb.charge_id ?? cb.charge ?? null,
+        monto,
+        moneda: String(cb.currency ?? "MXN"),
+        motivo: cb.reason ?? null,
+        estadoCrudo: String(cb.status ?? eventType),
+        fase: eventType === "charge.chargeback.created"
+          ? "abierta"
+          : (eventType === "charge.chargeback.won" || eventType === "charge.chargeback.lost")
+            ? "cerrada"
+            : "actualizada",
+        resultado: eventType === "charge.chargeback.won"
+          ? "ganada"
+          : eventType === "charge.chargeback.lost"
+            ? "perdida"
+            : "otro",
+        evidenciaVence: cb.evidence_due_by ?? null,
+        tipoEvento: eventType,
+        payload: body,
+      }, avisosCon(supabase, "webhook de Conekta"));
+
+      return jsonResponse({ received: true });
+    }
     if (!orderId) {
       console.log("No order ID in webhook, ignoring");
       return jsonResponse({ received: true });
