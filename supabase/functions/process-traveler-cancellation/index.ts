@@ -2,6 +2,7 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.116.0";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 async function cancelStampedCfds(
   // Solo se usan .from() y .functions.invoke(). Pedir el cliente completo
@@ -74,7 +75,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    , opcionesConContexto(req));
 
     // Validate auth and identify the calling traveler
     const authHeader = req.headers.get("Authorization");

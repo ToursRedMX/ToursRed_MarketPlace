@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,9 +57,9 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, opcionesConContexto(req, {
       global: { headers: { Authorization: authHeader } },
-    });
+    }));
 
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) {
@@ -78,7 +79,7 @@ Deno.serve(async (req: Request) => {
 
     const pepper = Deno.env.get("MFA_RECOVERY_PEPPER") || "toursred-default-pepper-change-me";
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, opcionesConContexto(req));
 
     // Delete existing unused codes for this user (regeneration invalidates old ones)
     await adminClient

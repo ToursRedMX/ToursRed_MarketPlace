@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2.114.0";
 import type { ContractData } from "../_shared/contractDocDefinition.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -79,7 +80,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    , opcionesConContexto(req));
 
     const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authErr || !user) return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: corsHeaders });
@@ -95,9 +96,9 @@ Deno.serve(async (req: Request) => {
     // and can initiate commission amendments.
     const userClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!, opcionesConContexto(req,
       { global: { headers: { Authorization: authHeader } } }
-    );
+    ));
     const aal2 = await checkAal2Required(userClient);
     if (!aal2.allowed) {
       return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores", aal2.code);

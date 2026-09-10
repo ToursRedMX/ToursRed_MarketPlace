@@ -6,6 +6,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 import { verificarCoberturaDePago } from "../_shared/coberturaDePago.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 // Se nombra el tipo del cliente para no sumar mas `any` a un archivo que ya
 // tiene varios. Se importa en vez de derivarlo con ReturnType<typeof
@@ -292,7 +293,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, opcionesConContexto(req));
 
     await supabase.from('webhook_logs').insert({
       event_type: event.type,

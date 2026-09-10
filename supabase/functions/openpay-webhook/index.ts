@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import { isConfigured, getCharge, getChargeMerchant } from "../_shared/openpay.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -34,7 +35,7 @@ Deno.serve(async (req: Request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, opcionesConContexto(req));
 
   // ── Step 1: Log raw payload immediately ──────────────────────
   let rawBody: any = null;

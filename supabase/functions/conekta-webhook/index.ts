@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { cubreElAnticipo } from "../_shared/exigible.ts";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,9 +96,9 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, opcionesConContexto(req,
       { auth: { persistSession: false, autoRefreshToken: false } }
-    );
+    ));
 
     // Conekta uses RSA-SHA256 signing (not HMAC). The public key is not secret — it's
     // designed to be shared. We embed it directly so verification works even if the

@@ -192,17 +192,32 @@ llamadores porque esa función es el **embudo único**: los 8 triggers de
 auditoría y las 13 Edge Functions que escriben bitácora pasan por ella, y las
 que se escriban mañana también.
 
+**Aplicada en producción el 10-sep-2026**, con `supabase db push` para que el
+ledger registre la versión del archivo y no una que la base se invente. Estado
+tras aplicar: `migration list --linked` da **889/889, 0 solo-local y 0
+solo-remoto**, y `db push --dry-run` responde `Remote database is up to date`.
+
+Y las escrituras que salen de una Edge Function se cubrieron el mismo día: las
+**49 funciones** que escriben en una tabla auditada o llaman a
+`insert_audit_log` envuelven ahora sus opciones con `opcionesConContexto(req)`,
+que reenvía el origen del cliente. Lo vigila `check-audit-context.mjs` dentro de
+`lint`, que es check requerido.
+
 Tres advertencias que el auditor merece oír antes de preguntarlas:
 
 1. **Los 1,400 registros existentes no se arreglan.** No hay backfill posible:
-   ese dato nunca existió. La mejora aplica de aquí en adelante.
-2. **No estaba en producción al cierre de este documento.** La migración está
-   commiteada; aplicarla es un acto aparte. Hasta que se aplique, las cifras de
-   arriba siguen siendo las vigentes.
-3. **Las escrituras desde una Edge Function necesitan además que la función
-   reenvíe el contexto del cliente**, porque si no PostgREST ve las cabeceras de
-   la petición interna. Para eso está `_shared/contextoAuditoria.ts`; queda
-   pendiente conectarlo en el resto de las funciones que escriben bitácora.
+   ese dato nunca existió. La mejora aplica de aquí en adelante, y por eso las
+   cifras de la tabla de arriba son las del histórico, no las de hoy.
+2. **Está probado en pruebas, no observado en producción.** La paridad de la
+   regla de enmascarado se comprueba ejecutándola contra Postgres en CI, y la
+   fusión de cabeceras la ejercitan 532 casos de `test-mfa-aal2.mjs` sobre 14
+   funciones. Pero **ningún evento real ha pasado todavía** por el camino
+   completo. La primera revisión de bitácora que se corra debería mirar
+   justamente eso.
+3. **Lo que no pasa por HTTP se queda sin origen, a propósito.** Un cron o un
+   proceso con service role por conexión directa no tiene cabeceras que
+   reenviar, y en esos casos `ip_address` queda en NULL. Inventar un origen
+   sería peor que no tenerlo.
 
 Dos detalles más que conviene señalar antes de que los pregunten:
 

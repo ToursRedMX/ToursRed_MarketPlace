@@ -19,7 +19,10 @@ function evaluate(source, globals = {}) {
     if (/^jsr:@supabase\/functions-js(@[^/]+)?\/edge-runtime\.d\.ts$/.test(specifier)) return {};
     throw new Error(`Unexpected module in MFA harness: ${specifier}`);
   };
-  const context = { exports: {}, require, Response, Request, Headers, console: quiet, ...globals };
+  // `crypto` hace falta desde el 10-sep-2026: `_shared/contextoAuditoria.ts`
+  // usa `crypto.randomUUID()` para abrir una correlacion cuando la peticion no
+  // trae ninguna.
+  const context = { exports: {}, require, Response, Request, Headers, crypto, console: quiet, ...globals };
   vm.runInNewContext(ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText, context);
@@ -41,6 +44,13 @@ const denoStub = {
 const compartidos = {
   ...evaluate(readFileSync(new URL('_shared/errores.ts', root), 'utf8')),
   ...evaluate(readFileSync(new URL('_shared/env.ts', root), 'utf8'), { Deno: denoStub }),
+  // Desde el 10-sep-2026 los handlers envuelven sus opciones con
+  // `opcionesConContexto(req, ...)` para reenviar el origen del cliente
+  // (Req. 10.2). Se evalua el modulo DE VERDAD, como los dos de arriba: si se
+  // sustituyera por un doble, esta prueba dejaria de comprobar que el
+  // Authorization del llamador sobrevive a la fusion de cabeceras — que es
+  // justo lo que verifica mas abajo.
+  ...evaluate(readFileSync(new URL('_shared/contextoAuditoria.ts', root), 'utf8')),
 };
 const ok = (data) => ({ data, error: null });
 const cases = [];

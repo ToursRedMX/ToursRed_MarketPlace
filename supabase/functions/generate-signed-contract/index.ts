@@ -8,6 +8,7 @@ import type { ContractData, AnexoBData } from "../_shared/contractDocDefinition.
 import { envRequerida } from "../_shared/env.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -84,7 +85,7 @@ Deno.serve(async (req)=>{
       status: 401,
       headers: corsHeaders
     });
-    const supabase = createClient(envRequerida("SUPABASE_URL"), envRequerida("SUPABASE_SERVICE_ROLE_KEY"));
+    const supabase = createClient(envRequerida("SUPABASE_URL"), envRequerida("SUPABASE_SERVICE_ROLE_KEY"), opcionesConContexto(req));
     const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authErr || !user) return new Response(JSON.stringify({
       error: "No autorizado"

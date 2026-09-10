@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2.114.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,9 +40,9 @@ Deno.serve(async (req: Request) => {
     // Verificar identidad del llamante con la anon key (respeta RLS).
     const supabaseUser = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!, opcionesConContexto(req,
       { global: { headers: { Authorization: authHeader } } }
-    );
+    ));
 
     const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
     if (userError || !user) return json({ error: "Invalid token" }, 401);
@@ -50,7 +51,7 @@ Deno.serve(async (req: Request) => {
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    , opcionesConContexto(req));
 
     // Verificar que el llamante es admin con is_super_admin = true.
     const { data: caller, error: callerError } = await supabaseAdmin

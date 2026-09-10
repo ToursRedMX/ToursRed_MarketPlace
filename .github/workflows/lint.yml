@@ -276,6 +276,16 @@ jobs:
       - name: Nadie lee Origin/Referer crudo en Edge Functions
         run: node scripts/check-origin-header.mjs
 
+      # Req. 10.2 de PCI DSS v4. Toda funcion que escriba en una tabla con
+      # trigger de auditoria tiene que reenviar el origen del cliente; si no, la
+      # bitacora registra la IP de la Edge Function en vez de la de la persona —
+      # un dato que parece bueno y no lo es, que es peor que no tener ninguno.
+      # Nace en 0 sobre 49 funciones en alcance. Y no es hipotetica: al
+      # enganchar esas 49 se quedo fuera `stripe-webhook` por transcribir una
+      # lista desde una salida truncada, y lo caso este escaner.
+      - name: Toda funcion que escribe bitacora reenvia el origen
+        run: node scripts/check-audit-context.mjs
+
       # Tercer punto de las recomendaciones estructurales de la auditoria de Edge
       # Functions, el unico que quedaba. Los otros dos (_shared/auth.ts y
       # _shared/cors.ts) bajan el costo de ponerse el guard; solo este impide que
