@@ -4,6 +4,8 @@ import { isConfigured, getCharge, getChargeMerchant } from "../_shared/openpay.t
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { registrarDisputa } from "../_shared/disputas.ts";
+import { avisosCon } from "../_shared/avisosDePago.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -85,6 +87,46 @@ Deno.serve(async (req: Request) => {
         processed_at: new Date().toISOString(),
       }).eq("id", webhookEventId);
     }
+    return new Response("OK", { status: 200, headers: corsHeaders });
+  }
+
+  // ── Contracargos ──────────────────────────────────────────────
+  if (eventType.startsWith("CHARGEBACK")) {
+    const tx = rawBody?.transaction ?? {};
+    const disputaId = String(tx.id ?? rawBody?.id ?? "");
+    if (!disputaId) {
+      console.error("Contracargo de OpenPay sin id:", JSON.stringify(rawBody));
+      return new Response("OK", { status: 200, headers: corsHeaders });
+    }
+
+    await registrarDisputa(supabase, {
+      procesador: "openpay",
+      disputaId,
+      cobroId: tx.id ?? null,
+      pagoId: tx.id ?? null,
+      // OpenPay maneja unidades con decimales, NO centavos.
+      monto: Number(tx.amount ?? 0),
+      moneda: String(tx.currency ?? "MXN"),
+      motivo: tx.error_message ?? tx.description ?? null,
+      estadoCrudo: String(tx.status ?? eventType),
+      fase: eventType === "CHARGEBACK.CREATED"
+        ? "abierta"
+        : (eventType === "CHARGEBACK.ACCEPTED" || eventType === "CHARGEBACK.REJECTED")
+          ? "cerrada"
+          : "actualizada",
+      // OJO: en OpenPay "accepted" significa que se ACEPTO el contracargo del
+      // tarjetahabiente, o sea que ToursRed PIERDE. Es al reves de lo que
+      // sugiere la palabra.
+      resultado: eventType === "CHARGEBACK.REJECTED"
+        ? "ganada"
+        : eventType === "CHARGEBACK.ACCEPTED"
+          ? "perdida"
+          : "otro",
+      evidenciaVence: null,
+      tipoEvento: eventType,
+      payload: rawBody,
+    }, avisosCon(supabase, "webhook de OpenPay"));
+
     return new Response("OK", { status: 200, headers: corsHeaders });
   }
 

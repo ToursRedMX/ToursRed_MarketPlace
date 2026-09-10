@@ -315,6 +315,13 @@ jobs:
       # Nace en 0 sobre 49 funciones en alcance. Y no es hipotetica: al
       # enganchar esas 49 se quedo fuera `stripe-webhook` por transcribir una
       # lista desde una salida truncada, y lo caso este escaner.
+      # Disputas y contracargos de los CINCO procesadores. Hasta el 10-sep-2026
+      # solo Stripe las registraba; PayPal tenia un case cuyo cuerpo entero era un
+      # console.warn, que parece cobertura y no persiste nada. Esta guardia impide
+      # volver ahi y ejercita registrarDisputa en sus seis escenarios.
+      - name: Los cinco procesadores registran sus disputas
+        run: node scripts/test-disputas.mjs
+
       - name: Toda funcion que escribe bitacora reenvia el origen
         run: node scripts/check-audit-context.mjs
 

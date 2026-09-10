@@ -2,6 +2,8 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { registrarDisputa } from "../_shared/disputas.ts";
+import { avisosCon } from "../_shared/avisosDePago.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -292,11 +294,61 @@ Deno.serve(async (req: Request) => {
       }
 
       // ============================================================
-      // CUSTOMER.DISPUTE.CREATED / RESOLVED — log for manual review
+      // CUSTOMER.DISPUTE.* — disputas
       // ============================================================
+      // Hasta el 10-sep-2026 este bloque era un `console.warn` y un `break`:
+      // parecia cobertura y no persistia nada. El efecto vive ahora en
+      // _shared/disputas.ts, igual que para los otros cuatro procesadores.
       case "CUSTOMER.DISPUTE.CREATED":
+      case "CUSTOMER.DISPUTE.UPDATED":
       case "CUSTOMER.DISPUTE.RESOLVED": {
-        console.warn(`PayPal dispute event: ${eventType}`, JSON.stringify(resource));
+        const disputaId = resource?.dispute_id ?? resource?.id;
+        if (!disputaId) {
+          console.error("Evento de disputa de PayPal sin dispute_id:", JSON.stringify(resource));
+          break;
+        }
+
+        // PayPal manda el monto como CADENA, dentro de `dispute_amount`.
+        const montoCrudo = resource?.dispute_amount?.value
+          ?? resource?.disputed_transactions?.[0]?.gross_amount?.value
+          ?? "0";
+        const moneda = resource?.dispute_amount?.currency_code
+          ?? resource?.disputed_transactions?.[0]?.gross_amount?.currency_code
+          ?? "MXN";
+
+        // El id que liga con payment_transactions.paypal_capture_id.
+        const capturaId = resource?.disputed_transactions?.[0]?.seller_transaction_id
+          ?? resource?.disputed_transactions?.[0]?.buyer_transaction_id
+          ?? null;
+
+        // `outcome_code`: RESOLVED_BUYER_FAVOUR / RESOLVED_SELLER_FAVOUR.
+        const desenlace = String(resource?.dispute_outcome?.outcome_code ?? "");
+        const resultado = desenlace.includes("SELLER_FAVOUR")
+          ? "ganada" as const
+          : desenlace.includes("BUYER_FAVOUR")
+            ? "perdida" as const
+            : "otro" as const;
+
+        await registrarDisputa(supabase, {
+          procesador: "paypal",
+          disputaId: String(disputaId),
+          cobroId: capturaId,
+          pagoId: capturaId,
+          monto: Number.parseFloat(String(montoCrudo)) || 0,
+          moneda: String(moneda),
+          motivo: resource?.reason ?? null,
+          estadoCrudo: String(resource?.status ?? resource?.dispute_state ?? "UNKNOWN"),
+          fase: eventType === "CUSTOMER.DISPUTE.CREATED"
+            ? "abierta"
+            : eventType === "CUSTOMER.DISPUTE.RESOLVED"
+              ? "cerrada"
+              : "actualizada",
+          resultado,
+          evidenciaVence: resource?.seller_response_due_date ?? null,
+          tipoEvento: eventType,
+          payload: event,
+        }, avisosCon(supabase, "webhook de PayPal"));
+
         break;
       }
 
