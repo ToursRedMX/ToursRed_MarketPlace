@@ -1,6 +1,17 @@
 -- Dos errores de modelado en `vista_movimientos_financieros`, los dos
 -- encontrados por Axel al abrir el reporte por primera vez.
 --
+-- NOTA SOBRE LA NUMERACION: este archivo nacio como `20260910090000` y se
+-- renumero a `...200000`. Cuando se fue a aplicar, la base ya tenia
+-- `20260910190000_bitacora_registra_el_origen_de_la_peticion` (de Codex, en
+-- paralelo), y el CLI se niega a insertar una migracion con version anterior
+-- a la ultima aplicada. La salida que ofrece el CLI en ese caso es
+-- `--include-all`, que en este repo NO SE USA: aplicaria a ciegas todo lo
+-- pendiente sin mirar el orden. Renumerar es lo correcto y aqui era seguro
+-- porque las dos migraciones no se tocan -- una es la vista financiera, la
+-- otra la bitacora de auditoria -- y esta nunca se habia aplicado, asi que no
+-- hay entrada en el ledger que corregir.
+--
 -- ============================================================================
 -- 1. LA MEMBRESIA NO ES UN PASIVO
 -- ============================================================================

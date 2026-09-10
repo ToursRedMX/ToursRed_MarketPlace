@@ -231,7 +231,7 @@ INSERT INTO featured_tour_slots VALUES
 -- Y encima la correccion: la membresia deja de ser pasivo, y lo devengado y no
 -- pagado a los ejecutivos pasa a ser deuda. Se aplican las DOS en orden, que es
 -- el estado real de produccion, en vez de probar solo la version final.
-\ir ../supabase/migrations/20260910090000_corregir_membresia_y_pasivo_por_comisiones.sql
+\ir ../supabase/migrations/20260910200000_corregir_membresia_y_pasivo_por_comisiones.sql
 
 \echo '=== Caso 1: un anticipo es caja y pasivo, NO ingreso ==='
 DO $$
