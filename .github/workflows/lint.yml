@@ -237,6 +237,23 @@ jobs:
           PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS tax_parity;" -c "CREATE DATABASE tax_parity;"
           node scripts/test-tax-snapshot-sql.mjs
 
+      # Misma categoria que el paso de arriba: una regla escrita dos veces. El
+      # enmascarado de IP vive en `public.enmascarar_ip` —de donde
+      # `insert_audit_log` deriva el `ip_masked` de la bitacora— y en
+      # `_shared/contextoAuditoria.ts`, que hace falta igual porque
+      # `user_sessions.ip_masked` no pasa por esa funcion. Sin Postgres la
+      # prueba solo comprueba que la migracion afirme los mismos vectores; con
+      # Postgres extrae la funcion, la crea y compara EJECUTANDO las dos.
+      - name: Verify the IP-masking rule matches between TypeScript and SQL
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: contexto_auditoria
+        run: |
+          PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS contexto_auditoria;" -c "CREATE DATABASE contexto_auditoria;"
+          node scripts/test-contexto-auditoria.mjs
+
       # F-1 de la auditoria de frontend. Desde el 09-sep-2026 la linea base es
       # CERO: dejo de ser un contador y es una guardia. Cualquier consulta nueva
       # que ignore su error rompe este check.

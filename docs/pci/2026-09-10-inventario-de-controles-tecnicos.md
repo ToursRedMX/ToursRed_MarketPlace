@@ -149,26 +149,62 @@ no avisa, y por eso hay una guardia y no una nota.
 
 ### 2.3 Bitácora y trazabilidad — Requisito 10
 
-Es el bloque más sólido del inventario.
+> **Corregido el 10-sep-2026.** Esta sección decía «es el bloque más sólido del
+> inventario» y listaba los campos como *capturados*. Al medirlos resultó que
+> varios estaban vacíos en el 100% de los registros. Lo que sigue distingue
+> **columna que existe** de **campo que se llena**, que no es lo mismo y era
+> justamente la confusión.
 
 **`audit_logs_2025` … `audit_logs_2029`** — particionado por año, RLS activo,
-lectura restringida. **1,398 registros en la partición de 2026** al 10-sep.
+lectura restringida. **1,400 registros** al 10-sep, desde el 25-jun-2026.
 
-Campos capturados:
+#### Columnas que existen, y cuánto se llenan de verdad
 
-```
-actor_id, actor_email, actor_role, target_id, target_table, action,
-old_values, new_values, diff, ip_address, ip_masked, user_agent,
-session_id, correlation_id, metadata, error_message, severity,
-created_at, country, country_code, city, region, source_platform
-```
+Medido sobre los 1,400 registros. La columna que importa es la última:
 
-Eso cubre de forma directa lo que pide 10.2: **quién** (`actor_*`), **qué**
-(`action`, `target_*`, `old_values`/`new_values`/`diff`), **cuándo** (`created_at`),
-**desde dónde** (`ip_address`, `ip_masked`, `country`, `user_agent`) y **con qué
-sesión** (`session_id`, `correlation_id`).
+| Campo | Vacío | Lectura |
+|---|---|---|
+| `action`, `target_table`, `created_at`, `severity` | 0 | siempre presentes |
+| `actor_id` | 663 | de esos, `FAILED_LOGIN` (39) y `PAYMENT_RECEIVED` (60) **son correctos por diseño** — no hay usuario autenticado en un intento fallido, ni persona detrás de un webhook |
+| `ip_address` / `ip_masked` | 795 | **el 100% de los eventos de negocio.** Los 605 de autenticación sí la traen |
+| `user_agent` | 808 | |
+| `old_values` / `new_values` | 784 / 698 | depende del tipo de evento |
+| `session_id` | **1.400 (100%)** | la columna existe y **nunca se llenó** |
+| `correlation_id` | **1.400 (100%)** | igual |
+| `source_platform` | 0 | pero es la constante `'toursred'` en los 1,400: **es un valor por omisión, no procedencia**. No cuenta como evidencia de nada |
 
-Dos detalles que conviene señalar antes de que los pregunten:
+#### Contra 10.2, honestamente
+
+- **Quién** (`actor_*`) — cubierto, con los huecos correctos ya explicados.
+- **Qué** (`action`, `target_*`, `diff`) — cubierto.
+- **Cuándo** (`created_at`) — cubierto.
+- **Desde dónde** — **era el hueco grande**: ni un solo evento de negocio traía
+  origen. La bitácora sabía de dónde vino cada login y no sabía de dónde vino un
+  cobro, una cancelación ni un cambio de cuenta bancaria.
+- **Con qué sesión** — no estaba cubierto en absoluto.
+
+#### Qué se hizo
+
+La migración `20260910190000` hace que `insert_audit_log` **deduzca** IP, user
+agent, sesión y correlación de `current_setting('request.headers')` y de los
+claims del JWT, que es lo que PostgREST deja por petición. Va ahí y no en los
+llamadores porque esa función es el **embudo único**: los 8 triggers de
+auditoría y las 13 Edge Functions que escriben bitácora pasan por ella, y las
+que se escriban mañana también.
+
+Tres advertencias que el auditor merece oír antes de preguntarlas:
+
+1. **Los 1,400 registros existentes no se arreglan.** No hay backfill posible:
+   ese dato nunca existió. La mejora aplica de aquí en adelante.
+2. **No estaba en producción al cierre de este documento.** La migración está
+   commiteada; aplicarla es un acto aparte. Hasta que se aplique, las cifras de
+   arriba siguen siendo las vigentes.
+3. **Las escrituras desde una Edge Function necesitan además que la función
+   reenvíe el contexto del cliente**, porque si no PostgREST ve las cabeceras de
+   la petición interna. Para eso está `_shared/contextoAuditoria.ts`; queda
+   pendiente conectarlo en el resto de las funciones que escriben bitácora.
+
+Dos detalles más que conviene señalar antes de que los pregunten:
 
 - **`ip_masked` junto a `ip_address`** sugiere que se pensó en minimización de
   datos personales. Vale la pena documentar el criterio de cuál se usa dónde.
@@ -210,8 +246,8 @@ workflows son el insumo directo del DRP.
 | `edge-types.yml` (`tipos-edge`) | **Sí** | que no entre un error de tipos nuevo en `supabase/functions/`. Línea base **vacía**: exige cero |
 | `lint.yml` (`lint`) | **Sí** | 19 suites y guardias, incluidas `check-supabase-errors` y `check-origin-header` |
 | `smoke-preview.yml` (`smoke`) | **Sí** | humo contra el deploy preview |
+| `edge-deps.yml` (`guardia-dependencias`) | **Sí** | que ningún import remoto de `supabase/functions/` entre sin **versión exacta**. Nació en 0 tras fijar 434 especificadores, y se hizo requerido el mismo 10-sep. Publica el inventario de 6.3.2 en el resumen de cada ejecución |
 | `search-path-guard.yml` (`guardia-search-path`) | No | `SET search_path` en toda `SECURITY DEFINER` nueva |
-| `edge-deps.yml` (`guardia-dependencias`) | No | que ningún import remoto de `supabase/functions/` entre sin **versión exacta**. Nació en 0 tras fijar 434 especificadores el 10-sep. Publica el inventario de 6.3.2 en el resumen de cada ejecución |
 | `audit-supabase-secrets.yml` | No | secretos de Edge Functions |
 | `audit-edge-jwt.yml` | No | configuración de JWT por función |
 | `audit-edge-functions.yml` | No | auditoría periódica de Edge Functions |
@@ -229,7 +265,7 @@ requerida previene. Presentarle a un auditor un control como preventivo cuando
 es detectivo es la clase de imprecisión que le hace dudar del resto del
 inventario — y con razón.
 
-Los checks requeridos son **siete**: los cinco de esta tabla marcados «Sí», más
+Los checks requeridos son **ocho**: los seis de esta tabla marcados «Sí», más
 `typecheck` y `netlify/toursredmx/deploy-preview`, que no son guardias. Se leen
 así, y **no de aquí** — este documento se desactualiza, la API no:
 
@@ -240,7 +276,14 @@ gh api repos/ToursRedMX/ToursRed_MarketPlace/branches/main/protection \
 
 Con `enforce_admins: true`, aplican también a los administradores. Al 10-sep-2026
 son: `typecheck`, `netlify/toursredmx/deploy-preview`, `guardia-desfase`,
-`guardia-fiscal`, `tipos-edge`, `lint` y `smoke`.
+`guardia-fiscal`, `tipos-edge`, `lint`, `smoke` y `guardia-dependencias`.
+
+**Y esta lista ya se quedó vieja una vez el mismo día en que se escribió.** Se
+redactó diciendo «siete», y horas después `guardia-dependencias` pasó a
+requerido y fueron ocho. No es un descuido: es la demostración de por qué el
+comando de arriba está aquí. Un documento afirma lo que era cierto el día que
+alguien lo escribió; la protección de rama afirma lo que es cierto ahora. Ante
+el auditor, corre el comando.
 
 `guardia-desfase` merece énfasis: es un control de gestión de cambios que **ya
 demostró funcionar en producción**, no en teoría. Eso es exactamente lo que pide
@@ -298,8 +341,13 @@ dos hallazgos que no se veían desde fuera**:
 - **Solo hay ~2.5 meses de bitácora** (desde el 25-jun-2026). El Requisito 10.5.1
   pide 12, y eso **no se recupera hacia atrás**: el reloj corre desde ya, y la
   única acción posible es no borrar nada.
-- **75 eventos `DELETE` sin actor ni IP.** Los escriben triggers de base de datos,
-  que no tienen contexto HTTP. Un borrado sin autor es difícil de defender.
+- ~~**75 eventos `DELETE` sin actor ni IP.**~~ **Se quedó corto, y por mucho.**
+  Al ir a arreglarlo se midió el resto: no son los `DELETE`, son **todos** los
+  eventos de negocio — 795 de 795 sin origen — y `session_id` y
+  `correlation_id` estaban vacíos en **los 1,400 registros**. La causa tampoco
+  era solo «los triggers no tienen contexto HTTP»: las Edge Functions que sí lo
+  tienen tampoco lo pasaban. Ver la sección 2.3, corregida, y la migración
+  `20260910190000`.
 
 O sea que escribir la política sirvió para algo más que tener el papel: obligó a
 medir, y medir encontró lo que no se sabía.

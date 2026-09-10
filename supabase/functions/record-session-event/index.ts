@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { enmascararIp, extraerIpDelCliente } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -122,41 +123,6 @@ function parseUserAgent(ua: string | undefined | null): ParsedUA {
   return { browser, browser_version, os, os_version, device_type };
 }
 
-function maskIp(ip: string): string {
-  if (!ip) return "";
-  if (ip.includes(".")) {
-    const parts = ip.split(".");
-    parts[parts.length - 1] = "xxx";
-    return parts.join(".");
-  }
-  const parts = ip.split(":");
-  if (parts.length >= 4) {
-    parts[parts.length - 1] = "xxx";
-    parts[parts.length - 2] = "xxx";
-  }
-  return parts.join(":");
-}
-
-// Extract real client IP from standard headers set by proxies / Supabase edge network
-function extractClientIp(req: Request): string | null {
-  const candidates = [
-    req.headers.get("cf-connecting-ip"),        // Cloudflare
-    req.headers.get("x-real-ip"),               // Nginx / generic
-    req.headers.get("x-forwarded-for"),         // Standard proxy (may be comma-separated)
-    req.headers.get("true-client-ip"),          // Akamai / Cloudflare Enterprise
-    req.headers.get("fastly-client-ip"),        // Fastly
-  ];
-
-  for (const candidate of candidates) {
-    if (candidate) {
-      // x-forwarded-for may be "client, proxy1, proxy2" — take first
-      const ip = candidate.split(",")[0].trim();
-      if (ip) return ip;
-    }
-  }
-  return null;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -190,8 +156,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Always extract IP from request headers — client cannot spoof server-side header reads
-    const ip_address = extractClientIp(req);
-    const ipMasked = ip_address ? maskIp(ip_address) : null;
+    const ip_address = extraerIpDelCliente(req);
+    const ipMasked = ip_address ? enmascararIp(ip_address) : null;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

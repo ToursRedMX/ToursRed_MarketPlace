@@ -39,15 +39,18 @@
  *
  * NACER EN CERO NO ES LO MISMO QUE BLOQUEAR
  *
- * Nacer en cero es lo que la hace EXIGIBLE; exigirla es un acto aparte.
- * Mientras `guardia-dependencias` no este en los checks requeridos de main,
- * esto se pone rojo y el merge igual procede: es una alarma, no una llave.
- * Los checks requeridos se leen en la API, no de este comentario:
+ * Nacer en cero es lo que la hace EXIGIBLE; exigirla es un acto aparte, y se
+ * hizo el mismo 10-sep-2026: `guardia-dependencias` es check requerido de
+ * main, asi que un especificador sin version exacta ya no se puede mergear.
+ * Paso de detectar a prevenir.
+ *
+ * Aun asi, esta linea no es la fuente de verdad. Los checks requeridos se leen
+ * en la API, nunca de un comentario ni de un documento:
  *
  *     gh api repos/ToursRedMX/ToursRed_MarketPlace/branches/main/protection \
  *       --jq '.required_status_checks.contexts'
  *
- * El 10-sep-2026 eran siete y esta no estaba entre ellos.
+ * El 10-sep-2026 eran ocho, esta incluida.
  *
  * POR QUE HAY QUE QUITAR COMENTARIOS ANTES DE BUSCAR
  *

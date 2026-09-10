@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { extraerIpDelCliente } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,23 +22,6 @@ if (sentryDsn) {
 interface RiskCheckBody {
   email: string;
   device_fingerprint?: string;
-}
-
-function extractClientIp(req: Request): string | null {
-  const candidates = [
-    req.headers.get("cf-connecting-ip"),
-    req.headers.get("x-real-ip"),
-    req.headers.get("x-forwarded-for"),
-    req.headers.get("true-client-ip"),
-    req.headers.get("fastly-client-ip"),
-  ];
-  for (const candidate of candidates) {
-    if (candidate) {
-      const ip = candidate.split(",")[0].trim();
-      if (ip) return ip;
-    }
-  }
-  return null;
 }
 
 interface RiskResult {
@@ -61,7 +45,7 @@ Deno.serve(async (req: Request) => {
   try {
     const body: RiskCheckBody = await req.json();
     const { email, device_fingerprint } = body;
-    const ip_address = extractClientIp(req);
+    const ip_address = extraerIpDelCliente(req);
 
     if (!email) {
       return new Response(
