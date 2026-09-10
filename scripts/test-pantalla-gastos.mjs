@@ -115,6 +115,54 @@ casos.push(() => {
     'la pantalla no debe marcar un gasto como registrado por su cuenta');
 });
 
+// --- 9. El alta de plantillas existe y valida el dia -----------------------
+casos.push(() => {
+  assert.ok(/from\('gastos_recurrentes'\)\.insert\(fila\)/.test(tsx),
+    'debe poder crearse una plantilla desde la pantalla');
+  assert.ok(/from\('gastos_recurrentes'\)\.update\(fila\)/.test(tsx),
+    'debe poder editarse una plantilla');
+  // Del 1 al 28: un recurrente al 31 no existiria en febrero. La base lo exige
+  // con un CHECK; la pantalla debe decirlo antes de chocar contra el.
+  assert.ok(/dia < 1 \|\| dia > 28/.test(tsx),
+    'el dia del mes debe validarse entre 1 y 28 antes de mandar el insert');
+});
+
+// --- 10. Borrar una plantilla que ya genero gastos se rechaza --------------
+casos.push(() => {
+  // La llave foranea es ON DELETE SET NULL, asi que borrar NO falla... y ese es
+  // el problema: los gastos generados pierden el vinculo y salen del indice
+  // unico que impide dos borradores del mismo periodo. Recrear la plantilla
+  // despues generaria un segundo borrador de un mes ya capturado.
+  assert.ok(/count: 'exact', head: true/.test(tsx),
+    'antes de borrar hay que contar los gastos que la plantilla genero');
+  assert.ok(/\(count \?\? 0\) > 0/.test(tsx),
+    'con gastos generados, borrar debe rechazarse');
+  assert.ok(/Desactivala en vez de borrarla/.test(tsx),
+    'hay que decir que la alternativa es desactivar');
+});
+
+// --- 11. Un borrador en moneda extranjera no se registra con el relleno ----
+casos.push(() => {
+  // Fallo reproducido: el generador inserta `tipo_cambio = 1` sin mirar la
+  // moneda, asi que el borrador de Claude salia con 260 USD a TC 1 y se
+  // asentaba como 260 pesos -- veinte veces menos que el gasto real, y
+  // perfectamente cuadrado, asi que ninguna suma lo cazaba.
+  assert.ok(/g\.moneda !== 'MXN' && Number\(g\.tipo_cambio\) === 1/.test(tsx),
+    'debe detectarse el tipo de cambio de relleno en moneda extranjera');
+  // El bloque del boton se recorta por sus delimitadores y no por una distancia
+  // en caracteres: la primera version usaba `[\s\S]{0,400}` y fallaba porque el
+  // boton mide 544. Una cota asi se rompe con cualquier reformato y no dice
+  // nada sobre el comportamiento.
+  const desde = tsx.indexOf('void registrar(g)');
+  assert.ok(desde > 0, 'no se encontro el boton de registrar');
+  const boton = tsx.slice(desde, tsx.indexOf('</button>', desde));
+  assert.ok(/Registrar/.test(boton), 'el boton de registrar cambio de etiqueta');
+  assert.ok(/disabled=\{guardando \|\| faltaTipoDeCambio\(g\)\}/.test(boton),
+    'registrar debe quedar deshabilitado mientras falte el tipo de cambio');
+  assert.ok(/falta el TC/.test(tsx),
+    'la fila debe decir que falta el tipo de cambio, no mostrar TC 1 como si fuera un dato');
+});
+
 let ok = 0;
 for (const caso of casos) { caso(); ok++; }
 console.log(`Contrato de la pantalla de gastos: ${ok}/${casos.length} casos OK`);

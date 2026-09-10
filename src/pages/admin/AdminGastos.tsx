@@ -83,6 +83,19 @@ interface Cuenta {
   name: string;
 }
 
+interface FormPlantilla {
+  id: string | null;
+  nombre: string;
+  cuenta_contable: string;
+  proveedor: string;
+  descripcion: string;
+  moneda: string;
+  subtotal_estimado: string;
+  iva_estimado: string;
+  dia_del_mes: string;
+  activo: boolean;
+}
+
 interface Formulario {
   id: string | null;
   fecha: string;
@@ -124,6 +137,19 @@ const FORMULARIO_VACIO = (): Formulario => ({
   notas: '',
 });
 
+const PLANTILLA_VACIA = (): FormPlantilla => ({
+  id: null,
+  nombre: '',
+  cuenta_contable: '',
+  proveedor: '',
+  descripcion: '',
+  moneda: 'MXN',
+  subtotal_estimado: '',
+  iva_estimado: '',
+  dia_del_mes: '1',
+  activo: true,
+});
+
 const aNumero = (texto: string): number => {
   const n = Number(String(texto).replace(/,/g, '').trim());
   return Number.isFinite(n) ? n : 0;
@@ -152,6 +178,8 @@ const AdminGastos: React.FC = () => {
   const [estadoFiltro, setEstadoFiltro] = useState<'todos' | 'borrador' | 'registrado' | 'cancelado'>('todos');
 
   const [formAbierto, setFormAbierto] = useState(false);
+  const [plantillaAbierta, setPlantillaAbierta] = useState(false);
+  const [plantilla, setPlantilla] = useState<FormPlantilla>(PLANTILLA_VACIA());
   const [form, setForm] = useState<Formulario>(FORMULARIO_VACIO());
   // Cuando alguien toca el total en pesos, deja de recalcularse solo. Es
   // ESTADO y no un ref aunque solo mande sobre un efecto: el texto de ayuda
@@ -379,6 +407,118 @@ const AdminGastos: React.FC = () => {
       .from('gastos_operacion').update({ estado: 'cancelado' }).eq('id', g.id);
     setGuardando(false);
     if (errorCancelar) { setError(traducirError(errorCancelar.message)); return; }
+    void cargar();
+  };
+
+  // ---------------------------------------------------------------------
+  // Plantillas
+  // ---------------------------------------------------------------------
+  const cambiarPlantilla = (campo: keyof FormPlantilla, valor: string) =>
+    setPlantilla((f) => ({ ...f, [campo]: valor }));
+
+  const abrirPlantillaNueva = () => {
+    setPlantilla(PLANTILLA_VACIA());
+    setError(null);
+    setPlantillaAbierta(true);
+  };
+
+  const abrirPlantilla = (r: Recurrente) => {
+    setPlantilla({
+      id: r.id,
+      nombre: r.nombre,
+      cuenta_contable: r.cuenta_contable,
+      proveedor: r.proveedor,
+      descripcion: r.descripcion,
+      moneda: r.moneda,
+      subtotal_estimado: String(r.subtotal_estimado),
+      iva_estimado: String(r.iva_estimado),
+      dia_del_mes: String(r.dia_del_mes),
+      activo: r.activo,
+    });
+    setError(null);
+    setPlantillaAbierta(true);
+  };
+
+  const guardarPlantilla = async () => {
+    if (!plantilla.nombre.trim())          { setError('Falta el nombre de la plantilla.'); return; }
+    if (!plantilla.cuenta_contable)        { setError('Falta la cuenta contable.'); return; }
+    if (!plantilla.proveedor.trim())       { setError('Falta el proveedor.'); return; }
+    if (!plantilla.descripcion.trim())     { setError('Falta la descripcion.'); return; }
+    const dia = aNumero(plantilla.dia_del_mes);
+    if (!Number.isInteger(dia) || dia < 1 || dia > 28) {
+      // Hasta 28 y no 31: un recurrente al 31 no existiria en febrero, y "el
+      // ultimo dia del mes" es otra regla que aqui no hace falta.
+      setError('El dia del mes tiene que estar entre 1 y 28.');
+      return;
+    }
+
+    setGuardando(true);
+    setError(null);
+    const fila = {
+      nombre: plantilla.nombre.trim(),
+      cuenta_contable: plantilla.cuenta_contable,
+      proveedor: plantilla.proveedor.trim(),
+      descripcion: plantilla.descripcion.trim(),
+      moneda: plantilla.moneda.toUpperCase(),
+      subtotal_estimado: redondear(aNumero(plantilla.subtotal_estimado)),
+      iva_estimado: redondear(aNumero(plantilla.iva_estimado)),
+      dia_del_mes: dia,
+      activo: plantilla.activo,
+    };
+    const { error: errorGuardar } = plantilla.id
+      ? await supabase.from('gastos_recurrentes').update(fila).eq('id', plantilla.id)
+      : await supabase.from('gastos_recurrentes').insert(fila);
+
+    setGuardando(false);
+    if (errorGuardar) { setError(traducirError(errorGuardar.message)); return; }
+    setPlantillaAbierta(false);
+    setAviso(plantilla.id ? 'Plantilla actualizada.' : 'Plantilla creada. Genera los borradores del periodo cuando quieras.');
+    void cargar();
+  };
+
+  const alternarPlantilla = async (r: Recurrente) => {
+    setGuardando(true);
+    const { error: errorAlternar } = await supabase
+      .from('gastos_recurrentes').update({ activo: !r.activo }).eq('id', r.id);
+    setGuardando(false);
+    if (errorAlternar) { setError(traducirError(errorAlternar.message)); return; }
+    void cargar();
+  };
+
+  const borrarPlantilla = async (r: Recurrente) => {
+    setGuardando(true);
+    setError(null);
+
+    // Antes de borrar se cuenta lo que ya genero. La llave foranea es ON DELETE
+    // SET NULL, asi que borrarla NO rompe nada... y ese es justo el problema:
+    // los gastos que genero se quedan con `recurrente_id` en NULL y salen del
+    // indice unico que impide dos borradores en el mismo periodo. Si despues se
+    // vuelve a crear la plantilla, el generador crearia un SEGUNDO borrador de
+    // un mes que ya estaba capturado. Desactivar no tiene ese problema, asi que
+    // borrar se permite solo cuando no hay nada que perder.
+    const { count, error: errorConteo } = await supabase
+      .from('gastos_operacion')
+      .select('id', { count: 'exact', head: true })
+      .eq('recurrente_id', r.id);
+
+    if (errorConteo) {
+      setGuardando(false);
+      setError(`No se pudo comprobar si la plantilla ya genero gastos: ${errorConteo.message}`);
+      return;
+    }
+    if ((count ?? 0) > 0) {
+      setGuardando(false);
+      setError(
+        `"${r.nombre}" ya genero ${count} gasto(s) y por eso no se borra: los gastos perderian su vinculo y ` +
+        'el generador podria volver a crear un borrador de un mes ya capturado. Desactivala en vez de borrarla.',
+      );
+      return;
+    }
+
+    const { error: errorBorrar } = await supabase.from('gastos_recurrentes').delete().eq('id', r.id);
+    setGuardando(false);
+    if (errorBorrar) { setError(traducirError(errorBorrar.message)); return; }
+    setAviso(`Plantilla "${r.nombre}" borrada.`);
     void cargar();
   };
 
@@ -658,7 +798,11 @@ const AdminGastos: React.FC = () => {
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{g.cuenta_contable}</td>
                   <td className="px-4 py-3 text-right text-gray-700 whitespace-nowrap">
                     {Number(g.total).toFixed(2)} {g.moneda}
-                    {g.moneda !== 'MXN' && <div className="text-xs text-gray-400">TC {Number(g.tipo_cambio)}</div>}
+                    {g.moneda !== 'MXN' && (
+                      faltaTipoDeCambio(g)
+                        ? <div className="text-xs text-amber-700 font-medium">falta el TC</div>
+                        : <div className="text-xs text-gray-400">TC {Number(g.tipo_cambio)}</div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
                     {formatCurrencyMXN(Number(g.total_mxn))}
@@ -678,8 +822,12 @@ const AdminGastos: React.FC = () => {
                           Editar
                         </button>
                         <button
-                          onClick={() => void registrar(g)} disabled={guardando}
-                          className="text-emerald-700 hover:text-emerald-900 text-sm font-medium mr-3 disabled:opacity-50"
+                          onClick={() => void registrar(g)}
+                          disabled={guardando || faltaTipoDeCambio(g)}
+                          title={faltaTipoDeCambio(g)
+                            ? `Captura el tipo de cambio de ${g.moneda} antes de registrar: con 1 se asentarian ${g.moneda} como pesos.`
+                            : 'Genera el asiento contable'}
+                          className="text-emerald-700 hover:text-emerald-900 text-sm font-medium mr-3 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           Registrar
                         </button>
@@ -708,32 +856,138 @@ const AdminGastos: React.FC = () => {
             <Repeat className="h-5 w-5 text-gray-500" />
             <h2 className="font-semibold text-gray-900">Gastos recurrentes</h2>
           </div>
-          <button
-            onClick={() => void generarRecurrentes()} disabled={guardando || recurrentes.length === 0}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            Generar borradores de {periodo}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void generarRecurrentes()} disabled={guardando || recurrentes.length === 0}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
+            >
+              Generar borradores de {periodo}
+            </button>
+            <button
+              onClick={abrirPlantillaNueva}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+            >
+              <Plus className="h-4 w-4" /> Nueva plantilla
+            </button>
+          </div>
         </div>
         <p className="text-xs text-gray-600 mb-4">
           Las plantillas generan BORRADORES, nunca gastos registrados: el importe de Telcel cambia cada mes y
           el de Claude viene en USD con otro tipo de cambio. Generarlo dos veces el mismo mes no duplica nada.
         </p>
 
+        {plantillaAbierta && (
+          <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900">
+                {plantilla.id ? 'Editar plantilla' : 'Nueva plantilla'}
+              </h3>
+              <button onClick={() => setPlantillaAbierta(false)} className="text-gray-400 hover:text-gray-600">
+                <XCircle className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Campo etiqueta="Nombre" ayuda="Como la vas a reconocer en la lista.">
+                <input value={plantilla.nombre} onChange={(e) => cambiarPlantilla('nombre', e.target.value)}
+                  className={CLASE_INPUT} placeholder="Telcel oficina, Claude, renta" />
+              </Campo>
+              <Campo etiqueta="Cuenta contable">
+                <select value={plantilla.cuenta_contable} onChange={(e) => cambiarPlantilla('cuenta_contable', e.target.value)} className={CLASE_INPUT}>
+                  <option value="">Selecciona una cuenta</option>
+                  {cuentas.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+                </select>
+              </Campo>
+              <Campo etiqueta="Proveedor">
+                <input value={plantilla.proveedor} onChange={(e) => cambiarPlantilla('proveedor', e.target.value)}
+                  className={CLASE_INPUT} placeholder="Radiomovil Dipsa, Anthropic" />
+              </Campo>
+
+              <Campo etiqueta="Descripcion" ancho="md:col-span-3">
+                <input value={plantilla.descripcion} onChange={(e) => cambiarPlantilla('descripcion', e.target.value)}
+                  className={CLASE_INPUT} placeholder="Internet de oficina" />
+              </Campo>
+
+              <Campo etiqueta="Moneda">
+                <input value={plantilla.moneda} maxLength={3}
+                  onChange={(e) => cambiarPlantilla('moneda', e.target.value.toUpperCase().slice(0, 3))}
+                  className={CLASE_INPUT} />
+              </Campo>
+              <Campo etiqueta="Subtotal estimado" ayuda="Se corrige cada mes al revisar el borrador.">
+                <input type="number" step="0.01" min="0" value={plantilla.subtotal_estimado}
+                  onChange={(e) => cambiarPlantilla('subtotal_estimado', e.target.value)} className={CLASE_INPUT} placeholder="0.00" />
+              </Campo>
+              <Campo etiqueta="IVA estimado" ayuda="Cero si el proveedor no lo traslada.">
+                <input type="number" step="0.01" min="0" value={plantilla.iva_estimado}
+                  onChange={(e) => cambiarPlantilla('iva_estimado', e.target.value)} className={CLASE_INPUT} placeholder="0.00" />
+              </Campo>
+
+              <Campo etiqueta="Dia del mes" ayuda="Del 1 al 28: el 31 no existe en febrero.">
+                <input type="number" min={1} max={28} value={plantilla.dia_del_mes}
+                  onChange={(e) => cambiarPlantilla('dia_del_mes', e.target.value)} className={CLASE_INPUT} />
+              </Campo>
+              <Campo etiqueta="Activa" ayuda="Solo las activas generan borradores.">
+                <label className="flex items-center gap-2 text-sm text-gray-700 py-2">
+                  <input type="checkbox" checked={plantilla.activo}
+                    onChange={(e) => setPlantilla((f) => ({ ...f, activo: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300" />
+                  Genera borradores cada mes
+                </label>
+              </Campo>
+            </div>
+
+            {plantilla.moneda !== 'MXN' && (
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  La plantilla NO guarda tipo de cambio, a proposito: cambia cada mes. El borrador va a nacer
+                  con un 1 de relleno y no se puede registrar hasta que captures el tipo de cambio del periodo.
+                </span>
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <button onClick={() => setPlantillaAbierta(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
+                Cancelar
+              </button>
+              <button onClick={() => void guardarPlantilla()} disabled={guardando}
+                className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-gray-700 disabled:opacity-50">
+                {guardando ? 'Guardando...' : plantilla.id ? 'Guardar cambios' : 'Crear plantilla'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {recurrentes.length === 0 ? (
-          <p className="text-sm text-gray-500">Todavia no hay plantillas.</p>
+          <p className="text-sm text-gray-500">
+            Todavia no hay plantillas. Crea una para Telcel, la renta o Claude y genera sus borradores cada mes.
+          </p>
         ) : (
           <ul className="divide-y divide-gray-100">
             {recurrentes.map((r) => (
-              <li key={r.id} className="py-2 flex items-center justify-between text-sm">
-                <div>
-                  <span className="font-medium text-gray-900">{r.nombre}</span>
+              <li key={r.id} className="py-2.5 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <div className="min-w-[14rem]">
+                  <span className={`font-medium ${r.activo ? 'text-gray-900' : 'text-gray-400'}`}>{r.nombre}</span>
                   <span className="text-gray-500"> — {r.proveedor}, cuenta {r.cuenta_contable}, dia {r.dia_del_mes}</span>
+                  {!r.activo && <span className="ml-2 text-xs text-gray-400">(inactiva, no genera nada)</span>}
                 </div>
-                <span className="text-gray-600">
-                  {(Number(r.subtotal_estimado) + Number(r.iva_estimado)).toFixed(2)} {r.moneda}
-                  {!r.activo && <span className="ml-2 text-xs text-gray-400">(inactivo)</span>}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-gray-600">
+                    {(Number(r.subtotal_estimado) + Number(r.iva_estimado)).toFixed(2)} {r.moneda}
+                  </span>
+                  <button onClick={() => abrirPlantilla(r)} className="text-gray-600 hover:text-gray-900">
+                    Editar
+                  </button>
+                  <button onClick={() => void alternarPlantilla(r)} disabled={guardando}
+                    className="text-gray-600 hover:text-gray-900 disabled:opacity-50">
+                    {r.activo ? 'Desactivar' : 'Activar'}
+                  </button>
+                  <button onClick={() => void borrarPlantilla(r)} disabled={guardando}
+                    title="Solo se puede borrar si todavia no genero ningun gasto"
+                    className="text-gray-400 hover:text-red-600 disabled:opacity-50">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -744,6 +998,15 @@ const AdminGastos: React.FC = () => {
 };
 
 const CLASE_INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500';
+
+/**
+ * Un borrador recurrente en moneda extranjera nace con `tipo_cambio = 1` porque
+ * la columna no admite 0 ni NULL y el tipo de cambio del mes no se sabe al
+ * generarlo. Ese 1 es relleno, no un dato: registrarlo asentaria dolares como
+ * si fueran pesos. La base lo prohibe con un CHECK; esto solo lo dice antes.
+ */
+const faltaTipoDeCambio = (g: Gasto): boolean =>
+  g.moneda !== 'MXN' && Number(g.tipo_cambio) === 1;
 
 /** Formatea el total propuesto igual que lo escribiria una persona. */
 const aDosDecimales = (n: number): string => n.toFixed(2);
@@ -757,6 +1020,8 @@ function traducirError(mensaje: string): string {
   if (mensaje.includes('gastos_mxn_tipo_cambio_uno')) return 'Un gasto en pesos tiene que llevar tipo de cambio 1.';
   if (mensaje.includes('gastos_total_cuadra')) return 'El total no cuadra con subtotal + IVA.';
   if (mensaje.includes('gastos_operacion_cfdi_unico')) return 'Ese CFDI ya se capturo antes. Buscalo en la lista en vez de capturarlo otra vez.';
+  if (mensaje.includes('gastos_registrado_con_tipo_de_cambio_real'))
+    return 'Falta capturar el tipo de cambio del periodo. Un gasto en moneda extranjera no se puede registrar con tipo de cambio 1: se asentarian dolares como si fueran pesos.';
   if (mensaje.includes('gastos_registrado_tiene_asiento')) return 'Un gasto registrado necesita su asiento. Usa el boton Registrar en vez de cambiar el estado a mano.';
   if (mensaje.includes('cuenta de gasto o costo')) return mensaje;
   if (mensaje.includes('No autorizado')) return 'No tienes el permiso para capturar gastos. Pideselo a un super admin (permiso "Gestionar gastos").';

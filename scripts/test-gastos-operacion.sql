@@ -36,6 +36,8 @@
 \ir ../supabase/migrations/20260910080000_vista_movimientos_financieros.sql
 \ir ../supabase/migrations/20260910200000_corregir_membresia_y_pasivo_por_comisiones.sql
 \ir ../supabase/migrations/20260910210000_captura_de_gastos_de_operacion.sql
+-- Y el arreglo del tipo de cambio de relleno de los recurrentes.
+\ir ../supabase/migrations/20260910220000_tipo_de_cambio_pendiente_en_recurrentes.sql
 
 -- La contable autorizada. Se le da el permiso que la migracion acaba de crear.
 INSERT INTO admin_permissions (user_id, can_view_accounting)
@@ -360,6 +362,91 @@ BEGIN
   RAISE NOTICE '  2 borradores, ninguno registrado, la segunda corrida no duplica. OK';
 END $$;
 
+\echo '=== Caso 12: un recurrente en USD no se asienta con el tipo de cambio de relleno ==='
+DO $$
+DECLARE v_plantilla uuid; v_borrador record; v_paso boolean; v_asiento uuid; v_debe numeric;
+BEGIN
+  -- ESTE CASO EXISTE POR UN FALLO REPRODUCIDO, no por precaucion.
+  --
+  -- El generador inserta `tipo_cambio = 1` siempre, sin mirar la moneda. Con la
+  -- plantilla de Claude, que es en USD, el borrador salia con 260 USD a tipo de
+  -- cambio 1 y `registrar_gasto_operacion` lo asentaba tal cual:
+  --
+  --     602  Anthropic — Suscripcion   debe 260.00
+  --     205  Por pagar a Anthropic                haber 260.00
+  --
+  -- 260 pesos por un gasto de 260 dolares. A 20 por dolar el gasto real son
+  -- 5,200: el asiento subestimaba el egreso VEINTE VECES. Y cuadraba, asi que
+  -- ni el invariante de la vista ni el debe/haber lo cazaban. Los numeros que
+  -- cuadran y son falsos hay que prohibirlos, no sumarlos.
+  INSERT INTO gastos_recurrentes (nombre, cuenta_contable, proveedor, descripcion,
+    moneda, subtotal_estimado, iva_estimado, dia_del_mes)
+  VALUES ('Claude USD','602','Anthropic','Suscripcion','USD',260,0,1)
+  RETURNING id INTO v_plantilla;
+
+  PERFORM generar_borradores_de_gastos_recurrentes('2026-11');
+
+  SELECT * INTO v_borrador FROM gastos_operacion
+   WHERE recurrente_id = v_plantilla AND periodo = '2026-11';
+
+  -- El borrador SI nace con el relleno: `tipo_cambio` no admite 0 ni NULL, y el
+  -- tipo de cambio del mes que viene no se sabe hoy. Eso esta bien.
+  IF v_borrador.tipo_cambio <> 1 OR v_borrador.moneda <> 'USD' THEN
+    RAISE EXCEPTION 'FALLO 12: el borrador nacio con moneda=% tc=% (se esperaba USD y el relleno 1).',
+      v_borrador.moneda, v_borrador.tipo_cambio;
+  END IF;
+  -- Pero lo dice.
+  IF coalesce(v_borrador.notas,'') NOT LIKE '%tipo de cambio%' THEN
+    RAISE EXCEPTION 'FALLO 12: el borrador en moneda extranjera no avisa que falta el tipo de cambio. Notas: %',
+      v_borrador.notas;
+  END IF;
+
+  -- Y NO se registra asi. Se comprueba el MENSAJE, no solo que falle: el CHECK
+  -- de la tabla ya lo impide, asi que sin mirar el texto una mutacion que
+  -- quitara el RAISE de la funcion sobrevivia -- comprobado, sobrevivio. Y un
+  -- 23514 con el nombre de la restriccion no le dice a nadie que hacer.
+  v_paso := false;
+  BEGIN
+    PERFORM registrar_gasto_operacion(v_borrador.id);
+    v_paso := true;
+  EXCEPTION WHEN check_violation THEN
+    IF sqlerrm NOT LIKE '%Captura el tipo de cambio%' THEN
+      RAISE EXCEPTION 'FALLO 12: rebota, pero con un mensaje que no dice que hacer: "%"', sqlerrm;
+    END IF;
+  END;
+  IF v_paso THEN
+    RAISE EXCEPTION 'FALLO 12: se asentaron 260 USD como 260 MXN. El gasto real es veinte veces mayor.';
+  END IF;
+
+  -- Ni por la puerta de atras: el CHECK tambien frena un UPDATE directo, que es
+  -- lo que haria alguien desde el editor de SQL o desde una pantalla futura.
+  v_paso := false;
+  BEGIN
+    UPDATE gastos_operacion SET estado = 'registrado',
+           asiento_id = (SELECT id FROM accounting_entries LIMIT 1)
+     WHERE id = v_borrador.id;
+    v_paso := true;
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  IF v_paso THEN
+    RAISE EXCEPTION 'FALLO 12: un UPDATE directo registro el gasto con el tipo de cambio de relleno.';
+  END IF;
+
+  -- Con el tipo de cambio del mes capturado, se registra normal y el asiento
+  -- refleja los pesos de verdad.
+  UPDATE gastos_operacion
+     SET tipo_cambio = 20, total_mxn = 5200
+   WHERE id = v_borrador.id;
+  v_asiento := registrar_gasto_operacion(v_borrador.id);
+
+  SELECT sum(debit) INTO v_debe FROM accounting_entry_lines WHERE entry_id = v_asiento;
+  IF v_debe <> 5200 THEN
+    RAISE EXCEPTION 'FALLO 12: el asiento quedo en % y debia ser 5200.', v_debe;
+  END IF;
+
+  RAISE NOTICE '  borrador USD nace con relleno y lo avisa; no se asienta hasta capturar el TC; con TC 20 asienta 5200. OK';
+END $$;
+
 \echo '=== Caso 11: las RLS aplican de verdad, no solo estan encendidas ==='
 DO $$
 DECLARE v_gastos boolean; v_recurrentes boolean;
@@ -395,4 +482,4 @@ END $$;
 RESET ROLE;
 
 \echo ''
-\echo 'Captura de gastos de operacion: 11/11 casos OK'
+\echo 'Captura de gastos de operacion: 12/12 casos OK'
