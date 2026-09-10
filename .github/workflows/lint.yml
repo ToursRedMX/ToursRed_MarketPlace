@@ -178,6 +178,15 @@ jobs:
       - name: Verify the expense screen keeps its editable-total and propose-only promises
         run: node scripts/test-pantalla-gastos.mjs
 
+      # El panel no podia dar de alta contadores: `create-admin-user` tenia el
+      # rol quemado y la lista filtraba solo admins. Y tres permisos contables
+      # existian en la tabla sin casilla en la UI. El caso 4 es el que importa:
+      # un permiso viaja por CUATRO sitios (select, mapeo, base del editor y
+      # upsert) y agregarlo a medias es peor que no tocarlo -- si falta en el
+      # select, el editor lo pinta apagado y guardar lo BORRA.
+      - name: Verify accountants can be created and accounting permissions persist
+        run: node scripts/test-alta-de-contadores.mjs
+
       # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
       # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
       # aplica SIN transaccion a proposito, porque asi fue como se descubrio que
