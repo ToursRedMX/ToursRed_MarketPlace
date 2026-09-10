@@ -210,6 +210,7 @@ workflows son el insumo directo del DRP.
 | `audit-edge-jwt.yml` | configuración de JWT por función |
 | `audit-edge-functions.yml` | auditoría periódica de Edge Functions |
 | `fiscal-guard.yml` (**bloquea**) | paridad de la fórmula de IVA entre TypeScript y plpgsql — 18 casos |
+| `edge-deps.yml` (`guardia-dependencias`) | que ningún import remoto de `supabase/functions/` entre sin **versión exacta**. Nació en 0 tras fijar 434 especificadores el 10-sep. Publica el inventario de 6.3.2 en el resumen de cada ejecución |
 
 `guardia-desfase` merece énfasis: es un control de gestión de cambios que **ya
 demostró funcionar en producción**, no en teoría. Eso es exactamente lo que pide
@@ -256,7 +257,7 @@ prepararse.
 | 1 | **Un `account_executive` activo sin MFA.** Los 2 admins sí lo tienen verificado | Depende de si ese rol entra en alcance | 8.4 |
 | 2 | **Ventana del JWT tras bloquear.** El token ya emitido vive hasta expirar | Acotado: dentro de esa ventana RLS ya no le responde | 8.2.5 |
 | 3 | **Sin escaneos ASV ni pruebas de penetración.** Depende del SAQ; un ASV es una contratación, no algo que corramos nosotros → [`escaneos-y-pruebas-de-intrusion.md`](escaneos-y-pruebas-de-intrusion.md) | 11.3 |
-| 4 | ~~Sin inventario formal de componentes de terceros~~ **Hecho** → [`inventario-de-componentes-de-terceros.md`](inventario-de-componentes-de-terceros.md). Dejó un hueco técnico nuevo: 3 de 6 componentes de Edge Functions **sin versión fija** | 6.3.2 |
+| 4 | ~~Sin inventario formal de componentes de terceros~~ **Hecho** → [`inventario-de-componentes-de-terceros.md`](inventario-de-componentes-de-terceros.md). El hueco técnico que dejó —componentes de Edge Functions sin versión fija— **también está cerrado**: eran 4 de 6, no 3, y 434 de 526 imports; se fijaron todos y lo vigila `guardia-dependencias` | 6.3.2 |
 | 5 | ~~Retención sin política escrita~~ **Hecho** → [`retencion-y-revision-de-bitacora.md`](retencion-y-revision-de-bitacora.md). Pero al medirla salió algo peor: solo hay **~2.5 meses de historia**, y los 12 no se recuperan hacia atrás | 10.5.1 |
 | 6 | ~~Sin revisión periódica documentada~~ **Procedimiento escrito** (mismo documento), con 7 consultas listas para correr. Falta que Axel asigne responsables | 10.4 |
 | 7 | **Procesadores en modo pruebas.** Stripe en cuenta de test, Facturapi con `sk_test_` y `pac_sandbox_mode = true` | No es hueco de PCI, pero el auditor va a ver un entorno que no es el productivo | — |

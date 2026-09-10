@@ -1,7 +1,7 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
-import * as Sentry from "npm:@sentry/deno@9";
+import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { envRequerida } from "../_shared/env.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 const corsHeaders = {

@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import {
   isConfigured,
@@ -12,7 +12,7 @@ import {
   createCashCharge,
 } from "../_shared/openpay.ts";
 import { urlDeRetornoSegura } from "../_shared/cors.ts";
-import * as Sentry from "npm:@sentry/deno@9";
+import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { exigibleAlProcesador } from "../_shared/exigible.ts";
 

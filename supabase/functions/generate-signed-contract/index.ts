@@ -1,12 +1,12 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2.114.0";
 import PdfPrinter from "npm:pdfmake@0.2.20/js/printer.js";
 import { Buffer } from "node:buffer";
 import { ROBOTO_NORMAL_B64, ROBOTO_BOLD_B64, ROBOTO_ITALICS_B64, ROBOTO_BOLDITALICS_B64 } from "../_shared/robotoFonts.ts";
 import { buildSignedContractDocDefinition } from "../_shared/contractDocDefinition.ts";
 import type { ContractData, AnexoBData } from "../_shared/contractDocDefinition.ts";
 import { envRequerida } from "../_shared/env.ts";
-import * as Sentry from "npm:@sentry/deno@9";
+import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");

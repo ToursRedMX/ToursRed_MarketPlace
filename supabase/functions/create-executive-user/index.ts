@@ -1,6 +1,6 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 import { checkAal2Required, aal2Response } from '../_shared/aal2Check.ts';
-import * as Sentry from "npm:@sentry/deno@9";
+import * as Sentry from "npm:@sentry/deno@9.47.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

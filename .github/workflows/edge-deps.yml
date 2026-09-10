@@ -1,0 +1,60 @@
+name: Dependencias de Edge Functions
+
+# Req. 6.3.2 de PCI DSS v4 pide poder responder, ante un aviso de seguridad,
+# cuales componentes de terceros corren y en que version. Con un especificador
+# flotante (`npm:paquete@2`) esa pregunta no tiene respuesta: la version la
+# elige el registro el dia del despliegue.
+#
+# El 10-sep-2026, antes de esta guardia, 434 de 526 imports remotos flotaban, y
+# `supabase-js` corria en CUATRO versiones a la vez (2.116.0, 2.114.0, 2.108.2
+# y 2.39.6) desde DOS registros distintos. Se fijaron todos en el mismo PR que
+# trajo esta guardia, asi que arranca en 0 hallazgos y bloquea de verdad.
+#
+# Es Node puro, sin red: tarda ~1s. Corre en TODOS los PR a main sin filtro de
+# `paths`, por la misma razon que `edge-types.yml`: un check requerido que no
+# corre deja el PR pendiente para siempre, asi que el filtro lo volveria
+# imposible de exigir.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guardia-dependencias:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Toda dependencia remota lleva version exacta
+        run: node scripts/check-edge-deps.mjs --lista | tee inventario-deps-edge.txt
+        shell: bash
+
+      # El inventario que imprime la guardia ES la evidencia de 6.3.2, generada
+      # de nuevo en cada ejecucion en vez de copiada a mano a un documento.
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            echo "## Dependencias de Edge Functions"
+            echo ""
+            if [ -f inventario-deps-edge.txt ]; then
+              echo '```'
+              cat inventario-deps-edge.txt
+              echo '```'
+            else
+              echo "No se genero inventario: la guardia no llego a correr."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
