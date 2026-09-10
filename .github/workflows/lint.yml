@@ -156,6 +156,18 @@ jobs:
           psql -h localhost -U postgres -d rls_ok -v ON_ERROR_STOP=1 -f test-is-active-rls.sql
           psql -h localhost -U postgres -d rls_guardia -v ON_ERROR_STOP=1 -f test-is-active-rls-guardia.sql
 
+      # La tercera pieza del bloqueo: revocar la sesion que el usuario ya
+      # tenia. Tambien contra un Postgres de verdad, porque lo que se prueba
+      # son las CASCADE del esquema auth —que la migracion no nombra— y que un
+      # fallo revocando NO tumbe el bloqueo, que es el control primario.
+      - name: Verify blocking a user revokes their sessions
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS revocacion;" -c "CREATE DATABASE revocacion;"
+          cd scripts
+          psql -h localhost -U postgres -d revocacion -v ON_ERROR_STOP=1 -f test-revocar-sesion.sql
+
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
       # que escribe el snapshot fiscal de cada cobro, y esos numeros son los que
