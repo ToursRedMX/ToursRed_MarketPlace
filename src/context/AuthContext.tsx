@@ -27,6 +27,8 @@ export interface AdminPermissions {
   canExportAuditLog: boolean;
   // Booking cancellation permission
   canCancelBookings: boolean;
+  // Captura de gastos de operacion (/admin/gastos)
+  canManageExpenses: boolean;
 }
 
 // Stable device fingerprint (no PII — only browser characteristics)
@@ -104,6 +106,7 @@ export interface AccountantPermissions {
   canViewAccounting: boolean;
   canExportSatXml: boolean;
   canManageChartOfAccounts: boolean;
+  canManageExpenses: boolean;
 }
 
 export interface AccountExecutiveInfo {
@@ -605,6 +608,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 canViewAuditSensitiveData: p.can_view_audit_sensitive_data ?? false,
                 canExportAuditLog: p.can_export_audit_log ?? false,
                 canCancelBookings: p.can_cancel_bookings ?? false,
+                canManageExpenses: p.can_manage_expenses ?? false,
               });
             } else {
               setPermissions(null);
@@ -630,7 +634,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // contador sin restricciones; lo que cambia es el caso de ERROR.
             const { data: acctPerms, error: errorPermisosContables } = await supabase
               .from('admin_permissions')
-              .select('can_view_accounting, can_export_sat_xml, can_manage_chart_of_accounts')
+              .select('can_view_accounting, can_export_sat_xml, can_manage_chart_of_accounts, can_manage_expenses')
               .eq('user_id', authUser.id)
               .maybeSingle();
 
@@ -640,12 +644,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 canViewAccounting: false,
                 canExportSatXml: false,
                 canManageChartOfAccounts: false,
+                canManageExpenses: false,
               });
             } else {
               setAccountantPermissions({
                 canViewAccounting: acctPerms?.can_view_accounting ?? true,
                 canExportSatXml: acctPerms?.can_export_sat_xml ?? true,
                 canManageChartOfAccounts: acctPerms?.can_manage_chart_of_accounts ?? false,
+                // Sin `?? true`: capturar gastos es ESCRIBIR en contabilidad y
+                // eso se concede a mano, no por ausencia de fila.
+                canManageExpenses: acctPerms?.can_manage_expenses ?? false,
               });
             }
           } catch (e) {
@@ -653,7 +661,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // tampoco se pudo leer el permiso, asi que tampoco se concede.
             // Antes este catch otorgaba ver contabilidad y exportar XML del SAT.
             console.error('AuthContext: excepcion leyendo los permisos contables', e);
-            setAccountantPermissions({ canViewAccounting: false, canExportSatXml: false, canManageChartOfAccounts: false });
+            setAccountantPermissions({ canViewAccounting: false, canExportSatXml: false, canManageChartOfAccounts: false, canManageExpenses: false });
           }
           setAllStaffInfo([]);
           setAccountExecutiveInfo(null);

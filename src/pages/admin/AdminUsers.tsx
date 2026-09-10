@@ -93,6 +93,7 @@ const AdminUsers: React.FC = () => {
     canViewAuditSensitiveData: false,
     canExportAuditLog: false,
     canCancelBookings: false,
+    canManageExpenses: false,
   });
 
   useEffect(() => {
@@ -117,7 +118,7 @@ const AdminUsers: React.FC = () => {
         (usersData || []).map(async (user) => {
           const { data: permsData, error: errorPermisos } = await supabase
             .from('admin_permissions')
-            .select('can_manage_agencies, can_manage_users, can_manage_travelers, can_manage_destinations, can_manage_categories, can_manage_departure_points, can_manage_reviews, can_manage_messages, can_manage_inquiries, can_manage_settings, can_manage_memberships, can_manage_points, can_manage_discount_codes, can_view_audit_log, can_view_audit_sensitive_data, can_export_audit_log, can_cancel_bookings')
+            .select('can_manage_agencies, can_manage_users, can_manage_travelers, can_manage_destinations, can_manage_categories, can_manage_departure_points, can_manage_reviews, can_manage_messages, can_manage_inquiries, can_manage_settings, can_manage_memberships, can_manage_points, can_manage_discount_codes, can_view_audit_log, can_view_audit_sensitive_data, can_export_audit_log, can_cancel_bookings, can_manage_expenses')
             .eq('user_id', user.id)
             .maybeSingle();
 
@@ -146,6 +147,7 @@ const AdminUsers: React.FC = () => {
               canViewAuditSensitiveData: permsData.can_view_audit_sensitive_data ?? false,
               canExportAuditLog: permsData.can_export_audit_log ?? false,
               canCancelBookings: permsData.can_cancel_bookings ?? false,
+              canManageExpenses: permsData.can_manage_expenses ?? false,
             } : null
           };
         })
@@ -271,6 +273,7 @@ const AdminUsers: React.FC = () => {
           can_view_audit_sensitive_data: tempPermissions.canViewAuditSensitiveData,
           can_export_audit_log: tempPermissions.canExportAuditLog,
           can_cancel_bookings: tempPermissions.canCancelBookings,
+          can_manage_expenses: tempPermissions.canManageExpenses,
         }, { onConflict: 'user_id' });
 
       if (updateError) throw updateError;
@@ -610,6 +613,11 @@ const AdminUsers: React.FC = () => {
                             checked={tempPermissions.canCancelBookings}
                             onChange={(checked) => setTempPermissions({ ...tempPermissions, canCancelBookings: checked })}
                           />
+                          <PermissionCheckbox
+                            label="Capturar Gastos de Operación"
+                            checked={tempPermissions.canManageExpenses}
+                            onChange={(checked) => setTempPermissions({ ...tempPermissions, canManageExpenses: checked })}
+                          />
                         </>
                       ) : (
                         <>
@@ -712,6 +720,12 @@ const AdminUsers: React.FC = () => {
                           <PermissionCheckbox
                             label="Cancelar Reservas"
                             checked={user.permissions?.canCancelBookings ?? false}
+                            onChange={() => {}}
+                            disabled
+                          />
+                          <PermissionCheckbox
+                            label="Capturar Gastos de Operación"
+                            checked={user.permissions?.canManageExpenses ?? false}
                             onChange={() => {}}
                             disabled
                           />

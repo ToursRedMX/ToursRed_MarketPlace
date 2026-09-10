@@ -88,6 +88,7 @@ import AdminCfdi from './pages/admin/AdminCfdi';
 import AdminCfdiManual from './pages/admin/AdminCfdiManual';
 import AdminContabilidad from './pages/admin/AdminContabilidad';
 import AdminReporteMaestro from './pages/admin/AdminReporteMaestro';
+import AdminGastos from './pages/admin/AdminGastos';
 import AccountingPage from './pages/accounting/AccountingPage';
 import MegaTravelPage from './pages/international/MegaTravelPage';
 import NefertariTravelPage from './pages/international/NefertariTravelPage';
@@ -730,6 +731,17 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
                 <AdminReporteMaestro />
+              </ProtectedRoute>
+            }
+          />
+          {/* Captura de gastos de operacion. El contador entra tambien: es
+              quien captura las facturas, y quien puede escribir de verdad lo
+              deciden las RLS con `can_manage_expenses`, no esta ruta. */}
+          <Route
+            path="/admin/gastos"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.ACCOUNTANT]}>
+                <AdminGastos />
               </ProtectedRoute>
             }
           />

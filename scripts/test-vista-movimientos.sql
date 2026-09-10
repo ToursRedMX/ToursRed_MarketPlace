@@ -34,195 +34,10 @@
 -- de mas —por ejemplo dejar pasar un reembolso todavia pendiente— pasaria la
 -- prueba. Se descubrio exactamente asi: la mutacion sobrevivio.
 
--- Supabase trae estos tres roles de fabrica; un Postgres pelado no. La
--- migracion les concede permisos y esta bien que lo haga: quien tiene que
--- parecerse al entorno real es la prueba, no al reves. Sin ellos el `GRANT`
--- revienta con 'role "anon" does not exist' y la prueba no llega ni a empezar.
-DO $roles$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon')          THEN CREATE ROLE anon          NOLOGIN; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='service_role')  THEN CREATE ROLE service_role  NOLOGIN; END IF;
-END $roles$;
+-- El fixture (roles, esquema, tablas de utileria y datos) vive aparte porque
+-- lo comparte `test-gastos-operacion.sql`.
+\ir fixture-movimientos.sql
 
-DROP SCHEMA IF EXISTS public CASCADE;
-CREATE SCHEMA public;
-SET search_path = public;
-
--- ---------------------------------------------------------------------------
--- Fixture: solo las columnas que la vista toca.
--- ---------------------------------------------------------------------------
-CREATE TABLE agencies (id uuid PRIMARY KEY, name text);
-CREATE TABLE users    (id uuid PRIMARY KEY, first_name text, last_name text);
-CREATE TABLE bookings (id uuid PRIMARY KEY, booking_code text, agency_id uuid, status text);
-
-CREATE TABLE payment_transactions (
-  id uuid PRIMARY KEY, booking_id uuid, amount numeric, status text,
-  processor_fee numeric, charge_context text, payment_processor text,
-  created_at timestamptz);
-
-CREATE TABLE openpay_wallet_topups (
-  id uuid PRIMARY KEY, user_id uuid, amount numeric, status text, created_at timestamptz);
-
-CREATE TABLE gift_cards (
-  id uuid PRIMARY KEY, code text, amount numeric, payment_status text,
-  payment_provider text, purchaser_email text, purchased_at timestamptz);
-
-CREATE TABLE booking_optional_services (
-  id uuid PRIMARY KEY, booking_id uuid, description text, payment_method text,
-  total_paid numeric, paid_at timestamptz, created_at timestamptz);
-
-CREATE TABLE booking_supplements (
-  id uuid PRIMARY KEY, booking_id uuid, total_paid numeric, created_at timestamptz);
-
-CREATE TABLE featured_tour_slots (
-  id uuid PRIMARY KEY, agency_id uuid, total_amount numeric,
-  payment_provider text, payment_confirmed_at timestamptz);
-
-CREATE TABLE commission_records (
-  id uuid PRIMARY KEY, booking_id uuid, agency_id uuid,
-  platform_total_revenue numeric, status text,
-  processed_at timestamptz, created_at timestamptz);
-
-CREATE TABLE insurance_commission_receipts (
-  id uuid PRIMARY KEY, provider_name text, amount numeric,
-  invoice_reference text, receipt_date timestamptz);
-
-CREATE TABLE agency_payouts (
-  id uuid PRIMARY KEY, agency_id uuid, amount numeric, status text,
-  payment_date timestamptz, payout_code text, payment_method text);
-
-CREATE TABLE toursred_cash_transactions (
-  id uuid PRIMARY KEY, user_id uuid, amount numeric, type text,
-  reference_type text, reference_id uuid, created_at timestamptz);
-
-CREATE TABLE executive_commissions (
-  id uuid PRIMARY KEY, agency_id uuid, amount numeric, status text,
-  commission_type text, payment_reference text,
-  paid_at timestamptz, created_at timestamptz);
-
-CREATE TABLE toursred_points_transactions (
-  id uuid PRIMARY KEY, user_id uuid, amount integer, type text,
-  reference_type text, created_at timestamptz);
-
-CREATE TABLE insurance_settlements (
-  id uuid PRIMARY KEY, provider_name text, amount numeric,
-  reference text, payment_date timestamptz);
-
-CREATE TABLE payment_refunds (
-  id uuid PRIMARY KEY, booking_id uuid, requested_amount numeric,
-  processor_refund_fee numeric, processor_fee_lost numeric,
-  refund_method text, payment_processor text, status text,
-  confirmed_at timestamptz, processed_at timestamptz, created_at timestamptz);
-
-CREATE TABLE payment_disputes (id uuid PRIMARY KEY, amount numeric, created_at timestamptz);
-
--- ---------------------------------------------------------------------------
--- Datos. Cifras chicas y distintas entre si para que cualquier suma equivocada
--- de un numero reconocible en vez de cuadrar por casualidad.
--- ---------------------------------------------------------------------------
-INSERT INTO agencies VALUES ('a0000000-0000-0000-0000-000000000001','Agencia Uno');
-INSERT INTO users    VALUES ('c0000000-0000-0000-0000-000000000001','Ana','Viajera');
-
-INSERT INTO bookings VALUES
-  ('b0000000-0000-0000-0000-000000000001','RES-VIVA',   'a0000000-0000-0000-0000-000000000001','confirmed'),
-  ('b0000000-0000-0000-0000-000000000002','RES-CANC-V', 'a0000000-0000-0000-0000-000000000001','cancelled'),
-  ('b0000000-0000-0000-0000-000000000003','RES-CANC-P', 'a0000000-0000-0000-0000-000000000001','cancelled'),
-  ('b0000000-0000-0000-0000-000000000004','RES-MONEDERO','a0000000-0000-0000-0000-000000000001','confirmed'),
-  ('b0000000-0000-0000-0000-000000000005','RES-VIVA-ANULADA','a0000000-0000-0000-0000-000000000001','confirmed');
-
--- Anticipo de 5,000 por tarjeta, con 50 de comision de procesador.
-INSERT INTO payment_transactions VALUES
-  ('d0000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',
-   5000,'succeeded',50,'booking_deposit','stripe','2026-09-01');
-
--- Reconocimiento sobre la reserva viva: 750.
-INSERT INTO commission_records VALUES
-  ('e0000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',
-   'a0000000-0000-0000-0000-000000000001',750,'processed','2026-09-01','2026-09-01'),
-  -- TRAMPA 2a: cancelada Y anulada. 111 no debe aparecer.
-  ('e0000000-0000-0000-0000-000000000002','b0000000-0000-0000-0000-000000000002',
-   'a0000000-0000-0000-0000-000000000001',111,'voided','2026-09-02','2026-09-02'),
-  -- TRAMPA 2b: cancelada pero SIN anular. 222 tampoco debe aparecer.
-  ('e0000000-0000-0000-0000-000000000003','b0000000-0000-0000-0000-000000000003',
-   'a0000000-0000-0000-0000-000000000001',222,'processed','2026-09-03','2026-09-03'),
-  -- TRAMPA 2c: reserva VIVA con el registro anulado (una correccion, por
-  -- ejemplo). Esta fila es la que hace que el filtro de `voided` se ejercite
-  -- de verdad: sin ella, el filtro de reservas canceladas ya tapaba a la 2a y
-  -- quitar el de `voided` no rompia nada -- comprobado con una mutacion que
-  -- sobrevivio. 444 no debe aparecer.
-  ('e0000000-0000-0000-0000-000000000004','b0000000-0000-0000-0000-000000000005',
-   'a0000000-0000-0000-0000-000000000001',444,'voided','2026-09-03','2026-09-03');
-
--- TRAMPA 1: recarga de 1,000 y despues una reserva de 400 pagada con ese saldo.
-INSERT INTO toursred_cash_transactions VALUES
-  -- Recarga por SPEI: dinero nuevo al banco.
-  ('10000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000001',
-   1000,'topup_spei','openpay_spei_topup',NULL,'2026-09-04'),
-  -- Reserva pagada con ese saldo: NO es caja nueva.
-  ('10000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
-   -400,'debit','booking','b0000000-0000-0000-0000-000000000004','2026-09-05'),
-  -- Reembolso al monedero: no sale del banco.
-  ('10000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
-   333,'refund','booking_cancellation','b0000000-0000-0000-0000-000000000002','2026-09-06'),
-  -- Canje de tarjeta de regalo: el pasivo solo cambia de cuenta.
-  ('10000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000001',
-   200,'gift_card','gift_card',NULL,'2026-09-06'),
-  -- Saldo de promocion: no entra dinero, pero se crea deuda y eso cuesta.
-  ('10000000-0000-0000-0000-000000000005','c0000000-0000-0000-0000-000000000001',
-   150,'promotion','campana',NULL,'2026-09-06');
-
--- Liberacion a la agencia: esto SI sale del banco.
-INSERT INTO agency_payouts VALUES
-  ('20000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
-   2000,'completed','2026-09-07','PAY-1','spei');
-
--- Los bloques que faltaban por ejercitar. Sin una fila aqui, romper esos
--- bloques no rompe nada y la mutacion sobrevive -- comprobado: la de la tarjeta
--- de regalo sobrevivio justo por esto.
-INSERT INTO gift_cards VALUES
-  ('60000000-0000-0000-0000-000000000001','GC-1',500,'paid','stripe','ana@x.mx','2026-09-08');
-INSERT INTO booking_optional_services VALUES
-  ('61000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',
-   'Snorkel','stripe',120,'2026-09-08','2026-09-08');
-INSERT INTO booking_supplements VALUES
-  ('62000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',70,'2026-09-08');
-INSERT INTO insurance_commission_receipts VALUES
-  ('63000000-0000-0000-0000-000000000001','Aseguradora X',450,'FAC-1','2026-09-08');
-INSERT INTO insurance_settlements VALUES
-  ('64000000-0000-0000-0000-000000000001','Aseguradora X',300,'LIQ-1','2026-09-08');
-INSERT INTO payment_disputes VALUES
-  ('65000000-0000-0000-0000-000000000001',210,'2026-09-08');
-
--- Una membresia: producto propio de ToursRed. Ni un peso de pasivo.
-INSERT INTO payment_transactions VALUES
-  ('d0000000-0000-0000-0000-000000000002',NULL,
-   800,'succeeded',0,'membership','stripe','2026-09-09');
-
--- Comisiones de ejecutivo: una pagada y una pendiente. La pendiente es gasto
--- YA y ademas es dinero que se debe.
-INSERT INTO executive_commissions VALUES
-  ('50000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
-   60,'paid','approval','REF-1','2026-09-09','2026-09-09'),
-  ('50000000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001',
-   90,'pending','platform_period',NULL,NULL,'2026-09-09');
-
--- Reembolso al METODO DE PAGO ORIGINAL: este si sale del banco. Es el caso
--- excepcional (una disputa de PROFECO, por ejemplo) que se hace desde el panel
--- de admin. `processor_fee_lost` de 30 esta puesto A PROPOSITO para comprobar
--- que NO se cuenta: esa comision es la del cobro original y ya se conto cuando
--- entro el dinero.
-INSERT INTO payment_refunds VALUES
-  ('40000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',
-   1500, 25, 30, 'original_payment_method','stripe','succeeded','2026-09-09',NULL,'2026-09-09'),
-  -- Uno todavia sin confirmar: no ha movido el banco, no debe aparecer.
-  ('40000000-0000-0000-0000-000000000002','b0000000-0000-0000-0000-000000000001',
-   999, 0, 0, 'original_payment_method','stripe','pending',NULL,NULL,'2026-09-09');
-
--- Tour destacado: ingreso integro, sin pasivo.
-INSERT INTO featured_tour_slots VALUES
-  ('30000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
-   900,'stripe','2026-09-08');
 
 -- ---------------------------------------------------------------------------
 -- La migracion de verdad.
@@ -232,6 +47,32 @@ INSERT INTO featured_tour_slots VALUES
 -- pagado a los ejecutivos pasa a ser deuda. Se aplican las DOS en orden, que es
 -- el estado real de produccion, en vez de probar solo la version final.
 \ir ../supabase/migrations/20260910200000_corregir_membresia_y_pasivo_por_comisiones.sql
+-- Y la tercera, que agrega el bloque 19: los gastos de operacion.
+\ir ../supabase/migrations/20260910240000_captura_de_gastos_de_operacion.sql
+
+-- Los gastos van DESPUES porque su tabla no existe hasta que corre la
+-- migracion. Se meten con `estado = 'registrado'` a mano, sin pasar por
+-- `registrar_gasto_operacion`: aqui se prueba COMO REPARTE LA VISTA, no como
+-- se genera el asiento. Eso lo cubre `test-gastos-operacion.sql`.
+INSERT INTO accounting_entries (id, entry_number, entry_type, entry_date, source_type, source_id)
+VALUES ('a1000000-0000-0000-0000-000000000001','EGR-202609-9001','egreso','2026-09-08','gasto_operacion','70000000-0000-0000-0000-000000000001'),
+       ('a1000000-0000-0000-0000-000000000002','EGR-202609-9002','egreso','2026-09-08','gasto_operacion','70000000-0000-0000-0000-000000000002');
+
+INSERT INTO gastos_operacion
+  (id, fecha, cuenta_contable, proveedor, descripcion, moneda, tipo_cambio,
+   subtotal, iva, total, total_mxn, metodo_pago, pagado_en, estado, asiento_id)
+VALUES
+  -- PAGADO: salio del banco. 400 de activo negativo, cero pasivo.
+  ('70000000-0000-0000-0000-000000000001','2026-09-08','601.01','Telcel','Internet de oficina',
+   'MXN',1,344.83,55.17,400,400,'spei','2026-09-08','registrado','a1000000-0000-0000-0000-000000000001'),
+  -- POR PAGAR: no salio del banco todavia, pero ya se debe. Cero activo,
+  -- 260 de pasivo. Es el caso que suele repartirse mal.
+  ('70000000-0000-0000-0000-000000000002','2026-09-08','602','Anthropic','Claude',
+   'USD',20,13,0,13,260,NULL,NULL,'registrado','a1000000-0000-0000-0000-000000000002'),
+  -- BORRADOR: no tiene asiento y no debe asomarse a la vista. Si el bloque 19
+  -- se dejara el filtro de estado, el caso 11 lo caza: los numeros subirian.
+  ('70000000-0000-0000-0000-000000000003','2026-09-08','601.02','Papeleria','Hojas',
+   'MXN',1,100,16,116,116,NULL,NULL,'borrador',NULL);
 
 \echo '=== Caso 1: un anticipo es caja y pasivo, NO ingreso ==='
 DO $$
@@ -504,7 +345,7 @@ BEGIN
   v_esperado := ARRAY[
     'cobro_booking_deposit','cobro_membership','comision_aseguradora',
     'comision_ejecutivo','comision_por_reembolso','comision_procesador',
-    'contracargo','liquidacion_aseguradora','monedero_debit',
+    'contracargo','gasto_operacion','liquidacion_aseguradora','monedero_debit',
     'monedero_gift_card','monedero_promotion','monedero_refund',
     'monedero_topup_spei','pago_agencia','reconocimiento_ingreso',
     'reembolso_metodo_original','servicio_opcional','suplemento',
@@ -518,6 +359,31 @@ BEGIN
       (SELECT coalesce(array_agg(x),'{}') FROM unnest(v_hay) x WHERE NOT x = ANY(v_esperado));
   END IF;
   RAISE NOTICE '  los % bloques con datos producen filas y entran al invariante. OK', array_length(v_hay,1);
+END $$;
+
+\echo '=== Caso 11: un gasto pagado sale del banco; uno por pagar es deuda ==='
+DO $$
+DECLARE v record; v_borrador int;
+BEGIN
+  SELECT sum(caja) AS caja, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso INTO v
+    FROM vista_movimientos_financieros WHERE categoria = 'gasto_operacion';
+
+  -- Pagado 400 -> caja -400, pasivo 0.  Por pagar 260 -> caja 0, pasivo +260.
+  -- Los dos son gasto (ingreso negativo) por su total en pesos: -400 - 260.
+  IF v.caja <> -400 OR v.pasivo <> 260 OR v.ingreso <> -660 THEN
+    RAISE EXCEPTION 'FALLO 11: caja=% pasivo=% ingreso=% (esperado -400/260/-660)',
+      v.caja, v.pasivo, v.ingreso;
+  END IF;
+
+  -- Y el borrador no esta. Se comprueba por su importe, no por contar filas:
+  -- 116 solo puede venir de el.
+  SELECT count(*) INTO v_borrador FROM vista_movimientos_financieros
+   WHERE origen_tabla = 'gastos_operacion' AND abs(ingreso) = 116;
+  IF v_borrador <> 0 THEN
+    RAISE EXCEPTION 'FALLO 11: el borrador de 116 se asomo a la vista. Un gasto sin asiento no es un hecho.';
+  END IF;
+
+  RAISE NOTICE '  pagado -400 de banco, por pagar +260 de deuda, borrador fuera. OK';
 END $$;
 
 \echo '=== Caso 9: vaciar una fuente no rompe la vista ==='
@@ -566,4 +432,4 @@ BEGIN
 END $$;
 
 \echo ''
-\echo 'Vista de movimientos financieros: 17/17 casos OK'
+\echo 'Vista de movimientos financieros: 18/18 casos OK'
