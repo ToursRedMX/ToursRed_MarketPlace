@@ -146,6 +146,14 @@ jobs:
       - name: Verify agency commission rates come from configuration
         run: node scripts/test-tasa-comision-agencia.mjs
 
+      # El contrato entre la vista y la pantalla del reporte maestro. Si alguien
+      # renombra una columna de la vista, el front la lee como undefined y pinta
+      # CERO: sin error, sin pantalla roja, solo un numero mas chico. Es el peor
+      # modo de fallo para un reporte financiero, y es el que motivo la
+      # reescritura entera.
+      - name: Verify the master report matches the view it reads
+        run: node scripts/test-reporte-maestro-contrato.mjs
+
       # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
       # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
       # aplica SIN transaccion a proposito, porque asi fue como se descubrio que
@@ -198,6 +206,21 @@ jobs:
           psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS desglose;" -c "CREATE DATABASE desglose;"
           cd scripts
           psql -h localhost -U postgres -d desglose -v ON_ERROR_STOP=1 -f test-calculate-payment-breakdown.sql
+
+      # La vista que alimenta el reporte maestro. Existe para cerrar dos
+      # trampas y la prueba REPRODUCE LAS DOS antes de comprobar que las evita:
+      # contar dos veces el dinero que pasa por el monedero, y contar el
+      # ingreso de reservas canceladas (`voided` marca la fila pero no toca el
+      # importe, y en produccion 4 de 8 canceladas ni siquiera estaban
+      # anuladas). Tambien exige security_invoker: sin el, la vista seria un
+      # rodeo alrededor de las RLS.
+      - name: Verify the financial movements view keeps cash, liability and revenue apart
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS movimientos;" -c "CREATE DATABASE movimientos;"
+          cd scripts
+          psql -h localhost -U postgres -d movimientos -v ON_ERROR_STOP=1 -f test-vista-movimientos.sql
 
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
