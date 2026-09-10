@@ -287,6 +287,14 @@ jobs:
       # solo Stripe las registraba; PayPal tenia un case cuyo cuerpo entero era un
       # console.warn, que parece cobertura y no persiste nada. Esta guardia impide
       # volver ahi y ejercita registrarDisputa en sus seis escenarios.
+      # La comision del procesador es el costo de cada cobro. Los caminos que la
+      # insertan en 0 tienen que actualizarla despues; un 0 silencioso no se
+      # distingue de "sin comision" e infla el margen que reporta el ERP.
+      # Linea base de 17 sitios en 5 funciones (mismo criterio que tipos-edge):
+      # se congela lo que hay y se bloquea lo nuevo.
+      - name: Ningun cobro nuevo deja la comision en cero
+        run: node scripts/test-comision-procesador.mjs
+
       - name: Los cinco procesadores registran sus disputas
         run: node scripts/test-disputas.mjs
 
