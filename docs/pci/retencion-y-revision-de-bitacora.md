@@ -83,12 +83,18 @@ es **correcta por diseño** y otra **sí es un hueco**:
 - **`PAYMENT_RECEIVED`** — 60 eventos sin actor. Los origina un webhook del
   procesador, no una persona. No hay IP de usuario que registrar.
 
-**Hueco real:**
+**Hueco real — y resultó bastante mayor de lo que decía esta lista:**
 
 - **`DELETE`** — **75 eventos, los 75 sin actor y sin IP**. Un borrado sin
-  atribución es exactamente lo que 10.2 quiere evitar. Es lo primero que hay que
-  cerrar de esta lista.
+  atribución es exactamente lo que 10.2 quiere evitar.
 - **`UPDATE`** — 357 eventos, 332 sin actor y los 357 sin IP.
+- **Pero no son solo esos dos.** Al medir el resto el 10-sep-2026 salió que
+  **ningún** evento de negocio trae IP: **795 de 795**. `DELETE` y `UPDATE` no
+  son el hueco, son dos ejemplos de él. Y `session_id` y `correlation_id` están
+  vacíos en **los 1,400 registros**, pese a que el inventario de controles los
+  presentaba como campos capturados. Atendido en la migración
+  `20260910190000`, que hace a `insert_audit_log` deducir el contexto de la
+  petición; **commiteada, no aplicada** al cierre de este documento.
 
 **La causa es arquitectónica y conviene explicarla tal cual:** estos registros los
 escriben *triggers* de base de datos, y un trigger no tiene contexto HTTP — no

@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { enmascararIp } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,21 +32,6 @@ interface GeoResult {
   geo_provider: string;
   ip_masked: string;
   error?: string;
-}
-
-function maskIp(ip: string): string {
-  if (!ip) return "";
-  if (ip.includes(".")) {
-    const parts = ip.split(".");
-    parts[parts.length - 1] = "xxx";
-    return parts.join(".");
-  }
-  const parts = ip.split(":");
-  if (parts.length >= 4) {
-    parts[parts.length - 1] = "xxx";
-    parts[parts.length - 2] = "xxx";
-  }
-  return parts.join(":");
 }
 
 // IPinfo Lite API: https://api.ipinfo.io/lite/{ip}
@@ -139,7 +125,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (PRIVATE_RANGES.some((r) => r.test(ip))) {
-      return respond({ geo_provider: "none", ip_masked: maskIp(ip), error: "private_ip" });
+      return respond({ geo_provider: "none", ip_masked: (enmascararIp(ip) ?? ""), error: "private_ip" });
     }
 
     const supabase = createClient(
@@ -178,7 +164,7 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    return respond({ ...geoResult, ip_masked: maskIp(ip) });
+    return respond({ ...geoResult, ip_masked: (enmascararIp(ip) ?? "") });
   } catch (err) {
     if (sentryDsn) {
       Sentry.captureException(err, {

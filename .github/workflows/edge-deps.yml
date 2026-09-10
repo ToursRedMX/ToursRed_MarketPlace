@@ -10,17 +10,20 @@ name: Dependencias de Edge Functions
 # y 2.39.6) desde DOS registros distintos. Se fijaron todos en el mismo PR que
 # trajo esta guardia, asi que arranca en 0 hallazgos.
 #
-# NACER EN CERO ES LO QUE LA HACE EXIGIBLE, PERO TODAVIA NO SE EXIGE. Al
-# 10-sep-2026 `guardia-dependencias` NO esta en los checks requeridos de main
-# (son siete: typecheck, netlify/toursredmx/deploy-preview, guardia-desfase,
-# guardia-fiscal, tipos-edge, lint y smoke). O sea que hoy esto se pone rojo y
-# el merge igual procede: detecta, no previene. Agregarlo a los requeridos es
-# una decision de Axel, no un cambio de este workflow.
+# NACER EN CERO ES LO QUE LA HIZO EXIGIBLE, Y SE EXIGE. Desde el 10-sep-2026
+# `guardia-dependencias` es check requerido de main, asi que un especificador
+# sin version exacta ya no se puede mergear: paso de detectar a prevenir. Con
+# `enforce_admins: true` aplica tambien a los administradores.
+#
+# El orden importo: primero se mergeo el PR que trae este archivo y DESPUES se
+# hizo requerido el check. Al reves, cualquier PR abierto desde un main sin
+# este workflow habria quedado esperando para siempre un check que nunca iba a
+# reportar.
 #
 # Es Node puro, sin red: tarda ~1s. Corre en TODOS los PR a main sin filtro de
 # `paths`, por la misma razon que `edge-types.yml`: un check requerido que no
 # corre deja el PR pendiente para siempre, asi que el filtro lo volveria
-# imposible de exigir el dia que se decida exigirlo.
+# imposible de exigir.
 
 on:
   push:
