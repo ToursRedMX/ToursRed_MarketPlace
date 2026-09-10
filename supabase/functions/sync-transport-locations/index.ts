@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.39.6';
-import * as Sentry from "npm:@sentry/deno@9";
+import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { envRequerida } from "../_shared/env.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");

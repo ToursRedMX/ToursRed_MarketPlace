@@ -45,7 +45,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 const RAIZ = "supabase/functions";
 const PERMISO = "origen-crudo-ok";
@@ -66,7 +66,14 @@ function archivosTs(dir) {
 const hallazgos = [];
 let revisados = 0;
 
-for (const ruta of archivosTs(RAIZ)) {
+for (const rutaCruda of archivosTs(RAIZ)) {
+  // Normalizar separadores ANTES de comparar. En Windows las rutas vienen con
+  // "\", asi que el endsWith de abajo nunca empataba y la guardia se reportaba
+  // a si misma: 3 hallazgos falsos en _shared/cors.ts, solo en local. En Linux
+  // pasaba, asi que CI estaba verde y el fallo solo se veia al correr la suite
+  // antes de subir — justo cuando mas estorba. Detectado el 10-sep-2026.
+  const ruta = rutaCruda.split(sep).join("/");
+
   // El propio helper es el unico sitio donde leerlo es correcto.
   if (ruta.endsWith("_shared/cors.ts")) continue;
   revisados++;

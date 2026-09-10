@@ -1,8 +1,8 @@
 ﻿import { requireServiceRole } from "../_shared/auth.ts";
 import { calculateTaxBreakdown, type TaxTreatment } from "../_shared/taxBreakdown.ts";
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.108.2";
-import * as Sentry from "npm:@sentry/deno@9";
+import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {

@@ -1,8 +1,8 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2.114.0";
 import type { ContractData } from "../_shared/contractDocDefinition.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
-import * as Sentry from "npm:@sentry/deno@9";
+import * as Sentry from "npm:@sentry/deno@9.47.1";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {

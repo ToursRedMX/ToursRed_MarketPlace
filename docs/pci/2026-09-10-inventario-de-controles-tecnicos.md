@@ -125,9 +125,9 @@ datos, por la capa 2.
 | CORS con lista blanca | `supabase/functions/_shared/cors.ts` | `scripts/check-origin-header.mjs` — 186 archivos, 0 leen `Origin`/`Referer` crudo | 6.4 |
 | Turnstile obligatorio + límite por IP | formularios públicos | `scripts/test-edge-security-closures.mjs` — 12 escenarios en los 3 llamadores | 6.4 |
 | Autenticidad del webhook verificada | Stripe, Conekta y MercadoPago verifican **firma**; OpenPay verifica **contra la API del procesador** (`getCharge`/`getChargeMerchant`), no por firma | — | 6.2 |
-| `SET search_path` en toda `SECURITY DEFINER` | migraciones | `scripts/check-search-path.mjs`, job `guardia-search-path` (**bloquea**). Medido en vivo: **254 funciones `SECURITY DEFINER`, 0 sin `search_path`** | 6.2 |
-| Sin errores silenciados en consultas | todo `src/` | `scripts/check-supabase-errors.mjs` — línea base **0**, cualquier consulta nueva que ignore su error rompe CI | 6.2 |
-| Tipado de Edge Functions | — | job `tipos-edge` | 6.2 |
+| `SET search_path` en toda `SECURITY DEFINER` | migraciones | `scripts/check-search-path.mjs`, job `guardia-search-path` — **corre en todo PR pero NO es requerido**: se pone rojo sin impedir el merge. Medido en vivo: **254 funciones `SECURITY DEFINER`, 0 sin `search_path`** | 6.2 |
+| Sin errores silenciados en consultas | todo `src/` | `scripts/check-supabase-errors.mjs` — línea base **0**. Corre dentro de `lint`, que **sí es requerido** | 6.2 |
+| Tipado de Edge Functions | — | job `tipos-edge` (**requerido**) | 6.2 |
 
 Sobre los webhooks: los cuatro comprueban que el evento es auténtico, pero **no
 todos por el mismo mecanismo**, y conviene decírselo al auditor tal cual.
@@ -203,13 +203,44 @@ workflows son el insumo directo del DRP.
 
 ### 2.5 Integridad de la configuración
 
-| Control | Qué vigila |
-|---|---|
-| `migration-drift.yml` (`guardia-desfase`) | que no haya esquema en producción sin archivo en el repo. **Corre en todos los PR y diario.** Se disparó de verdad el 10-sep con 4 migraciones aplicadas antes de llegar a `main` |
-| `audit-supabase-secrets.yml` | secretos de Edge Functions |
-| `audit-edge-jwt.yml` | configuración de JWT por función |
-| `audit-edge-functions.yml` | auditoría periódica de Edge Functions |
-| `fiscal-guard.yml` (**bloquea**) | paridad de la fórmula de IVA entre TypeScript y plpgsql — 18 casos |
+| Control | ¿Bloquea? | Qué vigila |
+|---|---|---|
+| `migration-drift.yml` (`guardia-desfase`) | **Sí** | que no haya esquema en producción sin archivo en el repo. **Corre en todos los PR y diario.** Se disparó de verdad el 10-sep con 4 migraciones aplicadas antes de llegar a `main` |
+| `fiscal-guard.yml` (`guardia-fiscal`) | **Sí** | paridad de la fórmula de IVA entre TypeScript y plpgsql — 18 casos |
+| `edge-types.yml` (`tipos-edge`) | **Sí** | que no entre un error de tipos nuevo en `supabase/functions/`. Línea base **vacía**: exige cero |
+| `lint.yml` (`lint`) | **Sí** | 19 suites y guardias, incluidas `check-supabase-errors` y `check-origin-header` |
+| `smoke-preview.yml` (`smoke`) | **Sí** | humo contra el deploy preview |
+| `search-path-guard.yml` (`guardia-search-path`) | No | `SET search_path` en toda `SECURITY DEFINER` nueva |
+| `edge-deps.yml` (`guardia-dependencias`) | No | que ningún import remoto de `supabase/functions/` entre sin **versión exacta**. Nació en 0 tras fijar 434 especificadores el 10-sep. Publica el inventario de 6.3.2 en el resumen de cada ejecución |
+| `audit-supabase-secrets.yml` | No | secretos de Edge Functions |
+| `audit-edge-jwt.yml` | No | configuración de JWT por función |
+| `audit-edge-functions.yml` | No | auditoría periódica de Edge Functions |
+
+### La columna «¿Bloquea?» es la que importa, y es la que estaba mal
+
+Hasta el 10-sep-2026 este documento afirmaba que `guardia-search-path`
+**bloqueaba**. No es cierto: corre en cada PR y se pone roja, pero no está entre
+los checks requeridos de `main`, así que el merge procede igual. Se corrigió al
+releer la protección de rama en la API en vez de confiar en lo que decía este
+documento.
+
+**La distinción no es un tecnicismo.** Una guardia que corre detecta; solo una
+requerida previene. Presentarle a un auditor un control como preventivo cuando
+es detectivo es la clase de imprecisión que le hace dudar del resto del
+inventario — y con razón.
+
+Los checks requeridos son **siete**: los cinco de esta tabla marcados «Sí», más
+`typecheck` y `netlify/toursredmx/deploy-preview`, que no son guardias. Se leen
+así, y **no de aquí** — este documento se desactualiza, la API no:
+
+```bash
+gh api repos/ToursRedMX/ToursRed_MarketPlace/branches/main/protection \
+  --jq '.required_status_checks.contexts'
+```
+
+Con `enforce_admins: true`, aplican también a los administradores. Al 10-sep-2026
+son: `typecheck`, `netlify/toursredmx/deploy-preview`, `guardia-desfase`,
+`guardia-fiscal`, `tipos-edge`, `lint` y `smoke`.
 
 `guardia-desfase` merece énfasis: es un control de gestión de cambios que **ya
 demostró funcionar en producción**, no en teoría. Eso es exactamente lo que pide
@@ -256,7 +287,7 @@ prepararse.
 | 1 | **Un `account_executive` activo sin MFA.** Los 2 admins sí lo tienen verificado | Depende de si ese rol entra en alcance | 8.4 |
 | 2 | **Ventana del JWT tras bloquear.** El token ya emitido vive hasta expirar | Acotado: dentro de esa ventana RLS ya no le responde | 8.2.5 |
 | 3 | **Sin escaneos ASV ni pruebas de penetración.** Depende del SAQ; un ASV es una contratación, no algo que corramos nosotros → [`escaneos-y-pruebas-de-intrusion.md`](escaneos-y-pruebas-de-intrusion.md) | 11.3 |
-| 4 | ~~Sin inventario formal de componentes de terceros~~ **Hecho** → [`inventario-de-componentes-de-terceros.md`](inventario-de-componentes-de-terceros.md). Dejó un hueco técnico nuevo: 3 de 6 componentes de Edge Functions **sin versión fija** | 6.3.2 |
+| 4 | ~~Sin inventario formal de componentes de terceros~~ **Hecho** → [`inventario-de-componentes-de-terceros.md`](inventario-de-componentes-de-terceros.md). El hueco técnico que dejó —componentes de Edge Functions sin versión fija— **también está cerrado**: eran 4 de 6, no 3, y 434 de 526 imports; se fijaron todos y lo vigila `guardia-dependencias` | 6.3.2 |
 | 5 | ~~Retención sin política escrita~~ **Hecho** → [`retencion-y-revision-de-bitacora.md`](retencion-y-revision-de-bitacora.md). Pero al medirla salió algo peor: solo hay **~2.5 meses de historia**, y los 12 no se recuperan hacia atrás | 10.5.1 |
 | 6 | ~~Sin revisión periódica documentada~~ **Procedimiento escrito** (mismo documento), con 7 consultas listas para correr. Falta que Axel asigne responsables | 10.4 |
 | 7 | **Procesadores en modo pruebas.** Stripe en cuenta de test, Facturapi con `sk_test_` y `pac_sandbox_mode = true` | No es hueco de PCI, pero el auditor va a ver un entorno que no es el productivo | — |
