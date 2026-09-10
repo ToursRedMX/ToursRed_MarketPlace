@@ -92,9 +92,14 @@ es **correcta por diseño** y otra **sí es un hueco**:
   **ningún** evento de negocio trae IP: **795 de 795**. `DELETE` y `UPDATE` no
   son el hueco, son dos ejemplos de él. Y `session_id` y `correlation_id` están
   vacíos en **los 1,400 registros**, pese a que el inventario de controles los
-  presentaba como campos capturados. Atendido en la migración
-  `20260910190000`, que hace a `insert_audit_log` deducir el contexto de la
-  petición; **commiteada, no aplicada** al cierre de este documento.
+  presentaba como campos capturados. **Cerrado el 10-sep-2026**: la migración
+  `20260910190000` hace que `insert_audit_log` deduzca el contexto de la
+  petición y **está aplicada en producción**, y las 49 Edge Functions que
+  escriben en tablas auditadas reenvían el origen del cliente, vigiladas por
+  `check-audit-context.mjs`. Los 1,400 registros viejos siguen sin origen: no
+  hay backfill posible, ese dato nunca existió. Conviene que la **primera
+  revisión** que se corra con este procedimiento compruebe que los eventos
+  nuevos sí lo traen — hoy está probado en CI, no observado en producción.
 
 **La causa es arquitectónica y conviene explicarla tal cual:** estos registros los
 escriben *triggers* de base de datos, y un trigger no tiene contexto HTTP — no

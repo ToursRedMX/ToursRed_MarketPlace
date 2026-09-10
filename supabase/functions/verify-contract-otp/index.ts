@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2.114.0";
 import type { ContractData, AnexoBData } from "../_shared/contractDocDefinition.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -62,8 +63,8 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, opcionesConContexto(req,
+    ));
 
     const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authErr || !user) return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: corsHeaders });

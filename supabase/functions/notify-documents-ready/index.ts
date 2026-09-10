@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.6";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,9 +38,9 @@ Deno.serve(async (req: Request) => {
     const anonKey     = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     // Verify caller identity
-    const callerClient = createClient(supabaseUrl, anonKey, {
+    const callerClient = createClient(supabaseUrl, anonKey, opcionesConContexto(req, {
       global: { headers: { Authorization: authHeader } },
-    });
+    }));
     const { data: { user }, error: userErr } = await callerClient.auth.getUser();
     if (userErr || !user) {
       return new Response(JSON.stringify({ error: "No autorizado" }), {
@@ -48,7 +49,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const adminClient = createClient(supabaseUrl, serviceKey);
+    const adminClient = createClient(supabaseUrl, serviceKey, opcionesConContexto(req));
 
     // Fetch agency info
     const { data: agency, error: agencyErr } = await adminClient

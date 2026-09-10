@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.1
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -74,7 +75,7 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, opcionesConContexto(req));
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return err("No authorization header", 401);
@@ -110,9 +111,9 @@ Deno.serve(async (req: Request) => {
     // not the service-role client: requires_aal2_check()/has_aal2() read auth.uid()/
     // auth.jwt(), which resolve to NULL under a service-role session and silently
     // no-op the check.
-    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, opcionesConContexto(req, {
       global: { headers: { Authorization: authHeader } },
-    });
+    }));
     const aal2 = await checkAal2Required(userClient);
     if (!aal2.allowed) {
       return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores", aal2.code);

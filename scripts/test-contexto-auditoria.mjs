@@ -41,6 +41,8 @@ import { readFileSync, readdirSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import vm from 'node:vm';
+import ts from 'typescript';
 
 const MODULO = 'supabase/functions/_shared/contextoAuditoria.ts';
 
@@ -57,24 +59,50 @@ const VECTORES = [
 // ---------------------------------------------------------------------------
 // 1. La implementacion de TypeScript
 // ---------------------------------------------------------------------------
-// El modulo es TypeScript para Deno; se le quitan los tipos con una
-// transformacion minima en vez de arrastrar el compilador: el archivo solo usa
-// anotaciones simples y no hay nada que valga la pena type-checkear aqui (de
-// eso ya se encarga `tipos-edge`).
+// Se transpila con el compilador de verdad en vez de quitar los tipos a mano
+// con expresiones regulares: el modulo tiene genericos y firmas multilinea, y
+// un limpiador artesanal se rompe con eso — y, peor, se rompe en silencio.
+// Mismo patron que `test-mfa-aal2.mjs`.
+//
 const fuente = readFileSync(MODULO, 'utf8');
 
+// El modulo NO debe importar nada. Que no importe `supabase-js` es justo lo que
+// le permite servir a las 49 funciones en alcance aunque usen TRES versiones
+// distintas (30 en npm 2.116.0, 13 en npm 2.39.6, 6 en jsr 2.114.0): un import
+// aqui meteria una SEGUNDA copia en el bundle de las 19 que usan otra.
+//
+// Se comprueba sobre el TEXTO y no con un centinela en `require`. Se intento
+// primero con el centinela y no servia: `ts.transpileModule` elimina los
+// imports que no se usan, asi que meter un import sin usarlo no emitia ningun
+// `require` y la prueba pasaba tan campante. Se descubrio metiendo el import a
+// proposito para ver fallar la prueba — y no fallo.
+const importaAlgo = fuente.split('\n').filter((l) => /^\s*import\s/.test(l));
+assert.deepEqual(
+  importaAlgo, [],
+  `contextoAuditoria.ts no debe importar nada y esta importando:\n  ${importaAlgo.join('\n  ')}\n` +
+  'Un import de supabase-js aqui mete una segunda copia en el bundle de las 19 ' +
+  'funciones en alcance que usan otra version.',
+);
+
 function evaluar(src) {
-  const js = src
-    .replace(/export function (\w+)\(([^)]*)\)\s*:\s*[^{]+\{/g, 'function $1($2) {')
-    .replace(/(\w+)\s*:\s*(string|Request)\s*\|\s*null\s*\|\s*undefined/g, '$1')
-    .replace(/(\w+)\s*:\s*(string|Request)/g, '$1')
-    .replace(/const (\w+)\s*:\s*Record<string,\s*string>\s*=/g, 'const $1 =');
-  const modulo = {};
-  new Function('exports', `${js}; exports.enmascararIp = enmascararIp; exports.extraerIpDelCliente = extraerIpDelCliente;`)(modulo);
-  return modulo;
+  const js = ts.transpileModule(src, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText;
+
+  const requerir = (especificador) => {
+    throw new Error(
+      `contextoAuditoria.ts no debe importar nada, y esta importando "${especificador}". ` +
+      `Si importa una version de supabase-js, mete una SEGUNDA copia en el bundle de las ` +
+      `19 funciones en alcance que usan otra version.`,
+    );
+  };
+
+  const contexto = { exports: {}, require: requerir, Request, Headers, crypto, console };
+  vm.runInNewContext(js, contexto);
+  return contexto.exports;
 }
 
-const { enmascararIp, extraerIpDelCliente } = evaluar(fuente);
+const { enmascararIp, extraerIpDelCliente, opcionesConContexto } = evaluar(fuente);
 
 for (const { entrada, esperado, nota } of VECTORES) {
   assert.equal(enmascararIp(entrada), esperado, `TypeScript, ${nota}: ${entrada}`);
@@ -104,6 +132,58 @@ assert.equal(
   extraerIpDelCliente(pedir({ 'x-forwarded-for': '  4.4.4.4  ' })),
   '4.4.4.4', 'se recortan espacios');
 assert.equal(extraerIpDelCliente(pedir({})), null, 'sin cabeceras, null');
+
+// ---------------------------------------------------------------------------
+// 2-bis. opcionesConContexto: la fusion de cabeceras
+// ---------------------------------------------------------------------------
+// Lo explicito del llamador tiene que ganar al contexto deducido.
+//
+// OJO CON EL ARGUMENTO, QUE ES FACIL EXAGERARLO: el `Authorization` que pasan
+// 24 de las 49 funciones en alcance no corre peligro con ninguno de los dos
+// ordenes, porque `cabecerasDeContexto()` nunca escribe `Authorization`. Se
+// comprueba igual, pero el aserto que de verdad detecta una inversion de orden
+// es el de `x-forwarded-for` — probado invirtiendo el spread a proposito: el
+// de Authorization seguia pasando y el de x-forwarded-for fallo.
+const peticion = pedir({
+  'cf-connecting-ip': '9.9.9.9',
+  'user-agent': 'NavegadorDePrueba/1.0',
+  'x-correlation-id': '11111111-2222-3333-4444-555555555555',
+});
+
+const opciones = opcionesConContexto(peticion, {
+  auth: { persistSession: false },
+  global: { headers: { Authorization: 'Bearer el-jwt-del-llamador' } },
+});
+
+const cab = opciones.global.headers;
+assert.equal(cab.Authorization, 'Bearer el-jwt-del-llamador',
+  'el Authorization del llamador no se puede perder');
+assert.equal(cab['x-forwarded-for'], '9.9.9.9', 'se reenvia la IP del cliente');
+assert.equal(cab['user-agent'], 'NavegadorDePrueba/1.0', 'se reenvia el user agent');
+assert.equal(cab['x-correlation-id'], '11111111-2222-3333-4444-555555555555',
+  'se propaga la correlacion que trae el cliente');
+
+// Las demas opciones sobreviven; no se pierde nada por el camino.
+assert.equal(opciones.auth.persistSession, false, 'las opciones ajenas se conservan');
+
+// Y si el llamador manda su propio x-forwarded-for, gana el suyo.
+assert.equal(
+  opcionesConContexto(peticion, { global: { headers: { 'x-forwarded-for': '203.0.113.7' } } })
+    .global.headers['x-forwarded-for'],
+  '203.0.113.7', 'lo explicito gana tambien para x-forwarded-for');
+
+// Sin opciones: funciona igual y no revienta.
+assert.equal(
+  opcionesConContexto(peticion).global.headers['x-forwarded-for'],
+  '9.9.9.9', 'sin opciones tambien reenvia contexto');
+
+// Una peticion sin cabeceras no debe inventar IP ni user agent. Un origen
+// inventado es peor que ninguno.
+const cabVacia = opcionesConContexto(pedir({})).global.headers;
+assert.equal(cabVacia['x-forwarded-for'], undefined, 'sin IP no se inventa IP');
+assert.equal(cabVacia['user-agent'], undefined, 'sin user agent no se inventa');
+assert.match(cabVacia['x-correlation-id'], /^[0-9a-f-]{36}$/,
+  'sin correlacion se abre una nueva para la peticion');
 
 // ---------------------------------------------------------------------------
 // 3. La migracion promete los mismos vectores
@@ -241,7 +321,7 @@ try {
 
 console.log(
   `Contexto de auditoria: ${VECTORES.length} vectores en TypeScript y afirmados en ` +
-  `${migracion}, mas 5 casos de precedencia de cabeceras.`,
+  `${migracion}, mas 5 casos de precedencia de cabeceras y 11 de fusion de cliente.`,
 );
 if (paridadEjecutada > 0) {
   console.log(`Paridad TypeScript <-> SQL EJECUTADA contra Postgres: ${paridadEjecutada} casos iguales.`);

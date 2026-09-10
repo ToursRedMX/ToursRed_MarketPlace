@@ -116,3 +116,59 @@ export function cabecerasDeContexto(req: Request): Record<string, string> {
 
   return cabeceras;
 }
+
+/**
+ * Opciones de cliente de Supabase con el contexto del cliente ya reenviado.
+ *
+ *     const supabase = createClient(url, key, opcionesConContexto(req));
+ *     const conJwt   = createClient(url, key, opcionesConContexto(req, {
+ *       global: { headers: { Authorization: authHeader } },
+ *     }));
+ *
+ * POR QUE DEVUELVE OPCIONES Y NO UN CLIENTE
+ *
+ * La primera version de esto devolvia el cliente ya construido, importando
+ * `createClient` aqui. Se descarto al medirlo: de las 49 funciones en alcance,
+ * **30 usan `supabase-js@2.116.0`, 13 usan `@2.39.6` y 6 usan `jsr:@2.114.0`**.
+ * Un helper que importe una version concreta mete una SEGUNDA copia de
+ * supabase-js en el bundle de las 19 que usan otra — o sea, reintroduce dentro
+ * de una funcion la mezcla de versiones que el PR #198 acababa de ordenar
+ * entre funciones. Y ya habia dado la cara: `stripe-webhook` declara
+ * `type ClienteSupabase = SupabaseClient` importado de 2.39.6, y no aceptaba
+ * el cliente de 2.116.0 que devolvia el helper.
+ *
+ * Devolviendo solo las opciones, cada funcion sigue usando SU `createClient`.
+ * Una copia, sus tipos, y este modulo no importa supabase-js en absoluto.
+ *
+ * COMO SE FUSIONA
+ *
+ * Las cabeceras de contexto van DEBAJO de las del llamador, asi que lo
+ * explicito siempre gana.
+ *
+ * Sin venderlo de mas: HOY el `Authorization` que pasan 24 de las 49 funciones
+ * no corre peligro con ninguno de los dos ordenes, porque
+ * `cabecerasDeContexto()` nunca escribe `Authorization`. Las unicas que pueden
+ * chocar son las tres que si pone. El orden importa por otra cosa: que una
+ * funcion pueda reenviar a proposito otro origen, y que el dia que el contexto
+ * crezca no pise nada del llamador sin que alguien lo decida.
+ *
+ * SOBRE LOS WEBHOOKS
+ *
+ * En `conekta-webhook`, `openpay-webhook` y compania el "cliente" es el
+ * procesador de pagos, asi que se registra SU origen. Es correcto y util
+ * —permite comprobar que el evento vino de sus rangos— y no se confunde con
+ * una persona porque `actor_id` sigue en NULL.
+ */
+export function opcionesConContexto<T extends object>(req: Request, opciones?: T) {
+  const global = (opciones as { global?: { headers?: Record<string, string> } } | undefined)
+    ?.global ?? {};
+  const cabecerasPropias = global.headers ?? {};
+
+  return {
+    ...((opciones ?? {}) as T),
+    global: {
+      ...global,
+      headers: { ...cabecerasDeContexto(req), ...cabecerasPropias },
+    },
+  };
+}

@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { cubreElAnticipo } from "../_shared/exigible.ts";
 import { registrarFallo } from "../_shared/falloSilencioso.ts";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -574,7 +575,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    , opcionesConContexto(req));
 
     // Del cuerpo solo se usan orderId y context. El front tambien manda
     // bookingId, giftCardId y slotId, pero NO se leen a proposito: el
@@ -598,7 +599,7 @@ Deno.serve(async (req: Request) => {
     if (context !== "gift_card") {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      const authClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+      const authClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, opcionesConContexto(req, { global: { headers: { Authorization: authHeader } } }));
       const { data: { user } } = await authClient.auth.getUser();
       if (!user) return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       // Se guarda para `confirmBooking`, que es donde se puede comprobar la

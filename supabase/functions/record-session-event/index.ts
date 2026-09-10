@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { enmascararIp, extraerIpDelCliente } from "../_shared/contextoAuditoria.ts";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -161,7 +162,7 @@ Deno.serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, opcionesConContexto(req));
 
     // Verify caller identity: require a valid JWT (user session or anon-key session).
     // The service_role key is also accepted for internal calls.
@@ -182,9 +183,9 @@ Deno.serve(async (req: Request) => {
 
     if (!isServiceRole) {
       const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const userClient = createClient(supabaseUrl, anonKey, {
+      const userClient = createClient(supabaseUrl, anonKey, opcionesConContexto(req, {
         global: { headers: { Authorization: authHeader } },
-      });
+      }));
 
       const { data: { user }, error: authError } = await userClient.auth.getUser();
       if (authError) {

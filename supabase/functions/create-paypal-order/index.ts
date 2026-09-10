@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { exigibleAlProcesador } from "../_shared/exigible.ts";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -54,7 +55,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    , opcionesConContexto(req));
 
     const authHeader = req.headers.get("Authorization");
     const { bookingId, amount: bodyAmount, description, context, extrasBody, plan_id, effective_amount, pay_full_balance } = await req.json();

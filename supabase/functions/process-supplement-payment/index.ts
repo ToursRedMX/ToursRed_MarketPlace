@@ -4,6 +4,7 @@ import Stripe from "npm:stripe@22.3.0";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,10 +39,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, opcionesConContexto(req));
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, opcionesConContexto(req, {
       global: { headers: { Authorization: authHeader } },
-    });
+    }));
 
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {

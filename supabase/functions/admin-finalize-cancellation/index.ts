@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.1
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
 async function cancelStampedCfds(
   // Solo se usan .from() y .functions.invoke(). Pedir el cliente completo
@@ -74,9 +75,9 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization") || "";
 
     // Verify admin via JWT
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, opcionesConContexto(req, {
       global: { headers: { Authorization: authHeader } },
-    });
+    }));
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return err("No autorizado", 401);
@@ -95,9 +96,9 @@ Deno.serve(async (req: Request) => {
     // (anon key + Authorization), not the service-role client, so that
     // requires_aal2_check()/has_aal2() reliably read the real auth.uid()/auth.jwt()
     // instead of depending on how the service-role client resolves headers.
-    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, opcionesConContexto(req, {
       global: { headers: { Authorization: authHeader } },
-    });
+    }));
     const aal2 = await checkAal2Required(userClient);
     if (!aal2.allowed) {
       return aal2Response(aal2.reason || "Se requiere autenticacion de dos factores", aal2.code);
@@ -114,7 +115,7 @@ Deno.serve(async (req: Request) => {
     if (!admin_cancellation_id) return err("admin_cancellation_id es requerido");
 
     // Service-role client for mutations
-    const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+    const serviceClient = createClient(supabaseUrl, supabaseServiceKey, opcionesConContexto(req));
 
     // ============================================================
     // Guard 1: Check current booking status
