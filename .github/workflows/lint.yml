@@ -131,6 +131,12 @@ jobs:
       - name: Verify blocked-account check fails closed
         run: node scripts/test-auth-falla-cerrado.mjs
 
+      # PayPal: que el dinero cobrado quede asentado aunque no alcance el piso
+      # —si no, dos pagos parciales no se suman— y que solo cuente como anticipo
+      # el dinero cuyo charge_context es booking_deposit.
+      - name: Verify PayPal booking confirmation records every capture
+        run: node scripts/test-paypal-confirmacion.mjs
+
       # La regla del exigible y del piso, que `9dd296b` rompio en 5 sitios al
       # tomar el maximo de un importe bruto y uno neto. Casos con reservas reales.
       - name: Verify the amount-due and deposit-floor rules
