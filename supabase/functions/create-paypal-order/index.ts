@@ -124,17 +124,60 @@ Deno.serve(async (req: Request) => {
         });
       }
       amount = Number(supp.total_paid);
-    } else if (context === "extras" || context === "payment_plan_installment") {
-      amount = Number(bodyAmount);
-      if (!amount || amount <= 0) {
-        return new Response(JSON.stringify({ error: "Monto inválido" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    } else if (context === "extras") {
+      const extraType = extrasBody?.type || "insurance";
+      if (extraType === "optional_service") {
+        const serviceId = extrasBody?.tour_optional_service_id;
+        const { data: service } = await supabase
+          .from("booking_optional_services")
+          .select("subtotal, total_paid, quantity, booking_id, paid_at, is_cancelled, tour_optional_services(price_per_person)")
+          .eq("tour_optional_service_id", serviceId)
+          .eq("booking_id", bookingId)
+          .maybeSingle();
+        if (!service || service.is_cancelled || service.paid_at) {
+          return new Response(JSON.stringify({ error: "Servicio opcional no disponible" }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        const requestedQuantity = Math.max(1, Number(extrasBody?.quantity || service.quantity || 1));
+        const unitPrice = Number((service.tour_optional_services as any)?.price_per_person || 0);
+        amount = unitPrice > 0 ? Number((unitPrice * requestedQuantity).toFixed(2)) : Number(service.total_paid || service.subtotal || 0);
+      } else {
+        const { data: bookingExtra } = await supabase
+          .from("bookings")
+          .select("travelers_count, count_adultos, count_ninos, count_infantes, count_adultos_mayores, selected_date, tours:tour_id(start_date, end_date)")
+          .eq("id", bookingId)
+          .maybeSingle();
+        const { data: settings } = await supabase
+          .from("platform_settings")
+          .select("travel_insurance_price_per_day_per_traveler, service_charge_percentage")
+          .maybeSingle();
+        if (!bookingExtra) throw new Error("Reserva no encontrada");
+        const travelers = Math.max(1, Number(bookingExtra.travelers_count || 0) || Number(bookingExtra.count_adultos || 0) + Number(bookingExtra.count_ninos || 0) + Number(bookingExtra.count_infantes || 0) + Number(bookingExtra.count_adultos_mayores || 0));
+        const tour = bookingExtra.tours as any;
+        const start = new Date(bookingExtra.selected_date || tour?.start_date || Date.now());
+        const end = tour?.end_date ? new Date(tour.end_date) : start;
+        const days = Math.max(1, Math.min(30, Number(extrasBody?.insurance_days) || Math.ceil(Math.max(0, end.getTime() - start.getTime()) / 86400000) || 1));
+        const price = Number(settings?.travel_insurance_price_per_day_per_traveler || 79);
+        const subtotal = Number((price * days * travelers).toFixed(2));
+        const fee = Number(settings?.service_charge_percentage || 0);
+        amount = Number((subtotal + subtotal * fee / 100).toFixed(2));
       }
+      if (!amount || amount <= 0) return new Response(JSON.stringify({ error: "Monto inválido" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } else if (context === "payment_plan_installment") {
+      const { data: installments } = await supabase
+        .from("booking_payment_plan_installments")
+        .select("amount_due, amount_paid, status, booking_id")
+        .eq("plan_id", plan_id)
+        .in("status", ["pending", "partially_paid"]);
+      const remaining = (installments || []).reduce((sum: number, row: any) => sum + Math.max(0, Number(row.amount_due || 0) - Number(row.amount_paid || 0)), 0);
+      const requested = bodyAmount != null ? Number(bodyAmount) : remaining;
+      if (!remaining || !requested || requested <= 0 || requested > remaining + 0.01) {
+        return new Response(JSON.stringify({ error: "Monto de cuota inválido o superior al saldo pendiente" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      amount = requested;
     } else {
       const { data: booking, error: bookingErr } = await supabase
         .from("bookings")
-        .select("amount_due_now, deposit_amount, payment_status")
+        .select("amount_due_now, deposit_amount, membership_cost, payment_status")
         .eq("id", bookingId)
         .maybeSingle();
       if (bookingErr || !booking) {
@@ -155,9 +198,10 @@ Deno.serve(async (req: Request) => {
         .eq("payment_processor", "paypal");
       const alreadyPaid = (existingPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
       // Ver nota en create-openpay-checkout: el techo es el exigible, no el anticipo.
-      const dueNow = booking.amount_due_now != null
-        ? Number(booking.amount_due_now)
-        : Number(booking.deposit_amount);
+      const dueNow = Math.max(
+        Number(booking.deposit_amount || 0),
+        Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0),
+      );
       const remainingBalance = Math.max(0, dueNow - alreadyPaid);
       if (remainingBalance <= 0) {
         return new Response(JSON.stringify({ error: "Esta reserva ya está pagada en su totalidad" }), {
@@ -261,11 +305,13 @@ Deno.serve(async (req: Request) => {
       },
     };
 
+    const requestId = `create_${context}_${bookingId || plan_id}`;
     const orderResponse = await fetch(`${base}/v2/checkout/orders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
+        "PayPal-Request-Id": requestId,
       },
       body: JSON.stringify(orderPayload),
     });

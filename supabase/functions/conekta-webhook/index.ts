@@ -101,17 +101,9 @@ Deno.serve(async (req: Request) => {
     // Conekta uses RSA-SHA256 signing (not HMAC). The public key is not secret — it's
     // designed to be shared. We embed it directly so verification works even if the
     // CONEKTA_WEBHOOK_SIGNING_KEY env var is missing or holds a stale HMAC value.
-    const CONEKTA_WEBHOOK_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlcnbdNdXlwl8CE5peF4Y
-+MX1JgwQx8q1GLkXB5FyAGzhMC+BKpx39WC+5u4eg11XeBKHo/gP/VxPZLFYGYjK
-H53USd5UYP178z2gHTZVMjIUHGvwf8sCAqICOCOWfivMuReqhnHHaae7whW2vDm0
-ZSj55evrN3zzdlh0Usx/1xgdbLZlgyaHTe63wCPDKuLb9L90tv0lcpyWkgI/TAq7
-Cry7hm9NuMeo95Vm5fqBtsQum9AwT9I8Qk0uVUvA9cgeNrdaUXAgHHhk0YwkbOQk
-zYCOsxIEAZSRKUhId1xG67KNn0m1ZvOCC7ftNEC6xy7CItO3FWF3ZbAZx0PfUZAd
-FwIDAQAB
------END PUBLIC KEY-----`;
 
-    const signingKey = Deno.env.get("CONEKTA_WEBHOOK_SIGNING_KEY") || CONEKTA_WEBHOOK_PUBLIC_KEY;
+    const signingKey = Deno.env.get("CONEKTA_WEBHOOK_SIGNING_KEY");
+    if (!signingKey) return jsonResponse({ error: "Conekta webhook signing key not configured" }, 500);
     // Conekta sends the RSA-SHA256 signature (base64) in the digest header
     const digestHeader = req.headers.get("digest");
 
@@ -232,6 +224,16 @@ FwIDAQAB
     // succession, and querying the live order status may already return "paid" by
     // the time earlier events are processed, causing duplicate confirmations.
     if (eventType === "order.paid") {
+      if (!conektaOrder) {
+        console.error(`Unable to retrieve authoritative Conekta order ${orderId}; keeping transaction pending`);
+        return jsonResponse({ received: true });
+      }
+      const authoritativeAmount = Number(conektaOrder?.amount ?? eventData.amount ?? 0) / 100;
+      if (authoritativeAmount > 0 && Math.abs(authoritativeAmount - Number(tx.amount || 0)) > 0.5) {
+        console.error(`Conekta order amount mismatch for ${orderId}: ${authoritativeAmount} vs ${tx.amount}`);
+        await supabase.from("payment_transactions").update({ status: "requires_action", metadata: { ...(tx.metadata || {}), amount_mismatch: true, authoritative_amount: authoritativeAmount } }).eq("id", tx.id);
+        return jsonResponse({ received: true });
+      }
       // Atomic idempotency gate: only transition to "succeeded" if not already succeeded.
       // If 0 rows updated, another concurrent execution already claimed this event —
       // skip all downstream logic (booking confirmation, CFDI, email) to avoid duplication.
@@ -347,17 +349,16 @@ FwIDAQAB
 
         const { data: booking } = await supabase
           .from("bookings")
-          .select("amount_due_now, deposit_amount, total_price, user_payment, payment_status, status")
+          .select("amount_due_now, deposit_amount, membership_cost, total_price, user_payment, payment_status, status")
           .eq("id", bookingId)
           .maybeSingle();
 
         if (booking) {
           // Confirmar contra el exigible real. Con deposit_amount se confirmaba la
           // reserva cobrando de menos (quedaban fuera cargo por servicio y extras).
-          const requiredAmount = Number(booking.amount_due_now)
-            || Number(booking.deposit_amount)
-            || Number(booking.total_price)
-            || 0;
+          const requiredAmount = booking.amount_due_now != null
+            ? Math.max(Number(booking.deposit_amount || 0), Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0))
+            : Number(booking.deposit_amount || booking.total_price || 0);
           const newUserPayment = Math.max(0, Number(booking.user_payment || 0) - Number(tx.amount));
 
           if (totalPaid >= requiredAmount) {

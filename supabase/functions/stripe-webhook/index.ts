@@ -366,7 +366,8 @@ Deno.serve(async (req) => {
     };
 
     switch (event.type) {
-      case 'checkout.session.completed': {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
         const session = event.data.object;
 
         const bookingId = session.metadata?.booking_id;

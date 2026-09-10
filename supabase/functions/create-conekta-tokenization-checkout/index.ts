@@ -48,9 +48,22 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Se requiere un monto válido para el checkout de tokenización" }, 400);
     }
 
+    if (booking_id) {
+      const { data: booking } = await supabase
+        .from("bookings")
+        .select("user_id, amount_due_now, deposit_amount")
+        .eq("id", booking_id)
+        .maybeSingle();
+      const expected = Number(booking?.amount_due_now ?? booking?.deposit_amount ?? 0);
+      if (!booking || booking.user_id !== user.id || expected <= 0 || Number(amount) > expected + 0.01) {
+        return jsonResponse({ error: "Reserva no válida para tokenización" }, 403);
+      }
+    }
+
     const { data: userProfile } = await supabase
       .from("users")
       .select("first_name, last_name")
+      .eq("id", user.id)
       .maybeSingle();
 
     const customerName = `${userProfile?.first_name || ""} ${userProfile?.last_name || ""}`.trim() || "Cliente";

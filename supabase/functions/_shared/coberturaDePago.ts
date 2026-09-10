@@ -90,10 +90,10 @@ export interface Cobertura {
  * NO se ha insertado la fila en `payment_transactions` — eso pasa despues, al
  * final del case.
  *
- * Si no se puede leer la reserva, devuelve `suficiente: true`. Es a proposito:
- * el cobro ya se hizo y negarse a confirmar por un parpadeo de la base dejaria
- * una reserva pagada sin confirmar, que es peor. El fallo queda anotado en
- * `detalle.noVerificable` para que el llamador lo registre.
+ * Si no se puede leer la reserva, devuelve `suficiente: false`. El cobro se
+ * conserva para conciliacion, pero una lectura fallida no debe convertirse en
+ * una confirmacion fail-open. El llamador deja la reserva en `processing` y
+ * puede reintentar la conciliacion cuando la base vuelva a responder.
  */
 export async function verificarCoberturaDePago(
   supabase: any,
@@ -118,7 +118,7 @@ export async function verificarCoberturaDePago(
 
   if (errorReserva || !reserva) {
     return {
-      suficiente: true,
+      suficiente: false,
       sospechosa: false,
       pagado: monto,
       cubierto: monto,

@@ -142,11 +142,11 @@ const casos = [
     espera: { suficiente: true, sospechosa: false },
   },
   {
-    nombre: 'no se pudo leer la reserva: se confirma igual, pero marcado',
+    nombre: 'no se pudo leer la reserva: queda pendiente por fail-closed',
     reserva: null,
     errorReserva: { message: 'timeout' },
     monto: 500,
-    espera: { suficiente: true, sospechosa: false, noVerificable: true },
+    espera: { suficiente: false, sospechosa: false, noVerificable: true },
   },
 ];
 
