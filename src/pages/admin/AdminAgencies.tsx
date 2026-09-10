@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Building, Users, Eye, EyeOff, Mail, Phone, Globe, Calendar, Search, Filter, MoreVertical, CheckCircle, XCircle, CreditCard as Edit, Save, X, Percent, DollarSign, AlertTriangle, User, MapPin, ArrowUpDown, ArrowUp, ArrowDown, FileText, RefreshCw } from 'lucide-react';
 import { getAllAgencies, updateAgencyStatus, supabase } from '../../lib/supabase';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
+import { tasaEfectivaAgencia } from '../../utils/comisionAgencia';
 import AgencyContractSection from '../../components/AgencyContractSection';
 
 interface Agency {
@@ -70,7 +71,12 @@ const AdminAgencies: React.FC = () => {
     contact_email: '',
     contact_phone: '',
     website: '',
-    commission_rate: 0.10,
+    // Placeholder: `openEditModal` siempre lo sobreescribe antes de abrir el
+    // modal (es el unico camino que hace `setIsEditingAgency(true)`), asi que
+    // este valor nunca se guarda. Se deja en 0 y no en 0.10 para que, si algun
+    // dia se abriera el modal por otra via, el bug fuera visible en pantalla en
+    // vez de escribir una comision del 10% que nadie eligio.
+    commission_rate: 0,
     rfc: '',
     razon_social: '',
     regimen_fiscal: '',
@@ -108,7 +114,9 @@ const AdminAgencies: React.FC = () => {
   useEffect(() => {
     fetchAgencies();
     supabase.from('platform_settings').select('agency_commission_percentage').limit(1).maybeSingle()
-      .then(({ data }) => { if (data?.agency_commission_percentage) setPlatformDefaultCommission(data.agency_commission_percentage); });
+      .then(({ data }) => {
+        if (data?.agency_commission_percentage != null) setPlatformDefaultCommission(data.agency_commission_percentage);
+      });
   }, []);
 
   const fetchAgencies = async () => {
@@ -524,7 +532,7 @@ const AdminAgencies: React.FC = () => {
       contact_email: agency.contact_email,
       contact_phone: agency.contact_phone || '',
       website: agency.website || '',
-      commission_rate: agency.commission_rate || 0.10,
+      commission_rate: tasaEfectivaAgencia(agency.commission_rate, platformDefaultCommission),
       rfc: agency.rfc || '',
       razon_social: agency.razon_social || '',
       regimen_fiscal: agency.regimen_fiscal || '',
@@ -545,7 +553,7 @@ const AdminAgencies: React.FC = () => {
       persona_type: (agency.persona_type as '' | 'persona_fisica' | 'persona_moral') || '',
       representante_legal_nombre: agency.representante_legal_nombre || '',
     });
-    const rate = agency.commission_rate || 0.10;
+    const rate = tasaEfectivaAgencia(agency.commission_rate, platformDefaultCommission);
     const pct = rate * 100;
     setCommissionInput(Number.isInteger(pct) ? String(pct) : pct.toFixed(1));
     // Initialize negotiated commission fields
@@ -664,8 +672,8 @@ const AdminAgencies: React.FC = () => {
           bValue = b.total_revenue || 0;
           break;
         case 'commission':
-          aValue = a.commission_rate || 0;
-          bValue = b.commission_rate || 0;
+          aValue = tasaEfectivaAgencia(a.commission_rate, platformDefaultCommission);
+          bValue = tasaEfectivaAgencia(b.commission_rate, platformDefaultCommission);
           break;
         case 'platform_commission':
           aValue = a.platform_commission || 0;
@@ -750,8 +758,8 @@ const AdminAgencies: React.FC = () => {
     totalTours: agencies.reduce((sum, a) => sum + (a.tour_count || 0), 0),
     totalBookings: agencies.reduce((sum, a) => sum + (a.booking_count || 0), 0),
     averageCommission: agencies.length > 0
-      ? Math.round((agencies.reduce((sum, a) => sum + (parseFloat(a.commission_rate) || 0.10), 0) / agencies.length) * 1000) / 10
-      : 10
+      ? Math.round((agencies.reduce((sum, a) => sum + tasaEfectivaAgencia(a.commission_rate, platformDefaultCommission), 0) / agencies.length) * 1000) / 10
+      : platformDefaultCommission
   };
 
   if (isLoading) {
@@ -990,7 +998,7 @@ const AdminAgencies: React.FC = () => {
                         <Percent className="h-4 w-4 text-orange-600 mr-2" />
                         <div>
                           <div className="text-sm font-medium text-gray-900">
-                            {((parseFloat(agency.commission_rate) || 0.10) * 100).toFixed(1)}%
+                            {(tasaEfectivaAgencia(agency.commission_rate, platformDefaultCommission) * 100).toFixed(1)}%
                           </div>
                           <div className="text-xs text-gray-500">
                             {formatCurrencyMXN(agency.platform_commission || 0)} generado
@@ -1137,7 +1145,7 @@ const AdminAgencies: React.FC = () => {
                           type="text"
                           inputMode="decimal"
                           value={commissionInput}
-                          placeholder="Ej: 10"
+                          placeholder={`Ej: ${platformDefaultCommission}`}
                           onChange={(e) => {
                             const val = e.target.value;
                             if (/^(\d{0,2}(\.\d{0,1})?)?$/.test(val)) {
