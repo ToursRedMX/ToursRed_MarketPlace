@@ -68,6 +68,32 @@
 --    error — da un numero mas alto.
 --
 -- ============================================================================
+-- LO QUE SE EXCLUYE A PROPOSITO (y no por olvido)
+-- ============================================================================
+--
+-- Se hizo un barrido de las Edge Functions que ESCRIBEN en tablas de dinero,
+-- para no volver a omitir un concepto por tener la tabla vacia. Tres quedaron
+-- fuera, y las tres por una razon concreta:
+--
+--   * `wallet_checkin_charges` -- el cobro al monedero en el checkin.
+--     `confirm-checkin-wallet-charge` llama a `update_wallet_balance` con
+--     `p_type = 'debit'`, asi que el movimiento YA entra por el bloque 11. La
+--     tabla es el comprobante, no el movimiento. Incluirla lo duplicaria.
+--
+--   * `tour_cancellations` -- cuando una agencia cancela un tour entero.
+--     `process-tour-cancellation` crea una fila en `booking_cancellations` por
+--     reserva y acredita cada monedero; `total_refunded_amount` es la SUMA de
+--     esos reembolsos. Los individuales ya entran por el bloque 11.
+--
+--   * `openpay_wallet_topups` -- ver el bloque 3.
+--
+-- Y una que NO se excluye aunque su tabla este vacia: `payment_refunds`, la
+-- devolucion al metodo de pago original. Esta en los bloques 12 y 13. Cero
+-- filas no significa que la via no exista, significa que es excepcional -- y
+-- cuando ocurre, ese dinero si sale del banco. Confundir las dos cosas es
+-- exactamente el bug del reporte viejo con `cancellation_penalty_records`.
+--
+-- ============================================================================
 -- LO QUE ESTA VISTA NO PUEDE HACER
 -- ============================================================================
 --
@@ -121,17 +147,10 @@ WHERE pt.status = 'succeeded' AND coalesce(pt.processor_fee,0) > 0
 
 UNION ALL
 
--- 3. Recargas de monedero. Caja real; ingreso cero: es dinero del viajero.
-SELECT t.created_at, 'recarga_monedero', 'ingreso', 'Recarga de ToursRed Cash',
-       left(t.id::text, 8),
-       nullif(trim(coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,'')), ''),
-       'openpay', t.amount, t.amount, 0, 0,
-       'openpay_wallet_topups', t.id
-FROM public.openpay_wallet_topups t
-LEFT JOIN public.users u ON u.id = t.user_id
-WHERE t.status = 'completed'
-
-UNION ALL
+-- 3. (libre) Las recargas ya no se leen de `openpay_wallet_topups`: las cubre
+--     el bloque 11, que lee el monedero entero. Comprobado que son el mismo
+--     dinero -- 3 filas y $51,600.00 en las dos -- asi que leer las dos seria
+--     contarlo doble.
 
 -- 4. Tarjetas de regalo vendidas. Pasivo hasta que se canjean o caducan.
 SELECT gc.purchased_at, 'tarjeta_regalo', 'ingreso', 'Venta de tarjeta de regalo',
@@ -229,38 +248,57 @@ WHERE ap.status = 'completed'
 
 UNION ALL
 
--- 11. Reembolsos. NO SALEN DEL BANCO: se acreditan al monedero del viajero.
---     Es el pasivo cambiando de acreedor, y por eso van como traspaso.
+-- 11. EL MONEDERO ENTERO, con sus ocho tipos.
 --
---     SE LEEN DEL MONEDERO Y NO DE LAS TABLAS DE CANCELACION, a proposito.
---     Sumar `booking_cancellations` + `booking_partial_cancellations` da
---     $17,532.54, pero el monedero registra $23,096.54: hay 9 reembolsos con
---     `reference_type = 'booking_cancellation'` que no aparecen en
---     `refund_amount_to_traveler`. Para el reembolso AL MONEDERO, esta es la
---     fuente completa.
+--     Se lee de `toursred_cash_transactions` y no de las tablas sueltas de
+--     cada movimiento, por la misma razon en los dos sentidos:
 --
---     OJO: no es la unica via de reembolso. La devolucion al metodo de pago
---     original existe y va en el bloque 12. `payment_refunds` esta vacia hoy
---     porque esos casos son excepcionales —una disputa de PROFECO que obligue
---     a devolver a la tarjeta—, no porque la via no exista. Un bloque no se
---     omite por tener cero filas: ese es justo el error que traia el reporte
---     viejo al leer `cancellation_penalty_records`.
+--     * `openpay_wallet_topups` solo cubre el riel de OpenPay. El enum del
+--       monedero tiene DOS tipos de recarga (`topup_spei` y `topup_codi`), y
+--       ocho tipos en total. Leer la tabla suelta dejaba fuera cinco.
+--     * Las tablas de cancelacion dan $17,532.54 de reembolso; el monedero
+--       registra $23,096.54. Hay 9 reembolsos que no aparecen en
+--       `refund_amount_to_traveler`.
 --
---     Lo que esta fuente NO da es el reparto entre lo devuelto y lo retenido
---     como penalizacion: `booking_cancellations.amount_to_platform` y
---     `amount_to_agency` estan en 0.00 en las 7 filas, asi que ese desglose
---     hoy no existe en ningun lado.
-SELECT tct.created_at, 'reembolso_' || coalesce(tct.reference_type,'sin_origen'), 'egreso',
-       'Reembolso al monedero (' || coalesce(tct.reference_type,'sin origen') || ')',
+--     Comprobado que `topup_spei` en el monedero y `openpay_wallet_topups`
+--     completadas son EL MISMO dinero: 3 filas y $51,600.00 en las dos. Leer
+--     las dos lo contaria doble, y por eso el bloque 3 quedo vacio.
+--
+--     El mapeo por tipo, que es donde esta toda la sustancia:
+--
+--       topup_spei / topup_codi  dinero nuevo que entra al banco y se le debe
+--                                al viajero -> caja + y pasivo +
+--       debit                    paga una reserva con su saldo. NO es caja
+--                                nueva: ya entro en la recarga. Solo cambia de
+--                                acreedor -> traspaso
+--       refund                   se le devuelve al monedero, no a la tarjeta.
+--                                Tampoco sale del banco -> traspaso
+--       gift_card                canje. El pasivo pasa de "tarjetas por
+--                                canjear" (218-12) a "monedero" (218-11). Ni
+--                                caja ni ingreso -> traspaso
+--       promotion / credit /     saldo que regala o ajusta ToursRed. No entra
+--       adjustment               dinero pero se crea una deuda, y eso cuesta
+--                                -> pasivo + e ingreso -
+SELECT tct.created_at,
+       'monedero_' || tct.type::text, 
+       CASE WHEN tct.amount < 0 THEN 'egreso' ELSE 'ingreso' END,
+       'Monedero: ' || tct.type::text
+         || coalesce(' (' || tct.reference_type || ')', ''),
        coalesce(b.booking_code, left(tct.id::text, 8)),
        nullif(trim(coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,'')), ''),
        'toursred_cash',
-       0, 0, 0, tct.amount,
+       CASE WHEN tct.type::text IN ('topup_spei','topup_codi') THEN tct.amount ELSE 0 END,
+       CASE WHEN tct.type::text IN ('topup_spei','topup_codi')            THEN tct.amount
+            WHEN tct.type::text IN ('promotion','credit','adjustment')    THEN tct.amount
+            ELSE 0 END,
+       CASE WHEN tct.type::text IN ('promotion','credit','adjustment')    THEN -tct.amount
+            ELSE 0 END,
+       CASE WHEN tct.type::text IN ('debit','refund','gift_card')         THEN abs(tct.amount)
+            ELSE 0 END,
        'toursred_cash_transactions', tct.id
 FROM public.toursred_cash_transactions tct
 LEFT JOIN public.users u ON u.id = tct.user_id
 LEFT JOIN public.bookings b ON b.id = tct.reference_id
-WHERE tct.type::text = 'refund'
 
 UNION ALL
 
@@ -310,20 +348,7 @@ WHERE pr.status = 'succeeded' AND coalesce(pr.processor_refund_fee,0) > 0
 
 UNION ALL
 
--- 14. Reserva pagada con el monedero. LA FILA QUE EVITA CONTAR DOBLE.
---     Caja cero: ese dinero ya entro cuando se recargo. Solo cambia de
---     acreedor, del viajero a la agencia.
-SELECT tct.created_at, 'pago_con_monedero', 'ingreso',
-       'Reserva pagada con ToursRed Cash', left(tct.id::text, 8),
-       nullif(trim(coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,'')), ''),
-       'toursred_cash',
-       0, 0, 0, abs(tct.amount),
-       'toursred_cash_transactions', tct.id
-FROM public.toursred_cash_transactions tct
-LEFT JOIN public.users u ON u.id = tct.user_id
-WHERE tct.type::text = 'debit'
-
-UNION ALL
+-- 14. (libre) El pago con monedero lo cubre el bloque 11, con el tipo `debit`.
 
 -- 15. Comision al ejecutivo de cuenta. Es gasto en cuanto se devenga; solo
 --     sale del banco cuando se paga.

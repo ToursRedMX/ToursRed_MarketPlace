@@ -155,15 +155,22 @@ INSERT INTO commission_records VALUES
    'a0000000-0000-0000-0000-000000000001',444,'voided','2026-09-03','2026-09-03');
 
 -- TRAMPA 1: recarga de 1,000 y despues una reserva de 400 pagada con ese saldo.
-INSERT INTO openpay_wallet_topups VALUES
-  ('f0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
-   1000,'completed','2026-09-04');
 INSERT INTO toursred_cash_transactions VALUES
+  -- Recarga por SPEI: dinero nuevo al banco.
+  ('10000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000001',
+   1000,'topup_spei','openpay_spei_topup',NULL,'2026-09-04'),
+  -- Reserva pagada con ese saldo: NO es caja nueva.
   ('10000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
    -400,'debit','booking','b0000000-0000-0000-0000-000000000004','2026-09-05'),
   -- Reembolso al monedero: no sale del banco.
   ('10000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
-   333,'refund','booking_cancellation','b0000000-0000-0000-0000-000000000002','2026-09-06');
+   333,'refund','booking_cancellation','b0000000-0000-0000-0000-000000000002','2026-09-06'),
+  -- Canje de tarjeta de regalo: el pasivo solo cambia de cuenta.
+  ('10000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000001',
+   200,'gift_card','gift_card',NULL,'2026-09-06'),
+  -- Saldo de promocion: no entra dinero, pero se crea deuda y eso cuesta.
+  ('10000000-0000-0000-0000-000000000005','c0000000-0000-0000-0000-000000000001',
+   150,'promotion','campana',NULL,'2026-09-06');
 
 -- Liberacion a la agencia: esto SI sale del banco.
 INSERT INTO agency_payouts VALUES
@@ -222,7 +229,7 @@ DECLARE v_caja numeric; v_traspaso numeric;
 BEGIN
   SELECT sum(caja), sum(traspaso) INTO v_caja, v_traspaso
     FROM vista_movimientos_financieros
-   WHERE categoria IN ('recarga_monedero','pago_con_monedero');
+   WHERE categoria IN ('monedero_topup_spei','monedero_debit');
 
   -- 1000 de recarga. El pago de 400 NO agrega caja: ese dinero ya entro.
   IF v_caja <> 1000 THEN
@@ -232,6 +239,31 @@ BEGIN
     RAISE EXCEPTION 'FALLO 3: el pago con monedero debe verse como traspaso de 400, y dio %', v_traspaso;
   END IF;
   RAISE NOTICE '  recarga 1000 + reserva 400 con monedero -> caja 1000, traspaso 400. OK';
+END $$;
+
+\echo '=== Caso 3b: los otros tipos del monedero tambien se tratan ==='
+DO $$
+DECLARE v_gc record; v_promo record;
+BEGIN
+  -- Canje de tarjeta de regalo: el pasivo cambia de cuenta (218-12 -> 218-11).
+  -- Ni caja ni ingreso.
+  SELECT sum(caja) AS caja, sum(ingreso) AS ingreso, sum(traspaso) AS traspaso
+    INTO v_gc FROM vista_movimientos_financieros WHERE categoria = 'monedero_gift_card';
+  IF v_gc.caja <> 0 OR v_gc.ingreso <> 0 OR v_gc.traspaso <> 200 THEN
+    RAISE EXCEPTION
+      'FALLO 3b: canje de tarjeta dio caja=% ingreso=% traspaso=%, esperado 0/0/200. El canje no es dinero nuevo: se cobro al vender la tarjeta.',
+      v_gc.caja, v_gc.ingreso, v_gc.traspaso;
+  END IF;
+
+  -- Saldo de promocion: no entra dinero pero se crea deuda, y eso cuesta.
+  SELECT sum(caja) AS caja, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso
+    INTO v_promo FROM vista_movimientos_financieros WHERE categoria = 'monedero_promotion';
+  IF v_promo.caja <> 0 OR v_promo.pasivo <> 150 OR v_promo.ingreso <> -150 THEN
+    RAISE EXCEPTION
+      'FALLO 3b: saldo de promocion dio caja=% pasivo=% ingreso=%, esperado 0/150/-150. Regalar saldo no entra dinero pero si genera pasivo y cuesta.',
+      v_promo.caja, v_promo.pasivo, v_promo.ingreso;
+  END IF;
+  RAISE NOTICE '  canje de tarjeta = traspaso; promocion = pasivo + y costo. OK';
 END $$;
 
 \echo '=== Caso 4: TRAMPA 2a/2b -- las canceladas no cuentan, anuladas o no ==='
@@ -258,7 +290,7 @@ DO $$
 DECLARE v record;
 BEGIN
   SELECT sum(caja) AS caja, sum(traspaso) AS traspaso INTO v FROM vista_movimientos_financieros
-   WHERE categoria = 'reembolso_booking_cancellation';
+   WHERE categoria = 'monedero_refund';
   IF v.caja <> 0 THEN
     RAISE EXCEPTION 'FALLO 6: el reembolso movio caja (%). Se acredita al monedero, no sale del banco.', v.caja;
   END IF;
@@ -357,4 +389,4 @@ BEGIN
 END $$;
 
 \echo ''
-\echo 'Vista de movimientos financieros: 11/11 casos OK'
+\echo 'Vista de movimientos financieros: 12/12 casos OK'
