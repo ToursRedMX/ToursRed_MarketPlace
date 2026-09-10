@@ -145,6 +145,21 @@ jobs:
           psql -h localhost -U postgres -d rls_ok -v ON_ERROR_STOP=1 -f test-is-active-rls.sql
           psql -h localhost -U postgres -d rls_guardia -v ON_ERROR_STOP=1 -f test-is-active-rls-guardia.sql
 
+      # Paridad de la formula de IVA entre la canonica en TypeScript y su
+      # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
+      # que escribe el snapshot fiscal de cada cobro, y esos numeros son los que
+      # van al CFDI: si las copias se separan, se declara un desglose y se guarda
+      # otro. El .sql existia desde el 01-sep y no lo corria nadie.
+      - name: Verify the VAT formula matches between TypeScript and plpgsql
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: tax_parity
+        run: |
+          PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS tax_parity;" -c "CREATE DATABASE tax_parity;"
+          node scripts/test-tax-snapshot-sql.mjs
+
       # F-1 de la auditoria de frontend. Desde el 09-sep-2026 la linea base es
       # CERO: dejo de ser un contador y es una guardia. Cualquier consulta nueva
       # que ignore su error rompe este check.
