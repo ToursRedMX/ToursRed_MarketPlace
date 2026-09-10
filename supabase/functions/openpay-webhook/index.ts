@@ -757,6 +757,46 @@ Deno.serve(async (req: Request) => {
 
         }
 
+        // ── Respaldo: que ningun contexto se quede sin comision ──────────
+        //
+        // Arriba hay un bloque de actualizacion POR CADA contexto, cada uno con
+        // su `charge_context` escrito a mano: booking_deposit, supplement,
+        // insurance, optional_service, payment_plan_installment y gift_card.
+        // El que no este en esa lista no recibe comision — y al medirlo el
+        // 10-sep-2026 faltaba `featured_slot`, que es un cobro real (los tours
+        // destacados que pagan las agencias).
+        //
+        // El problema no es que faltara uno: es que la lista hay que mantenerla
+        // a mano, asi que el proximo contexto que se agregue vuelve a nacer sin
+        // comision y nadie se entera. Esto lo cierra sin enumerar nada.
+        //
+        // Es aditivo y no puede pisar lo de arriba: solo toca filas de este
+        // mismo cobro que SIGUEN en cero.
+        if (processorFee > 0) {
+          const { data: rellenadas, error: errRelleno } = await supabase
+            .from("payment_transactions")
+            .update({
+              processor_fee: processorFee,
+              processor_fee_base: feeBase,
+              processor_fee_iva: feeIva,
+              net_amount: chargeAmount - processorFee,
+            })
+            .eq("charge_reference_id", chargeReferenceId)
+            .eq("payment_processor", "openpay")
+            .or("processor_fee.is.null,processor_fee.eq.0")
+            .select("id, charge_context");
+
+          if (errRelleno) {
+            console.error(`Respaldo de comision OpenPay (${chargeContext}):`, errRelleno);
+          } else if (rellenadas?.length) {
+            console.log(
+              `Respaldo de comision OpenPay: ${rellenadas.length} fila(s) sin comision ` +
+              `rellenadas con ${processorFee} — contextos: ` +
+              rellenadas.map((r: { charge_context: string }) => r.charge_context).join(", "),
+            );
+          }
+        }
+
         if (webhookEventId) {
           await supabase.from("openpay_webhook_events").update({
             processing_status: "processed",
