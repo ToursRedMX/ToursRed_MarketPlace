@@ -168,6 +168,18 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d revocacion -v ON_ERROR_STOP=1 -f test-revocar-sesion.sql
 
+      # La conciliacion contable diaria mira 7 dias, no uno: sin traslape,
+      # cualquier noche que el job falle pierde ese dia para siempre. La prueba
+      # levanta un pg_cron de mentiras porque la extension no esta en CI, y lo
+      # que se comprueba es la logica de la migracion, no pg_cron.
+      - name: Verify the accounting reconciliation window self-heals
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS ventana;" -c "CREATE DATABASE ventana;"
+          cd scripts
+          psql -h localhost -U postgres -d ventana -v ON_ERROR_STOP=1 -f test-ventana-conciliacion.sql
+
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
       # que escribe el snapshot fiscal de cada cobro, y esos numeros son los que
