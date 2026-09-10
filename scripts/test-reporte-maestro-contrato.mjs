@@ -92,6 +92,33 @@ casos.push(() => {
     'la consulta debe lanzar si falla, no dejar la tabla vacia en silencio');
 });
 
+// --- 5. Una fecha a medio escribir no dispara la consulta -------------------
+casos.push(() => {
+  // `<input type="date">` pasa por '' mientras se edita, y PostgREST responde
+  // 400 a `fecha=gte.` sin valor. Salio en la primera prueba real de la
+  // pantalla: banner rojo de error con la tabla llena de datos correctos.
+  assert.ok(/if\s*\(!filtros\.desde\s*\|\|\s*!filtros\.hasta\)\s*return/.test(tsx),
+    'la carga debe salirse si alguna fecha esta vacia, o PostgREST devuelve 400');
+});
+
+// --- 6. Dos cargas encimadas no se pisan -----------------------------------
+casos.push(() => {
+  // Sin secuenciar, la peticion que termina al final gana aunque sea la vieja.
+  // Eso dejo la pantalla con 185 filas Y el banner de error a la vez.
+  assert.ok(/peticionActual/.test(tsx),
+    'debe haber un contador de peticiones que descarte las respuestas que llegan tarde');
+  assert.ok((tsx.match(/miTurno !== peticionActual\.current/g) || []).length >= 2,
+    'tanto el camino bueno como el de error deben descartar una respuesta tardia');
+});
+
+// --- 7. Las columnas se llaman como el catalogo de cuentas -----------------
+casos.push(() => {
+  // "Caja" es una cuenta concreta; la columna es el movimiento de bancos, que
+  // en el catalogo es activo. Lo pidio Axel al no entender el reporte.
+  assert.ok(/'Activo \(bancos\)'/.test(tsx), "la tarjeta debe decir 'Activo (bancos)', no 'Caja'");
+  assert.ok(!/>Caja</.test(tsx), "la columna de la tabla no debe seguir llamandose 'Caja'");
+});
+
 // --- 5. El aviso de los gastos de operacion sigue en pantalla ---------------
 casos.push(() => {
   // Un hueco conocido que no se anuncia se lee como un cero, y un cero en

@@ -118,7 +118,20 @@ const AdminReporteMaestro: React.FC = () => {
     busqueda: '',
   });
 
+  // Contador de peticiones. Sin el, dos cargas encimadas se pisan: la que
+  // termina al final gana, aunque sea la vieja. Eso produjo una pantalla con
+  // 185 filas Y el banner de error al mismo tiempo, que es exactamente lo que
+  // un reporte financiero no debe hacer -- deja al lector sin saber si lo que
+  // ve es bueno.
+  const peticionActual = React.useRef(0);
+
   const cargar = useCallback(async () => {
+    // Un `<input type="date">` pasa por '' mientras se edita, y PostgREST
+    // responde 400 a `fecha=gte.` sin valor. No es un error que valga la pena
+    // ensenar: es un estado intermedio de la escritura.
+    if (!filtros.desde || !filtros.hasta) return;
+
+    const miTurno = ++peticionActual.current;
     setCargando(true);
     setError('');
     try {
@@ -133,6 +146,7 @@ const AdminReporteMaestro: React.FC = () => {
       // movimientos, que es indistinguible de un periodo sin actividad. Un
       // reporte financiero vacio por error es peor que no mostrar reporte.
       if (errorConsulta) throw errorConsulta;
+      if (miTurno !== peticionActual.current) return;  // llego tarde: la ignoramos
 
       setFilas(
         (data ?? []).map((f: Record<string, unknown>) => ({
@@ -152,6 +166,7 @@ const AdminReporteMaestro: React.FC = () => {
         })),
       );
     } catch (e) {
+      if (miTurno !== peticionActual.current) return;
       setError(
         e instanceof Error
           ? `No se pudo cargar el reporte: ${e.message}`
@@ -159,7 +174,7 @@ const AdminReporteMaestro: React.FC = () => {
       );
       setFilas([]);
     } finally {
-      setCargando(false);
+      if (miTurno === peticionActual.current) setCargando(false);
     }
   }, [filtros.desde, filtros.hasta]);
 
@@ -224,7 +239,7 @@ const AdminReporteMaestro: React.FC = () => {
       ['Generado:', format(new Date(), 'dd/MM/yyyy HH:mm')],
       [''],
       ['LAS TRES CAPAS'],
-      ['Caja (dinero del banco):', money(totales.caja)],
+      ['Activo (movimiento de bancos):', money(totales.caja)],
       ['Pasivo (dinero de terceros):', money(totales.pasivo)],
       ['Ingreso reconocido:', money(totales.ingreso)],
       ['Traspasos (cambian de dueno):', money(totales.traspaso)],
@@ -232,7 +247,7 @@ const AdminReporteMaestro: React.FC = () => {
       ['NOTA: los gastos de operacion (servicios, renta, marketing) NO estan'],
       ['incluidos. No existe todavia una tabla donde capturarlos.'],
       [''],
-      ['POR CATEGORIA', 'Caja', 'Pasivo', 'Ingreso', 'Traspaso'],
+      ['POR CATEGORIA', 'Activo', 'Pasivo', 'Ingreso', 'Traspaso'],
       ...porCategoria.map(([cat, t]) => [etiqueta(cat), t.caja, t.pasivo, t.ingreso, t.traspaso]),
     ];
     const wsResumen = XLSX.utils.aoa_to_sheet(resumen);
@@ -241,7 +256,7 @@ const AdminReporteMaestro: React.FC = () => {
 
     const detalle: (string | number)[][] = [
       ['Fecha', 'Categoria', 'Naturaleza', 'Descripcion', 'Referencia',
-       'Entidad', 'Metodo', 'Caja', 'Pasivo', 'Ingreso', 'Traspaso', 'Origen'],
+       'Entidad', 'Metodo', 'Activo', 'Pasivo', 'Ingreso', 'Traspaso', 'Origen'],
       ...filtradas.map((f) => [
         fecha(f.fecha), etiqueta(f.categoria), f.naturaleza, f.descripcion,
         f.referencia, f.entidad ?? '', f.metodo ?? '',
@@ -262,11 +277,11 @@ const AdminReporteMaestro: React.FC = () => {
   };
 
   const tarjetas = [
-    { titulo: 'Caja', valor: totales.caja, ayuda: 'Dinero que entro o salio del banco',
+    { titulo: 'Activo (bancos)', valor: totales.caja, ayuda: 'Dinero que entro o salio del banco',
       Icono: Landmark, color: totales.caja >= 0 ? 'text-emerald-600' : 'text-red-600', fondo: 'bg-emerald-50' },
     { titulo: 'Ingreso reconocido', valor: totales.ingreso, ayuda: 'Lo que ToursRed gano de verdad',
       Icono: TrendingUp, color: totales.ingreso >= 0 ? 'text-blue-700' : 'text-red-600', fondo: 'bg-blue-50' },
-    { titulo: 'Pasivo', valor: totales.pasivo, ayuda: 'Dinero de terceros: viajeros y agencias',
+    { titulo: 'Pasivo', valor: totales.pasivo, ayuda: 'Lo que se le debe a viajeros y agencias',
       Icono: Wallet, color: 'text-amber-700', fondo: 'bg-amber-50' },
     { titulo: 'Traspasos', valor: totales.traspaso, ayuda: 'Cambian de dueno sin mover caja',
       Icono: TrendingDown, color: 'text-gray-700', fondo: 'bg-gray-100' },
@@ -409,7 +424,7 @@ const AdminReporteMaestro: React.FC = () => {
                   <th className="px-4 py-3 text-left">Descripcion</th>
                   <th className="px-4 py-3 text-left">Referencia</th>
                   <th className="px-4 py-3 text-left">Entidad</th>
-                  <th className="px-4 py-3 text-right">Caja</th>
+                  <th className="px-4 py-3 text-right">Activo</th>
                   <th className="px-4 py-3 text-right">Pasivo</th>
                   <th className="px-4 py-3 text-right">Ingreso</th>
                   <th className="px-4 py-3 text-right">Traspaso</th>
