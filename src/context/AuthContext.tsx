@@ -321,10 +321,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const determineUserRole = async (authUser: any, forceRefresh: boolean = false): Promise<{ role: UserRole; emailVerified: boolean }> => {
     if (!authUser) return { role: UserRole.TRAVELER, emailVerified: false };
 
-    if (authUser.email === 'admin@toursred.com') {
-      setCachedRole(authUser.id, UserRole.ADMIN);
-      return { role: UserRole.ADMIN, emailVerified: true };
-    }
+    // NO hay atajo por email. Hasta el 10-sep-2026 esta funcion empezaba con:
+    //
+    //     if (authUser.email === 'admin@toursred.com') return { role: ADMIN, ... }
+    //
+    // O sea que la unica cuenta con la que se gestiona toda la plataforma era
+    // tambien la unica exenta de los tres chequeos que cuelgan de la lectura de
+    // `users`: `is_active` (el bloqueo), el rol real, y `must_change_password`.
+    // Si esa contrasena se filtrara, bloquear la cuenta desde el panel no la
+    // sacaba del navegador — justo el control de emergencia que uno querria
+    // que funcionara en la cuenta mas poderosa.
+    //
+    // Un email no es una credencial: es un dato que el rol y el estado de la
+    // cuenta tienen que salir de `public.users`, como para cualquier otro. Su
+    // fila puede leerse siempre, bloqueada o no, por la primera rama de la
+    // politica de `users` (`auth.uid() = id`), que no pasa por los helpers de
+    // rol; eso es lo que hace seguro quitar el atajo.
 
     if (!forceRefresh) {
       const cachedRole = getCachedRole(authUser.id);
@@ -812,22 +824,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       if (authUser) {
-        if (authUser.email === 'admin@toursred.com') {
-          setUserRole(UserRole.ADMIN);
-          setIsEmailVerified(true);
-          setIsSuperAdmin(true);
-          setPermissions(null);
-          setAccountantPermissions(null);
-          setAllStaffInfo([]);
-        } else {
-          const cachedRole = getCachedRole(authUser.id);
-          setUserRole(cachedRole || UserRole.TRAVELER);
-          setIsEmailVerified(true);
-          setIsSuperAdmin(false);
-          setPermissions(null);
-          setAccountantPermissions(null);
-          setAllStaffInfo([]);
-        }
+        // Sin excepcion por email. Esta rama concedia a admin@toursred.com el rol
+        // ADMIN y, peor, `setIsSuperAdmin(true)` sin consultar nada — siendo que
+        // esa bandera es la que abre las funciones exclusivas del super admin y en
+        // el camino normal sale de leer `users.is_super_admin`.
+        //
+        // Un error inesperado no puede conceder MAS privilegio que el camino que
+        // si funciona. Aqui se degrada: el rol cacheado (que a su vez solo se
+        // escribe tras una lectura con `is_active` en regla) o TRAVELER.
+        const cachedRole = getCachedRole(authUser.id);
+        setUserRole(cachedRole || UserRole.TRAVELER);
+        setIsEmailVerified(true);
+        setIsSuperAdmin(false);
+        setPermissions(null);
+        setAccountantPermissions(null);
+        setAllStaffInfo([]);
       } else {
         setUserRole(null);
         setIsEmailVerified(false);
