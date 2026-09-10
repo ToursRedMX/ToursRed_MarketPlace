@@ -1,4 +1,4 @@
-import * as Sentry from "npm:@sentry/deno@9";
+import * as Sentry from "npm:@sentry/deno@9.47.1";
 
 const dsn = Deno.env.get("SENTRY_BACKEND_DSN");
 const functionName = Deno.env.get("SB_FUNCTION_NAME") ?? "unknown-function";

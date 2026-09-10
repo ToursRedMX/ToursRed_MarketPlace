@@ -10,7 +10,13 @@ function evaluate(source, globals = {}) {
     // The Edge Runtime type reference is compile-time only. TypeScript emits
     // it as a CommonJS require in this Node-based harness, so provide a
     // harmless module stub instead of attempting to load a jsr: URL.
-    if (specifier === 'jsr:@supabase/functions-js/edge-runtime.d.ts') return {};
+    //
+    // Se empata por patron y no por cadena exacta a proposito: el 10-sep-2026
+    // el especificador paso de `jsr:@supabase/functions-js/edge-runtime.d.ts`
+    // a `jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts` al fijar las
+    // versiones (Req. 6.3.2), y la comparacion exacta rompio esta prueba. La
+    // version no le importa a un stub vacio.
+    if (/^jsr:@supabase\/functions-js(@[^/]+)?\/edge-runtime\.d\.ts$/.test(specifier)) return {};
     throw new Error(`Unexpected module in MFA harness: ${specifier}`);
   };
   const context = { exports: {}, require, Response, Request, Headers, console: quiet, ...globals };

@@ -1,5 +1,5 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 import { registrarFallo } from "../_shared/falloSilencioso.ts";
 import { reportEdgeError } from "../_shared/sentry.ts";
