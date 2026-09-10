@@ -14,6 +14,7 @@ import {
 import { urlDeRetornoSegura } from "../_shared/cors.ts";
 import * as Sentry from "npm:@sentry/deno@9";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { exigibleAlProcesador } from "../_shared/exigible.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -145,10 +146,8 @@ Deno.serve(async (req: Request) => {
       // amount_due_now es el exigible del primer cobro que calculo create_booking_atomic
       // (anticipo + cargo por servicio + extras + seguro + membresia - puntos - wallet).
       // deposit_amount es solo el anticipo del tour y deja fuera cargos y extras.
-      const dueNow = Math.max(
-        Number(booking.deposit_amount || 0),
-        Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0),
-      );
+      // Ver `_shared/exigible.ts`: el maximo ignoraba la billetera.
+      const dueNow = exigibleAlProcesador(booking);
       const remainingBalance = dueNow - alreadyPaid;
 
       if (remainingBalance <= 0) {

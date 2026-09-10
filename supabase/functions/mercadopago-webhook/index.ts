@@ -61,8 +61,18 @@ async function verifyMercadoPagoSignature(
   }
 
   if (!ts || !v1) return false;
+  // Proteccion contra reenvio, pero con una ventana que tolere los reintentos
+  // de MercadoPago. El reintento lleva el timestamp ORIGINAL, asi que con 300s
+  // un webhook que fallara una vez —por ejemplo durante un despliegue— no se
+  // podia reentregar nunca y el cobro quedaba sin confirmar. MercadoPago esta
+  // en uso activo (ultimo cobro 06-sep-2026), asi que no es teorico.
+  //
+  // 24h no debilita gran cosa: mas abajo hay una compuerta de idempotencia
+  // atomica sobre `payment_transactions`, asi que un evento reenviado no puede
+  // confirmar dos veces aunque su firma siga siendo valida.
   const timestamp = Number(ts);
-  if (!Number.isFinite(timestamp) || Math.abs(Date.now() / 1000 - timestamp) > 300) return false;
+  const VENTANA_SEGUNDOS = 24 * 60 * 60;
+  if (!Number.isFinite(timestamp) || Math.abs(Date.now() / 1000 - timestamp) > VENTANA_SEGUNDOS) return false;
 
   const manifest = [
     dataId ? `id:${dataId};` : "",

@@ -348,6 +348,7 @@ Deno.serve(async (req) => {
       const priceId = membershipPlan === 'monthly' ? monthlyPriceId : annualPriceId;
 
       sessionConfig.mode = "subscription";
+      sessionConfig.payment_method_types = ['card'];
       sessionConfig.line_items = [
         {
           price: priceId,
@@ -445,6 +446,19 @@ Deno.serve(async (req) => {
       }
 
       sessionConfig.mode = "payment";
+      // NO quitar esta linea. Fijar los tipos a mano IGNORA a proposito la
+      // configuracion de metodos de pago del dashboard de Stripe. Sin ella
+      // manda el dashboard, y en la cuenta LIVE `oxxo` y `customer_balance`
+      // salen con `available: false` — o sea que OXXO y transferencia bancaria
+      // desaparecen del checkout sin ningun error.
+      //
+      // El 09-sep-2026 se quito (`9dd296b`) y no se noto: en la cuenta de
+      // PRUEBAS ambos estan encendidos en el dashboard, y todo el trafico hasta
+      // hoy ha corrido ahi. Habria mordido el dia del lanzamiento, en live.
+      //
+      // El front promete los tres: PaymentProviderSelector.tsx dice
+      // "Tarjetas / OXXO / Transferencia".
+      sessionConfig.payment_method_types = ['card', 'oxxo', 'customer_balance'];
       sessionConfig.payment_method_options = {
         customer_balance: {
           funding_type: 'bank_transfer',
@@ -468,7 +482,13 @@ Deno.serve(async (req) => {
       };
     }
 
-    const idempotencyKey = `checkout_${bookingId}_${addMembership ? membershipPlan : 'booking'}_${cashSolicitado}_${puntosSolicitados}`;
+    // La ventana de 10 minutos es la valvula de escape. Sin ella, la clave es
+    // estable para siempre y Stripe devuelve LA MISMA sesion durante 24h: el
+    // viajero que abandona el checkout y vuelve mas tarde recibe una sesion ya
+    // expirada o ya completada, y no puede pagar. Con el bucket, los reintentos
+    // de un mismo arranque se deduplican y un intento nuevo obtiene sesion nueva.
+    const ventana = Math.floor(Date.now() / (10 * 60 * 1000));
+    const idempotencyKey = `checkout_${bookingId}_${addMembership ? membershipPlan : 'booking'}_${cashSolicitado}_${puntosSolicitados}_${ventana}`;
     const session = await stripe.checkout.sessions.create(sessionConfig, { idempotencyKey });
 
     return new Response(

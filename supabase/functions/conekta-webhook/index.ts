@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { cubreElAnticipo } from "../_shared/exigible.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -349,19 +350,22 @@ Deno.serve(async (req: Request) => {
 
         const { data: booking } = await supabase
           .from("bookings")
-          .select("amount_due_now, deposit_amount, membership_cost, total_price, user_payment, payment_status, status")
+          .select("amount_due_now, deposit_amount, membership_cost, total_price, user_payment, payment_status, status, points_used, toursred_cash_used")
           .eq("id", bookingId)
           .maybeSingle();
 
         if (booking) {
           // Confirmar contra el exigible real. Con deposit_amount se confirmaba la
           // reserva cobrando de menos (quedaban fuera cargo por servicio y extras).
-          const requiredAmount = booking.amount_due_now != null
-            ? Math.max(Number(booking.deposit_amount || 0), Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0))
-            : Number(booking.deposit_amount || booking.total_price || 0);
+          // Ver `_shared/exigible.ts`. El maximo con `amount_due_now` dejaba sin
+          // confirmar a quien pago parte con puntos o ToursRed Cash: nunca
+          // alcanzaba el piso. Se compara contra el anticipo bruto, sumando la
+          // billetera a lo cobrado.
+          const cobertura = cubreElAnticipo(booking, totalPaid);
+          const requiredAmount = cobertura.piso;
           const newUserPayment = Math.max(0, Number(booking.user_payment || 0) - Number(tx.amount));
 
-          if (totalPaid >= requiredAmount) {
+          if (cobertura.suficiente) {
             // Full deposit paid — confirm the booking
             await supabase
               .from("bookings")
