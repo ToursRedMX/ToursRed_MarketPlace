@@ -3,11 +3,20 @@ import { useAuth, AdminPermissions } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { UserPlus, Shield, X, Check, AlertCircle, Lock, Unlock, Trash2, Eye, EyeOff } from 'lucide-react';
 
+/** Los dos roles internos que esta pantalla da de alta y administra. */
+type RolInterno = 'admin' | 'accountant';
+
+const ETIQUETA_ROL: Record<RolInterno, string> = {
+  admin: 'Administrador',
+  accountant: 'Contador',
+};
+
 interface StaffUser {
   id: string;
   email: string;
   first_name: string;
   last_name: string;
+  role: RolInterno;
   is_super_admin: boolean;
   is_active: boolean;
   created_at: string;
@@ -58,7 +67,14 @@ const AdminUsers: React.FC = () => {
     password: '',
     nombre: '',
     apellido: '',
+    rol: 'admin' as RolInterno,
     permissions: {
+      // Los cuatro contables. Son los UNICOS que un contador usa: su
+      // `accountantPermissions` en AuthContext se arma solo con estos.
+      canViewAccounting: false,
+      canExportSatXml: false,
+      canManageChartOfAccounts: false,
+      canManageExpenses: false,
       canManageAgencies: false,
       canManageUsers: false,
       canManageTravelers: false,
@@ -109,7 +125,10 @@ const AdminUsers: React.FC = () => {
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select('id, email, first_name, last_name, role, is_active, created_at, is_super_admin')
-        .eq('role', 'admin')
+        // Antes filtraba `.eq('role', 'admin')` y por eso los contadores eran
+        // invisibles aqui: existian en la base y no habia forma de verlos ni de
+        // editarles permisos desde el panel.
+        .in('role', ['admin', 'accountant'])
         .order('created_at', { ascending: false });
 
       if (usersError) throw usersError;
@@ -118,7 +137,7 @@ const AdminUsers: React.FC = () => {
         (usersData || []).map(async (user) => {
           const { data: permsData, error: errorPermisos } = await supabase
             .from('admin_permissions')
-            .select('can_manage_agencies, can_manage_users, can_manage_travelers, can_manage_destinations, can_manage_categories, can_manage_departure_points, can_manage_reviews, can_manage_messages, can_manage_inquiries, can_manage_settings, can_manage_memberships, can_manage_points, can_manage_discount_codes, can_view_audit_log, can_view_audit_sensitive_data, can_export_audit_log, can_cancel_bookings, can_manage_expenses')
+            .select('can_manage_agencies, can_manage_users, can_manage_travelers, can_manage_destinations, can_manage_categories, can_manage_departure_points, can_manage_reviews, can_manage_messages, can_manage_inquiries, can_manage_settings, can_manage_memberships, can_manage_points, can_manage_discount_codes, can_view_audit_log, can_view_audit_sensitive_data, can_export_audit_log, can_cancel_bookings, can_manage_expenses, can_view_accounting, can_export_sat_xml, can_manage_chart_of_accounts')
             .eq('user_id', user.id)
             .maybeSingle();
 
@@ -148,6 +167,9 @@ const AdminUsers: React.FC = () => {
               canExportAuditLog: permsData.can_export_audit_log ?? false,
               canCancelBookings: permsData.can_cancel_bookings ?? false,
               canManageExpenses: permsData.can_manage_expenses ?? false,
+              canViewAccounting: permsData.can_view_accounting ?? false,
+              canExportSatXml: permsData.can_export_sat_xml ?? false,
+              canManageChartOfAccounts: permsData.can_manage_chart_of_accounts ?? false,
             } : null
           };
         })
@@ -190,7 +212,12 @@ const AdminUsers: React.FC = () => {
             password: newUser.password,
             nombre: newUser.nombre,
             apellido: newUser.apellido,
+            rol: newUser.rol,
             permissions: {
+              can_view_accounting: newUser.permissions.canViewAccounting,
+              can_export_sat_xml: newUser.permissions.canExportSatXml,
+              can_manage_chart_of_accounts: newUser.permissions.canManageChartOfAccounts,
+              can_manage_expenses: newUser.permissions.canManageExpenses,
               can_manage_agencies: newUser.permissions.canManageAgencies,
               can_manage_users: newUser.permissions.canManageUsers,
               can_manage_travelers: newUser.permissions.canManageTravelers,
@@ -221,7 +248,12 @@ const AdminUsers: React.FC = () => {
         password: '',
         nombre: '',
         apellido: '',
+        rol: 'admin',
         permissions: {
+          canViewAccounting: false,
+          canExportSatXml: false,
+          canManageChartOfAccounts: false,
+          canManageExpenses: false,
           canManageAgencies: false,
           canManageUsers: false,
           canManageTravelers: false,
@@ -274,6 +306,9 @@ const AdminUsers: React.FC = () => {
           can_export_audit_log: tempPermissions.canExportAuditLog,
           can_cancel_bookings: tempPermissions.canCancelBookings,
           can_manage_expenses: tempPermissions.canManageExpenses,
+          can_view_accounting: tempPermissions.canViewAccounting,
+          can_export_sat_xml: tempPermissions.canExportSatXml,
+          can_manage_chart_of_accounts: tempPermissions.canManageChartOfAccounts,
         }, { onConflict: 'user_id' });
 
       if (updateError) throw updateError;
@@ -306,7 +341,19 @@ const AdminUsers: React.FC = () => {
       canViewAuditLog: false,
       canViewAuditSensitiveData: false,
       canExportAuditLog: false,
+      canCancelBookings: false,
+      canManageExpenses: false,
+      canViewAccounting: false,
+      canExportSatXml: false,
+      canManageChartOfAccounts: false,
+      canManageServiceDesk: false,
+      canManageExecutives: false,
     };
+    // El spread de `user.permissions` gana sobre `base`, asi que lo que decide
+    // de verdad es que `loadStaffUsers` traiga la columna: si no la pide en el
+    // `select`, aqui llega undefined, el false de `base` se queda, y guardar
+    // APAGA un permiso que estaba puesto. Por eso las tres contables se
+    // agregaron primero al select y al mapeo, y hasta despues al guardado.
     setTempPermissions(user.permissions ? { ...base, ...user.permissions } : base);
     setEditingPermissions(user.id);
   };
@@ -469,6 +516,13 @@ const AdminUsers: React.FC = () => {
                       </h3>
                       <p className="text-gray-600">{user.email}</p>
                       <div className="flex gap-2 mt-1">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          user.role === 'accountant'
+                            ? 'bg-purple-100 text-purple-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {ETIQUETA_ROL[user.role] ?? user.role}
+                        </span>
                         {user.is_super_admin && (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                             Super Administrador
@@ -618,6 +672,24 @@ const AdminUsers: React.FC = () => {
                             checked={tempPermissions.canManageExpenses}
                             onChange={(checked) => setTempPermissions({ ...tempPermissions, canManageExpenses: checked })}
                           />
+                          {/* Estas tres existen en `admin_permissions` desde el
+                              16-may-2026 y el codigo las lee, pero nunca se les
+                              puso casilla: se podian conceder solo por SQL. */}
+                          <PermissionCheckbox
+                            label="Ver Contabilidad"
+                            checked={tempPermissions.canViewAccounting}
+                            onChange={(checked) => setTempPermissions({ ...tempPermissions, canViewAccounting: checked })}
+                          />
+                          <PermissionCheckbox
+                            label="Exportar XML del SAT"
+                            checked={tempPermissions.canExportSatXml}
+                            onChange={(checked) => setTempPermissions({ ...tempPermissions, canExportSatXml: checked })}
+                          />
+                          <PermissionCheckbox
+                            label="Gestionar Catálogo de Cuentas"
+                            checked={tempPermissions.canManageChartOfAccounts}
+                            onChange={(checked) => setTempPermissions({ ...tempPermissions, canManageChartOfAccounts: checked })}
+                          />
                         </>
                       ) : (
                         <>
@@ -729,6 +801,24 @@ const AdminUsers: React.FC = () => {
                             onChange={() => {}}
                             disabled
                           />
+                          <PermissionCheckbox
+                            label="Ver Contabilidad"
+                            checked={user.permissions?.canViewAccounting ?? false}
+                            onChange={() => {}}
+                            disabled
+                          />
+                          <PermissionCheckbox
+                            label="Exportar XML del SAT"
+                            checked={user.permissions?.canExportSatXml ?? false}
+                            onChange={() => {}}
+                            disabled
+                          />
+                          <PermissionCheckbox
+                            label="Gestionar Catálogo de Cuentas"
+                            checked={user.permissions?.canManageChartOfAccounts ?? false}
+                            onChange={() => {}}
+                            disabled
+                          />
                         </>
                       )}
                     </div>
@@ -776,6 +866,25 @@ const AdminUsers: React.FC = () => {
                 </div>
 
                 <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Rol
+                    </label>
+                    <select
+                      value={newUser.rol}
+                      onChange={(e) => setNewUser({ ...newUser, rol: e.target.value as RolInterno })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="admin">Administrador</option>
+                      <option value="accountant">Contador</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {newUser.rol === 'accountant'
+                        ? 'Entra directo al Mini ERP y a Gastos de Operacion. No ve el panel de administracion: ni reservas, ni agencias, ni viajeros.'
+                        : 'Entra al panel de administracion completo, limitado por los permisos de abajo.'}
+                    </p>
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Email
@@ -841,6 +950,50 @@ const AdminUsers: React.FC = () => {
 
                 <div className="border-t border-gray-200 pt-4 mb-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Permisos de Acceso</h3>
+
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">Contabilidad</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+                    <PermissionCheckbox
+                      label="Ver Contabilidad"
+                      checked={newUser.permissions.canViewAccounting}
+                      onChange={(checked) => setNewUser({
+                        ...newUser,
+                        permissions: { ...newUser.permissions, canViewAccounting: checked }
+                      })}
+                    />
+                    <PermissionCheckbox
+                      label="Capturar Gastos de Operación"
+                      checked={newUser.permissions.canManageExpenses}
+                      onChange={(checked) => setNewUser({
+                        ...newUser,
+                        permissions: { ...newUser.permissions, canManageExpenses: checked }
+                      })}
+                    />
+                    <PermissionCheckbox
+                      label="Exportar XML del SAT"
+                      checked={newUser.permissions.canExportSatXml}
+                      onChange={(checked) => setNewUser({
+                        ...newUser,
+                        permissions: { ...newUser.permissions, canExportSatXml: checked }
+                      })}
+                    />
+                    <PermissionCheckbox
+                      label="Gestionar Catálogo de Cuentas"
+                      checked={newUser.permissions.canManageChartOfAccounts}
+                      onChange={(checked) => setNewUser({
+                        ...newUser,
+                        permissions: { ...newUser.permissions, canManageChartOfAccounts: checked }
+                      })}
+                    />
+                  </div>
+
+                  {/* Un contador no llega a ninguna de las pantallas que estos
+                      permisos abren, asi que ofrecerselos seria mentirle: se
+                      guardarian y no harian nada. `accountantPermissions` en
+                      AuthContext se arma solo con los cuatro de arriba. */}
+                  {newUser.rol === 'admin' ? (
+                  <>
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">Operación</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <PermissionCheckbox
                       label="Gestionar Agencias"
@@ -947,6 +1100,13 @@ const AdminUsers: React.FC = () => {
                       })}
                     />
                   </div>
+                  </>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Los permisos de operación no se ofrecen para un contador: no llega a esas pantallas.
+                      Si necesita entrar al panel completo, dale de alta como Administrador.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-x-2">

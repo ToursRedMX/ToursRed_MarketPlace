@@ -19,11 +19,32 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
+/**
+ * Roles que esta funcion puede crear. Es una LISTA BLANCA a proposito: el rol
+ * llega en el cuerpo de la peticion, asi que sin ella un super admin podria
+ * teclear cualquier cosa -- 'agency' para colarse a otra agencia, o un valor
+ * que no existe y dejar al usuario sin ruta de aterrizaje. `is_super_admin`
+ * NO se toma nunca de la peticion; se escribe false mas abajo y punto.
+ */
+const ROLES_QUE_SE_PUEDEN_CREAR = ['admin', 'accountant'] as const;
+type RolCreable = (typeof ROLES_QUE_SE_PUEDEN_CREAR)[number];
+
+/**
+ * Type guard de verdad, no un `as`. Castear el rol de la peticion a RolCreable
+ * ANTES de validarlo compila igual y deja la guardia de adorno: el tipo diria
+ * que solo puede valer 'admin' o 'accountant' cuando en realidad vale lo que
+ * haya mandado el cliente. Asi, el estrechamiento lo hace la comprobacion.
+ */
+const esRolCreable = (valor: string): valor is RolCreable =>
+  (ROLES_QUE_SE_PUEDEN_CREAR as readonly string[]).includes(valor);
+
 interface CreateAdminUserRequest {
   email: string;
   password: string;
   nombre: string;
   apellido: string;
+  /** Omitido = 'admin', que es lo que hacia esta funcion antes de existir el campo. */
+  rol?: string;
   permissions: {
     can_manage_agencies: boolean;
     can_manage_users: boolean;
@@ -38,6 +59,19 @@ interface CreateAdminUserRequest {
     can_manage_inquiries: boolean;
     can_manage_points: boolean;
     can_manage_discount_codes: boolean;
+    // Los de abajo no existian cuando se escribio la pantalla de alta, asi que
+    // un usuario nuevo nacia sin ellos y habia que entrar a "Editar Permisos"
+    // para ponerlos. Van opcionales para no romper a ningun llamador viejo.
+    can_view_accounting?: boolean;
+    can_export_sat_xml?: boolean;
+    can_manage_chart_of_accounts?: boolean;
+    can_manage_expenses?: boolean;
+    can_view_audit_log?: boolean;
+    can_view_audit_sensitive_data?: boolean;
+    can_export_audit_log?: boolean;
+    can_cancel_bookings?: boolean;
+    can_manage_service_desk?: boolean;
+    can_manage_executives?: boolean;
   };
 }
 
@@ -119,6 +153,19 @@ Deno.serve(async (req: Request) => {
     const requestData: CreateAdminUserRequest = await req.json();
     const { email, password, nombre, apellido, permissions } = requestData;
 
+    const rol = requestData.rol ?? 'admin';
+    if (!esRolCreable(rol)) {
+      return new Response(
+        JSON.stringify({
+          error: `Rol no permitido: "${requestData.rol}". Solo se pueden crear ${ROLES_QUE_SE_PUEDEN_CREAR.join(' o ')}.`,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     if (!email || !password || !nombre || !apellido) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
@@ -134,7 +181,7 @@ Deno.serve(async (req: Request) => {
       password,
       email_confirm: true,
       user_metadata: {
-        role: 'admin',
+        role: rol,
       },
     });
 
@@ -156,7 +203,9 @@ Deno.serve(async (req: Request) => {
         email,
         first_name: nombre,
         last_name: apellido,
-        role: 'admin',
+        role: rol,
+        // NUNCA desde la peticion: un super admin solo puede crear usuarios
+        // que no lo son. Para elevar a alguien hace falta tocar la base.
         is_super_admin: false,
         email_verified: true,
       });
@@ -190,6 +239,19 @@ Deno.serve(async (req: Request) => {
         can_manage_inquiries: permissions.can_manage_inquiries,
         can_manage_points: permissions.can_manage_points,
         can_manage_discount_codes: permissions.can_manage_discount_codes,
+        // `?? false` y no `?? true`: un permiso que el llamador no menciona no
+        // se concede. Vale para todos, pero sobre todo para los contables, que
+        // dan acceso de ESCRITURA a la contabilidad.
+        can_view_accounting: permissions.can_view_accounting ?? false,
+        can_export_sat_xml: permissions.can_export_sat_xml ?? false,
+        can_manage_chart_of_accounts: permissions.can_manage_chart_of_accounts ?? false,
+        can_manage_expenses: permissions.can_manage_expenses ?? false,
+        can_view_audit_log: permissions.can_view_audit_log ?? false,
+        can_view_audit_sensitive_data: permissions.can_view_audit_sensitive_data ?? false,
+        can_export_audit_log: permissions.can_export_audit_log ?? false,
+        can_cancel_bookings: permissions.can_cancel_bookings ?? false,
+        can_manage_service_desk: permissions.can_manage_service_desk ?? false,
+        can_manage_executives: permissions.can_manage_executives ?? false,
       });
 
     if (permsError) {
@@ -213,6 +275,7 @@ Deno.serve(async (req: Request) => {
           email,
           nombre,
           apellido,
+          rol,
         },
       }),
       {
