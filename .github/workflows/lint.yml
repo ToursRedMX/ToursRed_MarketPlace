@@ -139,6 +139,13 @@ jobs:
       - name: Verify the amount-due and deposit-floor rules
         run: node scripts/test-exigible.mjs
 
+      # La tasa de comision que ve y guarda AdminAgencies sale de
+      # platform_settings, no de un 10% clavado. El `||` de antes trataba el 0
+      # como ausente, asi que un 0% pactado se convertia en 10% al reabrir la
+      # ficha -- y si se guardaba cualquier otro campo, ese 10% se escribia.
+      - name: Verify agency commission rates come from configuration
+        run: node scripts/test-tasa-comision-agencia.mjs
+
       # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
       # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
       # aplica SIN transaccion a proposito, porque asi fue como se descubrio que
@@ -176,6 +183,21 @@ jobs:
           psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS ventana;" -c "CREATE DATABASE ventana;"
           cd scripts
           psql -h localhost -U postgres -d ventana -v ON_ERROR_STOP=1 -f test-ventana-conciliacion.sql
+
+      # `calculate_payment_breakdown` existia por duplicado: la de 2025 con 10%
+      # y 3% clavados, y la de mayo-2026 que lee platform_settings. La segunda
+      # no reemplazo a la primera —agregar parametros crea una funcion nueva—,
+      # y como los parametros nuevos tienen DEFAULT, toda llamada de 3
+      # argumentos moria con "is not unique". La prueba PROVOCA ese 42725 antes
+      # de aplicar la migracion, y luego comprueba que la que sobrevive sigue a
+      # la configuracion.
+      - name: Verify only the config-driven payment breakdown survives
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS desglose;" -c "CREATE DATABASE desglose;"
+          cd scripts
+          psql -h localhost -U postgres -d desglose -v ON_ERROR_STOP=1 -f test-calculate-payment-breakdown.sql
 
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
