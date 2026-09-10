@@ -255,15 +255,33 @@ prepararse.
 |---|---|---|---|
 | 1 | **Un `account_executive` activo sin MFA.** Los 2 admins sí lo tienen verificado | Depende de si ese rol entra en alcance | 8.4 |
 | 2 | **Ventana del JWT tras bloquear.** El token ya emitido vive hasta expirar | Acotado: dentro de esa ventana RLS ya no le responde | 8.2.5 |
-| 3 | **Sin escaneos ASV ni pruebas de penetración** registrados en el repo | Requisito duro si aplica A-EP | 11.3 |
-| 4 | **Sin inventario formal de componentes de terceros** con su versión | 6.3.2 lo pide explícitamente | 6.3.2 |
-| 5 | **Retención de bitácora sin política escrita.** Las particiones existen hasta 2029, pero no hay documento que fije los 12 meses mínimos ni los 3 disponibles de inmediato | 10.5.1 |
-| 6 | **Sin revisión periódica documentada** de la bitácora | 10.4 exige revisión y que quede constancia | 10.4 |
+| 3 | **Sin escaneos ASV ni pruebas de penetración.** Depende del SAQ; un ASV es una contratación, no algo que corramos nosotros → [`escaneos-y-pruebas-de-intrusion.md`](escaneos-y-pruebas-de-intrusion.md) | 11.3 |
+| 4 | ~~Sin inventario formal de componentes de terceros~~ **Hecho** → [`inventario-de-componentes-de-terceros.md`](inventario-de-componentes-de-terceros.md). Dejó un hueco técnico nuevo: 3 de 6 componentes de Edge Functions **sin versión fija** | 6.3.2 |
+| 5 | ~~Retención sin política escrita~~ **Hecho** → [`retencion-y-revision-de-bitacora.md`](retencion-y-revision-de-bitacora.md). Pero al medirla salió algo peor: solo hay **~2.5 meses de historia**, y los 12 no se recuperan hacia atrás | 10.5.1 |
+| 6 | ~~Sin revisión periódica documentada~~ **Procedimiento escrito** (mismo documento), con 7 consultas listas para correr. Falta que Axel asigne responsables | 10.4 |
 | 7 | **Procesadores en modo pruebas.** Stripe en cuenta de test, Facturapi con `sk_test_` y `pac_sandbox_mode = true` | No es hueco de PCI, pero el auditor va a ver un entorno que no es el productivo | — |
 
-Los huecos 3 a 6 son **documentales, no técnicos**: el control existe o es barato
-de montar, lo que falta es el papel. Suelen ser los que más tiempo consumen si se
-dejan para el final.
+Los huecos 3 a 6 se atendieron el mismo 10-sep-2026, y al escribirlos **aparecieron
+dos hallazgos que no se veían desde fuera**:
+
+- **Solo hay ~2.5 meses de bitácora** (desde el 25-jun-2026). El Requisito 10.5.1
+  pide 12, y eso **no se recupera hacia atrás**: el reloj corre desde ya, y la
+  única acción posible es no borrar nada.
+- **75 eventos `DELETE` sin actor ni IP.** Los escriben triggers de base de datos,
+  que no tienen contexto HTTP. Un borrado sin autor es difícil de defender.
+
+O sea que escribir la política sirvió para algo más que tener el papel: obligó a
+medir, y medir encontró lo que no se sabía.
+
+---
+
+## 4-bis. Documentos que acompañan a este
+
+| Documento | Cubre |
+|---|---|
+| [`inventario-de-componentes-de-terceros.md`](inventario-de-componentes-de-terceros.md) | 6.3.2 — qué software de terceros corre y en qué versión |
+| [`retencion-y-revision-de-bitacora.md`](retencion-y-revision-de-bitacora.md) | 10.4 y 10.5.1 — cuánto se guarda y cómo se revisa |
+| [`escaneos-y-pruebas-de-intrusion.md`](escaneos-y-pruebas-de-intrusion.md) | 11.3 y 11.4 — qué falta y de qué depende |
 
 ---
 
