@@ -111,7 +111,6 @@ import NotFoundPage from './pages/NotFoundPage';
 import QaSentryTestPage from './pages/QaSentryTestPage';
 import UnsubscribePage from './pages/UnsubscribePage';
 import GiftCardsPage from './pages/GiftCardsPage';
-import TestOpenPay3DSPage from './pages/TestOpenPay3DSPage';
 import GiftCardRedeemPage from './pages/GiftCardRedeemPage';
 import GiftCardSuccessPage from './pages/GiftCardSuccessPage';
 import PaymentReturnPage from './pages/PaymentReturnPage';
@@ -273,7 +272,6 @@ const App: React.FC = () => {
           <Route path="/extras-success" element={<ExtrasSuccessPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/gift-cards" element={<GiftCardsPage />} />
-          <Route path="/test-openpay-3ds" element={<TestOpenPay3DSPage />} />
           <Route path="/gift-card/redeem" element={<GiftCardRedeemPage />} />
           <Route path="/gift-card/success" element={<GiftCardSuccessPage />} />
           <Route path="/payment-return" element={<PaymentReturnPage />} />
