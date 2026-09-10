@@ -131,6 +131,11 @@ jobs:
       - name: Verify blocked-account check fails closed
         run: node scripts/test-auth-falla-cerrado.mjs
 
+      # La regla del exigible y del piso, que `9dd296b` rompio en 5 sitios al
+      # tomar el maximo de un importe bruto y uno neto. Casos con reservas reales.
+      - name: Verify the amount-due and deposit-floor rules
+        run: node scripts/test-exigible.mjs
+
       # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
       # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
       # aplica SIN transaccion a proposito, porque asi fue como se descubrio que

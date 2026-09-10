@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 import { origenParaRedirigir } from "../_shared/cors.ts";
+import { exigibleAlProcesador } from "../_shared/exigible.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -103,7 +104,9 @@ Deno.serve(async (req: Request) => {
         .eq("status", "succeeded");
 
       const alreadyPaid = (alreadySucceeded || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
-      const requiredNow = Math.max(Number(booking.deposit_amount || 0), Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0));
+      // Ver `_shared/exigible.ts`: con el maximo se cobraba por encima de lo
+      // debido a quien pago parte con billetera.
+      const requiredNow = exigibleAlProcesador(booking);
       const remainingBalance = requiredNow - alreadyPaid;
 
       if (remainingBalance <= 0) {
@@ -232,7 +235,12 @@ Deno.serve(async (req: Request) => {
     }
 
     // Check for existing pending order for this booking + line
-    const idempotencyKey = `${booking_id}_${context}_${charge_reference_id || "deposit"}`;
+    // Mismo motivo que en create-checkout-session: sin la ventana, la clave es
+    // estable para siempre y Conekta devuelve la MISMA orden, aunque ya haya
+    // expirado. Con el bucket de 10 minutos se deduplican los reintentos del
+    // mismo arranque y un intento posterior obtiene una orden nueva.
+    const ventanaConekta = Math.floor(Date.now() / (10 * 60 * 1000));
+    const idempotencyKey = `${booking_id}_${context}_${charge_reference_id || "deposit"}_${ventanaConekta}`;
     const { data: existingPending } = await supabase
       .from("payment_transactions")
       .select("id, conekta_order_id")

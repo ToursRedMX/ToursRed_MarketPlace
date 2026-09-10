@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
+import { cubreElAnticipo } from "../_shared/exigible.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -101,12 +102,28 @@ async function activateGiftCard(supabase: any, giftCardId: string, paypalTransac
   );
 }
 
-async function confirmBooking(supabase: any, bookingId: string, paypalTransactionId: string | null, captureData?: any) {
-  const { data: existingBooking } = await supabase
+async function confirmBooking(supabase: any, bookingId: string, paypalTransactionId: string | null, captureData?: any, usuarioAutenticado?: string | null) {
+  const { data: existingBooking, error: errorReserva } = await supabase
     .from("bookings")
       .select("payment_status, deposit_amount, amount_due_now, membership_cost, user_id, toursred_cash_used, points_used")
     .eq("id", bookingId)
     .maybeSingle();
+
+  // Falla cerrado. Sin esto, una lectura fallida dejaba `existingBooking` en
+  // null, el piso se calculaba sobre un objeto vacio (piso 0) y CUALQUIER cobro
+  // confirmaba la reserva.
+  if (errorReserva || !existingBooking) {
+    console.error(`No se pudo leer la reserva ${bookingId}; no se confirma`, errorReserva);
+    return;
+  }
+
+  // Autenticar no es autorizar: sin esto, cualquier usuario con sesion podia
+  // capturar la orden de otro con solo conocer el orderId. `usuarioAutenticado`
+  // llega null en los caminos sin sesion (gift_card no pasa por aqui).
+  if (usuarioAutenticado && existingBooking.user_id !== usuarioAutenticado) {
+    console.error(`Usuario ${usuarioAutenticado} intento capturar la reserva ${bookingId}, que no es suya`);
+    return;
+  }
 
   if (existingBooking?.payment_status === "succeeded") {
     console.log(`Booking ${bookingId} already confirmed — skipping duplicate side effects (PayPal)`);
@@ -124,14 +141,15 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
     .eq("payment_processor", "paypal");
   const alreadyPaid = (priorPaypalPayments || []).reduce((sum: number, tx: any) => sum + Number(tx.amount || 0), 0);
   const totalPaid = alreadyPaid + capturedAmount;
-  const requiredAmount = Math.max(
-    Number(existingBooking?.deposit_amount || 0),
-    Number(existingBooking?.amount_due_now || 0) - Number(existingBooking?.membership_cost || 0),
-  );
+  // Ver `_shared/exigible.ts`. El maximo con `amount_due_now` convertia esto en
+  // un piso que quien pago con puntos o ToursRed Cash NUNCA alcanza: la reserva
+  // quedaba en `processing` con el dinero ya cobrado. El piso correcto es el
+  // anticipo bruto, y la billetera se suma a lo cubierto.
+  const cobertura = cubreElAnticipo(existingBooking, totalPaid);
 
-  if (totalPaid < requiredAmount - 0.5) {
+  if (!cobertura.suficiente) {
     await supabase.from("bookings").update({ payment_status: "processing" }).eq("id", bookingId);
-    console.log(`Partial PayPal payment for booking ${bookingId}: ${totalPaid}/${requiredAmount} paid — marked as processing`);
+    console.log(`Partial PayPal payment for booking ${bookingId}: cubierto ${cobertura.cubierto} de ${cobertura.piso} (billetera ${cobertura.billetera}) — marked as processing`);
     return;
   }
 
@@ -489,12 +507,17 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    let usuarioAutenticado: string | null = null;
     if (context !== "gift_card") {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       const authClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
       const { data: { user } } = await authClient.auth.getUser();
       if (!user) return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Se guarda para `confirmBooking`, que es donde se puede comprobar la
+      // propiedad: el id de la reserva no llega en el cuerpo, sale del
+      // `reference_id` que devuelve PayPal mas abajo.
+      usuarioAutenticado = user.id;
     }
 
     let paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID");
@@ -637,7 +660,7 @@ Deno.serve(async (req: Request) => {
                 );
               }
             } else if (referenceId) {
-              await confirmBooking(supabase, referenceId, paypalTransactionId, orderDetails);
+              await confirmBooking(supabase, referenceId, paypalTransactionId, orderDetails, usuarioAutenticado);
             }
 
             return new Response(JSON.stringify({ success: true, status: "COMPLETED", alreadyCaptured: true }), {
@@ -830,7 +853,7 @@ Deno.serve(async (req: Request) => {
         }
 
       } else if (referenceId) {
-        await confirmBooking(supabase, referenceId, paypalTransactionId, captureData);
+        await confirmBooking(supabase, referenceId, paypalTransactionId, captureData, usuarioAutenticado);
       }
 
       return new Response(JSON.stringify({ success: true, status: captureStatus }), {

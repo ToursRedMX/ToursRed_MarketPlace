@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 import { origenParaRedirigir } from "../_shared/cors.ts";
+import { exigibleAlProcesador } from "../_shared/exigible.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -198,10 +199,10 @@ Deno.serve(async (req: Request) => {
         .eq("payment_processor", "paypal");
       const alreadyPaid = (existingPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
       // Ver nota en create-openpay-checkout: el techo es el exigible, no el anticipo.
-      const dueNow = Math.max(
-        Number(booking.deposit_amount || 0),
-        Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0),
-      );
+      // Ver `_shared/exigible.ts`: el maximo con deposit_amount anulaba el
+      // descuento de puntos y ToursRed Cash, y subia el techo por encima de lo
+      // que el viajero debe.
+      const dueNow = exigibleAlProcesador(booking);
       const remainingBalance = Math.max(0, dueNow - alreadyPaid);
       if (remainingBalance <= 0) {
         return new Response(JSON.stringify({ error: "Esta reserva ya está pagada en su totalidad" }), {
