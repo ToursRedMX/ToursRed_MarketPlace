@@ -186,23 +186,31 @@ try {
   writeFileSync(archivo, [
     'CREATE SCHEMA IF NOT EXISTS public;',
     extraerFuncion(sql),
-    "\\pset tuples_only on",
-    "\\pset format unaligned",
-    "\\pset fieldsep '|'",
     consultas,
     // Los bordes tambien
     "SELECT '<vacia>', coalesce(public.enmascarar_ip(''), '<null>');",
     "SELECT '<nula>', coalesce(public.enmascarar_ip(NULL), '<null>');",
   ].join('\n'));
 
-  const salida = execFileSync('psql', ['-v', 'ON_ERROR_STOP=1', '-f', archivo], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  // El formato va por ARGUMENTOS y no con `\pset` dentro del archivo: `\pset
+  // fieldsep '|'` hace que psql imprima `Field separator is "|".`, una linea
+  // que contiene el separador y se colaba como si fuera una fila de datos. Lo
+  // cazo la asercion de conteo de abajo, que por eso esta.
+  //   -q  sin "CREATE FUNCTION" ni demas etiquetas de comando
+  //   -t  solo tuplas, sin cabeceras
+  //   -A  sin alineacion
+  //   -F  separador
+  const salida = execFileSync(
+    'psql',
+    ['-v', 'ON_ERROR_STOP=1', '-q', '-t', '-A', '-F', '|', '-f', archivo],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+  );
 
-  // psql imprime "CREATE SCHEMA" y "CREATE FUNCTION" antes de los resultados,
-  // y podria imprimir NOTICEs. Solo son filas de datos las que traen el
-  // separador; filtrar por el evita tomar esos avisos como si fueran casos.
+  // Con -q solo deberian salir filas de datos, pero se filtra igual por el
+  // separador por si aparece un NOTICE, y se CUENTA. Contar es lo que importa:
+  // si el filtro deja pasar una linea que no es un caso, o se pierde uno, la
+  // comparacion de abajo podria quedar en verde sin haber comparado lo que
+  // creia. Paso el 10-sep-2026 — `\pset fieldsep` metia una linea de mas.
   const filas = salida.split('\n').map((l) => l.trim()).filter((l) => l.includes('|'));
   assert.ok(
     filas.length === casos.length + 2,
