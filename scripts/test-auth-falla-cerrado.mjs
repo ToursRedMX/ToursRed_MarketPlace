@@ -58,6 +58,18 @@ function recortarBloque(fuente, marcador, anclaje = '{') {
   throw new Error(`bloque sin cerrar para: ${marcador}`);
 }
 
+/**
+ * Descarta las lineas que son solo comentario.
+ *
+ * Las guardias de mas abajo comprueban CODIGO, y sin esto se disparaban con el
+ * comentario que explica por que ese codigo ya no existe — que es justo lo que
+ * hay que conservar para que nadie lo reintroduzca por desconocer la historia.
+ * No intenta ser un analizador: un comentario al final de una linea con codigo
+ * se queda, y esta bien, porque esa linea si hay que mirarla.
+ */
+const soloCodigo = (texto) =>
+  texto.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+
 const compilar = (fuente) => ts.transpileModule(fuente, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
@@ -80,7 +92,7 @@ const UserRole = {
 
 /** supabase de mentiras: `respuestas` es la cola de lo que devuelve cada lectura. */
 function entorno({ respuestas, signOutLanza = false }) {
-  const registro = { lecturas: 0, signOuts: 0, destino: null, cacheEscrita: null };
+  const registro = { lecturas: 0, signOuts: 0, destino: null, cacheEscrita: null, cambioDePasswordExigido: null };
   const cola = [...respuestas];
 
   const supabase = {
@@ -112,7 +124,7 @@ function entorno({ respuestas, signOutLanza = false }) {
     sessionStorage: { getItem: () => null, setItem: () => {} },
     getCachedRole: () => null,
     setCachedRole: (_id, rol) => { registro.cacheEscrita = rol; },
-    setMustChangePassword: () => {},
+    setMustChangePassword: (v) => { registro.cambioDePasswordExigido = v; },
     exports: {},
   });
   // `window.location.href = x` con un setter en un getter no funciona; se
@@ -213,6 +225,94 @@ casos.push(async () => {
   assert.equal(r.role, 'agency');
   assert.equal(r.emailVerified, true);
   assert.equal(e.registro.lecturas, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Parte 1-bis — la cuenta de super admin NO es un caso especial
+// ---------------------------------------------------------------------------
+//
+// `determineUserRole` empezaba comparando el email con 'admin@toursred.com' y,
+// si coincidia, devolvia ADMIN SIN LEER LA BASE. O sea que la unica cuenta con
+// la que se gestiona toda la plataforma era justo la unica exenta de los tres
+// chequeos que cuelgan de esa lectura: `is_active`, el rol real, y
+// `must_change_password`.
+//
+// El rol tiene que salir de `public.users`, como para cualquier otro.
+
+const admin = { id: 'sa1', email: 'admin@toursred.com', user_metadata: { role: 'admin' } };
+
+// --- 8. Bloqueada de verdad: el bloqueo tambien aplica a esta cuenta ---------
+casos.push(async () => {
+  const e = entorno({
+    respuestas: [{ data: { role: 'admin', email_verified: true, is_active: false }, error: null }],
+  });
+  await assert.rejects(
+    () => e.determineUserRole(admin, true),
+    /Usuario bloqueado/,
+    'la cuenta de super admin se saltaba is_active por su email: si se filtra su ' +
+    'contrasena, bloquearla desde el panel no la sacaba del navegador',
+  );
+  assert.equal(e.registro.lecturas, 1, 'tiene que leer la fila, no decidir por el email');
+  assert.equal(e.destino, '/login?blocked=true');
+});
+
+// --- 9. El rol sale de la fila, no de una cadena de texto -------------------
+//
+// El escenario es deliberadamente extremo —esa fila hoy dice 'admin'— porque
+// lo que se prueba es la PROCEDENCIA del rol, no su valor. Mientras el front
+// conceda ADMIN por comparar un email, el rol de esa cuenta no es un dato:
+// es una constante compilada, y ningun cambio en la base la alcanza.
+casos.push(async () => {
+  const e = entorno({
+    respuestas: [{ data: { role: 'traveler', email_verified: true, is_active: true, must_change_password: false }, error: null }],
+  });
+  const r = await e.determineUserRole(admin, true);
+  assert.equal(r.role, 'traveler', 'el rol debe salir de public.users, no de comparar el email');
+  assert.equal(e.registro.lecturas, 1);
+});
+
+// --- 10. Y tampoco se salta el cambio de contrasena obligatorio -------------
+casos.push(async () => {
+  const e = entorno({
+    respuestas: [{ data: { role: 'admin', email_verified: true, is_active: true, must_change_password: true }, error: null }],
+  });
+  const r = await e.determineUserRole(admin, true);
+  assert.equal(r.role, 'admin', 'con la fila en regla debe entrar como admin, por la via normal');
+  assert.equal(
+    e.registro.cambioDePasswordExigido, true,
+    'el atajo nunca llamaba a setMustChangePassword: a esta cuenta jamas se le ' +
+    'habria pedido cambiar la contrasena',
+  );
+});
+
+// --- 11. El email no puede volver a ser una credencial ----------------------
+//
+// Los casos de arriba se pueden satisfacer moviendo el atajo a otro sitio del
+// archivo. Esto cierra esa puerta: la cadena no debe existir en AuthContext.
+casos.push(async () => {
+  assert.ok(
+    !soloCodigo(authContext).includes('admin@toursred.com'),
+    'volvio a aparecer un atajo por email en AuthContext. Un email no es una ' +
+    'credencial: el rol y el estado de la cuenta salen de public.users',
+  );
+});
+
+// --- 12. El catch de updateAuthState no puede REGALAR super admin -----------
+//
+// Ese catch concedia `setIsSuperAdmin(true)` sin consultar nada, y es la unica
+// bandera que abre las funciones exclusivas del super admin. En el camino
+// normal sale de una lectura de `users.is_super_admin` (linea ~537). Un error
+// inesperado no puede conceder mas privilegio que el camino que si funciona:
+// ante la duda se degrada, no se escala.
+casos.push(async () => {
+  const catchUpdate = recortarBloque(
+    authContext.slice(authContext.indexOf('const updateAuthState')),
+    '} catch (err: any) {',
+  );
+  assert.ok(
+    !/setIsSuperAdmin\(\s*true\s*\)/.test(soloCodigo(catchUpdate)),
+    'el catch de updateAuthState concede isSuperAdmin sin leer la base',
+  );
 });
 
 // ---------------------------------------------------------------------------
