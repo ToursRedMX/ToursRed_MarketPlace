@@ -177,6 +177,36 @@ INSERT INTO agency_payouts VALUES
   ('20000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
    2000,'completed','2026-09-07','PAY-1','spei');
 
+-- Los bloques que faltaban por ejercitar. Sin una fila aqui, romper esos
+-- bloques no rompe nada y la mutacion sobrevive -- comprobado: la de la tarjeta
+-- de regalo sobrevivio justo por esto.
+INSERT INTO gift_cards VALUES
+  ('60000000-0000-0000-0000-000000000001','GC-1',500,'paid','stripe','ana@x.mx','2026-09-08');
+INSERT INTO booking_optional_services VALUES
+  ('61000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',
+   'Snorkel','stripe',120,'2026-09-08','2026-09-08');
+INSERT INTO booking_supplements VALUES
+  ('62000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',70,'2026-09-08');
+INSERT INTO insurance_commission_receipts VALUES
+  ('63000000-0000-0000-0000-000000000001','Aseguradora X',450,'FAC-1','2026-09-08');
+INSERT INTO insurance_settlements VALUES
+  ('64000000-0000-0000-0000-000000000001','Aseguradora X',300,'LIQ-1','2026-09-08');
+INSERT INTO payment_disputes VALUES
+  ('65000000-0000-0000-0000-000000000001',210,'2026-09-08');
+
+-- Una membresia: producto propio de ToursRed. Ni un peso de pasivo.
+INSERT INTO payment_transactions VALUES
+  ('d0000000-0000-0000-0000-000000000002',NULL,
+   800,'succeeded',0,'membership','stripe','2026-09-09');
+
+-- Comisiones de ejecutivo: una pagada y una pendiente. La pendiente es gasto
+-- YA y ademas es dinero que se debe.
+INSERT INTO executive_commissions VALUES
+  ('50000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
+   60,'paid','approval','REF-1','2026-09-09','2026-09-09'),
+  ('50000000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001',
+   90,'pending','platform_period',NULL,NULL,'2026-09-09');
+
 -- Reembolso al METODO DE PAGO ORIGINAL: este si sale del banco. Es el caso
 -- excepcional (una disputa de PROFECO, por ejemplo) que se hace desde el panel
 -- de admin. `processor_fee_lost` de 30 esta puesto A PROPOSITO para comprobar
@@ -198,6 +228,10 @@ INSERT INTO featured_tour_slots VALUES
 -- La migracion de verdad.
 -- ---------------------------------------------------------------------------
 \ir ../supabase/migrations/20260910080000_vista_movimientos_financieros.sql
+-- Y encima la correccion: la membresia deja de ser pasivo, y lo devengado y no
+-- pagado a los ejecutivos pasa a ser deuda. Se aplican las DOS en orden, que es
+-- el estado real de produccion, en vez de probar solo la version final.
+\ir ../supabase/migrations/20260910090000_corregir_membresia_y_pasivo_por_comisiones.sql
 
 \echo '=== Caso 1: un anticipo es caja y pasivo, NO ingreso ==='
 DO $$
@@ -357,17 +391,160 @@ BEGIN
   RAISE NOTICE '  reembolso a tarjeta 1500 -> caja -1500 (no traspaso), mas 25 de comision por reembolsar. OK';
 END $$;
 
-\echo '=== Caso 9: las tablas vacias no rompen la vista ==='
+\echo '=== Caso 8c: la membresia es ingreso, no deuda ==='
 DO $$
-DECLARE v_n int;
+DECLARE v record;
 BEGIN
-  -- suplementos, aseguradora, liquidaciones y disputas estan en cero.
-  SELECT count(*) INTO v_n FROM vista_movimientos_financieros
-   WHERE categoria IN ('suplemento','comision_aseguradora','liquidacion_aseguradora','contracargo');
-  IF v_n <> 0 THEN RAISE EXCEPTION 'FALLO 9: se esperaban 0 filas de las tablas vacias y hay %', v_n; END IF;
-  -- Y la vista completa sigue respondiendo.
-  PERFORM count(*) FROM vista_movimientos_financieros;
-  RAISE NOTICE '  4 tablas vacias, la vista responde igual. OK';
+  SELECT sum(caja) AS caja, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso
+    INTO v FROM vista_movimientos_financieros WHERE categoria = 'cobro_membership';
+  IF v.caja <> 800 OR v.pasivo <> 0 OR v.ingreso <> 800 THEN
+    RAISE EXCEPTION
+      'FALLO 8c: membresia dio caja=% pasivo=% ingreso=%, esperado 800/0/800. Una membresia es producto de ToursRed: no hay agencia a la que liberarle nada, asi que no genera pasivo y es ingreso desde el primer momento.',
+      v.caja, v.pasivo, v.ingreso;
+  END IF;
+  RAISE NOTICE '  membresia 800 -> ingreso 800, pasivo 0. OK';
+END $$;
+
+\echo '=== Caso 8d: lo devengado y no pagado a ejecutivos es deuda ==='
+DO $$
+DECLARE v record;
+BEGIN
+  SELECT sum(caja) AS caja, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso
+    INTO v FROM vista_movimientos_financieros WHERE categoria = 'comision_ejecutivo';
+  -- Pagada 60 + pendiente 90: sale del banco solo la pagada, se debe la otra,
+  -- y las dos son gasto.
+  IF v.caja <> -60 OR v.pasivo <> 90 OR v.ingreso <> -150 THEN
+    RAISE EXCEPTION
+      'FALLO 8d: ejecutivos dio caja=% pasivo=% ingreso=%, esperado -60/90/-150. La comision devengada y no pagada es gasto Y deuda a la vez.',
+      v.caja, v.pasivo, v.ingreso;
+  END IF;
+  RAISE NOTICE '  ejecutivos -> caja -60, deuda 90, gasto -150. OK';
+END $$;
+
+\echo '=== Caso 8e: LA ECUACION CONTABLE, categoria por categoria ==='
+DO $$
+DECLARE v_mala text; v_desc numeric;
+BEGIN
+  -- activo = pasivo + ingreso. Este invariante es lo que caza un bloque que
+  -- reparta mal un movimiento, sin que nadie tenga que revisarlo a mano.
+  SELECT categoria, round((sum(caja) - sum(pasivo) - sum(ingreso))::numeric,2)
+    INTO v_mala, v_desc
+    FROM vista_movimientos_financieros
+   GROUP BY categoria
+  HAVING round((sum(caja) - sum(pasivo) - sum(ingreso))::numeric,2) <> 0
+   LIMIT 1;
+
+  IF v_mala IS NOT NULL THEN
+    RAISE EXCEPTION
+      'FALLO 8e: la categoria "%" descuadra por %. Debe cumplirse activo = pasivo + ingreso: si entra dinero al banco, o se le debe a alguien o se gano.',
+      v_mala, v_desc;
+  END IF;
+  RAISE NOTICE '  todas las categorias cumplen activo = pasivo + ingreso. OK';
+END $$;
+
+\echo '=== Caso 8g: de quien es el dinero, concepto por concepto ==='
+DO $$
+DECLARE r record;
+BEGIN
+  -- POR QUE ESTE CASO EXISTE, ADEMAS DEL INVARIANTE:
+  --
+  -- El invariante (8e) caza descuadres, NO malas clasificaciones. Marcar la
+  -- comision de la aseguradora como pasivo en vez de ingreso cuadra igual
+  -- —450 de activo contra 450 de pasivo— y pasa. Comprobado con una mutacion
+  -- que sobrevivio.
+  --
+  -- Es el mismo caso del bug que Axel encontro con la membresia: estaba
+  -- balanceada y mal clasificada. La pregunta "de quien es este dinero" hay
+  -- que afirmarla concepto por concepto; no se deduce de que las cuentas
+  -- cuadren.
+
+  -- Productos propios de ToursRed: no hay a quien liberarle nada.
+  FOR r IN
+    SELECT categoria, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso
+      FROM vista_movimientos_financieros
+     WHERE categoria IN ('cobro_membership','tour_destacado','comision_aseguradora')
+     GROUP BY categoria
+  LOOP
+    IF r.pasivo <> 0 OR r.ingreso <= 0 THEN
+      RAISE EXCEPTION
+        'FALLO 8g: "%" dio pasivo=% ingreso=%. Es un producto propio de ToursRed: no le debe nada a nadie, asi que pasivo 0 e ingreso positivo.',
+        r.categoria, r.pasivo, r.ingreso;
+    END IF;
+  END LOOP;
+
+  -- Dinero de terceros al entrar: todavia no se gano nada.
+  FOR r IN
+    SELECT categoria, sum(pasivo) AS pasivo, sum(ingreso) AS ingreso
+      FROM vista_movimientos_financieros
+     WHERE categoria IN ('cobro_booking_deposit','tarjeta_regalo','monedero_topup_spei')
+     GROUP BY categoria
+  LOOP
+    IF r.pasivo <= 0 OR r.ingreso <> 0 THEN
+      RAISE EXCEPTION
+        'FALLO 8g: "%" dio pasivo=% ingreso=%. Ese dinero entra al banco pero es del viajero o de la agencia: pasivo positivo e ingreso 0 hasta que se reconozca.',
+        r.categoria, r.pasivo, r.ingreso;
+    END IF;
+  END LOOP;
+
+  RAISE NOTICE '  productos propios sin pasivo, dinero de terceros sin ingreso. OK';
+END $$;
+
+\echo '=== Caso 8f: el fixture ejercita TODOS los bloques ==='
+DO $$
+DECLARE v_hay text[]; v_esperado text[];
+BEGIN
+  -- Un invariante solo vale lo que cubre el fixture. Si un bloque no produce
+  -- ni una fila, romperlo no rompe la prueba: la mutacion de la tarjeta de
+  -- regalo sobrevivio exactamente asi. Esta lista es EXACTA a proposito: al
+  -- agregar un bloque a la vista hay que agregarle su fila al fixture y su
+  -- nombre aqui, y la prueba obliga a hacerlo.
+  SELECT array_agg(DISTINCT categoria ORDER BY categoria) INTO v_hay
+    FROM vista_movimientos_financieros;
+
+  v_esperado := ARRAY[
+    'cobro_booking_deposit','cobro_membership','comision_aseguradora',
+    'comision_ejecutivo','comision_por_reembolso','comision_procesador',
+    'contracargo','liquidacion_aseguradora','monedero_debit',
+    'monedero_gift_card','monedero_promotion','monedero_refund',
+    'monedero_topup_spei','pago_agencia','reconocimiento_ingreso',
+    'reembolso_metodo_original','servicio_opcional','suplemento',
+    'tarjeta_regalo','tour_destacado'
+  ];
+
+  IF v_hay IS DISTINCT FROM v_esperado THEN
+    RAISE EXCEPTION
+      'FALLO 8f: el fixture ya no cubre los mismos bloques. Sin fila, un bloque roto no rompe la prueba. Falta cubrir: % / Nuevo o sobrante: %',
+      (SELECT coalesce(array_agg(x),'{}') FROM unnest(v_esperado) x WHERE NOT x = ANY(v_hay)),
+      (SELECT coalesce(array_agg(x),'{}') FROM unnest(v_hay) x WHERE NOT x = ANY(v_esperado));
+  END IF;
+  RAISE NOTICE '  los % bloques con datos producen filas y entran al invariante. OK', array_length(v_hay,1);
+END $$;
+
+\echo '=== Caso 9: vaciar una fuente no rompe la vista ==='
+DO $$
+DECLARE v_antes int; v_despues int; v_disputas int;
+BEGIN
+  SELECT count(*) INTO v_antes FROM vista_movimientos_financieros;
+
+  -- Antes este caso comprobaba que 4 tablas VACIAS no rompian nada. Dejo de
+  -- servir cuando el fixture las lleno para que sus bloques se ejercitaran
+  -- (caso 8f). Lo que si sigue importando es lo inverso: que una fuente que se
+  -- queda sin filas no tumbe el reporte entero ni haga desaparecer lo demas.
+  TRUNCATE payment_disputes;
+
+  SELECT count(*) INTO v_despues FROM vista_movimientos_financieros;
+  SELECT count(*) INTO v_disputas FROM vista_movimientos_financieros
+   WHERE categoria = 'contracargo';
+
+  IF v_disputas <> 0 THEN
+    RAISE EXCEPTION 'FALLO 9: se vacio payment_disputes y siguen apareciendo % contracargos', v_disputas;
+  END IF;
+  IF v_despues <> v_antes - 1 THEN
+    RAISE EXCEPTION
+      'FALLO 9: vaciar una fuente cambio el total de % a %, y solo debia quitar la unica fila de esa fuente.',
+      v_antes, v_despues;
+  END IF;
+  RAISE NOTICE '  fuente vacia: se va su fila y el resto sigue en pie. OK';
 END $$;
 
 \echo '=== Caso 10: la vista NO es un rodeo alrededor de las RLS ==='
@@ -389,4 +566,4 @@ BEGIN
 END $$;
 
 \echo ''
-\echo 'Vista de movimientos financieros: 12/12 casos OK'
+\echo 'Vista de movimientos financieros: 17/17 casos OK'
