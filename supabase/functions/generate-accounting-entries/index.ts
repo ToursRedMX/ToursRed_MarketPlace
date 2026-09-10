@@ -83,14 +83,31 @@ Deno.serve(async (req: Request) => {
       toDate = url.searchParams.get("to_date") ?? undefined;
     }
 
-    const { data, error } = await supabase.rpc("generate_accounting_entries_batch", {
-      p_from_date: fromDate ?? null,
-      p_to_date: toDate ?? null,
-    });
+    const rpcArgs: Record<string, string> = {};
+    if (fromDate) rpcArgs.p_from_date = fromDate;
+    if (toDate) rpcArgs.p_to_date = toDate;
+    const { data, error } = await supabase.rpc("generate_accounting_entries_batch", rpcArgs);
 
     if (error) throw error;
 
-    return new Response(JSON.stringify({ success: true, result: data }), {
+    const { data: executiveCommissions, error: executiveError } = await supabase.rpc(
+      "reconcile_executive_commissions_batch",
+      rpcArgs,
+    );
+    if (executiveError) throw executiveError;
+
+    const { data: paidMovements, error: paidMovementsError } = await supabase.rpc(
+      "reconcile_paid_accounting_movements",
+      rpcArgs,
+    );
+    if (paidMovementsError) throw paidMovementsError;
+
+    return new Response(JSON.stringify({
+      success: true,
+      result: data,
+      executive_commissions_processed: executiveCommissions ?? 0,
+      paid_movements: paidMovements ?? {},
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

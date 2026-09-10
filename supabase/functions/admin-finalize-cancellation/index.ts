@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
@@ -9,7 +9,7 @@ async function cancelStampedCfds(
   // exigia que los genericos coincidieran exactamente con los del cliente que
   // se pasa, y no coincidian: createClient(url, key) infiere
   // SupabaseClient<any, ...> y el tipo sin argumentos usa los valores por
-  // defecto. Mismo patron que ZohoClient en zohoAccessToken.ts.
+  // defecto. Mismo patron que cliente administrativo de Supabase.
   supabase: Pick<SupabaseClient, "from" | "functions">,
   bookingId: string,
   cancellationId: string
@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
       return err("Permisos insuficientes", 403);
     }
 
-    // AAL2 (MFA) check — use a client authenticated ONLY with the caller's own JWT
+    // AAL2 (MFA) check â€” use a client authenticated ONLY with the caller's own JWT
     // (anon key + Authorization), not the service-role client, so that
     // requires_aal2_check()/has_aal2() reliably read the real auth.uid()/auth.jwt()
     // instead of depending on how the service-role client resolves headers.
@@ -128,7 +128,7 @@ Deno.serve(async (req: Request) => {
     if (bookingErr || !booking) return err("Reserva no encontrada", 404);
 
     if (booking.status === "cancelled") {
-      return err("Esta cancelación ya fue finalizada anteriormente.");
+      return err("Esta cancelaciÃ³n ya fue finalizada anteriormente.");
     }
     if (booking.status !== "cancellation_processing") {
       return err(`Estado de reserva inesperado: '${booking.status}'. Se esperaba 'cancellation_processing'.`);
@@ -161,7 +161,7 @@ Deno.serve(async (req: Request) => {
       const missingLines = transactions
         .filter((t) => missingTxIds.includes(t.id))
         .map((t) => `${t.charge_context || "booking_deposit"} ($${t.amount})`);
-      return err(`Faltan reembolsos por iniciar en las siguientes líneas: ${missingLines.join(", ")}. La reserva permanece en 'cancellation_processing'.`);
+      return err(`Faltan reembolsos por iniciar en las siguientes lÃ­neas: ${missingLines.join(", ")}. La reserva permanece en 'cancellation_processing'.`);
     }
 
     const { data: failedRefunds } = await serviceClient
@@ -175,7 +175,7 @@ Deno.serve(async (req: Request) => {
       const failedLines = transactions
         .filter((t) => failedTxIds.has(t.id))
         .map((t) => `${t.charge_context || "booking_deposit"} ($${t.amount})`);
-      return err(`Las siguientes líneas tienen reembolsos fallidos: ${failedLines.join(", ")}. Reintenta o usa reembolso manual para esas líneas.`);
+      return err(`Las siguientes lÃ­neas tienen reembolsos fallidos: ${failedLines.join(", ")}. Reintenta o usa reembolso manual para esas lÃ­neas.`);
     }
 
     // ============================================================
@@ -196,7 +196,7 @@ Deno.serve(async (req: Request) => {
         const { error: pointsError } = await serviceClient.rpc("deduct_points", {
           p_user_id: booking.user_id,
           p_amount: pointsToDeduct,
-          p_description: `Puntos revertidos por cancelación administrativa (reserva ${booking_id.slice(0, 8)})`,
+          p_description: `Puntos revertidos por cancelaciÃ³n administrativa (reserva ${booking_id.slice(0, 8)})`,
           p_reference_id: booking_id,
           p_reference_type: "booking_cancellation",
         });
@@ -278,7 +278,7 @@ Deno.serve(async (req: Request) => {
 
     if (updateErr) {
       console.error("Error updating booking to cancelled:", updateErr);
-      return err("Error al finalizar la cancelación", 500);
+      return err("Error al finalizar la cancelaciÃ³n", 500);
     }
 
     // ============================================================
@@ -295,7 +295,7 @@ Deno.serve(async (req: Request) => {
         p_cancellation_type: "full",
       });
     } catch (accountingError) {
-      console.error("Error generando póliza contable (finalize):", accountingError);
+      console.error("Error generando pÃ³liza contable (finalize):", accountingError);
     }
 
     const { data: cancellationRow } = await serviceClient
@@ -421,7 +421,7 @@ Deno.serve(async (req: Request) => {
 
     return ok({
       success: true,
-      message: "Cancelación finalizada exitosamente",
+      message: "CancelaciÃ³n finalizada exitosamente",
       booking_id,
       cancellation_id,
       points_deducted: pointsDeducted,
@@ -441,3 +441,4 @@ Deno.serve(async (req: Request) => {
     return err(e.message || "Error interno", 500);
   }
 });
+

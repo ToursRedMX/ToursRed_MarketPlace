@@ -141,7 +141,7 @@ const AdminSettings: React.FC = () => {
     conekta_commission_fixed: 2.5,
     mercadopago_public_key: '',
     paypal_client_id: '',
-    pac_provider: 'none',
+    pac_provider: 'facturapi',
     pac_organization_id: '',
     cfdi_serie_booking: 'A',
     cfdi_serie_commission: 'B',
@@ -150,8 +150,8 @@ const AdminSettings: React.FC = () => {
     pac_issuer_razon_social: '',
     pac_issuer_regimen_fiscal: '',
     pac_issuer_postal_code: '',
-    accounting_provider: 'none',
-    accounting_sync_enabled: false,
+    accounting_provider: 'internal',
+    accounting_sync_enabled: true,
     zoho_client_id: '',
     zoho_org_id: '',
     zoho_region: 'com',
@@ -1880,11 +1880,7 @@ const AdminSettings: React.FC = () => {
                 onChange={(e) => setPlatformSettings(prev => ({ ...prev, pac_provider: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="none">Sin proveedor (desactivado)</option>
-                <option value="zoho_books">Zoho Books (Recomendado — via SW Sapien)</option>
-                <option value="facturapi">FacturAPI (PAC de contingencia)</option>
-                <option value="sw_sapien">SW Sapien</option>
-                <option value="contpaqi">Contpaqi Cloud</option>
+                <option value="facturapi">FacturAPI (PAC oficial)</option>
               </select>
               <p className="text-xs text-gray-400 mt-1">Cambiar el proveedor no afecta los CFDI ya emitidos.</p>
             </div>
@@ -2052,12 +2048,7 @@ const AdminSettings: React.FC = () => {
                 onChange={(e) => setPlatformSettings(prev => ({ ...prev, accounting_provider: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="none">Sin proveedor (desactivado)</option>
                 <option value="internal">Mini ERP Interno (ToursRed)</option>
-                <option value="zoho_books">Zoho Books</option>
-                <option value="odoo">Odoo (JSON-2 API)</option>
-                <option value="quickbooks">QuickBooks (Proximamente)</option>
-                <option value="contpaqi_cloud">Contpaqi Cloud (Proximamente)</option>
               </select>
               <p className="text-xs text-gray-400 mt-1">Cambiar el proveedor no afecta registros ya sincronizados.</p>
             </div>

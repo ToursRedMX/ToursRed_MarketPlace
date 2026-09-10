@@ -174,6 +174,7 @@ Deno.serve(async (req: Request) => {
     if (withholdIsr) taxes.push({ type: "ISR", rate: 0.10, factor: "Tasa", withholding: true });
 
     const facturapiBody = {
+      idempotency_key: `executive-commission-${exec.id}-${commissions.map((c: any) => c.id).sort().join("-")}`,
       type: "I",
       series: serie,
       payment_form: "03",

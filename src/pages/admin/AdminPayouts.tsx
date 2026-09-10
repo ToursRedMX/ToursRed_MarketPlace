@@ -876,15 +876,18 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
             if (errorCfdiSettings) {
               console.error('No se pudo leer el PAC configurado, no se genero el CFDI de comision:', errorCfdiSettings);
             }
-            if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== 'none' && result.payout_id) {
-              if (paymentDetails.records?.length > 0) {
+            if (result.payout_id) {
+              if (cfdiSettings?.pac_provider === 'facturapi' && paymentDetails.records?.length > 0) {
                 await supabase.functions.invoke('generate-commission-cfdi', {
                   body: { payout_id: result.payout_id }
                 });
               }
-              supabase.functions.invoke('sync-payout-to-accounting', {
+              const accountingSync = await supabase.functions.invoke('sync-payout-to-accounting', {
                 body: { payout_id: result.payout_id }
-              }).catch((err) => console.error('Error syncing payout to accounting:', err));
+              });
+              if (accountingSync.error || accountingSync.data?.error) {
+                throw new Error(accountingSync.error?.message || accountingSync.data?.error || 'No se pudo crear la póliza del payout');
+              }
             }
           } catch (cfdiErr) {
             console.error('Error triggering commission CFDI:', cfdiErr);
@@ -976,7 +979,7 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 No. de Factura / Referencia Contable <span className="text-gray-400 font-normal">(opcional)</span>
               </label>
-              <p className="text-xs text-gray-500 mb-2">Se usará como número de factura proveedor en Zoho Books. Ej: P2, FAC-001.</p>
+              <p className="text-xs text-gray-500 mb-2">Referencia fiscal del pago a la agencia. Ej: P2, FAC-001.</p>
               <input
                 type="text"
                 value={billNumber}

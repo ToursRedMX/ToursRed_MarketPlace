@@ -1,4 +1,3 @@
-import { getZohoAccessToken, type ZohoClient } from "../_shared/zohoAccessToken.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -79,43 +78,16 @@ async function facturapiCancel(
   return { pacInvoiceId: data.id ?? pacInvoiceId, cancellationStatus };
 }
 
-async function zohoBooksCancel(
-  supabaseClient: ZohoClient,
-  orgId: string,
-  pacInvoiceId: string
-): Promise<FacturapiCancelResult> {
-  const { token: accessToken, apiDomain } = await getZohoAccessToken(supabaseClient);
-
-  const baseUrl = `${apiDomain}/books/v3`;
-  const res = await fetch(`${baseUrl}/invoices/${pacInvoiceId}/void?organization_id=${orgId}`, {
-    method: "POST",
-    headers: { Authorization: `Zoho-oauthtoken ${accessToken}`, "Content-Type": "application/json" },
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Zoho Books cancel error ${res.status}: ${err}`);
-  }
-  return { pacInvoiceId, cancellationStatus: "accepted" };
-}
-
 async function cancelWithProvider(
   provider: string,
   apiKey: string,
   orgId: string,
   pacInvoiceId: string,
   motivo: string,
-  uuidSustitucion?: string,
-  supabaseClient?: ZohoClient
+  uuidSustitucion?: string
 ): Promise<FacturapiCancelResult> {
-  switch (provider) {
-    case "zoho_books":
-      if (!supabaseClient) throw new Error("supabaseClient required for zoho_books provider");
-      return zohoBooksCancel(supabaseClient, orgId, pacInvoiceId);
-    case "facturapi":
-      return facturapiCancel(apiKey, orgId, pacInvoiceId, motivo, uuidSustitucion);
-    default:
-      throw new Error(`Unknown PAC provider: ${provider}. Supported: zoho_books, facturapi`);
-  }
+  if (provider !== "facturapi") throw new Error(`PAC no soportado: ${provider}. Facturapi es el único PAC habilitado.`);
+  return facturapiCancel(apiKey, orgId, pacInvoiceId, motivo, uuidSustitucion);
 }
 
 Deno.serve(async (req: Request) => {
@@ -244,8 +216,7 @@ Deno.serve(async (req: Request) => {
         settings.pac_organization_id || "",
         cfdi.pac_invoice_id,
         motivo,
-        uuid_sustitucion,
-        supabase
+        uuid_sustitucion
       );
     } catch (cancelErr) {
       await supabase

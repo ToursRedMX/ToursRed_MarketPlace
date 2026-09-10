@@ -18,6 +18,14 @@ if (sentryDsn) {
   });
 }
 
+async function stableEventId(body: Record<string, unknown>): Promise<string> {
+  const explicit = body.id || body.event_id;
+  if (typeof explicit === "string" && explicit.length > 0) return explicit;
+  const bytes = new TextEncoder().encode(JSON.stringify(body));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -72,6 +80,17 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    const eventId = await stableEventId(body);
+    const { error: eventInsertError } = await supabase
+      .from("facturapi_webhook_events")
+      .insert({ event_id: eventId, event_type: eventType, payload: body });
+    if (eventInsertError?.code === "23505") {
+      return new Response(JSON.stringify({ received: true, processed: false, reason: "duplicate_event" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (eventInsertError) throw eventInsertError;
+
     // Find the CFDI by pac_invoice_id
     const { data: cfdi, error: cfdiError } = await supabase
       .from("cfdi_invoices")
@@ -98,17 +117,19 @@ Deno.serve(async (req: Request) => {
 
     if (cancellationStatus === "accepted") {
       // SAT confirmed the cancellation — mark as fully cancelled
-      await supabase
+      const { error: invoiceUpdateError } = await supabase
         .from("cfdi_invoices")
         .update({ status: "cancelled" })
         .eq("id", cfdi.id);
+      if (invoiceUpdateError) throw invoiceUpdateError;
 
       // Update the cancellation request
-      await supabase
+      const { error: requestUpdateError } = await supabase
         .from("cfdi_cancellation_requests")
         .update({ status: "accepted", processed_at: new Date().toISOString() })
         .eq("cfdi_invoice_id", cfdi.id)
         .in("status", ["pending", "verifying"]);
+      if (requestUpdateError) throw requestUpdateError;
 
       // If linked to a booking cancellation, generate replacement commission CFDI
       if (cfdi.cancellation_id && cfdi.booking_id) {
@@ -132,16 +153,18 @@ Deno.serve(async (req: Request) => {
       console.log(`CFDI ${cfdi.id} cancellation accepted by SAT`);
     } else if (cancellationStatus === "rejected") {
       // SAT rejected the cancellation — revert to stamped
-      await supabase
+      const { error: invoiceUpdateError } = await supabase
         .from("cfdi_invoices")
         .update({ status: "stamped" })
         .eq("id", cfdi.id);
+      if (invoiceUpdateError) throw invoiceUpdateError;
 
-      await supabase
+      const { error: requestUpdateError } = await supabase
         .from("cfdi_cancellation_requests")
         .update({ status: "rejected", processed_at: new Date().toISOString() })
         .eq("cfdi_invoice_id", cfdi.id)
         .in("status", ["pending", "verifying"]);
+      if (requestUpdateError) throw requestUpdateError;
 
       console.warn(`CFDI ${cfdi.id} cancellation rejected by SAT — manual review needed`);
     } else {
@@ -149,6 +172,7 @@ Deno.serve(async (req: Request) => {
       console.log(`CFDI ${cfdi.id} cancellation still in progress: ${cancellationStatus}`);
     }
 
+    await supabase.from("facturapi_webhook_events").update({ status: "processed", processed_at: new Date().toISOString() }).eq("event_id", eventId);
     return new Response(JSON.stringify({ received: true, processed: true, cancellation_status: cancellationStatus }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

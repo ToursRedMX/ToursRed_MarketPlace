@@ -150,12 +150,18 @@ export default function AdminEjecutivosComisiones() {
           .eq('id', commission.id);
         if (error) throw error;
 
-        try {
-          await supabase.rpc('create_accounting_entry_for_executive_commission', {
+        const { error: accountingError } = await supabase.rpc('create_accounting_entry_for_executive_commission', {
             p_commission_id: commission.id,
           });
-        } catch (acctErr) {
-          console.error('Error generating accounting entry for executive commission:', acctErr);
+        if (accountingError) {
+          // Do not leave a commission marked paid when its corresponding
+          // expense entry was not created.
+          await supabase.from('executive_commissions').update({
+            status: 'approved',
+            paid_at: null,
+            payment_reference: null,
+          }).eq('id', commission.id);
+          throw accountingError;
         }
 
         setMessage({ type: 'success', text: 'Pago registrado exitosamente.' });

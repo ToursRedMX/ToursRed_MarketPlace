@@ -55,10 +55,7 @@ const RECORD_TYPE_LABELS: Record<string, string> = {
 };
 
 const PROVIDER_LABELS: Record<string, string> = {
-  zoho_books: 'Zoho Books',
-  odoo: 'Odoo',
-  quickbooks: 'QuickBooks',
-  contpaqi_cloud: 'Contpaqi Cloud',
+  internal: 'ERP contable interno',
   none: 'Sin proveedor',
 };
 

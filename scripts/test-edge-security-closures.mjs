@@ -22,6 +22,10 @@ for (const name of ['generate-credit-note-for-item-cancellation', 'substitute-cf
   ]) {
     let handler, bodyReads = 0, businessReads = 0, accountingWrites = 0;
     const context = vm.createContext({ exports: {}, Response, console: quiet,
+      require(specifier) {
+        if (specifier.startsWith('../_shared/')) return context.exports;
+        return {};
+      },
       Deno: { env: { get: key => ({ SUPABASE_URL: 'https://db.test', SUPABASE_SERVICE_ROLE_KEY: test.missingKey ? undefined : 'service', SUPABASE_ANON_KEY: 'anon' })[key] }, serve(fn) { handler = fn; } },
       createClient(url, key, options) { return {
         auth: { async getUser() { return { data: { user: test.noUser ? null : { id: 'caller' } }, error: null }; } },
@@ -75,6 +79,7 @@ for (const test of [
     }; return q;
   };
   vm.runInNewContext(compile(read('send-inquiry-email/index')), { exports: {}, Response, URLSearchParams, AbortSignal, console: quiet,
+    require() { return {}; },
     Deno: { env: { get: key => key === 'SENTRY_BACKEND_DSN' ? undefined : key === 'TURNSTILE_SECRET_KEY' && test.missingSecret ? undefined : 'configured' }, serve(fn) { handler = fn; } },
     createClient: () => ({ from: qFor }),
     async fetch(url, options) {
