@@ -1,5 +1,4 @@
-import { getZohoAccessToken, type ZohoClient } from "../_shared/zohoAccessToken.ts";
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
 import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
@@ -80,66 +79,16 @@ async function facturapiStamp(
   };
 }
 
-async function zohoBooksStamp(
-  supabaseClient: ZohoClient,
-  orgId: string,
-  receptor: { rfc: string; razon_social: string; regimen_fiscal: string; postal_code: string; uso_cfdi: string },
-  conceptos: Array<{ descripcion: string; valor_unitario: number }>,
-  serie: string,
-  sandboxMode: boolean
-): Promise<CfdiResult> {
-  const { token: accessToken, apiDomain } = await getZohoAccessToken(supabaseClient);
-
-  const baseUrl = `${apiDomain}/books/v3`;
-  const zohoInvoice = {
-    customer_id: receptor.rfc,
-    reference_number: serie,
-    date: new Date().toISOString().split("T")[0],
-    currency_code: "MXN",
-    line_items: conceptos.map((c) => ({
-      name: c.descripcion, description: c.descripcion, quantity: 1, rate: c.valor_unitario, tax_percentage: 16,
-    })),
-    is_inclusive_tax: false,
-    notes: sandboxMode ? "[SANDBOX - CFDI de prueba]" : undefined,
-  };
-
-  const res = await fetch(`${baseUrl}/invoices?organization_id=${orgId}`, {
-    method: "POST",
-    headers: { Authorization: `Zoho-oauthtoken ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(zohoInvoice),
-  });
-  if (!res.ok) { const err = await res.text(); throw new Error(`Zoho Books error ${res.status}: ${err}`); }
-  const data = await res.json() as { invoice: { invoice_id: string; invoice_number: string; created_time: string } };
-  const inv = data.invoice;
-  return {
-    pac_invoice_id: inv.invoice_id,
-    uuid_fiscal: inv.invoice_id,
-    folio: inv.invoice_number ?? "",
-    serie,
-    stamped_at: inv.created_time ?? new Date().toISOString(),
-  };
-}
-
 async function stampCfdi(
   provider: string,
   apiKey: string,
   orgId: string,
-  body: Record<string, unknown>,
-  supabaseClient?: ZohoClient,
-  sandboxMode?: boolean
+  body: Record<string, unknown>
 ): Promise<CfdiResult> {
-  switch (provider) {
-    case "zoho_books": {
-      if (!supabaseClient) throw new Error("supabaseClient required for zoho_books provider");
-      const receptor = body.receptor as { rfc: string; razon_social: string; regimen_fiscal: string; postal_code: string; uso_cfdi: string };
-      const conceptos = body.conceptos as Array<{ descripcion: string; valor_unitario: number }>;
-      return zohoBooksStamp(supabaseClient, orgId, receptor, conceptos, (body.serie as string) || "B", sandboxMode ?? false);
-    }
-    case "facturapi":
-      return facturapiStamp(apiKey, orgId, body);
-    default:
-      throw new Error(`Unknown PAC provider: ${provider}. Supported: zoho_books, facturapi`);
+  if (provider !== "facturapi") {
+    throw new Error(`PAC no soportado: ${provider}. Facturapi es el único PAC habilitado.`);
   }
+  return facturapiStamp(apiKey, orgId, body);
 }
 
 Deno.serve(async (req: Request) => {
@@ -240,14 +189,14 @@ Deno.serve(async (req: Request) => {
     const total = Number(payout.platform_commission_amount || payout.net_amount);
     // 6 decimales para valor_unitario en FacturAPI (evita error de centavo en XML)
     const subtotalFacturapi = Math.round((total / 1.16) * 1000000) / 1000000;
-    // IVA como complemento del total exacto → subtotal + iva = total siempre
+    // IVA como complemento del total exacto â†’ subtotal + iva = total siempre
     const iva = Math.round(total * 16 / 116 * 100) / 100;
     const subtotal = Math.round((total - iva) * 100) / 100;
 
     if (!agency.regimen_fiscal || !agency.postal_code) {
       return new Response(
         JSON.stringify({
-          error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
+          error: "La agencia debe completar su rÃ©gimen fiscal y cÃ³digo postal en su expediente antes de poder facturar a cuenta de terceros.",
         }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -324,15 +273,17 @@ Deno.serve(async (req: Request) => {
           serie,
         };
 
+    if (settings.pac_provider === "facturapi") {
+      (stampBody as Record<string, unknown>).idempotency_key = cfdiRecord.id;
+    }
+
     let cfdiResult: CfdiResult;
     try {
       cfdiResult = await stampCfdi(
         settings.pac_provider,
         pacApiKey!,
         settings.pac_organization_id || "",
-        stampBody,
-        supabase,
-        settings.pac_sandbox_mode
+        stampBody
       );
     } catch (stampError) {
       await supabase
@@ -350,7 +301,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    await supabase
+    const { error: stampedUpdateError } = await supabase
       .from("cfdi_invoices")
       .update({
         pac_invoice_id: cfdiResult.pac_invoice_id,
@@ -362,6 +313,7 @@ Deno.serve(async (req: Request) => {
         error_message: null,
       })
       .eq("id", cfdiRecord.id);
+    if (stampedUpdateError) throw new Error(`No se pudo persistir el CFDI timbrado: ${stampedUpdateError.message}`);
 
     EdgeRuntime.waitUntil(
       supabase.functions.invoke("send-cfdi-email", {
@@ -393,3 +345,4 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+

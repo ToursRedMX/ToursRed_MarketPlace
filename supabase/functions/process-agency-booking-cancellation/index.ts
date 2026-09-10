@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -38,7 +38,7 @@ async function cancelStampedCfds(
   // exigia que los genericos coincidieran exactamente con los del cliente que
   // se pasa, y no coincidian: createClient(url, key) infiere
   // SupabaseClient<any, ...> y el tipo sin argumentos usa los valores por
-  // defecto. Mismo patron que ZohoClient en zohoAccessToken.ts.
+  // defecto. Mismo patron que cliente administrativo de Supabase.
   supabase: Pick<SupabaseClient, "from" | "functions">,
   bookingId: string,
   cancellationId: string
@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
 
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !user) return err("Token inválido");
+    if (userError || !user) return err("Token invÃ¡lido");
 
     const { booking_id, cancellation_reason } = await req.json();
     if (!booking_id) return err("booking_id es requerido");
@@ -100,7 +100,7 @@ Deno.serve(async (req: Request) => {
     if (bookingError || !booking) return err("Reserva no encontrada");
 
     const tour = (booking as any).tours as any;
-    if (!tour) return err("Información del tour no encontrada");
+    if (!tour) return err("InformaciÃ³n del tour no encontrada");
 
     // Security: verify the caller belongs to the agency that owns this tour
     const { data: agency } = await supabase
@@ -114,7 +114,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (booking.cancelled_at || booking.status === "cancelled") return err("Esta reserva ya fue cancelada");
-    if (booking.status === "cancellation_processing") return err("Esta reserva ya tiene una cancelación en proceso");
+    if (booking.status === "cancellation_processing") return err("Esta reserva ya tiene una cancelaciÃ³n en proceso");
     if (["pending", "confirmed"].includes(booking.status) === false) return err("Solo se pueden cancelar reservas pendientes o confirmadas");
 
     const tourStartDate = new Date(tour.start_date);
@@ -124,7 +124,7 @@ Deno.serve(async (req: Request) => {
     const daysBeforeTour = Math.floor((tourStartDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
     // ============================================================
-    // Calculate refund amounts — agency always refunds EVERYTHING
+    // Calculate refund amounts â€” agency always refunds EVERYTHING
     // including service charge and payment plan installments
     // ============================================================
     const originalDepositAmount = Number(booking.deposit_amount || 0);
@@ -192,14 +192,14 @@ Deno.serve(async (req: Request) => {
       p_booking_id: booking_id,
       p_refund_amount: refundAmount,
       p_reference_type: "agency_booking_cancellation",
-      p_description: `Reembolso completo por cancelación de agencia - ${tour.name}${descSuffix}`,
+      p_description: `Reembolso completo por cancelaciÃ³n de agencia - ${tour.name}${descSuffix}`,
       p_new_status: "cancelled",
       p_set_cancelled_at: true,
       p_cancellation_type: "agency_cancellation",
       p_cancellation_refund_amount: refundAmount,
     });
 
-    if (refundError) throw new Error(`Error en reembolso atómico: ${refundError.message}`);
+    if (refundError) throw new Error(`Error en reembolso atÃ³mico: ${refundError.message}`);
     transactionId = refundResult?.transaction_id || null;
 
     // Cancel optional services
@@ -228,7 +228,7 @@ Deno.serve(async (req: Request) => {
         toursred_cash_transaction_id: transactionId,
         refund_processed: refundAmount > 0,
         cancelled_by_agency: true,
-        agency_cancellation_reason: cancellation_reason || "Cancelación por agencia",
+        agency_cancellation_reason: cancellation_reason || "CancelaciÃ³n por agencia",
         service_charge_refunded_amount: originalServiceCharge + optionalServicesServiceCharge,
         insurance_refund_amount: insuranceRefund,
         optional_services_refund_amount: optionalServicesRefundable,
@@ -237,10 +237,10 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (cancellationError) {
-      throw new Error(`Error registrando cancelación: ${cancellationError.message}`);
+      throw new Error(`Error registrando cancelaciÃ³n: ${cancellationError.message}`);
     }
 
-    // Deduct points — 1 peso = 1 punto
+    // Deduct points â€” 1 peso = 1 punto
     let pointsDeducted = 0;
     if (refundAmount > 0) {
       const { data: earnedPoints } = await supabase.rpc("get_earned_points_for_reference", {
@@ -253,7 +253,7 @@ Deno.serve(async (req: Request) => {
           const { error: deductErr } = await supabase.rpc("deduct_points", {
             p_user_id: booking.user_id,
             p_amount: pointsToDeduct,
-            p_description: `Puntos revertidos por cancelación de agencia - ${tour.name}`,
+            p_description: `Puntos revertidos por cancelaciÃ³n de agencia - ${tour.name}`,
             p_reference_id: booking_id,
             p_reference_type: "agency_booking_cancellation",
           });
@@ -279,7 +279,7 @@ Deno.serve(async (req: Request) => {
         p_cancellation_type: "agency_booking",
       });
     } catch (accountingError) {
-      console.error("Error generando póliza contable:", accountingError);
+      console.error("Error generando pÃ³liza contable:", accountingError);
     }
 
     // Cancel stamped CFDIs (async, non-blocking)
@@ -329,6 +329,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return err(error.message || "Error al procesar la cancelación");
+    return err(error.message || "Error al procesar la cancelaciÃ³n");
   }
 });
+

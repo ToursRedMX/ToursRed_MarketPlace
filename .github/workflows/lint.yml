@@ -100,9 +100,6 @@ jobs:
       - name: Verify CFDI PAC configuration failures
         run: node scripts/test-cfdi-pac-config.mjs
 
-      - name: Verify shared Zoho OAuth handling
-        run: node scripts/test-zoho-access-token.mjs
-
       - name: Verify shared CFDI and step-up authorization
         run: node scripts/test-shared-authorization.mjs
 

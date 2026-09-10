@@ -1,11 +1,11 @@
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+﻿import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 // Solo se usa .from(). Pedir el SupabaseClient completo obligaba a que los
 // parametros genericos coincidieran exactamente: los llamadores construyen su
 // cliente con createClient(url, key), que infiere SupabaseClient<any, ...>,
 // mientras que el tipo sin argumentos usa los valores por defecto (unknown en
-// las versiones nuevas) — y any no es asignable a unknown en esa posicion.
-// Mismo patron que ZohoClient en zohoAccessToken.ts y AdminClient en cfdiAuth.ts.
+// las versiones nuevas) â€” y any no es asignable a unknown en esa posicion.
+// Mismo patron que cliente administrativo de Supabase y AdminClient en cfdiAuth.ts.
 export type PointsClient = Pick<SupabaseClient, "from">;
 
 const CHARGE_CONTEXT_TO_REFERENCE_TYPE: Record<string, string> = {
@@ -22,12 +22,12 @@ const CHARGE_CONTEXT_TO_REFERENCE_TYPE: Record<string, string> = {
  * After deduct_points() has already adjusted the wallet balance, this helper
  * inserts informational `clawback` records (amount=0) per earned-points source
  * so that a future "active points by source" report ties out. It does NOT
- * touch the wallet balance or total_used — purely for audit traceability.
+ * touch the wallet balance or total_used â€” purely for audit traceability.
  *
  * @param supabase     Service-role Supabase client
  * @param bookingId    The booking UUID
  * @param cancellationId  The booking_cancellations.id (or null if unavailable)
- * @param cancellationLabel  "administrativa" | "self-service" | "automatica" — used in description text
+ * @param cancellationLabel  "administrativa" | "self-service" | "automatica" â€” used in description text
  */
 export async function markPointsAsClawedBack(
   supabase: PointsClient,
@@ -83,9 +83,9 @@ export async function markPointsAsClawedBack(
     if (earnedErr || !earnedTx || earnedTx.length === 0) return;
 
     // 3. For each earned record, insert a clawback marker (amount=0)
-    const descText = `Marcado como reclamado por cancelación ${cancellationLabel} total` +
+    const descText = `Marcado como reclamado por cancelaciÃ³n ${cancellationLabel} total` +
       `${cancellationId ? ` (booking_cancellation_id: ${cancellationId})` : ""}` +
-      ` — ver deducción real en type=redeemed del mismo booking`;
+      ` â€” ver deducciÃ³n real en type=redeemed del mismo booking`;
 
     const inserts = earnedTx.map((pt) => ({
       wallet_id: pt.wallet_id,
@@ -109,3 +109,4 @@ export async function markPointsAsClawedBack(
     console.error("markPointsAsClawedBack exception:", e);
   }
 }
+

@@ -1,5 +1,4 @@
-import { getZohoAccessToken, type ZohoClient } from "../_shared/zohoAccessToken.ts";
-import { calculateTaxBreakdown, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
+﻿import { calculateTaxBreakdown, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as Sentry from "npm:@sentry/deno@9";
@@ -77,6 +76,7 @@ interface CfdiRequest {
   receptor: CfdiReceptor;
   conceptos: CfdiConcepto[];
   payment_form?: string;
+  idempotency_key?: string;
   /** CFDIs relacionados. relationship "04" = sustitucion de los CFDI previos. */
   related_documents?: Array<{ relationship: string; cfdi_uuids: string[] }>;
 }
@@ -149,7 +149,7 @@ const BOOKING_COLUMNS = [
 /**
  * Cierra el circulo en la direccion que fallo: si alguien agrega un campo a
  * BookingRow y olvida pedirlo en BOOKING_COLUMNS, esto NO COMPILA. Sin esto el
- * tipo prometeria una columna que PostgREST nunca devuelve — exactamente el
+ * tipo prometeria una columna que PostgREST nunca devuelve â€” exactamente el
  * bug de tax_treatment, solo que declarado.
  */
 type MissingBookingColumn = Exclude<
@@ -203,6 +203,7 @@ async function facturapiStamp(
       : {}),
     customer,
     use: request.receptor.uso_cfdi,
+    ...(request.idempotency_key ? { idempotency_key: request.idempotency_key } : {}),
     items: request.conceptos.map((c) => ({
       product: {
         description: c.descripcion,
@@ -262,93 +263,18 @@ async function facturapiStamp(
 }
 
 // =============================================
-// ZOHO BOOKS ADAPTER (uses Zoho Books Mexico CFDI stamping)
-// Zoho Books Mexico edition stamps via SW Sapien internally.
-// =============================================
-async function zohoBooksStamp(
-  supabaseClient: ZohoClient,
-  orgId: string,
-  request: CfdiRequest,
-  sandboxMode: boolean
-): Promise<CfdiResult> {
-  const { token: accessToken, apiDomain } = await getZohoAccessToken(supabaseClient);
-
-  const baseUrl = `${apiDomain}/books/v3`;
-  const headers = {
-    Authorization: `Zoho-oauthtoken ${accessToken}`,
-    "Content-Type": "application/json",
-  };
-
-  const zohoInvoice: Record<string, unknown> = {
-    customer_id: request.receptor.rfc,
-    reference_number: request.serie,
-    date: new Date().toISOString().split("T")[0],
-    currency_code: "MXN",
-    line_items: request.conceptos.map((c) => {
-      const item: Record<string, unknown> = {
-        name: c.descripcion,
-        description: c.descripcion,
-        quantity: c.cantidad,
-        rate: c.valor_unitario,
-        tax_percentage: 16,
-      };
-      if (c.descuento != null && c.descuento > 0) {
-        item.discount = c.descuento;
-        item.discount_type = "entity_level";
-      }
-      if (c.tercero) {
-        item.cf_tercero_rfc = c.tercero.rfc;
-        item.cf_tercero_nombre = c.tercero.nombre;
-      }
-      return item;
-    }),
-    is_inclusive_tax: false,
-    notes: sandboxMode ? "[SANDBOX - CFDI de prueba]" : undefined,
-  };
-
-  const res = await fetch(`${baseUrl}/invoices?organization_id=${orgId}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(zohoInvoice),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Zoho Books error ${res.status}: ${err}`);
-  }
-
-  const data = await res.json() as { invoice: { invoice_id: string; invoice_number: string; created_time: string } };
-  const inv = data.invoice;
-
-  return {
-    pac_invoice_id: inv.invoice_id,
-    uuid_fiscal: inv.invoice_id,
-    folio: inv.invoice_number ?? "",
-    serie: request.serie,
-    stamped_at: inv.created_time ?? new Date().toISOString(),
-  };
-}
-
-// =============================================
-// PROVIDER DISPATCHER (add new PACs here)
 // =============================================
 async function stampCfdi(
   provider: string,
   apiKey: string,
   orgId: string,
   request: CfdiRequest,
-  sandboxMode: boolean,
-  supabaseClient?: ZohoClient
+  sandboxMode: boolean
 ): Promise<CfdiResult> {
-  switch (provider) {
-    case "zoho_books":
-      if (!supabaseClient) throw new Error("supabaseClient required for zoho_books provider");
-      return zohoBooksStamp(supabaseClient, orgId, request, sandboxMode);
-    case "facturapi":
-      return facturapiStamp(apiKey, orgId, request, sandboxMode);
-    default:
-      throw new Error(`Unknown PAC provider: ${provider}. Supported: zoho_books, facturapi`);
+  if (provider !== "facturapi") {
+    throw new Error(`PAC no soportado: ${provider}. Facturapi es el único PAC habilitado.`);
   }
+  return facturapiStamp(apiKey, orgId, request, sandboxMode);
 }
 
 // =============================================
@@ -380,7 +306,7 @@ Deno.serve(async (req: Request) => {
     //
     // El select y el tipo se derivan uno del otro a proposito. Hasta el
     // 01-sep-2026 este select NO pedia tax_treatment ni exempt_ratio, pero el
-    // codigo de mas abajo si los leia — a traves de un `booking as {...}` que
+    // codigo de mas abajo si los leia â€” a traves de un `booking as {...}` que
     // dejaba a TypeScript sin nada que revisar. PostgREST devuelve unicamente
     // las columnas pedidas, asi que ambas llegaban `undefined`, caian en el
     // `?? "taxable_16"` y TODO tour se facturaba al 16%: la ruta de exentos
@@ -539,7 +465,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // -------------------------------------------------------
-    // MONTOS: difieren según si es cobro de check-in o reserva
+    // MONTOS: difieren segÃºn si es cobro de check-in o reserva
     // -------------------------------------------------------
     // Bruto del tour (IVA incluido) antes de separar base e IVA. Se necesita
     // aparte de precioTourBruto porque ese ya viene dividido entre 1.16 y el
@@ -558,8 +484,8 @@ Deno.serve(async (req: Request) => {
     let invoiceType: string;
     let effectivePaymentForm: string;
     let exactTotal: number; // monto exacto cobrado al cliente (IVA incluido)
-    // FIX (bug crítico detectado 2026-08-20): estas dos variables se referencian
-    // más abajo (en p_tour_amount) FUERA de los bloques if/else donde antes
+    // FIX (bug crÃ­tico detectado 2026-08-20): estas dos variables se referencian
+    // mÃ¡s abajo (en p_tour_amount) FUERA de los bloques if/else donde antes
     // estaban declaradas con const, causando ReferenceError en el 100% de las
     // llamadas desde finales de julio. Se elevan a este scope con let.
     let amountCharged: number | undefined;
@@ -604,7 +530,7 @@ Deno.serve(async (req: Request) => {
       const serviceChargeDiscountRaw = Number(booking.service_charge_discount || 0);
       const insuranceCost = booking.travel_insurance_included ? Number(booking.travel_insurance_cost || 0) : 0;
 
-      // r6 definido en bloque anterior; también aplica aquí
+      // r6 definido en bloque anterior; tambiÃ©n aplica aquÃ­
       const r6b = (n: number) => Math.round(n * 1000000) / 1000000;
 
       const membershipIncluded = booking.membership_purchased === true;
@@ -691,7 +617,7 @@ Deno.serve(async (req: Request) => {
     const issuerPostalCode = settings.pac_issuer_postal_code || "";
     if (!issuerPostalCode) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -726,7 +652,7 @@ Deno.serve(async (req: Request) => {
       receptorCP = issuerPostalCode;
     }
 
-    // Build "a cuenta de terceros" (agency pass-through) — solo aplica al concepto del tour
+    // Build "a cuenta de terceros" (agency pass-through) â€” solo aplica al concepto del tour
     // SAT CFDI40188: el RFC del tercero no puede coincidir con el del emisor ni el del receptor
     let terceroAgencia: CfdiTercero | undefined;
     if (
@@ -738,7 +664,7 @@ Deno.serve(async (req: Request) => {
       if (!agencyData.regimen_fiscal || !agencyData.postal_code) {
         return new Response(
           JSON.stringify({
-            error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
+            error: "La agencia debe completar su rÃ©gimen fiscal y cÃ³digo postal en su expediente antes de poder facturar a cuenta de terceros.",
           }),
           { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -755,7 +681,7 @@ Deno.serve(async (req: Request) => {
     const bookingRef = booking.booking_code || booking.id;
     const checkinLabel = isCheckinCharge ? " (cobro en check-in)" : "";
 
-    // ── Desglose fiscal del componente TOUR ──────────────────────────────────
+    // â”€â”€ Desglose fiscal del componente TOUR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Se lee el SNAPSHOT de la reserva, no la config viva del tour: si la
     // agencia cambia el tratamiento despues, este CFDI no debe moverse.
     // NULL = cobro anterior a la feature -> 16% implicito, que es exactamente
@@ -817,7 +743,7 @@ Deno.serve(async (req: Request) => {
         clave_prod_serv: "90121500",
         cantidad: 1,
         clave_unidad: "E48",
-        descripcion: `Anticipo por servicio turístico: ${tourName} (Reserva ${bookingRef})${checkinLabel}`,
+        descripcion: `Anticipo por servicio turÃ­stico: ${tourName} (Reserva ${bookingRef})${checkinLabel}`,
         valor_unitario: tourTax.exemptAmount,
         ...(descuentoTourExento > 0 ? { descuento: descuentoTourExento } : {}),
         exento: true,
@@ -881,7 +807,7 @@ Deno.serve(async (req: Request) => {
           : opt.service_kind === "language"
             ? "90121702"
             : "90121500";
-        const optDesc = opt.description || (opt.service_kind === "pickup" ? "Pick Up" : opt.service_kind === "language" ? "Idioma/Intérprete" : "Servicio opcional");
+        const optDesc = opt.description || (opt.service_kind === "pickup" ? "Pick Up" : opt.service_kind === "language" ? "Idioma/IntÃ©rprete" : "Servicio opcional");
 
         // Cada opcional usa SU PROPIO snapshot fiscal. No hereda nada del tour:
         // un tour gravado puede llevar una "Entrada a Six Flags" exenta
@@ -978,14 +904,14 @@ Deno.serve(async (req: Request) => {
     const descuentoTotal = Math.round(
       conceptos.reduce((acc, c) => acc + (c.descuento ?? 0) * factorBruto(c), 0) * 100) / 100;
 
-    // ── Guardia de cuadre ────────────────────────────────────────────────────
+    // â”€â”€ Guardia de cuadre â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Verifica que los conceptos reconstruyan lo cobrado ANTES de timbrar. El
     // bug de `cantidad` en suplementos y opcionales (el CFDI amparaba el doble
     // con quantity=2) sobrevivio precisamente porque nada comprobaba esto.
     //
     // Corre DESPUES de repartir puntos y saldo. Cuando corria antes comparaba
     // conceptos sin descontar contra un exactTotal que ya venia descontado, asi
-    // que toda reserva con puntos reportaba un descuadre falso a Sentry — y ese
+    // que toda reserva con puntos reportaba un descuadre falso a Sentry â€” y ese
     // ruido tapaba justamente los descuadres reales que la guardia busca.
     //
     // NO BLOQUEA a proposito: un CFDI que no se timbra deja al viajero sin
@@ -1004,7 +930,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ── Importes fiscales del comprobante ────────────────────────────────────
+    // â”€â”€ Importes fiscales del comprobante â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Se derivan de los conceptos ya finales, no de exactTotal. Antes era
     // `iva = exactTotal * 16/116` a secas: un IVA inventado en cuanto hay algo
     // exento. Un CFDI 100% exento de $1,000 guardaba exempt_amount 1,000 Y
@@ -1121,6 +1047,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Stamp with PAC
+    cfdiRequest.idempotency_key = cfdiRecord.id;
     let cfdiResult: CfdiResult;
     try {
       cfdiResult = await stampCfdi(
@@ -1128,8 +1055,7 @@ Deno.serve(async (req: Request) => {
         pacApiKey!,
         settings.pac_organization_id || "",
         cfdiRequest,
-        settings.pac_sandbox_mode,
-        supabase
+        settings.pac_sandbox_mode
       );
     } catch (stampError) {
       const stampErrStr = String(stampError);
@@ -1150,7 +1076,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Update CFDI record with stamped data
-    await supabase
+    const { error: stampedUpdateError } = await supabase
       .from("cfdi_invoices")
       .update({
         pac_invoice_id: cfdiResult.pac_invoice_id,
@@ -1162,6 +1088,9 @@ Deno.serve(async (req: Request) => {
         error_message: null,
       })
       .eq("id", cfdiRecord.id);
+    if (stampedUpdateError) {
+      throw new Error(`Facturapi timbrÃ³ pero no se pudo guardar el CFDI localmente: ${stampedUpdateError.message}`);
+    }
 
     // Send email notification (fire and forget)
     EdgeRuntime.waitUntil(
@@ -1194,3 +1123,4 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+

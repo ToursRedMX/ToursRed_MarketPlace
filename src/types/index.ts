@@ -863,7 +863,7 @@ export interface PayoutSchedule {
 
 export interface IntegrationConfig {
   id: string;
-  provider: 'zoho_books' | 'odoo' | 'quickbooks' | 'bank_api' | 'other';
+  provider: 'internal' | 'facturapi' | 'bank_api' | 'other';
   agency_id?: string;
   is_active: boolean;
   credentials_encrypted?: string;

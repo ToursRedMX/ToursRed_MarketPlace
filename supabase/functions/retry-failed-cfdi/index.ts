@@ -51,7 +51,7 @@ Deno.serve(async (req: Request) => {
 
     let query = supabase
       .from("cfdi_invoices")
-      .select("id, invoice_type, booking_id, payout_id, featured_slot_id, retry_count")
+      .select("id, invoice_type, booking_id, payout_id, featured_slot_id, installment_id, membership_id, booking_optional_service_id, booking_supplement_id, retry_count")
       .eq("status", "error")
       .lt("retry_count", 3);
 
@@ -89,6 +89,26 @@ Deno.serve(async (req: Request) => {
         } else if (cfdi.invoice_type === "featured_slot" && cfdi.featured_slot_id) {
           const res = await supabase.functions.invoke("generate-featured-slot-cfdi", {
             body: { slot_id: cfdi.featured_slot_id },
+          });
+          results.push({ id: cfdi.id, success: !res.error });
+        } else if (cfdi.invoice_type === "booking_installment" && cfdi.installment_id) {
+          const res = await supabase.functions.invoke("generate-booking-installment-cfdi", {
+            body: { installment_id: cfdi.installment_id },
+          });
+          results.push({ id: cfdi.id, success: !res.error });
+        } else if (cfdi.invoice_type === "membership" && cfdi.membership_id) {
+          const res = await supabase.functions.invoke("generate-membership-cfdi", {
+            body: { membership_id: cfdi.membership_id },
+          });
+          results.push({ id: cfdi.id, success: !res.error });
+        } else if (cfdi.invoice_type === "optional_service" && cfdi.booking_optional_service_id) {
+          const res = await supabase.functions.invoke("generate-optional-service-cfdi", {
+            body: { booking_optional_service_id: cfdi.booking_optional_service_id },
+          });
+          results.push({ id: cfdi.id, success: !res.error });
+        } else if (cfdi.invoice_type === "supplement" && cfdi.booking_supplement_id) {
+          const res = await supabase.functions.invoke("generate-supplement-cfdi", {
+            body: { booking_supplement_id: cfdi.booking_supplement_id },
           });
           results.push({ id: cfdi.id, success: !res.error });
         } else {
