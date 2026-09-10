@@ -25,7 +25,7 @@ ToursRed es una plataforma donde agencias de viaje comercializan sus propios tou
 ## Contexto de negocio útil
 - Política de cancelación (Cláusula 16): 15+ días → 100% en ToursRed Cash; 7–14 días → 50% en ToursRed Cash; <7 días o No Show → sin reembolso; cargo por servicio (5%) no reembolsable salvo causa no imputable al viajero.
 - Seguro de viaje: $79 MXN/día al viajero, costo real $59, comisión aseguradora 25%, config en `platform_settings`.
-- Lanzamiento objetivo: 21 de septiembre de 2026.
+- Lanzamiento objetivo: 23 de noviembre de 2026. (Era el 21-sep; se recorrió el 10-sep-2026 por decisión de Axel. Antes de esa fecha quedan la auditoría PCI, el DRP y las UAT, que no habían empezado.)
 
 ## Backlog técnico conocido (no asumas que ya está resuelto)
 - Centralizar lógica de desglose de costos de reserva (~4–6 días de trabajo)
