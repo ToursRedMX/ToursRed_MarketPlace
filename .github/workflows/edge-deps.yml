@@ -8,12 +8,19 @@ name: Dependencias de Edge Functions
 # El 10-sep-2026, antes de esta guardia, 434 de 526 imports remotos flotaban, y
 # `supabase-js` corria en CUATRO versiones a la vez (2.116.0, 2.114.0, 2.108.2
 # y 2.39.6) desde DOS registros distintos. Se fijaron todos en el mismo PR que
-# trajo esta guardia, asi que arranca en 0 hallazgos y bloquea de verdad.
+# trajo esta guardia, asi que arranca en 0 hallazgos.
+#
+# NACER EN CERO ES LO QUE LA HACE EXIGIBLE, PERO TODAVIA NO SE EXIGE. Al
+# 10-sep-2026 `guardia-dependencias` NO esta en los checks requeridos de main
+# (son siete: typecheck, netlify/toursredmx/deploy-preview, guardia-desfase,
+# guardia-fiscal, tipos-edge, lint y smoke). O sea que hoy esto se pone rojo y
+# el merge igual procede: detecta, no previene. Agregarlo a los requeridos es
+# una decision de Axel, no un cambio de este workflow.
 #
 # Es Node puro, sin red: tarda ~1s. Corre en TODOS los PR a main sin filtro de
 # `paths`, por la misma razon que `edge-types.yml`: un check requerido que no
 # corre deja el PR pendiente para siempre, asi que el filtro lo volveria
-# imposible de exigir.
+# imposible de exigir el dia que se decida exigirlo.
 
 on:
   push:

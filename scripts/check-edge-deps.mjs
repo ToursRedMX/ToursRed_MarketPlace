@@ -29,13 +29,25 @@
  * distintos. El caso peor era `@supabase/functions-js`, importado sin ni un
  * digito de version: Deno lo trataba como `@*`.
  *
- * POR QUE NACE EN CERO Y BLOQUEA
+ * POR QUE NACE EN CERO
  *
- * Mismo criterio que `guardia-fiscal` y `check-search-path.mjs`: los 434 usos
- * flotantes se fijaron en el mismo PR que trajo esta guardia, asi que arranca
- * en 0 hallazgos. Una guardia que nace con hallazgos se aprende a ignorar, y
- * esa es la peor forma de perderla. Al contrario que `check-edge-types.mjs`,
- * esta no necesita linea base: no habia deuda que tolerar una vez fijados.
+ * Los 434 usos flotantes se fijaron en el mismo PR que trajo esta guardia, asi
+ * que arranca en 0 hallazgos. Una guardia que nace con hallazgos se aprende a
+ * ignorar, y esa es la peor forma de perderla. Al contrario que
+ * `check-edge-types.mjs`, esta no necesita linea base: no habia deuda que
+ * tolerar una vez fijados.
+ *
+ * NACER EN CERO NO ES LO MISMO QUE BLOQUEAR
+ *
+ * Nacer en cero es lo que la hace EXIGIBLE; exigirla es un acto aparte.
+ * Mientras `guardia-dependencias` no este en los checks requeridos de main,
+ * esto se pone rojo y el merge igual procede: es una alarma, no una llave.
+ * Los checks requeridos se leen en la API, no de este comentario:
+ *
+ *     gh api repos/ToursRedMX/ToursRed_MarketPlace/branches/main/protection \
+ *       --jq '.required_status_checks.contexts'
+ *
+ * El 10-sep-2026 eran siete y esta no estaba entre ellos.
  *
  * POR QUE HAY QUE QUITAR COMENTARIOS ANTES DE BUSCAR
  *
