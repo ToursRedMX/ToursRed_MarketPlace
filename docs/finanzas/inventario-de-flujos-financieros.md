@@ -50,12 +50,17 @@ Con los datos reales al 10-sep-2026, las tres capas dan números muy distintos:
 |---|---|
 | Cobrado por procesadores | **$144,434.24** |
 | Recargas de monedero | **$51,600.00** |
-| Pasivo generado hacia agencias | **$95,189.74** |
-| **Ingreso realmente reconocido** | **$47,547.47** |
+| Pasivo vivo hacia agencias | **$77,896.90** |
+| **Ingreso realmente reconocido** | **$31,104.43** |
 
-Ese último número —comisión $35,017.51 + cargo por servicio $11,982.10 + los
-opcionales y el plan de pagos— es lo que ToursRed ganó. El reporte maestro hoy
-muestra **$335.00** para su ventana.
+El reporte maestro hoy muestra **$335.00** para su ventana.
+
+> **Cuidado al calcular ese ultimo numero.** Un `SUM(platform_total_revenue)`
+> sobre `commission_records` da **$47,547.47**, y esta mal: incluye
+> **$16,443.04** de reservas que se cancelaron y se reembolsaron. El estado
+> `voided` marca la fila pero **el importe se queda en la columna**, asi que
+> cualquier suma que no filtre por el estado de la reserva infla el ingreso un
+> 53%. La vista del reporte tiene que filtrar; ver la seccion 5.
 
 ### La trampa de contar doble
 
@@ -185,6 +190,21 @@ ningún estado de cuenta.
 `payment_transactions` tiene un cobro de membresía de $860.46. Una de las dos
 miente.
 
+**La anulación de comisión en cancelaciones es inconsistente.** De las 8 reservas
+canceladas, **4 tienen su `commission_record` en `voided` y 4 no** — siguen en
+`processed`, con $6,940.11 + $2,059.80 de ingreso contado como bueno sobre
+reservas que ya se reembolsaron.
+
+Y aunque estuvieran las 8 anuladas, el problema de fondo seguiría: **`voided`
+cambia el estado pero no toca el importe.** `platform_total_revenue` conserva su
+valor original, así que la anulación solo sirve si quien consulta se acuerda de
+filtrar. Ninguna de las dos mitades es segura por sí sola.
+
+**`booking_cancellations.amount_to_platform` y `amount_to_agency` están en $0.00
+en las 7 filas.** El reparto de una cancelación entre plataforma y agencia no se
+registra, así que hoy no se puede saber cuánta comisión se devolvió y cuánta se
+retuvo como penalización.
+
 ---
 
 ## 6. Qué significa para el reporte maestro
@@ -216,10 +236,20 @@ FROM payment_transactions GROUP BY 1,2 ORDER BY 4 DESC;
 SELECT type::text, coalesce(reference_type,'—'), count(*), round(sum(amount)::numeric,2)
 FROM toursred_cash_transactions GROUP BY 1,2 ORDER BY 4 DESC;
 
--- Ingreso realmente reconocido
-SELECT round(sum(platform_total_revenue)::numeric,2) AS ingreso,
-       round(sum(agency_net_amount)::numeric,2)      AS pasivo_a_agencias
-FROM commission_records;
+-- Ingreso realmente reconocido. El FILTER NO es opcional: sin el, la suma
+-- incluye las reservas canceladas y se infla un 53%.
+SELECT
+  round(sum(cr.platform_total_revenue)
+        FILTER (WHERE b.status NOT IN ('cancelled','cancellation_processing'))::numeric,2) AS ingreso_vivo,
+  round(sum(cr.agency_net_amount)
+        FILTER (WHERE b.status NOT IN ('cancelled','cancellation_processing'))::numeric,2) AS pasivo_vivo
+FROM commission_records cr JOIN bookings b ON b.id = cr.booking_id;
+
+-- Cuantas canceladas quedaron SIN anular su comision
+SELECT count(*) FILTER (WHERE cr.status <> 'voided') AS sin_anular,
+       count(*) FILTER (WHERE cr.status =  'voided') AS anuladas
+FROM commission_records cr JOIN bookings b ON b.id = cr.booking_id
+WHERE b.status IN ('cancelled','cancellation_processing');
 
 -- Comision de procesador por proveedor: delata a los que no la registran
 SELECT coalesce(payment_processor,'(nulo)'), count(*),
