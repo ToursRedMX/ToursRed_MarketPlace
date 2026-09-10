@@ -161,6 +161,14 @@ jobs:
       - name: Verify admin MFA always mints a fresh challenge
         run: node scripts/test-mfa-challenge-fresco.mjs
 
+      # El lector de CFDI de la captura de gastos propone importes que terminan
+      # en un asiento y en IVA acreditable. Tres trampas: que se duplique el IVA
+      # (en un CFDI `Traslado` aparece dos veces, por concepto y en el bloque
+      # global), que se acredite el IVA de una factura que no esta a nombre de
+      # la plataforma, y que subtotal + iva no de total cuando hay descuentos.
+      - name: Verify the CFDI reader proposes amounts that add up and belong to us
+        run: node scripts/test-cfdi-xml.mjs
+
       # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
       # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
       # aplica SIN transaccion a proposito, porque asi fue como se descubrio que
