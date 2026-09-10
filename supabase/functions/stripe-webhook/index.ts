@@ -2344,6 +2344,18 @@ Deno.serve(async (req) => {
         }
 
         // --- Record payment transaction for accounting ---
+        //
+        // OJO CON `stripe_payment_intent_id`: aqui guarda el id de la FACTURA
+        // (`in_...`), no el del payment intent (`pi_...`). Es incorrecto de
+        // nombre, pero se conserva a proposito: esa misma columna es la llave
+        // de idempotencia de tres lineas mas abajo, y cambiar lo que se guarda
+        // sin migrar las filas viejas haria que un reintento de Stripe sobre
+        // una factura ya cobrada no encontrara su fila y la insertara dos veces.
+        //
+        // Tiene una consecuencia que conviene conocer: una disputa sobre un
+        // cobro de membresia NO va a ligar con su payment_transaction, porque
+        // _shared/disputas.ts busca por payment intent. La disputa se registra
+        // igual, pero sin reserva ni transaccion asociada.
         const membershipAmount = invoice.amount_paid ? invoice.amount_paid / 100 : 0;
         const { data: existingMembershipTx } = await supabase
           .from('payment_transactions')
@@ -2380,6 +2392,65 @@ Deno.serve(async (req) => {
           }
 
           membershipTxId = newMembershipTx?.id ?? null;
+
+          // La comision de Stripe, que hasta el 10-sep-2026 este camino no
+          // registraba. Los otros cinco contextos (booking_deposit,
+          // payment_plan_installment, supplement, insurance, optional_service)
+          // insertan processor_fee en 0 y lo actualizan justo despues; este
+          // insertaba el 0 y ahi se quedaba, asi que toda membresia cobrada
+          // figuraba con neto igual a bruto y su costo no llegaba al ERP.
+          //
+          // Se ve en los datos: el cobro de membresia del 08-sep-2026 quedo con
+          // processor_fee = 0, mientras que los tres booking_deposit del 26-ago
+          // si tienen su comision.
+          //
+          // El id que hace falta es el del payment intent, y en una factura de
+          // suscripcion viene en `invoice.payment_intent`. NO sirve `invoice.id`
+          // --que es lo que se guarda en la columna, ver abajo-- porque
+          // getStripeProcessorFee llama a paymentIntents.retrieve.
+          if (membershipTxId) {
+            // De donde sale el payment intent de una factura DEPENDE DE LA
+            // VERSION DE API de la cuenta, y por eso se leen las dos formas:
+            //
+            //   antes  ->  invoice.payment_intent
+            //   ahora  ->  invoice.payments[].payment.payment_intent
+            //
+            // Stripe lo movio, y en los tipos de stripe@22.3.0 `Invoice` ya no
+            // declara `payment_intent` — lo cazo `deno check` al escribir esto.
+            // Cual de las dos llega aqui depende de con que version de API este
+            // configurado el webhook, dato que no consta en el repo. Soportar
+            // las dos sale mas barato que averiguarlo y quedar atado a esa
+            // respuesta el dia que Stripe la cambie otra vez.
+            const fac = invoice as unknown as {
+              payment_intent?: string | { id?: string };
+              payments?: { data?: { payment?: { payment_intent?: string | { id?: string } } }[] };
+            };
+            const crudo = fac.payment_intent
+              ?? fac.payments?.data?.[0]?.payment?.payment_intent
+              ?? null;
+            const piDeFactura = typeof crudo === 'string' ? crudo : crudo?.id ?? null;
+
+            if (!piDeFactura) {
+              console.warn(
+                `Membresia ${membership!.id} (invoice ${invoice.id}): la factura no trae ` +
+                `payment_intent, no se puede consultar la comision. Queda en 0.`,
+              );
+            } else {
+              const comision = await getStripeProcessorFee(stripe, piDeFactura);
+              if (comision) {
+                await supabase
+                  .from('payment_transactions')
+                  .update({ processor_fee: comision.fee, net_amount: comision.net })
+                  .eq('id', membershipTxId);
+              } else {
+                // Que quede dicho: sin esto, el 0 pasa por dato bueno.
+                console.warn(
+                  `Membresia ${membership!.id}: Stripe no devolvio balance_transaction ` +
+                  `para ${piDeFactura}. processor_fee queda en 0 y el neto sale inflado.`,
+                );
+              }
+            }
+          }
         } else if (existingMembershipTx) {
           membershipTxId = existingMembershipTx.id;
         }
