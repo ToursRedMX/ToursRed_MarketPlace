@@ -229,6 +229,21 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d movimientos -v ON_ERROR_STOP=1 -f test-vista-movimientos.sql
 
+      # La captura de gastos es la unica parte del sistema contable donde el
+      # importe lo escribe una persona, no un webhook. Tres riesgos: que el
+      # asiento no cuadre cuando alguien edita el total en pesos (que es
+      # editable a proposito, porque el banco aplica su propio tipo de cambio),
+      # que el gasto se cargue a una cuenta que no es de gasto -- la llave
+      # foranea acepta '102', Bancos -- y que lo registre quien no debe, porque
+      # la funcion es SECURITY DEFINER y se salta las RLS por diseno.
+      - name: Verify operating expense capture balances and checks authorization
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS gastos;" -c "CREATE DATABASE gastos;"
+          cd scripts
+          psql -h localhost -U postgres -d gastos -v ON_ERROR_STOP=1 -f test-gastos-operacion.sql
+
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
       # que escribe el snapshot fiscal de cada cobro, y esos numeros son los que
