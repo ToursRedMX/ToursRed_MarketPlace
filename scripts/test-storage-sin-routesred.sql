@@ -93,6 +93,13 @@ CREATE POLICY "rr_public_delete" ON storage.objects FOR DELETE TO authenticated
     SELECT 1 FROM routesred.transport_provider_users tpu
     WHERE tpu.user_id = auth.uid() AND tpu.status='active'
     AND (storage.foldername(name))[1] = ('providers/' || tpu.transport_provider_id::text)));
+-- La OCTAVA politica rr_*, que el fixture no tenia y produccion si. No lee
+-- ninguna tabla —el bucket publico se lee y ya— asi que esta migracion no la
+-- toca. Estaba ausente aqui y por eso la primera version de la migracion
+-- conto 7 de 7 en la prueba y 7 de 8 en produccion, donde reventó.
+CREATE POLICY "rr_public_read" ON storage.objects FOR SELECT TO authenticated
+  USING (bucket_id = 'routesred-public');
+
 CREATE POLICY "rr_private_read" ON storage.objects FOR SELECT TO authenticated
   USING (bucket_id = 'routesred-private' AND EXISTS (
     SELECT 1 FROM routesred.transport_provider_users tpu
@@ -261,7 +268,7 @@ END $$;
 -- Es la afirmacion general de la que salio todo: una politica que lea una tabla
 -- ajena es un punto unico de fallo para TODO Storage, no solo para su bucket.
 DO $$
-DECLARE v_n integer; v_rr integer;
+DECLARE v_n integer; v_rr integer; v_faltan text[];
 BEGIN
   SELECT count(*) INTO v_n FROM pg_policies
   WHERE schemaname='storage' AND tablename='objects'
@@ -271,11 +278,25 @@ BEGIN
     RAISE EXCEPTION 'Caso 5: % politicas de storage siguen leyendo transport_provider_users', v_n;
   END IF;
 
-  -- Y siguen siendo siete: quitarlas seria ABRIR los buckets, no arreglarlos.
+  -- Las siete reescritas siguen ahi, POR NOMBRE. Contarlas fue lo que fallo:
+  -- produccion tiene ocho rr_* porque existe `rr_public_read`, y el fixture
+  -- solo copiaba las siete que leen la tabla.
+  SELECT array_agg(nombre) INTO v_faltan
+  FROM unnest(ARRAY[
+    'rr_public_insert','rr_public_update','rr_public_delete',
+    'rr_private_read','rr_private_insert','rr_private_update','rr_private_delete'
+  ]) AS nombre
+  WHERE NOT EXISTS (SELECT 1 FROM pg_policies
+    WHERE schemaname='storage' AND tablename='objects' AND policyname = nombre);
+  IF v_faltan IS NOT NULL THEN
+    RAISE EXCEPTION 'Caso 5: faltan politicas tras la correccion: %', v_faltan;
+  END IF;
+
+  -- Y la que NO se toca sigue intacta.
   SELECT count(*) INTO v_rr FROM pg_policies
-  WHERE schemaname='storage' AND tablename='objects' AND policyname LIKE 'rr\_%';
-  IF v_rr <> 7 THEN
-    RAISE EXCEPTION 'Caso 5: se esperaban 7 politicas rr_* y hay %', v_rr;
+  WHERE schemaname='storage' AND tablename='objects' AND policyname = 'rr_public_read';
+  IF v_rr <> 1 THEN
+    RAISE EXCEPTION 'Caso 5: se toco rr_public_read, que no lee ninguna tabla';
   END IF;
   RAISE NOTICE 'Caso 5 OK';
 END $$;
@@ -337,6 +358,31 @@ BEGIN
   RAISE NOTICE 'Caso 7 OK';
 END $$;
 
+-- ===========================================================================
+-- 8. El bucket PUBLICO de RoutesRed se sigue leyendo
+-- ===========================================================================
+-- `rr_public_read` no lee ninguna tabla, asi que esta migracion no la toca —
+-- pero si alguien la borrara «de paso», el bucket publico dejaria de leerse y
+-- nadie se enteraria hasta que un cliente viera imagenes rotas.
+DO $$
+DECLARE v_n integer;
+BEGIN
+  INSERT INTO storage.objects (bucket_id, name)
+  VALUES ('routesred-public', 'providers/aaaaaaaa-0000-0000-0000-000000000001/foto.png');
+
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('prueba.usuario', '77777777-0000-0000-0000-000000000007', true);
+  PERFORM set_config('prueba.super', 'no', true);
+  PERFORM set_config('prueba.contador', 'no', true);
+  SELECT count(*) INTO v_n FROM storage.objects WHERE bucket_id = 'routesred-public';
+  RESET ROLE;
+
+  IF v_n <> 1 THEN
+    RAISE EXCEPTION 'Caso 8: el bucket publico de RoutesRed dejo de leerse (ve % filas)', v_n;
+  END IF;
+  RAISE NOTICE 'Caso 8 OK';
+END $$;
+
 ROLLBACK;
 
-\echo 'Storage sin leer tablas de RoutesRed: 8/8 casos OK'
+\echo 'Storage sin leer tablas de RoutesRed: 9/9 casos OK'
