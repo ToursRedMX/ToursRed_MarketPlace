@@ -338,6 +338,22 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d pagos -v ON_ERROR_STOP=1 -f test-pagar-gasto.sql
 
+      # Un gasto devengado en julio y pagado en septiembre son DOS hechos en dos
+      # meses. El bloque 19 los daba como uno solo, fechado el dia del gasto, y
+      # el reporte maestro contaba la salida de banco en el mes equivocado. Las
+      # pruebas anteriores no lo vieron porque el invariante caja = pasivo +
+      # ingreso cuadra igual: es ciego al tiempo. Estas afirman contra VENTANAS
+      # DE FECHAS, que es como consulta el reporte, y atan la vista al libro.
+      - name: Verify an expense payment lands on its own date, not the expense's
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS fechas;" -c "CREATE DATABASE fechas;"
+          cd scripts
+          psql -h localhost -U postgres -d fechas -v ON_ERROR_STOP=1 -f test-fecha-del-pago.sql
+
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
       # que escribe el snapshot fiscal de cada cobro, y esos numeros son los que
