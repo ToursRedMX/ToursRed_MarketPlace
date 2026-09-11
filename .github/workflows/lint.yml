@@ -187,6 +187,15 @@ jobs:
       - name: Verify accountants can be created and accounting permissions persist
         run: node scripts/test-alta-de-contadores.mjs
 
+      # PayPal era el tercer hueco de la comision, despues de MercadoPago (#211)
+      # y OpenPay (#213): `capture-paypal-order` solo insertaba filas nuevas y
+      # al encontrar una existente se iba, asi que el 0 que dejaba el camino
+      # sincrono se quedaba. Medido: 2 cobros, $6,162.44. Esta prueba EJECUTA la
+      # logica con un cliente de mentira, que es lo unico que demuestra la regla
+      # de no pisar una comision buena con un cero.
+      - name: Verify a PayPal charge always ends up with its processor fee
+        run: node scripts/test-cobros-paypal.mjs
+
       # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
       # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
       # aplica SIN transaccion a proposito, porque asi fue como se descubrio que
