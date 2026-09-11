@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  FileText, Search, Download, XCircle, RefreshCw, CheckCircle,
-  AlertCircle, Clock, Filter, ChevronDown, ExternalLink, RotateCcw, Shield
-} from 'lucide-react';
+import { FileText, Search, Download, XCircle, RefreshCw, CheckCircle, AlertCircle, Clock, ExternalLink, RotateCcw, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 

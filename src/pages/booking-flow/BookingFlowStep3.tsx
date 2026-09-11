@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  ChevronRight, ChevronLeft, Bus, Car, Globe, Users, AlertTriangle, AlertCircle,
-  Clock, Shield, Crown, Minus, Plus, Info, Timer,
-} from 'lucide-react';
+import { ChevronRight, ChevronLeft, Bus, Car, Globe, Users, AlertTriangle, AlertCircle, Shield, Crown, Minus, Plus, Timer } from 'lucide-react';
 import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { totalTravelerCount } from '../../types/booking-flow';
-import type { Tour, TourOptionalService } from '../../types';
+import type { TourOptionalService } from '../../types';
 import SeatMapPicker from '../../components/seats/SeatMapPicker';
 
 interface OptionalServiceCapacity {

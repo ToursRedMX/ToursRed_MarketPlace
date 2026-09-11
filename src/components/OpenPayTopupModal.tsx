@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  X, Plus, Building2, QrCode, Copy, Check, AlertCircle, Loader2,
-  Clock, ArrowLeft, RefreshCw, CheckCircle2, XCircle,
-} from 'lucide-react';
+import { X, Plus, Building2, QrCode, Copy, Check, AlertCircle, Loader2, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { supabase } from '../lib/supabase';

@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  ChevronLeft, AlertCircle, Tag, Award, Wallet, Crown, Shield,
-  Loader2, CreditCard, Check, X, Sparkles, ExternalLink, Info,
-} from 'lucide-react';
+import { ChevronLeft, AlertCircle, Tag, Award, Wallet, Crown, Shield, Loader2, CreditCard, Check, Sparkles, ExternalLink, Info } from 'lucide-react';
 import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
 import { useStepUp } from '../../context/StepUpContext';

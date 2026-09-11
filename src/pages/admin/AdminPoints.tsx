@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Award, Search, Filter, TrendingUp, TrendingDown, Clock, Users, Plus, Minus, X } from 'lucide-react';
+import { Award, Search, Filter, TrendingUp, TrendingDown, Users, Plus, Minus, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
 

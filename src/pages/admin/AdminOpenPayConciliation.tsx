@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  AlertCircle, RefreshCw, Check, X, Search, Building2, QrCode,
-  ArrowUpCircle, Clock, FileText, ExternalLink,
-} from 'lucide-react';
+import { RefreshCw, Check, X, Search, Building2, QrCode, ArrowUpCircle, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { format } from 'date-fns';

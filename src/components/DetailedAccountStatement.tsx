@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
 import type { CommissionRecord } from '../types';
 import { formatCurrencyMXN } from '../utils/formatCurrency';

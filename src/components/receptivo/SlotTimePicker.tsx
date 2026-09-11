@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Users, MapPin, Loader2, AlertCircle } from 'lucide-react';
+import { Clock, Loader2, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '../../lib/supabase';
-import { TourSlot, TourSchedule } from '../../types';
+import { TourSlot } from '../../types';
 
 interface SlotTimePickerProps {
   tourId: string;

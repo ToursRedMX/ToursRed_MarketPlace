@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Info } from 'lucide-react';
+import { Users } from 'lucide-react';
 
 interface MinTravelersAlertProps {
   minTravelersRequired: number;

@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
-import {
-  Clock, Landmark, Banknote, ExternalLink, Download, AlertCircle,
-  CheckCircle, ArrowRight, Home, Loader2, Calendar, Mail,
-} from 'lucide-react';
+import { Clock, Landmark, Banknote, Download, AlertCircle, CheckCircle, ArrowRight, Home, Loader2, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 

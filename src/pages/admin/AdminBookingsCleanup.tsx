@@ -1,9 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Trash2, RefreshCw, AlertTriangle, CheckSquare, Square,
-  Calendar, User, Building2, ShoppingBag, Clock, FileText,
-  ChevronDown, ChevronUp, Info, CheckCircle, Banknote
-} from 'lucide-react';
+import { Trash2, RefreshCw, AlertTriangle, CheckSquare, Square, Calendar, User, Building2, ShoppingBag, Clock, FileText, ChevronDown, ChevronUp, CheckCircle, Banknote } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { differenceInDays, parseISO, format } from 'date-fns';

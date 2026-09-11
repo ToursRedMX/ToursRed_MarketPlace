@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Building, Users, Eye, EyeOff, Mail, Phone, Globe, Calendar, Search, Filter, MoreVertical, CheckCircle, XCircle, CreditCard as Edit, Save, X, Percent, DollarSign, AlertTriangle, User, MapPin, ArrowUpDown, ArrowUp, ArrowDown, FileText, RefreshCw } from 'lucide-react';
-import { getAllAgencies, updateAgencyStatus, supabase } from '../../lib/supabase';
-import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
+import { Building, Eye, EyeOff, Mail, Phone, Globe, Calendar, Search, Filter, CheckCircle, XCircle, CreditCard as Edit, Save, X, Percent, DollarSign, AlertTriangle, User, ArrowUpDown, ArrowUp, ArrowDown, FileText, RefreshCw } from 'lucide-react';
+import { updateAgencyStatus, supabase } from '../../lib/supabase';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { tasaEfectivaAgencia } from '../../utils/comisionAgencia';
 import AgencyContractSection from '../../components/AgencyContractSection';
 

@@ -1,13 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  BookOpen, BarChart2, FileText, List, Download, RefreshCw,
-  TrendingUp, TrendingDown, DollarSign, Layers, ChevronRight,
-  Plus, AlertCircle, CheckCircle, Clock, Search, Calendar,
-  BookMarked, ArrowUpRight, ArrowDownLeft, Users, Building2,
-  X, ChevronDown, ChevronUp, Settings, PenLine, Trash2, Send,
-  Pencil, ToggleLeft, ToggleRight, Filter, CreditCard, Gift, RotateCcw, Ban,
-  ShieldCheck
-} from 'lucide-react';
+import { BookOpen, BarChart2, FileText, List, Download, RefreshCw, TrendingUp, TrendingDown, DollarSign, Layers, Plus, AlertCircle, CheckCircle, Clock, Search, Calendar, BookMarked, ArrowUpRight, ArrowDownLeft, ChevronDown, ChevronUp, PenLine, Trash2, Send, Pencil, Filter, CreditCard, Gift, RotateCcw, Ban, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import ManualEntryModal from '../../components/accounting/ManualEntryModal';

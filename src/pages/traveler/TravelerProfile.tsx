@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Calendar, Save, CreditCard as Edit, X, MapPin, CreditCard, Globe, Phone, Wallet, FileText, Shield, Monitor, Smartphone, Tablet, CheckCircle, XCircle, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';

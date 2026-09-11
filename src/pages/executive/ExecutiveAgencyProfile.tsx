@@ -1,9 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft, Building2, Mail, Phone, Globe, MapPin, FileText,
-  CheckCircle, Clock, AlertCircle, X
-} from 'lucide-react';
+import { ArrowLeft, Building2, Mail, Phone, Globe, MapPin, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import AgencyContractSection from '../../components/AgencyContractSection';

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Cookie, Settings, Trash2, ExternalLink } from 'lucide-react';
+import { Cookie, Settings, ExternalLink } from 'lucide-react';
 import Seo from '../components/Seo';
 
 export default function CookiePolicyPage() {

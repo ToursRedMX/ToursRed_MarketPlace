@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { Users, ArrowLeft, Save, UserPlus, Check, AlertCircle, AlertTriangle, Lock, Shield, Copy, Landmark, Banknote, CheckCircle2, Clock, CreditCard } from 'lucide-react';
-import { formatCurrencyMXN, formatCurrency } from '../utils/formatCurrency';
+import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { supabase } from '../lib/supabase';
-import { Booking, BookingTraveler, Tour, FrequentCompanion } from '../types';
+import { Booking, Tour, FrequentCompanion } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useStepUp } from '../context/StepUpContext';
 import { validateBirthDateForCategory, validateAllTravelers } from '../utils/birthDateValidation';

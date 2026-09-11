@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Plus, Edit, Trash2, Image, Globe, Clock, Search, Filter, Eye, EyeOff, Save, X, Upload, AlertTriangle, Calendar, User } from 'lucide-react';
-import { getAllDestinations, createDestination, updateDestination, deleteDestination, addDestinationImage, deleteDestinationImage, supabase } from '../../lib/supabase';
-import { Destination, DestinationImage } from '../../types';
+import { MapPin, Plus, Edit, Trash2, Image, Globe, Clock, Search, Filter, Eye, EyeOff, Save, X, Upload, AlertTriangle } from 'lucide-react';
+import { getAllDestinations, createDestination, updateDestination, deleteDestination, addDestinationImage, deleteDestinationImage } from '../../lib/supabase';
+import { Destination } from '../../types';
 import { format } from 'date-fns';
 import ImageUploader from '../../components/ImageUploader';
 

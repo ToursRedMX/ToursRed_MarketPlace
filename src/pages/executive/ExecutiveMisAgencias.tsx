@@ -1,9 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Building2, CheckCircle, Clock, AlertCircle, TrendingUp,
-  Calendar, X, Eye, FileText, ExternalLink
-} from 'lucide-react';
+import { Building2, CheckCircle, Clock, AlertCircle, X, Eye, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';

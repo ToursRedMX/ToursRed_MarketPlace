@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, MoreVertical, Edit, Trash2, Clock, Check, CheckCheck } from 'lucide-react';
+import { Send, Edit, Trash2, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useFormPersistence } from '../../hooks/useFormPersistence';

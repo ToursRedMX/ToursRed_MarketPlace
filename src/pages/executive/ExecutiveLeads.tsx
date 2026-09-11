@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronDown, CreditCard as Edit2, Eye, ArrowRight, Trash2, User, Phone, Mail, MapPin, MessageSquare, Calendar, X, CheckCircle, Clock, AlertCircle, Building2, Upload, Loader2, MailCheck, Send } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Plus, Search, CreditCard as Edit2, ArrowRight, MessageSquare, X, CheckCircle, AlertCircle, Building2, Loader2, MailCheck, Send } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 

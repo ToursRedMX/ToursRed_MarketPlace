@@ -11,7 +11,7 @@ import { useStepUp } from '../../context/StepUpContext';
 import ReviewForm from '../../components/ReviewForm';
 import { useFormPersistence } from '../../hooks/useFormPersistence';
 import { usePreventUnload } from '../../hooks/usePreventUnload';
-import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { paymentLabel } from '../../utils/paymentLabels';
 import { validateAllTravelers } from '../../utils/birthDateValidation';
 import { getMpDeviceId } from '../../utils/mercadopagoDevice';

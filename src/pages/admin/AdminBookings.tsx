@@ -1,12 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  ShoppingBag, Search, X, ChevronDown, ChevronUp, ChevronsUpDown,
-  User, Building2, MapPin, Calendar, CreditCard, DollarSign,
-  CheckCircle, Clock, XCircle, AlertTriangle, RefreshCw,
-  Users, Star, Coins, Shield, FileText, ArrowLeftRight,
-  Phone, Mail, Package, Percent, Hash, Tag, Info, Plus,
-  TrendingUp, BarChart2, Activity, Upload, Ban, Loader2, AlertCircle
-} from 'lucide-react';
+import { ShoppingBag, Search, X, ChevronDown, ChevronUp, ChevronsUpDown, User, Building2, MapPin, CreditCard, DollarSign, CheckCircle, Clock, XCircle, AlertTriangle, RefreshCw, Users, Star, Coins, Shield, FileText, ArrowLeftRight, Phone, Mail, Package, Percent, Tag, Info, Plus, TrendingUp, BarChart2, Activity, Upload, Ban, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { paymentLabel } from '../../utils/paymentLabels';

@@ -1,8 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Settings, DollarSign, Percent, Calendar, Plus, Trash2,
-  CheckCircle, AlertCircle, X, Save, Award, Target
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Settings, DollarSign, Plus, Trash2, CheckCircle, AlertCircle, X, Save, Award, Target } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 

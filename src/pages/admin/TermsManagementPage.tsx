@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileText, Plus, Eye, Download, Shield, Clock, Users, ChevronDown, ChevronUp, X, Check, AlertTriangle, Search, Calendar } from 'lucide-react';
+import { FileText, Plus, Download, Shield, Clock, Users, ChevronDown, ChevronUp, X, Check, AlertTriangle, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';

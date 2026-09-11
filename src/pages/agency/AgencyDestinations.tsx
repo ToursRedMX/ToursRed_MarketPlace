@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, CreditCard as Edit, Trash2, Image, MapPin, Globe, Clock, DollarSign, Users, Save, X, Upload, AlertCircle } from 'lucide-react';
+import { Plus, CreditCard as Edit, Trash2, Image, MapPin, Globe, Clock, Users, Save, X, Upload, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getAllDestinations, createDestination, updateDestination, addDestinationImage, deleteDestinationImage, deleteDestination } from '../../lib/supabase';
-import { Destination, DestinationImage, ImageUploadData } from '../../types';
+import { Destination } from '../../types';
 import ImageUploader from '../../components/ImageUploader';
 
 const AgencyDestinations: React.FC = () => {

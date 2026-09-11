@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, UserPlus, AlertCircle, Users as UsersIcon } from 'lucide-react';
+import { ChevronRight, ChevronLeft, AlertCircle } from 'lucide-react';
 import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle, Shield, Tag, Calendar, CreditCard, Award, ArrowRight, Loader } from 'lucide-react';
+import { CheckCircle, Shield, Tag, Calendar, CreditCard, ArrowRight, Loader } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';

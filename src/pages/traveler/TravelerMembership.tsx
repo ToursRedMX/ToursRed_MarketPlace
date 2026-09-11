@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Crown, Check, X, Zap, Shield, Sparkles, AlertCircle, ArrowLeft, Calendar, MapPin, DollarSign } from 'lucide-react';
+import { Crown, Check, Zap, Shield, Sparkles, AlertCircle, ArrowLeft, MapPin, DollarSign } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
-import { formatCurrencyMXN, formatCurrency } from '../../utils/formatCurrency';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
 
 interface Membership {
   id: string;

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Session, User } from '@supabase/supabase-js';
-import { format, parse } from 'date-fns';
+import { format } from 'date-fns';
 import { Tour, Booking, Destination, DestinationImage, ImageUploadData } from '../types';
 import { formatCurrency } from '../utils/formatCurrency';
 

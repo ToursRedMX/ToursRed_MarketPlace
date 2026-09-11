@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { createTour, searchDestinations, supabase, updateTour, deleteTour, getAllDestinations, createDestination, getTourCategories, getFeaturedPlans, getAgencyFeaturedSlots, joinFeaturedWaitlist, checkSlugAvailable, updateTourSlug } from '../../lib/supabase';
-import { Plus, Search, X, CreditCard, Trash2, Eye, Calendar, MapPin, Users, DollarSign, Save, Minus, Upload, Copy, CalendarX, AlertCircle, XCircle, FileText, Image, CheckSquare, Tag, PawPrint, Clock, Settings, List, Ban, ShoppingBag, Info, Percent, Route, RefreshCw, Layers, Car, Globe, AlertTriangle, Bus, Pencil, Sparkles, Star, TrendingUp, CheckCircle, Loader2, Lock, ChevronDown, Shield } from 'lucide-react';
+import { Plus, X, CreditCard, Trash2, Eye, Calendar, MapPin, Users, DollarSign, Save, Minus, Copy, CalendarX, AlertCircle, XCircle, FileText, Image, CheckSquare, Tag, PawPrint, Clock, Settings, Ban, ShoppingBag, Info, Percent, RefreshCw, Layers, Car, Globe, AlertTriangle, Bus, Pencil, Sparkles, Star, TrendingUp, CheckCircle, Loader2, Lock, ChevronDown, Shield } from 'lucide-react';
 import { VehicleMapType } from '../../types/seats';
 import TourPromotionsManager from '../../components/TourPromotionsManager';
 import AgencyScheduleManager from '../../components/receptivo/AgencyScheduleManager';
@@ -59,7 +59,7 @@ interface TourLanguage {
   extra_cost: string;
   cost_type: 'por_persona' | 'fijo';
 }
-import { Tour, Destination, DeparturePoint, PaymentOption, PaymentPlanMode, InstallmentDefinition } from '../../types';
+import { Tour, Destination, DeparturePoint, PaymentOption, PaymentPlanMode } from '../../types';
 import { format } from 'date-fns';
 import ImageUploader from '../../components/ImageUploader';
 import TaxTreatmentFields from '../../components/agency/TaxTreatmentFields';

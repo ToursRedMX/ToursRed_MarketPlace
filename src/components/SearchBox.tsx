@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Tag, Calendar, Building2, DollarSign, Dog, X, MapPin, FileSearch, RefreshCw, SlidersHorizontal, RotateCcw } from 'lucide-react';
+import { Search, Tag, Calendar, Building2, DollarSign, X, MapPin, FileSearch, SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { SearchFilters } from '../types';
 import { useTourCategories, useAgencies, useDeparturePoints } from '../hooks/useSharedData';
 

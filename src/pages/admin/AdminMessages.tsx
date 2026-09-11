@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, Users, Calendar, Search, Filter, Eye, Archive, AlertTriangle } from 'lucide-react';
+import { MessageCircle, Users, Search, Filter, Eye, Archive, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import MessageThread from '../../components/messaging/MessageThread';
 

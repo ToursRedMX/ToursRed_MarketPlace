@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Building, Mail, Phone, Globe, Star, CreditCard as Edit, Save, X, Upload, User, Calendar, MapPin, FileText, Landmark, Hash, Shield, Link2, Building2, Image, ExternalLink, CheckCircle, AlertCircle, Download, Briefcase } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Building, Mail, Phone, Globe, Star, CreditCard as Edit, Save, X, User, Calendar, MapPin, FileText, Landmark, Hash, Shield, Link2, Building2, CheckCircle, AlertCircle, Download, Briefcase } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { validarRfcAgencia, tieneDatosFiscalesCompletos } from '../../lib/validarRfcAgencia';

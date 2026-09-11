@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Tag, Search, Filter, Eye, ToggleLeft, ToggleRight, AlertCircle, Check, Calendar, Users, Building, X, ChevronDown, Loader2 } from 'lucide-react';
+import { Tag, Search, ToggleLeft, ToggleRight, AlertCircle, Check, Calendar, Users, Building, X, Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { supabase } from '../../lib/supabase';
 
