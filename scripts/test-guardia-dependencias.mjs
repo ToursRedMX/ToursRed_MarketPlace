@@ -127,8 +127,77 @@ caso('ignora lo que esta en comentarios', () => {
 
 // --- El arbol de verdad -----------------------------------------------------
 
-caso('supabase/functions/ cumple las dos reglas hoy', () => {
+caso('supabase/functions/ cumple las tres reglas hoy', () => {
   const { codigo, salida } = correr();
+  assert.equal(codigo, 0, salida);
+});
+
+// --- Regla 3: front y edge alineados ----------------------------------------
+//
+// Esta regla mira package.json y package-lock.json, o sea archivos del repo y no
+// fixtures. Para probarla sin tocarlos se copia el arbol minimo a un temporal y
+// se corre la guardia ahi con cwd propio.
+
+import { mkdirSync, cpSync } from 'node:fs';
+import { execFileSync as ejecutar } from 'node:child_process';
+
+/** Monta un repo de mentira con su package.json, su lock y una edge function. */
+function repoDeMentira({ front, lock, edge }) {
+  const raiz = mkdtempSync(join(tmpdir(), 'guardia-repo-'));
+  mkdirSync(join(raiz, 'scripts'), { recursive: true });
+  mkdirSync(join(raiz, 'supabase', 'functions', 'demo'), { recursive: true });
+  cpSync(GUARDIA, join(raiz, GUARDIA));
+  writeFileSync(join(raiz, 'package.json'),
+    JSON.stringify({ name: 'demo', dependencies: { '@supabase/supabase-js': front } }, null, 2));
+  if (lock !== null) {
+    writeFileSync(join(raiz, 'package-lock.json'), JSON.stringify({
+      name: 'demo', lockfileVersion: 3,
+      packages: { 'node_modules/@supabase/supabase-js': { version: lock } },
+    }, null, 2));
+  }
+  writeFileSync(join(raiz, 'supabase', 'functions', 'demo', 'index.ts'),
+    `import { createClient } from ${JSON.stringify(`npm:@supabase/supabase-js@${edge}`)};
+export default createClient;
+`);
+  return raiz;
+}
+
+function correrEn(raiz) {
+  try {
+    return { codigo: 0, salida: ejecutar('node', [GUARDIA], { cwd: raiz, encoding: 'utf8' }) };
+  } catch (e) {
+    return { codigo: e.status, salida: (e.stdout ?? '') + (e.stderr ?? '') };
+  }
+}
+
+caso('acepta front y edge en la misma version exacta', () => {
+  const { codigo, salida } = correrEn(repoDeMentira({ front: '2.116.0', lock: '2.116.0', edge: '2.116.0' }));
+  assert.equal(codigo, 0, salida);
+});
+
+caso('rechaza que el front use un rango aunque resuelva a la misma', () => {
+  const { codigo, salida } = correrEn(repoDeMentira({ front: '^2.116.0', lock: '2.116.0', edge: '2.116.0' }));
+  assert.equal(codigo, 1, 'un caret deja la version a eleccion de npm el dia del install');
+  assert.match(salida, /rango/);
+});
+
+caso('rechaza front y edge en versiones distintas', () => {
+  const { codigo, salida } = correrEn(repoDeMentira({ front: '2.115.0', lock: '2.115.0', edge: '2.116.0' }));
+  assert.equal(codigo, 1);
+  assert.match(salida, /no coinciden/);
+});
+
+// El caso real del 11-sep-2026: package.json correcto, lock atrasado. Netlify
+// instala desde el lock, asi que mirar solo package.json lo habria dado por
+// bueno mientras produccion corria otra version.
+caso('rechaza que el LOCK instale algo distinto de lo declarado', () => {
+  const { codigo, salida } = correrEn(repoDeMentira({ front: '2.116.0', lock: '2.115.0', edge: '2.116.0' }));
+  assert.equal(codigo, 1, 'el lock es lo que Netlify instala');
+  assert.match(salida, /lock/);
+});
+
+caso('sin lock, no revienta y sigue comprobando package.json', () => {
+  const { codigo, salida } = correrEn(repoDeMentira({ front: '2.116.0', lock: null, edge: '2.116.0' }));
   assert.equal(codigo, 0, salida);
 });
 
