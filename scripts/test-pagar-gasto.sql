@@ -35,6 +35,10 @@ BEGIN;
 \ir ../supabase/migrations/20260910250000_tipo_de_cambio_pendiente_en_recurrentes.sql
 \ir ../supabase/migrations/20260911020000_autor_del_gasto_por_defecto.sql
 \ir ../supabase/migrations/20260911040000_pagar_gasto_en_parcialidades.sql
+-- Y la correccion: la version de 040000 actualizaba el asiento DESPUES de
+-- publicarlo, y el trigger de inmutabilidad —que el fixture ahora si tiene— la
+-- rechaza. Se aplican las dos en orden, que es el estado real de produccion.
+\ir ../supabase/migrations/20260911050000_pago_de_gasto_no_toca_la_poliza.sql
 
 -- El permiso se da por bueno: lo prueba test-gastos-operacion.sql.
 CREATE OR REPLACE FUNCTION public.puede_gestionar_gastos() RETURNS boolean
@@ -250,6 +254,79 @@ BEGIN
   RAISE NOTICE 'Caso 10 OK';
 END $$;
 
+-- ===========================================================================
+-- 11. El asiento del pago NO se toca despues de publicarse
+-- ===========================================================================
+-- Este es el caso que faltaba. La version de `20260911040000` insertaba el
+-- asiento con `is_posted = true` y acto seguido le hacia UPDATE para escribir
+-- el `source_id`; en produccion eso devuelve «Una póliza publicada es
+-- inmutable; genere una reversa». Aqui se afirman las dos mitades: que el
+-- asiento queda publicado, y que su `source_id` ya trae el id del pago sin
+-- necesidad de una segunda escritura.
+DO $$
+DECLARE
+  v_gasto  uuid;
+  v_pago   uuid;
+  v_src    uuid;
+  v_posted boolean;
+BEGIN
+  INSERT INTO public.gastos_operacion
+    (fecha, cuenta_contable, proveedor, descripcion, moneda, tipo_cambio,
+     subtotal, iva, total, total_mxn)
+  VALUES ('2026-07-01','602','INMUTABLE','Prueba de poliza','MXN',1,100,16,116,116)
+  RETURNING id INTO v_gasto;
+
+  PERFORM public.registrar_gasto_operacion(v_gasto);
+  v_pago := public.pagar_gasto_operacion(v_gasto, '2026-07-20', 50, 'tarjeta', 'REF-11');
+
+  SELECT e.is_posted, e.source_id INTO v_posted, v_src
+  FROM public.accounting_entries e
+  JOIN public.pagos_de_gasto p ON p.asiento_id = e.id
+  WHERE p.id = v_pago;
+
+  IF NOT coalesce(v_posted, false) THEN
+    RAISE EXCEPTION 'Caso 11: el asiento del pago tiene que quedar publicado';
+  END IF;
+  IF v_src IS DISTINCT FROM v_pago THEN
+    RAISE EXCEPTION 'Caso 11: el source_id del asiento deberia ser el id del pago (% vs %)',
+      v_src, v_pago;
+  END IF;
+  RAISE NOTICE 'Caso 11 OK';
+END $$;
+
+-- ===========================================================================
+-- 12. Y el fixture REALMENTE bloquea el UPDATE sobre una poliza publicada
+-- ===========================================================================
+-- Sin este caso, alguien podria quitar los triggers del fixture y el caso 11
+-- seguiria pasando por la razon equivocada: no porque la funcion ya no toque
+-- el asiento, sino porque tocarlo volveria a ser legal en la prueba. Aqui se
+-- intenta el UPDATE a mano y se exige que reviente.
+DO $$
+DECLARE
+  v_asiento uuid;
+  v_msg     text;
+BEGIN
+  SELECT e.id INTO v_asiento
+  FROM public.accounting_entries e
+  JOIN public.pagos_de_gasto p ON p.asiento_id = e.id
+  WHERE e.is_posted LIMIT 1;
+
+  IF v_asiento IS NULL THEN
+    RAISE EXCEPTION 'Caso 12: no hay asiento publicado de pago con que probar';
+  END IF;
+
+  BEGIN
+    UPDATE public.accounting_entries SET description = 'editado' WHERE id = v_asiento;
+    RAISE EXCEPTION 'Caso 12: el fixture dejo editar una poliza publicada; le faltan los triggers de inmutabilidad';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+    IF v_msg NOT LIKE '%inmutable%' THEN
+      RAISE EXCEPTION 'Caso 12: se esperaba el error de inmutabilidad y llego: %', v_msg;
+    END IF;
+  END;
+  RAISE NOTICE 'Caso 12 OK';
+END $$;
+
 ROLLBACK;
 
-\echo 'Pagar gasto de operacion: 10/10 casos OK'
+\echo 'Pagar gasto de operacion: 12/12 casos OK'
