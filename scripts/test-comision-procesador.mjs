@@ -77,8 +77,16 @@ for (const archivo of globSync('supabase/functions/*/index.ts').sort()) {
       .slice(0, VENTANA)
       .join('\n');
 
+    // `columnasDeComision(...)` cuenta como actualizar. Es el ayudante de
+    // stripe-webhook que arma processor_fee, net_amount y, cuando Stripe manda
+    // el desglose, processor_fee_base y processor_fee_iva. Sin esta linea la
+    // guardia canta cuatro falsos positivos, porque busca el nombre de la
+    // columna DENTRO del `.update(` y ahora vive dentro del ayudante. Se acepta
+    // por nombre exacto y no por cualquier llamada: un `.update(loQueSea())`
+    // generico volveria la guardia inutil.
     const seActualiza = /\.update\(\s*\{[^}]*processor_fee/s.test(despues)
-      || /update\(\{ processor_fee/.test(despues);
+      || /update\(\{ processor_fee/.test(despues)
+      || /\.update\(\s*columnasDeComision\(/.test(despues);
     const seReconoce = /console\.warn\([^)]*(?:comision|processor_fee|queda en 0)/is.test(despues);
 
     if (seActualiza || seReconoce) return;

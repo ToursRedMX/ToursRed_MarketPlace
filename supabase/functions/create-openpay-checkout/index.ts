@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.39.6";
+import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import {
   isConfigured,
   getBaseUrl,

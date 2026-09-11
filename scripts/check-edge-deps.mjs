@@ -4,9 +4,28 @@
  *
  * QUE VIGILA
  *
- * Que ningun import remoto de `supabase/functions/` entre al repo sin una
- * version EXACTA. Un `npm:paquete@2` no es una version: es un rango, y Deno lo
- * resuelve al desplegar.
+ * Dos reglas, y conviene no confundirlas:
+ *
+ *   1. VERSION EXACTA. Que ningun import remoto de `supabase/functions/` entre
+ *      al repo sin una version exacta. Un `npm:paquete@2` no es una version: es
+ *      un rango, y Deno lo resuelve al desplegar.
+ *
+ *   2. VERSION UNICA. Que un mismo paquete no corra en dos versiones —ni desde
+ *      dos registros— a la vez. La regla 1 sola no lo impide: 175 imports
+ *      pueden llevar cada uno su version exacta y distinta, y pasar todos.
+ *
+ *   3. FRONT Y EDGE ALINEADOS. Que un paquete usado en los dos lados corra la
+ *      misma version en `package.json`, en `package-lock.json` y en las Edge
+ *      Functions. Las reglas 1 y 2 solo miran `supabase/functions/`, asi que no
+ *      ven esta frontera: el 11-sep-2026 el front declaraba `^2.115.0` de
+ *      supabase-js y las Edge Functions `2.116.0`, y ningun check chistaba.
+ *
+ * POR QUE LA REGLA 3 MIRA TAMBIEN EL LOCK
+ *
+ * Porque es lo que Netlify instala. Ese mismo 11-sep-2026, `package.json` decia
+ * `^2.115.0`, el lock decia `2.115.0` y el `node_modules` local tenia 2.116.0:
+ * mirar solo lo instalado habria dado "ya estan alineados" cuando produccion
+ * corria otra cosa. El lock es la fuente de verdad del build; `node_modules` no.
  *
  * POR QUE
  *
@@ -28,6 +47,22 @@
  * 2.114.0, 2.108.2 y 2.39.6), dos de ellas flotantes, y desde DOS registros
  * distintos. El caso peor era `@supabase/functions-js`, importado sin ni un
  * digito de version: Deno lo trataba como `@*`.
+ *
+ * Fijar las versiones resolvio lo flotante pero NO la mezcla: quedaron las
+ * cuatro, ahora exactas. La mezcla se cerro el 10-sep-2026 en un segundo paso,
+ * llevando los 175 usos a `npm:@supabase/supabase-js@2.116.0`. La regla 2 es
+ * lo que impide que vuelva.
+ *
+ * SUBIR DE 2.39.6 A 2.116.0 NO ES UN SALTO DE MAYOR, AUNQUE LO PAREZCA
+ *
+ * Asusta al mirar los subpaquetes: 2.39.6 trae `postgrest-js@1.9.2` y 2.116.0
+ * trae `postgrest-js@2.116.0`. No es una ruptura. Supabase renumero TODOS sus
+ * subpaquetes para que coincidan con la version del padre: auth-js,
+ * functions-js, postgrest-js, realtime-js y storage-js estan los cinco en
+ * 2.116.0. Comprobado ademas sobre la superficie que este repo usa de verdad:
+ * de los 27 metodos de `PostgrestFilterBuilder` en 1.9.2, en 2.116.0 no falta
+ * NINGUNO, y hay 5 nuevos (`isDistinct`, `notIn`, `regexMatch`,
+ * `regexIMatch`, `throwOnError`). Es un superconjunto estricto.
  *
  * POR QUE NACE EN CERO
  *
@@ -73,19 +108,52 @@
  *   npm:paquete@0.2.x / @* / @latest .......... NO, comodin
  *   jsr:@supabase/functions-js/edge-runtime... . NO, sin version
  *
+ * QUE INCUMPLE LA REGLA 2, aunque cada linea sea exacta
+ *
+ *   npm:@supabase/supabase-js@2.116.0  en una funcion
+ *   npm:@supabase/supabase-js@2.39.6   en otra ...... NO, dos versiones
+ *   jsr:@supabase/supabase-js@2.116.0  en otra ...... NO, dos registros
+ *
+ * La subruta no cuenta como diferencia: `npm:pdfmake@0.2.20` y
+ * `npm:pdfmake@0.2.20/js/printer.js` son el mismo paquete en la misma version,
+ * y asi los agrupa la guardia.
+ *
+ * LA UNICA EXCEPCION DE LA REGLA 3, Y POR QUE NO ES PEREZA
+ *
+ * `xlsx` corre 0.20.3 en el front y 0.18.5 en las Edge Functions, y **no se
+ * puede alinear cambiando un numero**: SheetJS dejo de publicar en npm, donde
+ * la ultima es 0.18.5 (2022). La 0.20.3 solo existe en su CDN — `npm view
+ * xlsx@0.20.3` responde 404. Alinearlos exige decidir si las Edge Functions
+ * tiran del CDN de SheetJS o si el front vuelve a una version de 2022, y eso
+ * es una decision aparte, no un ajuste de version.
+ *
+ * Lo que conviene saber al tomarla: 0.18.5 esta por debajo de DOS avisos
+ * "high" —GHSA-4r6h-8v6p-xvw6 (prototype pollution, < 0.19.3) y
+ * GHSA-5pgg-2g8v-p4x9 (ReDoS, < 0.20.2)—, **ninguno con parche en npm**. La
+ * exposicion practica hoy es nula: los dos se disparan al PARSEAR un archivo, y
+ * medido el 11-sep-2026 **nadie en el repo llama a `XLSX.read`** — front y edge
+ * solo GENERAN hojas (`aoa_to_sheet`, `book_new`, `write`). O sea: version
+ * vulnerable, camino vulnerable no ejercitado. Si algun dia alguien acepta un
+ * .xlsx subido por un usuario, esto deja de ser deuda y pasa a ser urgente.
+ *
  * USO
  *
  *   node scripts/check-edge-deps.mjs             revisa supabase/functions/
  *   node scripts/check-edge-deps.mjs --lista     ademas imprime el inventario
  *   node scripts/check-edge-deps.mjs ruta [...]  revisa solo esos archivos
  *
- * Sale con codigo 1 si encuentra un especificador remoto sin version exacta.
+ * Sale con codigo 1 si encuentra un especificador remoto sin version exacta
+ * (regla 1) o un paquete usado en mas de una version o registro (regla 2).
  */
 
 import { readFileSync } from 'node:fs';
 import { globSync } from 'node:fs';
 
 const RAIZ = 'supabase/functions';
+
+// Barra invertida de Windows. Se arma por codigo para no pelearse con el
+// escapado al generar este archivo desde un script.
+const SEPARADOR = String.fromCharCode(92);
 
 // ---------------------------------------------------------------------------
 // Quitar comentarios sin romper cadenas
@@ -157,6 +225,25 @@ const SEMVER_EXACTO = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 const PAQUETE = /^(@[^/@]+\/)?([^/@]+)(?:@([^/]+))?(\/.*)?$/;
 
 /**
+ * Parte un especificador npm:/jsr: en sus piezas. Devuelve null para lo que no
+ * es un paquete versionado (relativos, node:, URLs sueltas).
+ *
+ * La SUBRUTA se descarta a proposito: `npm:pdfmake@0.2.20` y
+ * `npm:pdfmake@0.2.20/js/printer.js` son el mismo paquete en la misma version,
+ * y contarlos como dos versiones distintas seria un falso positivo garantizado.
+ */
+function partes(spec) {
+  if (!spec.startsWith('npm:') && !spec.startsWith('jsr:')) return null;
+  const m = PAQUETE.exec(spec.slice(4));
+  if (!m) return null;
+  return {
+    registro: spec.slice(0, 3),
+    paquete: (m[1] ?? '') + m[2],
+    version: m[3] ?? '(sin version)',
+  };
+}
+
+/**
  * Devuelve null si el especificador esta bien fijado, o el motivo si no.
  */
 function motivoDeFallo(spec) {
@@ -198,6 +285,8 @@ if (archivos.length === 0) {
 
 const hallazgos = [];
 const inventario = new Map(); // spec -> cantidad de usos
+// paquete -> Map("npm:2.116.0" -> [archivos]). Alimenta la regla 2.
+const versionesPorPaquete = new Map();
 
 for (const archivo of archivos) {
   const src = readFileSync(archivo, 'utf8');
@@ -210,6 +299,15 @@ for (const archivo of archivos) {
     if (!REMOTO.test(spec) && !spec.startsWith('node:')) continue; // relativo
 
     inventario.set(spec, (inventario.get(spec) ?? 0) + 1);
+
+    const p = partes(spec);
+    if (p !== null) {
+      if (!versionesPorPaquete.has(p.paquete)) versionesPorPaquete.set(p.paquete, new Map());
+      const porVersion = versionesPorPaquete.get(p.paquete);
+      const clave = `${p.registro}:${p.version}`;
+      if (!porVersion.has(clave)) porVersion.set(clave, []);
+      porVersion.get(clave).push(archivo.split(SEPARADOR).join('/'));
+    }
 
     const motivo = motivoDeFallo(spec);
     if (motivo === null) continue;
@@ -234,10 +332,110 @@ if (quiereLista) {
   console.log('');
 }
 
-if (hallazgos.length === 0) {
-  console.log('Sin hallazgos: todo import remoto lleva version exacta.');
+// --- Regla 3: front y edge, la misma version --------------------------------
+// Solo tiene sentido sobre el arbol completo: con rutas sueltas (los fixtures de
+// la prueba) no hay "las Edge Functions" que comparar contra el front.
+//
+// `xlsx` queda fuera a proposito. No es pereza: SheetJS dejo de publicar en npm
+// y la 0.20.3 del front solo existe en su CDN, asi que alinearlo no es cambiar
+// un numero. La razon larga esta en el encabezado de este archivo.
+const FUERA_DE_LA_REGLA_3 = new Set(['xlsx']);
+
+const desalineados = [];
+
+if (rutas.length === 0) {
+  let pj = null;
+  let lock = null;
+  try { pj = JSON.parse(readFileSync('package.json', 'utf8')); } catch { /* sin front que comparar */ }
+  try { lock = JSON.parse(readFileSync('package-lock.json', 'utf8')); } catch { /* sin lock */ }
+
+  if (pj !== null) {
+    const declaradoEnFront = new Map();
+    for (const seccion of ['dependencies', 'devDependencies']) {
+      for (const [nombre, rango] of Object.entries(pj[seccion] ?? {})) declaradoEnFront.set(nombre, rango);
+    }
+
+    for (const [paquete, porVersion] of versionesPorPaquete) {
+      if (FUERA_DE_LA_REGLA_3.has(paquete)) continue;
+      if (!declaradoEnFront.has(paquete)) continue;      // solo vive en edge
+      if (porVersion.size !== 1) continue;                // ya lo reporta la regla 2
+
+      const versionEdge = [...porVersion.keys()][0].split(':')[1];
+      const rangoFront = declaradoEnFront.get(paquete);
+
+      // Un rango en el front hace la pregunta irrespondible: la version la
+      // elige npm el dia del install, que es el problema de la regla 1 al otro
+      // lado de la frontera. Se reutiliza SEMVER_EXACTO en vez de escribir otra
+      // expresion para rangos: un `^`, un `~` o un `x` simplemente NO son un
+      // semver exacto, y esa comprobacion ya esta probada por la regla 1.
+      if (!SEMVER_EXACTO.test(rangoFront)) {
+        desalineados.push({ paquete, motivo: `el front declara un rango (${rangoFront}) en vez de una version exacta`, front: rangoFront, edge: versionEdge });
+        continue;
+      }
+      if (rangoFront !== versionEdge) {
+        desalineados.push({ paquete, motivo: 'el front y las Edge Functions no coinciden', front: rangoFront, edge: versionEdge });
+        continue;
+      }
+      // package.json puede decir lo correcto y el lock instalar otra cosa. Es lo
+      // que Netlify usa de verdad, asi que se comprueba aparte.
+      const enLock = lock?.packages?.[`node_modules/${paquete}`]?.version;
+      if (enLock !== undefined && enLock !== versionEdge) {
+        desalineados.push({ paquete, motivo: 'el lock instala una version distinta de la que declara package.json', front: `${rangoFront} (lock: ${enLock})`, edge: versionEdge });
+      }
+    }
+  }
+}
+
+if (desalineados.length > 0) {
+  console.log(`Regla 3 — front y edge alineados: ${desalineados.length} paquete(s) desalineado(s).`);
+  console.log('');
+  for (const d of desalineados) {
+    console.log(`  ${d.paquete}`);
+    console.log(`    ${d.motivo}`);
+    console.log(`    front: ${d.front}`);
+    console.log(`    edge : ${d.edge}`);
+    console.log('');
+  }
+  console.log('Como se arregla: pon la MISMA version exacta en package.json y en los');
+  console.log('imports de supabase/functions/, y actualiza el lock con');
+  console.log('  npm install --package-lock-only');
+  console.log('que lo reescribe sin descargar nada.');
+  console.log('');
+}
+
+// --- Regla 2: un paquete, una version ---------------------------------------
+const conflictos = [...versionesPorPaquete.entries()]
+  .filter(([, porVersion]) => porVersion.size > 1)
+  .sort((a, b) => b[1].size - a[1].size);
+
+if (conflictos.length > 0) {
+  console.log(`Regla 2 — version unica: ${conflictos.length} paquete(s) en mas de una version.`);
+  console.log('');
+  for (const [paquete, porVersion] of conflictos) {
+    console.log(`  ${paquete}`);
+    const orden = [...porVersion.entries()].sort((a, b) => b[1].length - a[1].length);
+    for (const [clave, archivosDeEsa] of orden) {
+      console.log(`    ${clave.padEnd(20)} ${String(archivosDeEsa.length).padStart(4)} uso(s)`);
+      for (const a of archivosDeEsa.slice(0, 3)) console.log(`        ${a}`);
+      if (archivosDeEsa.length > 3) console.log(`        ... y ${archivosDeEsa.length - 3} mas`);
+    }
+    console.log('');
+  }
+  console.log('Como se arregla: deja UNA sola version, normalmente la mas alta que');
+  console.log('ya este en uso. No basta con que cada linea sea exacta: dos versiones');
+  console.log('del mismo paquete son dos bases de codigo distintas corriendo a la vez,');
+  console.log('y ante un aviso de seguridad hay que parchear las dos.');
+  console.log('');
+}
+
+if (hallazgos.length === 0 && conflictos.length === 0 && desalineados.length === 0) {
+  console.log('Sin hallazgos: todo import remoto lleva version exacta,');
+  console.log(`los ${versionesPorPaquete.size} paquetes corren en una sola version cada uno,`);
+  console.log('y los compartidos con el front coinciden con el.');
   process.exit(0);
 }
+
+if (hallazgos.length === 0) process.exit(1);
 
 console.log(`Hallazgos: ${hallazgos.length} import(s) sin version exacta.`);
 console.log('');
