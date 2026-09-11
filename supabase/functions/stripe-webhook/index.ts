@@ -2054,29 +2054,44 @@ Deno.serve(async (req) => {
             );
           }
 
-          const { data: existingTransaction } = await supabase
-            .from('payment_transactions')
-            .select('id')
-            .eq('stripe_payment_intent_id', paymentIntent.id)
-            .maybeSingle();
+          // Este evento CONFIRMA la fila 'pending' que dejo la fase unpaid de un
+          // SPEI u OXXO, no solo inserta si falta. Antes hacia `if
+          // (!existingTransaction)` y se salia, que con el arreglo del cobro
+          // fantasma dejaba el cobro en 'pending' PARA SIEMPRE: el endpoint de
+          // Stripe **no esta suscrito a `checkout.session.async_payment_succeeded`**
+          // (comprobado el 11-sep-2026 leyendo `enabled_events` del endpoint),
+          // asi que este es el UNICO evento que llega cuando el dinero entra.
+          // Sin esto, el arreglo cambiaba contar de mas por contar de menos.
+          //
+          // Se le pasa 'paid' explicito y no un payment_status de sesion: aqui
+          // no hay sesion, y que Stripe emita payment_intent.succeeded ya
+          // significa que el dinero entro.
+          const { error: transactionError, accion: accionCobroPi } = await asentarCobroStripe(
+            supabase,
+            {
+              booking_id: bookingId,
+              stripe_payment_intent_id: paymentIntent.id,
+              payment_processor: 'stripe',
+              amount: paymentIntent.amount / 100,
+              currency: paymentIntent.currency,
+              payment_method_type: paymentMethodType,
+              net_amount: paymentIntent.amount / 100,
+              processor_fee: 0,
+              // Faltaban los dos, y sin `charge_context` la vista financiera
+              // arma la categoria como 'cobro_' || NULL. Importa desde que esta
+              // rama deduplica: si payment_intent.succeeded se adelanta a
+              // checkout.session.completed, esta fila es la que se queda.
+              charge_context: 'booking_deposit',
+              charge_reference_id: bookingId,
+              metadata: paymentIntent
+            },
+            'paid',
+          );
+          console.log(`payment_transactions por payment_intent para la reserva ${bookingId}: ${accionCobroPi}`);
 
-          if (!existingTransaction) {
-            const { error: transactionError } = await supabase
-              .from('payment_transactions')
-              .insert({
-                booking_id: bookingId,
-                stripe_payment_intent_id: paymentIntent.id,
-                payment_processor: 'stripe',
-                amount: paymentIntent.amount / 100,
-                currency: paymentIntent.currency,
-                status: 'succeeded',
-                payment_method_type: paymentMethodType,
-                net_amount: paymentIntent.amount / 100,
-                processor_fee: 0,
-                metadata: paymentIntent
-              });
-
-            // Fetch real processor fee from Stripe and update transaction
+          // La comision se pide tras insertar Y tras confirmar: en el camino
+          // SPEI la fila 'pending' nacio sin ella.
+          if (accionCobroPi !== 'sin_cambio') {
             const piFee = await getStripeProcessorFee(stripe, paymentIntent.id);
             if (piFee) {
               await supabase
@@ -2084,10 +2099,10 @@ Deno.serve(async (req) => {
                 .update({ processor_fee: piFee.fee, net_amount: piFee.net })
                 .eq('stripe_payment_intent_id', paymentIntent.id);
             }
+          }
 
-            if (transactionError) {
-              console.error(`Error creating transaction record: ${transactionError.message}`);
-            }
+          if (transactionError) {
+            console.error(`Error creating transaction record: ${transactionError.message}`);
           }
         }
 
