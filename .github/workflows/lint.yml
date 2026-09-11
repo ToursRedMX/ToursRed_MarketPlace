@@ -394,6 +394,21 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d soportes -v ON_ERROR_STOP=1 -f test-soportes-de-gasto.sql
 
+      # Una politica RLS que consulta la tabla que protege es recursion infinita
+      # (42P17), y se lleva por delante a TODA politica que lea esa tabla —
+      # incluidas las siete de storage.objects, que rompian las subidas de
+      # archivos en todos los buckets. El caso 1 REPRODUCE el bug antes de
+      # arreglarlo: sin eso los demas pasarian aunque nunca hubiera existido.
+      - name: Verify no RLS policy queries the table it protects
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS recursion;" -c "CREATE DATABASE recursion;"
+          cd scripts
+          psql -h localhost -U postgres -d recursion -v ON_ERROR_STOP=1 -f test-recursion-routesred.sql
+
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
       # que escribe el snapshot fiscal de cada cobro, y esos numeros son los que
