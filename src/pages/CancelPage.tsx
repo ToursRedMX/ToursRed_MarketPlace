@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { XCircle, ArrowLeft, Home, CreditCard } from 'lucide-react';
+import { XCircle, ArrowLeft, Home } from 'lucide-react';
 
 const CancelPage: React.FC = () => {
   return (

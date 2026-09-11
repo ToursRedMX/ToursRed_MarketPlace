@@ -78,9 +78,15 @@ const recortar = (nombre) => {
   // primera: la firma trae `Promise<{ fee: number; ... }>` y contar desde ahi
   // emparejaba la llave del TIPO DE RETORNO en vez de la del cuerpo. Ambas son
   // funciones de nivel superior, asi que su cierre es el unico `}` sin sangria.
-  const fin = FUENTE.indexOf('\n}\n', inicio);
-  assert.ok(fin > inicio, `no se encontro el cierre de ${nombre}`);
-  return FUENTE.slice(inicio, fin + 2);
+  // Se busca con expresion regular y no con indexOf de un salto pelado: en
+  // Windows el fuente se checkoutea con CRLF, asi que el cierre real lleva
+  // retorno de carro y el indexOf no encontraba nada. La prueba pasaba en CI
+  // (Linux) y fallaba en local, que es la peor combinacion: deja la suite
+  // entera sin poder verificarse antes de subir.
+  const cierre = /\r?\n\}\r?\n/.exec(FUENTE.slice(inicio));
+  assert.ok(cierre, `no se encontro el cierre de ${nombre}`);
+  const posLlave = inicio + cierre.index + (cierre[0].startsWith('\r') ? 2 : 1);
+  return FUENTE.slice(inicio, posLlave + 1);
 };
 
 const dir = mkdtempSync(path.join(tmpdir(), 'comision-stripe-'));

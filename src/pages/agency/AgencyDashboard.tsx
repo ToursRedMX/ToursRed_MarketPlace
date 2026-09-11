@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MapPin, Calendar, Users, DollarSign, Activity, AlertCircle, CreditCard, Crown, Clock, Tag, Sparkles, Eye, MousePointerClick, Share2, ArrowRight, BarChart2 } from 'lucide-react';
+import { Plus, MapPin, Calendar, Users, DollarSign, Activity, AlertCircle, CreditCard, Crown, Clock, Tag, Sparkles, Eye, Share2, ArrowRight, BarChart2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
@@ -27,7 +27,7 @@ interface PreventaStats {
 }
 
 const AgencyDashboard: React.FC = () => {
-  const { user, isAgencyStaff, staffInfo } = useAuth();
+  const { isAgencyStaff, staffInfo } = useAuth();
   const { agencyId: hookAgencyId } = useAgencyId();
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({

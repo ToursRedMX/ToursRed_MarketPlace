@@ -12,7 +12,7 @@ export interface MfaGateProps {
 export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
   const { user, isAdmin, isAccountant, isSuperAdmin } = useAuth();
   const [state, setState] = useState<GateState>('loading');
-  const [mfaFactors, setMfaFactors] = useState<any[]>([]);
+  const [, setMfaFactors] = useState<any[]>([]);
   const [qrUrl, setQrUrl] = useState<string>('');
   const [totpSecret, setTotpSecret] = useState<string>('');
   const [verifyCode, setVerifyCode] = useState('');

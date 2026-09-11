@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Link as LinkIcon, Mail, MessageCircle, Check } from 'lucide-react';
 import { SiFacebook } from '@icons-pack/react-simple-icons';
 

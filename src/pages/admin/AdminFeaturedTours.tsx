@@ -1,11 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Sparkles, Clock, List, Settings2, Search, RefreshCw,
-  Building2, Calendar, TrendingUp, Eye, MousePointerClick,
-  ShoppingBag, CheckCircle, XCircle, AlertCircle, Bell,
-  Trash2, Save, ToggleLeft, ToggleRight, Loader2,
-  ChevronUp, ChevronDown, DollarSign
-} from 'lucide-react';
+import { Sparkles, Clock, List, Settings2, Search, RefreshCw, Building2, Calendar, Eye, MousePointerClick, ShoppingBag, CheckCircle, XCircle, AlertCircle, Bell, Trash2, Save, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, DollarSign } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
 

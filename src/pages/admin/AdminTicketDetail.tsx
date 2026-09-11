@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft, User, Building2, Paperclip, Send, Lock, RefreshCw,
-  ChevronDown, AlertCircle, ExternalLink, Clock, Mail
-} from 'lucide-react';
+import { ArrowLeft, User, Building2, Paperclip, Send, Lock, RefreshCw, AlertCircle, ExternalLink, Clock, Mail } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import {

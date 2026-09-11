@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, CreditCard as Edit2, Trash2, Clock, Save, X, Loader2, AlertCircle, Check } from 'lucide-react';
+import { Plus, CreditCard as Edit2, Trash2, Clock, Save, X, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { TourSchedule, DeparturePoint } from '../../types';
+import { TourSchedule } from '../../types';
 
 interface AgencyScheduleManagerProps {
   tourId: string;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, Search, Filter, Eye, EyeOff, MessageSquare, Trash2, Flag, Calendar, User, Building, MapPin, MoreVertical, AlertTriangle, CheckCircle, XCircle, X } from 'lucide-react';
+import { Star, Search, Filter, Eye, EyeOff, MessageSquare, Trash2, Flag, Calendar, User, Building, MapPin, AlertTriangle, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 

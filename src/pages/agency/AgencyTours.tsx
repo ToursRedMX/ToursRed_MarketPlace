@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { createTour, searchDestinations, supabase, updateTour, deleteTour, getAllDestinations, createDestination, getTourCategories, getFeaturedPlans, getAgencyFeaturedSlots, joinFeaturedWaitlist, checkSlugAvailable, updateTourSlug } from '../../lib/supabase';
-import { Plus, Search, X, CreditCard, Trash2, Eye, Calendar, MapPin, Users, DollarSign, Save, Minus, Upload, Copy, CalendarX, AlertCircle, XCircle, FileText, Image, CheckSquare, Tag, PawPrint, Clock, Settings, List, Ban, ShoppingBag, Info, Percent, Route, RefreshCw, Layers, Car, Globe, AlertTriangle, Bus, Pencil, Sparkles, Star, TrendingUp, CheckCircle, Loader2, Lock, ChevronDown, Shield } from 'lucide-react';
+import { Plus, X, CreditCard, Trash2, Eye, Calendar, MapPin, Users, DollarSign, Save, Minus, Copy, CalendarX, AlertCircle, XCircle, FileText, Image, CheckSquare, Tag, PawPrint, Clock, Settings, Ban, ShoppingBag, Info, Percent, RefreshCw, Layers, Car, Globe, AlertTriangle, Bus, Pencil, Sparkles, Star, TrendingUp, CheckCircle, Loader2, Lock, ChevronDown, Shield } from 'lucide-react';
 import { VehicleMapType } from '../../types/seats';
 import TourPromotionsManager from '../../components/TourPromotionsManager';
 import AgencyScheduleManager from '../../components/receptivo/AgencyScheduleManager';
@@ -59,7 +59,7 @@ interface TourLanguage {
   extra_cost: string;
   cost_type: 'por_persona' | 'fijo';
 }
-import { Tour, Destination, DeparturePoint, PaymentOption, PaymentPlanMode, InstallmentDefinition } from '../../types';
+import { Tour, Destination, DeparturePoint, PaymentOption, PaymentPlanMode } from '../../types';
 import { format } from 'date-fns';
 import ImageUploader from '../../components/ImageUploader';
 import TaxTreatmentFields from '../../components/agency/TaxTreatmentFields';
@@ -136,7 +136,7 @@ const AgencyTours: React.FC = () => {
   const [originalSlug, setOriginalSlug] = useState('');
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [slugConfirm, setSlugConfirm] = useState(false);
-  const [slugSaving, setSlugSaving] = useState(false);
+  const [, setSlugSaving] = useState(false);
 
   const [cancelModal, setCancelModal] = useState<{
     open: boolean;
@@ -284,7 +284,7 @@ const AgencyTours: React.FC = () => {
   const [transferCustomTime, setTransferCustomTime] = useState(false);
   const [transferPricingMode, setTransferPricingMode] = useState<'per_person' | 'per_vehicle'>('per_person');
   const [privateVehicleCapacity, setPrivateVehicleCapacity] = useState('');
-  const [transportOriginPoints, setTransportOriginPoints] = useState<SelectedDeparturePoint[]>([]);
+  const [, setTransportOriginPoints] = useState<SelectedDeparturePoint[]>([]);
   const [transportDestinationPoints, setTransportDestinationPoints] = useState<SelectedDeparturePoint[]>([]);
   const [transportServiceInfo, setTransportServiceInfo] = useState('');
   const [estimatedMinutes, setEstimatedMinutes] = useState('');
@@ -1667,7 +1667,7 @@ const AgencyTours: React.FC = () => {
   };
 
   const handleSubmitCapacityConflictResolution = async () => {
-    const { targetSlot, originalSlotId, tourId, reason, resolution, newSlotTime, affectedTravelers } = capacityConflictModal;
+    const { targetSlot, originalSlotId, tourId, reason, resolution, newSlotTime } = capacityConflictModal;
     if (!resolution) {
       setCapacityConflictModal(prev => ({ ...prev, error: 'Debes seleccionar una opcion.' }));
       return;

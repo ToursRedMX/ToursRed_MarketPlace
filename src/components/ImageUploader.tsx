@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, X, Image as ImageIcon, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, X, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ImageUploaderProps {

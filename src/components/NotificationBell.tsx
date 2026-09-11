@@ -117,7 +117,7 @@ const NotificationBell: React.FC = () => {
 
   const markAllAsRead = async () => {
     try {
-      const { data, error } = await markAllNotificationsAsRead();
+      const { error } = await markAllNotificationsAsRead();
       
       
       if (error) {

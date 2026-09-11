@@ -4,7 +4,7 @@ import { Crown, Check, ArrowLeft, Tag, X, Shield, CreditCard, Calendar, Zap, Spa
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
-import { formatCurrencyMXN, formatCurrency } from '../../utils/formatCurrency';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
 
 interface AppliedDiscount {
   code: string;

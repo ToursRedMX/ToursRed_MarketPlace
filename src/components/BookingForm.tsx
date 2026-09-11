@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Calendar, CreditCard, Users, AlertCircle, DollarSign, Settings, Minus, Plus, Crown, Sparkles, Wallet, Award, Ticket, X, Check, CheckCircle, Loader2, ShoppingBag, Info, Tag, RefreshCw, Clock, Car, Globe, AlertTriangle, MapPin, Bus, Shield, ShieldOff, ChevronRight } from 'lucide-react';
+import { Calendar, CreditCard, Users, AlertCircle, Settings, Minus, Plus, Crown, Sparkles, Wallet, Award, Ticket, X, Check, CheckCircle, Loader2, ShoppingBag, Info, Tag, RefreshCw, Clock, Car, Globe, AlertTriangle, Bus, Shield, ShieldOff, ChevronRight } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 import SeatMapPicker from './seats/SeatMapPicker';
 import PaymentProviderSelector, { PaymentProvider, ConektaMethod } from './PaymentProviderSelector';
@@ -24,7 +24,7 @@ interface TourOptionalService {
 }
 import { Tour } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { createBooking, formatDateForDB, supabase } from '../lib/supabase';
+import { createBooking, supabase } from '../lib/supabase';
 import { formatCurrency, formatCurrencyMXN } from '../utils/formatCurrency';
 import { useMembershipPrices } from '../hooks/useMembershipPrices';
 import { isCrawler } from '../utils/isCrawler';
@@ -68,12 +68,12 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const [useCustomAmount, setUseCustomAmount] = useState(false);
   const [customPayAmount, setCustomPayAmount] = useState('');
   const [pointsWalletActive, setPointsWalletActive] = useState(false);
-  const [noShowCount, setNoShowCount] = useState(0);
-  const [isLoadingNoShowCount, setIsLoadingNoShowCount] = useState(true);
+  const [, setNoShowCount] = useState(0);
+  const [, setIsLoadingNoShowCount] = useState(true);
   const [isHighRisk, setIsHighRisk] = useState(false);
   const [remainingExemption, setRemainingExemption] = useState(500);
   const [monthlyExemptionLimit, setMonthlyExemptionLimit] = useState(500);
-  const [isLoadingExemption, setIsLoadingExemption] = useState(true);
+  const [, setIsLoadingExemption] = useState(true);
 
   // Travel insurance
   const [insuranceEnabled, setInsuranceEnabled] = useState(true);
@@ -175,7 +175,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
     mascotas: 0,
   });
 
-  const { prices: membershipPrices, loading: loadingPrices } = useMembershipPrices();
+  const { prices: membershipPrices } = useMembershipPrices();
 
   React.useEffect(() => {
     const fetchCommissionRates = async () => {

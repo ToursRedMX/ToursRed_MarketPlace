@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   DollarSign, Upload, CheckCircle, AlertCircle, X,
   FileText, Download, ShieldCheck, ShieldAlert, Loader2, ExternalLink,

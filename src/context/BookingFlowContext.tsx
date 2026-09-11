@@ -1,11 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import {
-  BookingFlowState,
-  INITIAL_FLOW_STATE,
-  TravelerCounts,
-  totalTravelerCount,
-} from '../types/booking-flow';
+import { BookingFlowState, INITIAL_FLOW_STATE, totalTravelerCount } from '../types/booking-flow';
 import type { Tour } from '../types/index';
 
 const STORAGE_KEY = 'booking_flow_state';

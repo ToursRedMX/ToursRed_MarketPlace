@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Plus, Zap } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
+import { ChevronLeft, ChevronRight, Loader2, Zap } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '../../lib/supabase';
 import { TourSlot } from '../../types';

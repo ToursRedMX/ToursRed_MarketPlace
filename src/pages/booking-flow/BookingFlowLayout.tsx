@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { getTourBySlug, resolveTourSlug, supabase } from '../../lib/supabase';
+import { getTourBySlug, resolveTourSlug } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { BookingFlowProvider, useBookingFlow } from '../../context/BookingFlowContext';
 import type { Tour } from '../../types';

@@ -5,23 +5,11 @@ import { supabase } from '../lib/supabase';
 import TourCard from '../components/TourCard';
 import AgencyReviews from '../components/AgencyReviews';
 import Seo from '../components/Seo';
+import type { Agency } from '../types';
 
 const SITE_URL = (import.meta.env.VITE_APP_URL || 'https://toursredmx.netlify.app/').replace(/\/$/, '');
 
-interface Agency {
-  id: string;
-  name: string;
-  description: string;
-  logo: string;
-  cover_image_url: string;
-  custom_slug: string;
-  contact_email: string;
-  contact_phone: string;
-  website: string;
-  rating: number;
-  rnt: string;
-  created_at: string;
-}
+
 
 interface Tour {
   id: string;
@@ -231,11 +219,11 @@ const AgencyPublicProfile: React.FC = () => {
                     <h1 className="text-3xl font-bold text-gray-900">{agency.name}</h1>
 
                     <div className="flex flex-wrap items-center mt-2 gap-4">
-                      {agency.rating > 0 && (
+                      {(agency.rating ?? 0) > 0 && (
                         <div className="flex items-center">
                           <Star className="h-5 w-5 text-yellow-400 fill-current" />
                           <span className="ml-1 text-lg font-semibold text-gray-900">
-                            {agency.rating.toFixed(1)}
+                            {(agency.rating ?? 0).toFixed(1)}
                           </span>
                         </div>
                       )}

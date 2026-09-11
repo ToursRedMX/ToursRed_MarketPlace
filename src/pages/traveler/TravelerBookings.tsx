@@ -11,7 +11,7 @@ import { useStepUp } from '../../context/StepUpContext';
 import ReviewForm from '../../components/ReviewForm';
 import { useFormPersistence } from '../../hooks/useFormPersistence';
 import { usePreventUnload } from '../../hooks/usePreventUnload';
-import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { paymentLabel } from '../../utils/paymentLabels';
 import { validateAllTravelers } from '../../utils/birthDateValidation';
 import { getMpDeviceId } from '../../utils/mercadopagoDevice';
@@ -290,7 +290,7 @@ const TravelerBookings: React.FC = () => {
   const [pastLoaded, setPastLoaded] = useState(false);
   const [cancelledLoaded, setCancelledLoaded] = useState(false);
   const [pastOptionalServices, setPastOptionalServices] = useState<Record<string, any[]>>({});
-  const [pastSupplements, setPastSupplements] = useState<Record<string, any[]>>({});
+  const [, setPastSupplements] = useState<Record<string, any[]>>({});
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
   const [partialCancellationsByBooking, setPartialCancellationsByBooking] = useState<Record<string, any[]>>({});
   const [totalPaidByBooking, setTotalPaidByBooking] = useState<Record<string, number>>({});
@@ -1390,6 +1390,10 @@ const TravelerBookings: React.FC = () => {
         toursRedCashToUse: 0,
         isProcessing: false,
         selectedProvider: 'stripe',
+        // Sin estas dos, el modal abre con el metodo en `undefined` mientras
+        // el selector muestra "Tarjeta": Conekta devolvia 400 al cobrar.
+        conektaMethod: 'card',
+        openpayMethod: 'card',
       });
     } catch (err: any) {
       console.error('Error al abrir modal de pago:', err);
@@ -1484,6 +1488,8 @@ const TravelerBookings: React.FC = () => {
           toursRedCashToUse: 0,
           isProcessing: false,
           selectedProvider: 'stripe',
+          conektaMethod: 'card',
+          openpayMethod: 'card',
         });
 
         fetchBookings();
@@ -1879,6 +1885,10 @@ const TravelerBookings: React.FC = () => {
       pointsBalance: pointsData?.balance ?? 0,
       pointsValueMxn: Math.floor((pointsData?.balance ?? 0) / 100),
       selectedMethod: 'stripe',
+      // Mismo caso que el modal de deposito: sin estas dos, el radio de metodo
+      // sale sin marcar y el cobro de Conekta viaja con `conekta_method` vacio.
+      conektaMethod: 'card',
+      openpayMethod: 'card',
     });
   };
 
@@ -3980,7 +3990,7 @@ const TravelerBookings: React.FC = () => {
               <div className="flex justify-between items-start mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Completar Pago</h2>
                 <button
-                  onClick={() => setPaymentModal({ open: false, booking: null, walletBalance: 0, toursRedCashToUse: 0, isProcessing: false, selectedProvider: 'stripe' })}
+                  onClick={() => setPaymentModal({ open: false, booking: null, walletBalance: 0, toursRedCashToUse: 0, isProcessing: false, selectedProvider: 'stripe', conektaMethod: 'card', openpayMethod: 'card' })}
                   className="text-gray-400 hover:text-gray-500"
                   disabled={paymentModal.isProcessing}
                 >
@@ -4008,7 +4018,15 @@ const TravelerBookings: React.FC = () => {
                       <PaymentProviderSelector
                         context="booking"
                         value={paymentModal.selectedProvider}
-                        onChange={(provider) => setPaymentModal(prev => ({ ...prev, selectedProvider: provider }))}
+                        onChange={(provider) => {
+                          // `PaymentProvider` incluye 'toursred_cash', pero el selector
+                          // solo lo ofrece en contexto payment_plan y aqui el contexto es
+                          // "booking". Se descarta en vez de ampliar el estado: el cobro
+                          // de mas abajo no sabe tratarlo, y aceptarlo en el tipo seria
+                          // decir que si.
+                          if (provider === 'toursred_cash') return;
+                          setPaymentModal(prev => ({ ...prev, selectedProvider: provider }));
+                        }}
                         disabled={paymentModal.isProcessing}
                         amount={finalAmount}
                         conektaMethod={paymentModal.conektaMethod}
@@ -4154,7 +4172,7 @@ const TravelerBookings: React.FC = () => {
                 {/* Action Buttons */}
                 <div className="flex gap-3 pt-4">
                   <button
-                    onClick={() => setPaymentModal({ open: false, booking: null, walletBalance: 0, toursRedCashToUse: 0, isProcessing: false, selectedProvider: 'stripe' })}
+                    onClick={() => setPaymentModal({ open: false, booking: null, walletBalance: 0, toursRedCashToUse: 0, isProcessing: false, selectedProvider: 'stripe', conektaMethod: 'card', openpayMethod: 'card' })}
                     className="flex-1 px-4 py-3 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                     disabled={paymentModal.isProcessing}
                   >

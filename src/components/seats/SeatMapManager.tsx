@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Lock, Unlock, User, AlertCircle, Loader2, RefreshCw, X, Check, Calendar, Clock, ChevronDown } from 'lucide-react';
+import { Lock, User, AlertCircle, Loader2, RefreshCw, X, Check, Calendar, Clock, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { SeatWithStatus, VehicleSeatLayout } from '../../types/seats';
 import { useAuth } from '../../context/AuthContext';

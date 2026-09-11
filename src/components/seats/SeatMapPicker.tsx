@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { SeatDefinition, SeatWithStatus, VehicleShape, VehicleSeatLayout } from '../../types/seats';
+import { SeatWithStatus, VehicleShape, VehicleSeatLayout } from '../../types/seats';
 
 interface SeatMapPickerProps {
   tourId: string;

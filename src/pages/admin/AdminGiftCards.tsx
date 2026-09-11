@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Gift, Search, Mail, RefreshCw, Check, Clock, XCircle, Eye, EyeOff, Filter, Download } from 'lucide-react';
+import { Gift, Search, Mail, RefreshCw, Check, Clock, Eye, EyeOff, Filter } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 
@@ -108,7 +108,7 @@ export default function AdminGiftCards() {
     setResendResult(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('send-gift-card-email', {
+      const { error } = await supabase.functions.invoke('send-gift-card-email', {
         body: { giftCardId },
       });
 

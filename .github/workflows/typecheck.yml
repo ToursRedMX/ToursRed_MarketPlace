@@ -1,9 +1,32 @@
-name: Typecheck (informative)
+name: Typecheck
 
-# Modo informativo a proposito: reporta y nunca bloquea.
-# Vite no ejecuta tsc, y `tsc -p tsconfig.json` devuelve 0 siempre
-# porque ese archivo es solo referencias ("files": []).
-# El unico invocador util es tsconfig.app.json.
+# Vite no ejecuta tsc, y `tsc -p tsconfig.json` devuelve 0 siempre porque ese
+# archivo es solo referencias ("files": []). El unico invocador util es
+# tsconfig.app.json.
+#
+# DEJO DE SER INFORMATIVO EL 11-sep-2026
+#
+# Hasta entonces el job reportaba y nunca bloqueaba: comparaba el TOTAL de
+# errores contra `BASELINE_TOTAL` y escribia un aviso en el resumen. Un total no
+# sirve para esto, y se vio de las dos formas posibles:
+#
+#   1. No ve las sustituciones. Se arreglan cinco errores y entran cinco: el
+#      total no se mueve y los nuevos pasan sin que nada avise.
+#   2. Se desactualiza en silencio. Ese dia la base decia 460 y el repo estaba
+#      en 428 — 32 de holgura, o sea 32 errores nuevos admitidos sin chistar.
+#      Nadie lo noto porque bajar errores no obliga a tocar el numero.
+#
+# Ahora `scripts/check-front-types.mjs` compara por FIRMA (archivo + codigo +
+# mensaje, sin numero de linea) contra `scripts/front-check/baseline.txt`, y
+# falla solo ante firmas NUEVAS. Bajar errores sigue sin costar nada; subirlos
+# pone el check en rojo.
+#
+# La base NO nace en cero, y esta bien: arranca en 174 errores. Exigir cero
+# pedia semanas de limpieza antes de tener ninguna red. Para bajarla:
+# `node scripts/check-front-types.mjs --update`.
+#
+# El resumen por clases se conserva: sirve para ver la tendencia, aunque ya no
+# sea lo que decide.
 
 on:
   push:
@@ -15,7 +38,11 @@ permissions:
   contents: read
 
 env:
-  # Linea base sobre main. Actualizar al bajarla.
+  # Estos dos ya NO deciden nada: quien bloquea es la comparacion por firma de
+  # `scripts/check-front-types.mjs`. Se conservan porque el resumen los usa como
+  # referencia historica de por donde iba la deuda.
+  #
+  # Linea base sobre main.
   # 26-ago-2026: 501/32 al medir -> 461/0 tras cerrar el paso 2.
   # 27-ago-2026: medido 460/0 sobre main. La base decia 461, uno de mas, asi
   # que un error nuevo podia colarse sin disparar el aviso (dispara con >).
@@ -42,7 +69,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tsc (never blocks)
+      # Antes de creerle a la guardia, comprobar que la guardia mira. Incluye el
+      # caso que el contador anterior no podia ver: un error resuelto y otro
+      # nuevo, con el total identico.
+      - name: La guardia de tipos sigue detectando lo que dice detectar
+        run: node scripts/test-guardia-tipos-front.mjs
+
+      - name: Sin errores de tipos NUEVOS en el front
+        run: node scripts/check-front-types.mjs
+
+      - name: Run tsc otra vez para el resumen por clases (no bloquea)
         run: |
           # bash corre con -e: sin set +e, tsc saliendo != 0 aborta el step
           # y el check saldria rojo, que es justo lo que no queremos.

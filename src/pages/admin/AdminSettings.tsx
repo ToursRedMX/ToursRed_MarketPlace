@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, Server, Save, Loader, CheckCircle, AlertCircle, DollarSign, Percent, CreditCard, Crown, Gift, Award, Users, Globe, FileText, Shield, BookOpen, Link, Unlink, RefreshCw, ExternalLink, Tag, Image, Upload, RotateCcw, X, Wrench, Megaphone, Power, PowerOff, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
+import { Mail, Server, Save, Loader, CheckCircle, AlertCircle, DollarSign, Percent, CreditCard, Crown, Gift, Award, Users, Globe, FileText, Shield, BookOpen, Link, Unlink, RefreshCw, ExternalLink, Tag, Image, Upload, RotateCcw, X, Wrench, Megaphone, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { SecurityTogglesSection } from '../../components/SecurityTogglesSection';
@@ -553,7 +553,7 @@ const AdminSettings: React.FC = () => {
   };
 
   const handlePlatformChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, checked } = e.target;
     const numericFields = ['service_charge_percentage', 'agency_commission_percentage', 'supplement_commission_percentage', 'optional_service_commission_percentage', 'membership_monthly_price', 'membership_annual_price', 'membership_service_fee_exemption_monthly_limit', 'default_max_referrals_per_user', 'referral_bonus_points', 'openpay_commission_pct', 'openpay_commission_fixed', 'stripe_commission_pct', 'stripe_commission_fixed', 'paypal_commission_pct', 'paypal_commission_fixed', 'mercadopago_commission_pct', 'mercadopago_commission_fixed', 'conekta_commission_pct', 'conekta_commission_fixed'];
     const booleanFields = ['referral_program_enabled', 'mercadopago_enabled', 'paypal_enabled', 'conekta_enabled', 'openpay_enabled', 'oauth_google_login_enabled', 'oauth_azure_login_enabled', 'oauth_twitter_login_enabled', 'oauth_facebook_login_enabled', 'oauth_linkedin_login_enabled', 'turnstile_auth_enabled', 'oauth_google_link_enabled', 'oauth_azure_link_enabled', 'oauth_twitter_link_enabled', 'oauth_facebook_link_enabled', 'oauth_linkedin_link_enabled', 'stripe_bookings_enabled', 'stripe_gift_cards_enabled', 'stripe_memberships_enabled', 'travel_insurance_enabled'];
     setPlatformSettings(prev => ({

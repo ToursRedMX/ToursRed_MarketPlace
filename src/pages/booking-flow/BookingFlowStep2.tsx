@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, UserPlus, AlertCircle, Users as UsersIcon } from 'lucide-react';
+import { ChevronRight, ChevronLeft, AlertCircle } from 'lucide-react';
 import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -73,7 +73,7 @@ const BookingFlowStep2: React.FC = () => {
   const [globalError, setGlobalError] = useState('');
   const [frequentCompanions, setFrequentCompanions] = useState<FrequentCompanion[]>([]);
   const [isLoadingCompanions, setIsLoadingCompanions] = useState(true);
-  const [userProfile, setUserProfile] = useState<{
+  const [, setUserProfile] = useState<{
     first_name?: string; last_name?: string; email?: string; phone_number?: string;
     date_of_birth?: string; curp?: string; passport_number?: string;
     is_foreign_traveler?: boolean; emergency_contact_name?: string; emergency_contact_phone?: string;

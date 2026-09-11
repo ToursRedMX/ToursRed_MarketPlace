@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useAgencyId } from '../../hooks/useAgencyId';
-import { DollarSign, TrendingUp, Calendar, Download, FileText, CheckCircle, Clock, Eye, CreditCard, FileSpreadsheet, ShieldAlert } from 'lucide-react';
+import { TrendingUp, Download, FileText, CheckCircle, Clock, Eye, CreditCard, FileSpreadsheet, ShieldAlert } from 'lucide-react';
 import AgencyCfdiList from '../../components/AgencyCfdiList';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { format } from 'date-fns';

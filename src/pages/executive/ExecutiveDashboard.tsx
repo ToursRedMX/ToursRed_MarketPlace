@@ -1,8 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Users, TrendingUp, DollarSign, Clock, Target, CheckCircle,
-  AlertCircle, ChevronRight, Building2, Star, Award
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, TrendingUp, DollarSign, Clock, Target, CheckCircle, ChevronRight, Building2, Star, Award } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';

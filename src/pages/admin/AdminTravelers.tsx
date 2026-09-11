@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { User, Mail, Phone, Calendar, MapPin, Shield, ShieldOff, CreditCard as Edit2, Star, ShoppingBag, X, DollarSign, CreditCard, Crown, TrendingUp, Users, ArrowUpDown, ArrowUp, ArrowDown, Wallet, FileText, ChevronLeft, Building, Hash, Tag, MapPin as MapPinIcon, Receipt } from 'lucide-react';
+import { User, Mail, Phone, Calendar, MapPin, Shield, ShieldOff, CreditCard as Edit2, ShoppingBag, X, DollarSign, CreditCard, Crown, Users, ArrowUpDown, ArrowUp, ArrowDown, Wallet, FileText, ChevronLeft, Building, Hash, Tag, MapPin as MapPinIcon, Receipt } from 'lucide-react';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 
 interface Traveler {

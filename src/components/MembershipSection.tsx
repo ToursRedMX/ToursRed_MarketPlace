@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Crown, Check, CreditCard } from 'lucide-react';
+import { Crown, Check } from 'lucide-react';
 import { useMembershipPrices } from '../hooks/useMembershipPrices';
 
 const MembershipSection: React.FC = () => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { CheckCircle, Calendar, MapPin, Users, DollarSign, ArrowRight, CreditCard, Mail, Wallet, Award, Ticket, Tag, Bus, ShieldCheck } from 'lucide-react';
 import { supabase, parseDateFromDB, trackFeaturedBooking } from '../lib/supabase';
@@ -8,6 +8,19 @@ import { es } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { paymentLabel, processorLabel } from '../utils/paymentLabels';
+
+// Mismas etiquetas y mismo orden que `BookingFlowStep4`, que es donde el
+// viajero vio este desglose por ultima vez antes de pagar: si aqui se ordenara
+// distinto, parecerian dos desgloses de dos compras.
+const CATEGORIA_LABELS: Record<string, string> = {
+  adulto: 'Adulto',
+  nino: 'Niño',
+  infante: 'Infante',
+  adulto_mayor: 'Adulto Mayor',
+  mascota: 'Mascota',
+};
+
+const CATEGORIA_ORDER = ['adulto', 'nino', 'infante', 'adulto_mayor', 'mascota'];
 
 const BookingSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -22,7 +35,36 @@ const BookingSuccessPage: React.FC = () => {
   // pantalla de PAGO EXITOSO decia "Total pagado: $0" justo despues de cobrar.
   // Con esta bandera se muestra un guion en vez de una cifra falsa.
   const [totalPagadoDesconocido, setTotalPagadoDesconocido] = useState(false);
-  const { user, isLoading: authLoading } = useAuth();
+
+  /**
+   * Desglose por categoria de viajero.
+   *
+   * SALE DE `booking_travelers`, NO DEL PRECIO DE HOY DEL TOUR
+   *
+   * `precio_aplicado` es lo que se le cobro a ESE viajero en ESA reserva. El
+   * precio del tour puede haber cambiado despues, y un desglose que no sumara
+   * el total pagado seria peor que no ensenar ninguno — es la pantalla donde el
+   * viajero acaba de pagar.
+   *
+   * Mismo agrupamiento que `BookingFlowStep4`, que es el ultimo desglose que
+   * vio antes de pagar.
+   */
+  const desglosePorCategoria = useMemo(() => {
+    const viajeros = (booking as { booking_travelers?: { categoria_viajero?: string | null; precio_aplicado?: number | null }[] } | null)?.booking_travelers;
+    if (!viajeros || viajeros.length === 0) return [];
+
+    const grupos: Record<string, { count: number; unitPrice: number; subtotal: number }> = {};
+    for (const v of viajeros) {
+      const cat = v.categoria_viajero || 'adulto';
+      if (!grupos[cat]) grupos[cat] = { count: 0, unitPrice: Number(v.precio_aplicado) || 0, subtotal: 0 };
+      grupos[cat].count += 1;
+      grupos[cat].subtotal += Number(v.precio_aplicado) || 0;
+    }
+    return CATEGORIA_ORDER
+      .filter((cat) => grupos[cat] && grupos[cat].count > 0)
+      .map((cat) => ({ cat, ...grupos[cat] }));
+  }, [booking]);
+  const { isLoading: authLoading } = useAuth();
 
   useEffect(() => {
     // Esperar a que la autenticación termine antes de cargar la reserva
@@ -73,7 +115,8 @@ const BookingSuccessPage: React.FC = () => {
             deposit_percentage,
             agencies(name)
           ),
-          users!bookings_user_id_fkey(email)
+          users!bookings_user_id_fkey(email),
+          booking_travelers(categoria_viajero, precio_aplicado)
         `)
         .eq('id', bookingId)
         .maybeSingle();
@@ -353,37 +396,21 @@ const BookingSuccessPage: React.FC = () => {
               <div>
                 <h3 className="text-lg font-semibold mb-4">Desglose de Costos</h3>
                 <div className="flex flex-col gap-y-2 text-sm">
-                  {/* Desglose por categoría de viajeros */}
-                  {booking.adults_count > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">{booking.adults_count} {booking.adults_count === 1 ? 'Adulto' : 'Adultos'} × {formatCurrencyMXN(booking.adult_price ?? 0)}:</span>
-                      <span className="font-medium">{formatCurrencyMXN((booking.adult_price || 0) * (booking.adults_count || 0))}</span>
+                  {/* Desglose por categoria de viajeros.
+                      Antes leia `booking.adults_count` y `booking.adult_price`, que no
+                      existen en la tabla: las columnas se llaman `count_adultos` y los
+                      precios viven en el tour. Como el guard era `> 0` sobre `undefined`,
+                      el bloque entero no se pintaba NUNCA y el viajero no veia su
+                      desglose. Ahora sale de `booking_travelers`, que guarda el precio
+                      realmente aplicado a cada uno. */}
+                  {desglosePorCategoria.map(({ cat, count, unitPrice, subtotal }) => (
+                    <div key={cat} className="flex justify-between">
+                      <span className="text-gray-600">
+                        {count} {CATEGORIA_LABELS[cat] || cat}{count !== 1 ? (cat === 'adulto_mayor' ? 'es' : 's') : ''} x {formatCurrencyMXN(unitPrice)}:
+                      </span>
+                      <span className="font-medium">{formatCurrencyMXN(subtotal)}</span>
                     </div>
-                  )}
-                  {booking.children_count > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">{booking.children_count} {booking.children_count === 1 ? 'Niño' : 'Niños'} × {formatCurrencyMXN(booking.child_price ?? 0)}:</span>
-                      <span className="font-medium">{formatCurrencyMXN((booking.child_price || 0) * (booking.children_count || 0))}</span>
-                    </div>
-                  )}
-                  {booking.infants_count > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">{booking.infants_count} {booking.infants_count === 1 ? 'Infante' : 'Infantes'} × {formatCurrencyMXN(booking.infant_price ?? 0)}:</span>
-                      <span className="font-medium">{formatCurrencyMXN((booking.infant_price || 0) * (booking.infants_count || 0))}</span>
-                    </div>
-                  )}
-                  {booking.seniors_count > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">{booking.seniors_count} {booking.seniors_count === 1 ? 'Adulto Mayor' : 'Adultos Mayores'} × {formatCurrencyMXN(booking.senior_price ?? 0)}:</span>
-                      <span className="font-medium">{formatCurrencyMXN((booking.senior_price || 0) * (booking.seniors_count || 0))}</span>
-                    </div>
-                  )}
-                  {booking.pets_count > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">{booking.pets_count} {booking.pets_count === 1 ? 'Mascota' : 'Mascotas'} × {formatCurrencyMXN(booking.pet_price ?? 0)}:</span>
-                      <span className="font-medium">{formatCurrencyMXN((booking.pet_price || 0) * (booking.pets_count || 0))}</span>
-                    </div>
-                  )}
+                  ))}
 
                   {optionalServices.filter(opt => opt.service_kind === 'pickup').map(opt => (
                     <div key={opt.id} className="flex justify-between">
@@ -526,7 +553,7 @@ const BookingSuccessPage: React.FC = () => {
                         <Award className="h-4 w-4 mr-1" />
                         Puntos ToursRed Usados:
                       </span>
-                      <span className="font-bold text-amber-600">-{booking.points_used.toLocaleString()} puntos ({formatCurrencyMXN(booking.points_used / 100)})</span>
+                      <span className="font-bold text-amber-600">-{(booking.points_used ?? 0).toLocaleString()} puntos ({formatCurrencyMXN((booking.points_used ?? 0) / 100)})</span>
                     </div>
                   )}
 
@@ -551,11 +578,11 @@ const BookingSuccessPage: React.FC = () => {
                       <div className="text-xs text-gray-500 mt-1 text-right">
                         {Number(booking.points_used) > 0 && Number(booking.toursred_cash_used) > 0 ? (
                           <>
-                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Number(booking.toursred_cash_used))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, realTotalPaid - ((booking.points_used || 0) / 100) - Number(booking.toursred_cash_used || 0)))}{processorSuffix})
+                            ({(booking.points_used ?? 0).toLocaleString()} puntos + {formatCurrencyMXN(Number(booking.toursred_cash_used))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, realTotalPaid - ((booking.points_used || 0) / 100) - Number(booking.toursred_cash_used || 0)))}{processorSuffix})
                           </>
                         ) : Number(booking.points_used) > 0 ? (
                           <>
-                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Math.max(0, realTotalPaid - (booking.points_used / 100)))}{processorSuffix})
+                            ({(booking.points_used ?? 0).toLocaleString()} puntos + {formatCurrencyMXN(Math.max(0, realTotalPaid - ((booking.points_used ?? 0) / 100)))}{processorSuffix})
                           </>
                         ) : (
                           <>
@@ -572,7 +599,7 @@ const BookingSuccessPage: React.FC = () => {
                         <Award className="h-4 w-4 mr-1" />
                         Puntos ToursRed Ganados:
                       </span>
-                      <span className="font-bold text-green-600">+{booking.points_earned.toLocaleString()} puntos</span>
+                      <span className="font-bold text-green-600">+{(booking.points_earned ?? 0).toLocaleString()} puntos</span>
                     </div>
                   )}
 

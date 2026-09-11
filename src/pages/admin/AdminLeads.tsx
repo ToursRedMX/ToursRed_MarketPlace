@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Search, X, CheckCircle, Clock, AlertCircle, Building2, MailCheck, Send, Loader2, MessageSquare, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, X, CheckCircle, Building2, MailCheck, Send, Loader2, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 type LeadStatus = 'prospecto' | 'contactado' | 'negociacion' | 'registrado' | 'aprobado' | 'perdido';

@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  FileText, Search, Download, XCircle, RefreshCw, CheckCircle,
-  AlertCircle, Clock, Filter, ChevronDown, ExternalLink, RotateCcw, Shield
-} from 'lucide-react';
+import { FileText, Search, Download, XCircle, RefreshCw, CheckCircle, AlertCircle, Clock, ExternalLink, RotateCcw, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 
@@ -165,7 +162,7 @@ const AdminCfdi: React.FC = () => {
     if (!cancelModal.cfdi) return;
     setIsCancelling(true);
     try {
-      const { data, error } = await supabase.functions.invoke('cancel-cfdi', {
+      const { error } = await supabase.functions.invoke('cancel-cfdi', {
         body: {
           cfdi_invoice_id: cancelModal.cfdi.id,
           motivo: cancelModal.motivo,

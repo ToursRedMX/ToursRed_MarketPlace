@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Building2, Calendar, DollarSign, Percent, CreditCard as Edit2, X, Save, RotateCcw, Info, Search, Filter, ChevronDown, CheckCircle, AlertCircle, Clock, Tag } from 'lucide-react';
+import { MapPin, Building2, Calendar, DollarSign, Percent, CreditCard as Edit2, X, Save, Info, Search, Filter, ChevronDown, CheckCircle, AlertCircle, Clock, Tag } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { format, parseISO } from 'date-fns';

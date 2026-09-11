@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Download, ExternalLink, Loader2, AlertCircle, FileText, Building2, User, Receipt, Shield } from 'lucide-react';
 
 // ── Minimal QR Code generator (pure TS, no deps) ────────────────────────────

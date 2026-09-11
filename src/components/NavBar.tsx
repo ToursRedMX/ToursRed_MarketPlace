@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, User, LogOut, Search, MessageCircle, ChevronDown, LayoutDashboard, Building2, Users, UserCheck, MapPin, Tag, Navigation, Star, MessageSquare, Globe, Settings, CreditCard, Coins, Percent, DollarSign, Gift, Megaphone, Ticket, BadgePercent, Sparkles, Send, ArrowLeftRight, FileText, FilePlus2, BookOpen, Headphones as HeadphonesIcon, TicketCheck, ShoppingBag, Trash2, Bus, BarChart2, Briefcase, FileSpreadsheet, Shield, Mail, TrendingUp, RefreshCw, Receipt } from 'lucide-react';
+import { Menu, X, User, Search, MessageCircle, ChevronDown, LayoutDashboard, Building2, Users, UserCheck, MapPin, Tag, Navigation, Star, MessageSquare, Globe, Settings, CreditCard, Coins, Percent, DollarSign, Gift, Megaphone, BadgePercent, Sparkles, Send, FileText, FilePlus2, BookOpen, Headphones as HeadphonesIcon, TicketCheck, ShoppingBag, Trash2, Bus, BarChart2, Briefcase, FileSpreadsheet, Shield, Mail, TrendingUp, RefreshCw, Receipt } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import { useAuth } from '../context/AuthContext';
 import { signOut, supabase } from '../lib/supabase';
