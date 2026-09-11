@@ -171,7 +171,9 @@ CREATE POLICY "rr_private_delete"
 -- 4. Aserciones
 -- ---------------------------------------------------------------------------
 DO $$
-DECLARE v_n integer;
+DECLARE
+  v_n integer;
+  v_faltan text[];
 BEGIN
   -- NINGUNA politica de storage puede nombrar una tabla de routesred: el rol
   -- que consulta no tiene permiso para leerla, y el error se come la operacion
@@ -185,12 +187,30 @@ BEGIN
       'Quedan % politicas de storage.objects leyendo transport_provider_users: seguiran rompiendo TODOS los buckets.', v_n;
   END IF;
 
-  -- Y las siete siguen existiendo: quitarlas seria abrir los buckets de
-  -- RoutesRed, no arreglarlos.
-  SELECT count(*) INTO v_n FROM pg_policies
-  WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname LIKE 'rr\_%';
-  IF v_n <> 7 THEN
-    RAISE EXCEPTION 'Se esperaban 7 politicas rr_* y hay %.', v_n;
+  -- Y las siete siguen existiendo. POR NOMBRE, no por cuenta.
+  --
+  -- La primera version de esta migracion contaba `policyname LIKE 'rr\_%'` y
+  -- exigia 7. Fallo contra produccion, donde hay OCHO: existe `rr_public_read`,
+  -- que solo dice `bucket_id = 'routesred-public'`, no lee ninguna tabla y por
+  -- tanto no se toca. La prueba no lo cazo porque su fixture solo copiaba las
+  -- siete que leen la tabla: contaba 7 de 7 sobre una base que no era esta.
+  --
+  -- Contar es fragil: manana alguien añade `rr_public_download` y esta
+  -- migracion ya aplicada no se entera, pero cualquier re-aplicacion revienta.
+  -- Nombrar dice exactamente lo que importa: que las siete que se reescriben
+  -- siguen ahi, porque quitarlas seria ABRIR los buckets, no arreglarlos.
+  SELECT array_agg(nombre) INTO v_faltan
+  FROM unnest(ARRAY[
+    'rr_public_insert','rr_public_update','rr_public_delete',
+    'rr_private_read','rr_private_insert','rr_private_update','rr_private_delete'
+  ]) AS nombre
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = nombre
+  );
+
+  IF v_faltan IS NOT NULL THEN
+    RAISE EXCEPTION 'Faltan politicas de RoutesRed tras la correccion: %. Quitarlas abre los buckets.', v_faltan;
   END IF;
 
   RAISE NOTICE 'OK: storage.objects ya no lee tablas de routesred';
