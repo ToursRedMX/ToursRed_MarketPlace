@@ -4,10 +4,19 @@
 **Requisitos que atiende:** PCI DSS v4 **10.4** (revisión periódica) y **10.5.1**
 (retención: 12 meses, con al menos 3 disponibles de inmediato).
 
-> El mapeo a requisitos es una **propuesta**. Aquí nadie es QSA. Y **si el SAQ
-> final resulta ser A, buena parte del Requisito 10 no aplica**: esta política
-> está escrita para el caso más exigente, que es el prudente mientras el
-> adquirente no confirme lo contrario.
+> El mapeo a requisitos es una **propuesta**. Aquí nadie es QSA.
+>
+> **El SAQ quedó determinado el 10-sep-2026: es A**, y en esa modalidad buena
+> parte del Requisito 10 no se exige. Esta política se escribió para el caso más
+> exigente, cuando aún no se sabía.
+>
+> **Se conserva igual, y no por inercia:** la bitácora no existe solo para PCI.
+> Sirve para saber quién canceló una reserva, quién cambió una cuenta bancaria y
+> desde dónde — preguntas que se hacen aunque ningún auditor las pida. Lo que
+> cambia es el encuadre: de aquí en adelante es **control propio**, no requisito
+> heredado, así que se ajusta según lo que le sirva al negocio y no según lo que
+> exija un formulario. En particular, el hueco de los 12 meses de retención
+> **deja de ser un hallazgo de auditoría** y pasa a ser una decisión tuya.
 
 ---
 
@@ -101,15 +110,22 @@ es **correcta por diseño** y otra **sí es un hueco**:
   revisión** que se corra con este procedimiento compruebe que los eventos
   nuevos sí lo traen — hoy está probado en CI, no observado en producción.
 
-**La causa es arquitectónica y conviene explicarla tal cual:** estos registros los
-escriben *triggers* de base de datos, y un trigger no tiene contexto HTTP — no
-conoce la IP ni el user agent, y solo conoce el actor si la sesión trae
-`auth.uid()`. Los eventos que sí traen IP (`FAILED_LOGIN`) son los que se
-escriben desde la aplicación, que sí lo sabe.
+**La causa que se había diagnosticado era incompleta**, y conviene dejar las dos
+versiones porque la diferencia importa. Decía: los escriben *triggers* de base de
+datos, y un trigger no tiene contexto HTTP. Cierto, pero **no era toda la
+historia**: las Edge Functions que sí tienen ese contexto tampoco lo pasaban.
+Solo `record-session-event` lo hacía, y por eso los eventos de autenticación eran
+los únicos con IP.
 
-Cerrarlo pide propagar el contexto del llamador hacia el trigger, por ejemplo con
-variables de sesión (`set_config`) fijadas al inicio de la petición. **Es un
-cambio de código, no de política, y por eso no se hace aquí.**
+**Y el arreglo propuesto era peligroso.** Se planteó propagar el contexto con
+`set_config`. Con pooling de conexiones eso es una trampa: un GUC de *sesión*
+sobrevive a la petición y se filtra a la siguiente que reuse la conexión, con lo
+que se le atribuiría un borrado a la IP equivocada — **peor que no atribuirlo**.
+
+Lo que se hizo: PostgREST ya deja las cabeceras y los claims del JWT como
+ajustes **transaccionales** de cada petición, así que `insert_audit_log` los lee
+de ahí. No hace falta `set_config` y no hay riesgo de filtración entre
+peticiones.
 
 ---
 
@@ -252,7 +268,7 @@ ticket, o lo que el equipo ya use — lo que no puede es no existir.
 | 2 | **Atribuir los `DELETE`**: propagar actor e IP a los triggers | **Código** | pendiente |
 | 3 | Asignar responsables de la revisión diaria y semanal | Organizativo | **Axel** |
 | 4 | Definir dónde vive la constancia de cada revisión | Organizativo | **Axel** |
-| 5 | Confirmar con el adquirente si el Requisito 10 aplica según el SAQ | Externo | **Axel** |
+| 5 | ~~Confirmar si el Requisito 10 aplica según el SAQ~~ **HECHO: SAQ A**, así que buena parte no se exige. La bitácora se conserva como control propio, no heredado | — | — |
 
 El **2** es el único técnico, y es el que más peso tiene ante un auditor: un
 borrado sin autor es difícil de defender. El **5** puede volver irrelevante a
