@@ -36,6 +36,7 @@ interface SavedTour {
   created_at: string;
   tours: {
     id: string;
+    slug: string | null;
     name: string;
     destination: string;
     start_date: string;

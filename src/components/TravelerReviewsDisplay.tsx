@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Star, Building } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+import { comoFilas } from '../lib/relacionesSupabase';
 
 interface TravelerReview {
   id: string;
@@ -62,7 +63,7 @@ export default function TravelerReviewsDisplay({ travelerId }: TravelerReviewsDi
 
       const reviewsData = data || [];
       console.log('✅ [TravelerReviews] Reviews data:', reviewsData);
-      setReviews(reviewsData);
+      setReviews(comoFilas<TravelerReview>(reviewsData));
 
       if (reviewsData.length > 0) {
         const avg = reviewsData.reduce((sum, review) => sum + review.rating, 0) / reviewsData.length;

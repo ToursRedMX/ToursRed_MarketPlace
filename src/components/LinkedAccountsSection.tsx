@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link2, Link2Off, CheckCircle, AlertCircle, Loader } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+import type { UserIdentity } from '@supabase/supabase-js';
 
-interface Identity {
-  id: string;
-  provider: string;
-  identity_data?: Record<string, any>;
-  created_at?: string;
-}
+// El tipo lo pone la libreria: `unlinkIdentity` exige un `UserIdentity`
+// completo —lleva `user_id` e `identity_id`, que la copia local no tenia— y
+// es el mismo objeto que devuelve `getUserIdentities`, asi que no hay que
+// construirlo a mano.
+type Identity = UserIdentity;
 
 interface OAuthLinkToggles {
   google: boolean;

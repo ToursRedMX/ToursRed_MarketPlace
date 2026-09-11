@@ -11,18 +11,8 @@ import { TourSlot } from '../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-interface TourOptionalService {
-  id: string;
-  name: string;
-  description: string | null;
-  price_per_person: number;
-  max_capacity: number | null;
-  is_refundable: boolean;
-  is_active: boolean;
-  display_order: number;
-  available_capacity?: number | null;
-}
 import { Tour } from '../types';
+import type { TourOptionalService } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { createBooking, supabase } from '../lib/supabase';
 import { formatCurrency, formatCurrencyMXN } from '../utils/formatCurrency';

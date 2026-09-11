@@ -231,10 +231,13 @@ const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.
   </div>
 );
 
-const Field: React.FC<{ label: string; value: React.ReactNode; mono?: boolean }> = ({ label, value, mono }) => (
+// `highlight` estaba puesto en un <Field> («Total pagado» del plan de pagos)
+// pero no declarado, asi que React lo descartaba y ese dato no resaltaba. Se
+// pinta como el resto de los destacados del archivo: azul.
+const Field: React.FC<{ label: string; value: React.ReactNode; mono?: boolean; highlight?: boolean }> = ({ label, value, mono, highlight }) => (
   <div className="flex flex-col">
     <span className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">{label}</span>
-    <span className={`text-sm text-gray-800 ${mono ? 'font-mono' : ''}`}>{value ?? '—'}</span>
+    <span className={`text-sm ${highlight ? 'text-blue-700 font-semibold' : 'text-gray-800'} ${mono ? 'font-mono' : ''}`}>{value ?? '—'}</span>
   </div>
 );
 

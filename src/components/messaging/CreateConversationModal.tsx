@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Users, MessageCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
+import { comoFilas } from '../../lib/relacionesSupabase';
 
 interface User {
   id: string;
@@ -116,7 +117,7 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
 
           if (errorReservas) throw errorReservas;
 
-          setBookings(bookingsData || []);
+          setBookings(comoFilas<Booking>(bookingsData));
         }
 
         // Get agency's tours
@@ -141,7 +142,7 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
 
         if (errorReservasViajero) throw errorReservasViajero;
 
-        setBookings(bookingsData || []);
+        setBookings(comoFilas<Booking>(bookingsData));
       }
     } catch (err: any) {
       console.error('Error fetching data:', err);

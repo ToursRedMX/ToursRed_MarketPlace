@@ -50,6 +50,42 @@ interface AgencyProfile {
   booking_count?: number;
 }
 
+/**
+ * El formulario a partir de la agencia. Existe porque habia DOS copias de este
+ * objeto —la de cargar el perfil y la de «Cancelar»— y la segunda solo
+ * reconstruia 11 de los 26 campos: cancelar dejaba RFC, razon social, regimen
+ * fiscal, domicilio y datos bancarios con lo que el usuario acababa de teclear.
+ */
+const formularioDesdeLaAgencia = (agencia: AgencyProfile) => ({
+
+    name: agencia.name || '',
+    description: agencia.description || '',
+    rnt: agencia.rnt || '',
+    rfc: agencia.rfc || '',
+    razon_social: agencia.razon_social || '',
+    regimen_fiscal: agencia.regimen_fiscal || '',
+    domicilio_fiscal: agencia.domicilio_fiscal || '',
+    street: agencia.street || '',
+    exterior_number: agencia.exterior_number || '',
+    interior_number: agencia.interior_number || '',
+    colony: agencia.colony || '',
+    city: agencia.city || '',
+    state: agencia.state || '',
+    postal_code: agencia.postal_code || '',
+    country: agencia.country || 'México',
+    banco: agencia.banco || '',
+    cuenta_clabe: agencia.cuenta_clabe || '',
+    titular_cuenta: agencia.titular_cuenta || '',
+    logo: agencia.logo || '',
+    cover_image_url: agencia.cover_image_url || '',
+    custom_slug: agencia.custom_slug || '',
+    contact_email: agencia.contact_email || '',
+    contact_phone: agencia.contact_phone || '',
+    website: agencia.website || '',
+    first_name: agencia.users?.first_name || '',
+    last_name: agencia.users?.last_name || ''
+});
+
 const AgencyProfile: React.FC = () => {
   const { user } = useAuth();
   const { agencyId: resolvedAgencyId } = useAgencyId();
@@ -178,34 +214,7 @@ const AgencyProfile: React.FC = () => {
       }
 
       // Inicializar formulario de edición
-      setEditForm({
-        name: agencyData.name || '',
-        description: agencyData.description || '',
-        rnt: agencyData.rnt || '',
-        rfc: agencyData.rfc || '',
-        razon_social: agencyData.razon_social || '',
-        regimen_fiscal: agencyData.regimen_fiscal || '',
-        domicilio_fiscal: agencyData.domicilio_fiscal || '',
-        street: agencyData.street || '',
-        exterior_number: agencyData.exterior_number || '',
-        interior_number: agencyData.interior_number || '',
-        colony: agencyData.colony || '',
-        city: agencyData.city || '',
-        state: agencyData.state || '',
-        postal_code: agencyData.postal_code || '',
-        country: agencyData.country || 'México',
-        banco: agencyData.banco || '',
-        cuenta_clabe: agencyData.cuenta_clabe || '',
-        titular_cuenta: agencyData.titular_cuenta || '',
-        logo: agencyData.logo || '',
-        cover_image_url: agencyData.cover_image_url || '',
-        custom_slug: agencyData.custom_slug || '',
-        contact_email: agencyData.contact_email || '',
-        contact_phone: agencyData.contact_phone || '',
-        website: agencyData.website || '',
-        first_name: agencyData.users?.first_name || '',
-        last_name: agencyData.users?.last_name || ''
-      });
+      setEditForm(formularioDesdeLaAgencia(agencyData));
 
     } catch (err: any) {
       console.error('❌ Error cargando perfil de agencia:', err);
@@ -354,19 +363,7 @@ const AgencyProfile: React.FC = () => {
   const handleCancel = () => {
     if (!agency) return;
 
-    setEditForm({
-      name: agency.name || '',
-      description: agency.description || '',
-      logo: agency.logo || '',
-      cover_image_url: agency.cover_image_url || '',
-      custom_slug: agency.custom_slug || '',
-      rnt: agency.rnt || '',
-      contact_email: agency.contact_email || '',
-      contact_phone: agency.contact_phone || '',
-      website: agency.website || '',
-      first_name: agency.users?.first_name || '',
-      last_name: agency.users?.last_name || ''
-    });
+    setEditForm(formularioDesdeLaAgencia(agency));
     setIsEditing(false);
     setError('');
     setSuccess('');

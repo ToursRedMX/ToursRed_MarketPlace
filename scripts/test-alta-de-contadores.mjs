@@ -117,14 +117,20 @@ casos.push(() => {
   const select = tsx.match(/\.select\('can_manage_agencies[^']*'\)/)?.[0] ?? '';
   assert.ok(select, 'no se encontro el select de admin_permissions');
 
-  // Y la BASE se recorta al cuerpo de startEditPermissions. La primera version
+  // Y la BASE se recorta al literal de `PERMISOS_EN_CERO`. La primera version
   // buscaba `canViewAccounting: false,` en todo el archivo y por eso una
-  // mutacion que la borraba de la base SOBREVIVIA: el mismo texto aparece en
-  // el estado inicial del alta y en el reset posterior. Un patron que puede
-  // acertar en tres sitios no afirma nada sobre ninguno.
-  const inicio = tsx.indexOf('const startEditPermissions');
-  assert.ok(inicio > 0, 'no se encontro startEditPermissions');
-  const base_ = tsx.slice(inicio, tsx.indexOf('setEditingPermissions(user.id)', inicio));
+  // mutacion que la borraba de la base SOBREVIVIA: el mismo texto aparecia en
+  // el estado inicial, en el reset de cancelar y en la base de
+  // startEditPermissions. Un patron que puede acertar en tres sitios no afirma
+  // nada sobre ninguno. Desde el 11-sep-2026 esos tres sitios son UNO —la
+  // constante—, que es donde se mira ahora; y se comprueba ademas que
+  // startEditPermissions siga partiendo de ella, porque si alguien le vuelve a
+  // escribir una lista propia, la constante quedaria correcta y sin efecto.
+  const inicio = tsx.indexOf('const PERMISOS_EN_CERO');
+  assert.ok(inicio > 0, 'no se encontro PERMISOS_EN_CERO en AdminUsers');
+  const base_ = tsx.slice(inicio, tsx.indexOf('};', inicio));
+  assert.ok(/const base = PERMISOS_EN_CERO;/.test(tsx),
+    'startEditPermissions ya no parte de PERMISOS_EN_CERO: la constante quedo sin efecto');
 
   for (const [nombre, columna, mapeo, base, upsert] of sitios) {
     assert.ok(select.includes(columna),

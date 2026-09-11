@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Search, Filter, Eye, X, Users, Calendar, CheckCircle, AlertCircle, Clock, ChevronDown } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
+import { comoFilas } from '../../lib/relacionesSupabase';
 
 interface TourMessage {
   id: string;
@@ -78,7 +79,7 @@ const AdminTourMessages: React.FC = () => {
         .limit(200);
 
       if (err) throw new Error(err.message);
-      setMessages(data || []);
+      setMessages(comoFilas<TourMessage>(data));
     } catch (e: any) {
       setError(e.message || 'Error al cargar mensajes');
     } finally {
@@ -99,7 +100,7 @@ const AdminTourMessages: React.FC = () => {
         .eq('message_id', messageId)
         .order('created_at', { ascending: true });
 
-      if (!err) setRecipients(data || []);
+      if (!err) setRecipients(comoFilas<MessageRecipient>(data));
     } catch (e) {
       console.error('Error loading recipients:', e);
     } finally {

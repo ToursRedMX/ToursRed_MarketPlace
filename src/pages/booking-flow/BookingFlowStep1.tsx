@@ -9,7 +9,10 @@ import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { getDepositAmount, getEffectiveDepositPct } from '../../utils/depositCalculation';
 import { totalTravelerCount, TravelerCounts } from '../../types/booking-flow';
-import type { Tour, TourSlot } from '../../types';
+import type { Tour } from '../../types';
+// El TourSlot del FLUJO, no el de `types/index.ts`: hay dos con ese nombre y
+// el del flujo es el reducido que `flow.selectedSlot` guarda de verdad.
+import type { TourSlot } from '../../types/booking-flow';
 import SlotCalendarPicker from '../../components/receptivo/SlotCalendarPicker';
 import SlotTimePicker from '../../components/receptivo/SlotTimePicker';
 import MinTravelersAlert from '../../components/receptivo/MinTravelersAlert';

@@ -6,7 +6,8 @@ import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { BookingPaymentPlan, InstallmentStatus } from '../types';
-import PaymentProviderSelector, { type PaymentProvider, type ConektaMethod } from './PaymentProviderSelector';
+import PaymentProviderSelector, { type PaymentProvider, type ConektaMethod } from './PaymentProviderSelector';
+import { comoFila } from '../lib/relacionesSupabase';
 
 interface PaymentPlanCalendarProps {
   bookingId: string;
@@ -65,7 +66,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
       const sortedInstallments = [...(data.booking_payment_plan_installments || [])].sort(
         (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
       );
-      setPlan({ ...data, installments: sortedInstallments } as BookingPaymentPlan);
+      setPlan(comoFila<BookingPaymentPlan>({ ...data, installments: sortedInstallments }));
     }
     setIsLoading(false);
   };

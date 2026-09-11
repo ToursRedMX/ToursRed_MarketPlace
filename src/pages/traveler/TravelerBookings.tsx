@@ -15,7 +15,8 @@ import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { paymentLabel } from '../../utils/paymentLabels';
 import { validateAllTravelers } from '../../utils/birthDateValidation';
 import { getMpDeviceId } from '../../utils/mercadopagoDevice';
-import PaymentProviderSelector from '../../components/PaymentProviderSelector';
+import PaymentProviderSelector from '../../components/PaymentProviderSelector';
+import { comoFilas } from '../../lib/relacionesSupabase';
 
 const TravelerBookings: React.FC = () => {
   const { user } = useAuth();
@@ -365,7 +366,9 @@ const TravelerBookings: React.FC = () => {
       const today = new Date().toISOString().split('T')[0];
       const activeList: Booking[] = [];
       const expiredList: Booking[] = [];
-      for (const b of (data || [])) {
+      // `tours` y `agencies` son a-uno (las FK salen de `bookings`), pero
+      // supabase-js las infiere como arreglos. Ver src/lib/relacionesSupabase.ts.
+      for (const b of comoFilas<Booking>(data)) {
         const refDate = (b as any).selected_date || (b as any).tours?.end_date;
         if (refDate && refDate < today) {
           expiredList.push(b);

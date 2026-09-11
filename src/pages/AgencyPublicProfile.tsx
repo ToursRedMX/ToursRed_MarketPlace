@@ -5,25 +5,15 @@ import { supabase } from '../lib/supabase';
 import TourCard from '../components/TourCard';
 import AgencyReviews from '../components/AgencyReviews';
 import Seo from '../components/Seo';
-import type { Agency } from '../types';
+import type { Agency, Tour } from '../types';
 
 const SITE_URL = (import.meta.env.VITE_APP_URL || 'https://toursredmx.netlify.app/').replace(/\/$/, '');
 
 
 
-interface Tour {
-  id: string;
-  name: string;
-  destination: string;
-  description: string;
-  price: number;
-  deposit_percentage: number;
-  image_url: string;
-  start_date: string;
-  end_date: string;
-  max_travelers: number;
-  category: string[];
-}
+// Se usaba una copia local de `Tour` con 11 campos mientras la consulta hace
+// `select('*')` y el resultado se le pasa a <TourCard>, que espera el Tour
+// central: eran dos tipos con el mismo nombre y sin relacion entre si.
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
