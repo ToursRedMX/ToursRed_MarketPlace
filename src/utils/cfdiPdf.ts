@@ -308,7 +308,8 @@ export function construirPdfDeCfdi(cfdi: ResumenCfdi): jsPDF {
     doc.setFont('helvetica', 'italic');
     doc.setTextColor(GRIS);
     doc.text(latin1('Este CFDI no trae timbre fiscal digital: no esta timbrado.'), MARGEN, y);
-    y += 6;
+    // Sin `y += 6`: el pie se coloca desde el alto de la pagina, no desde aqui,
+    // asi que avanzar el cursor seria una linea muerta que aparenta importar.
   }
 
   // -------------------------------------------------------------------- pie
