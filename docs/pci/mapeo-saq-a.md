@@ -87,19 +87,39 @@ en los avisos de npm**: su seguimiento tiene que ser manual y deliberado.
 
 ### Requisito 8 — Identificar usuarios y autenticar accesos
 
-Incluye al menos **8.3.7** (no repetir las últimas cuatro contraseñas) y
-**8.3.9** (si la contraseña es el único factor: cambio cada 90 días, o análisis
-dinámico de la postura de la cuenta).
+**El alcance es lo primero que hay que entender aquí**, y cambia la lectura de
+todo lo demás. El SAQ dice, textual: *«para SAQ A, el Requisito 8 aplica a los
+servidores web del comercio que alojan la página que provee la dirección (la
+URL) de la página de pago del TPSP»*.
 
-**Ojo con el alcance:** 8.3.9 aplica a componentes **fuera del CDE**, que no
-están sujetos a MFA. En SAQ A el CDE es prácticamente inexistente, así que la
-pregunta se vuelve **de qué usuarios habla** — y eso lo resuelve el QSA.
+**No habla de los usuarios de la plataforma.** Habla de las cuentas que
+administran el servidor web — o sea, las cuentas de **Netlify y Supabase**, no
+las de los viajeros ni las de las agencias.
 
-**Dato medido:** 8 usuarios activos sin MFA (5 de agencia, 2 viajeros, 1
-ejecutivo); los 2 admins sí lo tienen.
+Lista completa en SAQ A:
 
-**No leí la lista completa del Requisito 8** en el PDF. Antes de firmar hay que
-recorrerla entera en la r1.
+| | |
+|---|---|
+| **8.2.1** | ID único por usuario antes de dar acceso |
+| **8.2.2** | Cuentas compartidas o genéricas solo por excepción, con justificación documentada, aprobación, y **cada acción atribuible a una persona** |
+| **8.2.5** | El acceso de quien deja la organización se revoca **de inmediato** |
+| **8.3.1** | Autenticación con al menos un factor: algo que se sabe, se tiene o se es |
+| **8.3.5** | Contraseñas de primer uso y de reinicio: valor único, y **cambio forzado tras el primer uso** |
+| **8.3.6** | Mínimo **12 caracteres** (8 si el sistema no soporta 12), con números y letras |
+| **8.3.7** | No repetir ninguna de las **últimas cuatro** |
+| **8.3.9** | Si la contraseña es el único factor: cambio cada 90 días **o** análisis dinámico de la postura de la cuenta |
+
+**Qué significa para el hueco de MFA que traíamos.** Medimos 8 usuarios activos
+sin MFA (5 de agencia, 2 viajeros, 1 ejecutivo) y lo llevábamos como hallazgo de
+8.4. Con el alcance de SAQ A a la vista, **esos usuarios probablemente no están
+en alcance**: no administran el servidor web. Lo que sí está en alcance son las
+cuentas de Netlify y Supabase — y ahí la pregunta es otra: **¿tienen MFA, quién
+las comparte, y se revocan al salir alguien?**
+
+Eso no convierte el MFA de las agencias en mala idea; lo saca de la lista de
+obligaciones y lo devuelve a decisión de producto. **Y abre una pregunta que no
+nos habíamos hecho: si alguien deja el equipo hoy, ¿se le revoca el acceso a
+Netlify y a Supabase el mismo día?** Eso es 8.2.5, y sí está en alcance.
 
 ### Requisito 9 — Acceso físico
 
@@ -140,20 +160,42 @@ diligencia, no cumplimiento — ver
 
 ### Requisito 12 — Políticas y programas
 
-**12.8.1**: mantener una **lista de todos los TPSP** con los que se comparten
-datos de cuenta o que podrían afectar su seguridad, con descripción del servicio
-de cada uno.
+Son **seis sub-requisitos**, no uno, y se cierran con cosas distintas:
 
-**No la tenemos como tal**, aunque los insumos están repartidos: los cinco
-procesadores, Netlify, Supabase, Cloudflare (Turnstile), smtp2go, Facturapi,
-SheetJS, Sentry, Backblaze B2.
+| | | Estado |
+|---|---|---|
+| **12.8.1** | Lista de TPSP con descripción del servicio | ✅ → [`proveedores-y-responsabilidades.md`](proveedores-y-responsabilidades.md) |
+| **12.8.2** | **Acuerdos escritos** donde el TPSP reconoce su responsabilidad | Plantilla lista, faltan los documentos |
+| **12.8.3** | Proceso de alta con diligencia previa | ✅ escrito |
+| **12.8.4** | Programa para monitorear su cumplimiento **cada 12 meses** | ✅ escrito, falta la primera revisión |
+| **12.8.5** | Qué requisito gestiona cada quién | ✅ matriz completa |
+| **12.10.1** | **Plan de respuesta a incidentes** | ✅ → [`plan-de-respuesta-a-incidentes.md`](plan-de-respuesta-a-incidentes.md) |
 
-El SAQ añade una nota que conviene tener presente: *«usar un TPSP certificado no
-hace que la entidad cumpla, ni la releva de su propia responsabilidad»*.
+**Dos avisos del propio SAQ que evitan errores caros:**
 
-**No leí el resto del Requisito 12** (12.8.2 en adelante, y la concienciación en
-seguridad que según el PCI SSC ahora incluye phishing e ingeniería social).
-Pendiente de recorrer en la r1.
+1. *«Usar un TPSP certificado no hace que la entidad cumpla, ni la releva de su
+   propia responsabilidad.»*
+2. *«La evidencia de que un TPSP cumple —por ejemplo un AOC o una declaración en
+   su web— **no es lo mismo** que el acuerdo escrito del 12.8.2.»* Son dos
+   entregables distintos, y es fácil creer que el AOC cubre ambos.
+
+### 12.10.1 no estaba en la primera versión de este mapeo
+
+Apareció al leer el Requisito 12 completo. **Está en SAQ A** y pide un plan de
+respuesta a incidentes con siete elementos, entre ellos **notificar a las marcas
+de pago y al adquirente** — la parte que distingue un plan de PCI de uno
+genérico de TI.
+
+Ya está escrito. Lo único que le falta es el **contacto de notificación del
+adquirente**, que es un dato que hay que conseguir y que buscar durante un
+incidente es justo lo que el plan existe para evitar.
+
+### Lo que sigue sin leerse
+
+La **concienciación en seguridad** (12.6.x). El PCI SSC menciona que en v4.0.1 el
+Requisito 12 incluye phishing e ingeniería social en la capacitación, pero **eso
+no aparece en el SAQ A de v4.0** que se leyó aquí. Puede ser una adición de la
+r1. **Hay que comprobarlo al leer la r1 antes de firmar.**
 
 ---
 
@@ -189,18 +231,31 @@ tenemos cubre el **inventario** (6.3.2); el **monitoreo** no.
 
 ## 4. Qué hacer, en orden
 
-| # | Acción | Tipo | Quién |
-|---|---|---|---|
-| 1 | **Contratar ASV** y correr el primer escaneo con margen para remediar | Contratación | **Axel** |
-| 2 | Escribir la **política de escaneo trimestral** — sin ella, el escaneo aprobado no basta para la primera certificación | Documento | se puede hacer aquí |
-| 3 | **Obtener y revisar los AOC** de Stripe, PayPal, MercadoPago, Conekta y OpenPay | Externo | **Axel** |
-| 4 | **Lista formal de TPSP** (12.8.1) con descripción de servicio | Documento | se puede hacer aquí |
-| 5 | Definir **quién monitorea avisos de vulnerabilidades** y con qué criterio de ranking (6.3.1), incluido `xlsx` fuera de npm | Decisión + documento | **Axel** define, se documenta aquí |
-| 6 | Proceso de **escaneo tras cambio significativo** (11.3.2.1), que no necesita ASV | Técnico | se puede hacer aquí |
-| 7 | **Leer el SAQ A v4.0.1 r1 completo** y recorrer los Requisitos 8 y 12, que aquí quedaron a medias | Revisión | antes de firmar |
+| # | Acción | Estado |
+|---|---|---|
+| 1 | **Contratar ASV** y correr el primer escaneo con margen para remediar | ⬜ **PENDIENTE — de Axel** |
+| 2 | Política de escaneo trimestral y de cambio significativo | ✅ [`politica-de-escaneos.md`](politica-de-escaneos.md) |
+| 3 | Lista formal de TPSP y matriz de responsabilidades (12.8.1–12.8.5) | ✅ [`proveedores-y-responsabilidades.md`](proveedores-y-responsabilidades.md) |
+| 4 | Monitoreo de vulnerabilidades y criterio de ranking (6.3.1) | ✅ [`gestion-de-vulnerabilidades.md`](gestion-de-vulnerabilidades.md) |
+| 5 | Proceso de escaneo tras cambio significativo (11.3.2.1) | ✅ dentro de la política de escaneos |
+| 6 | Plan de respuesta a incidentes (12.10.1) | ✅ [`plan-de-respuesta-a-incidentes.md`](plan-de-respuesta-a-incidentes.md) |
+| 7 | Recorrer los Requisitos 8 y 12 completos | ✅ hecho, arriba |
 
-**El 1 manda el calendario.** Los demás son días de trabajo; ese es tiempo de un
-tercero, y es el único que no se puede comprimir.
+**Queda un solo pendiente técnico: contratar el ASV.** Es lo único que no se
+puede resolver desde el repo, porque es tiempo de un tercero certificado.
+
+### Y unos datos que hay que conseguir, que no son trabajo pero sin ellos no cierra
+
+| Dato | Dónde va | Por qué importa |
+|---|---|---|
+| **AOC de los cinco procesadores** | `proveedores-y-responsabilidades.md` §1 | Sostiene la **elegibilidad** para SAQ A. Sin esto, no se puede afirmar que se es SAQ A |
+| **Cláusula de responsabilidad** de cada proveedor | §2 del mismo | Es 12.8.2, y **no lo cubre el AOC** |
+| **Contacto de notificación del adquirente** | `plan-de-respuesta-a-incidentes.md` §1 | Es lo más explícito de 12.10.1 |
+| **Nombres de los responsables** | los cuatro documentos | Están sin asignar a propósito: los pone Axel |
+| **Obligación legal de notificación en México** | plan de incidentes §6 | Declarado como hueco en vez de improvisado |
+
+**El primero es el que más pesa.** Los otros son papeleo; ese sostiene la
+premisa entera de esta carpeta.
 
 ---
 
