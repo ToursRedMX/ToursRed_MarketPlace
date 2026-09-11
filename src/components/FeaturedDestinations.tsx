@@ -50,7 +50,21 @@ const FeaturedDestinations: React.FC = () => {
         const today = new Date().toISOString().split('T')[0];
         const processedDestinations = data
           .map(dest => {
-            const tours = (dest.tour_destinations?.map(td => td.tours).filter(Boolean) || [])
+            // `tour_destinations` es una tabla puente (tour_id, destination_id) y su
+          // relacion `tours` es a-uno: PostgREST devuelve un OBJETO por fila.
+          // Comprobado contra la base el 11-sep-2026, no supuesto.
+          //
+          // supabase-js, sin tipos generados, no sabe la cardinalidad y la infiere
+          // como ARRAY, asi que sin este cast cree que `tours` es una lista y
+          // rechaza leer `tour_type`, `end_date` o `image_url` de ella.
+          interface TourDelDestino {
+            id: string;
+            image_url: string | null;
+            end_date: string | null;
+            tour_type: string | null;
+          }
+          const tours = ((dest.tour_destinations?.map(td => td.tours as unknown as TourDelDestino | null)
+            .filter(Boolean) || []) as TourDelDestino[])
               .filter(tour => tour.tour_type === 'receptivo' || !tour.end_date || tour.end_date >= today);
             return {
               id: dest.id,

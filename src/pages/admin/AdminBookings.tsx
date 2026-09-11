@@ -128,6 +128,7 @@ interface BookingRow {
     service_charge_rate: number | null;
     service_charge_amount: number | null;
     gross_service_charge_amount: number | null;
+    preventa_comision_descuento: number | null;
     membership_exemption_total: number | null;
     payment_plan_service_charges: number | null;
     payment_plan_membership_exemptions: number | null;

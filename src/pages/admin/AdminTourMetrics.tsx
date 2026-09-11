@@ -188,7 +188,7 @@ const TourDetailPanel: React.FC<{
   const activeBookings = bookings.filter(b => b.status !== 'cancelled' && b.status !== 'draft');
   const grossRevenue = activeBookings.reduce((s, b) => s + b.total_price, 0);
   const platformRevenue = activeBookings.reduce((s, b) => s + b.platform_revenue, 0);
-  const agencyCommission = activeBookings.reduce((s, b) => s + b.commission_amount, 0);
+  const agencyCommission = activeBookings.reduce((s, b) => s + (b.commission_amount ?? 0), 0);
   const insuranceTotal = activeBookings.reduce((s, b) => s + (b.travel_insurance_included ? (b.travel_insurance_cost ?? 0) : 0), 0);
 
   return (

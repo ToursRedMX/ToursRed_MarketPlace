@@ -122,6 +122,7 @@ const TravelerDashboard: React.FC = () => {
             *,
             tours (
               id,
+              slug,
               name,
               destination,
               start_date,

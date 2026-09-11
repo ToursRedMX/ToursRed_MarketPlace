@@ -228,6 +228,19 @@ const BookingFlowStep1: React.FC = () => {
     new Date(tour.preventa_fin + 'T23:59:59') >= today
   );
 
+  // `preventa_precio_especial` es un BOOLEANO en la base: dice si el tour tiene
+  // precio especial, no cual es. El precio sale de aplicar
+  // `preventa_descuento_valor` segun `preventa_tipo_descuento`, igual que en
+  // PreventasSection, BookingForm y TourCard. Aqui se formateaba el booleano
+  // tal cual, asi que esta tarjeta anunciaba «$1.00» como precio de preventa.
+  const preventaPrecioBase = (() => {
+    if (!tour.preventa_precio_especial || !tour.preventa_descuento_valor) return tour.price;
+    if (tour.preventa_tipo_descuento === 'porcentaje') {
+      return tour.price * (1 - tour.preventa_descuento_valor / 100);
+    }
+    return Math.max(0, tour.price - tour.preventa_descuento_valor);
+  })();
+
   return (
     <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
       <div className="p-6">
@@ -245,10 +258,10 @@ const BookingFlowStep1: React.FC = () => {
                 Este tour esta en periodo de preventa exclusiva para socios ToursRed Plus.
                 Adquiere tu membresía para acceder anticipadamente y disfrutar precios especiales.
               </p>
-              {tour.preventa_precio_especial && (
+              {tour.preventa_precio_especial && tour.preventa_descuento_valor && (
                 <div className="mb-4 p-3 bg-white rounded-xl inline-block">
                   <span className="text-xs text-gray-500">Precio especial de preventa</span>
-                  <div className="text-2xl font-bold text-amber-600">{formatCurrencyMXN(tour.preventa_precio_especial)}</div>
+                  <div className="text-2xl font-bold text-amber-600">{formatCurrencyMXN(preventaPrecioBase)}</div>
                 </div>
               )}
               <div>

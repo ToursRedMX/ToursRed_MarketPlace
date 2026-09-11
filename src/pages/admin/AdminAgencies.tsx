@@ -1008,7 +1008,7 @@ const AdminAgencies: React.FC = () => {
                         </div>
                         {agency.rating && (
                           <div className="text-sm text-gray-500">
-                            ⭐ {parseFloat(agency.rating).toFixed(1)}
+                            ⭐ {Number(agency.rating).toFixed(1)}
                           </div>
                         )}
                       </div>

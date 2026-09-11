@@ -1850,6 +1850,8 @@ const TravelerBookings: React.FC = () => {
       pointsBalance: pointsData?.balance ?? 0,
       pointsValueMxn: Math.floor((pointsData?.balance ?? 0) / 100),
       selectedMethod: 'stripe',
+      conektaMethod: 'card',
+      openpayMethod: 'card',
       cashToUse: 0,
     });
   };
@@ -2132,6 +2134,8 @@ const TravelerBookings: React.FC = () => {
       pointsBalance: pointsRes.data?.balance ?? 0,
       pointsValueMxn: Math.floor((pointsRes.data?.balance ?? 0) / 100),
       selectedMethod: 'stripe',
+      conektaMethod: 'card',
+      openpayMethod: 'card',
     });
   };
 
@@ -2677,7 +2681,7 @@ const TravelerBookings: React.FC = () => {
                       {Number(booking.service_charge) > 0 && (
                         <div>
                           <div className="text-gray-500">Cargo por Servicio:</div>
-                          <div className="font-medium">{formatCurrencyMXN(booking.service_charge)}</div>
+                          <div className="font-medium">{formatCurrencyMXN(booking.service_charge ?? 0)}</div>
                         </div>
                       )}
                       <div>
@@ -5392,9 +5396,12 @@ const TravelerBookings: React.FC = () => {
                   {extrasPaymentModal.selectedMethod === 'conekta' && (
                     <div className="mt-3 pl-6 space-y-2 border-l-2 border-gray-200">
                       {([
-                        { id: 'card', label: 'Tarjeta de credito/debito' },
-                        { id: 'cash', label: 'Efectivo (referencia de pago)' },
-                        { id: 'spei', label: 'Transferencia SPEI' },
+                        // `disabled` va en los cuatro a proposito: con `as const` cada
+                        // objeto tiene su propio tipo, y si solo BNPL lo declara, la union
+                        // resultante no tiene la propiedad y `m.disabled` no compila.
+                        { id: 'card', label: 'Tarjeta de credito/debito', disabled: false },
+                        { id: 'cash', label: 'Efectivo (referencia de pago)', disabled: false },
+                        { id: 'spei', label: 'Transferencia SPEI', disabled: false },
                         { id: 'bnpl', label: 'Compra ahora, paga despues (BNPL)', disabled: totalAmount < 1200 || totalAmount > 16000 },
                       ] as const).map(m => (
                         <label key={m.id} className={`flex items-center gap-2 ${m.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>

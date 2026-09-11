@@ -647,6 +647,10 @@ const AgencyTours: React.FC = () => {
       cancellation_refund_percentage: '80',
       min_travelers_required: '1',
       min_travelers_confirmation_hours: '24',
+      flexible_hours: '48',
+      flexible_refund_percentage: '100',
+      moderate_hours: '24',
+      moderate_refund_percentage: '50',
     });
     setFormData({
       name: '',
@@ -687,6 +691,9 @@ const AgencyTours: React.FC = () => {
       late_payment_grace_days: '5',
       late_payment_penalty_pct: '0',
       late_payment_penalty_fixed: '0',
+      cancellation_not_allowed: false,
+      name_changes_not_allowed: false,
+      vehicle_map_type: null as VehicleMapType | null,
     });
     setInstallmentDefs([]);
     setPaymentOptionsEnabled(false);
@@ -906,7 +913,12 @@ const AgencyTours: React.FC = () => {
         const selectedPoints: SelectedDeparturePoint[] = tourDeparturePoints
           .filter(tdp => tdp.departure_points)
           .map(tdp => ({
-            ...(tdp.departure_points as DeparturePoint),
+            // `departure_points` es UNO, no una lista: la FK va de
+            // tour_departure_points.departure_point_id a departure_points.id
+            // (verificado en la base el 11-sep-2026). Sin los tipos generados de
+            // la base, supabase-js infiere TODA relacion anidada como arreglo, asi
+            // que el `as` directo no basta y hay que pasar por unknown.
+            ...(tdp.departure_points as unknown as DeparturePoint),
             display_order: tdp.display_order,
             departure_time: tdp.departure_time || undefined,
             special_instructions: tdp.special_instructions || undefined,
@@ -1089,7 +1101,7 @@ const AgencyTours: React.FC = () => {
 
   const handleOpenFeatured = async (tour: Tour) => {
     if (!resolvedAgencyId) return;
-    setFeaturedModal({ open: true, tour, plans: [], activeSlot: null, isLoading: true, isSubmitting: false, selectedPlanId: '', error: '', success: '', step: 'plan', couponExpanded: false, pendingSlotId: '', selectedProvider: 'stripe', conektaMethod: 'card', couponCode: '', couponError: '', couponDiscount: 0, couponType: '', couponApplied: false, couponIsValidating: false });
+    setFeaturedModal({ open: true, tour, plans: [], activeSlot: null, isLoading: true, isSubmitting: false, selectedPlanId: '', error: '', success: '', step: 'plan', couponExpanded: false, pendingSlotId: '', selectedProvider: 'stripe', conektaMethod: 'card', couponCode: '', couponError: '', couponDiscount: 0, couponType: '', couponApplied: false, couponIsValidating: false, openpayMethod: 'card' });
     const [plansRes, slotsRes] = await Promise.all([
       getFeaturedPlans(),
       getAgencyFeaturedSlots(resolvedAgencyId),
@@ -1484,6 +1496,7 @@ const AgencyTours: React.FC = () => {
       newSlotDate: '',
       newSlotTime: '',
       bookingsInSlot: 0,
+      bookingsCountInSlot: 0,
     });
 
     if (action !== 'full-cancel') {
@@ -1558,6 +1571,7 @@ const AgencyTours: React.FC = () => {
       newSlotDate: '',
       newSlotTime: '',
       bookingsInSlot: 0,
+      bookingsCountInSlot: 0,
     });
   };
 
@@ -2751,7 +2765,7 @@ const AgencyTours: React.FC = () => {
           <button
             onClick={isCreating ? handleCancel : handleCreate}
             className={isCreating ? "btn btn-outline" : "btn btn-primary"}
-            disabled={editingTour}
+            disabled={!!editingTour}
           >
             {isCreating ? (
               <>
@@ -6840,9 +6854,9 @@ const AgencyTours: React.FC = () => {
                   {canCreate && (
                     <div className="mt-3 pt-3 border-t border-gray-100 flex justify-end">
                       <button
-                        onClick={() => handleDuplicate(tour.id)}
+                        onClick={() => handleDuplicate(tour)}
                         title="Duplicar tour"
-                        disabled={isSubmitting || duplicatingTour}
+                        disabled={isSubmitting || !!duplicatingTour}
                         className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Copy className="h-4 w-4" />
@@ -6987,7 +7001,7 @@ const AgencyTours: React.FC = () => {
                           onClick={() => handleEdit(tour)}
                           className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
                           title="Editar tour"
-                          disabled={isSubmitting || isCreating || editingTour || duplicatingTour}
+                          disabled={isSubmitting || isCreating || !!editingTour || !!duplicatingTour}
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -7017,7 +7031,7 @@ const AgencyTours: React.FC = () => {
                           onClick={() => handleDuplicate(tour)}
                           className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
                           title="Duplicar tour"
-                          disabled={isSubmitting || isCreating || editingTour || duplicatingTour}
+                          disabled={isSubmitting || isCreating || !!editingTour || !!duplicatingTour}
                         >
                           <Copy className="h-4 w-4" />
                         </button>
@@ -7080,7 +7094,7 @@ const AgencyTours: React.FC = () => {
                           onClick={() => handleDelete(tour.id, tour.name)}
                           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                           title="Eliminar tour"
-                          disabled={isSubmitting || duplicatingTour}
+                          disabled={isSubmitting || !!duplicatingTour}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
