@@ -182,6 +182,19 @@ jobs:
       - name: Verify the generic CFDI PDF keeps every character it is given
         run: node scripts/test-cfdi-pdf.mjs
 
+      # Cargar 30 XML de golpe es donde un error NO se nota: la pantalla dice
+      # «listo» y quedaron 28. El mismo CFDI dos veces en la seleccion pasa de
+      # verdad con las descargas del portal del SAT, y un CFDI en dolares sin
+      # tipo de cambio entra con un 1 de relleno que registrado asentaria
+      # dolares como pesos: tiene que entrar MARCADO, nunca callado.
+      - name: Verify bulk CFDI loading rejects per file without dropping the batch
+        run: node scripts/test-carga-masiva-cfdi.mjs
+
+      # El nombre del archivo viene del disco de quien sube y con el se arma la
+      # llave del objeto en Storage: un `..` es una travesia de directorios.
+      - name: Verify attachment storage keys cannot escape their folder
+        run: node scripts/test-soportes-helper.mjs
+
       # Tres promesas de la captura de gastos que solo viven en la pantalla y
       # que ninguna prueba de SQL puede cubrir: que el total en pesos se calcule
       # pero se pueda EDITAR (el banco aplica su propio tipo de cambio), que el
