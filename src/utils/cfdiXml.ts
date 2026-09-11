@@ -340,3 +340,315 @@ export function leerCfdiParaGasto(xml: string, rfcReceptorEsperado: string): Lec
     },
   };
 }
+
+// ===========================================================================
+// LECTURA COMPLETA: todo lo que el CFDI dice, para verlo y para imprimirlo
+// ===========================================================================
+//
+// `leerCfdiParaGasto` responde una pregunta muy concreta —«que campos propongo
+// para este gasto»— y por eso descarta casi todo: se queda con seis importes y
+// tira conceptos, impuestos, sellos y datos del emisor.
+//
+// Esta lectura es la contraria: NO juzga, NO valida y NO propone. Devuelve lo
+// que el documento dice, tal cual, para poder mostrarlo en pantalla y armar el
+// PDF generico. Por eso tampoco recibe el RFC de la plataforma: un CFDI que no
+// es tuyo no se puede capturar como gasto, pero si se tiene que poder LEER.
+// Separar las dos cosas evita la tentacion de aflojar la validacion del gasto
+// para que la vista funcione.
+
+export interface ConceptoCfdi {
+  claveProdServ: string;
+  noIdentificacion: string;
+  cantidad: number;
+  claveUnidad: string;
+  unidad: string;
+  descripcion: string;
+  valorUnitario: number;
+  importe: number;
+  descuento: number;
+  /** IVA trasladado de ESTE concepto. Cero si el CFDI solo lo trae global. */
+  iva: number;
+}
+
+export interface ImpuestoCfdi {
+  impuesto: string;
+  nombre: string;
+  tipoFactor: string;
+  tasaOCuota: string;
+  base: number;
+  importe: number;
+}
+
+export interface TimbreCfdi {
+  uuid: string;
+  fechaTimbrado: string;
+  rfcProvCertif: string;
+  noCertificadoSat: string;
+  selloCfd: string;
+  selloSat: string;
+}
+
+export interface ResumenCfdi {
+  version: string;
+  serie: string;
+  folio: string;
+  fecha: string;
+  lugarExpedicion: string;
+  tipoDeComprobante: string;
+  tipoDeComprobanteNombre: string;
+  formaPago: string;
+  formaPagoNombre: string;
+  metodoPago: string;
+  metodoPagoNombre: string;
+  condicionesDePago: string;
+  moneda: string;
+  tipoCambio: number;
+  subTotal: number;
+  descuento: number;
+  total: number;
+  emisor: { rfc: string; nombre: string; regimenFiscal: string; regimenNombre: string };
+  receptor: {
+    rfc: string; nombre: string; regimenFiscal: string; regimenNombre: string;
+    usoCfdi: string; usoCfdiNombre: string; domicilioFiscal: string;
+  };
+  conceptos: ConceptoCfdi[];
+  traslados: ImpuestoCfdi[];
+  retenciones: ImpuestoCfdi[];
+  totalTrasladados: number;
+  totalRetenidos: number;
+  timbre: TimbreCfdi | null;
+}
+
+// Los catalogos del SAT completos son enormes y cambian; aqui van solo los
+// codigos que aparecen en facturas de proveedor normales. Lo que no este se
+// imprime con su clave, que sigue siendo informacion util: vale mas «G03»
+// que una cadena vacia.
+const FORMAS_DE_PAGO: Record<string, string> = {
+  '01': 'Efectivo',
+  '02': 'Cheque nominativo',
+  '03': 'Transferencia electronica de fondos',
+  '04': 'Tarjeta de credito',
+  '05': 'Monedero electronico',
+  '06': 'Dinero electronico',
+  '08': 'Vales de despensa',
+  '12': 'Dacion en pago',
+  '17': 'Compensacion',
+  '28': 'Tarjeta de debito',
+  '29': 'Tarjeta de servicios',
+  '30': 'Aplicacion de anticipos',
+  '31': 'Intermediario pagos',
+  '99': 'Por definir',
+};
+
+const METODOS_DE_PAGO: Record<string, string> = {
+  PUE: 'Pago en una sola exhibicion',
+  PPD: 'Pago en parcialidades o diferido',
+};
+
+const USOS_CFDI: Record<string, string> = {
+  G01: 'Adquisicion de mercancias',
+  G02: 'Devoluciones, descuentos o bonificaciones',
+  G03: 'Gastos en general',
+  I01: 'Construcciones',
+  I02: 'Mobiliario y equipo de oficina',
+  I03: 'Equipo de transporte',
+  I04: 'Equipo de computo',
+  I08: 'Otra maquinaria y equipo',
+  D01: 'Honorarios medicos',
+  P01: 'Por definir',
+  S01: 'Sin efectos fiscales',
+  CP01: 'Pagos',
+  CN01: 'Nomina',
+};
+
+const REGIMENES: Record<string, string> = {
+  '601': 'General de Ley Personas Morales',
+  '603': 'Personas Morales con Fines no Lucrativos',
+  '605': 'Sueldos y Salarios e Ingresos Asimilados a Salarios',
+  '606': 'Arrendamiento',
+  '607': 'Enajenacion o Adquisicion de Bienes',
+  '608': 'Demas ingresos',
+  '610': 'Residentes en el Extranjero sin Establecimiento Permanente',
+  '611': 'Ingresos por Dividendos',
+  '612': 'Personas Fisicas con Actividades Empresariales y Profesionales',
+  '614': 'Ingresos por intereses',
+  '615': 'Regimen de los ingresos por obtencion de premios',
+  '616': 'Sin obligaciones fiscales',
+  '620': 'Sociedades Cooperativas de Produccion',
+  '621': 'Incorporacion Fiscal',
+  '622': 'Actividades Agricolas, Ganaderas, Silvicolas y Pesqueras',
+  '623': 'Opcional para Grupos de Sociedades',
+  '624': 'Coordinados',
+  '625': 'Actividades Empresariales con ingresos a traves de Plataformas Tecnologicas',
+  '626': 'Regimen Simplificado de Confianza',
+};
+
+const IMPUESTOS: Record<string, string> = {
+  '001': 'ISR',
+  '002': 'IVA',
+  '003': 'IEPS',
+};
+
+/** Devuelve `nombre` si la clave esta en el catalogo, y si no la clave sola. */
+const delCatalogo = (catalogo: Record<string, string>, clave: string): string => {
+  const c = (clave ?? '').trim();
+  if (!c) return '';
+  return catalogo[c] ?? c;
+};
+
+const leerImpuestos = (nodos: Nodo[], nombre: 'Traslado' | 'Retencion'): ImpuestoCfdi[] => {
+  // Igual que en `leerCfdiParaGasto`: los globales mandan, y solo si no hay se
+  // usan los de concepto. Sumar ambos duplicaria el impuesto.
+  const globales = nodos.filter(
+    (n) => n.nombre === nombre && n.camino.includes('Comprobante') && !n.camino.includes('Concepto'),
+  );
+  const porConcepto = nodos.filter((n) => n.nombre === nombre && n.camino.includes('Concepto'));
+  const fuente = globales.length > 0 ? globales : porConcepto;
+
+  // Un CFDI puede traer varios renglones del mismo impuesto y tasa; se agrupan
+  // para que el PDF muestre «IVA 16% ... 32.00» y no tres renglones sueltos.
+  const porLlave = new Map<string, ImpuestoCfdi>();
+  for (const n of fuente) {
+    const impuesto = (n.atributos.Impuesto ?? '').trim();
+    const tipoFactor = (n.atributos.TipoFactor ?? '').trim();
+    const tasaOCuota = (n.atributos.TasaOCuota ?? '').trim();
+    const llave = `${impuesto}|${tipoFactor}|${tasaOCuota}`;
+    const previo = porLlave.get(llave);
+    const base = aNumero(n.atributos.Base);
+    const importe = aNumero(n.atributos.Importe);
+    if (previo) {
+      previo.base = redondear(previo.base + base);
+      previo.importe = redondear(previo.importe + importe);
+    } else {
+      porLlave.set(llave, {
+        impuesto,
+        nombre: delCatalogo(IMPUESTOS, impuesto),
+        tipoFactor,
+        tasaOCuota,
+        base: redondear(base),
+        importe: redondear(importe),
+      });
+    }
+  }
+  return [...porLlave.values()];
+};
+
+/**
+ * Lee un CFDI entero, sin juzgarlo.
+ *
+ * Devuelve `null` solo cuando el archivo no es un CFDI en absoluto. Un CFDI de
+ * otro RFC, sin timbrar o de un tipo que no sirve para gastos SI se lee: la
+ * decision de si se puede capturar como gasto es de `leerCfdiParaGasto`.
+ */
+export function leerCfdiCompleto(xml: string): ResumenCfdi | null {
+  if (!xml || !xml.trim()) return null;
+
+  const nodos = recorrerXml(xml);
+  const comprobante = nodos.find((n) => n.nombre === 'Comprobante' && n.camino.length === 0)
+    ?? nodos.find((n) => n.nombre === 'Comprobante');
+  if (!comprobante) return null;
+
+  const a = comprobante.atributos;
+  const emisor = nodos.find((n) => n.nombre === 'Emisor')?.atributos ?? {};
+  const receptor = nodos.find((n) => n.nombre === 'Receptor')?.atributos ?? {};
+  const timbreNodo = nodos.find((n) => n.nombre === 'TimbreFiscalDigital');
+
+  const conceptos: ConceptoCfdi[] = nodos
+    .filter((n) => n.nombre === 'Concepto')
+    .map((c, i) => {
+      // El IVA del concepto sale de SUS traslados. Se identifican por el camino:
+      // un `Traslado` cuyo camino pasa por `Concepto`. Como el recorredor no
+      // numera los conceptos, se usa el orden de aparicion entre conceptos.
+      const iva = nodos
+        .filter((n) => n.nombre === 'Traslado' && n.camino.includes('Concepto')
+                    && indiceDeConcepto(nodos, n) === i
+                    && (n.atributos.Impuesto ?? '').trim() === '002')
+        .reduce((s, n) => s + aNumero(n.atributos.Importe), 0);
+      return {
+        claveProdServ: (c.atributos.ClaveProdServ ?? '').trim(),
+        noIdentificacion: (c.atributos.NoIdentificacion ?? '').trim(),
+        cantidad: aNumero(c.atributos.Cantidad),
+        claveUnidad: (c.atributos.ClaveUnidad ?? '').trim(),
+        unidad: (c.atributos.Unidad ?? '').trim(),
+        descripcion: (c.atributos.Descripcion ?? '').trim(),
+        valorUnitario: redondear(aNumero(c.atributos.ValorUnitario)),
+        importe: redondear(aNumero(c.atributos.Importe)),
+        descuento: redondear(aNumero(c.atributos.Descuento)),
+        iva: redondear(iva),
+      };
+    });
+
+  const traslados = leerImpuestos(nodos, 'Traslado');
+  const retenciones = leerImpuestos(nodos, 'Retencion');
+
+  const tipo = (a.TipoDeComprobante ?? '').trim().toUpperCase();
+  const moneda = (a.Moneda ?? 'MXN').trim().toUpperCase() || 'MXN';
+
+  return {
+    version: (a.Version ?? '').trim(),
+    serie: (a.Serie ?? '').trim(),
+    folio: (a.Folio ?? '').trim(),
+    fecha: (a.Fecha ?? '').trim(),
+    lugarExpedicion: (a.LugarExpedicion ?? '').trim(),
+    tipoDeComprobante: tipo,
+    tipoDeComprobanteNombre: TIPOS_DE_COMPROBANTE[tipo] ?? '',
+    formaPago: (a.FormaPago ?? '').trim(),
+    formaPagoNombre: delCatalogo(FORMAS_DE_PAGO, a.FormaPago ?? ''),
+    metodoPago: (a.MetodoPago ?? '').trim(),
+    metodoPagoNombre: delCatalogo(METODOS_DE_PAGO, a.MetodoPago ?? ''),
+    condicionesDePago: (a.CondicionesDePago ?? '').trim(),
+    moneda,
+    tipoCambio: moneda === 'MXN' ? 1 : aNumero(a.TipoCambio),
+    subTotal: redondear(aNumero(a.SubTotal)),
+    descuento: redondear(aNumero(a.Descuento)),
+    total: redondear(aNumero(a.Total)),
+    emisor: {
+      rfc: (emisor.Rfc ?? '').trim().toUpperCase(),
+      nombre: (emisor.Nombre ?? '').trim(),
+      regimenFiscal: (emisor.RegimenFiscal ?? '').trim(),
+      regimenNombre: delCatalogo(REGIMENES, emisor.RegimenFiscal ?? ''),
+    },
+    receptor: {
+      rfc: (receptor.Rfc ?? '').trim().toUpperCase(),
+      nombre: (receptor.Nombre ?? '').trim(),
+      regimenFiscal: (receptor.RegimenFiscalReceptor ?? '').trim(),
+      regimenNombre: delCatalogo(REGIMENES, receptor.RegimenFiscalReceptor ?? ''),
+      usoCfdi: (receptor.UsoCFDI ?? '').trim(),
+      usoCfdiNombre: delCatalogo(USOS_CFDI, receptor.UsoCFDI ?? ''),
+      domicilioFiscal: (receptor.DomicilioFiscalReceptor ?? '').trim(),
+    },
+    conceptos,
+    traslados,
+    retenciones,
+    totalTrasladados: redondear(traslados.reduce((s, t) => s + t.importe, 0)),
+    totalRetenidos: redondear(retenciones.reduce((s, t) => s + t.importe, 0)),
+    timbre: timbreNodo
+      ? {
+          uuid: (timbreNodo.atributos.UUID ?? '').trim().toUpperCase(),
+          fechaTimbrado: (timbreNodo.atributos.FechaTimbrado ?? '').trim(),
+          rfcProvCertif: (timbreNodo.atributos.RfcProvCertif ?? '').trim().toUpperCase(),
+          noCertificadoSat: (timbreNodo.atributos.NoCertificadoSAT ?? '').trim(),
+          selloCfd: (timbreNodo.atributos.SelloCFD ?? '').trim(),
+          selloSat: (timbreNodo.atributos.SelloSAT ?? '').trim(),
+        }
+      : null,
+  };
+}
+
+/**
+ * A que concepto pertenece un nodo hijo, por orden de aparicion.
+ *
+ * El recorredor guarda el camino por NOMBRE (`['Comprobante','Conceptos',
+ * 'Concepto','Impuestos','Traslados']`), no por posicion, asi que dos conceptos
+ * tienen caminos identicos. Como `recorrerXml` devuelve los nodos en el orden
+ * del documento, el concepto de un hijo es el ultimo `Concepto` que aparecio
+ * antes que el.
+ */
+function indiceDeConcepto(nodos: Nodo[], hijo: Nodo): number {
+  const posicion = nodos.indexOf(hijo);
+  let indice = -1;
+  for (let i = 0; i < posicion; i += 1) {
+    if (nodos[i].nombre === 'Concepto') indice += 1;
+  }
+  return indice;
+}

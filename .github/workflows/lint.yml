@@ -169,6 +169,19 @@ jobs:
       - name: Verify the CFDI reader proposes amounts that add up and belong to us
         run: node scripts/test-cfdi-xml.mjs
 
+      # La lectura COMPLETA del CFDI, que alimenta la vista y el PDF generico.
+      # Trampa propia: el recorredor guarda el camino por NOMBRE, asi que los
+      # traslados de dos conceptos distintos tienen caminos identicos y el
+      # concepto 1 se lleva el IVA de los dos si se asignan por camino.
+      - name: Verify the full CFDI reading splits tax per concept
+        run: node scripts/test-cfdi-resumen.mjs
+
+      # Las fuentes base de PDF codifican en Latin-1 y jspdf BORRA sin avisar lo
+      # que no entra: `doc.text('A - B')` con raya larga imprime "A  B". Todo
+      # texto pasa por un saneador, y esto lo comprueba contra los bytes del PDF.
+      - name: Verify the generic CFDI PDF keeps every character it is given
+        run: node scripts/test-cfdi-pdf.mjs
+
       # Tres promesas de la captura de gastos que solo viven en la pantalla y
       # que ninguna prueba de SQL puede cubrir: que el total en pesos se calcule
       # pero se pueda EDITAR (el banco aplica su propio tipo de cambio), que el
