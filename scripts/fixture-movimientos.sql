@@ -268,6 +268,93 @@ CREATE TABLE accounting_entry_lines (
   credit numeric(14,2) NOT NULL DEFAULT 0 CHECK (credit >= 0),
   cfdi_uuid text);
 
+-- Los triggers de inmutabilidad de `20260910000000`. NO son adorno: sin ellos
+-- este fixture aceptaba UPDATE sobre polizas publicadas, y por eso las diez
+-- pruebas de `test-pagar-gasto.sql` pasaron mientras produccion reventaba con
+-- «Una póliza publicada es inmutable; genere una reversa». Una tabla de
+-- prueba mas permisiva que la real no prueba nada: prueba otra base de datos.
+CREATE OR REPLACE FUNCTION validate_posted_accounting_entry()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  v_debit numeric; v_credit numeric; v_lines integer;
+BEGIN
+  IF TG_OP = 'DELETE' AND OLD.is_posted THEN
+    RAISE EXCEPTION 'Una póliza publicada no puede eliminarse; genere una reversa';
+  END IF;
+
+  IF TG_OP = 'UPDATE' AND OLD.is_posted THEN
+    RAISE EXCEPTION 'Una póliza publicada es inmutable; genere una reversa';
+  END IF;
+
+  IF TG_OP = 'UPDATE' AND NEW.is_posted AND NOT OLD.is_posted THEN
+    SELECT COUNT(*), COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0)
+      INTO v_lines, v_debit, v_credit
+      FROM accounting_entry_lines WHERE entry_id = NEW.id;
+    IF v_lines = 0 OR v_debit <> v_credit THEN
+      RAISE EXCEPTION 'La póliza publicada debe tener partidas y estar balanceada (débito %, crédito %)', v_debit, v_credit;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_validate_posted_accounting_entry ON accounting_entries;
+CREATE TRIGGER trg_validate_posted_accounting_entry
+BEFORE INSERT OR UPDATE OR DELETE ON accounting_entries
+FOR EACH ROW EXECUTE FUNCTION validate_posted_accounting_entry();
+
+-- El INSERT no se valida arriba porque las RPC meten la cabecera antes que sus
+-- partidas. El balance se revisa al cierre de la transaccion, diferido.
+CREATE OR REPLACE FUNCTION validate_posted_accounting_entry_deferred()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  v_debit numeric; v_credit numeric; v_lines integer;
+  v_entry_id uuid := COALESCE(NEW.id, OLD.id);
+BEGIN
+  IF TG_OP = 'DELETE' OR NOT COALESCE(NEW.is_posted, OLD.is_posted, false) THEN
+    RETURN NULL;
+  END IF;
+  SELECT COUNT(*), COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0)
+    INTO v_lines, v_debit, v_credit
+    FROM accounting_entry_lines WHERE entry_id = v_entry_id;
+  IF v_lines = 0 OR v_debit <> v_credit THEN
+    RAISE EXCEPTION 'La póliza publicada debe tener partidas y estar balanceada (débito %, crédito %)', v_debit, v_credit;
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_validate_posted_accounting_entry_deferred ON accounting_entries;
+CREATE CONSTRAINT TRIGGER trg_validate_posted_accounting_entry_deferred
+AFTER INSERT OR UPDATE ON accounting_entries
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION validate_posted_accounting_entry_deferred();
+
+CREATE OR REPLACE FUNCTION validate_posted_accounting_entry_lines()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  v_entry_id uuid := COALESCE(NEW.entry_id, OLD.entry_id);
+  v_posted boolean; v_debit numeric; v_credit numeric; v_lines integer;
+BEGIN
+  SELECT is_posted INTO v_posted FROM accounting_entries WHERE id = v_entry_id;
+  IF NOT COALESCE(v_posted, false) THEN RETURN NULL; END IF;
+
+  SELECT COUNT(*), COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0)
+    INTO v_lines, v_debit, v_credit
+    FROM accounting_entry_lines WHERE entry_id = v_entry_id;
+  IF v_lines = 0 OR v_debit <> v_credit THEN
+    RAISE EXCEPTION 'La póliza publicada debe permanecer balanceada';
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_validate_posted_accounting_entry_lines ON accounting_entry_lines;
+CREATE CONSTRAINT TRIGGER trg_validate_posted_accounting_entry_lines
+AFTER INSERT OR UPDATE OR DELETE ON accounting_entry_lines
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION validate_posted_accounting_entry_lines();
+
 CREATE OR REPLACE FUNCTION generate_entry_number(p_type text, p_anio integer, p_mes integer)
 RETURNS text LANGUAGE sql AS $$
   SELECT upper(left(p_type,3)) || '-' || p_anio || lpad(p_mes::text,2,'0') || '-' ||
