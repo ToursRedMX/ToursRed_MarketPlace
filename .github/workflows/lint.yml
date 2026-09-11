@@ -169,6 +169,32 @@ jobs:
       - name: Verify the CFDI reader proposes amounts that add up and belong to us
         run: node scripts/test-cfdi-xml.mjs
 
+      # La lectura COMPLETA del CFDI, que alimenta la vista y el PDF generico.
+      # Trampa propia: el recorredor guarda el camino por NOMBRE, asi que los
+      # traslados de dos conceptos distintos tienen caminos identicos y el
+      # concepto 1 se lleva el IVA de los dos si se asignan por camino.
+      - name: Verify the full CFDI reading splits tax per concept
+        run: node scripts/test-cfdi-resumen.mjs
+
+      # Las fuentes base de PDF codifican en Latin-1 y jspdf BORRA sin avisar lo
+      # que no entra: `doc.text('A - B')` con raya larga imprime "A  B". Todo
+      # texto pasa por un saneador, y esto lo comprueba contra los bytes del PDF.
+      - name: Verify the generic CFDI PDF keeps every character it is given
+        run: node scripts/test-cfdi-pdf.mjs
+
+      # Cargar 30 XML de golpe es donde un error NO se nota: la pantalla dice
+      # «listo» y quedaron 28. El mismo CFDI dos veces en la seleccion pasa de
+      # verdad con las descargas del portal del SAT, y un CFDI en dolares sin
+      # tipo de cambio entra con un 1 de relleno que registrado asentaria
+      # dolares como pesos: tiene que entrar MARCADO, nunca callado.
+      - name: Verify bulk CFDI loading rejects per file without dropping the batch
+        run: node scripts/test-carga-masiva-cfdi.mjs
+
+      # El nombre del archivo viene del disco de quien sube y con el se arma la
+      # llave del objeto en Storage: un `..` es una travesia de directorios.
+      - name: Verify attachment storage keys cannot escape their folder
+        run: node scripts/test-soportes-helper.mjs
+
       # Tres promesas de la captura de gastos que solo viven en la pantalla y
       # que ninguna prueba de SQL puede cubrir: que el total en pesos se calcule
       # pero se pueda EDITAR (el banco aplica su propio tipo de cambio), que el
@@ -337,6 +363,66 @@ jobs:
           psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS pagos;" -c "CREATE DATABASE pagos;"
           cd scripts
           psql -h localhost -U postgres -d pagos -v ON_ERROR_STOP=1 -f test-pagar-gasto.sql
+
+      # Un gasto devengado en julio y pagado en septiembre son DOS hechos en dos
+      # meses. El bloque 19 los daba como uno solo, fechado el dia del gasto, y
+      # el reporte maestro contaba la salida de banco en el mes equivocado. Las
+      # pruebas anteriores no lo vieron porque el invariante caja = pasivo +
+      # ingreso cuadra igual: es ciego al tiempo. Estas afirman contra VENTANAS
+      # DE FECHAS, que es como consulta el reporte, y atan la vista al libro.
+      - name: Verify an expense payment lands on its own date, not the expense's
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS fechas;" -c "CREATE DATABASE fechas;"
+          cd scripts
+          psql -h localhost -U postgres -d fechas -v ON_ERROR_STOP=1 -f test-fecha-del-pago.sql
+
+      # Una factura de proveedor trae RFC, domicilio fiscal y razon social. Si el
+      # bucket de comprobantes queda PUBLICO, ese documento esta a un `curl` de
+      # distancia de cualquiera que adivine la ruta — y la pantalla funcionaria
+      # igual de bien, que es lo que lo hace invisible. El caso 1 lo afirma.
+      - name: Verify the expense attachments bucket stays private
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS soportes;" -c "CREATE DATABASE soportes;"
+          cd scripts
+          psql -h localhost -U postgres -d soportes -v ON_ERROR_STOP=1 -f test-soportes-de-gasto.sql
+
+      # Una politica RLS que consulta la tabla que protege es recursion infinita
+      # (42P17), y se lleva por delante a TODA politica que lea esa tabla —
+      # incluidas las siete de storage.objects, que rompian las subidas de
+      # archivos en todos los buckets. El caso 1 REPRODUCE el bug antes de
+      # arreglarlo: sin eso los demas pasarian aunque nunca hubiera existido.
+      - name: Verify no RLS policy queries the table it protects
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS recursion;" -c "CREATE DATABASE recursion;"
+          cd scripts
+          psql -h localhost -U postgres -d recursion -v ON_ERROR_STOP=1 -f test-recursion-routesred.sql
+
+      # Postgres evalua TODAS las politicas permisivas de un comando, no solo la
+      # del bucket que le interesa al usuario. Una politica de storage.objects
+      # que consulte una tabla que el rol no puede leer mata la operacion
+      # ENTERA, en cualquier bucket: es un punto unico de fallo para todo
+      # Storage. El caso 1 reproduce el 42501 antes de arreglarlo.
+      - name: Verify no storage policy reads a table the caller cannot read
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS almacen;" -c "CREATE DATABASE almacen;"
+          cd scripts
+          psql -h localhost -U postgres -d almacen -v ON_ERROR_STOP=1 -f test-storage-sin-routesred.sql
 
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger

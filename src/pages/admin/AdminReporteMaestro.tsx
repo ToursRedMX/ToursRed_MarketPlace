@@ -93,6 +93,10 @@ const ETIQUETAS: Record<string, string> = {
   puntos_otorgados: 'Puntos otorgados',
   liquidacion_aseguradora: 'Liquidacion a aseguradora',
   contracargo: 'Contracargo',
+  // El gasto y su pago son dos renglones distintos, en dos fechas distintas:
+  // el devengo el dia de la factura, la salida de banco el dia que se pago.
+  gasto_operacion: 'Gasto de operacion',
+  pago_de_gasto: 'Pago de gasto',
 };
 
 const etiqueta = (c: string) =>

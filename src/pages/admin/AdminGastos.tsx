@@ -1,11 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Upload, RefreshCw, AlertCircle, Info, CheckCircle2, XCircle,
-  FileText, Repeat, Calculator, Trash2,
+  FileText, Repeat, Calculator, Trash2, Paperclip, FileDown, Layers, Download,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { leerCfdiParaGasto } from '../../utils/cfdiXml';
+import { descargarPdfDeCfdi } from '../../utils/cfdiPdf.ts';
+import { prepararLoteDeCfdi, type LoteDeCfdi } from '../../utils/cargaMasivaCfdi.ts';
+import {
+  subirSoporte, urlDeSoporte, borrarSoporte, descargarTexto,
+  TIPOS_ACEPTADOS, type SoporteDeGasto,
+} from '../../utils/soportesDeGasto.ts';
 
 /**
  * Captura de gastos de operacion.
@@ -59,6 +65,10 @@ interface Gasto {
   referencia_pago: string | null;
   pagado_en: string | null;
   cfdi_uuid: string | null;
+  // Ya venia en el `select('*')` desde siempre, pero no estaba declarado, asi
+  // que nada podia usarlo sin que tsc se quejara. Es lo que alimenta la
+  // descarga del XML y el PDF generico.
+  cfdi_xml: string | null;
   estado: string;
   periodo: string | null;
   asiento_id: string | null;
@@ -197,6 +207,20 @@ const AdminGastos: React.FC = () => {
   const [pagos, setPagos] = useState<PagoDeGasto[]>([]);
   // El pago que se esta capturando, o null si el modal esta cerrado. Guarda el
   // gasto entero y no solo su id: el modal necesita el saldo y el proveedor.
+  // Documentos: el XML que ya se guardaba pero no se podia mirar, y los
+  // archivos que alguien sube como respaldo.
+  const [soportes, setSoportes] = useState<SoporteDeGasto[]>([]);
+  const [viendoDocs, setViendoDocs] = useState<Gasto | null>(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const inputSoporte = useRef<HTMLInputElement>(null);
+
+  // Carga masiva: muchos XML de golpe, todos como borradores.
+  const [loteAbierto, setLoteAbierto] = useState(false);
+  const [lote, setLote] = useState<LoteDeCfdi | null>(null);
+  const [cuentaDelLote, setCuentaDelLote] = useState('');
+  const [insertandoLote, setInsertandoLote] = useState(false);
+  const inputLote = useRef<HTMLInputElement>(null);
+
   const [pagando, setPagando] = useState<Gasto | null>(null);
   const [formPago, setFormPago] = useState({ fecha: '', monto: '', metodo: '', referencia: '' });
 
@@ -225,7 +249,7 @@ const AdminGastos: React.FC = () => {
     const [anio, mes] = periodo.split('-').map(Number);
     const hasta = new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10);
 
-    const [resGastos, resRec, resCuentas, resAjustes, resPagos] = await Promise.all([
+    const [resGastos, resRec, resCuentas, resAjustes, resPagos, resSoportes] = await Promise.all([
       supabase.from('gastos_operacion').select('*')
         .gte('fecha', desde).lte('fecha', hasta).order('fecha', { ascending: false }),
       supabase.from('gastos_recurrentes').select('*').order('nombre'),
@@ -236,12 +260,22 @@ const AdminGastos: React.FC = () => {
       // un gasto de julio puede pagarse en agosto: el filtro de fecha es del
       // GASTO, y los pagos se ligan por id.
       supabase.from('pagos_de_gasto').select('*').order('fecha'),
+      // Los soportes de TODOS los gastos del periodo. Son filas chicas (ruta y
+      // nombre, no bytes), asi que traerlas de una vez evita una consulta por
+      // gasto al abrir cada panel de documentos.
+      supabase.from('soportes_de_gasto').select('*').order('created_at'),
     ]);
 
     // Los errores se muestran. Una lista vacia por un error de permisos se lee
     // igual que "no hay gastos", y esa confusion ya costo caro en otras
     // pantallas de este panel.
     const fallo = resGastos.error || resRec.error || resCuentas.error || resPagos.error;
+    // El de soportes NO tumba la pantalla: si falla, los gastos se siguen
+    // viendo y solo faltan los adjuntos. Pero se dice, no se traga.
+    if (resSoportes.error) {
+      console.error('AdminGastos: no se pudieron leer los soportes', resSoportes.error);
+      setAviso('Los gastos se cargaron, pero no se pudieron leer sus archivos adjuntos.');
+    }
     if (fallo) {
       setError(`No se pudieron cargar los gastos: ${fallo.message}`);
       setCargando(false);
@@ -253,6 +287,7 @@ const AdminGastos: React.FC = () => {
 
     setGastos((resGastos.data ?? []) as Gasto[]);
     setPagos((resPagos.data ?? []) as PagoDeGasto[]);
+    setSoportes((resSoportes.data ?? []) as SoporteDeGasto[]);
     setRecurrentes((resRec.data ?? []) as Recurrente[]);
     setCuentas((resCuentas.data ?? []) as Cuenta[]);
     setRfcPlataforma(resAjustes.data?.pac_issuer_rfc ?? '');
@@ -361,6 +396,120 @@ const AdminGastos: React.FC = () => {
       cfdi_xml: texto,
     }));
     setAvisosCfdi(lectura.avisos);
+  };
+
+  // ---------------------------------------------------------------------
+  // Documentos de un gasto
+  // ---------------------------------------------------------------------
+  const soportesDe = useCallback(
+    (gastoId: string) => soportes.filter((x) => x.gasto_id === gastoId),
+    [soportes],
+  );
+
+  /** Cuantos papeles tiene un gasto: el XML cuenta como uno. */
+  const documentosDe = useCallback(
+    (g: Gasto) => (g.cfdi_xml ? 1 : 0) + soportesDe(g.id).length,
+    [soportesDe],
+  );
+
+  const bajarXml = (g: Gasto) => {
+    if (!g.cfdi_xml) return;
+    descargarTexto(`CFDI-${g.cfdi_uuid ?? g.id.slice(0, 8)}.xml`, g.cfdi_xml);
+  };
+
+  const bajarPdfDelXml = (g: Gasto) => {
+    if (!g.cfdi_xml) return;
+    // Devuelve false cuando el texto guardado no es un CFDI legible. No deberia
+    // pasar —entro por el lector—, pero descargar un papel en blanco sin decir
+    // nada seria peor que el error.
+    if (!descargarPdfDeCfdi(g.cfdi_xml)) {
+      setError('El XML guardado no se pudo leer como CFDI, asi que no se pudo armar el PDF.');
+    }
+  };
+
+  const abrirSoporte = async (soporte: SoporteDeGasto) => {
+    // El bucket es privado: no hay URL publica, se firma una que caduca.
+    const { url, error: fallo } = await urlDeSoporte(supabase, soporte.ruta, 120);
+    if (fallo || !url) { setError(fallo ?? 'No se pudo abrir el archivo.'); return; }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const guardarSoporte = async (gasto: Gasto, archivo: File) => {
+    setSubiendo(true);
+    setError(null);
+    const fallo = await subirSoporte(supabase, gasto.id, archivo);
+    setSubiendo(false);
+    if (fallo) { setError(fallo); return; }
+    setAviso(`Se adjunto ${archivo.name}.`);
+    void cargar();
+  };
+
+  const quitarSoporte = async (soporte: SoporteDeGasto) => {
+    if (!window.confirm(`Quitar ${soporte.nombre}? El archivo se borra y no se puede deshacer.`)) return;
+    setSubiendo(true);
+    const fallo = await borrarSoporte(supabase, soporte);
+    setSubiendo(false);
+    if (fallo) { setError(fallo); return; }
+    void cargar();
+  };
+
+  // ---------------------------------------------------------------------
+  // Carga masiva de XML
+  // ---------------------------------------------------------------------
+  const leerLote = async (archivos: FileList) => {
+    setError(null);
+    const leidos = await Promise.all(
+      [...archivos].map(async (f) => ({ nombre: f.name, texto: await f.text() })),
+    );
+    // Los UUID que ya estan capturados. Se consultan SIN filtro de periodo: un
+    // CFDI de marzo tambien choca contra el indice unico aunque la pantalla
+    // este mirando julio, y rechazarlo aqui da un motivo claro en vez de un
+    // error de Postgres a mitad del lote.
+    const { data, error: fallo } = await supabase
+      .from('gastos_operacion').select('cfdi_uuid').not('cfdi_uuid', 'is', null);
+    if (fallo) {
+      setError(`No se pudieron comprobar los CFDI ya capturados: ${fallo.message}`);
+      return;
+    }
+    const existentes = new Set((data ?? []).map((r: { cfdi_uuid: string }) => r.cfdi_uuid));
+    setLote(prepararLoteDeCfdi(leidos, rfcPlataforma, cuentaDelLote, existentes));
+  };
+
+  const insertarLote = async () => {
+    if (!lote || lote.borradores.length === 0) return;
+    if (!cuentaDelLote) { setError('Elige la cuenta contable con la que nacen los borradores.'); return; }
+
+    setInsertandoLote(true);
+    setError(null);
+
+    // Mismo criterio que en `guardar`: si la sesion no resuelve se deja que el
+    // DEFAULT auth.uid() lo intente, pero no se calla el error.
+    const { data: { session: sesion }, error: errorSesion } = await supabase.auth.getSession();
+    if (errorSesion) {
+      console.error('[AdminGastos] no se pudo resolver quien carga el lote:', errorSesion);
+    }
+    const autorDelLote = sesion?.user?.id;
+
+    // La cuenta se aplica AQUI y no al preparar: asi se puede cambiar en el
+    // dialogo sin tener que volver a leer los archivos.
+    const filas = lote.borradores.map((b) => ({
+      ...b,
+      cuenta_contable: cuentaDelLote,
+      ...(autorDelLote ? { creado_por: autorDelLote } : {}),
+    }));
+
+    const { error: fallo } = await supabase.from('gastos_operacion').insert(filas);
+    setInsertandoLote(false);
+
+    if (fallo) { setError(traducirError(fallo.message)); return; }
+
+    setAviso(
+      `Se cargaron ${filas.length} borrador${filas.length === 1 ? '' : 'es'}. `
+      + 'Revisa cada uno: la cuenta contable es la misma para todos y el CFDI no dice cual va.',
+    );
+    setLoteAbierto(false);
+    setLote(null);
+    void cargar();
   };
 
   // ---------------------------------------------------------------------
@@ -729,6 +878,13 @@ const AdminGastos: React.FC = () => {
             <RefreshCw className={`h-4 w-4 ${cargando ? 'animate-spin' : ''}`} /> Actualizar
           </button>
           <button
+            onClick={() => { setLote(null); setLoteAbierto(true); }}
+            title="Carga varios XML de golpe. Todos entran como borradores para revisarlos despues."
+            className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+          >
+            <Layers className="h-4 w-4" /> Cargar XML en masa
+          </button>
+          <button
             onClick={abrirNuevo}
             className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
           >
@@ -945,11 +1101,25 @@ const AdminGastos: React.FC = () => {
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900">{g.proveedor}</div>
                     <div className="text-xs text-gray-500">{g.descripcion}</div>
-                    {g.cfdi_uuid && (
-                      <div className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                        <FileText className="h-3 w-3" /> {g.cfdi_uuid.slice(0, 8)}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-3 mt-0.5">
+                      {g.cfdi_uuid && (
+                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                          <FileText className="h-3 w-3" /> {g.cfdi_uuid.slice(0, 8)}
+                        </span>
+                      )}
+                      {/* El contador va aqui y no en una columna aparte: la
+                          tabla ya tiene siete y el dato pertenece al gasto. */}
+                      <button
+                        onClick={() => setViendoDocs(g)}
+                        title="Ver el XML, bajar el PDF y adjuntar comprobantes"
+                        className="text-xs text-gray-500 hover:text-red-600 flex items-center gap-1"
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        {documentosDe(g) === 0
+                          ? 'Sin documentos'
+                          : `${documentosDe(g)} documento${documentosDe(g) === 1 ? '' : 's'}`}
+                      </button>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{g.cuenta_contable}</td>
                   <td className="px-4 py-3 text-right text-gray-700 whitespace-nowrap">
@@ -1032,6 +1202,253 @@ const AdminGastos: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Documentos de un gasto                                            */}
+      {/* ---------------------------------------------------------------- */}
+      {viendoDocs && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="font-semibold text-gray-900">Documentos</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {viendoDocs.proveedor} — {viendoDocs.descripcion}
+                </p>
+              </div>
+              <button onClick={() => setViendoDocs(null)} className="text-gray-400 hover:text-gray-600">
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              {/* --- El CFDI --- */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-2">CFDI</h4>
+                {viendoDocs.cfdi_xml ? (
+                  <div className="rounded-lg border border-gray-200 p-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
+                      <FileText className="h-4 w-4 text-gray-400" />
+                      <span className="font-mono text-xs">{viendoDocs.cfdi_uuid ?? 'sin folio fiscal'}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">
+                      El XML es el documento fiscal. El PDF se arma a partir de el cada vez que lo pides,
+                      asi que siempre coincide con el original.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => bajarXml(viendoDocs)}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-xs hover:bg-gray-50"
+                      >
+                        <Download className="h-3.5 w-3.5" /> Descargar XML
+                      </button>
+                      <button
+                        onClick={() => bajarPdfDelXml(viendoDocs)}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-xs hover:bg-gray-50"
+                      >
+                        <FileDown className="h-3.5 w-3.5" /> Ver como PDF
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 rounded-lg border border-dashed border-gray-300 p-3">
+                    Este gasto se capturo a mano, sin CFDI. Puedes adjuntar el PDF de la factura abajo.
+                  </p>
+                )}
+              </div>
+
+              {/* --- Los soportes --- */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-gray-900">Soportes</h4>
+                  <button
+                    onClick={() => inputSoporte.current?.click()}
+                    disabled={subiendo}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-xs hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <Upload className="h-3.5 w-3.5" /> {subiendo ? 'Subiendo...' : 'Adjuntar archivo'}
+                  </button>
+                  <input
+                    ref={inputSoporte} type="file" className="hidden"
+                    accept={TIPOS_ACEPTADOS.join(',')}
+                    onChange={(e) => {
+                      const archivo = e.target.files?.[0];
+                      if (archivo && viendoDocs) void guardarSoporte(viendoDocs, archivo);
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
+
+                {soportesDe(viendoDocs.id).length === 0 ? (
+                  <p className="text-sm text-gray-500 rounded-lg border border-dashed border-gray-300 p-3">
+                    Nada adjunto todavia. Aqui va el PDF del proveedor, el comprobante de la
+                    transferencia o el contrato. Ninguno es obligatorio.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                    {soportesDe(viendoDocs.id).map((x) => (
+                      <li key={x.id} className="flex items-center gap-3 px-3 py-2">
+                        <Paperclip className="h-4 w-4 text-gray-400 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm text-gray-800 truncate">{x.nombre}</div>
+                          <div className="text-xs text-gray-400">
+                            {x.bytes ? `${(x.bytes / 1024).toFixed(0)} KB` : ''}
+                            {x.created_at ? ` · ${x.created_at.slice(0, 10)}` : ''}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => void abrirSoporte(x)}
+                          className="text-xs text-gray-600 hover:text-red-600"
+                        >
+                          Abrir
+                        </button>
+                        <button
+                          onClick={() => void quitarSoporte(x)}
+                          disabled={subiendo}
+                          className="text-gray-300 hover:text-red-600 disabled:opacity-50"
+                          title="Quitar"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-200 text-right">
+              <button
+                onClick={() => setViendoDocs(null)}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Carga masiva de XML                                               */}
+      {/* ---------------------------------------------------------------- */}
+      {loteAbierto && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="font-semibold text-gray-900">Cargar XML en masa</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Todos entran como BORRADORES. Ninguno se registra ni genera asiento.
+                </p>
+              </div>
+              <button
+                onClick={() => { setLoteAbierto(false); setLote(null); }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cuenta contable</label>
+                <select
+                  value={cuentaDelLote}
+                  onChange={(e) => setCuentaDelLote(e.target.value)}
+                  className={CLASE_INPUT}
+                >
+                  <option value="">Elige una cuenta...</option>
+                  {cuentas.map((c) => (
+                    <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+                  ))}
+                </select>
+                {/* Esto no es un detalle: el CFDI dice quien cobra y cuanto,
+                    pero no a que cuenta va el gasto. Eso es criterio contable. */}
+                <p className="text-xs text-gray-500 mt-1">
+                  El CFDI no dice a que cuenta va el gasto: eso es criterio contable, no dato fiscal.
+                  Todos nacen con esta y la corriges despues en los que no vayan aqui.
+                </p>
+              </div>
+
+              <div>
+                <button
+                  onClick={() => inputLote.current?.click()}
+                  className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+                >
+                  <Upload className="h-4 w-4" /> Elegir archivos XML
+                </button>
+                <input
+                  ref={inputLote} type="file" multiple className="hidden"
+                  accept=".xml,text/xml,application/xml"
+                  onChange={(e) => {
+                    if (e.target.files?.length) void leerLote(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+
+              {lote && (
+                <>
+                  <div className="flex gap-3 text-sm">
+                    <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-800">
+                      {lote.listos} listo{lote.listos === 1 ? '' : 's'}
+                    </span>
+                    {lote.rechazados > 0 && (
+                      <span className="px-2 py-1 rounded bg-red-50 text-red-800">
+                        {lote.rechazados} sin cargar
+                      </span>
+                    )}
+                  </div>
+
+                  <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 max-h-72 overflow-y-auto">
+                    {lote.resultados.map((r) => (
+                      <li key={r.nombre} className="px-3 py-2 text-sm">
+                        <div className="flex items-start gap-2">
+                          {r.borrador
+                            ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                            : <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-gray-800 truncate">{r.nombre}</div>
+                            {r.borrador && (
+                              <div className="text-xs text-gray-500">
+                                {r.borrador.proveedor} · {r.borrador.fecha} ·{' '}
+                                {r.borrador.total.toFixed(2)} {r.borrador.moneda}
+                              </div>
+                            )}
+                            {r.motivo && <div className="text-xs text-red-700 mt-0.5">{r.motivo}</div>}
+                            {r.avisos.map((a) => (
+                              <div key={a} className="text-xs text-amber-700 mt-0.5">{a}</div>
+                            ))}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => { setLoteAbierto(false); setLote(null); }}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void insertarLote()}
+                disabled={insertandoLote || !lote || lote.listos === 0 || !cuentaDelLote}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {insertandoLote
+                  ? 'Cargando...'
+                  : `Cargar ${lote?.listos ?? 0} borrador${(lote?.listos ?? 0) === 1 ? '' : 'es'}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ---------------------------------------------------------------- */}
       {/* Pago de un gasto registrado                                       */}
