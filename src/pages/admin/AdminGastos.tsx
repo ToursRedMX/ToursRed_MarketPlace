@@ -118,6 +118,17 @@ interface Formulario {
 const HOY = () => new Date().toISOString().slice(0, 10);
 const PERIODO_ACTUAL = () => new Date().toISOString().slice(0, 7);
 
+/** "2026-07" -> "julio de 2026". Se arma a mediodia UTC para que el cambio de
+ *  huso no corra el mes: `new Date('2026-07-01')` en UTC-6 cae en junio. */
+const nombreDePeriodo = (periodo: string): string => {
+  const [anio, mes] = periodo.split('-').map(Number);
+  return new Date(Date.UTC(anio, mes - 1, 1, 12)).toLocaleDateString('es-MX', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+};
+
 const FORMULARIO_VACIO = (): Formulario => ({
   id: null,
   fecha: HOY(),
@@ -377,9 +388,37 @@ const AdminGastos: React.FC = () => {
       ...(form.cfdi_xml ? { cfdi_xml: form.cfdi_xml } : {}),
     };
 
+    // Quien lo captura. La columna existia desde el principio y NADIE la
+    // llenaba: las capturas nacian con `creado_por` nulo, asi que no habia
+    // forma de saber quien registro un gasto — y `gastos_operacion` tampoco
+    // tiene trigger de auditoria. Importa desde que el permiso
+    // `can_manage_expenses` se le puede dar a alguien que no es el super admin.
+    //
+    // Solo en el alta: en una edicion sobrescribiria al autor original con el
+    // de quien corrige.
+    //
+    // La red de verdad es el DEFAULT auth.uid() de la tabla (20260911020000),
+    // que cubre a cualquier cliente presente o futuro. Esto es el cinturon.
+    //
+    // Si no hay usuario, la clave se OMITE en vez de mandarse nula: en Postgres
+    // un NULL explicito ANULA el DEFAULT —solo aplica cuando la columna no
+    // viene—, asi que `creado_por: x ?? null` desactivaria justo la red que
+    // pone la migracion. Comprobado contra Postgres 16 al escribirla.
+    const { data: sesion, error: errorSesion } = await supabase.auth.getUser();
+    if (errorSesion) {
+      // No se aborta el guardado: el gasto es el dato que importa y perderlo
+      // seria peor que guardarlo sin autor. Pero tampoco se calla, porque un
+      // gasto sin autor no se distingue de uno capturado por el cron, y aqui
+      // el DEFAULT auth.uid() tampoco va a salvarlo: si la sesion no resuelve
+      // en el cliente, lo mas probable es que PostgREST tampoco la vea.
+      console.error('[AdminGastos] no se pudo resolver quien captura el gasto:', errorSesion);
+    }
+    const autor = sesion?.user?.id;
+
     const { error: errorGuardar } = form.id
       ? await supabase.from('gastos_operacion').update(fila).eq('id', form.id)
-      : await supabase.from('gastos_operacion').insert(fila);
+      : await supabase.from('gastos_operacion')
+          .insert({ ...fila, ...(autor ? { creado_por: autor } : {}) });
 
     setGuardando(false);
     if (errorGuardar) {
@@ -387,7 +426,35 @@ const AdminGastos: React.FC = () => {
       return;
     }
     setFormAbierto(false);
-    setAviso(form.id ? 'Gasto actualizado.' : 'Gasto guardado como borrador. Registralo para que entre a contabilidad.');
+
+    // El gasto puede caer FUERA del mes que se esta viendo, y casi siempre asi
+    // es al cargar un XML: el lector toma la fecha del CFDI —la de la factura—
+    // mientras el filtro sigue en el mes actual. Sin esto la pantalla decia
+    // "guardado" y enseguida mostraba la lista vacia, que se lee como que no se
+    // guardo nada. Paso en la primera captura real, 11-sep-2026: una factura de
+    // TikTok del 01-jul quedo invisible en el periodo de septiembre.
+    //
+    // Se mueve el filtro al mes del gasto en vez de solo avisar: el objetivo es
+    // VERLO, y dejar al usuario cambiando el selector a mano despues de un
+    // mensaje es pedirle que arregle algo que la pantalla ya sabe.
+    const periodoDelGasto = form.fecha.slice(0, 7);
+    const cambiaDeMes = periodoDelGasto !== periodo;
+
+    const queHizo = form.id
+      ? 'Gasto actualizado.'
+      : 'Gasto guardado como borrador. Registralo para que entre a contabilidad.';
+    setAviso(
+      cambiaDeMes
+        ? `${queHizo} Quedo en ${nombreDePeriodo(periodoDelGasto)} porque esa es su fecha, `
+          + 'asi que se cambio el filtro para mostrartelo.'
+        : queHizo,
+    );
+
+    if (cambiaDeMes) {
+      // `cargar` se dispara solo por el efecto que depende de `periodo`.
+      setPeriodo(periodoDelGasto);
+      return;
+    }
     void cargar();
   };
 
