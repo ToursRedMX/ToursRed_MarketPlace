@@ -271,6 +271,31 @@ casos.push(async () => {
     'la fila pending de un SPEI nacio sin comision: al confirmarla hay que pedirla');
 });
 
+// --- 14. El asiento contable se dispara DESPUES de escribir la comision ----
+casos.push(async () => {
+  // Una poliza publicada es INMUTABLE ('genere una reversa'), asi que la
+  // comision que no entre al crearla no entra nunca. El webhook disparaba
+  // sync-booking-to-accounting unas lineas ANTES de consultarsela a Stripe:
+  // no era una carrera reñida, el asiento ganaba siempre porque el otro camino
+  // incluye una llamada a la API. Medido el 11-sep-2026: 12 asientos sin la
+  // comision de su cobro, $2,157.01 entre gasto e IVA acreditable.
+  const fuente = readFileSync('supabase/functions/stripe-webhook/index.ts', 'utf8');
+
+  const disparo = fuente.indexOf("functions/v1/sync-booking-to-accounting");
+  assert.ok(disparo > 0, 'no se encontro el disparo del asiento contable');
+
+  const comision = fuente.indexOf('.update(columnasDeComision(stripeFee))');
+  assert.ok(comision > 0, 'no se encontro el update de la comision del anticipo');
+
+  assert.ok(comision < disparo,
+    'el asiento contable tiene que dispararse DESPUES de escribir la comision, o el libro la pierde para siempre');
+
+  // Y solo cuando hubo cobro: un SPEI en 'unpaid' no tiene nada que asentar.
+  const antes = fuente.slice(Math.max(0, disparo - 400), disparo);
+  assert.ok(/if \(cobroLiquidado\) \{/.test(antes),
+    'con la sesion en unpaid no hay cobro que asentar');
+});
+
 let ok = 0;
 for (const caso of casos) { await caso(); ok++; }
 console.log(`Cobros de Stripe: ${ok}/${casos.length} casos OK`);

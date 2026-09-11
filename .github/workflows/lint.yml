@@ -302,6 +302,24 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d gastos -v ON_ERROR_STOP=1 -f test-gastos-operacion.sql
 
+      # El asiento contable se publica al confirmar el pago; la comision del
+      # procesador se conoce despues. Y una poliza publicada es INMUTABLE, asi
+      # que lo que no entre entonces no entra nunca: medido el 11-sep-2026, 12
+      # asientos sin la comision de su cobro, $2,157.01 entre gasto e IVA
+      # acreditable. El asiento cuadra igual (debe = haber) porque Bancos se
+      # cargo con el bruto: lo que esta mal es la clasificacion, no la suma.
+      # Los cuatro primeros casos son los cuatro errores que se cometieron al
+      # escribir la deteccion a mano, cada uno con un total distinto y plausible.
+      - name: Verify a late processor fee still reaches the ledger
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS comisiones;" -c "CREATE DATABASE comisiones;"
+          cd scripts
+          psql -h localhost -U postgres -d comisiones -v ON_ERROR_STOP=1 -f test-comisiones-al-libro.sql
+
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
       # que escribe el snapshot fiscal de cada cobro, y esos numeros son los que

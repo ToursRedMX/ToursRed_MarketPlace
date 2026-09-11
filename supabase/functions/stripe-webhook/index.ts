@@ -1544,12 +1544,21 @@ Deno.serve(async (req) => {
                   console.error('Error triggering booking CFDI:', cfdiErr);
                 }
 
-                // Sync booking to accounting system (fire and forget)
-                fetch(`${supabaseUrl}/functions/v1/sync-booking-to-accounting`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
-                  body: JSON.stringify({ booking_id: bookingId }),
-                }).catch((err) => console.error('Error triggering booking accounting sync:', err));
+                // Aqui vivia el disparo de `sync-booking-to-accounting`. Se movio
+                // MAS ABAJO, despues de escribir la comision del procesador.
+                //
+                // El asiento se creaba unas lineas antes de consultarle la
+                // comision a Stripe, y una poliza publicada es INMUTABLE: la
+                // comision llegaba ~100 ms tarde y el libro la perdia para
+                // siempre. No era una carrera reñida — el asiento ganaba
+                // practicamente siempre, porque el otro camino incluye una
+                // llamada a la API de Stripe.
+                //
+                // Medido el 11-sep-2026: 12 asientos sin la comision de su
+                // cobro, $2,157.01 entre gasto e IVA acreditable. Los otros
+                // cuatro caminos (conekta, openpay, mercadopago y
+                // capture-paypal-order) ya la escribian ANTES; este era el unico
+                // con el orden invertido.
 
                 // Create payment plan if selected_payment_mode === 'plan'
                 try {
@@ -1718,6 +1727,25 @@ Deno.serve(async (req) => {
             .from('payment_transactions')
             .update(columnasDeComision(stripeFee))
             .eq('stripe_payment_intent_id', paymentIntentId);
+        }
+
+        // El asiento contable se dispara AQUI, con la comision ya escrita, y no
+        // arriba junto al resto de los avisos. Ver el comentario de aquel sitio:
+        // una poliza publicada es inmutable, asi que lo que no entre ahora no
+        // entra nunca. `asentar_comisiones_faltantes()` (20260911030000) es la
+        // red para las comisiones que aun asi lleguen tarde —un backfill, un
+        // reintento—, pero la red no deberia usarse en el camino normal.
+        //
+        // Sigue siendo fire and forget: que la contabilidad tarde o falle no
+        // puede tumbar la confirmacion de un cobro que ya ocurrio.
+        if (cobroLiquidado) {
+          EdgeRuntime.waitUntil(
+            fetch(`${supabaseUrl}/functions/v1/sync-booking-to-accounting`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({ booking_id: bookingId }),
+            }).catch((err) => console.error('Error triggering booking accounting sync:', err))
+          );
         }
 
         if (transactionError) {
