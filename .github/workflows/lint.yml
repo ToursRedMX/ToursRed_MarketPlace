@@ -56,9 +56,14 @@ env:
   #                      Numero MEDIDO por CI en el job 103441033110 (PR #242),
   #                      no local: la instalacion de `xlsx` difiere entre
   #                      entornos y un conteo de escritorio no es comparable.
-  BASELINE_ERRORS: 2121
+  #   11-sep  2199/2111  se retiran 10 `react-hooks/set-state-in-effect` que eran
+  #                      estado derivado de verdad (PR #242). Los otros 108 NO
+  #                      se tocan a bulto: 58 son `useEffect(() => fetchX())`,
+  #                      el patron de carga del repo, y el resto pide leer caso
+  #                      por caso. Ver la entrada 24 de la bitacora.
+  BASELINE_ERRORS: 2111
   BASELINE_WARNINGS: 88
-  BASELINE_TOTAL: 2209
+  BASELINE_TOTAL: 2199
   BASELINE_FILES: 316
 
 jobs:

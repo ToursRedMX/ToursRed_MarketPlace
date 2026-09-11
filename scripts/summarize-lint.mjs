@@ -41,7 +41,7 @@ import path from 'node:path';
 const BASE = {
   '@typescript-eslint/no-explicit-any': 1615,
   'no-useless-escape': 171,
-  'react-hooks/set-state-in-effect': 118,
+  'react-hooks/set-state-in-effect': 108,
   'react-hooks/exhaustive-deps': 84,
   'react-hooks/immutability': 82,
   '@typescript-eslint/no-unused-vars': 79,
@@ -74,10 +74,10 @@ const BASE = {
 // Corriendo local sin las env del workflow, se cae a la misma base para que
 // los deltas sigan teniendo sentido.
 const num = (name, fallback) => Number(process.env[name] ?? fallback);
-const BASELINE_ERRORS = num('BASELINE_ERRORS', 2388);
+const BASELINE_ERRORS = num('BASELINE_ERRORS', 2111);
 const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 88);
-const BASELINE_TOTAL = num('BASELINE_TOTAL', 2476);
-const BASELINE_FILES = num('BASELINE_FILES', 325);
+const BASELINE_TOTAL = num('BASELINE_TOTAL', 2199);
+const BASELINE_FILES = num('BASELINE_FILES', 316);
 
 const argv = process.argv.slice(2);
 const estricto = argv.includes('--strict');

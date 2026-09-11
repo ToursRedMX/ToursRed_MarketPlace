@@ -71,7 +71,6 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
   const [parentSearch, setParentSearch] = useState('');
   const [showParentDropdown, setShowParentDropdown] = useState(false);
   const [codeManuallyEdited, setCodeManuallyEdited] = useState(isEdit);
-  const [codeTaken, setCodeTaken] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,12 +112,18 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
     if (!isEdit) setNature(DEFAULT_NATURE[accountType] ?? 'deudora');
   }, [accountType, isEdit]);
 
-  // Check code uniqueness (debounced)
-  useEffect(() => {
-    if (!code || (isEdit && code === account?.code)) { setCodeTaken(false); return; }
-    const exists = allAccounts.some(a => a.code === code && a.id !== account?.id);
-    setCodeTaken(exists);
-  }, [code, allAccounts, isEdit, account]);
+  // Si el codigo ya existe. Se CALCULA, no se guarda.
+  //
+  // Era un useState sincronizado por un efecto cuyo comentario decia
+  // «(debounced)» — no lo estaba, no habia ningun temporizador. Y al ser
+  // estado quedaba una ventana de un render en la que `code` ya habia cambiado
+  // y `codeTaken` todavia valia lo anterior. Esa variable gobierna el `disabled`
+  // del boton de guardar Y la validacion de `handleSubmit`, asi que la ventana
+  // era la de guardar un codigo de cuenta duplicado. Calculado en el render no
+  // puede desfasarse.
+  const codeTaken = !code || (isEdit && code === account?.code)
+    ? false
+    : allAccounts.some(a => a.code === code && a.id !== account?.id);
 
   const handleSubmit = async () => {
     setError(null);

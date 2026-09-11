@@ -12,7 +12,10 @@ import * as XLSX from 'xlsx';
 
 const AgencyFinancials: React.FC = () => {
   const { agencyId: resolvedAgencyId } = useAgencyId();
-  const [agencyId, setAgencyId] = useState<string | null>(null);
+  // `agencyId` era un useState que solo copiaba `resolvedAgencyId` en un efecto,
+  // y nadie mas le escribia: costaba un render de mas y retrasaba la primera
+  // carga en un ciclo. Es un alias, no estado.
+  const agencyId = resolvedAgencyId;
   const [isLoading, setIsLoading] = useState(true);
   const [summary, setSummary] = useState<FinancialSummary>({
     pending_balance: 0,
@@ -27,11 +30,6 @@ const AgencyFinancials: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (resolvedAgencyId) {
-      setAgencyId(resolvedAgencyId);
-    }
-  }, [resolvedAgencyId]);
 
   useEffect(() => {
     if (agencyId) {

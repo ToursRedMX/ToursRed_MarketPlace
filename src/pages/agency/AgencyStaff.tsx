@@ -117,7 +117,10 @@ function daysUntil(dateStr: string): number {
 export default function AgencyStaff() {
   const { isAgencyStaff } = useAuth();
   const { agencyId: resolvedAgencyId } = useAgencyId();
-  const [agencyId, setAgencyId] = useState<string | null>(null);
+  // `agencyId` era un useState que solo copiaba `resolvedAgencyId` en un efecto,
+  // y nadie mas le escribia: costaba un render de mas y retrasaba la primera
+  // carga en un ciclo. Es un alias, no estado.
+  const agencyId = resolvedAgencyId;
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,7 +144,6 @@ export default function AgencyStaff() {
   const [cancellingInvitationId, setCancellingInvitationId] = useState<string | null>(null);
   const [resendingInvitationId, setResendingInvitationId] = useState<string | null>(null);
 
-  useEffect(() => { if (resolvedAgencyId) setAgencyId(resolvedAgencyId); }, [resolvedAgencyId]);
   useEffect(() => {
     if (agencyId) {
       fetchStaff();
