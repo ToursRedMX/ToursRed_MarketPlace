@@ -163,3 +163,43 @@ export function descuentoDeCargoPorServicio(
 
   return redondear(Math.min(Math.max(monto, 0), cargoCompleto));
 }
+
+/**
+ * Cuanto baja el COSTO DEL SEGURO de viaje.
+ *
+ * Vive aparte del descuento del tour porque son codigos distintos, validados
+ * por una RPC distinta (`validate_insurance_discount_code`) y guardados en
+ * columnas distintas de la reserva. Un codigo de seguro aplicado al tour, o al
+ * reves, produce una cifra creible y equivocada.
+ *
+ * `insurance_free` exonera el seguro entero e IGNORA `discount_value`, igual
+ * que `service_fee_full` con el cargo por servicio.
+ */
+export function descuentoDeSeguro(
+  codigo: CodigoDeDescuento | null | undefined,
+  costoDelSeguro: number,
+): number {
+  if (!codigo) return 0;
+  if (!(costoDelSeguro > 0)) return 0;
+
+  let monto: number;
+  switch (codigo.discount_type) {
+    case 'insurance_free':
+      monto = costoDelSeguro;
+      break;
+    case 'insurance_percentage':
+      monto = costoDelSeguro * (Number(codigo.discount_value) / 100);
+      break;
+    case 'insurance_fixed':
+      monto = Number(codigo.discount_value);
+      break;
+    default:
+      // No es un codigo de seguro. No se inventa un descuento.
+      return 0;
+  }
+
+  const tope = codigo.max_discount_amount;
+  if (tope != null && monto > Number(tope)) monto = Number(tope);
+
+  return redondear(Math.min(Math.max(monto, 0), costoDelSeguro));
+}

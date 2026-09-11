@@ -1,4 +1,5 @@
 import type { CodigoDeDescuento as DatosDelCodigoDeDescuento } from '../utils/descuentoDeReserva.ts';
+import type { PromocionDeGrupo as PromocionVigente } from '../utils/promocionDeGrupo.ts';
 
 import type { Tour } from './index';
 
@@ -103,7 +104,10 @@ export interface BookingFlowState {
    */
   discountCodeMeta: DatosDelCodigoDeDescuento | null;
   insuranceDiscountCodeId: string | null;
-  insuranceDiscountAmount: number;
+  /** Mismo criterio que el del tour: se guarda el codigo, el monto se deriva. */
+  insuranceDiscountMeta: DatosDelCodigoDeDescuento | null;
+  /** La promocion de grupo vigente del tour, tal como la devuelve la RPC. */
+  promocion: PromocionVigente | null;
 
   pointsUsed: number;
   toursredCashUsed: number;
@@ -152,7 +156,8 @@ export const INITIAL_FLOW_STATE: BookingFlowState = {
   discountCodeId: null,
   discountCodeMeta: null,
   insuranceDiscountCodeId: null,
-  insuranceDiscountAmount: 0,
+  insuranceDiscountMeta: null,
+  promocion: null,
   pointsUsed: 0,
   toursredCashUsed: 0,
   paymentProvider: 'stripe',

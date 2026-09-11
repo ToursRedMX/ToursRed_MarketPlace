@@ -5,7 +5,8 @@ import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
 import { useStepUp } from '../../context/StepUpContext';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
-import { montoDeDescuento, descuentoDeCargoPorServicio } from '../../utils/descuentoDeReserva.ts';
+import { montoDeDescuento, descuentoDeCargoPorServicio, descuentoDeSeguro } from '../../utils/descuentoDeReserva.ts';
+import { calcularPromocionDeGrupo } from '../../utils/promocionDeGrupo.ts';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { getEffectiveDepositPct } from '../../utils/depositCalculation';
@@ -54,6 +55,10 @@ const BookingFlowStep4: React.FC = () => {
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const [discountError, setDiscountError] = useState('');
   const [discountApplied, setDiscountApplied] = useState(false);
+  const [insuranceInput, setInsuranceInput] = useState('');
+  const [isApplyingInsurance, setIsApplyingInsurance] = useState(false);
+  const [insuranceError, setInsuranceError] = useState('');
+  const insuranceApplied = flow.insuranceDiscountMeta !== null;
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   // F-1: si alguna de las lecturas de abajo falla, el checkout seguia con
@@ -199,6 +204,30 @@ const BookingFlowStep4: React.FC = () => {
     return Math.max(1, days);
   }, [tour, flow.includeInsurance]);
 
+  // La promocion de grupo vigente del tour. La RPC ya filtra por `is_active`,
+  // fechas y usos agotados, y devuelve como mucho una.
+  useEffect(() => {
+    if (!tour?.id) return;
+    let vivo = true;
+    void (async () => {
+      const { data, error } = await supabase.rpc('get_active_promotion_for_tour', { p_tour_id: tour.id });
+      if (!vivo) return;
+      if (error) {
+        // Sin promocion se cobra precio normal: no se tumba la reserva por esto,
+        // pero tampoco se calla, porque el viajero veria un precio mas alto sin
+        // que nadie sepa por que.
+        console.error('[BookingFlowStep4] no se pudo leer la promocion del tour', error);
+        return;
+      }
+      // Devuelve una TABLA, asi que PostgREST entrega un arreglo.
+      updateFlow({ promocion: Array.isArray(data) && data.length > 0 ? data[0] : null });
+    })();
+    return () => { vivo = false; };
+    // `updateFlow` es `useCallback(..., [])` en el contexto, asi que es estable
+    // y no reinicia el efecto. Comprobado antes de incluirlo: si no lo fuera,
+    // este efecto —que llama a updateFlow— seria un bucle infinito.
+  }, [tour?.id, updateFlow]);
+
   const insuranceCost = useMemo(() => {
     if (!flow.includeInsurance) return 0;
     return insurancePricePerDay * insuranceDays * totalTravelers;
@@ -245,6 +274,12 @@ const BookingFlowStep4: React.FC = () => {
 
   // Descuento de cargo por servicio. Va sobre el cargo del anticipo, que es el
   // que el viajero paga hoy.
+  const insuranceDiscountAmount = useMemo(
+    () => (flow.includeInsurance ? descuentoDeSeguro(flow.insuranceDiscountMeta, insuranceCost) : 0),
+    [flow.includeInsurance, flow.insuranceDiscountMeta, insuranceCost],
+  );
+  const effectiveInsuranceCost = Math.max(0, insuranceCost - insuranceDiscountAmount);
+
   const serviceChargeDiscount = useMemo(
     () => descuentoDeCargoPorServicio(flow.discountCodeMeta, depositServiceCharge),
     [flow.discountCodeMeta, depositServiceCharge],
@@ -260,9 +295,29 @@ const BookingFlowStep4: React.FC = () => {
   // Los DOS destinos posibles, derivados del codigo guardado. Un codigo de
   // `service_fees` no toca el precio del tour —lo paga la plataforma de su
   // margen, no la agencia— y uno de tour no toca el cargo por servicio.
+  // Descuento por promocion de grupo. Va sobre el precio del tour y ANTES que
+  // el codigo de descuento: el codigo rebaja lo que ya quedo con promocion.
+  const promo = useMemo(() => {
+    const viajeros = { adultos: 0, ninos: 0, infantes: 0, adultos_mayores: 0, mascotas: 0 };
+    const precios = { adulto: 0, nino: 0, infante: 0, adulto_mayor: 0 };
+    for (const t of flow.travelers) {
+      const cat = t.categoria_viajero || 'adulto';
+      const precio = t.precio_aplicado || 0;
+      if (cat === 'adulto')            { viajeros.adultos += 1;         precios.adulto = precio; }
+      else if (cat === 'nino')         { viajeros.ninos += 1;           precios.nino = precio; }
+      else if (cat === 'infante')      { viajeros.infantes += 1;        precios.infante = precio; }
+      else if (cat === 'adulto_mayor') { viajeros.adultos_mayores += 1; precios.adulto_mayor = precio; }
+      else if (cat === 'mascota')      { viajeros.mascotas += 1; }
+    }
+    return calcularPromocionDeGrupo(flow.promocion, viajeros, precios);
+  }, [flow.promocion, flow.travelers]);
+
+  const promoDiscountAmount = promo.activa ? promo.descuento : 0;
+  const precioTrasPromocion = Math.max(0, baseTourPrice - promoDiscountAmount);
+
   const discountAmount = useMemo(
-    () => montoDeDescuento(flow.discountCodeMeta, baseTourPrice),
-    [flow.discountCodeMeta, baseTourPrice],
+    () => montoDeDescuento(flow.discountCodeMeta, precioTrasPromocion),
+    [flow.discountCodeMeta, precioTrasPromocion],
   );
 
   // Anticipo efectivo. La regla vive en utils/depositCalculation para que Step1 y
@@ -273,7 +328,7 @@ const BookingFlowStep4: React.FC = () => {
     [tour, flow.selectedDate]
   );
 
-  const tourPriceAfterDiscount = Math.max(0, baseTourPrice - discountAmount);
+  const tourPriceAfterDiscount = Math.max(0, precioTrasPromocion - discountAmount);
 
   // El anticipo vive sobre el precio BRUTO del tour, no sobre el neto de wallet.
   const depositAmount = Math.round(tourPriceAfterDiscount * (effectiveDepositPct / 100) * 100) / 100;
@@ -284,7 +339,7 @@ const BookingFlowStep4: React.FC = () => {
   // Tambien rompe la circularidad SC -> exigible -> wallet -> SC.
   const netBeforeCharges = Math.max(
     0,
-    depositAmount + extrasSubtotal + insuranceCost + membershipCost
+    depositAmount + extrasSubtotal + effectiveInsuranceCost + membershipCost
   );
 
   // Tope del 50%: los puntos nunca cubren mas de la mitad del monto exigible.
@@ -324,11 +379,11 @@ const BookingFlowStep4: React.FC = () => {
 
   // Exigible ahora CON cargos por servicio.
   const dueNow = depositAmount + effectiveDepositServiceCharge + extrasSubtotal
-    + effectiveExtrasServiceCharge + insuranceCost + membershipCost;
+    + effectiveExtrasServiceCharge + effectiveInsuranceCost + membershipCost;
 
   // Valor total de la reserva (referencia para el desglose).
   const subtotalBeforeDiscount = tourPriceAfterDiscount + extrasSubtotal
-    + effectiveExtrasServiceCharge + insuranceCost + effectiveDepositServiceCharge + membershipCost;
+    + effectiveExtrasServiceCharge + effectiveInsuranceCost + effectiveDepositServiceCharge + membershipCost;
 
   const grandTotal = Math.max(0, subtotalBeforeDiscount - pointsDiscount - walletDiscount);
 
@@ -414,6 +469,48 @@ const BookingFlowStep4: React.FC = () => {
     }
   };
 
+  const handleApplyInsuranceDiscount = async () => {
+    if (!insuranceInput.trim() || !user) return;
+    setIsApplyingInsurance(true);
+    setInsuranceError('');
+    try {
+      // Codigo de SEGURO: RPC distinta y columnas distintas a las del tour.
+      // Aplicarle un codigo de tour al seguro da una cifra creible y mal.
+      const { data, error } = await supabase.rpc('validate_insurance_discount_code', {
+        p_code: insuranceInput.trim().toUpperCase(),
+        p_user_id: user.id,
+      });
+      if (error) throw error;
+      // Objeto jsonb, no arreglo.
+      if (!data?.valid) {
+        setInsuranceError(data?.error || 'Codigo de seguro invalido o expirado.');
+        return;
+      }
+      updateFlow({
+        insuranceDiscountCodeId: data.code_id,
+        insuranceDiscountMeta: {
+          code_id: data.code_id,
+          code: data.code,
+          discount_type: data.discount_type,
+          discount_value: Number(data.discount_value),
+          max_discount_amount: data.max_discount_amount ?? null,
+          applicable_to: 'insurance',
+        },
+      });
+      setInsuranceInput('');
+    } catch (e) {
+      console.error('[BookingFlowStep4] fallo al validar el codigo de seguro', e);
+      setInsuranceError('Error al validar el codigo.');
+    } finally {
+      setIsApplyingInsurance(false);
+    }
+  };
+
+  const handleRemoveInsuranceDiscount = () => {
+    updateFlow({ insuranceDiscountCodeId: null, insuranceDiscountMeta: null });
+    setInsuranceError('');
+  };
+
   const handleRemoveDiscount = () => {
     updateFlow({ discountCode: '', discountCodeId: null, discountCodeMeta: null });
     setDiscountInput('');
@@ -476,7 +573,11 @@ const BookingFlowStep4: React.FC = () => {
         restrictions_accepted: flow.restrictionsAccepted,
         es_reserva_preventa: false,
         travel_insurance_included: flow.includeInsurance,
-        travel_insurance_cost: insuranceCost,
+        travel_insurance_cost: effectiveInsuranceCost,
+        insurance_discount_code_id: flow.insuranceDiscountCodeId || null,
+        insurance_discount_amount: insuranceDiscountAmount,
+        promotion_id: promo.activa ? flow.promocion?.id ?? null : null,
+        promo_discount_amount: promoDiscountAmount,
         insurance_days: insuranceDays,
         selected_payment_mode: 'standard',
         membership_purchased: flow.addMembership,
@@ -816,6 +917,26 @@ const BookingFlowStep4: React.FC = () => {
           )}
 
           {/* Insurance */}
+          {insuranceDiscountAmount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-emerald-700 flex items-center gap-1">
+                <Tag className="w-3 h-3" /> Descuento de seguro
+              </span>
+              <span className="font-medium text-emerald-700">
+                -{formatCurrencyMXN(insuranceDiscountAmount)}
+              </span>
+            </div>
+          )}
+          {promoDiscountAmount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-rose-700 flex items-center gap-1">
+                <Tag className="w-3 h-3" /> {promo.etiqueta}
+              </span>
+              <span className="font-medium text-rose-700">
+                -{formatCurrencyMXN(promoDiscountAmount)}
+              </span>
+            </div>
+          )}
           {insuranceCost > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-600 flex items-center gap-1">
@@ -1039,6 +1160,48 @@ const BookingFlowStep4: React.FC = () => {
             <p className="text-xs text-red-600 mt-1">{discountError}</p>
           )}
         </div>
+
+        {/* Codigo de descuento del SEGURO. Solo si contrato seguro: sin seguro
+            no hay nada que descontar y el campo confundiria. */}
+        {flow.includeInsurance && insuranceCost > 0 && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Codigo de descuento del seguro
+            </label>
+            {insuranceApplied ? (
+              <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <Check className="w-4 h-4 text-green-600" />
+                <span className="text-sm text-green-800 font-medium">
+                  {flow.insuranceDiscountMeta?.code} aplicado
+                </span>
+                <button
+                  onClick={handleRemoveInsuranceDiscount}
+                  className="ml-auto text-sm text-red-600 hover:underline"
+                >
+                  Quitar
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={insuranceInput}
+                  onChange={(e) => setInsuranceInput(e.target.value)}
+                  placeholder="Codigo del seguro"
+                  className="input text-sm flex-1"
+                />
+                <button
+                  onClick={handleApplyInsuranceDiscount}
+                  disabled={isApplyingInsurance || !insuranceInput.trim()}
+                  className="px-4 py-2 bg-gray-800 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:bg-gray-300"
+                >
+                  {isApplyingInsurance ? 'Validando...' : 'Aplicar'}
+                </button>
+              </div>
+            )}
+            {insuranceError && <p className="text-xs text-red-600 mt-1">{insuranceError}</p>}
+          </div>
+        )}
 
         {/* Points toggle */}
         {pointsBalance > 0 && (

@@ -202,6 +202,13 @@ jobs:
       - name: Verify booking discount codes hit the right total
         run: node scripts/test-descuento-de-reserva.mjs
 
+      # `max_uses` topa los grupos DENTRO de una misma reserva: 12 viajeros con
+      # min_travelers=4 son tres grupos, y si solo quedan dos usos el tercero
+      # paga completo. Sin ese tope una reserva grande se lleva mas descuento
+      # del autorizado, y el importe se ve perfectamente razonable.
+      - name: Verify group promotions respect their remaining uses
+        run: node scripts/test-promocion-de-grupo.mjs
+
       # Tres promesas de la captura de gastos que solo viven en la pantalla y
       # que ninguna prueba de SQL puede cubrir: que el total en pesos se calcule
       # pero se pueda EDITAR (el banco aplica su propio tipo de cambio), que el

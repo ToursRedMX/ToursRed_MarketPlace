@@ -45,7 +45,7 @@ if (!process.execArgv.some((a) => a.includes('strip-types'))) {
   process.exit(r.status ?? 1);
 }
 
-const { dondeAplica, montoDeDescuento, descuentoDeCargoPorServicio } = await import(
+const { dondeAplica, montoDeDescuento, descuentoDeCargoPorServicio, descuentoDeSeguro } = await import(
   pathToFileURL(path.join(AQUI, '..', 'src', 'utils', 'descuentoDeReserva.ts')).href
 );
 
@@ -192,5 +192,38 @@ caso('12. el redondeo es a dos decimales, como el dinero', () => {
     100), 33.33);
 });
 
-console.log(`\nDescuento de reserva: ${casos}/12 casos OK`);
-if (casos !== 12) { console.error('faltaron casos'); process.exit(1); }
+caso('13. los TRES tipos de seguro, y solo esos', () => {
+  const seg = (t, v) => codigo({ applicable_to: 'insurance', discount_type: t, discount_value: v });
+  // `free` exonera el seguro entero e IGNORA discount_value.
+  assert.equal(descuentoDeSeguro(seg('insurance_free', 1), 450), 450);
+  assert.equal(descuentoDeSeguro(seg('insurance_percentage', 20), 450), 90);
+  assert.equal(descuentoDeSeguro(seg('insurance_fixed', 100), 450), 100);
+  // Nunca mas que el costo del seguro.
+  assert.equal(descuentoDeSeguro(seg('insurance_fixed', 9999), 450), 450);
+  assert.equal(descuentoDeSeguro(seg('insurance_percentage', 300), 450), 450);
+  // Respeta el tope.
+  assert.equal(descuentoDeSeguro(
+    codigo({ applicable_to: 'insurance', discount_type: 'insurance_percentage',
+             discount_value: 50, max_discount_amount: 60 }), 450), 60);
+});
+
+caso('14. un codigo de TOUR no rebaja el seguro, y viceversa', () => {
+  // La confusion que da una cifra creible y equivocada.
+  assert.equal(descuentoDeSeguro(codigo(), 450), 0, 'un codigo de tour rebajó el seguro');
+  assert.equal(descuentoDeSeguro(
+    codigo({ applicable_to: 'service_fees', discount_type: 'service_fee_full' }), 450), 0);
+
+  const deSeguro = codigo({ applicable_to: 'insurance', discount_type: 'insurance_free' });
+  assert.equal(montoDeDescuento(deSeguro, 1000), 0, 'un codigo de seguro rebajó el tour');
+  assert.equal(descuentoDeCargoPorServicio(deSeguro, 87.5), 0);
+});
+
+caso('15. sin seguro contratado no hay descuento que aplicar', () => {
+  const seg = codigo({ applicable_to: 'insurance', discount_type: 'insurance_free' });
+  assert.equal(descuentoDeSeguro(seg, 0), 0);
+  assert.equal(descuentoDeSeguro(seg, -10), 0);
+  assert.equal(descuentoDeSeguro(null, 450), 0);
+});
+
+console.log(`\nDescuento de reserva: ${casos}/15 casos OK`);
+if (casos !== 15) { console.error('faltaron casos'); process.exit(1); }
