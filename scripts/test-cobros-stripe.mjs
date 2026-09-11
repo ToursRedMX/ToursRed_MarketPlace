@@ -204,8 +204,8 @@ casos.push(async () => {
     .map((linea, i) => (linea.includes("charge_context: 'booking_deposit'") ? i : -1))
     .filter((i) => i >= 0);
 
-  assert.equal(sitios.length, 2,
-    `se esperaban 2 sitios de booking_deposit (cobertura insuficiente y camino normal) y hay ${sitios.length}`);
+  assert.equal(sitios.length, 3,
+    `se esperaban 3 sitios de booking_deposit (cobertura insuficiente, camino normal y payment_intent.succeeded) y hay ${sitios.length}`);
 
   for (const i of sitios) {
     // Hacia arriba hasta el inicio de la llamada: tiene que ser el ayudante y
@@ -239,6 +239,36 @@ casos.push(async () => {
   // Y que `cobroLiquidado` signifique lo que dice llamarse.
   assert.ok(/const cobroLiquidado = estadoSegunStripe\(paymentStatus\) === 'succeeded';/.test(fuente),
     'cobroLiquidado tiene que salir de estadoSegunStripe, no de otra cosa');
+});
+
+// --- 12. payment_intent.succeeded CONFIRMA, no se salta -------------------
+casos.push(async () => {
+  // El endpoint de Stripe NO esta suscrito a
+  // `checkout.session.async_payment_succeeded` (leido en `enabled_events` el
+  // 11-sep-2026), asi que cuando el dinero de un SPEI entra, el UNICO evento
+  // que llega es payment_intent.succeeded. Si esa rama se salta la fila
+  // existente —como hacia con `if (!existingTransaction)`— el cobro se queda
+  // en 'pending' para siempre: el arreglo del cobro fantasma habria cambiado
+  // contar de mas por contar de menos.
+  const fuente = readFileSync('supabase/functions/stripe-webhook/index.ts', 'utf8');
+  const caso = fuente.slice(fuente.indexOf("case 'payment_intent.succeeded':"));
+  const bloque = caso.slice(0, caso.indexOf("case 'customer.subscription.created':"));
+
+  assert.ok(/asentarCobroStripe\(/.test(bloque),
+    'payment_intent.succeeded tiene que pasar por el ayudante para poder confirmar una fila pending');
+  assert.ok(!/if \(!existingTransaction\)/.test(bloque),
+    'volvio el "solo si no existe": deja el SPEI pagado en pending para siempre');
+  assert.ok(/charge_context: 'booking_deposit'/.test(bloque),
+    "sin charge_context la vista arma la categoria como 'cobro_' || NULL");
+});
+
+// --- 13. Y la comision se pide tambien al confirmar ------------------------
+casos.push(async () => {
+  const fuente = readFileSync('supabase/functions/stripe-webhook/index.ts', 'utf8');
+  const caso = fuente.slice(fuente.indexOf("case 'payment_intent.succeeded':"));
+  const bloque = caso.slice(0, caso.indexOf("case 'customer.subscription.created':"));
+  assert.ok(/accionCobroPi !== 'sin_cambio'/.test(bloque),
+    'la fila pending de un SPEI nacio sin comision: al confirmarla hay que pedirla');
 });
 
 let ok = 0;
