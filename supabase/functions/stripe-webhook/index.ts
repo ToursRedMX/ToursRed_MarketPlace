@@ -9,6 +9,7 @@ import { mensajeDeError } from "../_shared/errores.ts";
 import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 import { crearAsientoContable, notificarAdmins, alertarOps, avisosCon } from "../_shared/avisosDePago.ts";
 import { registrarDisputa } from "../_shared/disputas.ts";
+import { asentarCobroStripe, estadoSegunStripe } from "../_shared/cobrosStripe.ts";
 
 // Se nombra el tipo del cliente para no sumar mas `any` a un archivo que ya
 // tiene varios. Se importa en vez de derivarlo con ReturnType<typeof
@@ -992,29 +993,27 @@ Deno.serve(async (req) => {
             // alcanza por el `break`— para que no desaparezca de la conciliacion.
             // `payment_transactions` no tiene indice unico por
             // stripe_payment_intent_id, asi que un reintento del webhook
-            // duplicaria la fila. Se comprueba antes de insertar.
-            const { data: yaRegistrado } = await supabase
-              .from('payment_transactions')
-              .select('id')
-              .eq('stripe_payment_intent_id', paymentIntentId)
-              .limit(1);
-
-            if (!yaRegistrado || yaRegistrado.length === 0) {
-              await supabase.from('payment_transactions').insert({
+            // duplicaria la fila. La deduplicacion vive en asentarCobroStripe,
+            // que ademas confirma la fila 'pending' que pudo dejar la fase
+            // unpaid de un SPEI: aqui el dinero SI entro, y antes se quedaba en
+            // 'pending' para siempre porque el insert se saltaba entero.
+            await asentarCobroStripe(
+              supabase,
+              {
                 booking_id: bookingId,
                 stripe_payment_intent_id: paymentIntentId,
                 payment_processor: 'stripe',
                 amount: (session.amount_total ?? 0) / 100,
                 currency: session.currency,
-                status: 'succeeded',
                 payment_method_type: paymentMethod,
                 net_amount: (session.amount_total ?? 0) / 100,
                 processor_fee: 0,
                 charge_context: 'booking_deposit',
                 charge_reference_id: bookingId,
                 metadata: session,
-              });
-            }
+              },
+              paymentStatus,
+            );
 
             await supabase
               .from('bookings')
@@ -1601,33 +1600,44 @@ Deno.serve(async (req) => {
           if (bookingError) {
             console.error(`Error updating booking: ${bookingError.message}`);
           } else {
-            console.log(`Booking ${bookingId} marked as processing (awaiting OXXO payment)`);
+            console.log(`Booking ${bookingId} marked as processing (awaiting SPEI/OXXO payment)`);
           }
         }
 
-        const { error: transactionError } = await supabase
-          .from('payment_transactions')
-          .insert({
+        // El estado sale de `paymentStatus`, no escrito a mano: para SPEI y
+        // OXXO este mismo bloque corre primero con 'unpaid' —Stripe solo
+        // genero la CLABE o el voucher— y otra vez con 'paid' dias despues.
+        // Ver el encabezado de cobrosStripe.ts: registraba $3,727.19 de cobros
+        // que nunca entraron.
+        const { error: transactionError, accion: accionCobro } = await asentarCobroStripe(
+          supabase,
+          {
             booking_id: bookingId,
             stripe_payment_intent_id: paymentIntentId,
             payment_processor: 'stripe',
             amount: (session.amount_total ?? 0) / 100,
             currency: session.currency,
-            status: 'succeeded',
             payment_method_type: paymentMethod,
             net_amount: (session.amount_total ?? 0) / 100,
             processor_fee: 0,
             charge_context: 'booking_deposit',
             charge_reference_id: bookingId,
             metadata: session
-          });
+          },
+          paymentStatus,
+        );
+        console.log(`payment_transactions para la reserva ${bookingId}: ${accionCobro} (payment_status ${paymentStatus})`);
 
         // Fetch real processor fee from Stripe and update transaction.
         // paymentIntentId puede ser null (una sesion en modo suscripcion cuya
         // invoice no traiga pago). Antes se pasaba igual y la llamada tiraba
         // dentro del try de getStripeProcessorFee, que devolvia null sin decir
         // por que; ahora se salta explicitamente y queda en el log.
-        const stripeFee = paymentIntentId
+        //
+        // Tampoco se pide con la sesion en 'unpaid': todavia no hay charge, asi
+        // que no hay balance_transaction de donde leer la comision.
+        const cobroLiquidado = estadoSegunStripe(paymentStatus) === 'succeeded';
+        const stripeFee = paymentIntentId && cobroLiquidado
           ? await getStripeProcessorFee(stripe, paymentIntentId)
           : null;
         if (!paymentIntentId) {

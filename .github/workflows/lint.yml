@@ -196,6 +196,17 @@ jobs:
       - name: Verify a PayPal charge always ends up with its processor fee
         run: node scripts/test-cobros-paypal.mjs
 
+      # Generar la CLABE de un SPEI no es cobrar. El insert del anticipo estaba
+      # fuera del if/else que mira session.payment_status, con 'succeeded' a
+      # mano: cruzado contra la API de Stripe el 11-sep-2026 habia $3,727.19
+      # que nunca llegaron. bookings y stripe_orders si lo sabian; el que mentia
+      # era payment_transactions, y en vista_movimientos_financieros eso entra
+      # como caja +3,727.19 y pasivo +3,727.19 (ingreso 0): efectivo inventado,
+      # no utilidad inflada. El invariante activo = pasivo + ingreso no lo caza
+      # nunca porque 3727.19 = 3727.19 + 0 cuadra.
+      - name: Verify an unpaid SPEI/OXXO session is never recorded as a charge
+        run: node scripts/test-cobros-stripe.mjs
+
       # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
       # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
       # aplica SIN transaccion a proposito, porque asi fue como se descubrio que
