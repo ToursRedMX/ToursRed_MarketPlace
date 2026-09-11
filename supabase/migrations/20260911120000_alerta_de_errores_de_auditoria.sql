@@ -1,4 +1,4 @@
--- `audit_errors` deja rastro y nadie lo lee. Ahora avisa.
+﻿-- `audit_errors` deja rastro y nadie lo lee. Ahora avisa.
 --
 -- POR QUE
 --
