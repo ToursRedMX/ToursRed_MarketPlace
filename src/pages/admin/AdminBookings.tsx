@@ -292,11 +292,6 @@ function AdminBookings() {
 
   // Detail modal
   const [selected, setSelected] = useState<BookingRow | null>(null);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const { permissions, isSuperAdmin } = useAuth();
-  const canCancel = isSuperAdmin || permissions?.canCancelBookings;
-  const [adminCancellationData, setAdminCancellationData] = useState<any>(null);
-
   // Scroll horizontal sincronizado (scrollbar arriba y abajo)
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -310,10 +305,6 @@ function AdminBookings() {
     return () => obs.disconnect();
   }, []);
 
-  const onTopScroll = () => {
-    if (tableScrollRef.current && topScrollRef.current)
-      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
-  };
   const onTableScroll = () => {
     if (topScrollRef.current && tableScrollRef.current)
       topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
@@ -1403,7 +1394,7 @@ interface AdminCancelModalProps {
   onSuccess: () => void;
 }
 
-const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, adminCancellationData, onClose, onSuccess }) => {
+const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, onClose, onSuccess }) => {
   const [reasonForTraveler, setReasonForTraveler] = useState('');
   const [reasonForAgency, setReasonForAgency] = useState('');
   const [withRefund, setWithRefund] = useState(true);

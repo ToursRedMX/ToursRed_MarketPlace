@@ -57,7 +57,7 @@ function suggestNextCode(parentCode: string, siblings: ChartAccount[]): string {
 
 const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, onSaved }) => {
   const isEdit = !!account;
-  const hasMovements = false; // will be determined on submit if needed
+  // will be determined on submit if needed
 
   const [code, setCode] = useState(account?.code ?? '');
   const [name, setName] = useState(account?.name ?? '');

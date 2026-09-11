@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, Mail, Phone, Globe, MapPin, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
 import AgencyContractSection from '../../components/AgencyContractSection';
 
 interface AgencyDetail {
@@ -46,7 +45,6 @@ const ONBOARDING_LABELS: Record<string, { label: string; color: string }> = {
 export default function ExecutiveAgencyProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { accountExecutiveInfo } = useAuth();
   const [agency, setAgency] = useState<AgencyDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');

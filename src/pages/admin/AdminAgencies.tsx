@@ -740,17 +740,6 @@ const AdminAgencies: React.FC = () => {
     return clabe.replace(/(.{4})/g, '$1 ').trim();
   };
 
-  const getRegimenFiscalName = (regimen: string) => {
-    const regimenes: Record<string, string> = {
-      '601': 'General de Ley',
-      '612': 'Personas Físicas con Actividades Empresariales',
-      '621': 'Incorporación Fiscal',
-      '625': 'Régimen Simplificado de Confianza',
-      '626': 'Régimen Simplificado de Confianza (RESICO)'
-    };
-    return regimenes[regimen] || regimen;
-  };
-
   const stats = {
     total: agencies.length,
     active: agencies.filter(a => a.is_active).length,

@@ -495,7 +495,7 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
                 </div>
 
                 <div className="flex flex-col gap-y-2">
-                  {lines.map((l, idx) => (
+                  {lines.map((l) => (
                     <div key={l.id} className="grid grid-cols-12 gap-2 items-start bg-gray-50 rounded-lg p-3 border border-gray-100">
                       <div className="col-span-12 sm:col-span-4">
                         <select

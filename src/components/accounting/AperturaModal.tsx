@@ -82,8 +82,6 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
   const assetAccounts = useMemo(() => accounts.filter(a => a.account_type === 'activo' && a.level >= 3), [accounts]);
   const liabilityAccounts = useMemo(() => accounts.filter(a => a.account_type === 'pasivo' && a.level >= 3), [accounts]);
   const capitalAccounts = useMemo(() => accounts.filter(a => a.account_type === 'capital' && a.level >= 3), [accounts]);
-  const allBsAccounts = useMemo(() => [...assetAccounts, ...liabilityAccounts, ...capitalAccounts], [assetAccounts, liabilityAccounts, capitalAccounts]);
-
   const totalDebit = lines.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
   const totalCredit = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
   const diff = Math.abs(totalDebit - totalCredit);

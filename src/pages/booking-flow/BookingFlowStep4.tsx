@@ -9,7 +9,6 @@ import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { getEffectiveDepositPct } from '../../utils/depositCalculation';
 import { totalTravelerCount } from '../../types/booking-flow';
-import type { Tour } from '../../types';
 import { getMpDeviceId } from '../../utils/mercadopagoDevice';
 import PaymentProviderSelector, {
   PaymentProvider as Provider,
@@ -1123,7 +1122,6 @@ const BookingFlowStep4: React.FC = () => {
                   onChange={(e) => {
                     const val = parseFloat(e.target.value) || 0;
                     const isBnpl = flow.conektaMethod === 'bnpl' || flow.openpayMethod === 'bnpl';
-                    const minVal = isBnpl ? 1200 : 500;
                     const maxVal = isBnpl ? Math.min(16000, depositAmount - 10) : depositAmount - 10;
                     updateFlow({ partialPaymentAmount: Math.min(Math.max(val, 0), maxVal) });
                   }}

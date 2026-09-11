@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   Sparkles, Eye, MousePointerClick, ShoppingBag, TrendingUp,
   Calendar, Clock, ChevronDown, ChevronUp, ArrowRight, RefreshCw,
@@ -312,7 +312,6 @@ const HistoryRow: React.FC<{ slot: FeaturedSlot; isExpanded: boolean; onToggle: 
 
 const AgencyFeaturedTours: React.FC = () => {
   const { agencyId } = useAgencyId();
-  const navigate = useNavigate();
   const [slots, setSlots] = useState<FeaturedSlot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({});

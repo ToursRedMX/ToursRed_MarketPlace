@@ -44,7 +44,6 @@ const AgencyOnboardingLayout: React.FC<Props> = ({ children, currentStep, steps 
             {steps.map((step, idx) => {
               const done    = step.number < currentStep;
               const active  = step.number === currentStep;
-              const pending = step.number > currentStep;
               return (
                 <React.Fragment key={step.number}>
                   <div className="flex items-center gap-2 min-w-0">

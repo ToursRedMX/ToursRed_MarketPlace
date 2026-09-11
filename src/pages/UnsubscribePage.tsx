@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { CheckCircle2, XCircle, Mail, Loader2, ArrowRight } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-
 const UnsubscribePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');

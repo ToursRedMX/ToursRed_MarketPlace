@@ -12,11 +12,6 @@ interface AgencySlotCalendarProps {
   onGenerateSlots: (start: string, end: string) => Promise<void>;
 }
 
-interface DaySlots {
-  date: string;
-  slots: TourSlot[];
-}
-
 const AgencySlotCalendar: React.FC<AgencySlotCalendarProps> = ({ tourId, agencyId, onGenerateSlots }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [daySlots, setDaySlots] = useState<Map<string, TourSlot[]>>(new Map());

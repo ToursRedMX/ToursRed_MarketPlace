@@ -5,8 +5,6 @@ import { X, Download, ExternalLink, Loader2, AlertCircle, FileText, Building2, U
 // Supports alphanumeric + byte mode, versions 1-40, ECC level M.
 // Based on the public-domain "nayuki" reference implementation logic.
 
-const QR_ALPHANUM = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
-
 function qrEncode(text: string): boolean[][] {
   // Use byte mode (UTF-8)
   const data = new TextEncoder().encode(text);

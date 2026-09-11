@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, User, Building2, Paperclip, Send, Lock, RefreshCw, AlertCircle, ExternalLink, Clock, Mail } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -17,8 +17,6 @@ interface AgencyOption { id: string; name: string; }
 const AdminTicketDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const navigate = useNavigate();
-
   const [ticket, setTicket] = useState<SupportTicket | null>(null);
   const [comments, setComments] = useState<SupportTicketComment[]>([]);
   const [history, setHistory] = useState<SupportTicketHistoryEvent[]>([]);
@@ -245,7 +243,6 @@ const AdminTicketDetail: React.FC = () => {
       if (errorAgencia) console.error('AdminTicketDetail: no se pudo leer el usuario de la agencia para notificarla', errorAgencia);
 
       if (agencyUser?.user_id) {
-        const agency = agencies.find(a => a.id === newAgencyId);
         await supabase.from('notifications').insert({
           user_id: agencyUser.user_id,
           type: 'support_ticket_assigned',

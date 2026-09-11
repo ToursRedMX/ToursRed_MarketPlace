@@ -237,8 +237,6 @@ export const exportTourReportToPDF = (reportData: TourReportData, agencyName: st
     }
   });
 
-  const finalY = (doc as any).lastAutoTable.finalY || 150;
-
   doc.addPage();
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');

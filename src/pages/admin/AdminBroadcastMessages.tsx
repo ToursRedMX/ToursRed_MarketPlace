@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Users, Building2, Globe, Mail, Bell, BellRing, CheckCheck, Clock, AlertCircle, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
 import { format } from 'date-fns';
 import RichTextEditor from '../../components/RichTextEditor';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
@@ -66,8 +65,6 @@ const CHANNEL_OPTIONS: { value: SendChannel; label: string; icon: React.ReactNod
 ];
 
 const AdminBroadcastMessages: React.FC = () => {
-  const { user } = useAuth();
-
   const [subject, setSubject] = useState('');
   const [messageBody, setMessageBody] = useState('');
   const [audience, setAudience] = useState<Audience>('travelers');

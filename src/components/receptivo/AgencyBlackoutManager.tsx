@@ -18,7 +18,7 @@ const emptyForm = {
   is_partial_day: false,
 };
 
-const AgencyBlackoutManager: React.FC<AgencyBlackoutManagerProps> = ({ tourId, agencyId, userId }) => {
+const AgencyBlackoutManager: React.FC<AgencyBlackoutManagerProps> = ({ tourId, agencyId }) => {
   const [blackouts, setBlackouts] = useState<TourSlotBlackout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
