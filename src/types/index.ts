@@ -290,6 +290,12 @@ export interface Tour {
   late_payment_grace_days?: number;
   late_payment_penalty_pct?: number;
   late_payment_penalty_fixed?: number;
+  // Columnas reales de `public.tours` que faltaban aqui: el codigo de
+  // AgencyTours.tsx ya las usaba y `tsc` llevaba 10 errores senalandolo.
+  // Verificadas contra el esquema el 11-sep-2026: las dos son
+  // `boolean NOT NULL` (default true e false), asi que van SIN `?`.
+  is_published: boolean;
+  cancelled_by_agency: boolean;
 }
 
 // ── Featured Tours System ──────────────────────────────────────
@@ -468,6 +474,16 @@ export interface Booking {
   payment_plan_paid?: number;
   payment_plan_status?: PaymentPlanStatus;
   payment_plan?: BookingPaymentPlan;
+  // Columnas reales de `public.bookings` que faltaban aqui. Verificadas contra
+  // el esquema el 11-sep-2026; las cuatro son nullable, de ahi el `?`.
+  // `points_used` sola explicaba 19 de los errores de tipos del front.
+  points_used?: number;
+  points_earned?: number;
+  cancelled_at?: string;
+  // El union sale del CHECK `bookings_payment_provider_check`, no de leer el
+  // codigo: si manana se agrega un procesador, el CHECK y esta linea tienen que
+  // moverse juntos.
+  payment_provider?: 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
 }
 
 export interface BookingOptionalService {

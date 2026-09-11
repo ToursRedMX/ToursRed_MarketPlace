@@ -526,7 +526,7 @@ const BookingSuccessPage: React.FC = () => {
                         <Award className="h-4 w-4 mr-1" />
                         Puntos ToursRed Usados:
                       </span>
-                      <span className="font-bold text-amber-600">-{booking.points_used.toLocaleString()} puntos ({formatCurrencyMXN(booking.points_used / 100)})</span>
+                      <span className="font-bold text-amber-600">-{(booking.points_used ?? 0).toLocaleString()} puntos ({formatCurrencyMXN((booking.points_used ?? 0) / 100)})</span>
                     </div>
                   )}
 
@@ -551,11 +551,11 @@ const BookingSuccessPage: React.FC = () => {
                       <div className="text-xs text-gray-500 mt-1 text-right">
                         {Number(booking.points_used) > 0 && Number(booking.toursred_cash_used) > 0 ? (
                           <>
-                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Number(booking.toursred_cash_used))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, realTotalPaid - ((booking.points_used || 0) / 100) - Number(booking.toursred_cash_used || 0)))}{processorSuffix})
+                            ({(booking.points_used ?? 0).toLocaleString()} puntos + {formatCurrencyMXN(Number(booking.toursred_cash_used))} ToursRed Cash + {formatCurrencyMXN(Math.max(0, realTotalPaid - ((booking.points_used || 0) / 100) - Number(booking.toursred_cash_used || 0)))}{processorSuffix})
                           </>
                         ) : Number(booking.points_used) > 0 ? (
                           <>
-                            ({booking.points_used.toLocaleString()} puntos + {formatCurrencyMXN(Math.max(0, realTotalPaid - (booking.points_used / 100)))}{processorSuffix})
+                            ({(booking.points_used ?? 0).toLocaleString()} puntos + {formatCurrencyMXN(Math.max(0, realTotalPaid - ((booking.points_used ?? 0) / 100)))}{processorSuffix})
                           </>
                         ) : (
                           <>
@@ -572,7 +572,7 @@ const BookingSuccessPage: React.FC = () => {
                         <Award className="h-4 w-4 mr-1" />
                         Puntos ToursRed Ganados:
                       </span>
-                      <span className="font-bold text-green-600">+{booking.points_earned.toLocaleString()} puntos</span>
+                      <span className="font-bold text-green-600">+{(booking.points_earned ?? 0).toLocaleString()} puntos</span>
                     </div>
                   )}
 
