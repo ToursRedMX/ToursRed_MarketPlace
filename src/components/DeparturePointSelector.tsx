@@ -38,7 +38,6 @@ const DeparturePointSelector: React.FC<DeparturePointSelectorProps> = ({
   const [suggestions, setSuggestions] = useState<DeparturePoint[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

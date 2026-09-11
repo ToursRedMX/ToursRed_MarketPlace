@@ -164,14 +164,6 @@ const NavBar: React.FC = () => {
     setIsProfileOpen(false);
   };
 
-  const getDashboardLink = () => {
-    if (isAdmin) return '/admin/dashboard';
-    if (isAgency) return '/agency/dashboard';
-    if (isAgencyStaff) return '/agency/dashboard';
-    if (isAccountExecutive) return '/executive/dashboard';
-    return '/traveler/dashboard';
-  };
-
   const getProfileLink = () => {
     if (isAdmin) return '/admin/profile';
     if (isAgency) return '/agency/profile';

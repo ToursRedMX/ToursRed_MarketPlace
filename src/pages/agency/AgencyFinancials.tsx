@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { TrendingUp, Download, FileText, CheckCircle, Clock, Eye, CreditCard, FileSpreadsheet, ShieldAlert } from 'lucide-react';
@@ -12,7 +11,6 @@ import { autoTable } from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 const AgencyFinancials: React.FC = () => {
-  const { user } = useAuth();
   const { agencyId: resolvedAgencyId } = useAgencyId();
   const [agencyId, setAgencyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);

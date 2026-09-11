@@ -17,16 +17,6 @@ const SEAT_GAP = 6;
 const AISLE_WIDTH = 20;
 const PADDING = 16;
 
-function getSeatColor(status: string, isSelected: boolean): string {
-  if (isSelected) return 'bg-blue-600 border-blue-700 text-white shadow-md scale-105';
-  switch (status) {
-    case 'disponible': return 'bg-white border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-400 cursor-pointer';
-    case 'reservado': return 'bg-gray-300 border-gray-400 text-gray-500 cursor-not-allowed';
-    case 'bloqueado': return 'bg-gray-400 border-gray-500 text-gray-600 cursor-not-allowed';
-    default: return 'bg-white border-gray-300 text-gray-700';
-  }
-}
-
 function getSeatTitle(seat: SeatWithStatus): string {
   if (seat.status === 'reservado') return `Asiento ${seat.number} - Ocupado`;
   if (seat.status === 'bloqueado') return `Asiento ${seat.number} - Bloqueado${seat.block_note ? `: ${seat.block_note}` : ''}`;

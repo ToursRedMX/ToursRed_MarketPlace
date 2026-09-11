@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { BookingPaymentPlan, BookingPaymentPlanInstallment, InstallmentStatus } from '../types';
+import type { BookingPaymentPlan, InstallmentStatus } from '../types';
 import PaymentProviderSelector, { type PaymentProvider, type ConektaMethod } from './PaymentProviderSelector';
 
 interface PaymentPlanCalendarProps {
@@ -74,7 +74,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
     fetchPlan();
   }, [bookingId]);
 
-  const handlePay = async (installment: BookingPaymentPlanInstallment) => {
+  const handlePay = async () => {
     if (!plan || !user) return;
     setIsProcessingPayment(true);
     setPaymentError('');
@@ -405,7 +405,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => handlePay(inst)}
+                          onClick={() => handlePay()}
                           disabled={isProcessingPayment}
                           className="flex-1 btn btn-primary btn-sm text-xs"
                         >

@@ -221,19 +221,6 @@ const AgencyBookings: React.FC = () => {
     }
   };
 
-  const formatFullDate = (dateString: string) => {
-    try {
-      // Check if it's a full ISO 8601 timestamp (contains 'T')
-      const date = dateString.includes('T')
-        ? new Date(dateString)
-        : parseDateFromDB(dateString);
-      return format(date, 'EEEE, d \'de\' MMMM \'de\' yyyy');
-    } catch (error) {
-      console.error('Error formatting full date:', dateString, error);
-      return format(new Date(dateString), 'dd/MM/yyyy');
-    }
-  };
-
   const canMarkAsNoShow = (booking: Booking) => {
     if (!booking.tours?.start_date) return false;
     if ((booking as any).is_no_show) return false;

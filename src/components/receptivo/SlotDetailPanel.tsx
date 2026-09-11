@@ -30,7 +30,7 @@ const STATUS_COLORS: Record<SlotStatus, string> = {
   completado: 'bg-blue-100 text-blue-600',
 };
 
-const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ tourId, agencyId, dateKey, slots, onClose, onRefresh }) => {
+const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ dateKey, slots, onClose, onRefresh }) => {
   const [editingCapacity, setEditingCapacity] = useState<string | null>(null);
   const [newCapacity, setNewCapacity] = useState('');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);

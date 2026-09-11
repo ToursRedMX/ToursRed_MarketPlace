@@ -207,12 +207,6 @@ const BookingFlowStep1: React.FC = () => {
       return;
     }
 
-    const bookingDate = isReceptivo && selectedSlot
-      ? selectedSlot.slot_date
-      : isTransferCustomTime && selectedDate
-        ? selectedDate.toISOString().split('T')[0]
-        : tour.start_date;
-
     updateFlow({
       selectedSlot,
       selectedDate: selectedDate ? selectedDate.toISOString().split('T')[0] : null,

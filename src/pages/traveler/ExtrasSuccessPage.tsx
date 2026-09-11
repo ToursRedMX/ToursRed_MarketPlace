@@ -142,14 +142,6 @@ const ExtrasSuccessPage: React.FC = () => {
     );
   }
 
-  const methodLabel: Record<string, string> = {
-    stripe: 'Tarjeta de Crédito/Débito',
-    toursred_cash: 'ToursRed Cash',
-    points: 'Puntos ToursRed',
-    mercadopago: 'MercadoPago',
-    paypal: 'PayPal',
-  };
-
   // ── Insurance success ─────────────────────────────────────────────────
   if (extraType === 'insurance' && bookingData) {
     const tour = bookingData.tours;

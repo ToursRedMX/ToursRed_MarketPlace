@@ -18,7 +18,6 @@ export default function ShareTourModal({ isOpen, onClose, tourId, tourName, tour
 
   const tourUrl = `${window.location.origin}/tours/${tourSlug || tourId}`;
   const encodedUrl = encodeURIComponent(tourUrl);
-  const encodedTitle = encodeURIComponent(tourName);
   const shareMessage = encodeURIComponent(`¡Mira este tour increíble! ${tourName}`);
 
   const handleCopyLink = async () => {

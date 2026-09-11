@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Plus, Building2, QrCode, Copy, Check, AlertCircle, Loader2, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { supabase } from '../lib/supabase';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-
 type TopupStep = 'select-method' | 'select-amount' | 'processing' | 'spei-instructions' | 'codi-qr' | 'error' | 'success';
 type PaymentMethod = 'spei' | 'codi';
 
@@ -20,7 +16,6 @@ const MIN_AMOUNT = 500;
 const MAX_AMOUNT = 50000;
 
 const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const { user } = useAuth();
   const [step, setStep] = useState<TopupStep>('select-amount');
   const [method, setMethod] = useState<PaymentMethod>('spei');
   const [amount, setAmount] = useState<number>(1000);
@@ -42,11 +37,6 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
   const handleClose = () => {
     resetState();
     onClose();
-  };
-
-  const handleMethodSelect = (m: PaymentMethod) => {
-    setMethod(m);
-    setStep('select-amount');
   };
 
   const getEffectiveAmount = (): number | null => {

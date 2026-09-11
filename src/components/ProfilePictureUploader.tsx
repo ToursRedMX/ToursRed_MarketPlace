@@ -8,11 +8,7 @@ interface ProfilePictureUploaderProps {
   userId: string;
 }
 
-const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({
-  currentImage,
-  onImageChange,
-  userId
-}) => {
+const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({ onImageChange, userId }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);

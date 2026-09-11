@@ -37,14 +37,6 @@ function primeraVocalInterna(palabra: string): string {
   return 'X';
 }
 
-function primeraConsonanteInterna(palabra: string): string {
-  const consonantes = 'BCDFGHJKLMNOPQRSTVWXYZ';
-  for (let i = 1; i < palabra.length; i++) {
-    if (consonantes.includes(palabra[i])) return palabra[i];
-  }
-  return 'X';
-}
-
 /**
  * Calculates the CURP prefix (first 11 characters):
  * - Pos 1: First letter of paternal surname

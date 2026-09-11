@@ -136,7 +136,6 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
     return Math.max(0, tour.price - tour.preventa_descuento_valor);
   })();
 
-  const precioEfectivo = isEnPreventa && hasMembership ? preventaPrecioBase : tour.price;
   const pickupZones: any[] = Array.isArray(tour.pickup_zones) ? tour.pickup_zones : [];
   const tourLanguages: any[] = Array.isArray(tour.tour_languages) ? tour.tour_languages : [];
 
@@ -1104,10 +1103,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
     : totalToPayNow;
   const remainingAfterInitial = Math.max(0, totalToPayNow - effectivePayAmount);
 
-  const agencyReceives = depositAmount - agencyCommission;
-
   const handleOptionalServiceChange = (serviceId: string, delta: number, service: TourOptionalService) => {
-    const totalPeople = totalTravelers + travelerCounts.mascotas;
     const maxByPeople = totalTravelers > 0 ? totalTravelers : 1;
     const maxByCapacity = service.available_capacity !== null && service.available_capacity !== undefined
       ? service.available_capacity

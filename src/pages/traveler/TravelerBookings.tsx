@@ -4199,7 +4199,6 @@ const TravelerBookings: React.FC = () => {
                           if (paymentModal.selectedProvider === 'mercadopago') return 'Pagar con MercadoPago';
                           if (paymentModal.selectedProvider === 'paypal') return 'Proceder a PayPal';
                           if (paymentModal.selectedProvider === 'conekta') return 'Proceder a Conekta';
-                          if (paymentModal.selectedProvider === 'mercadopago') return 'Proceder a MercadoPago';
                           return 'Proceder a Stripe';
                         })()}
                       </>

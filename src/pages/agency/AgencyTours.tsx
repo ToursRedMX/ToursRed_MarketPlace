@@ -1128,7 +1128,6 @@ const AgencyTours: React.FC = () => {
     if (!featuredModal.pendingSlotId) return;
     setFeaturedModal(prev => ({ ...prev, isSubmitting: true, error: '' }));
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const origin = window.location.origin;
       const res = await supabase.functions.invoke('create-featured-slot-checkout', {
         body: {
@@ -1999,23 +1998,6 @@ const AgencyTours: React.FC = () => {
     setSupplements(updated);
   };
 
-  const handleDeparturePointChange = (index: number, value: string) => {
-    const newDeparturePoints = [...departurePoints];
-    newDeparturePoints[index] = value;
-    setDeparturePoints(newDeparturePoints);
-  };
-
-  const addDeparturePoint = () => {
-    setDeparturePoints([...departurePoints, '']);
-  };
-
-  const removeDeparturePoint = (index: number) => {
-    if (departurePoints.length > 1) {
-      setDeparturePoints(departurePoints.filter((_, i) => i !== index));
-    }
-  };
-
-
   const handleImageSelect = (publicUrl: string, _type: string, _size: number) => {
     setFormData({ ...formData, image_url: publicUrl });
   };
@@ -2289,7 +2271,7 @@ const AgencyTours: React.FC = () => {
         // 2. Identificar puntos a insertar (nuevos)
         const pointsToInsert = uniquePoints
           .filter(point => !existingPointIds.has(point.id))
-          .map((point, index) => ({
+          .map((point) => ({
             tour_id: tourId,
             departure_point_id: point.id,
             display_order: uniquePoints.findIndex(p => p.id === point.id) + 1,
@@ -5452,7 +5434,7 @@ const AgencyTours: React.FC = () => {
                     tourId={editingTour.id}
                     agencyId={editingTour.agency_id}
                     slotId={null}
-                    isReceptivo={tourType === 'receptivo'}
+                    isReceptivo={false}
                   />
                 </div>
               </div>
