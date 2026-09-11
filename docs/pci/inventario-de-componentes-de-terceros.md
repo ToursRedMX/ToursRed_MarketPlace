@@ -157,11 +157,13 @@ las 172 funciones estaban expuestas sin inspeccionar cada despliegue.
 
 **3. `xlsx` en dos versiones.** El front usa 0.20.3 (del CDN de SheetJS) y las
 Edge Functions 0.18.5 (de npm). Dos versiones distintas de la misma librería, de
-dos orígenes distintos. **Este sigue abierto**, y medido el 11-sep-2026 **no se
-puede cerrar cambiando un número**: SheetJS dejó de publicar en npm, donde la
+dos orígenes distintos. **Cerrado el 11-sep-2026 como decisión, no como
+arreglo:** cada lado se queda con la última versión que su origen ofrece,
+porque **no se puede alinear cambiando un número**: SheetJS dejó de publicar en npm, donde la
 última es 0.18.5 (2022), y la 0.20.3 solo existe en su CDN — `npm view
-xlsx@0.20.3` responde **404**. Cerrarlo exige decidir si las Edge Functions
-tiran del CDN o si el front vuelve a una versión de 2022.
+xlsx@0.20.3` responde **404**. Alinearlos exigía cambiar de **origen** —o las
+Edge Functions tiran del CDN, o el front vuelve a una versión de 2022— y se
+decidió que ninguna de las dos.
 
 **Lo que hay que saber al decidirlo:** 0.18.5 está por debajo de **dos avisos
 "high"**, y **ninguno tiene parche en npm**:
@@ -311,8 +313,10 @@ de verdad en cada PR. Los de la regla 3 montan un repo de mentira completo
 —`package.json`, lock y una función— para no tener que tocar los del repo.
 
 **Lo que la guardia NO cubre:** el desajuste de `xlsx` queda **excluido a
-propósito** de la regla 3 (la versión del front no existe en npm), así que sigue
-abierto y la guardia no lo va a recordar por nadie. Y nada de esto vigila las
+propósito** de la regla 3 (la versión del front no existe en npm). Desde el
+11-sep-2026 eso es una decisión tomada, no un pendiente, así que la guardia no
+va a volver a preguntar por él — y por eso la exclusión está escrita en el
+código con su motivo, donde se lee, y no en la cabeza de nadie. Y nada de esto vigila las
 dependencias **transitivas**: de eso se encarga el `deno.lock` commiteado, del
 lado edge, y el `package-lock.json`, del lado front.
 

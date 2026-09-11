@@ -118,14 +118,15 @@
  * `npm:pdfmake@0.2.20/js/printer.js` son el mismo paquete en la misma version,
  * y asi los agrupa la guardia.
  *
- * LA UNICA EXCEPCION DE LA REGLA 3, Y POR QUE NO ES PEREZA
+ * LA UNICA EXCEPCION DE LA REGLA 3, Y POR QUE ES DEFINITIVA
  *
  * `xlsx` corre 0.20.3 en el front y 0.18.5 en las Edge Functions, y **no se
  * puede alinear cambiando un numero**: SheetJS dejo de publicar en npm, donde
  * la ultima es 0.18.5 (2022). La 0.20.3 solo existe en su CDN — `npm view
- * xlsx@0.20.3` responde 404. Alinearlos exige decidir si las Edge Functions
- * tiran del CDN de SheetJS o si el front vuelve a una version de 2022, y eso
- * es una decision aparte, no un ajuste de version.
+ * xlsx@0.20.3` responde 404. Alinearlos exigia cambiar de ORIGEN —o las Edge
+ * Functions tiran del CDN de SheetJS, o el front vuelve a una version de 2022—
+ * y el 11-sep-2026 Axel decidio que ninguna de las dos: cada lado se queda con
+ * la ultima version que su origen ofrece. La exclusion no es provisional.
  *
  * Lo que conviene saber al tomarla: 0.18.5 esta por debajo de DOS avisos
  * "high" —GHSA-4r6h-8v6p-xvw6 (prototype pollution, < 0.19.3) y
