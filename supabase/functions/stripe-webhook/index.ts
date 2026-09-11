@@ -62,27 +62,97 @@ function getStripePaymentForm(paymentMethodType: string, cardFunding?: string | 
   return '04';
 }
 
-async function getStripeProcessorFee(stripe: any, paymentIntentId: string): Promise<{ fee: number; net: number } | null> {
+/**
+ * Comision real de Stripe, con el IVA separado de la comision sin IVA.
+ *
+ * Antes devolvia solo `{ fee, net }`: leia `balance_transaction.fee` —el
+ * TOTAL— e ignoraba `fee_details`, que viene en la MISMA respuesta y trae el
+ * desglose. Por eso `processor_fee_base` y `processor_fee_iva` nacian nulas en
+ * todo cobro de Stripe, mientras OpenPay si las llenaba desde el 08-sep-2026.
+ *
+ * No era un agujero fiscal: `create_accounting_entry_for_booking`
+ * (20260830221915) deriva `base = fee / 1.16` cuando la columna esta nula, y
+ * comprobado el 11-sep-2026 contra los 13 cobros de Stripe en produccion esa
+ * derivacion da el centavo exacto en los 13. Lo que se cierra aqui es la
+ * DEPENDENCIA de esa suposicion: si alguna vez Stripe cobra una comision sin
+ * IVA —una tarjeta extranjera facturada distinto, por ejemplo—, dividir entre
+ * 1.16 inventaria un IVA que no existe y lo acreditariamos.
+ *
+ * `base` e `iva` vuelven NULAS cuando Stripe no manda `fee_details`. A
+ * proposito: guardar un valor derivado seria indistinguible de uno real, y la
+ * cascada de la funcion contable ya cubre ese caso de forma documentada.
+ * Mejor un hueco explicito que un numero inventado.
+ *
+ * El desglose se lee por `type` y no por posicion: el orden de `fee_details`
+ * VARIA entre cobros (observado el 11-sep-2026; en unos llega `tax` primero y
+ * en otros `stripe_fee`). Y se SUMA por tipo en vez de tomar el primero, por
+ * si Stripe parte la comision en varias lineas.
+ */
+async function getStripeProcessorFee(
+  stripe: any,
+  paymentIntentId: string,
+): Promise<{ fee: number; net: number; base: number | null; iva: number | null } | null> {
   try {
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
       expand: ['latest_charge.balance_transaction'],
     });
     const balanceTxn = pi.latest_charge?.balance_transaction;
-    if (balanceTxn && balanceTxn.fee) {
-      const fee = balanceTxn.fee / 100;
-      const net = (balanceTxn.net) / 100;
-      return { fee, net };
+    if (!balanceTxn) return null;
+
+    const fee = balanceTxn.fee / 100;
+    const net = balanceTxn.net / 100;
+
+    const detalles: Array<{ type?: string; amount?: number }> = Array.isArray(balanceTxn.fee_details)
+      ? balanceTxn.fee_details
+      : [];
+
+    if (detalles.length === 0) {
+      console.warn(`Stripe no mando fee_details para ${paymentIntentId}: el desglose queda nulo`);
+      return { fee, net, base: null, iva: null };
     }
-    // Fallback: try charges
-    if (pi.latest_charge?.balance_transaction) {
-      const fee = pi.latest_charge.balance_transaction.fee / 100;
-      const net = pi.latest_charge.balance_transaction.net / 100;
-      return { fee, net };
+
+    const centavosPorTipo = (esIva: boolean) =>
+      detalles
+        .filter((d) => (d.type === 'tax') === esIva)
+        .reduce((suma, d) => suma + (d.amount ?? 0), 0);
+
+    const iva = centavosPorTipo(true) / 100;
+    const base = centavosPorTipo(false) / 100;
+
+    // Si el desglose no suma el total, algo se leyo mal y es peor guardarlo
+    // que no guardarlo: la cascada contable hace su trabajo con la nula.
+    if (Math.abs(base + iva - fee) > 0.01) {
+      console.warn(
+        `Desglose de comision incongruente para ${paymentIntentId}: ` +
+        `base ${base} + iva ${iva} != total ${fee}. Se guarda solo el total.`,
+      );
+      return { fee, net, base: null, iva: null };
     }
+
+    return { fee, net, base, iva };
   } catch (e) {
     console.error('Error fetching Stripe processor fee:', mensajeDeError(e));
   }
   return null;
+}
+
+/**
+ * Las columnas del desglose para un `.update()`, omitidas cuando Stripe no lo
+ * mando. Se omiten en vez de mandarse nulas para no BORRAR un desglose que ya
+ * estuviera guardado —misma regla que «no pisar una comision buena con un
+ * cero» del #211— y para que los seis sitios que actualizan la comision no
+ * repitan el condicional.
+ */
+function columnasDeComision(
+  c: { fee: number; net: number; base: number | null; iva: number | null },
+): Record<string, number> {
+  return {
+    processor_fee: c.fee,
+    net_amount: c.net,
+    ...(c.base !== null && c.iva !== null
+      ? { processor_fee_base: c.base, processor_fee_iva: c.iva }
+      : {}),
+  };
 }
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
@@ -365,7 +435,7 @@ Deno.serve(async (req) => {
               if (suppFee) {
                 await supabase
                   .from('payment_transactions')
-                  .update({ processor_fee: suppFee.fee, net_amount: suppFee.net })
+                  .update(columnasDeComision(suppFee))
                   .eq('stripe_payment_intent_id', suppPaymentIntentId);
               }
             }
@@ -565,7 +635,7 @@ Deno.serve(async (req) => {
               if (extraFee) {
                 await supabase
                   .from('payment_transactions')
-                  .update({ processor_fee: extraFee.fee, net_amount: extraFee.net })
+                  .update(columnasDeComision(extraFee))
                   .eq('stripe_payment_intent_id', extraPaymentIntentId);
               }
             }
@@ -771,7 +841,7 @@ Deno.serve(async (req) => {
               if (planFee) {
                 await supabase
                   .from('payment_transactions')
-                  .update({ processor_fee: planFee.fee, net_amount: planFee.net })
+                  .update(columnasDeComision(planFee))
                   .eq('stripe_payment_intent_id', planPaymentIntentId);
               }
             }
@@ -1646,7 +1716,7 @@ Deno.serve(async (req) => {
         if (stripeFee) {
           await supabase
             .from('payment_transactions')
-            .update({ processor_fee: stripeFee.fee, net_amount: stripeFee.net })
+            .update(columnasDeComision(stripeFee))
             .eq('stripe_payment_intent_id', paymentIntentId);
         }
 
@@ -2096,7 +2166,7 @@ Deno.serve(async (req) => {
             if (piFee) {
               await supabase
                 .from('payment_transactions')
-                .update({ processor_fee: piFee.fee, net_amount: piFee.net })
+                .update(columnasDeComision(piFee))
                 .eq('stripe_payment_intent_id', paymentIntent.id);
             }
           }
@@ -2465,7 +2535,7 @@ Deno.serve(async (req) => {
               if (comision) {
                 await supabase
                   .from('payment_transactions')
-                  .update({ processor_fee: comision.fee, net_amount: comision.net })
+                  .update(columnasDeComision(comision))
                   .eq('id', membershipTxId);
               } else {
                 // Que quede dicho: sin esto, el 0 pasa por dato bueno.
