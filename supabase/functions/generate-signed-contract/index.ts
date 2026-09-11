@@ -1,6 +1,13 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
-import PdfPrinter from "npm:pdfmake@0.2.20/js/printer.js";
+// El default de `npm:pdfmake` ES la clase PdfPrinter, y hay que importarlo asi
+// y no por la subruta `/js/printer.js`: esa carpeta NO EXISTE en el paquete
+// (0.2.20 trae `build/` y `src/`), asi que el runtime moria con
+// "worker boot error: Unable to load .../pdfmake/0.2.20/js/printer.js".
+// La funcion seguia en pie con una compilacion vieja y el fallo solo salio al
+// redesplegarla el 11-sep-2026. Es el mismo patron que ya usaban
+// `approve-agency-documents` y `verify-contract-otp`.
+import PdfPrinter from "npm:pdfmake@0.2.20";
 import { Buffer } from "node:buffer";
 import { ROBOTO_NORMAL_B64, ROBOTO_BOLD_B64, ROBOTO_ITALICS_B64, ROBOTO_BOLDITALICS_B64 } from "../_shared/robotoFonts.ts";
 import { buildSignedContractDocDefinition } from "../_shared/contractDocDefinition.ts";
