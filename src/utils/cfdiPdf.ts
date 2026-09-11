@@ -71,6 +71,8 @@ const EQUIVALENTES: Record<string, string> = {
   '\u20AC': 'EUR',
 };
 
+export { FONDO_ENCABEZADO, TEXTO_ENCABEZADO };
+
 export function latin1(texto: string): string {
   if (!texto) return '';
   let salida = '';
@@ -90,6 +92,13 @@ const SEP = ' \u00B7 ';
 const MARGEN = 12;
 const GRIS = 120;
 const NEGRO = 33;
+// El encabezado de la tabla va en oscuro, asi que su TEXTO tiene que ir en
+// claro. `autoTable` hereda `styles.textColor` en el encabezado si no se le
+// dice otra cosa, y eso deja negro sobre gris oscuro: ilegible. Las dos
+// constantes viven juntas para que se vea de un golpe que contrastan, y una
+// prueba lo exige.
+const FONDO_ENCABEZADO: [number, number, number] = [45, 45, 45];
+const TEXTO_ENCABEZADO = 255;
 
 const pesos = (n: number, moneda: string): string =>
   `${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${moneda}`;
@@ -214,7 +223,7 @@ export function construirPdfDeCfdi(cfdi: ResumenCfdi): jsPDF {
       c.iva ? pesos(c.iva, '') : '-',
     ]),
     styles: { fontSize: 7.5, cellPadding: 1.6, textColor: NEGRO },
-    headStyles: { fillColor: [45, 45, 45], fontSize: 7.5 },
+    headStyles: { fillColor: FONDO_ENCABEZADO, textColor: TEXTO_ENCABEZADO, fontSize: 7.5 },
     columnStyles: {
       0: { cellWidth: 20 },
       1: { cellWidth: 12, halign: 'right' },

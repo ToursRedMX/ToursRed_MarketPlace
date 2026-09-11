@@ -169,5 +169,39 @@ caso('10. una moneda extranjera se imprime con su clave', () => {
   assert.ok(t.includes('USD'), 'el total no dice en que moneda esta');
 });
 
-console.log(`\nPDF generico de CFDI: ${casos}/10 casos OK`);
-if (casos !== 10) { console.error('faltaron casos'); process.exit(1); }
+caso('11. el encabezado de la tabla NO es negro sobre negro', () => {
+  // Reportado a ojo el 11-sep-2026: el encabezado salia ilegible. `autoTable`
+  // HEREDA `styles.textColor` en el encabezado si no se le dice otra cosa, y
+  // ese textColor es el negro del cuerpo. Con el fondo oscuro que le puse,
+  // negro sobre gris: invisible.
+  //
+  // La afirmacion va contra los OPERADORES del PDF, no contra las constantes:
+  // comprobar que dos numeros contrastan no prueba que se hayan usado. jspdf
+  // emite `N g` para el gris de relleno antes de cada `Tj`, asi que se lee el
+  // ultimo que precede al texto del encabezado.
+  const t = comoTexto(construirPdfDeCfdi(leerCfdiCompleto(cfdiDe())));
+
+  /** El ultimo `N g` (gris de relleno) antes de que se pinte `texto`. */
+  const grisAntesDe = (texto) => {
+    const i = t.indexOf(`(${texto}) Tj`);
+    assert.notEqual(i, -1, `el PDF no pinta "${texto}"`);
+    const previos = [...t.slice(0, i).matchAll(/([\d.]+) g\n/g)];
+    assert.ok(previos.length > 0, `no hay color de relleno antes de "${texto}"`);
+    return Number(previos[previos.length - 1][1]);
+  };
+
+  // El cuerpo va en oscuro sobre blanco: correcto.
+  assert.ok(grisAntesDe('01010101') < 0.5, 'el cuerpo de la tabla salio en claro');
+
+  // El encabezado va sobre fondo oscuro, asi que su texto tiene que ser CLARO.
+  for (const columna of ['Clave', 'Unidad', 'Descripcion', 'Importe', 'IVA']) {
+    const gris = grisAntesDe(columna);
+    assert.ok(
+      gris > 0.5,
+      `el encabezado "${columna}" se pinta en gris ${gris} sobre fondo oscuro: ilegible`,
+    );
+  }
+});
+
+console.log(`\nPDF generico de CFDI: ${casos}/11 casos OK`);
+if (casos !== 11) { console.error('faltaron casos'); process.exit(1); }
