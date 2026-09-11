@@ -8,6 +8,55 @@ import { formatCurrency } from '../utils/formatCurrency';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
+/**
+ * Id de correlacion de ESTA pestana.
+ *
+ * POR QUE EXISTE
+ *
+ * `insert_audit_log` sabe deducir la correlacion, pero solo de la cabecera
+ * `x-correlation-id`, y el front no la mandaba: medido el 11-sep-2026, los 23
+ * eventos de `audit_logs` posteriores al arreglo del 10-sep tenian
+ * `correlation_id` en NULL — los 23, incluidos los que si traen IP y sesion.
+ *
+ * QUE APORTA, SI YA HAY session_id
+ *
+ * `session_id` sale del JWT y es el mismo en todas las pestanas del usuario.
+ * Esto separa una pestana de otra, que es lo que hace falta para reconstruir
+ * una operacion concreta cuando alguien tiene tres abiertas.
+ *
+ * Vive en `sessionStorage` y no en `localStorage` a proposito: `sessionStorage`
+ * es por pestana y sobrevive a una recarga, que es exactamente el alcance que
+ * se quiere. En `localStorage` seria compartido por todas y no distinguiria
+ * nada.
+ *
+ * Tiene que ser un UUID valido: la funcion hace `::uuid` y, si el cast falla,
+ * se queda en NULL sin avisar.
+ */
+const CLAVE_CORRELACION = 'toursred.correlacion';
+
+function correlacionDeLaPestana(): string {
+  const nuevo = (): string => {
+    // `crypto.randomUUID` pide contexto seguro; el respaldo evita quedarse sin
+    // correlacion en un entorno sin https.
+    try {
+      return crypto.randomUUID();
+    } catch {
+      return '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0').slice(-12);
+    }
+  };
+  try {
+    const guardado = window.sessionStorage.getItem(CLAVE_CORRELACION);
+    if (guardado) return guardado;
+    const id = nuevo();
+    window.sessionStorage.setItem(CLAVE_CORRELACION, id);
+    return id;
+  } catch {
+    // Modo privado o almacenamiento bloqueado: se usa una sin persistir. Nunca
+    // puede tumbar la creacion del cliente.
+    return nuevo();
+  }
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
@@ -17,7 +66,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     experimental: {
       passkey: true,
     },
-  }
+  },
+  global: {
+    // Comprobado antes de anadirla: el preflight de PostgREST devuelve esta
+    // cabecera en `access-control-allow-headers`, asi que no rompe CORS.
+    headers: {
+      'x-correlation-id': correlacionDeLaPestana(),
+    },
+  },
 });
 
 // User roles enum
