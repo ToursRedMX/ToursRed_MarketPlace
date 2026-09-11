@@ -367,6 +367,20 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d fechas -v ON_ERROR_STOP=1 -f test-fecha-del-pago.sql
 
+      # Una factura de proveedor trae RFC, domicilio fiscal y razon social. Si el
+      # bucket de comprobantes queda PUBLICO, ese documento esta a un `curl` de
+      # distancia de cualquiera que adivine la ruta — y la pantalla funcionaria
+      # igual de bien, que es lo que lo hace invisible. El caso 1 lo afirma.
+      - name: Verify the expense attachments bucket stays private
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS soportes;" -c "CREATE DATABASE soportes;"
+          cd scripts
+          psql -h localhost -U postgres -d soportes -v ON_ERROR_STOP=1 -f test-soportes-de-gasto.sql
+
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
       # que escribe el snapshot fiscal de cada cobro, y esos numeros son los que
