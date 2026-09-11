@@ -1116,12 +1116,12 @@ const BookingFlowStep4: React.FC = () => {
                 </label>
                 <input
                   type="number"
-                  min={flow.conektaMethod === 'bnpl' || flow.openpayMethod === 'bnpl' ? 1200 : 500}
-                  max={flow.conektaMethod === 'bnpl' || flow.openpayMethod === 'bnpl' ? Math.min(16000, depositAmount - 10) : depositAmount - 10}
+                  min={flow.conektaMethod === 'bnpl' ? 1200 : 500}
+                  max={flow.conektaMethod === 'bnpl' ? Math.min(16000, depositAmount - 10) : depositAmount - 10}
                   value={flow.partialPaymentAmount || ''}
                   onChange={(e) => {
                     const val = parseFloat(e.target.value) || 0;
-                    const isBnpl = flow.conektaMethod === 'bnpl' || flow.openpayMethod === 'bnpl';
+                    const isBnpl = flow.conektaMethod === 'bnpl';
                     const maxVal = isBnpl ? Math.min(16000, depositAmount - 10) : depositAmount - 10;
                     updateFlow({ partialPaymentAmount: Math.min(Math.max(val, 0), maxVal) });
                   }}

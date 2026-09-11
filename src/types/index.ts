@@ -417,7 +417,12 @@ export interface Booking {
   deposit_amount: number;
   commission_amount: number;
   total_price: number;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'cancellation_processing';
+  // 'draft' es un estado REAL aunque hoy no haya ninguna fila: lo usan tres
+  // funciones SQL —`activate_draft_booking`, `cleanup_abandoned_draft_bookings`
+  // y `handle_booking_approval_notification`—, y sin declararlo el
+  // `status === 'draft'` de TravelersInfoPage era una comparacion imposible
+  // que nunca activaba el borrador.
+  status: 'draft' | 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'cancellation_processing';
   booking_date: string;
   travelers_count: number;
   created_at: string;
@@ -444,7 +449,10 @@ export interface Booking {
   booking_approval_type?: 'automatic' | 'manual';
   toursred_cash_used?: number;
   has_pending_reschedule?: boolean;
-  reschedule_response?: 'accepted' | 'rejected' | 'auto_accepted';
+  // `auto_cancelled` lo escribe `process_expired_slot_reschedules` cuando
+  // vence el plazo para responder. Faltaba aqui, asi que el mensaje que lo
+  // anuncia al viajero no se pintaba nunca.
+  reschedule_response?: 'accepted' | 'rejected' | 'auto_accepted' | 'auto_cancelled';
   reschedule_responded_at?: string;
   original_booking_date?: string;
   discount_code_id?: string;
@@ -544,7 +552,7 @@ export interface FrequentCompanion {
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'booking_pending_approval' | 'booking_approved' | 'booking_rejected' | 'booking_confirmed' | 'booking_cancelled' | 'message_received' | 'tour_updated' | 'system_announcement' | 'tour_rescheduled' | 'referral_signup' | 'referral_completed' | 'referral_bonus_earned' | 'payment_plan_reminder' | 'payment_plan_overdue' | 'payment_plan_overdue_critical' | 'payment_plan_paid';
+  type: 'agency_documents_approved' | 'agency_documents_rejected' | 'booking_approved' | 'booking_cancelled' | 'booking_confirmed' | 'booking_pending_approval' | 'booking_rejected' | 'commission_earned' | 'message_received' | 'payment_plan_overdue' | 'payment_plan_overdue_critical' | 'payment_plan_paid' | 'payment_plan_reminder' | 'referral_bonus_earned' | 'referral_completed' | 'referral_signup' | 'support_ticket_created' | 'support_ticket_updated' | 'system_announcement' | 'tour_announcement' | 'tour_rescheduled' | 'tour_updated';
   title: string;
   message: string;
   data?: any;

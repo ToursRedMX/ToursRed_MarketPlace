@@ -5434,7 +5434,7 @@ const AgencyTours: React.FC = () => {
                     tourId={editingTour.id}
                     agencyId={editingTour.agency_id}
                     slotId={null}
-                    isReceptivo={tourType === 'receptivo'}
+                    isReceptivo={false}
                   />
                 </div>
               </div>
