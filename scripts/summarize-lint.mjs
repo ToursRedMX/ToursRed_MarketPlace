@@ -39,15 +39,15 @@ import path from 'node:path';
 // 101883996483), con eslint 10 / typescript-eslint 8.68.0. Mover junto con las
 // BASELINE_* de lint.yml: si una baja, se actualizan las dos.
 const BASE = {
-  '@typescript-eslint/no-explicit-any': 1648,
-  '@typescript-eslint/no-unused-vars': 310,
+  '@typescript-eslint/no-explicit-any': 1615,
   'no-useless-escape': 171,
-  'react-hooks/set-state-in-effect': 117,
-  'react-hooks/immutability': 86,
+  'react-hooks/set-state-in-effect': 118,
   'react-hooks/exhaustive-deps': 84,
+  'react-hooks/immutability': 82,
+  '@typescript-eslint/no-unused-vars': 79,
   'react-hooks/refs': 21,
-  'no-useless-assignment': 16,
-  'no-empty': 10,
+  'no-useless-assignment': 17,
+  'no-empty': 9,
   'react-hooks/preserve-manual-memoization': 4,
   'react-refresh/only-export-components': 4,
   '@typescript-eslint/no-unused-expressions': 2,
@@ -57,6 +57,18 @@ const BASE = {
   // proposito: los dos quedaron en 0. Fuera de BASE, si reaparecen se marcan
   // con el aviso de "reglas fuera de la base" ademas del delta, que es la
   // senal que queremos.
+  //
+  // Reajustada el 11-sep-2026 contra la medicion de CI del PR #242. La
+  // anterior era del 07-sep y habia quedado floja: `no-unused-vars` decia 310
+  // cuando ya eran 79, y `no-explicit-any` 1648 cuando eran 1615 — 264 de
+  // holgura solo entre esas dos.
+  //
+  // OJO CON LO QUE ESTA TABLA NO IMPIDE: el corte que BLOQUEA es el total de
+  // errores, no la fila. Mientras estuvo floja se colaron en main dos subidas
+  // por regla sin que nada sonara — `set-state-in-effect` 117 -> 118 y
+  // `no-useless-assignment` 16 -> 17 — porque el total bajaba por otro lado.
+  // Un PR que cambie un `any` por un setState dentro de un efecto sigue
+  // pasando en verde, y esas dos reglas marcan bugs de verdad, no estilo.
 };
 
 // Corriendo local sin las env del workflow, se cae a la misma base para que
