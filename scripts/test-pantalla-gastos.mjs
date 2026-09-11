@@ -163,6 +163,86 @@ casos.push(() => {
     'la fila debe decir que falta el tipo de cambio, no mostrar TC 1 como si fuera un dato');
 });
 
+// --- 12. Un gasto fuera del mes visible NO se queda invisible -------------
+casos.push(() => {
+  // Fallo reproducido en la PRIMERA captura real (11-sep-2026): el lector de
+  // CFDI toma la fecha de la FACTURA —una de TikTok del 01-jul— mientras el
+  // filtro sigue en el mes actual. La pantalla decia "guardado" y enseguida
+  // mostraba la lista vacia, que se lee como que no se guardo nada. La fila si
+  // existia, en julio.
+  assert.ok(/const periodoDelGasto = form\.fecha\.slice\(0, 7\);/.test(tsx),
+    'hay que comparar el mes del gasto contra el del filtro');
+  assert.ok(/const cambiaDeMes = periodoDelGasto !== periodo;/.test(tsx),
+    'la comparacion es contra el periodo que se esta viendo');
+
+  // Mover el filtro, no solo avisar: el objetivo es VER el gasto.
+  assert.ok(/if \(cambiaDeMes\) \{[\s\S]{0,200}setPeriodo\(periodoDelGasto\);/.test(tsx),
+    'el filtro tiene que saltar al mes del gasto, no dejar al usuario cambiandolo a mano');
+
+  // Y decir por que se movio, o el salto de mes parece un error de la pantalla.
+  assert.ok(/porque esa es su fecha/.test(tsx),
+    'hay que explicar por que el gasto quedo en otro mes');
+
+  // `cargar` no se llama dos veces: cambiar `periodo` ya dispara el efecto.
+  const desde = tsx.indexOf('const cambiaDeMes');
+  const bloque = tsx.slice(desde, tsx.indexOf('const registrar', desde));
+  assert.equal((bloque.match(/void cargar\(\)/g) || []).length, 1,
+    'al cambiar de mes el efecto de `periodo` ya recarga: llamar a cargar() ademas la pide dos veces');
+});
+
+// --- 13. Queda registrado quien captura, sin anular el DEFAULT -------------
+casos.push(() => {
+  // La columna existia desde el principio y nadie la llenaba: la primera
+  // captura real nacio con `creado_por` nulo. Importa porque `gastos_operacion`
+  // NO tiene trigger de auditoria y el permiso can_manage_expenses esta hecho
+  // para darselo a alguien que no es el super admin.
+  assert.ok(/supabase\.auth\.getUser\(\)/.test(tsx),
+    'hay que saber quien esta capturando');
+
+  // Se ancla en `const autor =` y no en la expresion completa: la primera
+  // version apuntaba a `sesion.user?.id` y se rompio sola al agregarle el
+  // manejo de error a getUser(), que volvio la lectura opcional.
+  const desde = tsx.indexOf('const autor =');
+  assert.ok(desde > 0, 'no se encontro la resolucion del autor');
+  assert.ok(/const \{ data: sesion, error: errorSesion \} = await supabase\.auth\.getUser\(\);/.test(tsx),
+    'getUser puede fallar y un gasto sin autor no se distingue de uno del cron: hay que desestructurar el error');
+  assert.ok(/\[AdminGastos\] no se pudo resolver quien captura el gasto/.test(tsx),
+    'si no se puede resolver el autor tiene que quedar en el log, no en silencio');
+  const bloque = tsx.slice(desde, tsx.indexOf('setGuardando(false)', desde));
+
+  // LA PARTE QUE IMPORTA: si no hay usuario, la clave se OMITE. En Postgres un
+  // NULL explicito ANULA el DEFAULT —solo aplica cuando la columna no viene—,
+  // asi que `creado_por: autor ?? null` desactivaria la red de la migracion
+  // 20260911020000. Salio al probar la migracion contra Postgres 16.
+  assert.ok(/\.\.\.\(autor \? \{ creado_por: autor \} : \{\}\)/.test(bloque),
+    'la clave se omite cuando no hay autor; mandar null explicito anula el DEFAULT auth.uid()');
+  assert.ok(!/creado_por:\s*\w+\s*\?\?\s*null/.test(bloque),
+    'mandar `creado_por: x ?? null` desactiva el DEFAULT de la tabla');
+
+  // Solo en el alta: en una edicion sobrescribiria al autor original.
+  assert.ok(/\.update\(fila\)\.eq\('id', form\.id\)/.test(bloque),
+    'la edicion no debe tocar creado_por');
+});
+
+// --- 14. La migracion del DEFAULT existe y cubre las dos tablas ------------
+casos.push(() => {
+  const sql = readFileSync(
+    'supabase/migrations/20260911020000_autor_del_gasto_por_defecto.sql', 'utf8');
+  for (const tabla of ['gastos_operacion', 'gastos_recurrentes']) {
+    assert.ok(
+      new RegExp(`ALTER TABLE public\\.${tabla}\\s+ALTER COLUMN creado_por SET DEFAULT auth\\.uid\\(\\);`)
+        .test(sql),
+      `falta el DEFAULT auth.uid() en ${tabla}`);
+  }
+  // La asercion que hace que un retroceso falle en la migracion y no meses
+  // despues con una tabla llena de nulos.
+  assert.ok(/RAISE EXCEPTION 'Sin DEFAULT auth\.uid\(\) en: %'/.test(sql),
+    'la migracion debe fallar si el DEFAULT no quedo puesto');
+  // NOT NULL romperia el generador de recurrentes y las cargas por service role.
+  assert.ok(!/SET NOT NULL/.test(sql),
+    'poner NOT NULL romperia el cron y el service role, que no tienen auth.uid()');
+});
+
 let ok = 0;
 for (const caso of casos) { caso(); ok++; }
 console.log(`Contrato de la pantalla de gastos: ${ok}/${casos.length} casos OK`);
