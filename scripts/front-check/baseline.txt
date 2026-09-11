@@ -12,9 +12,6 @@
 1	src/components/PreventasSection.tsx | TS2430 | Interface 'PreventaTour' incorrectly extends interface 'Tour'.
 1	src/components/RichTextEditor.tsx | TS2339 | Property 'setImage' does not exist on type 'ChainedCommands'.
 1	src/components/RichTextEditor.tsx | TS2559 | Type 'false' has no properties in common with type 'SetContentOptions'.
-1	src/components/TourPromotionsManager.tsx | TS2322 | Type 'number' is not assignable to type 'string'.
-2	src/components/TourPromotionsManager.tsx | TS2363 | The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
-2	src/components/TourPromotionsManager.tsx | TS2365 | Operator '<' cannot be applied to types 'string' and 'number'.
 1	src/components/TravelerReviewsDisplay.tsx | TS2345 | Argument of type '{ id: any; rating: any; comment: any; created_at: any; agency: { name: any; logo: any; }[]; booking: { tour: { name: any; }[]; }[]; }[]' is not assignable to parameter of type 'SetStateAction<TravelerReview[]>'.
 1	src/components/contracts/ContractDraftViewer.tsx | TS2550 | Property 'replaceAll' does not exist on type 'string'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2021' or later.
 2	src/components/messaging/CreateConversationModal.tsx | TS2345 | Argument of type '{ id: any; tour_id: any; tours: { id: any; name: any; destination: any; }[]; }[]' is not assignable to parameter of type 'SetStateAction<Booking[]>'.
@@ -71,8 +68,3 @@
 1	src/pages/traveler/TravelerInvoices.tsx | TS2352 | Conversion of type '{ id: any; invoice_type: any; uuid_fiscal: any; folio: any; serie: any; receptor_rfc: any; subtotal: any; iva_amount: any; total: any; status: any; xml_url: any; pdf_url: any; stamped_at: any; created_at: any; booking_id: any; membership_id: any; bookings: { ...; }[]; }' to type 'CfdiInvoice' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
 1	src/pages/traveler/TravelerInvoices.tsx | TS2352 | Conversion of type '{ id: any; invoice_type: any; uuid_fiscal: any; folio: any; serie: any; receptor_rfc: any; subtotal: any; iva_amount: any; total: any; status: any; xml_url: any; pdf_url: any; stamped_at: any; created_at: any; booking_id: any; membership_id: any; checkin_charge_id: any; bookings: { ...; }[]; }' to type 'CfdiInvoice' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
 1	src/pages/traveler/TravelerMembership.tsx | TS2345 | Argument of type '{ id: any; booking_code: any; created_at: any; paid_at: any; membership_service_fee_saved: any; used_membership_benefit: any; tour: { name: any; destination: any; }[]; }[]' is not assignable to parameter of type 'SetStateAction<BookingWithBenefit[]>'.
-4	src/types/index.ts | TS2687 | All declarations of 'created_at' must have identical modifiers.
-2	src/types/index.ts | TS2687 | All declarations of 'id' must have identical modifiers.
-1	src/types/index.ts | TS2717 | Subsequent property declarations must have the same type. Property 'categoria_viajero' must be of type '"adulto" | "nino" | "infante" | "adulto_mayor" | "mascota"', but here has type '"adulto" | "nino" | "infante" | "adulto_mayor"'.
-2	src/types/index.ts | TS2717 | Subsequent property declarations must have the same type. Property 'created_at' must be of type 'string | undefined', but here has type 'string'.
-1	src/types/index.ts | TS2717 | Subsequent property declarations must have the same type. Property 'id' must be of type 'string | undefined', but here has type 'string'.

@@ -517,14 +517,38 @@ export interface BookingOptionalService {
   paid_at?: string | null;
 }
 
+/**
+ * Una fila de `public.booking_travelers`.
+ *
+ * ESTABA DECLARADA DOS VECES, y TypeScript las fusionaba: el tipo efectivo era
+ * la mezcla de ambas, con `id` opcional y requerido a la vez y
+ * `categoria_viajero` con y sin 'mascota'. De ahi salian 7 de los 10 errores
+ * que `tsc` reportaba contra este archivo.
+ *
+ * Esta version sale del esquema real (11-sep-2026), no de juntar las dos:
+ *
+ *   - `fecha_nacimiento` es NULLABLE en la base. Las DOS declaraciones la
+ *     daban por obligatoria, asi que ninguna de las dos era correcta.
+ *   - `categoria_viajero` no tiene CHECK y hoy solo hay 'adulto' y
+ *     'adulto_mayor' en las filas, pero el flujo de reserva maneja las cinco
+ *     —`CATEGORIA_ORDER` en BookingFlowStep4— y `bookings.count_mascotas`
+ *     existe, asi que 'mascota' se declara.
+ *   - Faltaban cinco columnas que la tabla si tiene: `is_cancelled`,
+ *     `cancelled_at`, `partial_cancellation_id`, `promo_discount_per_traveler`
+ *     e `is_no_show`.
+ *
+ * Los campos que no siempre vienen en un `select` van opcionales, que es el
+ * criterio del resto del archivo: describir lo que el front recibe de verdad.
+ */
 export interface BookingTraveler {
   id?: string;
   booking_id: string;
   categoria_viajero: 'adulto' | 'nino' | 'infante' | 'adulto_mayor' | 'mascota';
   nombre: string;
+  apellido?: string;
   email: string;
   telefono?: string;
-  fecha_nacimiento: string;
+  fecha_nacimiento?: string;
   precio_aplicado: number;
   frequent_companion_id?: string;
   created_at?: string;
@@ -532,8 +556,24 @@ export interface BookingTraveler {
   documento_numero?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
+  is_cancelled?: boolean;
+  cancelled_at?: string;
+  partial_cancellation_id?: string;
+  promo_discount_per_traveler?: number;
+  is_no_show?: boolean;
 }
 
+/**
+ * Una fila de `public.frequent_companions`.
+ *
+ * Tambien estaba dos veces: una completa y otra reducida a siete campos, con
+ * `created_at` obligatorio. La base lo tiene NULLABLE, asi que la reducida era
+ * la equivocada — y al fusionarlas TypeScript se quedaba con el conflicto.
+ *
+ * Verificado contra el esquema el 11-sep-2026. Aqui `fecha_nacimiento` SI es
+ * obligatoria (NOT NULL), al reves que en `BookingTraveler`: no es un descuido,
+ * las dos tablas difieren de verdad.
+ */
 export interface FrequentCompanion {
   id: string;
   user_id: string;
@@ -651,33 +691,7 @@ export interface PaymentBreakdown {
   preventaComisionDescuento?: number;
 }
 
-export interface FrequentCompanion {
-  id: string;
-  user_id: string;
-  nombre: string;
-  email: string;
-  telefono?: string;
-  fecha_nacimiento: string;
-  created_at: string;
-}
 
-export interface BookingTraveler {
-  id: string;
-  booking_id: string;
-  categoria_viajero: 'infante' | 'nino' | 'adulto' | 'adulto_mayor';
-  nombre: string;
-  apellido?: string;
-  email: string;
-  telefono?: string;
-  fecha_nacimiento: string;
-  precio_aplicado: number;
-  frequent_companion_id?: string;
-  created_at: string;
-  documento_tipo?: 'curp' | 'pasaporte';
-  documento_numero?: string;
-  emergency_contact_name?: string;
-  emergency_contact_phone?: string;
-}
 
 export interface TravelerCategory {
   categoria: 'infante' | 'nino' | 'adulto' | 'adulto_mayor';
