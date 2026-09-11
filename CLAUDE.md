@@ -19,7 +19,10 @@ ToursRed es una plataforma donde agencias de viaje comercializan sus propios tou
 2. **No hagas push a producción/main sin que Axel lo revise y apruebe explícitamente.** Trabaja en ramas o espera confirmación antes de mergear/pushear cambios sensibles.
 3. **No toques integraciones con Zoho Books u Odoo** como si fueran el sistema contable activo — están deprecadas.
 4. Antes de dar por "terminada" una tarea, corre `git diff` y muéstrale a Axel qué cambió.
-5. **Nunca corras `supabase db push --include-all`** contra este repo: reaplicaría `users_curp_or_passport_check`, que **5 de los 11 usuarios actuales violan**, y `users_identification_check`, retirado a propósito.
+5. **`supabase db push --include-all` se usa solo con un motivo y mirando antes el ledger.** Aplica TODO archivo local que no esté en el ledger, así que su radio de daño es el repo entero y no el cambio que traes.
+   **Este archivo lo daba por prohibido sin matices, y eso era impreciso.** El peligro concreto que citaba —reaplicar `users_curp_or_passport_check` (de `tight_manor`) y `users_identification_check` (de `pale_swamp`, retirado a propósito)— **no puede dispararse hoy**: las dos se marcaron como aplicadas con `migration repair` el 02-sep-2026, así que `--include-all` las salta. Comprobado el 11-sep-2026: `copper_grove`, `tight_manor` y `pale_swamp` están las tres en el ledger y ninguna de las dos restricciones existe en la base.
+   **El riesgo sigue siendo real si alguna sale del ledger** (un `repair --status reverted`, una base nueva, otro proyecto): `users_curp_or_passport_check` exige CURP o pasaporte según `is_foreign_traveler`, y **6 de los 11 usuarios de hoy lo violarían** — medido, no recordado. Un `ALTER TABLE ... ADD CONSTRAINT` contra filas que lo violan falla y aborta la migración entera.
+   Antes de correrlo, mira qué va a aplicar: `supabase db push --dry-run`.
 
 ## Estilo de trabajo
 - Explica en español los cambios que propones antes de aplicarlos si son de impacto medio/alto (lógica de pagos, cancelaciones, wallet/puntos, esquema de BD).
