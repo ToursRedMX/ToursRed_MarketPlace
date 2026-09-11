@@ -409,6 +409,21 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d recursion -v ON_ERROR_STOP=1 -f test-recursion-routesred.sql
 
+      # Postgres evalua TODAS las politicas permisivas de un comando, no solo la
+      # del bucket que le interesa al usuario. Una politica de storage.objects
+      # que consulte una tabla que el rol no puede leer mata la operacion
+      # ENTERA, en cualquier bucket: es un punto unico de fallo para todo
+      # Storage. El caso 1 reproduce el 42501 antes de arreglarlo.
+      - name: Verify no storage policy reads a table the caller cannot read
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS almacen;" -c "CREATE DATABASE almacen;"
+          cd scripts
+          psql -h localhost -U postgres -d almacen -v ON_ERROR_STOP=1 -f test-storage-sin-routesred.sql
+
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
       # que escribe el snapshot fiscal de cada cobro, y esos numeros son los que
