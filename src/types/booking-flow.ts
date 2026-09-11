@@ -1,3 +1,5 @@
+import type { CodigoDeDescuento as DatosDelCodigoDeDescuento } from '../utils/descuentoDeReserva.ts';
+
 import type { Tour } from './index';
 
 export type TravelerCategory = 'adulto' | 'nino' | 'infante' | 'adulto_mayor' | 'mascota';
@@ -93,7 +95,13 @@ export interface BookingFlowState {
 
   discountCode: string;
   discountCodeId: string | null;
-  discountAmount: number;
+  /**
+   * El CODIGO validado, no su importe. La RPC devuelve tipo, valor, tope y
+   * ambito; el monto lo calcula el front sobre una base que cambia si el
+   * viajero vuelve atras y toca los viajeros. Guardar el importe ya calculado
+   * lo dejaria congelado contra un precio que ya no existe.
+   */
+  discountCodeMeta: DatosDelCodigoDeDescuento | null;
   insuranceDiscountCodeId: string | null;
   insuranceDiscountAmount: number;
 
@@ -142,7 +150,7 @@ export const INITIAL_FLOW_STATE: BookingFlowState = {
   insuranceDays: null,
   discountCode: '',
   discountCodeId: null,
-  discountAmount: 0,
+  discountCodeMeta: null,
   insuranceDiscountCodeId: null,
   insuranceDiscountAmount: 0,
   pointsUsed: 0,

@@ -5,6 +5,7 @@ import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
 import { useStepUp } from '../../context/StepUpContext';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
+import { montoDeDescuento, descuentoDeCargoPorServicio } from '../../utils/descuentoDeReserva.ts';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { getEffectiveDepositPct } from '../../utils/depositCalculation';
@@ -242,6 +243,13 @@ const BookingFlowStep4: React.FC = () => {
     return extrasServiceChargeBase;
   }, [extrasServiceChargeBase, shouldWaiveServiceCharge, hasMembership, flow.addMembership, extrasExemptionUsed]);
 
+  // Descuento de cargo por servicio. Va sobre el cargo del anticipo, que es el
+  // que el viajero paga hoy.
+  const serviceChargeDiscount = useMemo(
+    () => descuentoDeCargoPorServicio(flow.discountCodeMeta, depositServiceCharge),
+    [flow.discountCodeMeta, depositServiceCharge],
+  );
+
   const hasReachedExemptionLimit = hasMembership && remainingExemption < (baseServiceCharge + extrasServiceChargeBase);
 
   const membershipCost = useMemo(() => {
@@ -249,7 +257,13 @@ const BookingFlowStep4: React.FC = () => {
     return flow.membershipPlan === 'anual' ? membershipPrices.annualPrice : membershipPrices.monthlyPrice;
   }, [flow.addMembership, flow.membershipPlan, hasMembership, membershipPrices]);
 
-  const discountAmount = flow.discountAmount || 0;
+  // Los DOS destinos posibles, derivados del codigo guardado. Un codigo de
+  // `service_fees` no toca el precio del tour —lo paga la plataforma de su
+  // margen, no la agencia— y uno de tour no toca el cargo por servicio.
+  const discountAmount = useMemo(
+    () => montoDeDescuento(flow.discountCodeMeta, baseTourPrice),
+    [flow.discountCodeMeta, baseTourPrice],
+  );
 
   // Anticipo efectivo. La regla vive en utils/depositCalculation para que Step1 y
   // Step4 nunca muestren porcentajes distintos para el mismo tour, y se mantiene en
@@ -294,7 +308,9 @@ const BookingFlowStep4: React.FC = () => {
     && tentativeRemaining < MIN_PROCESSOR_AMOUNT;
 
   // ── PASE 2: aplicar la exencion y recalcular con los montos definitivos.
-  const effectiveDepositServiceCharge = isFullWalletPayment ? 0 : depositServiceCharge;
+  const effectiveDepositServiceCharge = isFullWalletPayment
+    ? 0
+    : Math.max(0, Math.round((depositServiceCharge - serviceChargeDiscount) * 100) / 100);
   const effectiveExtrasServiceCharge = isFullWalletPayment ? 0 : extrasServiceCharge;
 
   // Tope duro del wallet: el exigible ahora. No se permite abonar de mas.
@@ -348,26 +364,50 @@ const BookingFlowStep4: React.FC = () => {
     setIsApplyingDiscount(true);
     setDiscountError('');
     try {
-      const { data, error } = await supabase.rpc('validate_discount_code', {
+      // `validate_tour_discount_code`, no `validate_discount_code`. Hasta el
+      // 12-sep-2026 se llamaba a la segunda pasandole `p_tour_id` y `p_amount`,
+      // **que no son parametros suyos**: PostgREST resuelve las RPC por NOMBRE
+      // de argumento, asi que respondia PGRST202 y la llamada no llegaba nunca
+      // a la funcion. El viajero tecleaba un codigo bueno y leia «Error al
+      // validar el codigo».
+      //
+      // La de tour es ademas la correcta: comprueba que el codigo sea de la
+      // agencia del tour y que no este restringido a otro tour.
+      const { data, error } = await supabase.rpc('validate_tour_discount_code', {
         p_code: discountInput.trim().toUpperCase(),
         p_user_id: user.id,
         p_tour_id: tour.id,
-        p_amount: subtotalBeforeDiscount,
       });
       if (error) throw error;
-      if (!data || data.length === 0 || !data[0].valid) {
-        setDiscountError('Codigo de descuento invalido o expirado.');
+
+      // Devuelve un OBJETO jsonb, no un arreglo. El codigo anterior hacia
+      // `data[0].valid` y reventaba aunque los parametros hubieran sido buenos.
+      if (!data?.valid) {
+        setDiscountError(data?.error || 'Codigo de descuento invalido o expirado.');
         setDiscountApplied(false);
         return;
       }
-      const result = data[0];
+
       updateFlow({
         discountCode: discountInput.trim().toUpperCase(),
-        discountCodeId: result.discount_code_id,
-        discountAmount: Number(result.discount_amount) || 0,
+        discountCodeId: data.code_id,
+        // Se guarda el CODIGO, no su importe: el monto se deriva mas abajo
+        // sobre el precio vigente.
+        discountCodeMeta: {
+          code_id: data.code_id,
+          code: data.code,
+          discount_type: data.discount_type,
+          discount_value: Number(data.discount_value),
+          discount_applies_to: data.discount_applies_to ?? 'total_price',
+          max_discount_amount: data.max_discount_amount ?? null,
+          applicable_to: data.applicable_to ?? 'tours',
+        },
       });
       setDiscountApplied(true);
-    } catch {
+    } catch (e) {
+      // No se traga el motivo: un error de contrato con la base se veia igual
+      // que un codigo caducado, y fue justamente lo que escondio este bug.
+      console.error('[BookingFlowStep4] fallo al validar el codigo de descuento', e);
       setDiscountError('Error al validar el codigo.');
     } finally {
       setIsApplyingDiscount(false);
@@ -375,7 +415,7 @@ const BookingFlowStep4: React.FC = () => {
   };
 
   const handleRemoveDiscount = () => {
-    updateFlow({ discountCode: '', discountCodeId: null, discountAmount: 0 });
+    updateFlow({ discountCode: '', discountCodeId: null, discountCodeMeta: null });
     setDiscountInput('');
     setDiscountApplied(false);
   };
@@ -424,7 +464,7 @@ const BookingFlowStep4: React.FC = () => {
         toursred_cash_used: walletDiscount,
         discount_code_id: flow.discountCodeId || null,
         discount_amount: discountAmount,
-        service_charge_discount: 0,
+        service_charge_discount: serviceChargeDiscount,
         payment_provider: flow.paymentProvider,
         conekta_method: flow.paymentProvider === 'conekta' ? flow.conektaMethod : null,
         openpay_method: flow.paymentProvider === 'openpay' ? flow.openpayMethod : null,
