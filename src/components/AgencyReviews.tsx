@@ -53,10 +53,23 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
 
       const reviewsData = data || [];
 
-      const reviewsWithTravelers = reviewsData.map(review => ({
+      // La RPC devuelve filas sin tipar, asi que el parametro salia `any`
+      // implicito. Se declara lo que este map consume de verdad, ni mas ni
+      // menos: si manana la consulta trae un campo nuevo, se anade aqui.
+      interface FilaResena {
+        id: string;
+        rating: number;
+        comment: string | null;
+        reply: string | null;
+        created_at: string;
+        traveler_first_name: string | null;
+        traveler_last_name: string | null;
+      }
+
+      const reviewsWithTravelers = (reviewsData as FilaResena[]).map((review) => ({
         id: review.id,
         rating: review.rating,
-        comment: review.comment,
+        comment: review.comment ?? '',
         reply: review.reply,
         created_at: review.created_at,
         traveler: {

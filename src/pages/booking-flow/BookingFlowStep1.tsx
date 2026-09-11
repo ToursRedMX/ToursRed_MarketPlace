@@ -71,12 +71,12 @@ const BookingFlowStep1: React.FC = () => {
       setCheckingMembership(false);
       return;
     }
-    supabase
+    Promise.resolve(supabase
       .rpc('has_active_membership')
       .then(({ data }) => {
         setHasActiveMembership(!!data);
         setCheckingMembership(false);
-      })
+      }))
       .catch(() => setCheckingMembership(false));
   }, [user]);
 

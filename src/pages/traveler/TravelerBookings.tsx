@@ -605,8 +605,8 @@ const TravelerBookings: React.FC = () => {
 
     const results = await Promise.all(
       bookingsWithReschedule.map(booking =>
-        supabase.rpc('get_pending_reschedule_for_booking', { p_booking_id: booking.id })
-          .then(({ data, error }) => ({ bookingId: booking.id, data, error }))
+        Promise.resolve(supabase.rpc('get_pending_reschedule_for_booking', { p_booking_id: booking.id })
+          .then(({ data, error }) => ({ bookingId: booking.id, data, error })))
           .catch(err => ({ bookingId: booking.id, data: null, error: err }))
       )
     );

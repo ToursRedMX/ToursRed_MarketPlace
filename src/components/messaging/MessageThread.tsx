@@ -82,15 +82,30 @@ const MessageThread: React.FC<MessageThreadProps> = ({
         throw new Error(error.message);
       }
 
-      const enrichedMessages = messagesData?.map(msg => ({
+      // Igual que en AgencyReviews: la RPC no trae tipos. El indice permite el
+      // `...msg` de abajo sin tener que declarar la fila entera, que es larga y
+      // aqui solo se leen los campos del remitente.
+      // Extiende `Message` en vez de llevar un indice a `unknown`: con el
+      // indice, el `...msg` de abajo producia `unknown` para cada campo y el
+      // objeto ya no encajaba en `Message[]`.
+      interface FilaMensaje extends Message {
+        sender_first_name?: string | null;
+        sender_last_name?: string | null;
+        sender_email?: string | null;
+        sender_role?: string | null;
+        sender_profile_picture?: string | null;
+        agency_name?: string | null;
+      }
+
+      const enrichedMessages = (messagesData as FilaMensaje[] | null)?.map((msg) => ({
         ...msg,
         sender: {
-          first_name: msg.sender_first_name,
-          last_name: msg.sender_last_name,
-          email: msg.sender_email,
-          role: msg.sender_role,
+          first_name: msg.sender_first_name ?? undefined,
+          last_name: msg.sender_last_name ?? undefined,
+          email: msg.sender_email ?? '',
+          role: msg.sender_role ?? '',
           profile_picture: msg.sender_profile_picture,
-          agency_name: msg.agency_name
+          agency_name: msg.agency_name ?? undefined
         }
       }));
 

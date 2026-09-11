@@ -43,13 +43,13 @@ const HomePage: React.FC = () => {
       setNewToursLoading(false);
     }).catch(() => setNewToursLoading(false));
 
-    supabase
+    Promise.resolve(supabase
       .from('platform_settings')
       .select('hero_background_url')
       .maybeSingle()
       .then(({ data }) => {
         setHeroBackground(data?.hero_background_url ?? null);
-      })
+      }))
       .catch(() => setHeroBackground(null));
   }, []);
 

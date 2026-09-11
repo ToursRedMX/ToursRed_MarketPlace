@@ -25,6 +25,11 @@ interface AgencyLead {
   converted_agency_onboarding_status?: string | null;
   converted_agency_name?: string | null;
   executive_name?: string | null;
+  // Columna real de `agency_leads`, nullable, y `ExecutiveLeads.tsx` ya la
+  // declaraba: esta copia del tipo se habia quedado sin ella. Son DOS
+  // declaraciones locales de `AgencyLead` en dos archivos, sin una sola
+  // fuente — igual que pasaba con `Agency`, que tenia cuatro.
+  rfc?: string | null;
 }
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bg: string }> = {
