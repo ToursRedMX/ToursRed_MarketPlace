@@ -383,9 +383,17 @@ medir, y medir encontró lo que no se sabía.
 
 | Documento | Cubre |
 |---|---|
+| **[`mapeo-saq-a.md`](mapeo-saq-a.md)** | **Empezar por aquí.** Qué requisitos aplican de verdad ahora que el SAQ es A |
 | [`inventario-de-componentes-de-terceros.md`](inventario-de-componentes-de-terceros.md) | 6.3.2 — qué software de terceros corre y en qué versión |
 | [`retencion-y-revision-de-bitacora.md`](retencion-y-revision-de-bitacora.md) | 10.4 y 10.5.1 — cuánto se guarda y cómo se revisa |
 | [`escaneos-y-pruebas-de-intrusion.md`](escaneos-y-pruebas-de-intrusion.md) | 11.3 y 11.4 — qué falta y de qué depende |
+
+**Este inventario mapea a requisitos elegidos antes de saber el SAQ.** Con SAQ A
+confirmado, varios de sus huecos **ya no son hallazgos** —el Requisito 10 entero
+no está en SAQ A— y aparecieron obligaciones que no figuran aquí: el ASV
+trimestral, el escaneo tras cambio significativo, la lista formal de proveedores
+y la revisión de los AOC de los cinco procesadores. El mapeo lo dice entrada por
+entrada.
 
 ---
 
