@@ -207,6 +207,18 @@ jobs:
       - name: Verify an unpaid SPEI/OXXO session is never recorded as a charge
         run: node scripts/test-cobros-stripe.mjs
 
+      # getStripeProcessorFee leia el TOTAL de la comision e ignoraba
+      # fee_details, que viene en la misma respuesta con el desglose. Por eso
+      # processor_fee_base y processor_fee_iva nacian nulas en Stripe mientras
+      # OpenPay si las llenaba. No era un agujero fiscal —la funcion contable
+      # deriva base = fee/1.16 y eso da el centavo exacto en los 13 cobros
+      # medidos—, pero dependia de que Stripe SIEMPRE cobre IVA sobre la
+      # comision. Si alguna vez no lo hace, dividir entre 1.16 acreditaria un
+      # IVA que nadie cobro. Ahora se lee, y si Stripe no lo manda las columnas
+      # quedan nulas a proposito en vez de guardar un numero derivado.
+      - name: Verify the Stripe fee VAT split is read, not assumed
+        run: node scripts/test-desglose-comision-stripe.mjs
+
       # El bloqueo de cuentas (is_active) aplicado en RLS. Se corre la migracion
       # de verdad contra un Postgres de verdad: la de la guardia, ademas, se
       # aplica SIN transaccion a proposito, porque asi fue como se descubrio que
