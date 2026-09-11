@@ -15,11 +15,24 @@
  *
  * ESTE MODULO NO IMPORTA supabase-js, A PROPOSITO
  *
- * Los cinco webhooks no usan la misma version: `stripe-webhook` importa
- * `@2.39.6` y otros `@2.116.0`. Un import aqui meteria una segunda copia en el
- * bundle de los que usan otra — lo mismo que se descarto el 10-sep-2026 al
- * construir `contextoAuditoria.ts`, y que ya habia dado un error de tipos real.
- * Por eso el cliente entra como parametro con un tipo estructural minimo.
+ * Cuando se escribio, los cinco webhooks no usaban la misma version:
+ * `stripe-webhook` importaba `@2.39.6` y otros `@2.116.0`. Un import aqui
+ * metia una segunda copia en el bundle de los que usaran otra — lo mismo que
+ * se descarto el 10-sep-2026 al construir `contextoAuditoria.ts`, y que ya
+ * habia dado un error de tipos real. Por eso el cliente entra como parametro
+ * con un tipo estructural minimo. *
+ * ESA PREMISA YA NO ES CIERTA, Y CONVIENE QUE SE SEPA
+ *
+ * El 10-sep-2026 los 175 imports de supabase-js se unificaron en `@2.116.0`, y
+ * la regla de version unica de `check-edge-deps.mjs` impide que vuelvan a
+ * divergir. Hoy un import aqui NO duplicaria nada.
+ *
+ * El parametro estructural se mantiene igualmente: un modulo compartido que
+ * fija una version se la impone a todas las funciones que lo importan, y la
+ * proxima subida tendria que pasar por aqui. No cuesta nada y no ata a nadie.
+ * Pero a partir de ahora es una preferencia de diseno, no una restriccion: si
+ * alguien decide importar supabase-js en este archivo, no estara repitiendo el
+ * error de 2026.
  *
  * LO QUE NO GARANTIZA
  *

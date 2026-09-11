@@ -157,8 +157,28 @@ las 172 funciones estaban expuestas sin inspeccionar cada despliegue.
 
 **3. `xlsx` en dos versiones.** El front usa 0.20.3 (del CDN de SheetJS) y las
 Edge Functions 0.18.5 (de npm). Dos versiones distintas de la misma librería, de
-dos orígenes distintos. **Este sigue abierto** — no es un flotante, son dos
-pines legítimos que nadie ha unificado.
+dos orígenes distintos. **Este sigue abierto**, y medido el 11-sep-2026 **no se
+puede cerrar cambiando un número**: SheetJS dejó de publicar en npm, donde la
+última es 0.18.5 (2022), y la 0.20.3 solo existe en su CDN — `npm view
+xlsx@0.20.3` responde **404**. Cerrarlo exige decidir si las Edge Functions
+tiran del CDN o si el front vuelve a una versión de 2022.
+
+**Lo que hay que saber al decidirlo:** 0.18.5 está por debajo de **dos avisos
+"high"**, y **ninguno tiene parche en npm**:
+
+| Aviso | Qué es | Vulnerable | Parche en npm |
+|---|---|---|---|
+| GHSA-4r6h-8v6p-xvw6 | Prototype pollution | < 0.19.3 | **no hay** |
+| GHSA-5pgg-2g8v-p4x9 | ReDoS | < 0.20.2 | **no hay** |
+
+**La exposición práctica hoy es nula, y conviene decir por qué en vez de dejarlo
+en "vulnerable".** Los dos avisos se disparan al **parsear** un archivo, y
+medido el 11-sep-2026 **nadie en el repo llama a `XLSX.read`**: las dos Edge
+Functions (`generate-insurance-xlsx`, `send-travel-insurance-notification`) y
+las pantallas del front solo **generan** hojas (`aoa_to_sheet`, `book_new`,
+`write`). Versión vulnerable, camino vulnerable no ejercitado. **El día que
+alguien acepte un .xlsx subido por un usuario, esto deja de ser deuda y pasa a
+ser urgente** — y ese es justo el cambio que no avisa de que lo es.
 
 ### El estado después
 
@@ -180,19 +200,121 @@ dependencias **transitivas**. La única que sigue declarada como rango es
 `npm:openai@^4.52.5`, que la pide `@supabase/functions-js` en su propio
 manifiesto y no se controla desde nuestro código; el lock la clava en 4.104.0.
 
-**Lo que NO se hizo, a propósito:** unificar las cuatro versiones de
+**Lo que NO se hizo en ese PR, a propósito:** unificar las cuatro versiones de
 `supabase-js` en una sola, ni mover los 13 de `jsr:` a `npm:`. Las dos son
-cambios de comportamiento reales —especialmente subir los 69 que están en
-2.39.6, de feb-2024— y no deben venir de contrabando dentro de un PR de
-endurecimiento. Quedan como decisión aparte.
+cambios de comportamiento reales —especialmente subir los 69 que estaban en
+2.39.6, de feb-2024— y no debían venir de contrabando dentro de un PR de
+endurecimiento. **Se hizo aparte, el mismo 10-sep-2026** (sección siguiente).
+
+### La unificación de `supabase-js`
+
+Los **86 especificadores repartidos en 85 archivos** que no estaban en
+`npm:@supabase/supabase-js@2.116.0` se movieron ahí. Resultado: **175 usos, una
+sola versión, un solo registro.**
+
+**Por qué 2.116.0 y no la más baja:** era ya la mayoritaria (89 usos), es la que
+resuelve el `@2` que usaba media plataforma, y es la más cercana a la 2.115.0
+del front. Bajar habría sido un downgrade real para 89 funciones.
+
+**El salto de 2.39.6 a 2.116.0 no es un cambio de mayor, aunque lo parezca.** Al
+comparar los subpaquetes asusta: 2.39.6 trae `postgrest-js@1.9.2` y 2.116.0 trae
+`postgrest-js@2.116.0`. Es renumeración, no ruptura — Supabase alineó **todos**
+sus subpaquetes con la versión del padre (auth-js, functions-js, postgrest-js,
+realtime-js y storage-js están los cinco en 2.116.0). Comprobado además sobre la
+superficie que el repo usa de verdad: de los **27 métodos de
+`PostgrestFilterBuilder` en 1.9.2, en 2.116.0 no falta ninguno**, y hay 5 nuevos
+(`isDistinct`, `notIn`, `regexMatch`, `regexIMatch`, `throwOnError`). Es un
+superconjunto estricto.
+
+**Verificación:** `deno check` sobre las 190 fuentes da **0 errores nuevos**
+contra la línea base de `check-edge-types.mjs`, y el diff es quirúrgico — 86
+líneas cambiadas, 86 líneas, **ninguna que no sea un especificador**.
+
+**De dónde venía cada una:** 67 de `npm:@2.39.6`, 13 de `jsr:@2.114.0`, 5 de
+`npm:@2.108.2`.
+
+**El riesgo que queda es de despliegue, no de código.** De las 85 movidas, **11
+tocan `payment_transactions` o llaman a la API de un procesador**, y conviene
+separarlas:
+
+| | Funciones |
+|---|---|
+| **Mueven dinero** (8) | `stripe-webhook`, `openpay-webhook`, `create-checkout-session`, `create-openpay-checkout`, `create-membership-subscription`, `manage-membership-subscription`, `purchase-gift-card`, `_shared/openpay.ts` |
+| **Solo leen** (3) | `get-gift-card-status`, `get-refundable-lines`, `send-booking-confirmation` |
+
+**Y hay tres que no aparecen en el diff y hay que desplegar igual.**
+`_shared/openpay.ts` es un módulo compartido: al cambiar su especificador,
+arrastra a todo lo que lo importe. `create-featured-slot-checkout`,
+`process-payment-plan-installment` y `purchase-post-booking-extras` **ya estaban
+en 2.116.0**, no cambió una línea suya, y aun así necesitan redespliegue para
+recibirlo — las tres cobran. Pasar por alto esto dejaría en producción funciones
+con el módulo compartido viejo.
+
+Total a desplegar: **88** (85 cambiadas + 3 arrastradas). Los otros cinco
+módulos `_shared` tocados solo cambiaron comentarios, así que quien los importe
+puede esperar al siguiente despliegue.
+
+Como el despliegue es por función, se hace **escalonado**: primero las que no
+cobran, y el grupo de pagos después de confirmar que el primero no rompió nada.
 
 ### La guardia
 
 `scripts/check-edge-deps.mjs`, workflow `edge-deps.yml`, job
-`guardia-dependencias`. Rechaza cualquier import remoto sin versión exacta:
-rangos (`@2`, `^1.2.3`, `~1.2.3`), comodines (`@*`, `@latest`, `0.2.x`), y la
-ausencia total de versión. Los `node:` built-in se permiten, que no tienen
-versión que fijar.
+`guardia-dependencias`. Vigila **dos reglas distintas**, y conviene no
+confundirlas:
+
+**Regla 1 — versión exacta.** Rechaza cualquier import remoto sin versión
+exacta: rangos (`@2`, `^1.2.3`, `~1.2.3`), comodines (`@*`, `@latest`,
+`0.2.x`), y la ausencia total de versión. Los `node:` built-in se permiten, que
+no tienen versión que fijar.
+
+**Regla 3 — front y edge alineados.** Un paquete usado en los dos lados debe
+correr la misma versión en `package.json`, en `package-lock.json` y en las Edge
+Functions. Las reglas 1 y 2 solo miran `supabase/functions/`, así que **no ven
+esta frontera**: el 11-sep-2026 el front declaraba `^2.115.0` de `supabase-js`
+y las Edge Functions `2.116.0`, y ningún check chistaba.
+
+**Mira también el lock, y esa parte no es cosmética.** Ese mismo día
+`package.json` decía `^2.115.0`, el lock decía `2.115.0` y el `node_modules`
+local tenía `2.116.0`. Netlify instala desde **el lock**, así que mirar lo
+instalado habría dado "ya están alineados" mientras producción corría otra cosa.
+Es lo que se arregló: `package.json` pasa a `2.116.0` **exacto** (sin caret, que
+deja la versión a elección de npm el día del install) y el lock se regeneró con
+`npm install --package-lock-only`, que lo reescribe sin descargar nada —
+necesario aquí, porque el `npm install` completo no resuelve el árbol.
+
+Única excepción, declarada en el código: **`xlsx`**, por la razón de arriba —
+la versión del front no existe en npm.
+
+**Regla 2 — versión única.** Rechaza que un mismo paquete corra en dos versiones
+—o desde dos registros— a la vez. Se añadió con la unificación, y es lo que
+impide que la mezcla vuelva: **la regla 1 sola no la habría detectado nunca**,
+porque 175 imports pueden llevar cada uno su versión exacta y distinta y pasar
+sin una queja. La subruta no cuenta como diferencia (`npm:pdfmake@0.2.20` y
+`npm:pdfmake@0.2.20/js/printer.js` son el mismo paquete).
+
+Las dos nacen en cero, que es lo que las hace exigibles. Medido sobre el árbol
+ya unificado: **6 paquetes remotos, una sola versión cada uno.**
+
+**La guardia tiene su propia prueba**, `scripts/test-guardia-dependencias.mjs`,
+que corre **antes** que la guardia en el mismo job: **14 casos** que comprueban
+que sigue detectando lo que dice detectar —las tres reglas por separado, dos de
+ellas juntas, la subruta que no debe contar, los comentarios que debe ignorar, y
+los tres modos de desalineación front/edge, incluido **el caso real del
+11-sep-2026**: `package.json` correcto y lock atrasado—. Las tres están
+**verificadas por mutación**: desactivando cada regla en la guardia, el test
+falla.
+
+Sus fixtures viven en un directorio temporal fuera del repo a propósito: uno con
+`npm:@sentry/deno@9` dentro de `supabase/functions/` haría fallar a la guardia
+de verdad en cada PR. Los de la regla 3 montan un repo de mentira completo
+—`package.json`, lock y una función— para no tener que tocar los del repo.
+
+**Lo que la guardia NO cubre:** el desajuste de `xlsx` queda **excluido a
+propósito** de la regla 3 (la versión del front no existe en npm), así que sigue
+abierto y la guardia no lo va a recordar por nadie. Y nada de esto vigila las
+dependencias **transitivas**: de eso se encarga el `deno.lock` commiteado, del
+lado edge, y el `package-lock.json`, del lado front.
 
 **Nace en cero y por eso puede exigirse.** Es el mismo criterio de
 `guardia-fiscal` y `check-search-path.mjs`: una guardia que nace con hallazgos

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.116.0";
-import type { SupabaseClient as LegacySupabaseClient } from "npm:@supabase/supabase-js@2.39.6";
+import type { SupabaseClient as LegacySupabaseClient } from "npm:@supabase/supabase-js@2.116.0";
 
 type OpenPayClient = Pick<SupabaseClient, "from"> | Pick<LegacySupabaseClient, "from">;
 

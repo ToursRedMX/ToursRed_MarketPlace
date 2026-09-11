@@ -10,6 +10,18 @@ name: Dependencias de Edge Functions
 # y 2.39.6) desde DOS registros distintos. Se fijaron todos en el mismo PR que
 # trajo esta guardia, asi que arranca en 0 hallazgos.
 #
+# Fijarlos no deshizo la mezcla: quedaron las cuatro versiones, ahora exactas.
+# Por eso la guardia vigila DOS reglas, y la segunda llego despues:
+#
+#   1. version EXACTA — ningun `npm:paquete@2`
+#   2. version UNICA  — ningun paquete en dos versiones ni dos registros
+#
+# La regla 2 se agrego al unificar los 175 imports de `supabase-js` en
+# `npm:@supabase/supabase-js@2.116.0`. Tambien nace en cero: medido sobre el
+# arbol ya unificado, los 6 paquetes remotos corren en una sola version cada
+# uno. Sin ella, 175 imports podrian llevar cada uno su version exacta y
+# distinta y pasar la regla 1 sin una queja.
+#
 # NACER EN CERO ES LO QUE LA HIZO EXIGIBLE, Y SE EXIGE. Desde el 10-sep-2026
 # `guardia-dependencias` es check requerido de main, asi que un especificador
 # sin version exacta ya no se puede mergear: paso de detectar a prevenir. Con
@@ -48,7 +60,14 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Toda dependencia remota lleva version exacta
+      # Antes de creerle a la guardia, comprobar que la guardia mira. Sus
+      # fixtures viven en un directorio temporal fuera del repo: uno con
+      # `npm:@sentry/deno@9` dentro de `supabase/functions/` haria fallar al
+      # paso siguiente en cada PR.
+      - name: La guardia sigue detectando lo que dice detectar
+        run: node scripts/test-guardia-dependencias.mjs
+
+      - name: Version exacta y version unica
         run: node scripts/check-edge-deps.mjs --lista | tee inventario-deps-edge.txt
         shell: bash
 

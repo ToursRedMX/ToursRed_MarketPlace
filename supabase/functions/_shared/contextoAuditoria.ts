@@ -129,16 +129,28 @@ export function cabecerasDeContexto(req: Request): Record<string, string> {
  *
  * La primera version de esto devolvia el cliente ya construido, importando
  * `createClient` aqui. Se descarto al medirlo: de las 49 funciones en alcance,
- * **30 usan `supabase-js@2.116.0`, 13 usan `@2.39.6` y 6 usan `jsr:@2.114.0`**.
- * Un helper que importe una version concreta mete una SEGUNDA copia de
- * supabase-js en el bundle de las 19 que usan otra — o sea, reintroduce dentro
- * de una funcion la mezcla de versiones que el PR #198 acababa de ordenar
- * entre funciones. Y ya habia dado la cara: `stripe-webhook` declara
+ * 30 usaban `supabase-js@2.116.0`, 13 `@2.39.6` y 6 `jsr:@2.114.0`. Un helper
+ * que importara una version concreta metia una SEGUNDA copia de supabase-js en
+ * el bundle de las 19 que usaran otra — o sea, reintroducia dentro de una
+ * funcion la mezcla de versiones que el PR #198 acababa de ordenar entre
+ * funciones. Y ya habia dado la cara: `stripe-webhook` declaraba
  * `type ClienteSupabase = SupabaseClient` importado de 2.39.6, y no aceptaba
  * el cliente de 2.116.0 que devolvia el helper.
  *
  * Devolviendo solo las opciones, cada funcion sigue usando SU `createClient`.
  * Una copia, sus tipos, y este modulo no importa supabase-js en absoluto.
+ *
+ * LA MEZCLA QUE MOTIVO ESTA FIRMA YA NO EXISTE
+ *
+ * Ese mismo 10-sep-2026, mas tarde, los 175 imports se unificaron en
+ * `npm:@supabase/supabase-js@2.116.0` y la regla de version unica de
+ * `check-edge-deps.mjs` paso a impedir que vuelvan a divergir. O sea que la
+ * segunda copia ya no podria darse.
+ *
+ * La firma se queda: devolver opciones en vez de un cliente no ata a este
+ * modulo a ninguna version, y revertirlo seria tocar 49 funciones para no
+ * ganar nada. Lo que cambia es el estatus — preferencia de diseno, no
+ * restriccion tecnica.
  *
  * COMO SE FUSIONA
  *

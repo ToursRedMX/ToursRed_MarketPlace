@@ -66,10 +66,15 @@ const VECTORES = [
 //
 const fuente = readFileSync(MODULO, 'utf8');
 
-// El modulo NO debe importar nada. Que no importe `supabase-js` es justo lo que
-// le permite servir a las 49 funciones en alcance aunque usen TRES versiones
-// distintas (30 en npm 2.116.0, 13 en npm 2.39.6, 6 en jsr 2.114.0): un import
-// aqui meteria una SEGUNDA copia en el bundle de las 19 que usan otra.
+// El modulo NO debe importar nada. Nacio porque las 49 funciones en alcance
+// usaban TRES versiones distintas (30 en npm 2.116.0, 13 en npm 2.39.6, 6 en
+// jsr 2.114.0) y un import aqui metia una SEGUNDA copia de supabase-js en el
+// bundle de las 19 que usaran otra.
+//
+// Desde la unificacion del 10-sep-2026 hay una sola version, asi que esa
+// duplicacion ya no podria darse. La comprobacion se queda porque sigue
+// valiendo para lo otro: un modulo compartido que importa supabase-js le impone
+// su version a las 49 funciones que lo usan.
 //
 // Se comprueba sobre el TEXTO y no con un centinela en `require`. Se intento
 // primero con el centinela y no servia: `ts.transpileModule` elimina los
