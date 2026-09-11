@@ -320,6 +320,24 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d comisiones -v ON_ERROR_STOP=1 -f test-comisiones-al-libro.sql
 
+      # Pagar un gasto: despues de registrarlo, y en parcialidades. Antes no
+      # habia camino — la pantalla solo editaba borradores y
+      # registrar_gasto_operacion sale temprano si ya esta registrado — y el
+      # unico atajo, un UPDATE a pagado_en, SEPARA la vista del libro: el bloque
+      # 19 decidia caja contra pasivo con ese campo, asi que el reporte diria
+      # "salio del banco" mientras el asiento sigue diciendo "se debe". Ahora
+      # caja y pasivo salen de la SUMA de pagos, que ademas es lo unico que sabe
+      # representar un abono parcial.
+      - name: Verify an operating expense can be paid, in full or in parts
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS pagos;" -c "CREATE DATABASE pagos;"
+          cd scripts
+          psql -h localhost -U postgres -d pagos -v ON_ERROR_STOP=1 -f test-pagar-gasto.sql
+
       # Paridad de la formula de IVA entre la canonica en TypeScript y su
       # traduccion a mano en plpgsql. compute_tax_snapshot corre en el trigger
       # que escribe el snapshot fiscal de cada cobro, y esos numeros son los que
