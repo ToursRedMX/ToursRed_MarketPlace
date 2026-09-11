@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.39.6";
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.39.6";
+import { createClient } from "npm:@supabase/supabase-js@2.116.0";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.116.0";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";

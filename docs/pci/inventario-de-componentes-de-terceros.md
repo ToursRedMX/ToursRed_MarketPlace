@@ -180,19 +180,95 @@ dependencias **transitivas**. La única que sigue declarada como rango es
 `npm:openai@^4.52.5`, que la pide `@supabase/functions-js` en su propio
 manifiesto y no se controla desde nuestro código; el lock la clava en 4.104.0.
 
-**Lo que NO se hizo, a propósito:** unificar las cuatro versiones de
+**Lo que NO se hizo en ese PR, a propósito:** unificar las cuatro versiones de
 `supabase-js` en una sola, ni mover los 13 de `jsr:` a `npm:`. Las dos son
-cambios de comportamiento reales —especialmente subir los 69 que están en
-2.39.6, de feb-2024— y no deben venir de contrabando dentro de un PR de
-endurecimiento. Quedan como decisión aparte.
+cambios de comportamiento reales —especialmente subir los 69 que estaban en
+2.39.6, de feb-2024— y no debían venir de contrabando dentro de un PR de
+endurecimiento. **Se hizo aparte, el mismo 10-sep-2026** (sección siguiente).
+
+### La unificación de `supabase-js`
+
+Los **86 especificadores repartidos en 85 archivos** que no estaban en
+`npm:@supabase/supabase-js@2.116.0` se movieron ahí. Resultado: **175 usos, una
+sola versión, un solo registro.**
+
+**Por qué 2.116.0 y no la más baja:** era ya la mayoritaria (89 usos), es la que
+resuelve el `@2` que usaba media plataforma, y es la más cercana a la 2.115.0
+del front. Bajar habría sido un downgrade real para 89 funciones.
+
+**El salto de 2.39.6 a 2.116.0 no es un cambio de mayor, aunque lo parezca.** Al
+comparar los subpaquetes asusta: 2.39.6 trae `postgrest-js@1.9.2` y 2.116.0 trae
+`postgrest-js@2.116.0`. Es renumeración, no ruptura — Supabase alineó **todos**
+sus subpaquetes con la versión del padre (auth-js, functions-js, postgrest-js,
+realtime-js y storage-js están los cinco en 2.116.0). Comprobado además sobre la
+superficie que el repo usa de verdad: de los **27 métodos de
+`PostgrestFilterBuilder` en 1.9.2, en 2.116.0 no falta ninguno**, y hay 5 nuevos
+(`isDistinct`, `notIn`, `regexMatch`, `regexIMatch`, `throwOnError`). Es un
+superconjunto estricto.
+
+**Verificación:** `deno check` sobre las 190 fuentes da **0 errores nuevos**
+contra la línea base de `check-edge-types.mjs`, y el diff es quirúrgico — 86
+líneas cambiadas, 86 líneas, **ninguna que no sea un especificador**.
+
+**De dónde venía cada una:** 67 de `npm:@2.39.6`, 13 de `jsr:@2.114.0`, 5 de
+`npm:@2.108.2`.
+
+**El riesgo que queda es de despliegue, no de código.** De las 85 movidas, **11
+tocan `payment_transactions` o llaman a la API de un procesador**, y conviene
+separarlas:
+
+| | Funciones |
+|---|---|
+| **Mueven dinero** (8) | `stripe-webhook`, `openpay-webhook`, `create-checkout-session`, `create-openpay-checkout`, `create-membership-subscription`, `manage-membership-subscription`, `purchase-gift-card`, `_shared/openpay.ts` |
+| **Solo leen** (3) | `get-gift-card-status`, `get-refundable-lines`, `send-booking-confirmation` |
+
+**Y hay tres que no aparecen en el diff y hay que desplegar igual.**
+`_shared/openpay.ts` es un módulo compartido: al cambiar su especificador,
+arrastra a todo lo que lo importe. `create-featured-slot-checkout`,
+`process-payment-plan-installment` y `purchase-post-booking-extras` **ya estaban
+en 2.116.0**, no cambió una línea suya, y aun así necesitan redespliegue para
+recibirlo — las tres cobran. Pasar por alto esto dejaría en producción funciones
+con el módulo compartido viejo.
+
+Total a desplegar: **88** (85 cambiadas + 3 arrastradas). Los otros cinco
+módulos `_shared` tocados solo cambiaron comentarios, así que quien los importe
+puede esperar al siguiente despliegue.
+
+Como el despliegue es por función, se hace **escalonado**: primero las que no
+cobran, y el grupo de pagos después de confirmar que el primero no rompió nada.
 
 ### La guardia
 
 `scripts/check-edge-deps.mjs`, workflow `edge-deps.yml`, job
-`guardia-dependencias`. Rechaza cualquier import remoto sin versión exacta:
-rangos (`@2`, `^1.2.3`, `~1.2.3`), comodines (`@*`, `@latest`, `0.2.x`), y la
-ausencia total de versión. Los `node:` built-in se permiten, que no tienen
-versión que fijar.
+`guardia-dependencias`. Vigila **dos reglas distintas**, y conviene no
+confundirlas:
+
+**Regla 1 — versión exacta.** Rechaza cualquier import remoto sin versión
+exacta: rangos (`@2`, `^1.2.3`, `~1.2.3`), comodines (`@*`, `@latest`,
+`0.2.x`), y la ausencia total de versión. Los `node:` built-in se permiten, que
+no tienen versión que fijar.
+
+**Regla 2 — versión única.** Rechaza que un mismo paquete corra en dos versiones
+—o desde dos registros— a la vez. Se añadió con la unificación, y es lo que
+impide que la mezcla vuelva: **la regla 1 sola no la habría detectado nunca**,
+porque 175 imports pueden llevar cada uno su versión exacta y distinta y pasar
+sin una queja. La subruta no cuenta como diferencia (`npm:pdfmake@0.2.20` y
+`npm:pdfmake@0.2.20/js/printer.js` son el mismo paquete).
+
+Las dos nacen en cero, que es lo que las hace exigibles. Medido sobre el árbol
+ya unificado: **6 paquetes remotos, una sola versión cada uno.**
+
+**La guardia tiene su propia prueba**, `scripts/test-guardia-dependencias.mjs`,
+que corre **antes** que la guardia en el mismo job: 9 casos que comprueban que
+sigue detectando lo que dice detectar —las dos reglas por separado, las dos
+juntas, la subruta que no debe contar, y los comentarios que debe ignorar—. Sus
+fixtures viven en un directorio temporal fuera del repo a propósito: uno con
+`npm:@sentry/deno@9` dentro de `supabase/functions/` haría fallar a la guardia
+de verdad en cada PR.
+
+**Lo que la guardia NO cubre:** solo mira `supabase/functions/`. El desajuste de
+`xlsx` —0.20.3 en el front, 0.18.5 en las Edge Functions— cruza esa frontera y
+**sigue abierto**; la regla 2 no lo ve porque el front no está en su alcance.
 
 **Nace en cero y por eso puede exigirse.** Es el mismo criterio de
 `guardia-fiscal` y `check-search-path.mjs`: una guardia que nace con hallazgos

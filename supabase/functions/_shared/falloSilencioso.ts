@@ -50,10 +50,15 @@ const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
  * Escribe el fallo en los logs y, en la medida de lo posible, en
  * `public.audit_errors`. Nunca lanza.
  *
- * Se usa REST directo en vez de `createClient` a proposito: la mitad del repo
- * importa `supabase-js@2` y la otra mitad `@2.39.6`, y este modulo lo importan
- * las dos. Un `fetch` a PostgREST no tiene ese problema de tipos ni arrastra
- * una dependencia mas al bundle de 16 funciones.
+ * Se usa REST directo en vez de `createClient` a proposito. La razon original
+ * fue de versiones: media repo importaba `supabase-js@2` y la otra mitad
+ * `@2.39.6`, y a este modulo lo importaban las dos. Desde el 10-sep-2026 hay una
+ * sola version y esa razon ya no aplica.
+ *
+ * Se mantiene por la otra, que sigue en pie: un `fetch` a PostgREST no arrastra
+ * supabase-js al bundle de las 16 funciones que solo lo usan para registrar un
+ * fallo, y este modulo tiene que funcionar precisamente cuando algo ya salio
+ * mal — cuantas menos piezas, mejor.
  */
 export async function registrarFallo(
   contexto: string,
@@ -131,10 +136,12 @@ export async function vigilarResultado(
   contexto: string,
   datos?: Record<string, unknown>,
 ): Promise<void> {
-  // `unknown` y no `{ error?: unknown }` a proposito: el tipo concreto que
-  // devuelve `invoke` cambia entre supabase-js@2 y @2.39.6, y este modulo lo
-  // importan funciones de las dos. Estrechar aqui evita que la anotacion del
-  // llamador tenga que coincidir con ninguna de las dos.
+  // `unknown` y no `{ error?: unknown }` a proposito. Nacio porque el tipo que
+  // devuelve `invoke` cambiaba entre supabase-js@2 y @2.39.6 y a este modulo lo
+  // importaban funciones de las dos; desde la unificacion del 10-sep-2026 hay
+  // una sola. Se deja ancho igualmente: tambien se le pasan resultados de
+  // `.from().insert()` y de `rpc()`, que no comparten tipo entre si, asi que
+  // estrechar a la forma de `invoke` obligaria a castear en el llamador.
   const err = (r as { error?: unknown } | null | undefined)?.error;
   if (err) {
     await registrarFallo(contexto, err, datos);

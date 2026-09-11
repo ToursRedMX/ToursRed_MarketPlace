@@ -67,11 +67,16 @@ import { createClient } from "npm:@supabase/supabase-js@2.116.0";
  * El cliente admin lo crea este modulo, no lo recibe.
  *
  * La primera version lo recibia como parametro, y eso obligaba a que la funcion
- * que llama al guard y este archivo importen la MISMA version de supabase-js.
- * No es el caso: la mitad del repo importa @2 y la otra mitad @2.39.6, asi que
- * pasar el cliente daba un TS2345 por tipos estructuralmente distintos. Crearlo
- * aqui evita el problema de raiz y de paso quita una linea repetida en cada
- * funcion que adopta el guard.
+ * que llama al guard y este archivo importaran la MISMA version de supabase-js.
+ * No lo era: media repo importaba `@2` y la otra mitad `@2.39.6`, asi que pasar
+ * el cliente daba un TS2345 por tipos estructuralmente distintos.
+ *
+ * Desde el 10-sep-2026 los 175 imports estan en `@2.116.0` y la guardia de
+ * dependencias no deja que vuelvan a divergir, o sea que ese TS2345 ya no
+ * podria darse. Se deja como esta igualmente: crear el cliente aqui quita una
+ * linea repetida en cada funcion que adopta el guard, y volver a recibirlo por
+ * parametro seria trabajo sin ganancia. La razon historica queda escrita porque
+ * explica una firma que si no parece arbitraria.
  *
  * Es un cliente sin sesion: solo se usa para resolver el JWT del llamador y
  * leer users.role.

@@ -4,9 +4,15 @@
  *
  * QUE VIGILA
  *
- * Que ningun import remoto de `supabase/functions/` entre al repo sin una
- * version EXACTA. Un `npm:paquete@2` no es una version: es un rango, y Deno lo
- * resuelve al desplegar.
+ * Dos reglas, y conviene no confundirlas:
+ *
+ *   1. VERSION EXACTA. Que ningun import remoto de `supabase/functions/` entre
+ *      al repo sin una version exacta. Un `npm:paquete@2` no es una version: es
+ *      un rango, y Deno lo resuelve al desplegar.
+ *
+ *   2. VERSION UNICA. Que un mismo paquete no corra en dos versiones —ni desde
+ *      dos registros— a la vez. La regla 1 sola no lo impide: 175 imports
+ *      pueden llevar cada uno su version exacta y distinta, y pasar todos.
  *
  * POR QUE
  *
@@ -28,6 +34,22 @@
  * 2.114.0, 2.108.2 y 2.39.6), dos de ellas flotantes, y desde DOS registros
  * distintos. El caso peor era `@supabase/functions-js`, importado sin ni un
  * digito de version: Deno lo trataba como `@*`.
+ *
+ * Fijar las versiones resolvio lo flotante pero NO la mezcla: quedaron las
+ * cuatro, ahora exactas. La mezcla se cerro el 10-sep-2026 en un segundo paso,
+ * llevando los 175 usos a `npm:@supabase/supabase-js@2.116.0`. La regla 2 es
+ * lo que impide que vuelva.
+ *
+ * SUBIR DE 2.39.6 A 2.116.0 NO ES UN SALTO DE MAYOR, AUNQUE LO PAREZCA
+ *
+ * Asusta al mirar los subpaquetes: 2.39.6 trae `postgrest-js@1.9.2` y 2.116.0
+ * trae `postgrest-js@2.116.0`. No es una ruptura. Supabase renumero TODOS sus
+ * subpaquetes para que coincidan con la version del padre: auth-js,
+ * functions-js, postgrest-js, realtime-js y storage-js estan los cinco en
+ * 2.116.0. Comprobado ademas sobre la superficie que este repo usa de verdad:
+ * de los 27 metodos de `PostgrestFilterBuilder` en 1.9.2, en 2.116.0 no falta
+ * NINGUNO, y hay 5 nuevos (`isDistinct`, `notIn`, `regexMatch`,
+ * `regexIMatch`, `throwOnError`). Es un superconjunto estricto.
  *
  * POR QUE NACE EN CERO
  *
@@ -73,19 +95,34 @@
  *   npm:paquete@0.2.x / @* / @latest .......... NO, comodin
  *   jsr:@supabase/functions-js/edge-runtime... . NO, sin version
  *
+ * QUE INCUMPLE LA REGLA 2, aunque cada linea sea exacta
+ *
+ *   npm:@supabase/supabase-js@2.116.0  en una funcion
+ *   npm:@supabase/supabase-js@2.39.6   en otra ...... NO, dos versiones
+ *   jsr:@supabase/supabase-js@2.116.0  en otra ...... NO, dos registros
+ *
+ * La subruta no cuenta como diferencia: `npm:pdfmake@0.2.20` y
+ * `npm:pdfmake@0.2.20/js/printer.js` son el mismo paquete en la misma version,
+ * y asi los agrupa la guardia.
+ *
  * USO
  *
  *   node scripts/check-edge-deps.mjs             revisa supabase/functions/
  *   node scripts/check-edge-deps.mjs --lista     ademas imprime el inventario
  *   node scripts/check-edge-deps.mjs ruta [...]  revisa solo esos archivos
  *
- * Sale con codigo 1 si encuentra un especificador remoto sin version exacta.
+ * Sale con codigo 1 si encuentra un especificador remoto sin version exacta
+ * (regla 1) o un paquete usado en mas de una version o registro (regla 2).
  */
 
 import { readFileSync } from 'node:fs';
 import { globSync } from 'node:fs';
 
 const RAIZ = 'supabase/functions';
+
+// Barra invertida de Windows. Se arma por codigo para no pelearse con el
+// escapado al generar este archivo desde un script.
+const SEPARADOR = String.fromCharCode(92);
 
 // ---------------------------------------------------------------------------
 // Quitar comentarios sin romper cadenas
@@ -157,6 +194,25 @@ const SEMVER_EXACTO = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 const PAQUETE = /^(@[^/@]+\/)?([^/@]+)(?:@([^/]+))?(\/.*)?$/;
 
 /**
+ * Parte un especificador npm:/jsr: en sus piezas. Devuelve null para lo que no
+ * es un paquete versionado (relativos, node:, URLs sueltas).
+ *
+ * La SUBRUTA se descarta a proposito: `npm:pdfmake@0.2.20` y
+ * `npm:pdfmake@0.2.20/js/printer.js` son el mismo paquete en la misma version,
+ * y contarlos como dos versiones distintas seria un falso positivo garantizado.
+ */
+function partes(spec) {
+  if (!spec.startsWith('npm:') && !spec.startsWith('jsr:')) return null;
+  const m = PAQUETE.exec(spec.slice(4));
+  if (!m) return null;
+  return {
+    registro: spec.slice(0, 3),
+    paquete: (m[1] ?? '') + m[2],
+    version: m[3] ?? '(sin version)',
+  };
+}
+
+/**
  * Devuelve null si el especificador esta bien fijado, o el motivo si no.
  */
 function motivoDeFallo(spec) {
@@ -198,6 +254,8 @@ if (archivos.length === 0) {
 
 const hallazgos = [];
 const inventario = new Map(); // spec -> cantidad de usos
+// paquete -> Map("npm:2.116.0" -> [archivos]). Alimenta la regla 2.
+const versionesPorPaquete = new Map();
 
 for (const archivo of archivos) {
   const src = readFileSync(archivo, 'utf8');
@@ -210,6 +268,15 @@ for (const archivo of archivos) {
     if (!REMOTO.test(spec) && !spec.startsWith('node:')) continue; // relativo
 
     inventario.set(spec, (inventario.get(spec) ?? 0) + 1);
+
+    const p = partes(spec);
+    if (p !== null) {
+      if (!versionesPorPaquete.has(p.paquete)) versionesPorPaquete.set(p.paquete, new Map());
+      const porVersion = versionesPorPaquete.get(p.paquete);
+      const clave = `${p.registro}:${p.version}`;
+      if (!porVersion.has(clave)) porVersion.set(clave, []);
+      porVersion.get(clave).push(archivo.split(SEPARADOR).join('/'));
+    }
 
     const motivo = motivoDeFallo(spec);
     if (motivo === null) continue;
@@ -234,10 +301,38 @@ if (quiereLista) {
   console.log('');
 }
 
-if (hallazgos.length === 0) {
-  console.log('Sin hallazgos: todo import remoto lleva version exacta.');
+// --- Regla 2: un paquete, una version ---------------------------------------
+const conflictos = [...versionesPorPaquete.entries()]
+  .filter(([, porVersion]) => porVersion.size > 1)
+  .sort((a, b) => b[1].size - a[1].size);
+
+if (conflictos.length > 0) {
+  console.log(`Regla 2 — version unica: ${conflictos.length} paquete(s) en mas de una version.`);
+  console.log('');
+  for (const [paquete, porVersion] of conflictos) {
+    console.log(`  ${paquete}`);
+    const orden = [...porVersion.entries()].sort((a, b) => b[1].length - a[1].length);
+    for (const [clave, archivosDeEsa] of orden) {
+      console.log(`    ${clave.padEnd(20)} ${String(archivosDeEsa.length).padStart(4)} uso(s)`);
+      for (const a of archivosDeEsa.slice(0, 3)) console.log(`        ${a}`);
+      if (archivosDeEsa.length > 3) console.log(`        ... y ${archivosDeEsa.length - 3} mas`);
+    }
+    console.log('');
+  }
+  console.log('Como se arregla: deja UNA sola version, normalmente la mas alta que');
+  console.log('ya este en uso. No basta con que cada linea sea exacta: dos versiones');
+  console.log('del mismo paquete son dos bases de codigo distintas corriendo a la vez,');
+  console.log('y ante un aviso de seguridad hay que parchear las dos.');
+  console.log('');
+}
+
+if (hallazgos.length === 0 && conflictos.length === 0) {
+  console.log('Sin hallazgos: todo import remoto lleva version exacta,');
+  console.log(`y los ${versionesPorPaquete.size} paquetes corren en una sola version cada uno.`);
   process.exit(0);
 }
+
+if (hallazgos.length === 0) process.exit(1);
 
 console.log(`Hallazgos: ${hallazgos.length} import(s) sin version exacta.`);
 console.log('');
