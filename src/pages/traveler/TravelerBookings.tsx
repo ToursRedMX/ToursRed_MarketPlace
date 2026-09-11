@@ -290,7 +290,7 @@ const TravelerBookings: React.FC = () => {
   const [pastLoaded, setPastLoaded] = useState(false);
   const [cancelledLoaded, setCancelledLoaded] = useState(false);
   const [pastOptionalServices, setPastOptionalServices] = useState<Record<string, any[]>>({});
-  const [pastSupplements, setPastSupplements] = useState<Record<string, any[]>>({});
+  const [, setPastSupplements] = useState<Record<string, any[]>>({});
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
   const [partialCancellationsByBooking, setPartialCancellationsByBooking] = useState<Record<string, any[]>>({});
   const [totalPaidByBooking, setTotalPaidByBooking] = useState<Record<string, number>>({});

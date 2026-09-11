@@ -64,7 +64,7 @@ const BookingSuccessPage: React.FC = () => {
       .filter((cat) => grupos[cat] && grupos[cat].count > 0)
       .map((cat) => ({ cat, ...grupos[cat] }));
   }, [booking]);
-  const { user, isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading } = useAuth();
 
   useEffect(() => {
     // Esperar a que la autenticación termine antes de cargar la reserva

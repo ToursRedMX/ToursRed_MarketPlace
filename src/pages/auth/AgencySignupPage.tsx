@@ -82,7 +82,7 @@ const AgencySignupPage: React.FC = () => {
     }
 
     try {
-      const { data, error: signUpError, profileData, isExistingUser } = await signUp(email, password, UserRole.AGENCY, {}, turnstileToken || undefined);
+      const { data, error: signUpError, isExistingUser } = await signUp(email, password, UserRole.AGENCY, {}, turnstileToken || undefined);
 
       if (signUpError) {
         // F-1: signUp se detiene si no puede comprobar que el correo ya exista,

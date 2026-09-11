@@ -68,12 +68,12 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const [useCustomAmount, setUseCustomAmount] = useState(false);
   const [customPayAmount, setCustomPayAmount] = useState('');
   const [pointsWalletActive, setPointsWalletActive] = useState(false);
-  const [noShowCount, setNoShowCount] = useState(0);
-  const [isLoadingNoShowCount, setIsLoadingNoShowCount] = useState(true);
+  const [, setNoShowCount] = useState(0);
+  const [, setIsLoadingNoShowCount] = useState(true);
   const [isHighRisk, setIsHighRisk] = useState(false);
   const [remainingExemption, setRemainingExemption] = useState(500);
   const [monthlyExemptionLimit, setMonthlyExemptionLimit] = useState(500);
-  const [isLoadingExemption, setIsLoadingExemption] = useState(true);
+  const [, setIsLoadingExemption] = useState(true);
 
   // Travel insurance
   const [insuranceEnabled, setInsuranceEnabled] = useState(true);
@@ -175,7 +175,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
     mascotas: 0,
   });
 
-  const { prices: membershipPrices, loading: loadingPrices } = useMembershipPrices();
+  const { prices: membershipPrices } = useMembershipPrices();
 
   React.useEffect(() => {
     const fetchCommissionRates = async () => {

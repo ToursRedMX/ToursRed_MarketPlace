@@ -108,7 +108,7 @@ export default function AdminGiftCards() {
     setResendResult(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('send-gift-card-email', {
+      const { error } = await supabase.functions.invoke('send-gift-card-email', {
         body: { giftCardId },
       });
 

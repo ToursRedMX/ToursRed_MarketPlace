@@ -64,7 +64,7 @@ const NotificationsPage: React.FC = () => {
 
   const markAllAsRead = async () => {
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .rpc('mark_all_notifications_as_read');
       
       if (error) {

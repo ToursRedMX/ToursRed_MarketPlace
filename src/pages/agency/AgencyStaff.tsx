@@ -115,7 +115,7 @@ function daysUntil(dateStr: string): number {
 }
 
 export default function AgencyStaff() {
-  const { user, isAgencyStaff } = useAuth();
+  const { isAgencyStaff } = useAuth();
   const { agencyId: resolvedAgencyId } = useAgencyId();
   const [agencyId, setAgencyId] = useState<string | null>(null);
   const [staffList, setStaffList] = useState<StaffMember[]>([]);

@@ -27,7 +27,7 @@ interface PreventaStats {
 }
 
 const AgencyDashboard: React.FC = () => {
-  const { user, isAgencyStaff, staffInfo } = useAuth();
+  const { isAgencyStaff, staffInfo } = useAuth();
   const { agencyId: hookAgencyId } = useAgencyId();
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({

@@ -9,7 +9,7 @@ const MessagingPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [conversationTitle, setConversationTitle] = useState<string>('');
+  const [conversationTitle] = useState<string>('');
   const [preselectedUserId, setPreselectedUserId] = useState<string | null>(null);
 
   useEffect(() => {

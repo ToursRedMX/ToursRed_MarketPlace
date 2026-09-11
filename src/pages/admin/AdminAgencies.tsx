@@ -382,7 +382,7 @@ const AdminAgencies: React.FC = () => {
       const commissionChanged = editForm.commission_rate !== selectedAgency.commission_rate;
 
       // Actualizar datos de la agencia
-      const { data: updateData, error: agencyError } = await supabase
+      const { error: agencyError } = await supabase
         .from('agencies')
         .update({
           name: editForm.name,

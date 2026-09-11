@@ -300,7 +300,7 @@ function AdminBookings() {
   // Scroll horizontal sincronizado (scrollbar arriba y abajo)
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
-  const [tableScrollWidth, setTableScrollWidth] = useState(0);
+  const [, setTableScrollWidth] = useState(0);
 
   useEffect(() => {
     const tableEl = tableScrollRef.current;

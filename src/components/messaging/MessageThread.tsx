@@ -119,7 +119,7 @@ const MessageThread: React.FC<MessageThreadProps> = ({
     try {
       setIsSending(true);
 
-      const { data: messageId, error } = await supabase.rpc('send_message', {
+      const { error } = await supabase.rpc('send_message', {
         p_conversation_id: conversationId,
         p_content: newMessage.trim(),
         p_message_type: 'text'

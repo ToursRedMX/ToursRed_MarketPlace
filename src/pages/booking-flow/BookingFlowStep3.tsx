@@ -16,7 +16,7 @@ interface OptionalServiceCapacity {
 }
 
 const BookingFlowStep3: React.FC = () => {
-  const { flow, updateFlow, goToStep, sessionId, releaseHolds } = useBookingFlow();
+  const { flow, updateFlow, goToStep, sessionId } = useBookingFlow();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { prices: membershipPrices } = useMembershipPrices();
@@ -42,7 +42,7 @@ const BookingFlowStep3: React.FC = () => {
   const [hasMembership, setHasMembership] = useState(false);
   const [isLoadingMembership, setIsLoadingMembership] = useState(true);
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
-  const [noShowCount, setNoShowCount] = useState(0);
+  const [, setNoShowCount] = useState(0);
   const [isHighRisk, setIsHighRisk] = useState(false);
 
   const [insuranceEnabled, setInsuranceEnabled] = useState(true);
