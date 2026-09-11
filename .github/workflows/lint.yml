@@ -195,6 +195,30 @@ jobs:
       - name: Verify attachment storage keys cannot escape their folder
         run: node scripts/test-soportes-helper.mjs
 
+      # La RPC devuelve el CODIGO, no el monto: quien calcula es el front. Y
+      # calcularlo mal no da un error, da una cifra creible y equivocada — un
+      # codigo de `service_fees` aplicado al precio del tour le quita dinero a
+      # la AGENCIA, cuando ese descuento lo paga la plataforma de su margen.
+      - name: Verify booking discount codes hit the right total
+        run: node scripts/test-descuento-de-reserva.mjs
+
+      # `max_uses` topa los grupos DENTRO de una misma reserva: 12 viajeros con
+      # min_travelers=4 son tres grupos, y si solo quedan dos usos el tercero
+      # paga completo. Sin ese tope una reserva grande se lleva mas descuento
+      # del autorizado, y el importe se ve perfectamente razonable.
+      - name: Verify group promotions respect their remaining uses
+        run: node scripts/test-promocion-de-grupo.mjs
+
+      # Si falla el correo de credenciales, la agencia NO se deshace: el usuario
+      # de Auth y la fila se quedan, y la respuesta lo dice con `emailSent:false`
+      # en vez de un 500 que invitaria a reintentar la conversion entera. Se
+      # ejercitan los diez desenlaces del correo contra las tres funciones.
+      # La prueba existia desde el 09-sep y nadie la corria: llevaba roto desde
+      # que las funciones estrenaron `opcionesConContexto`, fallando con un
+      # "500 !== 200" que no distinguia un stub ausente de una regresion real.
+      - name: Verify a failed credentials email never rolls back the agency
+        run: node scripts/test-agency-credentials-email.mjs
+
       # Tres promesas de la captura de gastos que solo viven en la pantalla y
       # que ninguna prueba de SQL puede cubrir: que el total en pesos se calcule
       # pero se pueda EDITAR (el banco aplica su propio tipo de cambio), que el

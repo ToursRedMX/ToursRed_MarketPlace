@@ -1,3 +1,6 @@
+import type { CodigoDeDescuento as DatosDelCodigoDeDescuento } from '../utils/descuentoDeReserva.ts';
+import type { PromocionDeGrupo as PromocionVigente } from '../utils/promocionDeGrupo.ts';
+
 import type { Tour } from './index';
 
 export type TravelerCategory = 'adulto' | 'nino' | 'infante' | 'adulto_mayor' | 'mascota';
@@ -93,9 +96,18 @@ export interface BookingFlowState {
 
   discountCode: string;
   discountCodeId: string | null;
-  discountAmount: number;
+  /**
+   * El CODIGO validado, no su importe. La RPC devuelve tipo, valor, tope y
+   * ambito; el monto lo calcula el front sobre una base que cambia si el
+   * viajero vuelve atras y toca los viajeros. Guardar el importe ya calculado
+   * lo dejaria congelado contra un precio que ya no existe.
+   */
+  discountCodeMeta: DatosDelCodigoDeDescuento | null;
   insuranceDiscountCodeId: string | null;
-  insuranceDiscountAmount: number;
+  /** Mismo criterio que el del tour: se guarda el codigo, el monto se deriva. */
+  insuranceDiscountMeta: DatosDelCodigoDeDescuento | null;
+  /** La promocion de grupo vigente del tour, tal como la devuelve la RPC. */
+  promocion: PromocionVigente | null;
 
   pointsUsed: number;
   toursredCashUsed: number;
@@ -142,9 +154,10 @@ export const INITIAL_FLOW_STATE: BookingFlowState = {
   insuranceDays: null,
   discountCode: '',
   discountCodeId: null,
-  discountAmount: 0,
+  discountCodeMeta: null,
   insuranceDiscountCodeId: null,
-  insuranceDiscountAmount: 0,
+  insuranceDiscountMeta: null,
+  promocion: null,
   pointsUsed: 0,
   toursredCashUsed: 0,
   paymentProvider: 'stripe',
