@@ -34,6 +34,13 @@ import ts from 'typescript';
 
 const FUENTE = 'supabase/functions/capture-paypal-order/index.ts';
 const EXIGIBLE = 'supabase/functions/_shared/exigible.ts';
+// `registrarCobroPaypal` ya no inserta por su cuenta: delega en este modulo,
+// que decide entre insertar y rellenar la comision de una fila existente. Como
+// esta prueba RECORTA el texto de la funcion y lo corre en un sandbox, el
+// ayudante tiene que cargarse tambien o la llamada revienta con un
+// ReferenceError que el try/catch de la funcion se traga en silencio: la fila
+// no se insertaba y el caso 1 fallaba con «0 !== 1».
+const COBROS_PAYPAL = 'supabase/functions/_shared/cobrosPaypal.ts';
 
 const codigo = readFileSync(FUENTE, 'utf8');
 
@@ -88,7 +95,10 @@ function clienteFalso(estado) {
         const filas = estado.transacciones ?? [];
         if (filtros.paypal_capture_id !== undefined) {
           const ya = filas.find((f) => f.paypal_capture_id === filtros.paypal_capture_id);
-          return { data: ya ? { id: 'tx-existente' } : null, error: null };
+          // `processor_fee` va incluido a proposito: `asentarCobroPaypal` decide
+          // con el si rellena o no toca nada. Devolver solo `id` lo dejaba
+          // decidiendo sobre un undefined, o sea sin probar la regla.
+          return { data: ya ? { id: ya.id ?? 'tx-existente', processor_fee: ya.processor_fee ?? 0 } : null, error: null };
         }
         const seleccion = filas.filter((f) =>
           (filtros.status === undefined || f.status === filtros.status) &&
@@ -155,6 +165,9 @@ function montar(estado) {
   });
 
   vm.runInContext(compilar(readFileSync(EXIGIBLE, 'utf8')), contexto);
+  Object.assign(contexto, contexto.exports);
+
+  vm.runInContext(compilar(readFileSync(COBROS_PAYPAL, 'utf8')), contexto);
   Object.assign(contexto, contexto.exports);
 
   vm.runInContext(compilar([

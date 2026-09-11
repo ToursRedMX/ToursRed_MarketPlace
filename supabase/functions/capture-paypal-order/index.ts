@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { cubreElAnticipo } from "../_shared/exigible.ts";
+import { asentarCobroPaypal } from "../_shared/cobrosPaypal.ts";
 import { registrarFallo } from "../_shared/falloSilencioso.ts";
 import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
@@ -150,15 +151,7 @@ async function registrarCobroPaypal(
     const currencyCode = (capture?.amount?.currency_code || "MXN").toLowerCase();
     const paypalFee = parseFloat(capture?.seller_receivable_breakdown?.paypal_fee?.value || "0");
 
-    const { data: existingTx } = await supabase
-      .from("payment_transactions")
-      .select("id")
-      .eq("paypal_capture_id", paypalTransactionId)
-      .maybeSingle();
-
-    if (existingTx) return;
-
-    const { error } = await supabase.from("payment_transactions").insert({
+    const { error } = (await asentarCobroPaypal(supabase, {
       booking_id: bookingId,
       paypal_capture_id: paypalTransactionId,
       payment_processor: "paypal",
@@ -171,7 +164,7 @@ async function registrarCobroPaypal(
       processor_fee: paypalFee,
       net_amount: amountValue - paypalFee,
       metadata: captureData || null,
-    });
+    }));
 
     if (error) {
       await registrarFallo(
@@ -819,7 +812,7 @@ Deno.serve(async (req: Request) => {
 
         const capturedAmt = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
         const ppFee = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.seller_receivable_breakdown?.paypal_fee?.value ?? "0");
-        await supabase.from("payment_transactions").insert({
+        await asentarCobroPaypal(supabase, {
           booking_id: (await supabase.from("booking_supplements").select("booking_id").eq("id", referenceId).maybeSingle()).data?.booking_id,
           paypal_capture_id: paypalTransactionId, payment_processor: "paypal",
           amount: capturedAmt, currency: "mxn", status: "succeeded",
@@ -850,7 +843,7 @@ Deno.serve(async (req: Request) => {
           const capturedAmt = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
           const ppFee = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.seller_receivable_breakdown?.paypal_fee?.value ?? "0");
           const bosBooking = (await supabase.from("booking_optional_services").select("booking_id").eq("id", referenceId).maybeSingle()).data?.booking_id;
-          await supabase.from("payment_transactions").insert({
+          await asentarCobroPaypal(supabase, {
             booking_id: bosBooking, paypal_capture_id: paypalTransactionId, payment_processor: "paypal",
             amount: capturedAmt, currency: "mxn", status: "succeeded",
             processor_fee: ppFee, net_amount: capturedAmt - ppFee,
@@ -878,7 +871,7 @@ Deno.serve(async (req: Request) => {
 
           const capturedAmt = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
           const ppFee = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.seller_receivable_breakdown?.paypal_fee?.value ?? "0");
-          await supabase.from("payment_transactions").insert({
+          await asentarCobroPaypal(supabase, {
             booking_id: referenceId, paypal_capture_id: paypalTransactionId, payment_processor: "paypal",
             amount: capturedAmt, currency: "mxn", status: "succeeded",
             processor_fee: ppFee, net_amount: capturedAmt - ppFee,
@@ -921,7 +914,7 @@ Deno.serve(async (req: Request) => {
           console.error(`Error allocating payment plan installment (PayPal) for plan ${planId}:`, allocError.message);
         }
 
-        await supabase.from("payment_transactions").insert({
+        await asentarCobroPaypal(supabase, {
           booking_id: planRow?.booking_id, paypal_capture_id: paypalTransactionId,
           payment_processor: "paypal", amount: capturedAmt, currency: "mxn",
           status: "succeeded", processor_fee: ppFee, net_amount: capturedAmt - ppFee,
