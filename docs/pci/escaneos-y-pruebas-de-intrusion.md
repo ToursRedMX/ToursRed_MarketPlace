@@ -3,9 +3,15 @@
 **Fecha:** 10 de septiembre de 2026
 **Requisito que atiende:** PCI DSS v4 **11.3** (escaneos internos y externos) y
 **11.4** (pruebas de intrusión).
-**Estado: NO INICIADO.**
+**SAQ: A**, determinado el 10-sep-2026.
+**Estado: el ASV trimestral es OBLIGATORIO y no está contratado.**
 
 > El mapeo a requisitos es una **propuesta**. Aquí nadie es QSA.
+>
+> **Este documento se corrigió el 10-sep-2026 en su punto más importante.** Decía
+> que en SAQ A los escaneos ASV «generalmente no aplican», y bajo PCI DSS v4 eso
+> es falso: el Requisito 11.3.2 se añadió a SAQ A precisamente para comercios
+> como este. La sección 1 explica el cambio y por qué importa.
 
 ---
 
@@ -22,27 +28,46 @@ algo que el equipo pueda producir por su cuenta. **Es una contratación.**
 
 ---
 
-## 1. Lo primero: saber si aplica
+## 1. El SAQ es A. Y eso NO libra de los escaneos ASV.
 
-**El alcance de 11.3 depende del SAQ**, y el SAQ todavía no está determinado.
+**Determinado el 10-sep-2026: SAQ A.** Los cinco procesadores usan checkout
+alojado —el viajero sale a la página del procesador— así que ningún dato de
+tarjeta pasa por nuestro sitio. Con `/test-openpay-3ds` eliminado (PR #195) no
+queda ningún formulario de tarjeta servido desde nuestro dominio, que era lo
+único que empujaba hacia A-EP.
 
-| SAQ | ¿Escaneos ASV trimestrales? |
-|---|---|
-| **A** | Generalmente **no** aplican |
-| **A-EP** | **Sí**, trimestrales |
+### La corrección que trae esta versión
 
-Por eso el orden correcto es: **confirmar el SAQ con el adquirente antes de
-contratar nada.** Contratar un ASV para descubrir después que se está en SAQ A
-sería gastar dinero y tiempo de calendario en algo que no se pedía.
+**Este documento decía, en su versión del 10-sep-2026, que en SAQ A los escaneos
+ASV «generalmente no aplican». Es falso bajo PCI DSS v4.**
 
-Ese es también el motivo por el que se eliminó `/test-openpay-3ds` (PR #195): era
-el único formulario de tarjeta servido desde nuestro dominio, y por lo tanto lo
-único que empujaba de forma evidente hacia A-EP. Con esa página fuera, la
-conversación con el adquirente empieza desde una posición mucho mejor.
+| | v3.2.1 | **v4.x** |
+|---|---|---|
+| ASV trimestral en SAQ A | no aplicaba | **SÍ aplica** |
 
-**Acción, y es de Axel:** preguntar al adquirente qué SAQ corresponde, describiendo
-el flujo real —redirección a la página del procesador en los cinco casos, sin
-captura de tarjeta propia.
+El PCI SSC **añadió** el Requisito 11.3.2 a SAQ A en la versión 4, y lo hizo a
+propósito: los comercios SAQ A estaban siendo vulnerados a un ritmo alarmante
+—justamente por la vía de la página que redirige— y el escaneo externo es lo que
+detecta eso. Aplica al sistema del comercio que aloja la página que redirige al
+tercero o que embebe su formulario. **Es exactamente nuestro caso.**
+
+Todos los requisitos con fecha futura de PCI DSS v4 son obligatorios desde el
+**31 de marzo de 2025**, así que no hay periodo de gracia que esperar.
+
+**Por qué importaba corregirlo:** un error en esta dirección no falla
+ruidosamente. Lleva a no contratar un ASV que sí es obligatorio, y eso se
+descubre en la auditoría, con la fecha encima.
+
+### La cadencia es trimestral, no semestral
+
+**Cada 90 días**, y el resultado tiene que ser **aprobatorio**: un escaneo con
+hallazgos no cierra el requisito, hay que remediar y **reescanear** hasta pasar.
+No existe modalidad semestral en PCI DSS; si alguien la menciona, está pensando
+en otro marco.
+
+Eso cambia la planeación: no es una contratación de una vez, son **cuatro
+ciclos al año**, y el primero conviene tenerlo **antes** de la auditoría para no
+llegar con el primer escaneo sin remediar.
 
 ---
 
@@ -90,11 +115,27 @@ lista.
 
 ---
 
-## 4. Pruebas de intrusión (11.4)
+## 4. Pruebas de intrusión (11.4): NO son obligatorias en SAQ A
 
-Misma lógica: **el alcance depende del SAQ**, y en las modalidades reducidas suele
-no exigirse. Se anota aquí para que la pregunta quede hecha, no porque haya algo
-que hacer todavía.
+Al contrario que los escaneos ASV, aquí la exención sí se sostiene: **SAQ A está
+generalmente exento del Requisito 11.4.** Las pruebas de intrusión se exigen en
+SAQ D, A-EP y C, que son las modalidades donde el comercio tiene sistemas de cara
+a internet que influyen en la transacción.
+
+**Pero hacerlo igual es buena idea, y es decisión tomada.** Un pentest interno no
+cierra un requisito de PCI; cierra la pregunta de si la plataforma tiene huecos
+que nadie ha buscado. Son cosas distintas y conviene no confundirlas al
+presentarlo:
+
+- **Ante el auditor**, es evidencia de diligencia, no cumplimiento de 11.4. No
+  hay que apuntarlo como si cerrara el requisito, porque no lo cierra y el QSA
+  lo va a notar.
+- **Para el negocio**, es lo único de esta lista que busca fallos que no están
+  en ninguna lista de requisitos.
+
+Si se contrata externo, conviene saber que **11.4 no exige que sea un QSA ni un
+ASV**: pide un recurso interno cualificado o un tercero con independencia
+organizacional. O sea que la barra es de competencia, no de certificación.
 
 ---
 
@@ -102,12 +143,18 @@ que hacer todavía.
 
 | # | Pendiente | Tipo | Quién |
 |---|---|---|---|
-| 1 | **Confirmar el SAQ con el adquirente** — bloquea todo lo demás | Externo | **Axel** |
-| 2 | Pedir a Netlify y Supabase su documentación de cumplimiento | Externo | **Axel** |
-| 3 | Contratar ASV **solo si el SAQ lo exige** | Contratación | **Axel** |
-| 4 | Revisar cabeceras HTTP de Netlify | Técnico | pendiente |
-| 5 | Fijar versiones en Edge Functions | Técnico | pendiente |
+| 1 | ~~Confirmar el SAQ~~ **HECHO: es SAQ A** (10-sep-2026) | — | — |
+| 2 | **Contratar ASV — es OBLIGATORIO en SAQ A bajo v4**, cada 90 días con resultado aprobatorio | Contratación | **Axel** |
+| 3 | Pedir a Netlify y Supabase su documentación de cumplimiento | Externo | **Axel** |
+| 4 | Pentest interno — **no exigido**, buena práctica | Decisión tomada | **Axel** |
+| 5 | Revisar cabeceras HTTP de Netlify | Técnico | pendiente |
+| 6 | ~~Fijar versiones en Edge Functions~~ **HECHO** (PR #198) | — | — |
 
-**El 1 es el que desbloquea.** Mientras no esté, los demás son especulación:
-podrían ser trabajo obligatorio o podrían ser innecesarios, y no hay forma de
-saberlo desde el repo.
+**El 2 es ahora el que manda el calendario.** No es una contratación de una vez:
+son cuatro ciclos al año, cada uno con su remediación y reescaneo si hay
+hallazgos. Con la auditoría apuntando a noviembre, el primer escaneo debería
+encargarse con margen suficiente para remediar lo que salga.
+
+**El 1 ya no bloquea nada.** Durante días fue el nudo de esta carpeta: sin saber
+el SAQ, ninguna de las demás decisiones se podía tomar. Con SAQ A confirmado,
+todo lo de arriba tiene respuesta.

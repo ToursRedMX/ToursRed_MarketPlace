@@ -19,8 +19,10 @@ sería una lástima tener que reconstruir de memoria.
 - **No es una determinación de cumplimiento.** Nadie aquí es QSA. El mapeo a
   requisitos que aparece más abajo es una **propuesta razonada** para que el
   auditor tenga por dónde empezar, no un veredicto.
-- **No decide el SAQ.** Eso lo determina el adquirente o el QSA. Lo que sí hay
-  aquí son los hechos verificables sobre los que se toma esa decisión.
+- **El SAQ ya está determinado: es A** (10-sep-2026). Los cinco procesadores usan
+  checkout alojado, así que ningún dato de tarjeta pasa por nuestro sitio. Este
+  documento no lo decidió —eso lo determina el adquirente o el QSA— pero sí
+  aportó los hechos verificables sobre los que se tomó.
 - **No cubre los controles no técnicos.** Políticas, capacitación, acuerdos con
   proveedores, seguridad física: nada de eso está en el repo y nada de eso se
   inventaría aquí.
@@ -79,8 +81,16 @@ la rechazaba con 401 desde el 29-ago— podía estar multiplicando el alcance.
 **Se eliminó** (PR #195). El SDK de OpenPay lo inyectaba esa misma página, así que
 también desapareció un script de tercero de producción.
 
-**Para el auditor:** confirmar con el adquirente qué SAQ aplica, ahora que el
-único formulario propio ya no existe.
+**Confirmado: SAQ A** (10-sep-2026). Los cinco procesadores redirigen a su propia
+página de checkout, así que la captura de tarjeta la sirve entero el tercero en
+los cinco casos, y ya no queda ningún formulario propio.
+
+**Pero SAQ A no libra de los escaneos ASV.** PCI DSS v4 añadió el Requisito
+11.3.2 a SAQ A —no aplicaba en v3.2.1— precisamente para comercios con este
+flujo: la página que redirige sigue siendo del comercio y es por donde se han
+dado las intrusiones. Ver
+[`escaneos-y-pruebas-de-intrusion.md`](escaneos-y-pruebas-de-intrusion.md), que
+tenía ese punto **al revés** y se corrigió el 10-sep-2026.
 
 ---
 
@@ -344,7 +354,7 @@ prepararse.
 |---|---|---|---|
 | 1 | **Un `account_executive` activo sin MFA.** Los 2 admins sí lo tienen verificado | Depende de si ese rol entra en alcance | 8.4 |
 | 2 | **Ventana del JWT tras bloquear.** El token ya emitido vive hasta expirar | Acotado: dentro de esa ventana RLS ya no le responde | 8.2.5 |
-| 3 | **Sin escaneos ASV ni pruebas de penetración.** Depende del SAQ; un ASV es una contratación, no algo que corramos nosotros → [`escaneos-y-pruebas-de-intrusion.md`](escaneos-y-pruebas-de-intrusion.md) | 11.3 |
+| 3 | **Sin escaneos ASV. Ya no depende del SAQ: es obligatorio.** Con SAQ A confirmado, PCI DSS v4 exige ASV **cada 90 días** con resultado aprobatorio. Un ASV es una contratación, no algo que corramos nosotros. Las pruebas de intrusión (11.4) **no** se exigen en SAQ A; el pentest interno queda como buena práctica → [`escaneos-y-pruebas-de-intrusion.md`](escaneos-y-pruebas-de-intrusion.md) | 11.3.2 |
 | 4 | ~~Sin inventario formal de componentes de terceros~~ **Hecho** → [`inventario-de-componentes-de-terceros.md`](inventario-de-componentes-de-terceros.md). El hueco técnico que dejó —componentes de Edge Functions sin versión fija— **también está cerrado**: eran 4 de 6, no 3, y 434 de 526 imports; se fijaron todos y lo vigila `guardia-dependencias` | 6.3.2 |
 | 5 | ~~Retención sin política escrita~~ **Hecho** → [`retencion-y-revision-de-bitacora.md`](retencion-y-revision-de-bitacora.md). Pero al medirla salió algo peor: solo hay **~2.5 meses de historia**, y los 12 no se recuperan hacia atrás | 10.5.1 |
 | 6 | ~~Sin revisión periódica documentada~~ **Procedimiento escrito** (mismo documento), con 7 consultas listas para correr. Falta que Axel asigne responsables | 10.4 |
@@ -381,7 +391,7 @@ medir, y medir encontró lo que no se sabía.
 
 ## 5. Qué llevar a la primera sesión con el auditor
 
-1. **La determinación de SAQ**, ahora que no hay formulario propio de tarjeta.
+1. **La determinación de SAQ: es A**, y el hecho que la sustenta — cero formularios de tarjeta propios, checkout alojado en los cinco procesadores.
 2. **Este inventario**, con la aclaración de que el mapeo es propuesto.
 3. **La evidencia de que los controles se prueban**: las guardias de CI y su
    historial de ejecuciones en Actions.
