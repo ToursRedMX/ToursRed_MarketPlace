@@ -73,7 +73,7 @@ const ContractDraftViewer: React.FC<Props> = ({ agencyId }) => {
         let template = contractTemplate;
 
         for (const [key, value] of Object.entries(replacements)) {
-          template = template.replaceAll(`{{${key}}}`, value);
+          template = template.split(`{{${key}}}`).join(value);
         }
 
         if (!cancelled) setHtml(template);

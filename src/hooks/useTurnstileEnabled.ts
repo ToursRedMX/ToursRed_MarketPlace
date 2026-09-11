@@ -6,14 +6,14 @@ export function useTurnstileEnabled(): { turnstileEnabled: boolean; loading: boo
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase
+    Promise.resolve(supabase
       .from('platform_settings')
       .select('turnstile_auth_enabled')
       .maybeSingle()
       .then(({ data }) => {
         setTurnstileEnabled(data?.turnstile_auth_enabled ?? false);
         setLoading(false);
-      })
+      }))
       .catch(() => {
         setTurnstileEnabled(false);
         setLoading(false);

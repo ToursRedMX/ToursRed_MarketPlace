@@ -541,7 +541,19 @@ const BookingFlowStep4: React.FC = () => {
         travelers_count: totalTravelers,
         total_price: grandTotal,
         deposit_amount: depositAmount,
-        commission_amount: Math.round(baseTourPrice * ((tour.commission_rate || tour.agencies?.commission_rate || 10) / 100) * 100) / 100,
+        // La comision NO se manda: la calcula `create_booking_atomic`, que es a
+        // donde delega `create_booking_atomic_with_preventa`. Comprobado el
+        // 11-sep-2026: esa funcion no lee `commission_amount` del payload —cero
+        // coincidencias de `p_booking_data->>'commission_amount'`— y lo resuelve
+        // con `get_effective_commission_rates(agency_id, tour_id)`.
+        //
+        // Lo que habia aqui era decorativo Y estaba mal de dos formas: leia
+        // `tour.commission_rate`, que NO existe en la tabla (la columna es
+        // `commission_rate_override`), y dividia la tasa entre 100 cuando
+        // `agencies.commission_rate` ya es una fraccion (0.10, no 10). El
+        // backend hace `precio * tasa` sin dividir, que es lo correcto: medido,
+        // las comisiones reales son del 10% exacto. Si alguien hubiera hecho que
+        // este valor se usara, habria cobrado el 0.1%.
         service_charge: effectiveDepositServiceCharge,
         user_payment: amountToPay,
         platform_revenue: effectiveDepositServiceCharge + effectiveExtrasServiceCharge,

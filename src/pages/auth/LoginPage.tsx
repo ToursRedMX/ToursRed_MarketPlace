@@ -91,7 +91,7 @@ const LoginPage: React.FC = () => {
   );
 
   useEffect(() => {
-    supabase
+    Promise.resolve(supabase
       .from('platform_settings')
       .select('oauth_google_login_enabled, oauth_azure_login_enabled, oauth_twitter_login_enabled, oauth_facebook_login_enabled, oauth_linkedin_login_enabled, passkeys_enabled')
       .maybeSingle()
@@ -106,7 +106,7 @@ const LoginPage: React.FC = () => {
           });
           setPasskeysEnabled(data.passkeys_enabled ?? false);
         }
-      })
+      }))
       .catch(() => {});
   }, []);
 

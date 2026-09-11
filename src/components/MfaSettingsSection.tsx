@@ -89,9 +89,9 @@ export const MfaSettingsSection: React.FC = () => {
 
   useEffect(() => {
     loadFactors();
-    supabase.from('users').select('is_super_admin').maybeSingle().then(({ data }) => {
+    Promise.resolve(supabase.from('users').select('is_super_admin').maybeSingle().then(({ data }) => {
       setIsSuperAdmin(data?.is_super_admin ?? false);
-    }).catch(() => {});
+    })).catch(() => {});
   }, [loadFactors]);
 
   useEffect(() => {

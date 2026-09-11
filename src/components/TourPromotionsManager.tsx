@@ -28,8 +28,33 @@ interface TourPromotionsManagerProps {
   tourPrice: number;
 }
 
-const defaultForm = {
-  promotion_type: '2x1' as '2x1' | '3x2' | 'grupo_precio_fijo' | 'nxprecio',
+/**
+ * El formulario se tipa a mano en vez de dejar que TypeScript lo infiera del
+ * valor inicial.
+ *
+ * Sin esto, `min_travelers: ''` hacia que se infiriera `string`, y el campo
+ * recibe numeros —`handleOpenEdit` le asigna `promo.min_travelers`, que es
+ * `number`— y se usa en aritmetica y comparaciones. JavaScript lo coercionaba
+ * y funcionaba, pero `tsc` marcaba cinco errores ahi: una asignacion invalida,
+ * dos comparaciones `string < number` y dos operaciones aritmeticas.
+ *
+ * `number | ''` describe lo que el campo es de verdad: vacio mientras no se
+ * escribe nada, y un numero en cuanto se escribe. Los guards que ya habia
+ * (`!formData.min_travelers || ...`) descartan el vacio, asi que TypeScript
+ * estrecha a `number` solo y no hace falta tocar ninguna de las cinco lineas.
+ */
+interface FormularioPromocion {
+  promotion_type: '2x1' | '3x2' | 'grupo_precio_fijo' | 'nxprecio';
+  min_travelers: number | '';
+  fixed_group_price: string;
+  group_discount_percentage: string;
+  valid_from: string;
+  valid_until: string;
+  max_uses: string;
+}
+
+const defaultForm: FormularioPromocion = {
+  promotion_type: '2x1',
   min_travelers: '',
   fixed_group_price: '',
   group_discount_percentage: '',
@@ -384,7 +409,7 @@ const TourPromotionsManager: React.FC<TourPromotionsManagerProps> = ({ tourId, a
                         type="number"
                         min={4}
                         value={formData.min_travelers}
-                        onChange={e => setFormData(prev => ({ ...prev, min_travelers: e.target.value }))}
+                        onChange={e => setFormData(prev => ({ ...prev, min_travelers: e.target.value === '' ? '' : Number(e.target.value) }))}
                         placeholder="Ej: 4"
                         className="w-full px-3 py-2 pr-16 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
                       />
@@ -441,13 +466,13 @@ const TourPromotionsManager: React.FC<TourPromotionsManagerProps> = ({ tourId, a
                         type="number"
                         min={2}
                         value={formData.min_travelers}
-                        onChange={e => setFormData(prev => ({ ...prev, min_travelers: e.target.value }))}
+                        onChange={e => setFormData(prev => ({ ...prev, min_travelers: e.target.value === '' ? '' : Number(e.target.value) }))}
                         placeholder="Ej: 4"
                         className="w-full px-3 py-2 pr-16 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
                       />
                       <span className="absolute right-2.5 top-2 text-xs text-gray-400 pointer-events-none">viajeros</span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">Precio normal: ${formatCurrency(tourPrice * (parseInt(formData.min_travelers) || 2))}</p>
+                    <p className="text-xs text-gray-400 mt-1">Precio normal: ${formatCurrency(tourPrice * (formData.min_travelers || 2))}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
