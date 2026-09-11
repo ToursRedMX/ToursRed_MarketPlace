@@ -243,6 +243,53 @@ casos.push(() => {
     'poner NOT NULL romperia el cron y el service role, que no tienen auth.uid()');
 });
 
+// --- 15. Pagar un gasto registrado, con parcialidades ---------------------
+casos.push(() => {
+  // Faltaba entero: la pantalla solo ofrecia «Editar» en borrador, y
+  // `registrar_gasto_operacion` sale temprano si ya esta registrado. No habia
+  // forma de marcar pagado un gasto ya asentado, ni de abonar una parte.
+  assert.ok(/rpc\('pagar_gasto_operacion'/.test(tsx),
+    'el pago tiene que pasar por la funcion, que genera el asiento 205/102 en la misma transaccion');
+
+  // NUNCA un UPDATE directo a pagado_en: eso separa la vista del libro, porque
+  // el bloque 19 decide caja contra pasivo con los pagos y el asiento no
+  // existiria. Es la trampa que describia —mal— el comentario de la migracion
+  // original.
+  assert.ok(!/update\(\{\s*pagado_en/.test(tsx),
+    'escribir pagado_en a mano deja el gasto pagado en la vista y sin asiento en el libro');
+
+  // El saldo sale de la SUMA de pagos, no de un si/no.
+  assert.ok(/const saldoDe = \(g: Gasto\): number =>/.test(tsx),
+    'hace falta el saldo por gasto para poder pagar parcial');
+  assert.ok(/pagadoPorGasto/.test(tsx),
+    'el abonado se acumula por gasto: un gasto puede tener varios pagos');
+
+  // El monto propuesto es el saldo, no el total: pagar de mas se rechaza.
+  assert.ok(/monto: saldoDe\(g\)\.toFixed\(2\)/.test(tsx),
+    'el modal debe proponer el SALDO; proponer el total invita al sobrepago');
+
+  // Y se valida antes de ir al servidor, para no mostrar un error de Postgres.
+  assert.ok(/excede el saldo pendiente/.test(tsx),
+    'el sobrepago debe avisarse en la pantalla, ademas de rechazarlo la base');
+});
+
+// --- 16. Los totales entienden un pago parcial ----------------------------
+casos.push(() => {
+  // La version anterior sumaba el TOTAL de los gastos segun `pagado_en`, asi
+  // que un gasto de 232 con 100 abonados mandaba los 232 completos a «por
+  // pagar» y cero a «ya pagado». Con parcialidades eso es simplemente falso.
+  const desde = tsx.indexOf('const totales = useMemo');
+  assert.ok(desde > 0, 'no se encontro el calculo de totales');
+  const bloque = tsx.slice(desde, tsx.indexOf('}, [gastos', desde));
+
+  assert.ok(/pagadoPorGasto\.get\(g\.id\)/.test(bloque),
+    '«ya pagado» tiene que sumar lo ABONADO, no el total de los marcados pagados');
+  assert.ok(/saldoDe\(g\)/.test(bloque),
+    '«por pagar» tiene que sumar los SALDOS, no el total de los no marcados');
+  assert.ok(!/filter\(\(g\) => g\.pagado_en\)/.test(bloque),
+    'partir por pagado_en no sabe representar un pago parcial');
+});
+
 let ok = 0;
 for (const caso of casos) { caso(); ok++; }
 console.log(`Contrato de la pantalla de gastos: ${ok}/${casos.length} casos OK`);

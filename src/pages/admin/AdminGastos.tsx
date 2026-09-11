@@ -65,6 +65,15 @@ interface Gasto {
   notas: string | null;
 }
 
+interface PagoDeGasto {
+  id: string;
+  gasto_id: string;
+  fecha: string;
+  monto_mxn: number;
+  metodo_pago: string | null;
+  referencia: string | null;
+}
+
 interface Recurrente {
   id: string;
   nombre: string;
@@ -185,6 +194,12 @@ const AdminGastos: React.FC = () => {
   const [aviso, setAviso] = useState<string | null>(null);
   const [avisosCfdi, setAvisosCfdi] = useState<string[]>([]);
 
+  const [pagos, setPagos] = useState<PagoDeGasto[]>([]);
+  // El pago que se esta capturando, o null si el modal esta cerrado. Guarda el
+  // gasto entero y no solo su id: el modal necesita el saldo y el proveedor.
+  const [pagando, setPagando] = useState<Gasto | null>(null);
+  const [formPago, setFormPago] = useState({ fecha: '', monto: '', metodo: '', referencia: '' });
+
   const [periodo, setPeriodo] = useState(PERIODO_ACTUAL());
   const [estadoFiltro, setEstadoFiltro] = useState<'todos' | 'borrador' | 'registrado' | 'cancelado'>('todos');
 
@@ -210,19 +225,23 @@ const AdminGastos: React.FC = () => {
     const [anio, mes] = periodo.split('-').map(Number);
     const hasta = new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10);
 
-    const [resGastos, resRec, resCuentas, resAjustes] = await Promise.all([
+    const [resGastos, resRec, resCuentas, resAjustes, resPagos] = await Promise.all([
       supabase.from('gastos_operacion').select('*')
         .gte('fecha', desde).lte('fecha', hasta).order('fecha', { ascending: false }),
       supabase.from('gastos_recurrentes').select('*').order('nombre'),
       supabase.from('chart_of_accounts').select('code, name')
         .in('account_type', ['gasto', 'costo']).eq('is_active', true).order('code'),
       supabase.from('platform_settings').select('pac_issuer_rfc').limit(1).maybeSingle(),
+      // Los pagos del periodo. Se traen por separado y no con un embed porque
+      // un gasto de julio puede pagarse en agosto: el filtro de fecha es del
+      // GASTO, y los pagos se ligan por id.
+      supabase.from('pagos_de_gasto').select('*').order('fecha'),
     ]);
 
     // Los errores se muestran. Una lista vacia por un error de permisos se lee
     // igual que "no hay gastos", y esa confusion ya costo caro en otras
     // pantallas de este panel.
-    const fallo = resGastos.error || resRec.error || resCuentas.error;
+    const fallo = resGastos.error || resRec.error || resCuentas.error || resPagos.error;
     if (fallo) {
       setError(`No se pudieron cargar los gastos: ${fallo.message}`);
       setCargando(false);
@@ -233,6 +252,7 @@ const AdminGastos: React.FC = () => {
     }
 
     setGastos((resGastos.data ?? []) as Gasto[]);
+    setPagos((resPagos.data ?? []) as PagoDeGasto[]);
     setRecurrentes((resRec.data ?? []) as Recurrente[]);
     setCuentas((resCuentas.data ?? []) as Cuenta[]);
     setRfcPlataforma(resAjustes.data?.pac_issuer_rfc ?? '');
@@ -468,6 +488,55 @@ const AdminGastos: React.FC = () => {
     void cargar();
   };
 
+  /**
+   * Abre el modal de pago con el SALDO como monto propuesto. El caso normal es
+   * pagar todo lo que falta; el parcial se escribe encima.
+   */
+  const abrirPago = (g: Gasto) => {
+    setFormPago({
+      fecha: new Date().toISOString().slice(0, 10),
+      monto: saldoDe(g).toFixed(2),
+      metodo: g.metodo_pago ?? '',
+      referencia: '',
+    });
+    setPagando(g);
+  };
+
+  const guardarPago = async () => {
+    if (!pagando) return;
+    const monto = redondear(aNumero(formPago.monto));
+    const saldo = saldoDe(pagando);
+
+    // Se valida aqui ADEMAS de en la base. La funcion rechaza el sobrepago
+    // igual, pero decirlo antes de ir al servidor evita que el usuario vea un
+    // error de Postgres traducido a medias.
+    if (monto <= 0) { setError('El monto del pago tiene que ser mayor que cero.'); return; }
+    if (monto > saldo) {
+      setError(`El pago (${formatCurrencyMXN(monto)}) excede el saldo pendiente (${formatCurrencyMXN(saldo)}).`);
+      return;
+    }
+    if (!formPago.fecha) { setError('Captura la fecha del pago.'); return; }
+
+    setGuardando(true);
+    setError(null);
+    const { error: errorPago } = await supabase.rpc('pagar_gasto_operacion', {
+      p_gasto_id: pagando.id,
+      p_fecha: formPago.fecha,
+      p_monto_mxn: monto,
+      p_metodo: formPago.metodo.trim() || null,
+      p_referencia: formPago.referencia.trim() || null,
+    });
+    setGuardando(false);
+    if (errorPago) { setError(traducirError(errorPago.message)); return; }
+
+    const resta = redondear(saldo - monto);
+    setAviso(resta > 0
+      ? `Pago de ${formatCurrencyMXN(monto)} a ${pagando.proveedor} registrado. Quedan ${formatCurrencyMXN(resta)} por pagar.`
+      : `Gasto de ${pagando.proveedor} saldado. Salio del banco y ya no figura como deuda.`);
+    setPagando(null);
+    void cargar();
+  };
+
   const cancelar = async (g: Gasto) => {
     setGuardando(true);
     const { error: errorCancelar } = await supabase
@@ -610,15 +679,34 @@ const AdminGastos: React.FC = () => {
     () => (estadoFiltro === 'todos' ? gastos : gastos.filter((g) => g.estado === estadoFiltro)),
     [gastos, estadoFiltro],
   );
+  /** Lo abonado a cada gasto, por id. Un gasto puede tener varios pagos. */
+  const pagadoPorGasto = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of pagos) {
+      m.set(p.gasto_id, redondear((m.get(p.gasto_id) ?? 0) + Number(p.monto_mxn)));
+    }
+    return m;
+  }, [pagos]);
+
+  const saldoDe = (g: Gasto): number =>
+    redondear(Number(g.total_mxn) - (pagadoPorGasto.get(g.id) ?? 0));
+
   const totales = useMemo(() => {
     const registrados = gastos.filter((g) => g.estado === 'registrado');
+    // Se suma lo ABONADO y lo que RESTA, no el total de los gastos marcados
+    // pagados: con parcialidades un gasto esta en los dos lados a la vez, y la
+    // version anterior —que contaba el total entero segun `pagado_en`— mandaba
+    // los 232 completos a «por pagar» aunque ya se hubieran abonado 100.
+    const abonado = registrados.reduce(
+      (s, g) => s + (pagadoPorGasto.get(g.id) ?? 0), 0);
     return {
       registrado: registrados.reduce((s, g) => s + Number(g.total_mxn), 0),
-      pagado: registrados.filter((g) => g.pagado_en).reduce((s, g) => s + Number(g.total_mxn), 0),
-      porPagar: registrados.filter((g) => !g.pagado_en).reduce((s, g) => s + Number(g.total_mxn), 0),
+      pagado: redondear(abonado),
+      porPagar: redondear(registrados.reduce((s, g) => s + saldoDe(g), 0)),
       borradores: gastos.filter((g) => g.estado === 'borrador').length,
     };
-  }, [gastos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gastos, pagadoPorGasto]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -837,6 +925,7 @@ const AdminGastos: React.FC = () => {
                 <th className="px-4 py-3 text-left font-medium">Cuenta</th>
                 <th className="px-4 py-3 text-right font-medium">Total</th>
                 <th className="px-4 py-3 text-right font-medium">En pesos</th>
+                <th className="px-4 py-3 text-right font-medium">Saldo</th>
                 <th className="px-4 py-3 text-left font-medium">Estado</th>
                 <th className="px-4 py-3 text-right font-medium">Acciones</th>
               </tr>
@@ -877,6 +966,24 @@ const AdminGastos: React.FC = () => {
                       {g.pagado_en ? `pagado ${g.pagado_en}` : 'por pagar'}
                     </div>
                   </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {g.estado !== 'registrado' ? (
+                      <span className="text-gray-300">—</span>
+                    ) : saldoDe(g) <= 0 ? (
+                      <span className="text-emerald-600 text-xs font-medium">Pagado</span>
+                    ) : (
+                      <>
+                        <span className="text-amber-700 font-medium">{formatCurrencyMXN(saldoDe(g))}</span>
+                        {/* Solo se dice «de X» cuando hubo un abono: en un gasto
+                            sin pagos el saldo ES el total y repetirlo es ruido. */}
+                        {(pagadoPorGasto.get(g.id) ?? 0) > 0 && (
+                          <span className="block text-[11px] text-gray-500">
+                            de {formatCurrencyMXN(Number(g.total_mxn))}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs ${ETIQUETA_ESTADO[g.estado]?.clase ?? ''}`}>
                       {ETIQUETA_ESTADO[g.estado]?.texto ?? g.estado}
@@ -904,7 +1011,19 @@ const AdminGastos: React.FC = () => {
                       </>
                     )}
                     {g.estado === 'registrado' && (
-                      <span className="text-xs text-gray-400">Asiento {g.asiento_id?.slice(0, 8)}</span>
+                      <>
+                        {saldoDe(g) > 0 && (
+                          <button
+                            onClick={() => abrirPago(g)}
+                            disabled={guardando}
+                            title="Genera el asiento del pago: carga a proveedores y abona a bancos"
+                            className="text-emerald-700 hover:text-emerald-900 text-sm font-medium mr-3 disabled:opacity-40"
+                          >
+                            Registrar pago
+                          </button>
+                        )}
+                        <span className="text-xs text-gray-400">Asiento {g.asiento_id?.slice(0, 8)}</span>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -913,6 +1032,84 @@ const AdminGastos: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Pago de un gasto registrado                                       */}
+      {/* ---------------------------------------------------------------- */}
+      {pagando && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold text-gray-900">Registrar pago</h2>
+              <button onClick={() => setPagando(null)} className="text-gray-400 hover:text-gray-600">
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              {pagando.proveedor} — saldo pendiente{' '}
+              <span className="font-medium text-amber-700">{formatCurrencyMXN(saldoDe(pagando))}</span>
+              {' '}de {formatCurrencyMXN(Number(pagando.total_mxn))}
+            </p>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Fecha del pago</label>
+                <input
+                  type="date" value={formPago.fecha}
+                  min={pagando.fecha}
+                  onChange={(e) => setFormPago({ ...formPago, fecha: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+                <p className="text-xs text-gray-500 mt-1">No puede ser anterior al gasto.</p>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Monto</label>
+                <input
+                  type="text" value={formPago.monto}
+                  onChange={(e) => setFormPago({ ...formPago, monto: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Viene con el saldo completo. Cambialo si es un pago parcial.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Metodo de pago</label>
+                <input
+                  type="text" value={formPago.metodo} placeholder="spei, tarjeta, efectivo"
+                  onChange={(e) => setFormPago({ ...formPago, metodo: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Referencia</label>
+                <input
+                  type="text" value={formPago.referencia} placeholder="Folio de la transferencia"
+                  onChange={(e) => setFormPago({ ...formPago, referencia: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-500 mt-4">
+              Genera un asiento: carga a Acreedores diversos y abono a Bancos. El gasto
+              queda saldado solo cuando el saldo llega a cero.
+            </p>
+
+            <div className="flex justify-end gap-3 mt-5">
+              <button onClick={() => setPagando(null)} className="px-4 py-2 text-gray-600 hover:text-gray-900">
+                Cancelar
+              </button>
+              <button
+                onClick={() => void guardarPago()} disabled={guardando}
+                className="px-5 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50"
+              >
+                Registrar pago
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ---------------------------------------------------------------- */}
       {/* Recurrentes                                                       */}
