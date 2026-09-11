@@ -48,6 +48,18 @@ jobs:
 
       - name: Type-check contra la linea base
         run: node scripts/check-edge-types.mjs | tee reporte-tipos-edge.txt
+
+      # Las subrutas van aparte porque NINGUN type-check las ve: el paso de
+      # arriba sale con 0 sobre un `npm:pdfmake@0.2.20/js/printer.js` que no
+      # existe, y la guardia de dependencias tambien, porque la version SI es
+      # exacta y unica. El unico que lo nota es el runtime, al arrancar la
+      # funcion — o sea en produccion, despues de que el CLI diga "Deployed
+      # Functions". Paso el 11-sep-2026 con `generate-signed-contract`.
+      - name: La guardia de subrutas sigue detectando lo que dice detectar
+        run: node scripts/test-guardia-subrutas.mjs
+
+      - name: Toda subruta importada existe dentro de su paquete
+        run: node scripts/check-edge-subpaths.mjs
         shell: bash
 
       - name: Resumen
