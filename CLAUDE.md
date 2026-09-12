@@ -15,7 +15,7 @@ ToursRed es una plataforma donde agencias de viaje comercializan sus propios tou
 
 ## Reglas duras — no negociables
 
-1. **Nunca apliques migraciones de base de datos directamente en Supabase sin autorización explícita de Axel en el momento.** Los cambios de esquema deben pasar por el repo (commit) para quedar en el historial. Leer y diagnosticar la BD libremente sí está permitido en cualquier momento. **Commitear el SQL no basta: hay que aplicarlo con la versión del archivo.** Si se aplica desde el Dashboard o por API, la base asigna su propio timestamp y el ledger queda apuntando a una versión que no existe en el repo — pasó con las dos migraciones del 02-sep-2026 pese a que ambas estaban commiteadas y revisadas en PR. Ver `scripts/check-migration-drift.mjs` y la entrada 3 de la bitácora.
+1. **Nunca apliques migraciones de base de datos directamente en Supabase sin autorización explícita de Axel en el momento.** Los cambios de esquema deben pasar por el repo (commit) para quedar en el historial. Leer y diagnosticar la BD libremente sí está permitido en cualquier momento. **Commitear el SQL no basta: hay que aplicarlo con la versión del archivo.** Si se aplica desde el Dashboard o por API, la base asigna su propio timestamp y el ledger queda apuntando a una versión que no existe en el repo — pasó con las dos migraciones del 02-sep-2026 pese a que ambas estaban commiteadas y revisadas en PR. Ver `scripts/check-migration-drift.mjs` y la entrada 3 de la bitácora. **Y hay que aplicarlo desde una carpeta que TENGA el archivo**: ver la trampa de `db push` en la sección de comandos.
 2. **No hagas push a producción/main sin que Axel lo revise y apruebe explícitamente.** Trabaja en ramas o espera confirmación antes de mergear/pushear cambios sensibles.
 3. **No toques integraciones con Zoho Books u Odoo** como si fueran el sistema contable activo — están deprecadas.
 4. Antes de dar por "terminada" una tarea, corre `git diff` y muéstrale a Axel qué cambió.
@@ -44,6 +44,21 @@ ToursRed es una plataforma donde agencias de viaje comercializan sus propios tou
 **`npm install` no resuelve el árbol en el contenedor remoto:** `xlsx` se baja del CDN de SheetJS, que está bloqueado (403). Consecuencias prácticas: (a) faltan tipos de `xlsx`, así que `npm run typecheck` da 4 errores fantasma `Cannot find module 'xlsx'` **que también salen en main** — compáralos siempre contra main antes de atribuírtelos; (b) `vite build` falla por lo mismo, igual que en main; (c) para tocar el lock usa `npm install --package-lock-only`, que lo reescribe sin descargar.
 
 **Checks requeridos de main: léelos de la API, nunca de este archivo.** Esta lista ya se quedó vieja el mismo día en que se escribió, dos veces. Hoy son ocho y `enforce_admins: true`. Al hacer requerido un check nuevo, **primero mergea el PR que trae su workflow y después márcalo requerido** — al revés, todo PR abierto se queda esperando para siempre un check que nunca va a reportar.
+
+**«Remote database is up to date» puede significar «no veo el archivo».** `supabase db push` lee `supabase/migrations/` **del disco**, no del repo remoto: si la rama que tienes sacada no trae la migración, responde que todo está al día y no miente — simplemente no la ve. Pasó el 12-sep-2026 con `20260912010000`: el `db push` salió limpio y no había aplicado nada.
+
+Axel tiene `main` ocupada por un **worktree en `C:\trw`, donde corre los worktrees de Codex**, así que su carpeta de trabajo vive en ramas de feature y `git checkout main` ahí falla con *'main' is already used by worktree*. La salida que lo delata está en el `git pull`: si dice `Already up to date` mientras la línea de arriba muestra `abc..def main -> origin/main`, el remoto avanzó y **tu rama local no**.
+
+Antes de dar por aplicada una migración:
+
+```powershell
+git branch --show-current                       # ¿en qué rama estás de verdad?
+git checkout -B aplicar-lo-que-sea origin/main  # el nombre NO puede ser `main`, por el worktree
+Test-Path supabase\migrations\<archivo>.sql     # tiene que decir True
+supabase db push                                # debe listar la migración, no decir «up to date»
+```
+
+Y después, **confirma contra la base** —columna, función, y que el ledger registró la versión DEL ARCHIVO—: es el patrón 6, un verde puede ser un paso que no se ejecutó.
 
 **Después de desplegar Edge Functions, manda un `OPTIONS` a cada una.** `Deployed Functions` del CLI no significa que arranque: `generate-signed-contract` llevaba semanas rota y el CLI la dio por buena. El preflight ejercita el arranque sin disparar lógica de negocio.
 
