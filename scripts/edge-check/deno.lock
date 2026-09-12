@@ -14,8 +14,7 @@
     "npm:@supabase/supabase-js@2.39.6": "2.39.6",
     "npm:openai@^4.52.5": "4.104.0",
     "npm:pdfmake@0.2.20": "0.2.20",
-    "npm:stripe@22.3.0": "22.3.0",
-    "npm:xlsx@0.18.5": "0.18.5"
+    "npm:stripe@22.3.0": "22.3.0"
   },
   "jsr": {
     "@supabase/functions-js@2.112.4": {
@@ -696,19 +695,6 @@
     },
     "ws@8.21.3": {
       "integrity": "sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw=="
-    },
-    "xlsx@0.18.5": {
-      "integrity": "sha512-dmg3LCjBPHZnQp5/F/+nnTa+miPJxUXB6vtk42YjBBKayDNagxGEeIdWApkYPOf3Z3pm3k62Knjzp7lMeTEtFQ==",
-      "dependencies": [
-        "adler-32",
-        "cfb",
-        "codepage",
-        "crc-32",
-        "ssf",
-        "wmf",
-        "word"
-      ],
-      "bin": true
     },
     "xmldoc@2.0.3": {
       "integrity": "sha512-6gRk4NY/Jvg67xn7OzJuxLRsGgiXBaPUQplVJ/9l99uIugxh4FTOewYz5ic8WScj7Xx/2WvhENiQKwkK9RpE4w==",

@@ -1,8 +1,8 @@
-import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { formatCurrencyMXN } from './formatCurrency';
+import { downloadExcel } from './excelExport';
 
 interface TravelerData {
   id: string;
@@ -78,8 +78,7 @@ const formatDate = (dateString: string): string => {
   }
 };
 
-export const exportTourReportToExcel = (reportData: TourReportData, agencyName: string) => {
-  const wb = XLSX.utils.book_new();
+export const exportTourReportToExcel = async (reportData: TourReportData, agencyName: string) => {
 
   const summaryData = [
     ['REPORTE DE ASISTENTES POR TOUR'],
@@ -106,10 +105,6 @@ export const exportTourReportToExcel = (reportData: TourReportData, agencyName: 
     ['Saldo Pendiente Total:', formatCurrency(reportData.summary.totalRemaining)],
     ['Ingreso Total:', formatCurrency(reportData.summary.totalRevenue)],
   ];
-
-  const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-  wsSummary['!cols'] = [{ wch: 30 }, { wch: 30 }];
-  XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
 
   const detailData: any[][] = [
     [
@@ -179,17 +174,16 @@ export const exportTourReportToExcel = (reportData: TourReportData, agencyName: 
     }
   });
 
-  const wsDetail = XLSX.utils.aoa_to_sheet(detailData);
-  wsDetail['!cols'] = [
-    { wch: 12 }, { wch: 25 }, { wch: 30 }, { wch: 15 },
-    { wch: 25 }, { wch: 15 }, { wch: 30 }, { wch: 15 },
-    { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 18 },
-    { wch: 15 }, { wch: 12 }, { wch: 12 }
-  ];
-  XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle de Viajeros');
-
   const fileName = `Reporte_${reportData.tour.name.replace(/\s+/g, '_')}_${format(new Date(), 'ddMMyyyy')}.xlsx`;
-  XLSX.writeFile(wb, fileName);
+  await downloadExcel([
+    { data: summaryData, sheet: 'Resumen', columns: [{ width: 30 }, { width: 30 }] },
+    { data: detailData, sheet: 'Detalle de Viajeros', columns: [
+      { width: 12 }, { width: 25 }, { width: 30 }, { width: 15 },
+      { width: 25 }, { width: 15 }, { width: 30 }, { width: 15 },
+      { width: 15 }, { width: 15 }, { width: 15 }, { width: 18 },
+      { width: 15 }, { width: 12 }, { width: 12 },
+    ] },
+  ], fileName);
 };
 
 export const exportTourReportToPDF = (reportData: TourReportData, agencyName: string) => {

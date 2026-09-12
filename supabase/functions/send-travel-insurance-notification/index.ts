@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
-import * as XLSX from "npm:xlsx@0.18.5";
+import writeExcelFile from "npm:write-excel-file@4.1.1/universal";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
@@ -79,14 +79,14 @@ function formatDateShort(dateStr: string | null | undefined): string {
   }
 }
 
-function generateXlsxBase64(
+async function generateXlsxBase64(
   travelers: any[],
   bookingCode: string,
   tourName: string,
   agencyName: string,
   tourStart: string,
   tourEnd: string
-): { base64: string; filename: string } {
+): Promise<{ base64: string; filename: string }> {
   const headers = [
     "Nombre",
     "Apellido",
@@ -121,17 +121,17 @@ function generateXlsxBase64(
     ];
   });
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  ws["!cols"] = [
-    { wch: 20 }, { wch: 25 }, { wch: 12 }, { wch: 18 },
-    { wch: 22 }, { wch: 18 }, { wch: 30 }, { wch: 30 }, { wch: 22 },
-  ];
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Pasajeros");
-
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const blob = await writeExcelFile([headers, ...rows], {
+    sheet: "Pasajeros",
+    columns: [
+      { width: 20 }, { width: 25 }, { width: 12 }, { width: 18 },
+      { width: 22 }, { width: 18 }, { width: 30 }, { width: 30 }, { width: 22 }, { width: 22 },
+    ],
+  }).toBlob();
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  const base64 = btoa(binary);
   return { base64, filename: `seguro_${bookingCode}_pasajeros.xlsx` };
 }
 
@@ -422,7 +422,7 @@ Deno.serve(async (req: Request) => {
 </html>`;
 
     // Generar Excel adjunto
-    const { base64: xlsxBase64, filename: xlsxFilename } = generateXlsxBase64(
+    const { base64: xlsxBase64, filename: xlsxFilename } = await generateXlsxBase64(
       travelers,
       booking_code,
       tour_name,
