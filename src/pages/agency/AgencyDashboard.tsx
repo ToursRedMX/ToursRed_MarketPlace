@@ -81,6 +81,7 @@ const AgencyDashboard: React.FC = () => {
             status,
             created_at,
             total_price,
+            travelers_count,
             tour_id,
             tours(name, destination),
             users!bookings_user_id_fkey(first_name, last_name, email)
@@ -255,7 +256,7 @@ const AgencyDashboard: React.FC = () => {
           <h3 className="text-xl font-semibold mb-2">Error al cargar datos</h3>
           <p className="text-gray-600 mb-6">{error}</p>
           <button 
-            onClick={fetchAgencyData}
+            onClick={() => { if (hookAgencyId) fetchAgencyData(hookAgencyId); }}
             className="btn btn-primary"
           >
             Reintentar

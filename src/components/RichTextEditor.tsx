@@ -33,6 +33,17 @@ const ImageExtension = Node.create({
   },
 });
 
+// El comando lo define `addCommands` de arriba, pero tiptap solo lo conoce en
+// tiempo de tipos si se anuncia aqui. Sin esto `setImage` compilaba en rojo
+// aunque en ejecucion funcionara.
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    imagenDelEditor: {
+      setImage: (options: { src: string; alt?: string; title?: string }) => ReturnType;
+    };
+  }
+}
+
 interface RichTextEditorProps {
   value?: string;
   onChange?: (html: string) => void;
@@ -70,7 +81,10 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   useEffect(() => {
     if (editor && value !== undefined && value !== editor.getHTML()) {
-      editor.commands.setContent(value, false);
+      // En tiptap 3 el segundo parametro son OPCIONES, no el booleano
+      // `emitUpdate` de la v2: pasar `false` aqui no apagaba nada, asi que
+      // sincronizar el valor de fuera disparaba un onChange de vuelta.
+      editor.commands.setContent(value, { emitUpdate: false });
     }
   }, [value, editor]);
 

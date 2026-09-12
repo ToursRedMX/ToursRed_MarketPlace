@@ -36,6 +36,7 @@ interface SavedTour {
   created_at: string;
   tours: {
     id: string;
+    slug: string | null;
     name: string;
     destination: string;
     start_date: string;
@@ -122,6 +123,7 @@ const TravelerDashboard: React.FC = () => {
             *,
             tours (
               id,
+              slug,
               name,
               destination,
               start_date,

@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 
 const NotificationBell: React.FC = () => {
-  const { user, role, isLoading: authLoading } = useAuth();
+  const { user, isAdmin, isAgency, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const channelId = useMemo(() => `notification-bell-${Math.random().toString(36).slice(2)}`, []);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -198,10 +198,14 @@ const NotificationBell: React.FC = () => {
       case 'support_ticket_created':
       case 'support_ticket_updated': {
         const ticketId = data.ticket_id;
-        if (role === 'admin' || role === 'super_admin') {
+        // Aqui se leia `role`, que AuthContext NO expone —expone `userRole`,
+        // `isAdmin`, `isAgency`…—, asi que la comparacion era contra undefined y
+        // TODA notificacion de ticket caia en la rama del viajero, tambien la de
+        // un admin. `isAdmin` ya cubre al super admin.
+        if (isAdmin) {
           return ticketId ? `/admin/service-desk/tickets/${ticketId}` : '/admin/service-desk';
         }
-        if (role === 'agency') {
+        if (isAgency) {
           return ticketId ? `/agency/soporte?ticket=${ticketId}` : '/agency/soporte';
         }
         return ticketId ? `/traveler/soporte?ticket=${ticketId}` : '/traveler/soporte';

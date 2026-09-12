@@ -41,15 +41,44 @@ interface CfdiInvoice {
   created_at: string;
   booking_id: string | null;
   membership_id: string | null;
-  checkin_charge_id: string | null;
-  booking_supplement_id: string | null;
-  booking_optional_service_id: string | null;
-  installment_id: string | null;
+  // Las cuatro son FK opcionales —una factura cuelga de UNA cosa: una reserva,
+  // un suplemento, un servicio o una parcialidad— y los `select` de este
+  // archivo no siempre las piden. Declararlas obligatorias hacia que
+  // `comoFactura(inv)` fallara en los cinco sitios: para TypeScript el
+  // objeto de la consulta no se parecia lo bastante al tipo.
+  checkin_charge_id?: string | null;
+  booking_supplement_id?: string | null;
+  booking_optional_service_id?: string | null;
+  installment_id?: string | null;
   bookings?: { booking_code: string | null; travel_insurance_included: boolean | null; travel_insurance_cost: number | null; tours?: { name: string } | null } | null;
   booking_supplements?: { tour_supplements?: { name: string } | null } | null;
   booking_optional_services?: { tour_optional_service?: { name: string } | null } | null;
   booking_payment_plan_installments?: { label: string; installment_number: number } | null;
 }
+
+/**
+ * Convierte una fila de `cfdi_invoices` en `CfdiInvoice`.
+ *
+ * POR QUE HACE FALTA PASAR POR `unknown`
+ *
+ * supabase-js, sin tipos generados de la base, NO sabe la cardinalidad de las
+ * relaciones y las infiere siempre como ARRAY. Aqui `bookings` es una relacion
+ * a-uno y PostgREST devuelve un OBJETO — comprobado contra la base el
+ * 11-sep-2026, no supuesto.
+ *
+ * O sea que el tipo inferido dice `bookings: {...}[]` donde el dato real es
+ * `bookings: {...}`. Los dos no se solapan, y por eso un `as CfdiInvoice` a
+ * secas lo rechaza: hay que decirle explicitamente que se descarta la
+ * inferencia.
+ *
+ * Se usa en los SIETE sitios que convierten filas aqui, no solo en los cinco
+ * que daban error: los otros dos tienen el mismo problema y solo se libraban
+ * por como estaba escrito el `select`.
+ *
+ * El dia que el cliente lleve `<Database>`, esto sobra: la cardinalidad vendria
+ * bien desde el principio.
+ */
+const comoFactura = (fila: unknown): CfdiInvoice => fila as CfdiInvoice;
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   stamped: { label: 'Timbrado', color: 'bg-success-100 text-success-700', icon: <CheckCircle className="h-3.5 w-3.5" /> },
@@ -118,7 +147,7 @@ const TravelerInvoices: React.FC = () => {
         await Promise.all(
           bookingInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            if (await esDelViajero('bookings', inv.booking_id)) bookingMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) bookingMine.push(comoFactura(inv));
           })
         );
       }
@@ -140,7 +169,7 @@ const TravelerInvoices: React.FC = () => {
         await Promise.all(
           membershipInvoices.map(async (inv) => {
             if (!inv.membership_id) return;
-            if (await esDelViajero('memberships', inv.membership_id)) membershipMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('memberships', inv.membership_id)) membershipMine.push(comoFactura(inv));
           })
         );
       }
@@ -162,7 +191,7 @@ const TravelerInvoices: React.FC = () => {
         await Promise.all(
           checkinInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            if (await esDelViajero('bookings', inv.booking_id)) checkinMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) checkinMine.push(comoFactura(inv));
           })
         );
       }
@@ -184,7 +213,7 @@ const TravelerInvoices: React.FC = () => {
         await Promise.all(
           supplementInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            if (await esDelViajero('bookings', inv.booking_id)) supplementMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) supplementMine.push(comoFactura(inv));
           })
         );
       }
@@ -206,7 +235,7 @@ const TravelerInvoices: React.FC = () => {
         await Promise.all(
           insuranceInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            if (await esDelViajero('bookings', inv.booking_id)) insuranceMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) insuranceMine.push(comoFactura(inv));
           })
         );
       }
@@ -228,7 +257,7 @@ const TravelerInvoices: React.FC = () => {
         await Promise.all(
           optionalInvoices.map(async (inv) => {
             if (!inv.booking_id) return;
-            if (await esDelViajero('bookings', inv.booking_id)) optionalMine.push(inv as CfdiInvoice);
+            if (await esDelViajero('bookings', inv.booking_id)) optionalMine.push(comoFactura(inv));
           })
         );
       }

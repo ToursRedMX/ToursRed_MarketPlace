@@ -329,7 +329,7 @@ const AdminDestinations: React.FC = () => {
         <button
           onClick={handleCreate}
           className="btn btn-primary"
-          disabled={isCreating || editingDestination}
+          disabled={isCreating || !!editingDestination}
         >
           <Plus className="h-5 w-5 mr-2" />
           Crear Destino
@@ -629,7 +629,7 @@ const AdminDestinations: React.FC = () => {
                   <button
                     onClick={() => handleEdit(destination)}
                     className="bg-white/80 hover:bg-white rounded-full p-2 text-gray-700"
-                    disabled={isCreating || editingDestination}
+                    disabled={isCreating || !!editingDestination}
                     title="Editar destino"
                   >
                     <Edit className="h-4 w-4" />

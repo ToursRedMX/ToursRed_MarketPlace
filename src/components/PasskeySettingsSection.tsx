@@ -63,10 +63,20 @@ export const PasskeySettingsSection: React.FC = () => {
     setSuccess('');
     setRegistering(true);
     try {
-      const { error: registerError } = await supabase.auth.registerPasskey({
-        friendlyName: `Clave ${new Date().toLocaleDateString()}`,
-      });
+      // `registerPasskey` NO acepta `friendlyName` —su unico parametro es
+      // `{ options?: { signal } }`—, asi que el nombre que se le pasaba aqui se
+      // descartaba en silencio y la clave quedaba sin etiqueta. El nombre se
+      // pone despues, con `passkey.update`, y a proposito sin romper el alta si
+      // falla: la clave ya quedo registrada y sirve, solo se queda sin nombre.
+      const { data: nuevaClave, error: registerError } = await supabase.auth.registerPasskey();
       if (registerError) throw registerError;
+      if (nuevaClave?.id) {
+        const { error: errorNombre } = await supabase.auth.passkey.update({
+          passkeyId: nuevaClave.id,
+          friendlyName: `Clave ${new Date().toLocaleDateString()}`,
+        });
+        if (errorNombre) console.error('No se pudo nombrar la clave de acceso:', errorNombre);
+      }
       setSuccess('Clave de acceso registrada correctamente');
       await loadPasskeys();
     } catch (err: any) {
@@ -82,7 +92,10 @@ export const PasskeySettingsSection: React.FC = () => {
     setError('');
     setSuccess('');
     try {
-      const { error: deleteError } = await supabase.auth.passkey.delete(passkeyId);
+      // `delete` espera `{ passkeyId }`, no el id suelto: con una cadena leia
+      // `params.passkeyId` como undefined y la peticion salia hacia
+      // `DELETE /passkeys/undefined`, asi que borrar una clave no funcionaba.
+      const { error: deleteError } = await supabase.auth.passkey.delete({ passkeyId });
       if (deleteError) throw deleteError;
       setSuccess('Clave eliminada');
       await loadPasskeys();

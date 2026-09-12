@@ -6,7 +6,8 @@ import {
   Shield
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { comoFilas } from '../../lib/relacionesSupabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -188,7 +189,7 @@ const TourDetailPanel: React.FC<{
   const activeBookings = bookings.filter(b => b.status !== 'cancelled' && b.status !== 'draft');
   const grossRevenue = activeBookings.reduce((s, b) => s + b.total_price, 0);
   const platformRevenue = activeBookings.reduce((s, b) => s + b.platform_revenue, 0);
-  const agencyCommission = activeBookings.reduce((s, b) => s + b.commission_amount, 0);
+  const agencyCommission = activeBookings.reduce((s, b) => s + (b.commission_amount ?? 0), 0);
   const insuranceTotal = activeBookings.reduce((s, b) => s + (b.travel_insurance_included ? (b.travel_insurance_cost ?? 0) : 0), 0);
 
   return (
@@ -517,12 +518,12 @@ const AdminTourMetrics: React.FC = () => {
 
       if (toursErr) throw toursErr;
 
-      const rawTours = (toursData ?? []) as Array<{
+      const rawTours = comoFilas<{
         id: string; name: string; destination: string; tour_type: 'excursion' | 'receptivo';
         start_date: string | null; end_date: string | null; max_travelers: number | null;
         default_slot_capacity: number | null; agency_id: string;
         agencies: { id: string; name: string } | null;
-      }>;
+      }>(toursData);
 
       if (rawTours.length === 0) { setTours([]); return; }
 
@@ -620,7 +621,7 @@ const AdminTourMetrics: React.FC = () => {
       setDetails(prev => ({
         ...prev,
         [tourId]: {
-          bookings: (bookingsRes.data ?? []) as BookingDetail[],
+          bookings: comoFilas<BookingDetail>(bookingsRes.data),
           slots: (slotsRes.data ?? []) as SlotDetail[],
         },
       }));

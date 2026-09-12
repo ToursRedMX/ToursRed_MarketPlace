@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Plus, Search, AlertCircle, ExternalLink, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-interface DeparturePoint {
-  id: string;
-  name: string;
-  city: string;
-  municipality: string;
-  google_maps_url?: string;
-  usage_count: number;
-}
+// Se importa el tipo central en vez de declarar una copia con menos campos.
+//
+// La copia local tenia 6 campos y la central 10 —le faltaban `is_active`,
+// `created_by`, `created_at` y `updated_at`, que la tabla SI tiene—. Para
+// TypeScript eran DOS TIPOS SIN RELACION con el mismo nombre, asi que pasarle
+// a este componente el setter de `AgencyTours` daba un error que no decia nada
+// util a primera vista: «Dispatch<SetStateAction<SelectedDeparturePoint[]>> no
+// es asignable a (points: SelectedDeparturePoint[]) => void».
+import type { DeparturePoint } from '../types';
 
 interface SelectedDeparturePoint extends DeparturePoint {
   display_order: number;

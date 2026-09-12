@@ -17,7 +17,10 @@ export default function AgencyDiscountCodes() {
   const { user } = useAuth();
   const { agencyId: resolvedAgencyId } = useAgencyId();
   const [codes, setCodes] = useState<AgencyDiscountCode[]>([]);
-  const [agencyId, setAgencyId] = useState<string | null>(null);
+  // `agencyId` era un useState que solo copiaba `resolvedAgencyId` en un efecto,
+  // y nadie mas le escribia: costaba un render de mas y retrasaba la primera
+  // carga en un ciclo. Es un alias, no estado.
+  const agencyId = resolvedAgencyId;
   const [agencyTours, setAgencyTours] = useState<AgencyTour[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -44,11 +47,6 @@ export default function AgencyDiscountCodes() {
     is_active: true,
   });
 
-  useEffect(() => {
-    if (resolvedAgencyId) {
-      setAgencyId(resolvedAgencyId);
-    }
-  }, [resolvedAgencyId]);
 
   useEffect(() => {
     if (agencyId) {

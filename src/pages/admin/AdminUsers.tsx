@@ -53,6 +53,39 @@ const PermissionCheckbox = ({
   </label>
 );
 
+/**
+ * Los permisos, todos apagados. Es la unica lista completa del archivo: habia
+ * TRES copias a mano (el estado inicial, el reset de cancelar y la base de
+ * `startEditPermissions`) y ninguna de las tres estaba al dia — entre las tres
+ * faltaban cinco permisos distintos. Eso importa porque el `{ ...base, ...user
+ * .permissions }` de abajo hace que una clave ausente se quede en `false`.
+ */
+const PERMISOS_EN_CERO: AdminPermissions = {
+  canManageAgencies: false,
+  canManageUsers: false,
+  canManageTravelers: false,
+  canManageDestinations: false,
+  canManageCategories: false,
+  canManageDeparturePoints: false,
+  canManageReviews: false,
+  canManageMessages: false,
+  canManageSettings: false,
+  canManageMemberships: false,
+  canManageInquiries: false,
+  canManagePoints: false,
+  canManageDiscountCodes: false,
+  canViewAuditLog: false,
+  canViewAuditSensitiveData: false,
+  canExportAuditLog: false,
+  canCancelBookings: false,
+  canManageExpenses: false,
+  canViewAccounting: false,
+  canExportSatXml: false,
+  canManageChartOfAccounts: false,
+  canManageServiceDesk: false,
+  canManageExecutives: false,
+};
+
 const AdminUsers: React.FC = () => {
   const { isSuperAdmin } = useAuth();
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
@@ -91,26 +124,7 @@ const AdminUsers: React.FC = () => {
     }
   });
 
-  const [tempPermissions, setTempPermissions] = useState<AdminPermissions>({
-    canManageAgencies: false,
-    canManageUsers: false,
-    canManageTravelers: false,
-    canManageDestinations: false,
-    canManageCategories: false,
-    canManageDeparturePoints: false,
-    canManageReviews: false,
-    canManageMessages: false,
-    canManageSettings: false,
-    canManageMemberships: false,
-    canManageInquiries: false,
-    canManagePoints: false,
-    canManageDiscountCodes: false,
-    canViewAuditLog: false,
-    canViewAuditSensitiveData: false,
-    canExportAuditLog: false,
-    canCancelBookings: false,
-    canManageExpenses: false,
-  });
+  const [tempPermissions, setTempPermissions] = useState<AdminPermissions>(PERMISOS_EN_CERO);
 
   useEffect(() => {
     loadStaffUsers();
@@ -137,7 +151,7 @@ const AdminUsers: React.FC = () => {
         (usersData || []).map(async (user) => {
           const { data: permsData, error: errorPermisos } = await supabase
             .from('admin_permissions')
-            .select('can_manage_agencies, can_manage_users, can_manage_travelers, can_manage_destinations, can_manage_categories, can_manage_departure_points, can_manage_reviews, can_manage_messages, can_manage_inquiries, can_manage_settings, can_manage_memberships, can_manage_points, can_manage_discount_codes, can_view_audit_log, can_view_audit_sensitive_data, can_export_audit_log, can_cancel_bookings, can_manage_expenses, can_view_accounting, can_export_sat_xml, can_manage_chart_of_accounts')
+            .select('can_manage_agencies, can_manage_users, can_manage_travelers, can_manage_destinations, can_manage_categories, can_manage_departure_points, can_manage_reviews, can_manage_messages, can_manage_inquiries, can_manage_settings, can_manage_memberships, can_manage_points, can_manage_discount_codes, can_view_audit_log, can_view_audit_sensitive_data, can_export_audit_log, can_cancel_bookings, can_manage_expenses, can_view_accounting, can_export_sat_xml, can_manage_chart_of_accounts, can_manage_service_desk, can_manage_executives')
             .eq('user_id', user.id)
             .maybeSingle();
 
@@ -170,6 +184,13 @@ const AdminUsers: React.FC = () => {
               canViewAccounting: permsData.can_view_accounting ?? false,
               canExportSatXml: permsData.can_export_sat_xml ?? false,
               canManageChartOfAccounts: permsData.can_manage_chart_of_accounts ?? false,
+              // Estos dos NO se editan en esta pantalla (no hay casilla y el
+              // guardado de abajo no los escribe), pero se leen para que
+              // `tempPermissions` no los invente en false: los usan NavBar y
+              // AuthContext para dar paso a /admin/ejecutivos y a la mesa de
+              // servicio. Al 11-sep-2026, 1 de las 2 filas de staff los tiene.
+              canManageServiceDesk: permsData.can_manage_service_desk ?? false,
+              canManageExecutives: permsData.can_manage_executives ?? false,
             } : null
           };
         })
@@ -324,31 +345,7 @@ const AdminUsers: React.FC = () => {
   };
 
   const startEditPermissions = (user: StaffUser) => {
-    const base = {
-      canManageAgencies: false,
-      canManageUsers: false,
-      canManageTravelers: false,
-      canManageDestinations: false,
-      canManageCategories: false,
-      canManageDeparturePoints: false,
-      canManageReviews: false,
-      canManageMessages: false,
-      canManageSettings: false,
-      canManageMemberships: false,
-      canManageInquiries: false,
-      canManagePoints: false,
-      canManageDiscountCodes: false,
-      canViewAuditLog: false,
-      canViewAuditSensitiveData: false,
-      canExportAuditLog: false,
-      canCancelBookings: false,
-      canManageExpenses: false,
-      canViewAccounting: false,
-      canExportSatXml: false,
-      canManageChartOfAccounts: false,
-      canManageServiceDesk: false,
-      canManageExecutives: false,
-    };
+    const base = PERMISOS_EN_CERO;
     // El spread de `user.permissions` gana sobre `base`, asi que lo que decide
     // de verdad es que `loadStaffUsers` traiga la columna: si no la pide en el
     // `select`, aqui llega undefined, el false de `base` se queda, y guardar
@@ -360,24 +357,7 @@ const AdminUsers: React.FC = () => {
 
   const cancelEditPermissions = () => {
     setEditingPermissions(null);
-    setTempPermissions({
-      canManageAgencies: false,
-      canManageUsers: false,
-      canManageTravelers: false,
-      canManageDestinations: false,
-      canManageCategories: false,
-      canManageDeparturePoints: false,
-      canManageReviews: false,
-      canManageMessages: false,
-      canManageSettings: false,
-      canManageMemberships: false,
-      canManageInquiries: false,
-      canManagePoints: false,
-      canManageDiscountCodes: false,
-      canViewAuditLog: false,
-      canViewAuditSensitiveData: false,
-      canExportAuditLog: false,
-    });
+    setTempPermissions(PERMISOS_EN_CERO);
   };
 
   const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {

@@ -2,17 +2,14 @@ import React, { useState } from 'react';
 import { X, MapPin, AlertCircle, ExternalLink, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import type { DeparturePoint } from '../types';
 
 interface DeparturePointFormProps {
   onClose: () => void;
-  onSuccess: (newPoint: {
-    id: string;
-    name: string;
-    city: string;
-    municipality: string;
-    google_maps_url?: string;
-    usage_count: number;
-  }) => void;
+  // La fila entera: el insert de abajo hace `.select()` sin argumentos, asi que
+  // devuelve TODAS las columnas. Declarar menos hacia que quien la recibe no
+  // pudiera tratarla como un DeparturePoint, pese a que lo es.
+  onSuccess: (newPoint: DeparturePoint) => void;
 }
 
 const DeparturePointForm: React.FC<DeparturePointFormProps> = ({ onClose, onSuccess }) => {

@@ -49,10 +49,22 @@ env:
   #                      oxxo_payment.expired. Numero MEDIDO por CI en el job
   #                      101883996483 sobre 98fee3f, no proyectado ni tomado
   #                      de un entorno local.
-  BASELINE_ERRORS: 2388
+  #   11-sep  2209/2121  la base llevaba desde el 07-sep sin bajar mientras el
+  #                      conteo real caia, asi que habia 267 errores de HOLGURA:
+  #                      cabia una regresion de ese tamano sin que el check se
+  #                      pusiera rojo. Una base floja no avisa de nada.
+  #                      Numero MEDIDO por CI en el job 103441033110 (PR #242),
+  #                      no local: la instalacion de `xlsx` difiere entre
+  #                      entornos y un conteo de escritorio no es comparable.
+  #   11-sep  2199/2111  se retiran 10 `react-hooks/set-state-in-effect` que eran
+  #                      estado derivado de verdad (PR #242). Los otros 108 NO
+  #                      se tocan a bulto: 58 son `useEffect(() => fetchX())`,
+  #                      el patron de carga del repo, y el resto pide leer caso
+  #                      por caso. Ver la entrada 24 de la bitacora.
+  BASELINE_ERRORS: 2111
   BASELINE_WARNINGS: 88
-  BASELINE_TOTAL: 2476
-  BASELINE_FILES: 325
+  BASELINE_TOTAL: 2199
+  BASELINE_FILES: 316
 
 jobs:
   lint:

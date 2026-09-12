@@ -4,7 +4,8 @@ import { Crown, Check, Zap, Shield, Sparkles, AlertCircle, ArrowLeft, MapPin, Do
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
-import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { comoFilas } from '../../lib/relacionesSupabase';
 
 interface Membership {
   id: string;
@@ -104,7 +105,7 @@ export default function TravelerMembership() {
         .order('paid_at', { ascending: false });
 
       if (error) throw error;
-      setBookingsWithBenefit(data || []);
+      setBookingsWithBenefit(comoFilas<BookingWithBenefit>(data));
     } catch (err) {
       console.error('Error fetching bookings with benefit:', err);
     }

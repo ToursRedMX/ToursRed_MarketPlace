@@ -6,7 +6,8 @@ import TourCard from '../components/TourCard';
 import { Tour, SearchFilters } from '../types';
 import { getTours, getActiveFeaturedTours, supabase } from '../lib/supabase';
 import { useTourPromotionsBatch } from '../hooks/useSharedData';
-import Seo from '../components/Seo';
+import Seo from '../components/Seo';
+import { comoFilas } from '../lib/relacionesSupabase';
 
 const SITE_URL = (import.meta.env.VITE_APP_URL || 'https://toursredmx.netlify.app/').replace(/\/$/, '');
 
@@ -166,7 +167,10 @@ const TourCatalogPage: React.FC = () => {
             }
           }
 
-          setTours(data || []);
+          // `getTours` selecciona a proposito solo las columnas que la tarjeta del
+          // catalogo pinta —no la fila entera— y embebe `agencies`, que
+          // supabase-js infiere como arreglo. Ver src/lib/relacionesSupabase.ts.
+          setTours(comoFilas<Tour>(data));
           setFeaturedSlotMapCatalog({});
           setFeaturedCount(0);
           setTotalCount(count ?? data?.length ?? 0);

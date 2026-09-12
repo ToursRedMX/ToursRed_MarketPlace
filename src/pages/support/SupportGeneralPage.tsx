@@ -32,11 +32,9 @@ const SupportGeneralPage: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [categories, setCategories] = useState<SupportCategory[]>([]);
   const [subcategories, setSubcategories] = useState<SupportSubcategory[]>([]);
-  const [filteredSubs, setFilteredSubs] = useState<SupportSubcategory[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [folio, setFolio] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [allowAttachments, setAllowAttachments] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -69,26 +67,34 @@ const SupportGeneralPage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (form.category_id) {
-      const filtered = subcategories.filter(s => s.category_id === form.category_id);
-      setFilteredSubs(filtered);
-      setForm(prev => ({ ...prev, subcategory_id: '' }));
-    } else {
-      setFilteredSubs([]);
-    }
-  }, [form.category_id, subcategories]);
-
-  useEffect(() => {
-    if (form.subcategory_id) {
-      const sub = subcategories.find(s => s.id === form.subcategory_id);
-      setAllowAttachments(sub?.permite_adjuntos ?? true);
-      if (!sub?.permite_adjuntos) setFiles([]);
-    }
-  }, [form.subcategory_id, subcategories]);
+  // Los dos se CALCULAN, no se guardan. Antes eran estado sincronizado por dos
+  // efectos, y `allowAttachments` solo se recalculaba cuando habia subcategoria:
+  // si elegias una que prohibe adjuntos y despues cambiabas de categoria, el
+  // efecto no volvia a correr y el bloque de adjuntos seguia OCULTO hasta elegir
+  // otra subcategoria. Calculandolo en el render el estado obsoleto no existe.
+  const filteredSubs = form.category_id
+    ? subcategories.filter(s => s.category_id === form.category_id)
+    : [];
+  const allowAttachments = form.subcategory_id
+    ? (subcategories.find(s => s.id === form.subcategory_id)?.permite_adjuntos ?? true)
+    : true;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setForm(prev => {
+      const siguiente = { ...prev, [name]: value };
+      // Cambiar de categoria invalida la subcategoria elegida. Vivia en un
+      // efecto que dependia tambien de `subcategories`, asi que una recarga de
+      // la lista habria borrado la seleccion del usuario sin que el tocara nada.
+      if (name === 'category_id') siguiente.subcategory_id = '';
+      return siguiente;
+    });
+    // Si la subcategoria elegida no admite adjuntos, los que ya hubiera se
+    // tiran: ocultarlos no basta, seguirian enviandose.
+    if (name === 'subcategory_id' && value
+        && !(subcategories.find(s => s.id === value)?.permite_adjuntos ?? true)) {
+      setFiles([]);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

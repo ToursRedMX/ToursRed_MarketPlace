@@ -415,7 +415,11 @@ export interface Booking {
   tour_id: string;
   agency_id: string;
   deposit_amount: number;
-  commission_amount: number;
+  // Opcional a proposito: es el margen de la agencia y `BOOKING_SELECT_FIELDS`
+  // —la consulta del viajero— NO lo pide. Declararlo obligatorio obligaba a
+  // exponerselo al viajero o a mentir en el tipo; lo piden las vistas de admin
+  // y de agencia, que tienen su propio select.
+  commission_amount?: number;
   total_price: number;
   // 'draft' es un estado REAL aunque hoy no haya ninguna fila: lo usan tres
   // funciones SQL —`activate_draft_booking`, `cleanup_abandoned_draft_bookings`
@@ -438,9 +442,10 @@ export interface Booking {
   payment_method?: string;
   paid_at?: string;
   approval_status?: 'pending' | 'approved' | 'rejected';
-  approval_notes?: string;
-  approved_at?: string;
-  approved_by?: string;
+  // Las tres son NULLABLE en la base y el codigo les escribe null.
+  approval_notes?: string | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
   count_adultos?: number;
   count_ninos?: number;
   count_infantes?: number;
@@ -492,6 +497,24 @@ export interface Booking {
   // codigo: si manana se agrega un procesador, el CHECK y esta linea tienen que
   // moverse juntos.
   payment_provider?: 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
+}
+
+/**
+ * Un servicio opcional tal y como lo define el tour (el catalogo).
+ * `BookingOptionalService`, mas abajo, es lo que una reserva CONTRATA de el.
+ * Vivia suelto dentro de BookingForm mientras BookingFlowStep3 lo importaba
+ * desde aqui, de donde nunca se exporto: ese import no resolvia nada.
+ */
+export interface TourOptionalService {
+  id: string;
+  name: string;
+  description: string | null;
+  price_per_person: number;
+  max_capacity: number | null;
+  is_refundable: boolean;
+  is_active: boolean;
+  display_order: number;
+  available_capacity?: number | null;
 }
 
 export interface BookingOptionalService {

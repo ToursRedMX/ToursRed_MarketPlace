@@ -15,8 +15,6 @@ const SupportTravelerPage: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [categories, setCategories] = useState<SupportCategory[]>([]);
   const [subcategories, setSubcategories] = useState<SupportSubcategory[]>([]);
-  const [filteredSubs, setFilteredSubs] = useState<SupportSubcategory[]>([]);
-  const [allowAttachments, setAllowAttachments] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [folio, setFolio] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,22 +35,24 @@ const SupportTravelerPage: React.FC = () => {
     load();
   }, [user]);
 
-  useEffect(() => {
-    if (categoryId) {
-      setFilteredSubs(subcategories.filter(s => s.category_id === categoryId));
-      setSubcategoryId('');
-    } else {
-      setFilteredSubs([]);
-    }
-  }, [categoryId, subcategories]);
-
-  useEffect(() => {
-    if (subcategoryId) {
-      const sub = subcategories.find(s => s.id === subcategoryId);
-      setAllowAttachments(sub?.permite_adjuntos ?? true);
-      if (!sub?.permite_adjuntos) setFiles([]);
-    }
-  }, [subcategoryId, subcategories]);
+  // Los dos se CALCULAN, no se guardan. Antes eran estado sincronizado por dos
+  // efectos, y `allowAttachments` solo se recalculaba cuando habia subcategoria:
+  // si elegias una que prohibe adjuntos y despues cambiabas de categoria, el
+  // efecto no volvia a correr —`subcategoryId` quedaba vacio— y el bloque de
+  // adjuntos seguia OCULTO hasta elegir otra subcategoria. Calculandolo en el
+  // render el estado obsoleto no puede existir.
+  //
+  // Lo que SI era un efecto de verdad —limpiar la subcategoria al cambiar de
+  // categoria y tirar los adjuntos al elegir una que no los admite— se movio a
+  // los `onChange`, que es donde ocurre el suceso. En el efecto dependia ademas
+  // de `subcategories`, asi que una recarga de la lista habria borrado la
+  // seleccion del usuario.
+  const filteredSubs = categoryId
+    ? subcategories.filter(s => s.category_id === categoryId)
+    : [];
+  const allowAttachments = subcategoryId
+    ? (subcategories.find(s => s.id === subcategoryId)?.permite_adjuntos ?? true)
+    : true;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,7 +154,7 @@ const SupportTravelerPage: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Categoria <span className="text-red-500">*</span>
               </label>
-              <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="input" required>
+              <select value={categoryId} onChange={e => { setCategoryId(e.target.value); setSubcategoryId(''); }} className="input" required>
                 <option value="">Selecciona una categoria</option>
                 {availableCategories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.nombre}</option>
@@ -167,7 +167,13 @@ const SupportTravelerPage: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Tipo de problema <span className="text-red-500">*</span>
                 </label>
-                <select value={subcategoryId} onChange={e => setSubcategoryId(e.target.value)} className="input" required>
+                <select value={subcategoryId} onChange={e => {
+                  const id = e.target.value;
+                  setSubcategoryId(id);
+                  // Si la subcategoria elegida no admite adjuntos, los que ya
+                  // hubiera se tiran: ocultarlos no basta, seguirian enviandose.
+                  if (id && !(subcategories.find(s => s.id === id)?.permite_adjuntos ?? true)) setFiles([]);
+                }} className="input" required>
                   <option value="">Selecciona el tipo</option>
                   {filteredSubs.map(sub => (
                     <option key={sub.id} value={sub.id}>{sub.nombre}</option>

@@ -7,7 +7,8 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
 
 interface PreventaTour extends Tour {
-  agencies?: { name: string; rating?: number };
+  // `agencies` NO se redeclara: `Tour` ya lo trae como `Agency`, y la version
+  // reducida que habia aqui no era compatible con ella.
   dias_restantes: number;
 }
 

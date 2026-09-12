@@ -534,12 +534,11 @@ export default function AdminEjecutivosComisiones() {
                 <p className="text-gray-700">{new Date(selected.cfdi_uploaded_at).toLocaleDateString('es-MX')}</p>
               </div>
             )}
-            {selected.payment_method && (
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">Método de pago</p>
-                <p className="text-gray-700">{selected.payment_method}</p>
-              </div>
-            )}
+            {/* Aqui habia un bloque «Método de pago» leyendo
+                `selected.payment_method`. `executive_commissions` NO tiene esa
+                columna (comprobado en la base el 11-sep-2026), asi que nunca
+                pudo pintarse. Si se quiere el dato, hay que agregar la columna
+                —`commission_records` si la tiene— antes de volver a pintarlo. */}
             {selected.payment_reference && (
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">Referencia</p>

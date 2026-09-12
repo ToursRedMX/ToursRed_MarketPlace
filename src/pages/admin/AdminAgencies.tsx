@@ -3,7 +3,8 @@ import { Building, Eye, EyeOff, Mail, Phone, Globe, Calendar, Search, Filter, Ch
 import { updateAgencyStatus, supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { tasaEfectivaAgencia } from '../../utils/comisionAgencia';
-import AgencyContractSection from '../../components/AgencyContractSection';
+import AgencyContractSection from '../../components/AgencyContractSection';
+import { comoFila } from '../../lib/relacionesSupabase';
 
 interface Agency {
   id: string;
@@ -220,7 +221,8 @@ const AdminAgencies: React.FC = () => {
 
             return {
               ...agency,
-              is_approved: agency.users?.is_approved,
+              // `users` es a-uno: la FK es agencies.user_id -> users.
+              is_approved: comoFila<{ is_approved?: boolean } | null>(agency.users)?.is_approved,
               tour_count: tourCount || 0,
               booking_count: bookingCount || 0,
               total_revenue: totalRevenue,
@@ -1008,7 +1010,7 @@ const AdminAgencies: React.FC = () => {
                         </div>
                         {agency.rating && (
                           <div className="text-sm text-gray-500">
-                            ⭐ {parseFloat(agency.rating).toFixed(1)}
+                            ⭐ {Number(agency.rating).toFixed(1)}
                           </div>
                         )}
                       </div>
