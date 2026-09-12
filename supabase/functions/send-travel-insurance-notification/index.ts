@@ -5,6 +5,12 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
 
+const etiquetaDeSexo = (sexo: string | null | undefined): string =>
+  sexo === "masculino" ? "MASCULINO"
+  : sexo === "femenino" ? "FEMENINO"
+  : sexo === "no_binario" ? "NO BINARIO"
+  : "";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -88,6 +94,7 @@ function generateXlsxBase64(
     "Tipo de documento",
     "Número de documento",
     "Fecha de nacimiento",
+    "Sexo",
     "Email",
     "Nombre contacto emergencia",
     "Teléfono contacto emergencia",
@@ -107,6 +114,7 @@ function generateXlsxBase64(
       tipoDoc,
       numDoc,
       formatDateShort(t.fecha_nacimiento),
+      etiquetaDeSexo(t.sexo),
       t.email || "",
       t.emergency_contact_name || "",
       t.emergency_contact_phone || "",
@@ -184,7 +192,7 @@ Deno.serve(async (req: Request) => {
     // Obtener datos individuales de cada viajero asegurado (incluyendo apellido)
     const { data: bookingTravelers } = await supabase
       .from("booking_travelers")
-      .select("nombre, apellido, fecha_nacimiento, documento_tipo, documento_numero, emergency_contact_name, emergency_contact_phone, email, categoria_viajero")
+      .select("nombre, apellido, fecha_nacimiento, documento_tipo, documento_numero, emergency_contact_name, emergency_contact_phone, email, categoria_viajero, sexo")
       .eq("booking_id", booking_id)
       .neq("categoria_viajero", "mascota")
       .eq("is_cancelled", false)
