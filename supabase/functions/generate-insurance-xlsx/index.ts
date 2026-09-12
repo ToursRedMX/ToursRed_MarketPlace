@@ -3,6 +3,12 @@ import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as XLSX from "npm:xlsx@0.18.5";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 
+const etiquetaDeSexo = (sexo: string | null | undefined): string =>
+  sexo === "masculino" ? "MASCULINO"
+  : sexo === "femenino" ? "FEMENINO"
+  : sexo === "no_binario" ? "NO BINARIO"
+  : "";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -132,6 +138,7 @@ Deno.serve(async (req: Request) => {
       "Tipo de documento",
       "Número de documento",
       "Fecha de nacimiento",
+      "Sexo",
       "Email",
       "Nombre contacto emergencia",
       "Teléfono contacto emergencia",
@@ -151,6 +158,7 @@ Deno.serve(async (req: Request) => {
         tipoDoc,
         (t.documento_numero || "").toUpperCase(),
         formatDateMX(t.fecha_nacimiento),
+        etiquetaDeSexo(t.sexo),
         t.email || "",
         t.emergency_contact_name || "",
         t.emergency_contact_phone || "",

@@ -231,6 +231,16 @@ jobs:
       - name: Verify a failed credentials email never rolls back the agency
         run: node scripts/test-agency-credentials-email.mjs
 
+      # El sexo del viajero viajaba por CUATRO sitios de la pantalla —select del
+      # perfil, prellenado, copia del acompanante y opciones— y ninguno lo
+      # movia. Peor: `booking_travelers` no tenia la columna y
+      # `create_booking_atomic` no la escribia, asi que el paso 4 lo mandaba en
+      # el payload y se ignoraba EN SILENCIO. El caso 5 exige los cuatro sitios
+      # a la vez: a medias, el campo se queda con el sexo del titular pegado en
+      # la fila de otra persona, y un dato equivocado no avisa de nada.
+      - name: Verify the traveler's sex is prefilled, stored and sent to the insurer
+        run: node scripts/test-sexo-del-viajero.mjs
+
       # Tres promesas de la captura de gastos que solo viven en la pantalla y
       # que ninguna prueba de SQL puede cubrir: que el total en pesos se calcule
       # pero se pueda EDITAR (el banco aplica su propio tipo de cambio), que el
@@ -399,6 +409,23 @@ jobs:
           psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS pagos;" -c "CREATE DATABASE pagos;"
           cd scripts
           psql -h localhost -U postgres -d pagos -v ON_ERROR_STOP=1 -f test-pagar-gasto.sql
+
+      # El parche de `create_booking_atomic` es un replace de dos trozos exactos
+      # sobre una funcion de 743 lineas, asi que la unica prueba que vale algo es
+      # la que corre contra el texto REAL: con una funcion inventada el replace
+      # acertaria siempre. Se puede porque plpgsql no valida las tablas del
+      # cuerpo al crear la funcion. Ya se gano el sueldo: cazo que
+      # pg_get_function_identity_arguments quita los DEFAULT de los parametros,
+      # y sin ellos Postgres rechaza el CREATE OR REPLACE.
+      - name: Verify the traveler's sex reaches the database
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS sexo;" -c "CREATE DATABASE sexo;"
+          cd scripts
+          psql -h localhost -U postgres -d sexo -v ON_ERROR_STOP=1 -f test-sexo-del-viajero.sql
 
       # Un gasto devengado en julio y pagado en septiembre son DOS hechos en dos
       # meses. El bloque 19 los daba como uno solo, fechado el dia del gasto, y
