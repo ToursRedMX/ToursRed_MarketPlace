@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
-import * as XLSX from "npm:xlsx@0.18.5";
+import writeExcelFile from "npm:write-excel-file@4.1.1/universal";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 
 const etiquetaDeSexo = (sexo: string | null | undefined): string =>
@@ -166,26 +166,7 @@ Deno.serve(async (req: Request) => {
     });
 
     const worksheetData = [headers, ...rows];
-    const ws = XLSX.utils.aoa_to_sheet(worksheetData);
-
-    // Estilo de columnas (anchos)
-    ws["!cols"] = [
-      { wch: 20 }, // Nombre
-      { wch: 25 }, // Apellido
-      { wch: 12 }, // País
-      { wch: 18 }, // Tipo de documento
-      { wch: 22 }, // Número de documento
-      { wch: 18 }, // Fecha de nacimiento
-      { wch: 30 }, // Email
-      { wch: 30 }, // Nombre contacto emergencia
-      { wch: 22 }, // Teléfono contacto emergencia
-    ];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Pasajeros");
-
-    // Segunda hoja con metadatos de la reserva
-    const metaWs = XLSX.utils.aoa_to_sheet([
+    const metadata = [
       ["Campo", "Valor"],
       ["Código de reserva", booking.booking_code],
       ["Tour", (booking.tour as any)?.name || ""],
@@ -193,12 +174,23 @@ Deno.serve(async (req: Request) => {
       ["Fecha inicio", formatDateMX((booking.tour as any)?.start_date)],
       ["Fecha fin", formatDateMX((booking.tour as any)?.end_date)],
       ["Total viajeros asegurados", rows.length],
-    ]);
-    metaWs["!cols"] = [{ wch: 25 }, { wch: 40 }];
-    XLSX.utils.book_append_sheet(wb, metaWs, "Reserva");
+    ];
 
-    const xlsxBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(xlsxBuffer)));
+    const blob = await writeExcelFile([
+      {
+        data: worksheetData,
+        sheet: "Pasajeros",
+        columns: [
+          { width: 20 }, { width: 25 }, { width: 12 }, { width: 18 },
+          { width: 22 }, { width: 18 }, { width: 30 }, { width: 30 }, { width: 22 },
+        ],
+      },
+      { data: metadata, sheet: "Reserva", columns: [{ width: 25 }, { width: 40 }] },
+    ]).toBlob();
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    const base64 = btoa(binary);
 
     const filename = `seguro_${booking.booking_code}_pasajeros.xlsx`;
 
