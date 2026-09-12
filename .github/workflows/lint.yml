@@ -259,6 +259,19 @@ jobs:
       - name: Verify accountants can be created and accounting permissions persist
         run: node scripts/test-alta-de-contadores.mjs
 
+      # El camino de RECUPERACION del ledger de migraciones. Axel decidio el
+      # 12-sep-2026 que los cinco agentes conserven acceso al Dashboard y que,
+      # cuando el ledger se desfase, se baje el SQL de la base y se reconcilie
+      # el repo. `export-orphan-migrations.sql` lleva incrustada la lista de
+      # versiones que YA tienen archivo, y estuvo cuatro dias vieja: 716 cuando
+      # el repo tenia 912. Con esa lista la reconciliacion habria declarado
+      # huerfanas 200 migraciones —198 de ellas CON archivo— y el import las
+      # habria sobrescrito con su exportacion mecanica, perdiendo la
+      # documentacion escrita a mano. Una red que se pudre en silencio es peor
+      # que no tenerla: se descubre el dia que hace falta.
+      - name: La consulta de migraciones huerfanas sigue al dia
+        run: node scripts/test-consulta-huerfanas.mjs
+
       # PayPal era el tercer hueco de la comision, despues de MercadoPago (#211)
       # y OpenPay (#213): `capture-paypal-order` solo insertaba filas nuevas y
       # al encontrar una existente se iba, asi que el 0 que dejaba el camino
