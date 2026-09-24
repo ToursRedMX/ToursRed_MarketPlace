@@ -727,7 +727,18 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, customerEmail: user.email, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, addMembership: flow.addMembership, membershipPlan: flow.membershipPlan, toursRedCashUsed: srvCashApplied }),
+            // create-checkout-session reconstruye sus propias lineas de Stripe
+            // desde deposit_amount/service_charge de la reserva y les resta
+            // pointsUsed/toursRedCashUsed como descuento (buildDesgloseLineItems),
+            // y rechaza el pago si esa suma no cuadra con `amount` (ver
+            // validarMontoDelCliente). Faltaba pointsUsed aqui: solo el cash
+            // viajaba. Con puntos aplicados y un resto por pagar con Stripe, el
+            // servidor sumaba el deposito COMPLETO (sin descontar los puntos)
+            // contra un `amount` que si los traia descontados — nunca cuadraban,
+            // y el pago se rechazaba con "El monto a cobrar no coincide con el
+            // desglose de la reserva". Bug preexistente, no de este PR: se
+            // destapo el 24-sep-2026 probando 1 viajero + puntos + Stripe.
+            body: JSON.stringify({ bookingId, customerEmail: user.email, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, addMembership: flow.addMembership, membershipPlan: flow.membershipPlan, toursRedCashUsed: srvCashApplied, pointsUsed: srvPointsApplied }),
           }
         );
         if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.error || 'Error al crear la sesion de pago'); }
