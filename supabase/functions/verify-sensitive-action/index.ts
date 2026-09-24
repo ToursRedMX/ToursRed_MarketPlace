@@ -9,6 +9,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// El user-agent que opcionesConContexto() reenvia es el del NAVEGADOR de
+// quien llama, para que insert_audit_log/los triggers de auditoria le
+// acierten el origen (Req. 10.2 PCI DSS). Eso es correcto para un cliente de
+// llave anon. Para uno de service_role es el problema: el gateway de
+// Supabase decide "esta llave secreta viaja con un user-agent de navegador"
+// y la rechaza con "Forbidden use of secret API key in browser" — silencioso
+// para quien no revisa el error de cada INSERT. Se usa SOLO al armar el
+// cliente admin; IP y correlacion se mantienen.
+function sinUserAgentDeNavegador<T extends { global?: { headers?: Record<string, string> } }>(
+  opciones: T,
+): T {
+  const cabeceras = opciones.global?.headers;
+  if (!cabeceras || !("user-agent" in cabeceras)) return opciones;
+  const resto = Object.fromEntries(
+    Object.entries(cabeceras).filter(([nombre]) => nombre !== "user-agent"),
+  );
+  return { ...opciones, global: { ...opciones.global, headers: resto } };
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -55,35 +74,23 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // opcionesConContexto reenvia el user-agent REAL del navegador del
-    // viajero (para que insert_audit_log/los triggers de auditoria le
-    // acierten el origen). Con la service_role key eso se vuelve el problema:
-    // el gateway de Supabase decide "esta llave secreta viene de un
-    // navegador" con ese mismo header y la rechaza con "Forbidden use of
-    // secret API key in browser" — 200 desde este archivo (auth.mfa.verify ya
-    // paso), pero los dos INSERT de mas abajo nunca se guardaban.
-    //
-    // Confirmado el 24-sep-2026 leyendo function_logs, no adivinado: el
-    // mensaje exacto salio ahi. sensitive_verifications se quedaba vacio de
-    // hoy pese a que verify-sensitive-action respondia verified:true, y el
-    // reintento de confirm-booking-wallet-payment volvia a chocar con 403
-    // STEP_UP_REQUIRED un instante despues. Bloqueaba TODO pago 100%
-    // wallet/puntos con MFA activo.
-    //
-    // Se quita el user-agent SOLO de este cliente admin — el userClient de
-    // arriba lo conserva, porque ahi la llave es anon y el gateway no la
-    // trata como secreta. El resto del contexto (IP, correlacion) se
-    // mantiene: no hacia falta perderlo para arreglar esto.
+    // Confirmado el 24-sep-2026 leyendo function_logs, no adivinado: sin
+    // sinUserAgentDeNavegador() de arriba, el gateway respondia "Forbidden
+    // use of secret API key in browser" en los dos INSERT de mas abajo — 200
+    // desde este archivo (auth.mfa.verify ya paso), pero sensitive_verifications
+    // se quedaba vacio, y el reintento de confirm-booking-wallet-payment
+    // volvia a chocar con 403 STEP_UP_REQUIRED un instante despues. Bloqueaba
+    // TODO pago 100% wallet/puntos con MFA activo.
     //
     // OJO: opcionesConContexto es el patron recomendado en 49 funciones para
     // el Req. 10.2 de PCI DSS. Cualquier otra que arme un cliente de
     // service_role asi puede tener el mismo problema en silencio — no se
     // audito aqui por tiempo, queda pendiente revisar las demas.
-    const adminOptions = opcionesConContexto(req);
-    if (adminOptions.global?.headers) {
-      delete (adminOptions.global.headers as Record<string, string>)["user-agent"];
-    }
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, adminOptions);
+    const adminClient = createClient(
+      supabaseUrl,
+      serviceRoleKey,
+      sinUserAgentDeNavegador(opcionesConContexto(req)),
+    );
 
     // Rate limiting: max 5 failed TOTP attempts in 10 minutes
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
