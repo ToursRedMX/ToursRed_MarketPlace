@@ -55,7 +55,35 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, opcionesConContexto(req));
+    // opcionesConContexto reenvia el user-agent REAL del navegador del
+    // viajero (para que insert_audit_log/los triggers de auditoria le
+    // acierten el origen). Con la service_role key eso se vuelve el problema:
+    // el gateway de Supabase decide "esta llave secreta viene de un
+    // navegador" con ese mismo header y la rechaza con "Forbidden use of
+    // secret API key in browser" — 200 desde este archivo (auth.mfa.verify ya
+    // paso), pero los dos INSERT de mas abajo nunca se guardaban.
+    //
+    // Confirmado el 24-sep-2026 leyendo function_logs, no adivinado: el
+    // mensaje exacto salio ahi. sensitive_verifications se quedaba vacio de
+    // hoy pese a que verify-sensitive-action respondia verified:true, y el
+    // reintento de confirm-booking-wallet-payment volvia a chocar con 403
+    // STEP_UP_REQUIRED un instante despues. Bloqueaba TODO pago 100%
+    // wallet/puntos con MFA activo.
+    //
+    // Se quita el user-agent SOLO de este cliente admin — el userClient de
+    // arriba lo conserva, porque ahi la llave es anon y el gateway no la
+    // trata como secreta. El resto del contexto (IP, correlacion) se
+    // mantiene: no hacia falta perderlo para arreglar esto.
+    //
+    // OJO: opcionesConContexto es el patron recomendado en 49 funciones para
+    // el Req. 10.2 de PCI DSS. Cualquier otra que arme un cliente de
+    // service_role asi puede tener el mismo problema en silencio — no se
+    // audito aqui por tiempo, queda pendiente revisar las demas.
+    const adminOptions = opcionesConContexto(req);
+    if (adminOptions.global?.headers) {
+      delete (adminOptions.global.headers as Record<string, string>)["user-agent"];
+    }
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, adminOptions);
 
     // Rate limiting: max 5 failed TOTP attempts in 10 minutes
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -112,20 +140,55 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Record successful attempt
-    await adminClient.from("auth_attempts").insert({
+    // Record successful attempt. Best-effort a proposito: solo alimenta el
+    // rate-limit de arriba, un fallo aqui no debe tumbar una verificacion que
+    // por lo demas fue correcta.
+    const { error: attemptError } = await adminClient.from("auth_attempts").insert({
       user_id: user.id, attempt_type: "totp_verify", success: true,
     });
+    if (attemptError) {
+      console.error("verify-sensitive-action: no se pudo registrar el intento exitoso:", attemptError);
+    }
 
-    // Insert sensitive verification with 15-minute window
+    // Insert sensitive verification with 15-minute window. Esta fila es la
+    // UNICA que checkStepUp() (stepUpCheck.ts) va a buscar en el reintento
+    // inmediato que hace el cliente. Antes este insert no revisaba `error`:
+    // si fallaba, la funcion igual respondia `verified: true`, el modal se
+    // cerraba como si nada, y el reintento volvia a chocar con 403
+    // STEP_UP_REQUIRED un instante despues porque la fila nunca existio —
+    // sin que el codigo enterado ni siquiera se reportado en ningun lado.
+    // Confirmado el 24-sep-2026 cruzando los logs de Edge Functions (dos
+    // verify-sensitive-action en 200, cero filas nuevas en
+    // sensitive_verifications) contra el confirm-booking-wallet-payment que
+    // le seguia, tambien en 403. Aqui SI se revisa: si no queda guardada, no
+    // se le dice al cliente que quedo verificado.
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 15 * 60 * 1000);
-    await adminClient.from("sensitive_verifications").insert({
+    const { error: verificationError } = await adminClient.from("sensitive_verifications").insert({
       user_id: user.id,
       method: "totp",
       verified_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),
     });
+
+    if (verificationError) {
+      console.error("verify-sensitive-action: no se pudo guardar la verificacion:", verificationError);
+      if (sentryDsn) {
+        Sentry.captureException(verificationError, {
+          tags: {
+            execution_id: Deno.env.get("SB_EXECUTION_ID") || "unknown",
+            region: Deno.env.get("SB_REGION") || "unknown",
+          },
+          extra: { context: "insert-sensitive-verifications", user_id: user.id },
+        });
+        await Sentry.flush(2000);
+      }
+      return new Response(JSON.stringify({
+        error: "Tu codigo era correcto, pero no pudimos guardar la verificacion. Intenta de nuevo.",
+      }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Audit log (correct insert_audit_log signature: p_tenant_type is required)
     try {
