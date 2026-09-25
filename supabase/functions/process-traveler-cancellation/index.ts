@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.1
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { politicaDelTour, salidaDelTour } from "../_shared/politicaCancelacion.ts";
 
 async function cancelStampedCfds(
   // Solo se usan .from() y .functions.invoke(). Pedir el cliente completo
@@ -122,35 +123,15 @@ Deno.serve(async (req: Request) => {
     if (!tour) return err("InformaciÃ³n del tour no encontrada");
 
     const isPending = (booking as any).approval_status === "pending";
-    const isReceptivo = tour.tour_type === "receptivo";
 
-    // Determine departure datetime for policy calculation
-    let departureDateTime: Date;
-    let tourStartDateForRecord: string | null = null;
-
-    if (isReceptivo) {
-      const selectedDate = (booking as any).selected_date as string | null;
-      const selectedTime = ((booking as any).selected_time as string | null) || "00:00:00";
-      if (selectedDate) {
-        departureDateTime = new Date(`${selectedDate}T${selectedTime}`);
-        tourStartDateForRecord = selectedDate;
-      } else if (tour.start_date) {
-        departureDateTime = new Date(tour.start_date);
-        tourStartDateForRecord = tour.start_date;
-      } else {
-        // No date available: use tomorrow as a safe fallback so the cancellation proceeds
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        departureDateTime = tomorrow;
-        tourStartDateForRecord = tomorrow.toISOString().split("T")[0];
-      }
-    } else {
-      if (!tour.start_date) return err("El tour no tiene fecha de inicio configurada");
-      departureDateTime = new Date(tour.start_date);
-      tourStartDateForRecord = tour.start_date;
-    }
-
+    // Fecha de salida: la misma regla que la cancelacion parcial
+    // (_shared/politicaCancelacion.ts).
     const now = new Date();
+    const salida = salidaDelTour(tour, booking as any, now);
+    if (!salida) return err("El tour no tiene fecha de inicio configurada");
+    const departureDateTime = salida.salida;
+    const tourStartDateForRecord = salida.fechaParaRegistro;
+
     const millisecondsPerHour = 1000 * 60 * 60;
     const hoursBeforeTour = (departureDateTime.getTime() - now.getTime()) / millisecondsPerHour;
     const daysBeforeTour = Math.ceil(hoursBeforeTour / 24);
@@ -277,39 +258,11 @@ Deno.serve(async (req: Request) => {
       optionalServicesServiceCharge += Number((bos as any).service_charge || 0);
     }
 
-    // Calculate cancellation policy
-    let policyType: string;
-    let refundPct: number;
-    let penaltyAmount: number;
-
-    if (isPending) {
-      policyType = "pending_approval";
-      refundPct = 1;
-      penaltyAmount = 0;
-    } else if (tour.cancellation_not_allowed) {
-      policyType = "no_refund";
-      refundPct = 0;
-      penaltyAmount = principalPaid;
-    } else {
-      const flexibleHours = Number(tour.flexible_hours ?? 48);
-      const flexibleRefundPct = Number(tour.flexible_refund_percentage ?? 100) / 100;
-      const moderateHours = Number(tour.moderate_hours ?? 24);
-      const moderateRefundPct = Number(tour.moderate_refund_percentage ?? 50) / 100;
-
-      if (hoursBeforeTour >= flexibleHours) {
-        refundPct = flexibleRefundPct;
-        penaltyAmount = principalPaid * (1 - flexibleRefundPct);
-        policyType = flexibleRefundPct >= 1 ? "100_percent" : "50_percent";
-      } else if (hoursBeforeTour >= moderateHours) {
-        refundPct = moderateRefundPct;
-        penaltyAmount = principalPaid * (1 - moderateRefundPct);
-        policyType = moderateRefundPct > 0 ? "50_percent" : "no_refund";
-      } else {
-        refundPct = 0;
-        penaltyAmount = principalPaid;
-        policyType = "no_refund";
-      }
-    }
+    // Politica del tour: la misma regla que la cancelacion parcial
+    // (_shared/politicaCancelacion.ts). La penalizacion es lo que no se
+    // devuelve del principal; da lo mismo que las cinco ramas que habia aqui.
+    const { policyType, refundPct } = politicaDelTour(tour, hoursBeforeTour, isPending);
+    const penaltyAmount = principalPaid * (1 - refundPct);
 
     const insuranceRefund = (booking as any).travel_insurance_included
       ? Number((booking as any).travel_insurance_cost || 0) * refundPct

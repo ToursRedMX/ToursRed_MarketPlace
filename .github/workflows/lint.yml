@@ -130,6 +130,9 @@ jobs:
       - name: Verify refunds return each payment method in its own currency
         run: node scripts/test-reembolso-por-medio.mjs
 
+      - name: Verify partial cancellations use the tour policy and are not refunded twice
+        run: node scripts/test-cancelacion-parcial.mjs
+
       - name: Verify OpenPay customer persistence
         run: node scripts/test-openpay-customer.mjs
 
