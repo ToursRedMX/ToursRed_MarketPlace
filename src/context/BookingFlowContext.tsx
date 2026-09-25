@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { supabase } from '../lib/supabase';
 import { BookingFlowState, INITIAL_FLOW_STATE, totalTravelerCount } from '../types/booking-flow';
 import type { Tour } from '../types/index';
+import { estadoInicialDelFlujo } from './estadoInicialDelFlujo';
 
 const STORAGE_KEY = 'booking_flow_state';
 const SESSION_ID_KEY = 'booking_flow_session_id';
@@ -76,19 +77,17 @@ export const BookingFlowProvider: React.FC<{
   initialTour,
   children,
 }) => {
-  const [flow, setFlow] = useState<BookingFlowState>(() => {
-    const stored = loadFromStorage(tourSlug);
-    if (stored) return stored;
-    return {
-      ...INITIAL_FLOW_STATE,
-      tourSlug,
-      tourId: initialTour?.id ?? '',
-      tour: initialTour ?? null,
-    };
-  });
+  const [flow, setFlow] = useState<BookingFlowState>(() =>
+    estadoInicialDelFlujo(loadFromStorage(tourSlug), tourSlug, initialTour),
+  );
 
   const sessionIdRef = useRef<string>(getSessionId());
   const tourSlugRef = useRef<string>(tourSlug);
+
+  // Para detectar cambios de viajeros o de fecha que afectan a los asientos
+  // apartados (efecto de mas abajo). `resetFlow` tambien los toca.
+  const prevTravelerCountRef = useRef<number>(totalTravelerCount(flow.travelerCounts));
+  const prevSlotIdRef = useRef<string | null>(flow.selectedSlot?.id || null);
 
   useEffect(() => {
     saveToStorage(tourSlug, flow);
@@ -121,7 +120,17 @@ export const BookingFlowProvider: React.FC<{
 
   const resetFlow = useCallback(() => {
     clearStorage(tourSlugRef.current);
-    setFlow({ ...INITIAL_FLOW_STATE, tourSlug: tourSlugRef.current });
+    // El reset no es un cambio de fecha ni de viajeros: sin esto, el efecto
+    // de abajo ve el slot pasar de algo a null y pone «Cambiaste la fecha».
+    prevSlotIdRef.current = null;
+    prevTravelerCountRef.current = 0;
+    // Se conserva el tour: sin el, el Paso 1 no pinta nada.
+    setFlow((prev) => ({
+      ...INITIAL_FLOW_STATE,
+      tourSlug: tourSlugRef.current,
+      tourId: prev.tourId,
+      tour: prev.tour,
+    }));
   }, []);
 
   const releaseHolds = useCallback(async () => {
@@ -146,10 +155,6 @@ export const BookingFlowProvider: React.FC<{
       }
     };
   }, []);
-
-  // Detect traveler count or slot changes that affect holds
-  const prevTravelerCountRef = useRef<number>(totalTravelerCount(flow.travelerCounts));
-  const prevSlotIdRef = useRef<string | null>(flow.selectedSlot?.id || null);
 
   useEffect(() => {
     const currentCount = totalTravelerCount(flow.travelerCounts);
