@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.1
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta, vigilarResultado } from "../_shared/falloSilencioso.ts";
+import { requireServiceRole } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,16 +87,8 @@ Deno.serve(async (req: Request) => {
     // Comprobar SIEMPRE reproduciendo la llamada del cron desde SQL con
     // net.http_post y leyendo el status_code en net._http_response, en vez de
     // esperar a que el cron lo descubra una hora despues.
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearer = authHeader.replace("Bearer ", "").trim();
-
-    if (!bearer || bearer !== supabaseServiceKey) {
-      console.warn("process-payment-plan-tour-deadline: llamada sin service role, rechazada");
-      return new Response(
-        JSON.stringify({ error: "No autorizado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    const auth = requireServiceRole(req, { recurso: "process-payment-plan-tour-deadline", cors: corsHeaders });
+    if (!auth.ok) return auth.response;
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false, autoRefreshToken: false },

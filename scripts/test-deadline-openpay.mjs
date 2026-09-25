@@ -7,6 +7,11 @@ const compile = s => ts.transpileModule(s.replace(/^import[^\n]*\n/gm, ''), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
 const source = readFileSync('supabase/functions/process-payment-plan-tour-deadline/index.ts', 'utf8');
+// El helper real, con el mismo entorno que el handler: la llave es 'service'.
+const helperServicio = { exports: {}, Request, Headers, Response, console: { warn() {} },
+  Deno: { env: { get: key => key === 'SENTRY_BACKEND_DSN' ? undefined : 'service' } } };
+vm.runInNewContext(compile(readFileSync('supabase/functions/_shared/auth.ts', 'utf8')), helperServicio);
+const { requireServiceRole } = helperServicio.exports;
 const scenarios = [ {}, { denied: true }, { days: 17 }, { planStatus: 'completed' },
   ...['booking_payment_plans', 'booking_payment_plan_installments', 'booking_payment_plan_transactions'].map(tableError => ({ tableError })),
   { tableError: 'cfdi_invoices' }, { invokeError: true }, { invokeThrows: true },
@@ -41,6 +46,7 @@ for (const test of scenarios) {
   };
   vm.runInNewContext(compile(source), { exports: {}, Response, console: { log() {}, error() {}, warn() {} },
     createClient: () => client,
+    requireServiceRole,
     Deno: { env: { get: key => key === 'SENTRY_BACKEND_DSN' ? undefined : 'service' }, serve(fn) { handler = fn; } },
     EdgeRuntime: { waitUntil(task) { tasks.push(task); } },
     async registrarFallo(...args) { failures.push(args); },

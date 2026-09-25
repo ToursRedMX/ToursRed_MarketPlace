@@ -146,8 +146,23 @@ function esServiceRoleKey(credencial: string): boolean {
   return Boolean(clave) && credencial.length > 0 && credencial === clave;
 }
 
-/** true si el service role viene por Authorization o por apikey. */
-function llamadaInterna(req: Request): boolean {
+/**
+ * true si el service role viene por Authorization o por apikey.
+ *
+ * Exportada el 25-sep-2026 porque trece sitios la reimplementaban mirando solo
+ * el Bearer (`bearer === SUPABASE_SERVICE_ROLE_KEY`), y eso falla en otro caso
+ * ademas del de los crons de arriba: cuando una Edge Function llama a otra
+ * que tiene `verify_jwt = true`, el gateway valida la llave `sb_secret_` y
+ * REEMPLAZA el Authorization por un JWT de service_role acunado por el
+ * (`sb_api_key_compatibility: minted`). La llave solo sobrevive en `apikey`.
+ * Asi `cancel-cfdi` rechazaba con 401 a `process-traveler-cancellation` y el
+ * CFDI de una reserva cancelada seguia timbrado ante el SAT.
+ *
+ * No acepta un JWT con `role = service_role` sin verificar su firma: si la
+ * funcion pasara a `verify_jwt = false`, cualquiera podria fabricarlo.
+ * `scripts/check-llamada-de-servicio.mjs` impide volver a comparar a mano.
+ */
+export function llamadaInterna(req: Request): boolean {
   return esServiceRoleKey(leerBearer(req)) || esServiceRoleKey(leerApikey(req));
 }
 

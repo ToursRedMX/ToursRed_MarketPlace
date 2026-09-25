@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.116.0";
+import { llamadaInterna } from "./auth.ts";
 
 /**
  * Autorizacion compartida para las funciones que timbran CFDIs.
@@ -60,13 +61,16 @@ export async function authorizeCfdiRequest(
   req: Request,
   { ownerUserId, resource }: { ownerUserId?: string | null; resource: string },
 ): Promise<CfdiAuthOutcome> {
+  // Por `apikey` y no solo por el Bearer: en las funciones con
+  // verify_jwt = true el gateway reemplaza el Bearer del servicio por un JWT
+  // acunado. Ver llamadaInterna() en _shared/auth.ts.
+  if (llamadaInterna(req)) {
+    return { allowed: true, caller: { isServiceRole: true, isAdmin: true, userId: null } };
+  }
+
   const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer(?:\s+|$)/i, "").trim();
   if (!bearer) {
     return { allowed: false, response: jsonResponse({ error: "No autorizado" }, 401) };
-  }
-
-  if (bearer.length > 0 && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
-    return { allowed: true, caller: { isServiceRole: true, isAdmin: true, userId: null } };
   }
 
   try {

@@ -1,6 +1,7 @@
 ﻿import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { llamadaInterna } from "../_shared/auth.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey" };
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
@@ -17,10 +18,9 @@ async function logSync(supabase: SupabaseClient, recordType: string, recordId: s
 }
 
 async function isAuthorized(req: Request, url: string, serviceKey: string, supabase: SupabaseClient) {
+  if (llamadaInterna(req)) return true;
   const header = req.headers.get("Authorization");
   if (!header) return false;
-  const token = header.replace(/^Bearer\s+/i, "");
-  if (token === serviceKey) return true;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   if (!anonKey) return false;
   const userClient = createClient(url, anonKey, { global: { headers: { Authorization: header } } });

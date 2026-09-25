@@ -164,6 +164,10 @@ const cab = opciones.global.headers;
 assert.equal(cab.Authorization, 'Bearer el-jwt-del-llamador',
   'el Authorization del llamador no se puede perder');
 assert.equal(cab['x-forwarded-for'], '9.9.9.9', 'se reenvia la IP del cliente');
+// La que lee ip_de_la_peticion() cuando el JWT es de service_role. Sin ella,
+// PostgREST ve en cf-connecting-ip la IP de la funcion y la bitacora la toma.
+assert.equal(cab['x-toursred-ip-cliente'], '9.9.9.9',
+  'se reenvia la IP del cliente en la cabecera propia');
 assert.equal(cab['user-agent'], 'NavegadorDePrueba/1.0', 'se reenvia el user agent');
 assert.equal(cab['x-correlation-id'], '11111111-2222-3333-4444-555555555555',
   'se propaga la correlacion que trae el cliente');
@@ -186,6 +190,7 @@ assert.equal(
 // inventado es peor que ninguno.
 const cabVacia = opcionesConContexto(pedir({})).global.headers;
 assert.equal(cabVacia['x-forwarded-for'], undefined, 'sin IP no se inventa IP');
+assert.equal(cabVacia['x-toursred-ip-cliente'], undefined, 'sin IP no se inventa la cabecera propia');
 assert.equal(cabVacia['user-agent'], undefined, 'sin user agent no se inventa');
 assert.match(cabVacia['x-correlation-id'], /^[0-9a-f-]{36}$/,
   'sin correlacion se abre una nueva para la peticion');
@@ -202,6 +207,8 @@ const admin = sinUserAgentDeNavegador(opcionesConContexto(peticion, {
 assert.equal(admin.global.headers['user-agent'], undefined,
   'el cliente admin no puede llevar el user-agent del navegador');
 assert.equal(admin.global.headers['x-forwarded-for'], '9.9.9.9', 'la IP se conserva');
+assert.equal(admin.global.headers['x-toursred-ip-cliente'], '9.9.9.9',
+  'el cliente admin es justo el que la necesita: es el unico con JWT de service_role');
 assert.equal(admin.global.headers['x-correlation-id'], '11111111-2222-3333-4444-555555555555',
   'la correlacion se conserva');
 assert.equal(admin.auth.persistSession, false, 'las opciones ajenas se conservan');
@@ -344,7 +351,7 @@ try {
 
 console.log(
   `Contexto de auditoria: ${VECTORES.length} vectores en TypeScript y afirmados en ` +
-  `${migracion}, mas 5 casos de precedencia de cabeceras, 11 de fusion de cliente y 5 del cliente de servicio sin user-agent.`,
+  `${migracion}, mas 5 casos de precedencia de cabeceras, 13 de fusion de cliente y 6 del cliente de servicio sin user-agent.`,
 );
 if (paridadEjecutada > 0) {
   console.log(`Paridad TypeScript <-> SQL EJECUTADA contra Postgres: ${paridadEjecutada} casos iguales.`);

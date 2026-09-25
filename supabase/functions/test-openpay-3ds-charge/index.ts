@@ -10,6 +10,7 @@ import {
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { llamadaInterna } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,7 +45,7 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearer = authHeader.replace("Bearer ", "").trim();
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const isServiceRole = bearer.length > 0 && bearer === serviceRoleKey;
+    const isServiceRole = llamadaInterna(req);
 
     if (!isServiceRole) {
       if (!bearer) {

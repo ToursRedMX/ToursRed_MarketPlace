@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { llamadaInterna } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,7 +48,7 @@ Deno.serve(async (req: Request) => {
     // Ese token NO tiene usuario detras, asi que getUser devolvia null y el
     // guard respondia 401: el correo de la tarjeta comprada nunca salia. El
     // service role es el llamador interno y pasa como maxima autoridad.
-    const esLlamadaInterna = token.length > 0 && token === supabaseServiceKey;
+    const esLlamadaInterna = llamadaInterna(req);
 
     // Tres tipos de llamador, no dos:
     //
