@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Session, User } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { formatCurrency } from '../utils/formatCurrency';
+import { crearFetchConCorrelacion } from './fetchConCorrelacion';
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -67,11 +68,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     },
   },
   global: {
-    // Comprobado antes de anadirla: el preflight de PostgREST devuelve esta
-    // cabecera en `access-control-allow-headers`, asi que no rompe CORS.
-    headers: {
-      'x-correlation-id': correlacionDeLaPestana(),
-    },
+    // NO en `global.headers`: de ahi tambien la toma `functions.invoke`, y
+    // ninguna Edge Function la admite en CORS. Ver fetchConCorrelacion.ts.
+    fetch: crearFetchConCorrelacion(correlacionDeLaPestana()),
   },
 });
 
