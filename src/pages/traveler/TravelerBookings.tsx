@@ -15,8 +15,9 @@ import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { paymentLabel } from '../../utils/paymentLabels';
 import { validateAllTravelers } from '../../utils/birthDateValidation';
 import { getMpDeviceId } from '../../utils/mercadopagoDevice';
-import PaymentProviderSelector from '../../components/PaymentProviderSelector';
+import PaymentProviderSelector from '../../components/PaymentProviderSelector';
 import { comoFilas } from '../../lib/relacionesSupabase';
+import { reembolsoPorMedio } from '../../utils/reembolsoPorMedio';
 
 const TravelerBookings: React.FC = () => {
   const { user } = useAuth();
@@ -894,7 +895,20 @@ const TravelerBookings: React.FC = () => {
         throw new Error('No se pudo cargar la información de la reserva');
       }
 
-      const policy = await calculateCancellationPolicy(fullBooking);
+      const politica = await calculateCancellationPolicy(fullBooking);
+      // Cada medio vuelve en su moneda, igual que en el servidor: sin esto el
+      // modal ofrecia devolver en Cash tambien lo que se pago con puntos.
+      const reparto = reembolsoPorMedio(
+        politica.refundAmountToTraveler,
+        fullBooking.points_used,
+        politica.refundPercentage / 100,
+      );
+      const policy = {
+        ...politica,
+        pointsUsed: Number(fullBooking.points_used || 0),
+        cashRefund: reparto.cash,
+        pointsRefund: reparto.puntos,
+      };
 
       setCancellationModal(prev => ({
         ...prev,
@@ -3603,6 +3617,12 @@ const TravelerBookings: React.FC = () => {
                           }`}>
                             {cancellationModal.policy.refundMessage}
                           </p>
+                          {(cancellationModal.policy.pointsUsed ?? 0) > 0 && (
+                            <p className="text-sm font-medium text-gray-800 mt-2">
+                              Se devuelve en la misma forma en que pagaste: ${formatCurrencyMXN(cancellationModal.policy.cashRefund ?? 0)} a tu ToursRed Cash
+                              {' '}y {(cancellationModal.policy.pointsRefund ?? 0).toLocaleString('es-MX')} puntos a tus ToursRed Points.
+                            </p>
+                          )}
                         </div>
 
                         {cancellationModal.policy.originalServiceCharge > 0 && (
@@ -3723,9 +3743,14 @@ const TravelerBookings: React.FC = () => {
                   <p className="text-gray-600 mb-4">
                     Tu reserva ha sido cancelada exitosamente. Recibirás un correo electrónico con los detalles.
                   </p>
-                  {cancellationModal.policy?.refundAmountToTraveler > 0 && (
+                  {(cancellationModal.policy?.cashRefund ?? cancellationModal.policy?.refundAmountToTraveler) > 0 && (
                     <p className="text-sm text-gray-600">
-                      El reembolso de ${formatCurrencyMXN(cancellationModal.policy.refundAmountToTraveler)} ha sido depositado en tu ToursRed Cash.
+                      El reembolso de ${formatCurrencyMXN(cancellationModal.policy.cashRefund ?? cancellationModal.policy.refundAmountToTraveler)} ha sido depositado en tu ToursRed Cash.
+                    </p>
+                  )}
+                  {(cancellationModal.policy?.pointsRefund ?? 0) > 0 && (
+                    <p className="text-sm text-gray-600">
+                      Y {cancellationModal.policy.pointsRefund.toLocaleString('es-MX')} puntos regresaron a tus ToursRed Points.
                     </p>
                   )}
                 </div>

@@ -348,12 +348,21 @@ Deno.serve(async (req: Request) => {
       p_set_cancelled_at: true,
       p_cancellation_type: policyType,
       p_cancellation_refund_amount: refundAmountToTraveler,
+      // Cada medio en su moneda: la RPC resta del Cash la parte pagada con
+      // puntos a este mismo porcentaje, y el trigger de bookings devuelve
+      // floor(points_used x refundPct) puntos. Hasta el 25-sep-2026 se
+      // devolvia el total en Cash Y ademas el 100% de los puntos.
+      p_porcentaje_puntos: refundPct,
     });
 
     if (rpcError || !rpcResult?.success) {
       throw new Error(rpcError?.message || rpcResult?.error || "Error procesando cancelaciÃ³n atÃ³mica");
     }
     transactionId = rpcResult.transaction_id || null;
+    // Lo que de verdad se devolvio, por moneda. `refundAmountToTraveler`
+    // sigue siendo el bruto (sirve para decidir si la venta se revierte).
+    const cashRefunded = Number(rpcResult.cash_refunded ?? refundAmountToTraveler);
+    const pointsRefunded = Number(rpcResult.points_refunded ?? 0);
 
     // BUG FIX 2: tour_start_date is NOT NULL â€” always provide a valid date
     // tourStartDateForRecord is guaranteed non-null from the logic above
@@ -369,11 +378,11 @@ Deno.serve(async (req: Request) => {
         original_deposit_amount: originalDepositAmount,
         original_service_charge: originalServiceCharge + optionalServicesServiceCharge,
         total_principal_paid: principalPaid,
-        refund_amount_to_traveler: refundAmountToTraveler,
+        refund_amount_to_traveler: cashRefunded,
         amount_to_agency: amountToAgency,
         amount_to_platform: amountToPlatform,
         toursred_cash_transaction_id: transactionId,
-        refund_processed: refundAmountToTraveler > 0,
+        refund_processed: cashRefunded > 0 || pointsRefunded > 0,
         cancellation_reason: cancellation_reason || null,
         service_charge_refunded_amount: 0,
         insurance_refund_amount: insuranceRefund,
@@ -494,7 +503,8 @@ Deno.serve(async (req: Request) => {
     return ok({
       success: true,
       cancellation_id: cancellationRecord.id,
-      refund_amount: refundAmountToTraveler,
+      refund_amount: cashRefunded,
+      points_refunded: pointsRefunded,
       refund_percentage: Math.round(refundPct * 100),
       policy_type: policyType,
       days_before_tour: daysBeforeTour,

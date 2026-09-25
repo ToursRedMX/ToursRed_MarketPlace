@@ -575,9 +575,10 @@ Deno.serve(async (req: Request) => {
       );
 
     } else if (response === "rejected") {
-      const depositAmount = Number(booking.deposit_amount || 0);
-      const toursredCashUsed = Number(booking.toursred_cash_used || 0);
-      const totalRefund = depositAmount + toursredCashUsed;
+      // `deposit_amount` ya incluye lo pagado con Cash y con puntos: sumarle
+      // `toursred_cash_used` devolvia el Cash dos veces (una reserva de $500
+      // pagada con wallet devolvia $1,000). La RPC separa la parte en puntos.
+      const totalRefund = Number(booking.deposit_amount || 0);
 
       let refundTransactionId: string | null = null;
 

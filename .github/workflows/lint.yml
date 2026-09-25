@@ -127,6 +127,9 @@ jobs:
       - name: Verify the booking flow never starts without a tour
         run: node scripts/test-flujo-reserva-estado-inicial.mjs
 
+      - name: Verify refunds return each payment method in its own currency
+        run: node scripts/test-reembolso-por-medio.mjs
+
       - name: Verify OpenPay customer persistence
         run: node scripts/test-openpay-customer.mjs
 
