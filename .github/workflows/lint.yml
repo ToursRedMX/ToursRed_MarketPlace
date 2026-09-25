@@ -115,6 +115,9 @@ jobs:
       - name: Verify shared CFDI and step-up authorization
         run: node scripts/test-shared-authorization.mjs
 
+      - name: Verify x-correlation-id reaches PostgREST but not Edge Functions
+        run: node scripts/test-correlacion-front.mjs
+
       - name: Verify OpenPay customer persistence
         run: node scripts/test-openpay-customer.mjs
 
