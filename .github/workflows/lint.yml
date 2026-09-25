@@ -124,6 +124,9 @@ jobs:
       - name: Guard against comparing the Bearer with the service key
         run: node scripts/check-llamada-de-servicio.mjs
 
+      - name: Verify the booking flow never starts without a tour
+        run: node scripts/test-flujo-reserva-estado-inicial.mjs
+
       - name: Verify OpenPay customer persistence
         run: node scripts/test-openpay-customer.mjs
 
