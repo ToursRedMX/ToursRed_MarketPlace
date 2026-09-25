@@ -75,7 +75,7 @@ const BookingFlowStep1: React.FC = () => {
       return;
     }
     Promise.resolve(supabase
-      .rpc('has_active_membership')
+      .rpc('has_active_membership', { p_user_id: user.id })
       .then(({ data }) => {
         setHasActiveMembership(!!data);
         setCheckingMembership(false);

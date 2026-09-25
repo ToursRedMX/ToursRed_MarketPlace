@@ -610,6 +610,9 @@ export interface FrequentCompanion {
   documento_numero?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
+  /** Mismo dominio que `users.sexo`. Sin esto el sexo era el unico de los once
+   *  campos del acompanante que habia que volver a teclear en cada reserva. */
+  sexo?: 'masculino' | 'femenino' | 'no_binario';
 }
 
 export interface Notification {

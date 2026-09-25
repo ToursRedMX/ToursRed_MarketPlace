@@ -34,7 +34,10 @@ export interface FlowTraveler {
   categoria_viajero: TravelerCategory;
   contacto_emergencia_nombre: string;
   contacto_emergencia_telefono: string;
-  sexo: 'masculino' | 'femenino' | '';
+  /** Mismo dominio que `users.sexo` y que el CHECK de `booking_travelers`.
+   *  `no_binario` faltaba aqui y en el selector del paso 2, asi que a quien
+   *  lo tuviera guardado en su perfil no le cabia su propio dato. */
+  sexo: 'masculino' | 'femenino' | 'no_binario' | '';
   precio_aplicado: number;
 }
 

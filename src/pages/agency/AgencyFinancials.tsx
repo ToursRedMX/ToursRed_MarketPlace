@@ -8,7 +8,7 @@ import { format } from 'date-fns';
 import type { FinancialSummary, TourFinancialSummary } from '../../types';
 import jsPDF from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import { downloadExcel } from '../../utils/excelExport';
 
 const AgencyFinancials: React.FC = () => {
   const { agencyId: resolvedAgencyId } = useAgencyId();
@@ -439,8 +439,6 @@ const AgencyFinancials: React.FC = () => {
         return 'Pendiente';
       };
 
-      const wb = XLSX.utils.book_new();
-
       const summarySheet = [
         ['ESTADO DE CUENTA DETALLADO'],
         ['Agencia:', agencyData?.name || 'N/A'],
@@ -455,10 +453,6 @@ const AgencyFinancials: React.FC = () => {
         [''],
         ['TOTAL DE RESERVAS', bookings?.length || 0],
       ];
-
-      const ws1 = XLSX.utils.aoa_to_sheet(summarySheet);
-      ws1['!cols'] = [{ wch: 30 }, { wch: 20 }];
-      XLSX.utils.book_append_sheet(wb, ws1, 'Resumen');
 
       const bookingsSheet = [
         ['DETALLE COMPLETO DE RESERVAS'],
@@ -542,17 +536,6 @@ const AgencyFinancials: React.FC = () => {
         }) || []),
       ];
 
-      const ws2 = XLSX.utils.aoa_to_sheet(bookingsSheet);
-      ws2['!cols'] = [
-        { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 30 }, { wch: 12 },
-        { wch: 25 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
-        { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 },
-        { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 15 },
-        { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 },
-        { wch: 20 }, { wch: 15 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws2, 'Detalle Reservas');
-
       const travelersSheet = [
         ['DETALLE DE VIAJEROS POR RESERVA'],
         [''],
@@ -584,15 +567,7 @@ const AgencyFinancials: React.FC = () => {
         });
       });
 
-      const ws3 = XLSX.utils.aoa_to_sheet(travelersSheet);
-      ws3['!cols'] = [
-        { wch: 15 }, { wch: 30 }, { wch: 35 }, { wch: 15 }, { wch: 18 },
-        { wch: 15 }, { wch: 30 }, { wch: 15 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws3, 'Viajeros');
-
-      if (processedPayments.length > 0) {
-        const paymentsSheet = [
+      const paymentsSheet = processedPayments.length > 0 ? [
           ['HISTORIAL DE PAGOS RECIBIDOS'],
           [''],
           ['Fecha Pago', 'Monto Total', 'Método de Pago', 'Comisiones Incluidas', 'Notas'],
@@ -603,12 +578,7 @@ const AgencyFinancials: React.FC = () => {
             payment.records_count,
             payment.payment_notes || '-',
           ]),
-        ];
-
-        const ws4 = XLSX.utils.aoa_to_sheet(paymentsSheet);
-        ws4['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 20 }, { wch: 50 }];
-        XLSX.utils.book_append_sheet(wb, ws4, 'Pagos Recibidos');
-      }
+        ] : null;
 
       const tourSummarySheet = [
         ['RESUMEN POR TOUR'],
@@ -625,11 +595,28 @@ const AgencyFinancials: React.FC = () => {
         ]),
       ];
 
-      const ws5 = XLSX.utils.aoa_to_sheet(tourSummarySheet);
-      ws5['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 12 }];
-      XLSX.utils.book_append_sheet(wb, ws5, 'Resumen Tours');
-
-      XLSX.writeFile(wb, `estado-cuenta-detallado-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+      const sheets = [
+        { data: summarySheet, sheet: 'Resumen', columns: [{ width: 30 }, { width: 20 }] },
+        { data: bookingsSheet, sheet: 'Detalle Reservas', columns: [
+          { width: 15 }, { width: 18 }, { width: 18 }, { width: 30 }, { width: 12 },
+          { width: 25 }, { width: 30 }, { width: 12 }, { width: 10 }, { width: 10 },
+          { width: 10 }, { width: 15 }, { width: 10 }, { width: 15 }, { width: 15 },
+          { width: 18 }, { width: 18 }, { width: 18 }, { width: 15 }, { width: 15 },
+          { width: 18 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 20 },
+          { width: 20 }, { width: 15 },
+        ] },
+        { data: travelersSheet, sheet: 'Viajeros', columns: [
+          { width: 15 }, { width: 30 }, { width: 35 }, { width: 15 }, { width: 18 },
+          { width: 15 }, { width: 30 }, { width: 15 },
+        ] },
+        ...(paymentsSheet ? [{
+          data: paymentsSheet,
+          sheet: 'Pagos Recibidos',
+          columns: [{ width: 15 }, { width: 15 }, { width: 25 }, { width: 20 }, { width: 50 }],
+        }] : []),
+        { data: tourSummarySheet, sheet: 'Resumen Tours', columns: [{ width: 30 }, { width: 12 }, { width: 10 }, { width: 15 }, { width: 20 }, { width: 20 }, { width: 12 }] },
+      ];
+      await downloadExcel(sheets, `estado-cuenta-detallado-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
     } catch (error) {
       console.error('Error generating Excel:', error);
       alert('Error al generar el archivo Excel: ' + (error as Error).message);

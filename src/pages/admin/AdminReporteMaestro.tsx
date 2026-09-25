@@ -4,9 +4,9 @@ import {
   BarChart2, Download, RefreshCw, Calendar, Tag, AlertCircle, Info,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { downloadExcel } from '../../utils/excelExport';
 
 /**
  * Reporte maestro: el log financiero de la plataforma.
@@ -233,8 +233,7 @@ const AdminReporteMaestro: React.FC = () => {
     return [...m.entries()].sort((x, y) => Math.abs(y[1].caja) - Math.abs(x[1].caja));
   }, [filtradas]);
 
-  const exportar = () => {
-    const wb = XLSX.utils.book_new();
+  const exportar = async () => {
 
     const resumen: (string | number)[][] = [
       ['REPORTE MAESTRO DE MOVIMIENTOS FINANCIEROS'],
@@ -254,10 +253,6 @@ const AdminReporteMaestro: React.FC = () => {
       ['POR CATEGORIA', 'Activo', 'Pasivo', 'Ingreso', 'Traspaso'],
       ...porCategoria.map(([cat, t]) => [etiqueta(cat), t.caja, t.pasivo, t.ingreso, t.traspaso]),
     ];
-    const wsResumen = XLSX.utils.aoa_to_sheet(resumen);
-    wsResumen['!cols'] = [{ wch: 38 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
-    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
-
     const detalle: (string | number)[][] = [
       ['Fecha', 'Categoria', 'Naturaleza', 'Descripcion', 'Referencia',
        'Entidad', 'Metodo', 'Activo', 'Pasivo', 'Ingreso', 'Traspaso', 'Origen'],
@@ -269,15 +264,14 @@ const AdminReporteMaestro: React.FC = () => {
         f.origen_tabla,
       ]),
     ];
-    const wsDetalle = XLSX.utils.aoa_to_sheet(detalle);
-    wsDetalle['!cols'] = [
-      { wch: 12 }, { wch: 26 }, { wch: 11 }, { wch: 38 }, { wch: 18 },
-      { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
-      { wch: 14 }, { wch: 26 },
-    ];
-    XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle');
-
-    XLSX.writeFile(wb, `ReporteMaestro_${filtros.desde}_${filtros.hasta}.xlsx`);
+    await downloadExcel([
+      { data: resumen, sheet: 'Resumen', columns: [{ width: 38 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }] },
+      { data: detalle, sheet: 'Detalle', columns: [
+        { width: 12 }, { width: 26 }, { width: 11 }, { width: 38 }, { width: 18 },
+        { width: 26 }, { width: 16 }, { width: 14 }, { width: 14 }, { width: 14 },
+        { width: 14 }, { width: 26 },
+      ] },
+    ], `ReporteMaestro_${filtros.desde}_${filtros.hasta}.xlsx`);
   };
 
   const tarjetas = [

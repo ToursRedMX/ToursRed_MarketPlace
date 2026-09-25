@@ -94,7 +94,7 @@ const BookingFlowStep2: React.FC = () => {
       try {
         const { data: userData, error: errUser } = await supabase
           .from('users')
-          .select('first_name, last_name, email, phone_number, date_of_birth, curp, passport_number, is_foreign_traveler, emergency_contact_name, emergency_contact_phone')
+          .select('first_name, last_name, email, phone_number, date_of_birth, curp, passport_number, is_foreign_traveler, emergency_contact_name, emergency_contact_phone, sexo')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -123,6 +123,10 @@ const BookingFlowStep2: React.FC = () => {
             pasaporte: userData.passport_number || '',
             contacto_emergencia_nombre: userData.emergency_contact_name || '',
             contacto_emergencia_telefono: userData.emergency_contact_phone || '',
+            // Faltaba, y era el UNICO campo del perfil que no se prellenaba:
+            // el `select` de arriba no pedia la columna, asi que a los usuarios
+            // que si lo tienen guardado se les volvia a pedir.
+            sexo: (userData.sexo || '') as FlowTraveler['sexo'],
           };
         }
 
@@ -186,6 +190,7 @@ const BookingFlowStep2: React.FC = () => {
       pasaporte: companion.documento_tipo === 'pasaporte' ? (companion.documento_numero || '') : '',
       contacto_emergencia_nombre: companion.emergency_contact_name || '',
       contacto_emergencia_telefono: companion.emergency_contact_phone || '',
+      sexo: (companion.sexo || '') as FlowTraveler['sexo'],
     };
     setTravelers(updated);
   };
@@ -349,12 +354,13 @@ const BookingFlowStep2: React.FC = () => {
                         <label className="block text-xs font-medium text-gray-500 mb-1">Sexo</label>
                         <select
                           value={traveler.sexo}
-                          onChange={(e) => handleTravelerChange(index, 'sexo', e.target.value as 'masculino' | 'femenino' | '')}
+                          onChange={(e) => handleTravelerChange(index, 'sexo', e.target.value as FlowTraveler['sexo'])}
                           className="input text-sm"
                         >
                           <option value="">Seleccionar...</option>
                           <option value="masculino">Masculino</option>
                           <option value="femenino">Femenino</option>
+                          <option value="no_binario">No binario</option>
                         </select>
                       </div>
                       <div>

@@ -15,7 +15,7 @@ ToursRed es una plataforma donde agencias de viaje comercializan sus propios tou
 
 ## Reglas duras — no negociables
 
-1. **Nunca apliques migraciones de base de datos directamente en Supabase sin autorización explícita de Axel en el momento.** Los cambios de esquema deben pasar por el repo (commit) para quedar en el historial. Leer y diagnosticar la BD libremente sí está permitido en cualquier momento. **Commitear el SQL no basta: hay que aplicarlo con la versión del archivo.** Si se aplica desde el Dashboard o por API, la base asigna su propio timestamp y el ledger queda apuntando a una versión que no existe en el repo — pasó con las dos migraciones del 02-sep-2026 pese a que ambas estaban commiteadas y revisadas en PR. Ver `scripts/check-migration-drift.mjs` y la entrada 3 de la bitácora.
+1. **Nunca apliques migraciones de base de datos directamente en Supabase sin autorización explícita de Axel en el momento.** Los cambios de esquema deben pasar por el repo (commit) para quedar en el historial. Leer y diagnosticar la BD libremente sí está permitido en cualquier momento. **Commitear el SQL no basta: hay que aplicarlo con la versión del archivo.** Si se aplica desde el Dashboard o por API, la base asigna su propio timestamp y el ledger queda apuntando a una versión que no existe en el repo — pasó con las dos migraciones del 02-sep-2026 pese a que ambas estaban commiteadas y revisadas en PR. Ver `scripts/check-migration-drift.mjs` y la entrada 3 de la bitácora. **Y hay que aplicarlo desde una carpeta que TENGA el archivo**: ver la trampa de `db push` en la sección de comandos.
 2. **No hagas push a producción/main sin que Axel lo revise y apruebe explícitamente.** Trabaja en ramas o espera confirmación antes de mergear/pushear cambios sensibles.
 3. **No toques integraciones con Zoho Books u Odoo** como si fueran el sistema contable activo — están deprecadas.
 4. Antes de dar por "terminada" una tarea, corre `git diff` y muéstrale a Axel qué cambió.
@@ -45,6 +45,21 @@ ToursRed es una plataforma donde agencias de viaje comercializan sus propios tou
 
 **Checks requeridos de main: léelos de la API, nunca de este archivo.** Esta lista ya se quedó vieja el mismo día en que se escribió, dos veces. Hoy son ocho y `enforce_admins: true`. Al hacer requerido un check nuevo, **primero mergea el PR que trae su workflow y después márcalo requerido** — al revés, todo PR abierto se queda esperando para siempre un check que nunca va a reportar.
 
+**«Remote database is up to date» puede significar «no veo el archivo».** `supabase db push` lee `supabase/migrations/` **del disco**, no del repo remoto: si la rama que tienes sacada no trae la migración, responde que todo está al día y no miente — simplemente no la ve. Pasó el 12-sep-2026 con `20260912010000`: el `db push` salió limpio y no había aplicado nada.
+
+Axel tiene `main` ocupada por un **worktree en `C:\trw`, donde corre los worktrees de Codex**, así que su carpeta de trabajo vive en ramas de feature y `git checkout main` ahí falla con *'main' is already used by worktree*. La salida que lo delata está en el `git pull`: si dice `Already up to date` mientras la línea de arriba muestra `abc..def main -> origin/main`, el remoto avanzó y **tu rama local no**.
+
+Antes de dar por aplicada una migración:
+
+```powershell
+git branch --show-current                       # ¿en qué rama estás de verdad?
+git checkout -B aplicar-lo-que-sea origin/main  # el nombre NO puede ser `main`, por el worktree
+Test-Path supabase\migrations\<archivo>.sql     # tiene que decir True
+supabase db push                                # debe listar la migración, no decir «up to date»
+```
+
+Y después, **confirma contra la base** —columna, función, y que el ledger registró la versión DEL ARCHIVO—: es el patrón 6, un verde puede ser un paso que no se ejecutó.
+
 **Después de desplegar Edge Functions, manda un `OPTIONS` a cada una.** `Deployed Functions` del CLI no significa que arranque: `generate-signed-contract` llevaba semanas rota y el CLI la dio por buena. El preflight ejercita el arranque sin disparar lógica de negocio.
 
 **Antes de desplegar, cruza `verify_jwt` contra la API.** El CLI pone `true` a lo que no esté declarado en `config.toml`, y `stripe-webhook` y `openpay-webhook` viven de tenerlo en `false`.
@@ -57,7 +72,6 @@ ToursRed es una plataforma donde agencias de viaje comercializan sus propios tou
 
 ## Lo que está abierto hoy (11-sep-2026)
 
-- **La llave.** Nada impide todavía que un cambio de esquema se aplique directo en Supabase sin pasar por un commit — la causa raíz de las 151 migraciones huérfanas. Hay alarma (`migration-drift.yml`, diaria y en cada PR) pero no cerradura. Las dos salidas son técnica (event trigger + GUC, añade ceremonia a cada `db push`) u organizativa (restringir quién puede correr SQL en el Dashboard). **Bloqueado en una respuesta de Axel: cuánta gente tiene acceso al Dashboard.**
 - **DRP.** Iniciado; falta pulirlo, documentarlo y probarlo.
 - **Borrar `src/components/BookingForm.tsx`** (166 KB de código muerto: la reserva en una sola pantalla, anterior al flujo de 4 pasos). El PR #236 portó lo que faltaba —códigos de descuento, promociones de grupo, descuento de seguro—, así que **solo falta que Axel confirme en el preview que el flujo de 4 pasos cubre todo** antes de borrarlo. Se conserva mientras tanto por si hay algo que rescatar. **Lleva dentro un bug documentado:** el tope de ToursRed Points (`maxPointsAllowed = userPayment * 50`) se calcula sobre una base que excluye opcionales y seguro, mientras la pantalla ofrece «hasta el 50% del total». No hace daño porque es código muerto — pero si alguien rescata esa función, el bug se va con ella.
 - **`audit_errors` tiene renglones sin revisar.** Nadie los ha leído nunca. Conviene hacerlo antes de las UAT: es mirar qué se registró, no escribir código.
@@ -70,6 +84,8 @@ ToursRed es una plataforma donde agencias de viaje comercializan sus propios tou
 
 Axel cerró estos puntos el 11-sep-2026. Si aparecen en un documento viejo como «pendientes», el documento está desactualizado:
 
+- **La llave: NO se cierra. Todos conservan acceso al Dashboard. DECISIÓN de Axel, 12-sep-2026.** Con acceso están los cinco agentes (Claude Code, Claude, ChatGPT, Codex y **Bolt**) y Axel. El remedio que estaba anotado —«restringir quién puede correr SQL en el Dashboard»— se escribió imaginando un equipo de personas a quienes quitar acceso; hay **una** persona, así que restringir *es* quitárselo a los agentes, y Axel prefiere que todos lo tengan. **El proceso acordado cuando el ledger se desfase:** bajar el SQL de la base y reconciliar el repo — `node scripts/generar-consulta-huerfanas.mjs`, correr `scripts/export-orphan-migrations.sql` en el Dashboard, descargar el JSON y `node scripts/import-orphan-migrations.mjs <archivo>`. **Ojo:** lo que produce es una exportación funcional de `statements[]`, no el texto original — los comentarios sueltos se pierden y el formato queda normalizado. Sirve para reproducir el esquema, no como registro literal. Y el import **sobrescribe**: revisar `git status` después.
+- **El diagnóstico de «la llave» estaba viejo, y conviene no repetirlo.** Medido el 12-sep-2026 sobre el ledger completo: **912 pares local == remoto, 0 desalineados, 0 archivos sin aplicar**. El mecanismo original —la base asignando su propia versión— **ya no ocurre**. Lo que ocurre hoy es otra cosa: el cambio llega a producción **antes** de que el PR se mergee (siete veces solo el 11-sep), se auto-cura al mergear, y mientras tanto pone `guardia-desfase` en rojo en PRs que no tienen nada que ver. Si esa guardia te bloquea un PR, **mira primero si es tu rama la que está desactualizada** antes de dar por hecho que hay una huérfana.
 - **Webhook de producción de Stripe.** La cuenta livemode `acct_1Roc3UEakEqayEr8` no tiene ningún endpoint; hoy todo corre sobre la de prueba. **Se crea después de las UAT**, no ahora. Lo que sí queda anotado: es bloqueante antes de cobrar dinero real.
 - **Comisiones de PayPal sin conciliar** y **los ~30 cobros históricos con `net_amount = amount`**: son datos de prueba que se depuran antes de las UAT. No se invierte tiempo en limpiarlos.
 - **Las reservas de Teotihuacán con IVA al 16%** y los $2,028.28 de diferencia: pruebas de Axel. No hay nada que reemitir ni que preguntarle al contador.

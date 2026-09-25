@@ -821,7 +821,7 @@ const AgencyBookings: React.FC = () => {
       alert('Primero genera el reporte');
       return;
     }
-    exportTourReportToExcel(reportData, agencyName);
+    void exportTourReportToExcel(reportData, agencyName);
   };
 
   const handleExportPDF = () => {

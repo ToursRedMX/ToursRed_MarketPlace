@@ -343,9 +343,13 @@ const BookingFlowStep4: React.FC = () => {
   );
 
   // Tope del 50%: los puntos nunca cubren mas de la mitad del monto exigible.
+  // Vive del netBeforeCharges de ESTE render, no de un monto capturado al marcar
+  // la casilla: si viajeros/extras/seguro cambian despues con la casilla ya
+  // marcada, el punto de partida no puede quedarse atras (bug del 24-sep-2026,
+  // ver bitacora).
   const maxPointsAllowed = Math.floor(netBeforeCharges * POINTS_PER_MXN * MAX_POINTS_COVERAGE);
   const pointsApplied = usePoints
-    ? Math.min(flow.pointsUsed, pointsBalance, maxPointsAllowed)
+    ? Math.min(pointsBalance, maxPointsAllowed)
     : 0;
   const pointsDiscount = pointsApplied / POINTS_PER_MXN;
 
@@ -368,10 +372,12 @@ const BookingFlowStep4: React.FC = () => {
     : Math.max(0, Math.round((depositServiceCharge - serviceChargeDiscount) * 100) / 100);
   const effectiveExtrasServiceCharge = isFullWalletPayment ? 0 : extrasServiceCharge;
 
-  // Tope duro del wallet: el exigible ahora. No se permite abonar de mas.
+  // Tope duro del wallet: el exigible ahora, de ESTE render. No se permite
+  // abonar de mas, y tampoco se congela el monto al marcar la casilla — mismo
+  // motivo que arriba: netBeforeCharges puede subir despues sin que el usuario
+  // vuelva a tocar el checkbox.
   const walletDiscount = useWallet
     ? Math.min(
-        flow.toursredCashUsed,
         walletBalance,
         Math.max(0, netBeforeCharges - pointsDiscount)
       )
@@ -669,7 +675,7 @@ const BookingFlowStep4: React.FC = () => {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${session.access_token}`,
               },
-              body: JSON.stringify({ bookingId }),
+              body: JSON.stringify({ booking_id: bookingId }),
             }
           );
         }
@@ -721,7 +727,18 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, customerEmail: user.email, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, addMembership: flow.addMembership, membershipPlan: flow.membershipPlan, toursRedCashUsed: srvCashApplied }),
+            // create-checkout-session reconstruye sus propias lineas de Stripe
+            // desde deposit_amount/service_charge de la reserva y les resta
+            // pointsUsed/toursRedCashUsed como descuento (buildDesgloseLineItems),
+            // y rechaza el pago si esa suma no cuadra con `amount` (ver
+            // validarMontoDelCliente). Faltaba pointsUsed aqui: solo el cash
+            // viajaba. Con puntos aplicados y un resto por pagar con Stripe, el
+            // servidor sumaba el deposito COMPLETO (sin descontar los puntos)
+            // contra un `amount` que si los traia descontados — nunca cuadraban,
+            // y el pago se rechazaba con "El monto a cobrar no coincide con el
+            // desglose de la reserva". Bug preexistente, no de este PR: se
+            // destapo el 24-sep-2026 probando 1 viajero + puntos + Stripe.
+            body: JSON.stringify({ bookingId, customerEmail: user.email, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, addMembership: flow.addMembership, membershipPlan: flow.membershipPlan, toursRedCashUsed: srvCashApplied, pointsUsed: srvPointsApplied }),
           }
         );
         if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.error || 'Error al crear la sesion de pago'); }
@@ -1223,13 +1240,15 @@ const BookingFlowStep4: React.FC = () => {
                 type="checkbox"
                 checked={usePoints}
                 onChange={(e) => {
+                  // El monto que de verdad se cobra es pointsApplied (arriba,
+                  // linea ~347), que se recalcula en cada render mientras
+                  // usePoints este activo. flow.pointsUsed de aqui ya NO topa
+                  // ese calculo — es solo un registro informativo — porque
+                  // congelarlo en el click era el bug: si netBeforeCharges subia
+                  // despues (mas viajeros, extras, seguro) con la casilla ya
+                  // marcada, el tope se quedaba en el valor viejo.
                   setUsePoints(e.target.checked);
-                  if (e.target.checked) {
-                    const maxPoints = Math.min(pointsBalance, maxPointsAllowed);
-                    updateFlow({ pointsUsed: maxPoints });
-                  } else {
-                    updateFlow({ pointsUsed: 0 });
-                  }
+                  updateFlow({ pointsUsed: e.target.checked ? Math.min(pointsBalance, maxPointsAllowed) : 0 });
                 }}
                 className="h-4 w-4 text-amber-600"
               />
@@ -1252,13 +1271,11 @@ const BookingFlowStep4: React.FC = () => {
                 type="checkbox"
                 checked={useWallet}
                 onChange={(e) => {
+                  // Mismo motivo que en puntos: walletDiscount (linea ~372) ya se
+                  // recalcula en cada render mientras useWallet este activo.
+                  // flow.toursredCashUsed de aqui es solo informativo.
                   setUseWallet(e.target.checked);
-                  if (e.target.checked) {
-                    const maxWallet = Math.min(walletBalance, Math.max(0, netBeforeCharges - pointsDiscount));
-                    updateFlow({ toursredCashUsed: maxWallet });
-                  } else {
-                    updateFlow({ toursredCashUsed: 0 });
-                  }
+                  updateFlow({ toursredCashUsed: e.target.checked ? Math.min(walletBalance, Math.max(0, netBeforeCharges - pointsDiscount)) : 0 });
                 }}
                 className="h-4 w-4 text-teal-600"
               />

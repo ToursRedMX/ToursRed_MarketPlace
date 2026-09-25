@@ -118,25 +118,6 @@
  * `npm:pdfmake@0.2.20/js/printer.js` son el mismo paquete en la misma version,
  * y asi los agrupa la guardia.
  *
- * LA UNICA EXCEPCION DE LA REGLA 3, Y POR QUE ES DEFINITIVA
- *
- * `xlsx` corre 0.20.3 en el front y 0.18.5 en las Edge Functions, y **no se
- * puede alinear cambiando un numero**: SheetJS dejo de publicar en npm, donde
- * la ultima es 0.18.5 (2022). La 0.20.3 solo existe en su CDN — `npm view
- * xlsx@0.20.3` responde 404. Alinearlos exigia cambiar de ORIGEN —o las Edge
- * Functions tiran del CDN de SheetJS, o el front vuelve a una version de 2022—
- * y el 11-sep-2026 Axel decidio que ninguna de las dos: cada lado se queda con
- * la ultima version que su origen ofrece. La exclusion no es provisional.
- *
- * Lo que conviene saber al tomarla: 0.18.5 esta por debajo de DOS avisos
- * "high" —GHSA-4r6h-8v6p-xvw6 (prototype pollution, < 0.19.3) y
- * GHSA-5pgg-2g8v-p4x9 (ReDoS, < 0.20.2)—, **ninguno con parche en npm**. La
- * exposicion practica hoy es nula: los dos se disparan al PARSEAR un archivo, y
- * medido el 11-sep-2026 **nadie en el repo llama a `XLSX.read`** — front y edge
- * solo GENERAN hojas (`aoa_to_sheet`, `book_new`, `write`). O sea: version
- * vulnerable, camino vulnerable no ejercitado. Si algun dia alguien acepta un
- * .xlsx subido por un usuario, esto deja de ser deuda y pasa a ser urgente.
- *
  * USO
  *
  *   node scripts/check-edge-deps.mjs             revisa supabase/functions/
@@ -337,10 +318,7 @@ if (quiereLista) {
 // Solo tiene sentido sobre el arbol completo: con rutas sueltas (los fixtures de
 // la prueba) no hay "las Edge Functions" que comparar contra el front.
 //
-// `xlsx` queda fuera a proposito. No es pereza: SheetJS dejo de publicar en npm
-// y la 0.20.3 del front solo existe en su CDN, asi que alinearlo no es cambiar
-// un numero. La razon larga esta en el encabezado de este archivo.
-const FUERA_DE_LA_REGLA_3 = new Set(['xlsx']);
+const FUERA_DE_LA_REGLA_3 = new Set();
 
 const desalineados = [];
 

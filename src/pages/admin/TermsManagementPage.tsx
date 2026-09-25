@@ -5,9 +5,9 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 import RichTextEditor from '../../components/RichTextEditor';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
+import { downloadExcel } from '../../utils/excelExport';
 
 interface TermsVersion {
   id: string;
@@ -290,7 +290,7 @@ const TermsManagementPage: React.FC = () => {
     setLoading(false);
   };
 
-  const exportCSV = () => {
+  const exportCSV = async () => {
     const rows = acceptances.map(a => ({
       'Fecha/Hora': format(new Date(a.accepted_at), 'dd/MM/yyyy HH:mm:ss'),
       'Correo': a.user_email,
@@ -300,10 +300,22 @@ const TermsManagementPage: React.FC = () => {
       'Dispositivo/Navegador': a.user_agent || '-',
       'ID Usuario': a.user_id,
     }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Aceptaciones');
-    XLSX.writeFile(wb, `auditoria_terms_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+    const headers = Object.keys(rows[0] || {
+      'Fecha/Hora': '',
+      'Correo': '',
+      'Tipo': '',
+      'Versión': '',
+      'IP': '',
+      'Dispositivo/Navegador': '',
+      'ID Usuario': '',
+    });
+    await downloadExcel([
+      {
+        data: [headers, ...rows.map(row => headers.map(header => row[header as keyof typeof row]))],
+        sheet: 'Aceptaciones',
+        columns: [{ width: 20 }, { width: 30 }, { width: 14 }, { width: 12 }, { width: 18 }, { width: 40 }, { width: 38 }],
+      },
+    ], `auditoria_terms_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
   };
 
   const exportPDF = () => {
