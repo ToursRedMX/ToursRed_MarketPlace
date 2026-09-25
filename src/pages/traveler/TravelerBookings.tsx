@@ -896,25 +896,40 @@ const TravelerBookings: React.FC = () => {
       }
 
       const politica = await calculateCancellationPolicy(fullBooking);
+
+      // Lo que ya consumieron las cancelaciones parciales no se vuelve a
+      // devolver: mismo descuento que process_cancellation_refund en el
+      // servidor (migracion 20260925240000).
+      const { data: parciales, error: errorParciales } = await supabase
+        .from('booking_partial_cancellations')
+        .select('original_partial_amount, points_share')
+        .eq('booking_id', booking.id);
+      if (errorParciales) throw new Error('No se pudieron leer las cancelaciones parciales de la reserva');
+      const principalConsumido = (parciales || []).reduce((s, p) => s + Number(p.original_partial_amount || 0), 0);
+      const puntosConsumidos = (parciales || []).reduce((s, p) => s + Number(p.points_share || 0), 0);
+      const pct = politica.refundPercentage / 100;
+
       // Cada medio vuelve en su moneda, igual que en el servidor: sin esto el
       // modal ofrecia devolver en Cash tambien lo que se pago con puntos.
+      const pointsUsed = Math.max(0, Number(fullBooking.points_used || 0) - puntosConsumidos);
       const reparto = reembolsoPorMedio(
-        politica.refundAmountToTraveler,
-        fullBooking.points_used,
-        politica.refundPercentage / 100,
+        Math.max(0, politica.refundAmountToTraveler - pct * principalConsumido),
+        pointsUsed,
+        pct,
       );
-      const pointsUsed = Number(fullBooking.points_used || 0);
-      // El mensaje de calculateCancellationPolicy dice que TODO va a Cash. Con
-      // puntos de por medio eso es falso, asi que se reescribe con el reparto
-      // real en vez de agregarle una linea que lo contradiga.
+      // El mensaje de calculateCancellationPolicy dice que TODO va a Cash y
+      // no sabe de parciales. Con puntos o parciales de por medio eso es
+      // falso, asi que se reescribe con el reparto real en vez de agregarle
+      // una linea que lo contradiga.
       let refundMessage = politica.refundMessage;
-      if (pointsUsed > 0 && (reparto.cash > 0 || reparto.puntos > 0)) {
+      if ((pointsUsed > 0 || principalConsumido > 0) && (reparto.cash > 0 || reparto.puntos > 0)) {
         const opcionales = Number(politica.optionalServicesRefundable || 0);
         const noReembolsables = Number(politica.optionalServicesNonRefundable || 0);
         refundMessage =
           `Se reembolsará el ${politica.refundPercentage}% de lo pagado en la misma forma en que pagaste: ` +
-          `${formatCurrencyMXN(reparto.cash)} a tu ToursRed Cash y ` +
-          `${reparto.puntos.toLocaleString('es-MX')} puntos a tus ToursRed Points.` +
+          `${formatCurrencyMXN(reparto.cash)} a tu ToursRed Cash` +
+          (reparto.puntos > 0 ? ` y ${reparto.puntos.toLocaleString('es-MX')} puntos a tus ToursRed Points.` : '.') +
+          (principalConsumido > 0 ? ' Ya no incluye a los viajeros que cancelaste antes.' : '') +
           (opcionales > 0 ? ` El Cash incluye los servicios opcionales reembolsables (${formatCurrencyMXN(opcionales)}).` : '') +
           (politica.originalServiceCharge > 0 ? ` El cargo por servicio (${formatCurrencyMXN(politica.originalServiceCharge)}) no es reembolsable.` : '') +
           (noReembolsables > 0 ? ` Los servicios no reembolsables (${formatCurrencyMXN(noReembolsables)}) no se devuelven.` : '');
@@ -3915,9 +3930,17 @@ const TravelerBookings: React.FC = () => {
                             <div className="flex justify-between">
                               <span className="text-gray-600">Reembolso a ToursRed Cash:</span>
                               <span className={`font-bold ${partialCancellationModal.policy.refundAmountToTraveler > 0 ? 'text-green-700' : 'text-red-600'}`}>
-                                ${formatCurrencyMXN(Number(partialCancellationModal.policy.refundAmountToTraveler))}
+                                {formatCurrencyMXN(Number(partialCancellationModal.policy.refundAmountToTraveler))}
                               </span>
                             </div>
+                            {Number(partialCancellationModal.policy.pointsRefund || 0) > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Reembolso a ToursRed Points:</span>
+                                <span className="font-bold text-green-700">
+                                  {Number(partialCancellationModal.policy.pointsRefund).toLocaleString('es-MX')} puntos
+                                </span>
+                              </div>
+                            )}
                           </div>
                           <p className={`text-xs mt-1 ${
                             partialCancellationModal.policy.policyType === '100_percent' ? 'text-green-700' :
@@ -4015,7 +4038,12 @@ const TravelerBookings: React.FC = () => {
                   <p className="text-gray-600 mb-2">Los viajeros han sido removidos de tu reserva.</p>
                   {partialCancellationModal.policy?.refundAmountToTraveler > 0 && (
                     <p className="text-sm text-gray-600">
-                      El reembolso de ${formatCurrencyMXN(Number(partialCancellationModal.policy.refundAmountToTraveler))} ha sido acreditado en tu ToursRed Cash.
+                      El reembolso de {formatCurrencyMXN(Number(partialCancellationModal.policy.refundAmountToTraveler))} ha sido acreditado en tu ToursRed Cash.
+                    </p>
+                  )}
+                  {Number(partialCancellationModal.policy?.pointsRefund || 0) > 0 && (
+                    <p className="text-sm text-gray-600">
+                      Y {Number(partialCancellationModal.policy.pointsRefund).toLocaleString('es-MX')} puntos regresaron a tus ToursRed Points.
                     </p>
                   )}
                 </div>

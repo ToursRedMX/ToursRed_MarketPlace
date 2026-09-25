@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { politicaDelTour, salidaDelTour } from "../_shared/politicaCancelacion.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,17 +41,14 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-function parseDateFromDB(dateString: string | null | undefined): Date {
-  if (!dateString) return new Date();
-  const [year, month, day] = dateString.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
 interface PolicyResult {
   policyType: "100_percent" | "50_percent" | "no_refund";
   daysBeforeTour: number;
   originalPartialAmount: number;
+  /** Lo que vuelve a ToursRed Cash. */
   refundAmountToTraveler: number;
+  /** Los ToursRed Points que vuelven. */
+  pointsRefund: number;
   amountToAgency: number;
   amountToPlatform: number;
   insuranceRefund: number;
@@ -92,9 +90,11 @@ Deno.serve(async (req: Request) => {
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .select(`
-        id, status, user_id, total_price, deposit_amount, points_earned, agency_id,
+        id, status, user_id, total_price, deposit_amount, points_earned, points_used, agency_id,
         has_payment_plan, travel_insurance_included, travel_insurance_cost,
-        tours (id, name, start_date, cancellation_not_allowed),
+        selected_date, selected_time, approval_status,
+        tours (id, name, start_date, cancellation_not_allowed, tour_type,
+               flexible_hours, flexible_refund_percentage, moderate_hours, moderate_refund_percentage),
         agencies (id, user_id)
       `)
       .eq("id", bookingId)
@@ -136,14 +136,26 @@ Deno.serve(async (req: Request) => {
     // Get the travelers to cancel (with precio_aplicado read from DB, not from client)
     const travelersToCancel = (activeTravelers || []).filter((t: any) => travelerIds.includes(t.id));
 
-    // ── Calculate cancellation policy (server-side, replicating client logic exactly) ──
+    // ── Politica: la MISMA del tour que la cancelacion total ──
+    // Hasta el 25-sep-2026 aqui iban dias fijos (15+ -> 100%, 7-14 -> 50%,
+    // <7 -> 0) y la total usaba la politica del tour: en un receptivo de 48 h,
+    // quitar a un viajero 5 dias antes daba 0% y cancelar la reserva entera el
+    // mismo dia daba 100%. Axel decidio que las dos usen la del tour.
     const tour = (booking as any).tours as any;
-    const tourStartDate = parseDateFromDB(tour.start_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const millisecondsPerDay = 1000 * 60 * 60 * 24;
-    const daysBeforeTour = Math.ceil((tourStartDate.getTime() - today.getTime()) / millisecondsPerDay);
+    // Campos que usan la politica y el reparto, tipados en vez de `as any`.
+    const reserva = booking as unknown as {
+      points_used?: number | null;
+      approval_status?: string | null;
+      selected_date?: string | null;
+      selected_time?: string | null;
+    };
+    const salida = salidaDelTour(tour, reserva);
+    if (!salida) return err("El tour no tiene fecha de inicio configurada");
+    const hoursBeforeTour = (salida.salida.getTime() - Date.now()) / (1000 * 60 * 60);
+    if (hoursBeforeTour <= 0) return err("No se puede cancelar viajeros de un tour que ya inició o ha pasado");
+    const daysBeforeTour = Math.ceil(hoursBeforeTour / 24);
+    const { policyType: tipoPolitica, refundPct } = politicaDelTour(
+      tour, hoursBeforeTour, reserva.approval_status === "pending");
 
     const fullPriceOfCancelledTravelers = travelersToCancel.reduce(
       (sum: number, t: any) => sum + Number(t.precio_aplicado),
@@ -184,9 +196,7 @@ Deno.serve(async (req: Request) => {
         .eq("booking_id", bookingId);
       const baseCount = totalTravelerCount || currentActiveCount;
       if (baseCount > 0) {
-        const refundPct =
-          daysBeforeTour >= 15 ? 1 :
-          daysBeforeTour >= 7 ? 0.5 : 0;
+        // Mismo porcentaje de la politica del tour que el principal.
         insuranceRefund = Math.round((insuranceCost / baseCount) * travelerIds.length * refundPct * 100) / 100;
       }
     }
@@ -199,51 +209,59 @@ Deno.serve(async (req: Request) => {
 
     const commissionRate = ((platformSettings as any)?.agency_commission_percentage || 15) / 100;
 
-    let policy: PolicyResult;
+    // Cada medio en su moneda: la parte de los puntos que corresponde a estos
+    // viajeros vuelve como puntos, lo demas como Cash. La regla vive en
+    // reparto_parcial() (migracion 20260925240000) y es la misma que usa
+    // procesar_reembolso_parcial() al ejecutar, asi que la vista previa y el
+    // dinero no pueden diferir. Hasta el 25-sep-2026 todo iba a Cash y los
+    // puntos no volvian.
+    const { data: reparto, error: repartoError } = await supabase.rpc("reparto_parcial", {
+      p_points_used: Number(reserva.points_used) || 0,
+      p_parte: originalPartialAmount,
+      p_principal: totalPrincipalPaid,
+      p_porcentaje: refundPct,
+      p_extra_cash: insuranceRefund,
+    }).single<{ points_share: number; cash: number; puntos: number }>();
+    if (repartoError || !reparto) return err("Error calculando el reembolso: " + (repartoError?.message ?? "sin datos"));
+    const cashRefund = Number(reparto.cash) || 0;
+    const pointsRefund = Number(reparto.puntos) || 0;
 
-    if (daysBeforeTour >= 15) {
-      policy = {
-        policyType: "100_percent",
-        daysBeforeTour,
-        originalPartialAmount,
-        refundAmountToTraveler: originalPartialAmount + insuranceRefund,
-        amountToAgency: 0,
-        amountToPlatform: 0,
-        insuranceRefund,
-        refundMessage: `Se reembolsará el 100% del anticipo parcial (${formatCurrency(originalPartialAmount)}) a tu ToursRed Cash.`,
-      };
-    } else if (daysBeforeTour >= 7 && daysBeforeTour < 15) {
-      const refundAmount = originalPartialAmount * 0.5;
-      const penaltyAmount = originalPartialAmount * 0.5;
-      policy = {
-        policyType: "50_percent",
-        daysBeforeTour,
-        originalPartialAmount,
-        refundAmountToTraveler: refundAmount + insuranceRefund,
-        amountToAgency: penaltyAmount * 0.7,
-        amountToPlatform: penaltyAmount * 0.3,
-        insuranceRefund,
-        refundMessage: `Se reembolsará el 50% del anticipo parcial (${formatCurrency(refundAmount)}) a tu ToursRed Cash.`,
-      };
-    } else {
-      const agencyAmount = originalPartialAmount * (1 - commissionRate);
-      const platformAmount = originalPartialAmount * commissionRate;
-      policy = {
-        policyType: "no_refund",
-        daysBeforeTour,
-        originalPartialAmount,
-        refundAmountToTraveler: insuranceRefund,
-        amountToAgency: agencyAmount,
-        amountToPlatform: platformAmount,
-        insuranceRefund,
-        warningMessage: tour.cancellation_not_allowed
+    // La penalizacion es la parte del principal que no se devuelve. El reparto
+    // entre agencia y plataforma es el que ya tenia esta funcion.
+    const penaltyAmount = originalPartialAmount * (1 - refundPct);
+    const policyType: PolicyResult["policyType"] =
+      tipoPolitica === "pending_approval" ? "100_percent" : tipoPolitica;
+    const amountToAgency = refundPct === 0
+      ? originalPartialAmount * (1 - commissionRate)
+      : penaltyAmount * 0.7;
+    const amountToPlatform = refundPct === 0
+      ? originalPartialAmount * commissionRate
+      : penaltyAmount * 0.3;
+
+    const enMonedas = pointsRefund > 0
+      ? `${formatCurrency(cashRefund)} a tu ToursRed Cash y ${pointsRefund.toLocaleString("es-MX")} puntos a tus ToursRed Points (la parte que pagaste con puntos vuelve como puntos)`
+      : `${formatCurrency(cashRefund)} a tu ToursRed Cash`;
+
+    const policy: PolicyResult = {
+      policyType,
+      daysBeforeTour,
+      originalPartialAmount,
+      refundAmountToTraveler: cashRefund,
+      pointsRefund,
+      amountToAgency: refundPct >= 1 ? 0 : amountToAgency,
+      amountToPlatform: refundPct >= 1 ? 0 : amountToPlatform,
+      insuranceRefund,
+      warningMessage: refundPct === 0
+        ? (tour.cancellation_not_allowed
           ? "Este tour NO permite cancelaciones con reembolso."
-          : daysBeforeTour < 1
-            ? "Cancelar en este momento no genera reembolso."
-            : undefined,
-        refundMessage: "No habrá reembolso por estos viajeros. La cancelación se procesa para evitar penalización de No Show.",
-      };
-    }
+          : "Cancelar en este momento no genera reembolso.")
+        : undefined,
+      refundMessage: refundPct === 0
+        ? (cashRefund > 0
+          ? `No habrá reembolso de lo pagado por estos viajeros; solo se devuelve el seguro (${enMonedas}).`
+          : "No habrá reembolso por estos viajeros. La cancelación se procesa para evitar penalización de No Show.")
+        : `Se reembolsará el ${Math.round(refundPct * 100)}% de lo pagado por estos viajeros: ${enMonedas}.`,
+    };
 
     // ── Preview mode: return policy without any side effects ──
     if (isPreview) {
@@ -258,22 +276,27 @@ Deno.serve(async (req: Request) => {
     let transactionId: string | null = null;
 
     // 1. Refund to wallet (server-calculated amount, not client-supplied)
+    // Cash y puntos en una sola transaccion, con la misma regla que la vista
+    // previa. Se llama siempre: aunque no se devuelva nada, `points_share`
+    // (los puntos de estos viajeros) tiene que quedar registrado para que una
+    // cancelacion total posterior no los vuelva a devolver.
     const partialCancellationId = crypto.randomUUID();
-    if (policy.refundAmountToTraveler > 0) {
-      const tourName = tour.name;
-      const { data: refundData, error: refundError } = await supabase.rpc("update_wallet_balance", {
-        p_user_id: user.id,
-        p_amount: policy.refundAmountToTraveler,
-        p_type: "refund",
-        p_description: `Reembolso por cancelación parcial de ${tourName}`,
-        p_reference_id: bookingId,
-        p_reference_type: "booking_partial_cancellation",
-        p_idempotency_key: partialCancellationId,
-      });
-
-      if (refundError) return err("Error al procesar reembolso: " + refundError.message);
-      transactionId = refundData?.transaction_id || null;
+    const { data: refundData, error: refundError } = await supabase.rpc("procesar_reembolso_parcial", {
+      p_booking_id: bookingId,
+      p_partial_cancellation_id: partialCancellationId,
+      p_parte: originalPartialAmount,
+      p_principal: totalPrincipalPaid,
+      p_porcentaje: refundPct,
+      p_extra_cash: insuranceRefund,
+      p_description: `Reembolso por cancelación parcial de ${tour.name}`,
+    });
+    if (refundError || !refundData?.success) {
+      return err("Error al procesar reembolso: " + (refundError?.message ?? "sin respuesta"));
     }
+    transactionId = refundData.transaction_id || null;
+    const cashRefunded = Number(refundData.cash_refunded) || 0;
+    const pointsRefunded = Number(refundData.points_refunded) || 0;
+    const pointsShare = Number(refundData.points_share) || 0;
 
     // 2. Insert partial cancellation record
     const { data: partialCancellation, error: insertError } = await supabase
@@ -282,7 +305,7 @@ Deno.serve(async (req: Request) => {
         id: partialCancellationId,
         booking_id: bookingId,
         cancelled_by_user_id: user.id,
-        tour_start_date: tour.start_date,
+        tour_start_date: salida.fechaParaRegistro,
         days_before_tour: policy.daysBeforeTour,
         cancellation_policy_type: policy.policyType,
         travelers_cancelled: travelersToCancel.map((t: any) => ({
@@ -292,11 +315,13 @@ Deno.serve(async (req: Request) => {
           precio_aplicado: Number(t.precio_aplicado),
         })),
         original_partial_amount: policy.originalPartialAmount,
-        refund_amount_to_traveler: policy.refundAmountToTraveler,
+        refund_amount_to_traveler: cashRefunded,
+        points_share: pointsShare,
+        points_refunded: pointsRefunded,
         amount_to_agency: policy.amountToAgency,
         amount_to_platform: policy.amountToPlatform,
         toursred_cash_transaction_id: transactionId,
-        refund_processed: policy.refundAmountToTraveler > 0,
+        refund_processed: cashRefunded > 0 || pointsRefunded > 0,
         cancellation_reason: cancellationReason || null,
         insurance_refund_amount: policy.insuranceRefund,
       })
@@ -384,7 +409,9 @@ Deno.serve(async (req: Request) => {
           partial_cancellation_id: partialCancellation.id,
           cancellation_policy_type: policy.policyType,
           original_booking_amount: policy.originalPartialAmount,
-          gross_penalty: policy.originalPartialAmount - policy.refundAmountToTraveler,
+          // Lo que no se devuelve del principal. No se resta el Cash devuelto: desde
+          // el 25-sep-2026 ese Cash excluye la parte pagada con puntos.
+          gross_penalty: penaltyAmount,
           agency_net_amount: policy.amountToAgency,
           platform_amount: policy.amountToPlatform,
           status: "pending",
@@ -406,7 +433,8 @@ Deno.serve(async (req: Request) => {
             booking_id: bookingId,
             partial_cancellation_id: partialCancellation.id,
             travelers_count: travelerIds.length,
-            refund_amount: policy.refundAmountToTraveler,
+            refund_amount: cashRefunded,
+            points_refunded: pointsRefunded,
             policy_type: policy.policyType,
           },
         });
