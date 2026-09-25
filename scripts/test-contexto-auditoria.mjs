@@ -107,7 +107,7 @@ function evaluar(src) {
   return contexto.exports;
 }
 
-const { enmascararIp, extraerIpDelCliente, opcionesConContexto } = evaluar(fuente);
+const { enmascararIp, extraerIpDelCliente, opcionesConContexto, sinUserAgentDeNavegador } = evaluar(fuente);
 
 for (const { entrada, esperado, nota } of VECTORES) {
   assert.equal(enmascararIp(entrada), esperado, `TypeScript, ${nota}: ${entrada}`);
@@ -189,6 +189,24 @@ assert.equal(cabVacia['x-forwarded-for'], undefined, 'sin IP no se inventa IP');
 assert.equal(cabVacia['user-agent'], undefined, 'sin user agent no se inventa');
 assert.match(cabVacia['x-correlation-id'], /^[0-9a-f-]{36}$/,
   'sin correlacion se abre una nueva para la peticion');
+
+// ---------------------------------------------------------------------------
+// 2-ter. sinUserAgentDeNavegador: lo que exige la llave secreta
+// ---------------------------------------------------------------------------
+// El gateway rechaza una llave `sb_secret_` que viaje con user-agent de
+// navegador. El cliente admin tiene que perder EXACTAMENTE esa cabecera y
+// nada mas: sin IP ni correlacion la bitacora pierde el origen.
+const admin = sinUserAgentDeNavegador(opcionesConContexto(peticion, {
+  auth: { persistSession: false },
+}));
+assert.equal(admin.global.headers['user-agent'], undefined,
+  'el cliente admin no puede llevar el user-agent del navegador');
+assert.equal(admin.global.headers['x-forwarded-for'], '9.9.9.9', 'la IP se conserva');
+assert.equal(admin.global.headers['x-correlation-id'], '11111111-2222-3333-4444-555555555555',
+  'la correlacion se conserva');
+assert.equal(admin.auth.persistSession, false, 'las opciones ajenas se conservan');
+assert.equal(opciones.global.headers['user-agent'], 'NavegadorDePrueba/1.0',
+  'no muta las opciones de entrada');
 
 // ---------------------------------------------------------------------------
 // 3. La migracion promete los mismos vectores
@@ -326,7 +344,7 @@ try {
 
 console.log(
   `Contexto de auditoria: ${VECTORES.length} vectores en TypeScript y afirmados en ` +
-  `${migracion}, mas 5 casos de precedencia de cabeceras y 11 de fusion de cliente.`,
+  `${migracion}, mas 5 casos de precedencia de cabeceras, 11 de fusion de cliente y 5 del cliente de servicio sin user-agent.`,
 );
 if (paridadEjecutada > 0) {
   console.log(`Paridad TypeScript <-> SQL EJECUTADA contra Postgres: ${paridadEjecutada} casos iguales.`);

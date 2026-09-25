@@ -119,6 +119,43 @@ function motivosDeAlcance(limpio) {
   return motivos;
 }
 
+// Segundo argumento de un `createClient(...)`: la llave. Se corta en la primera
+// coma a profundidad cero, no en la primera coma a secas, por si la URL viene
+// de una llamada con argumentos.
+function segundoArgumento(argumentos) {
+  let prof = 0, inicio = -1;
+  for (let i = 0; i < argumentos.length; i++) {
+    const c = argumentos[i];
+    if ('([{'.includes(c)) prof++;
+    else if (')]}'.includes(c)) prof--;
+    else if (c === ',' && prof === 0) {
+      if (inicio === -1) { inicio = i + 1; continue; }
+      return argumentos.slice(inicio, i).trim();
+    }
+  }
+  return inicio === -1 ? '' : argumentos.slice(inicio).trim();
+}
+
+// Recorre cada `createClient(...)` de un archivo ya sin comentarios y devuelve
+// su linea, el texto de sus argumentos y su llave.
+function* llamadasACreateClient(limpio) {
+  for (const m of limpio.matchAll(/\bcreateClient\s*\(/g)) {
+    const apertura = m.index + m[0].length - 1;
+    let prof = 0, fin = -1;
+    for (let i = apertura; i < limpio.length; i++) {
+      if (limpio[i] === '(') prof++;
+      else if (limpio[i] === ')') { prof--; if (prof === 0) { fin = i; break; } }
+    }
+    if (fin === -1) continue;
+    const argumentos = limpio.slice(apertura + 1, fin);
+    yield {
+      linea: limpio.slice(0, m.index).split('\n').length,
+      argumentos,
+      llave: segundoArgumento(argumentos),
+    };
+  }
+}
+
 const argv = process.argv.slice(2);
 const quiereLista = argv.includes('--lista');
 
@@ -157,6 +194,36 @@ for (const archivo of archivos) {
   if (sueltos.length > 0) hallazgos.push({ fn, ruta, motivos, lineas: sueltos });
 }
 
+// SEGUNDA REGLA: llave de servicio + user-agent de navegador = 401.
+//
+// `opcionesConContexto(req)` reenvia el user-agent de quien llama. La llave
+// de servicio es `sb_secret_...`, y el gateway rechaza TODA peticion que la
+// traiga con user-agent de navegador ("Forbidden use of secret API key in
+// browser"). Del 10 al 25-sep-2026 eso tumbo en silencio cada escritura admin
+// de ~40 funciones llamadas desde el front: `user_sessions` sin una fila,
+// `audit_logs` sin ninguna escrita por Edge Function con origen de navegador.
+//
+// Corre sobre TODAS las funciones, no solo las del alcance de arriba: el 401
+// no depende de que la funcion escriba bitacora.
+//
+// La llave se reconoce por el nombre (`SUPABASE_SERVICE_ROLE_KEY`,
+// `serviceKey`, `supabaseServiceKey`, `serviceRoleKey`...). Al 25-sep-2026
+// todas las variables con "service" en el nombre valen esa llave y todas las
+// de llave anon dicen "anon"; si alguien la guarda en una variable con otro
+// nombre, esta regla no la ve.
+const conUserAgent = [];
+for (const archivo of archivos) {
+  const ruta = archivo.replace(/\\/g, '/');
+  const fn = ruta.split('/')[2];
+  const limpio = sinComentarios(readFileSync(archivo, 'utf8'));
+  for (const { linea, argumentos, llave } of llamadasACreateClient(limpio)) {
+    if (!/service/i.test(llave)) continue;
+    if (!/opcionesConContexto\s*\(\s*req\b/.test(argumentos)) continue;
+    if (/sinUserAgentDeNavegador\s*\(\s*opcionesConContexto\s*\(/.test(argumentos)) continue;
+    conUserAgent.push({ fn, ruta, linea });
+  }
+}
+
 console.log('Guardia de contexto de bitacora');
 console.log(`Funciones revisadas ..... ${archivos.length}`);
 console.log(`En alcance .............. ${enAlcance.length}`);
@@ -170,8 +237,24 @@ if (quiereLista) {
   console.log('');
 }
 
+if (conUserAgent.length > 0) {
+  console.log(`Hallazgos: ${conUserAgent.length} cliente(s) con llave de servicio reenvian el user-agent.`);
+  console.log('El gateway los rechaza con 401 cuando los llama un navegador.');
+  console.log('');
+  for (const { fn, ruta, linea } of conUserAgent) {
+    console.log(`  ${fn}`);
+    console.log(`    ${ruta}:${linea}`);
+  }
+  console.log('');
+  console.log('Como se arregla: quita el user-agent SOLO al cliente de servicio:');
+  console.log('  createClient(url, serviceKey, sinUserAgentDeNavegador(opcionesConContexto(req)))');
+  console.log('');
+}
+
 if (hallazgos.length === 0) {
-  console.log('Sin hallazgos: toda funcion en alcance reenvia el contexto del cliente.');
+  if (conUserAgent.length > 0) process.exit(1);
+  console.log('Sin hallazgos: toda funcion en alcance reenvia el contexto del cliente,');
+  console.log('y ningun cliente con llave de servicio reenvia el user-agent.');
   process.exit(0);
 }
 

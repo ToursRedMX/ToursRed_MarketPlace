@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 import { checkAal2Required, aal2Response } from '../_shared/aal2Check.ts';
 import * as Sentry from "npm:@sentry/deno@9.47.1";
-import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -86,14 +86,14 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', opcionesConContexto(req,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', sinUserAgentDeNavegador(opcionesConContexto(req,
       {
         auth: {
           autoRefreshToken: false,
           persistSession: false,
         },
       }
-    ));
+    )));
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {

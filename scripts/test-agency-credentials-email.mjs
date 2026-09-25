@@ -128,6 +128,7 @@ for (const slug of ['convert-lead-to-agency', 'fix-agency-email', 'resend-agency
       },
       Sentry: { init() {}, captureException() {}, flush: async () => {} },
       opcionesConContexto: contexto.opcionesConContexto,
+      sinUserAgentDeNavegador: contexto.sinUserAgentDeNavegador,
       createClient: (_url, _key, opciones) => { opcionesDelCliente = opciones; return client; },
       fetch: async (url, init) => {
         emailCalls++;
@@ -174,7 +175,12 @@ for (const slug of ['convert-lead-to-agency', 'fix-agency-email', 'resend-agency
     const cabeceras = opcionesDelCliente?.global?.headers ?? {};
     assert.equal(cabeceras['x-forwarded-for'], '203.0.113.7',
       `${slug}/${outcome}: se reenvia la IP del cliente, la primera de la lista`);
-    assert.equal(cabeceras['user-agent'], 'Prueba/1.0', `${slug}/${outcome}: se reenvia el user agent`);
+    // El user-agent NO: este cliente usa la llave de servicio (`sb_secret_`),
+    // y el gateway la rechaza con 401 si viaja con user-agent de navegador.
+    // Hasta el 25-sep-2026 esta linea exigia lo contrario — la prueba afirmaba
+    // el bug como si fuera el comportamiento correcto.
+    assert.equal(cabeceras['user-agent'], undefined,
+      `${slug}/${outcome}: el cliente de servicio no puede reenviar el user agent`);
     assert.match(cabeceras['x-correlation-id'] ?? '', /^[0-9a-f-]{36}$/,
       `${slug}/${outcome}: se abre correlacion para la peticion`);
     assert.equal(opcionesDelCliente?.auth?.persistSession, false,

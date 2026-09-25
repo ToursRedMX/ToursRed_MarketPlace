@@ -184,3 +184,46 @@ export function opcionesConContexto<T extends object>(req: Request, opciones?: T
     },
   };
 }
+
+/**
+ * Quita el `user-agent` de unas opciones de cliente. OBLIGATORIO en todo
+ * cliente que use la llave de servicio:
+ *
+ *     const admin = createClient(url, serviceKey,
+ *       sinUserAgentDeNavegador(opcionesConContexto(req)));
+ *
+ * POR QUE
+ *
+ * `SUPABASE_SERVICE_ROLE_KEY` es una llave `sb_secret_...`, y el gateway de
+ * Supabase rechaza toda peticion que la traiga junto con un user-agent de
+ * navegador: 401 `UNAUTHORIZED_INVALID_API_KEY_TYPE`, "Forbidden use of secret
+ * API key in browser". `opcionesConContexto()` reenvia justo ese user-agent,
+ * asi que cualquier funcion llamada desde el front que armara asi su cliente
+ * admin fallaba en CADA consulta — y como casi ninguna revisa el `error` de
+ * sus escrituras, fallaba en silencio.
+ *
+ * Medido el 25-sep-2026 contra `edge_logs`: el 24-sep, 21 de 21 peticiones
+ * con llave secreta y user-agent de navegador salieron en 401, y ninguna con
+ * otro user-agent. Desde el PR que introdujo `opcionesConContexto` (10-sep)
+ * `user_sessions` no recibio una sola fila pese a haber inicios de sesion, y
+ * `audit_logs` no tiene NINGUNA fila escrita por Edge Function con
+ * user-agent de navegador en toda su historia.
+ *
+ * Con llave anon no pasa (el gateway la da por publica), asi que ahi el
+ * user-agent se conserva. IP y correlacion se conservan siempre: el 10.2.2
+ * de PCI DSS pide origen, no user-agent.
+ *
+ * `scripts/check-audit-context.mjs` exige esta envoltura en todo
+ * `createClient` con llave de servicio que reenvie contexto. Se llama inline,
+ * no sobre una variable aparte, para que esa guardia la vea.
+ */
+export function sinUserAgentDeNavegador<T extends { global?: { headers?: Record<string, string> } }>(
+  opciones: T,
+): T {
+  const cabeceras = opciones.global?.headers;
+  if (!cabeceras || !("user-agent" in cabeceras)) return opciones;
+  const resto = Object.fromEntries(
+    Object.entries(cabeceras).filter(([nombre]) => nombre !== "user-agent"),
+  );
+  return { ...opciones, global: { ...opciones.global, headers: resto } };
+}
