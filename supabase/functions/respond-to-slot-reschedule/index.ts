@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
-import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -194,7 +194,7 @@ Deno.serve(async (req: Request) => {
     const userClient = createClient(supabaseUrl, anonKey, opcionesConContexto(req, {
       global: { headers: { Authorization: authHeader } },
     }));
-    const adminClient = createClient(supabaseUrl, serviceKey, opcionesConContexto(req));
+    const adminClient = createClient(supabaseUrl, serviceKey, sinUserAgentDeNavegador(opcionesConContexto(req)));
 
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {

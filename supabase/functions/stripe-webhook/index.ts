@@ -6,7 +6,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 import { verificarCoberturaDePago } from "../_shared/coberturaDePago.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
-import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { crearAsientoContable, notificarAdmins, alertarOps, avisosCon } from "../_shared/avisosDePago.ts";
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { asentarCobroStripe, estadoSegunStripe } from "../_shared/cobrosStripe.ts";
@@ -251,7 +251,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, opcionesConContexto(req));
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, sinUserAgentDeNavegador(opcionesConContexto(req)));
 
     await supabase.from('webhook_logs').insert({
       event_type: event.type,

@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.1
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
-import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 
 async function cancelStampedCfds(
   // Solo se usan .from() y .functions.invoke(). Pedir el cliente completo
@@ -75,9 +75,9 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization") || "";
 
     // Verify admin via JWT
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, opcionesConContexto(req, {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, sinUserAgentDeNavegador(opcionesConContexto(req, {
       global: { headers: { Authorization: authHeader } },
-    }));
+    })));
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return err("No autorizado", 401);
@@ -115,7 +115,7 @@ Deno.serve(async (req: Request) => {
     if (!admin_cancellation_id) return err("admin_cancellation_id es requerido");
 
     // Service-role client for mutations
-    const serviceClient = createClient(supabaseUrl, supabaseServiceKey, opcionesConContexto(req));
+    const serviceClient = createClient(supabaseUrl, supabaseServiceKey, sinUserAgentDeNavegador(opcionesConContexto(req)));
 
     // ============================================================
     // Guard 1: Check current booking status

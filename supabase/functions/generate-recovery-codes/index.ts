@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
-import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -79,7 +79,7 @@ Deno.serve(async (req: Request) => {
 
     const pepper = Deno.env.get("MFA_RECOVERY_PEPPER") || "toursred-default-pepper-change-me";
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, opcionesConContexto(req));
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, sinUserAgentDeNavegador(opcionesConContexto(req)));
 
     // Delete existing unused codes for this user (regeneration invalidates old ones)
     await adminClient

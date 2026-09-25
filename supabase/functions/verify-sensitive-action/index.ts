@@ -1,32 +1,13 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
-import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
-
-// El user-agent que opcionesConContexto() reenvia es el del NAVEGADOR de
-// quien llama, para que insert_audit_log/los triggers de auditoria le
-// acierten el origen (Req. 10.2 PCI DSS). Eso es correcto para un cliente de
-// llave anon. Para uno de service_role es el problema: el gateway de
-// Supabase decide "esta llave secreta viaja con un user-agent de navegador"
-// y la rechaza con "Forbidden use of secret API key in browser" — silencioso
-// para quien no revisa el error de cada INSERT. Se usa SOLO al armar el
-// cliente admin; IP y correlacion se mantienen.
-function sinUserAgentDeNavegador<T extends { global?: { headers?: Record<string, string> } }>(
-  opciones: T,
-): T {
-  const cabeceras = opciones.global?.headers;
-  if (!cabeceras || !("user-agent" in cabeceras)) return opciones;
-  const resto = Object.fromEntries(
-    Object.entries(cabeceras).filter(([nombre]) => nombre !== "user-agent"),
-  );
-  return { ...opciones, global: { ...opciones.global, headers: resto } };
-}
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -75,17 +56,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // Confirmado el 24-sep-2026 leyendo function_logs, no adivinado: sin
-    // sinUserAgentDeNavegador() de arriba, el gateway respondia "Forbidden
-    // use of secret API key in browser" en los dos INSERT de mas abajo — 200
+    // sinUserAgentDeNavegador(), el gateway respondia "Forbidden use of
+    // secret API key in browser" en los dos INSERT de mas abajo — 200
     // desde este archivo (auth.mfa.verify ya paso), pero sensitive_verifications
     // se quedaba vacio, y el reintento de confirm-booking-wallet-payment
     // volvia a chocar con 403 STEP_UP_REQUIRED un instante despues. Bloqueaba
-    // TODO pago 100% wallet/puntos con MFA activo.
-    //
-    // OJO: opcionesConContexto es el patron recomendado en 49 funciones para
-    // el Req. 10.2 de PCI DSS. Cualquier otra que arme un cliente de
-    // service_role asi puede tener el mismo problema en silencio — no se
-    // audito aqui por tiempo, queda pendiente revisar las demas.
+    // TODO pago 100% wallet/puntos con MFA activo. Esta fue la primera que se
+    // encontro; el 25-sep-2026 se corrigieron las demas (ver el helper).
     const adminClient = createClient(
       supabaseUrl,
       serviceRoleKey,

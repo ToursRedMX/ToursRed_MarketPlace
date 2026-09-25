@@ -4,7 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { cubreElAnticipo } from "../_shared/exigible.ts";
 import { asentarCobroPaypal } from "../_shared/cobrosPaypal.ts";
 import { registrarFallo } from "../_shared/falloSilencioso.ts";
-import { opcionesConContexto } from "../_shared/contextoAuditoria.ts";
+import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -568,7 +568,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    , opcionesConContexto(req));
+    , sinUserAgentDeNavegador(opcionesConContexto(req)));
 
     // Del cuerpo solo se usan orderId y context. El front tambien manda
     // bookingId, giftCardId y slotId, pero NO se leen a proposito: el
