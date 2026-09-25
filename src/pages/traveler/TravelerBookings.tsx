@@ -903,9 +903,26 @@ const TravelerBookings: React.FC = () => {
         fullBooking.points_used,
         politica.refundPercentage / 100,
       );
+      const pointsUsed = Number(fullBooking.points_used || 0);
+      // El mensaje de calculateCancellationPolicy dice que TODO va a Cash. Con
+      // puntos de por medio eso es falso, asi que se reescribe con el reparto
+      // real en vez de agregarle una linea que lo contradiga.
+      let refundMessage = politica.refundMessage;
+      if (pointsUsed > 0 && (reparto.cash > 0 || reparto.puntos > 0)) {
+        const opcionales = Number(politica.optionalServicesRefundable || 0);
+        const noReembolsables = Number(politica.optionalServicesNonRefundable || 0);
+        refundMessage =
+          `Se reembolsará el ${politica.refundPercentage}% de lo pagado en la misma forma en que pagaste: ` +
+          `${formatCurrencyMXN(reparto.cash)} a tu ToursRed Cash y ` +
+          `${reparto.puntos.toLocaleString('es-MX')} puntos a tus ToursRed Points.` +
+          (opcionales > 0 ? ` El Cash incluye los servicios opcionales reembolsables (${formatCurrencyMXN(opcionales)}).` : '') +
+          (politica.originalServiceCharge > 0 ? ` El cargo por servicio (${formatCurrencyMXN(politica.originalServiceCharge)}) no es reembolsable.` : '') +
+          (noReembolsables > 0 ? ` Los servicios no reembolsables (${formatCurrencyMXN(noReembolsables)}) no se devuelven.` : '');
+      }
       const policy = {
         ...politica,
-        pointsUsed: Number(fullBooking.points_used || 0),
+        refundMessage,
+        pointsUsed,
         cashRefund: reparto.cash,
         pointsRefund: reparto.puntos,
       };
@@ -3617,12 +3634,6 @@ const TravelerBookings: React.FC = () => {
                           }`}>
                             {cancellationModal.policy.refundMessage}
                           </p>
-                          {(cancellationModal.policy.pointsUsed ?? 0) > 0 && (
-                            <p className="text-sm font-medium text-gray-800 mt-2">
-                              Se devuelve en la misma forma en que pagaste: ${formatCurrencyMXN(cancellationModal.policy.cashRefund ?? 0)} a tu ToursRed Cash
-                              {' '}y {(cancellationModal.policy.pointsRefund ?? 0).toLocaleString('es-MX')} puntos a tus ToursRed Points.
-                            </p>
-                          )}
                         </div>
 
                         {cancellationModal.policy.originalServiceCharge > 0 && (
@@ -3745,7 +3756,7 @@ const TravelerBookings: React.FC = () => {
                   </p>
                   {(cancellationModal.policy?.cashRefund ?? cancellationModal.policy?.refundAmountToTraveler) > 0 && (
                     <p className="text-sm text-gray-600">
-                      El reembolso de ${formatCurrencyMXN(cancellationModal.policy.cashRefund ?? cancellationModal.policy.refundAmountToTraveler)} ha sido depositado en tu ToursRed Cash.
+                      El reembolso de {formatCurrencyMXN(cancellationModal.policy.cashRefund ?? cancellationModal.policy.refundAmountToTraveler)} ha sido depositado en tu ToursRed Cash.
                     </p>
                   )}
                   {(cancellationModal.policy?.pointsRefund ?? 0) > 0 && (

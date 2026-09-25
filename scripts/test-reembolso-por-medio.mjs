@@ -74,6 +74,15 @@ assert.match(viajero, /p_porcentaje_puntos:\s*refundPct/, 'process-traveler-canc
 const pago = readFileSync('supabase/functions/process-payment-cancellation/index.ts', 'utf8');
 assert.match(pago, /p_monto_incluye_puntos:\s*false/, 'process-payment-cancellation pasa solo Cash, sin puntos');
 
+// El modal REESCRIBE el mensaje cuando hubo puntos. La primera version solo le
+// agrego una linea debajo, y el texto principal seguia diciendo «Se
+// reembolsara el 100% de lo pagado (500.00 = 500.00) a tu ToursRed Cash».
+const modal = readFileSync('src/pages/traveler/TravelerBookings.tsx', 'utf8');
+assert.match(modal, /refundMessage =\s*\n?\s*`Se reembolsará el \$\{politica\.refundPercentage\}% de lo pagado en la misma forma en que pagaste/,
+  'el modal tiene que reescribir refundMessage con el reparto por moneda');
+assert.match(modal, /\.\.\.politica,\s*\n\s*refundMessage,/,
+  'la politica del modal tiene que llevar el mensaje reescrito, no el original');
+
 // Nadie suma deposit_amount + toursred_cash_used.
 const sumaDoble = /deposit_amount[^;\n]{0,80}\+[^;\n]{0,80}toursred_cash_used|toursred_cash_used[^;\n]{0,80}\+[^;\n]{0,80}deposit_amount|depositAmount\s*\+\s*toursredCashUsed|refundAmount\s*\+\s*toursredCashUsed/;
 for (const archivo of globSync('supabase/functions/*/index.ts')) {
@@ -82,4 +91,4 @@ for (const archivo of globSync('supabase/functions/*/index.ts')) {
     `${archivo} suma deposit_amount y toursred_cash_used: deposit_amount ya incluye el Cash.`);
 }
 
-console.log(`Reembolso por medio: ${VECTORES.length} vectores con paridad TS <-> SQL, 4 bordes y 6 comprobaciones de uso.`);
+console.log(`Reembolso por medio: ${VECTORES.length} vectores con paridad TS <-> SQL, 4 bordes y 8 comprobaciones de uso.`);
