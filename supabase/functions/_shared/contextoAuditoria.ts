@@ -104,7 +104,17 @@ export function cabecerasDeContexto(req: Request): Record<string, string> {
   const cabeceras: Record<string, string> = {};
 
   const ip = extraerIpDelCliente(req);
-  if (ip) cabeceras["x-forwarded-for"] = ip;
+  if (ip) {
+    cabeceras["x-forwarded-for"] = ip;
+    // `x-forwarded-for` sola no basta: cuando la funcion habla con PostgREST,
+    // Cloudflare pone en `cf-connecting-ip` la IP de la FUNCION (AWS), y
+    // `insert_audit_log` la prefiere. El 25-sep-2026 las primeras filas de
+    // bitacora escritas por una Edge Function salieron con 3.145.206.xxx en
+    // vez de la IP del viajero. Esta cabecera la lee `ip_de_la_peticion()`
+    // PRIMERO, pero solo si el JWT es de service_role: un navegador no puede
+    // tener ese rol, asi que no puede usarla para falsificar su origen.
+    cabeceras["x-toursred-ip-cliente"] = ip;
+  }
 
   const ua = req.headers.get("user-agent");
   if (ua) cabeceras["user-agent"] = ua;

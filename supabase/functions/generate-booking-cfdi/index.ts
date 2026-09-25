@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
+import { llamadaInterna } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -344,8 +345,7 @@ Deno.serve(async (req: Request) => {
     // ser el dueno de la reserva o un admin, igual que en create-openpay-checkout.
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearer = authHeader.replace("Bearer ", "").trim();
-    const isServiceRole = bearer.length > 0 &&
-      bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const isServiceRole = llamadaInterna(req);
 
     if (!isServiceRole) {
       const { data: { user: caller }, error: callerErr } = await supabase.auth.getUser(bearer);

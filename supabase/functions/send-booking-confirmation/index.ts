@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { llamadaInterna } from "../_shared/auth.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -69,7 +70,7 @@ Deno.serve(async (req: Request) => {
     // generate-booking-cfdi.
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearer = authHeader.replace("Bearer ", "").trim();
-    const isServiceRole = bearer.length > 0 && bearer === supabaseServiceKey;
+    const isServiceRole = llamadaInterna(req);
 
     if (!isServiceRole) {
       if (!bearer) {

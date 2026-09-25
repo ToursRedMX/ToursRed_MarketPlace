@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { enmascararIp } from "../_shared/contextoAuditoria.ts";
+import { llamadaInterna } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -100,9 +101,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const token = authHeader.replace("Bearer ", "");
-  const isServiceRole = token === supabaseServiceKey;
+  const isServiceRole = llamadaInterna(req);
 
   if (!isServiceRole) {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;

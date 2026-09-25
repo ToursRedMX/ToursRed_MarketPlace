@@ -11,10 +11,17 @@ function load(name, globals = {}) {
   }).outputText, context);
   return context.exports;
 }
-const cfdi = load('cfdiAuth', { Deno: { env: { get: () => 'service-key' } } });
+const denoServicio = { Deno: { env: { get: () => 'service-key' } } };
+const { llamadaInterna } = load('auth', { ...denoServicio, Request, Headers });
+const cfdi = load('cfdiAuth', { ...denoServicio, llamadaInterna });
 const cfdiCases = [
   { token: '', status: 401, calls: 0 },
   { token: 'service-key', status: 200, calls: 0 },
+  // verify_jwt = true: el gateway cambia el Bearer por un JWT acunado y la
+  // llave solo sobrevive en `apikey`. Hasta el 25-sep-2026 esto daba 401 y
+  // cancel-cfdi rechazaba a process-traveler-cancellation.
+  { token: 'jwt-acunado-por-el-gateway', apikey: 'service-key', status: 200, calls: 0 },
+  { apikey: 'sb_publishable_x', role: 'admin', status: 200 },
   { role: 'admin', status: 200 }, { role: 'super_admin', status: 200 },
   { role: 'traveler', owner: 'caller', status: 200 },
   { role: 'agency', owner: 'caller', status: 200 },
@@ -46,7 +53,9 @@ for (const test of cfdiCases) {
       return q;
     },
   };
-  const req = new Request('https://example.test', { headers: { Authorization: `Bearer ${test.token ?? 'user-token'}` } });
+  const headers = { Authorization: `Bearer ${test.token ?? 'user-token'}` };
+  if (test.apikey) headers.apikey = test.apikey;
+  const req = new Request('https://example.test', { headers });
   const result = await cfdi.authorizeCfdiRequest(client, req, { ownerUserId: test.owner, resource: 'test' });
   assert.equal(result.allowed ? 200 : result.response.status, test.status);
   assert.equal(authCalls, test.calls ?? 1);

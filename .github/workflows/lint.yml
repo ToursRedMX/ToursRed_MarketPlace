@@ -118,6 +118,12 @@ jobs:
       - name: Verify x-correlation-id reaches PostgREST but not Edge Functions
         run: node scripts/test-correlacion-front.mjs
 
+      - name: Verify service-role callers are recognized by apikey, not only Bearer
+        run: node scripts/test-llamada-de-servicio.mjs
+
+      - name: Guard against comparing the Bearer with the service key
+        run: node scripts/check-llamada-de-servicio.mjs
+
       - name: Verify OpenPay customer persistence
         run: node scripts/test-openpay-customer.mjs
 
