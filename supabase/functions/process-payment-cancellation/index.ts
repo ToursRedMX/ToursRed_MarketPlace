@@ -95,6 +95,9 @@ Deno.serve(async (req: Request) => {
       p_set_cancelled_at: true,
       p_cancellation_type: "payment_cancelled",
       p_cancellation_refund_amount: toursredCashUsed,
+      // El monto es solo lo pagado en Cash, sin el valor de los puntos: la
+      // RPC no debe restarle nada. Los puntos vuelven al 100% por el trigger.
+      p_monto_incluye_puntos: false,
     });
 
     if (rpcError || !rpcResult?.success) {

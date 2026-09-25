@@ -254,9 +254,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     } else if (response === "rejected") {
       console.log("🔴 PROCESANDO RECHAZO...");
 
-      const refundAmount = Number(booking.deposit_amount);
-      const toursredCashUsed = Number(booking.toursred_cash_used || 0);
-      const totalRefund = refundAmount + toursredCashUsed;
+      // `deposit_amount` ya incluye lo pagado con Cash y con puntos: sumarle
+      // `toursred_cash_used` devolvia el Cash dos veces (una reserva de $500
+      // pagada con wallet devolvia $1,000). La RPC separa la parte en puntos.
+      const totalRefund = Number(booking.deposit_amount || 0);
 
       const { data: refundResult, error: refundError } = await supabase.rpc(
         "process_cancellation_refund",
