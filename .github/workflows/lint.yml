@@ -133,6 +133,9 @@ jobs:
       - name: Verify partial cancellations use the tour policy and are not refunded twice
         run: node scripts/test-cancelacion-parcial.mjs
 
+      - name: Verify OAuth and failed logins are recorded
+        run: node scripts/test-registro-de-login.mjs
+
       - name: Verify OpenPay customer persistence
         run: node scripts/test-openpay-customer.mjs
 
