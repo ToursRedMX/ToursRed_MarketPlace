@@ -62,6 +62,43 @@ assert.equal(debeRegistrarLogin('s1', 's1'), false, 'ya registrada: SIGNED_IN re
 assert.equal(debeRegistrarLogin('s2', 's1'), true, 'otra sesion');
 assert.equal(debeRegistrarLogin(null, null), false, 'sin session_id no se registra a ciegas');
 
+// ── El servidor decide el metodo con el amr del token ──────────────────────
+// El 25-sep-2026 cuatro logins con Google llegaron como 'email_password' desde
+// el front aunque mfa_amr_claims decia 'oauth'. La decision paso al servidor.
+const jsServidor = ts.transpileModule(readFileSync('supabase/functions/_shared/metodoDeSesion.ts', 'utf8'), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText;
+const ctxServidor = { exports: {}, atob, Set };
+vm.runInNewContext(jsServidor, ctxServidor);
+const { metodoDeLaSesion, metodosDelToken } = ctxServidor.exports;
+
+// Token con la forma de GoTrue, con acentos en user_metadata (UTF-8 en base64url).
+const tokenGoTrue = (amr) => 'Bearer ' + [
+  b64url({ alg: 'ES256', kid: 'k' }),
+  Buffer.from(JSON.stringify({
+    sub: 'c67943e8', session_id: 'e440ce6b', aal: 'aal1', amr,
+    user_metadata: { full_name: 'Alan Axel Álvarez Hernández' },
+    app_metadata: { provider: 'email', providers: ['email', 'google'] },
+  }), 'utf8').toString('base64url'),
+  'firma',
+].join('.');
+
+assert.deepEqual([...metodosDelToken(tokenGoTrue([{ method: 'oauth', timestamp: 1 }]))], ['oauth'],
+  'lee el amr de un token real con acentos');
+assert.equal(metodoDeLaSesion(tokenGoTrue([{ method: 'oauth', timestamp: 1 }]), 'google', 'email_password'), 'google',
+  'el caso del 25-sep: el cliente dice email_password, el token oauth, el proveedor google -> google');
+assert.equal(metodoDeLaSesion(tokenGoTrue([{ method: 'oauth', timestamp: 1 }]), 'hackeo', 'x'), 'oauth',
+  'un proveedor desconocido del cliente no se guarda');
+assert.equal(metodoDeLaSesion(tokenGoTrue([{ method: 'password', timestamp: 1 }]), 'google', 'google'), 'email_password',
+  'contrasena manda sobre lo que diga el cliente');
+assert.equal(metodoDeLaSesion(tokenGoTrue([{ method: 'oauth', timestamp: 1 }, { method: 'totp', timestamp: 2 }]), 'azure', null), 'azure',
+  'el factor de MFA no cuenta');
+assert.equal(metodoDeLaSesion('Bearer basura', null, 'email_password'), 'email_password', 'sin amr: lo del cliente');
+assert.equal(metodoDeLaSesion(null, null, undefined), 'email_password', 'sin nada: por defecto');
+// Y el front, con el mismo token, tambien lo lee (si falla en el navegador, el servidor corrige).
+assert.equal(metodoDeLogin(tokenGoTrue([{ method: 'oauth', timestamp: 1 }]).replace('Bearer ', ''), 'google'), 'google',
+  'el helper del front con un token real con acentos');
+
 // ── El front registra antes de la guarda ───────────────────────────────────
 const sin = (f) => readFileSync(f, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
 const auth = sin('src/context/AuthContext.tsx');
@@ -82,6 +119,13 @@ assert.match(fn, /const failedUserId = isServiceRole \? \(body\.user_id \?\? nul
 assert.match(fn, /error: failedInsertError/, 'el insert de failed_login revisa su error');
 assert.match(fn, /onConflict: "session_id", ignoreDuplicates: true/,
   'el login es idempotente por session_id: dos pestanas no pueden duplicar la fila');
+assert.match(fn, /metodoDeLaSesion\(authHeader, body\.oauth_provider, login_method\)/,
+  'el servidor decide el metodo con el token, no con lo que diga el cliente');
+// Dentro del upsert de user_sessions, no solo en el metadata de la bitacora:
+// una primera version de esta asercion miraba el archivo entero y dejo
+// sobrevivir una mutacion que quitaba el valor del upsert.
+const upsertSesion = fn.slice(fn.indexOf('from("user_sessions").upsert('), fn.indexOf('onConflict: "session_id"'));
+assert.match(upsertSesion, /login_method: metodoFinal,/, 'user_sessions guarda lo que decidio el servidor');
 assert.match(fn, /duplicado: true/, 'una sesion ya registrada no escribe un segundo LOGIN en la bitacora');
 const indice = readFileSync('supabase/migrations/20260926060000_user_sessions_una_fila_por_sesion.sql', 'utf8');
 assert.match(indice, /CREATE UNIQUE INDEX IF NOT EXISTS user_sessions_session_id_key\s+ON public\.user_sessions \(session_id\)/,
@@ -92,4 +136,4 @@ const toml = readFileSync('supabase/config.toml', 'utf8');
 assert.match(toml, /\[functions\."record-session-event"\]\s*\nverify_jwt = false/,
   'record-session-event tiene que estar declarada con verify_jwt = false: sin declarar, el CLI la despliega en true');
 
-console.log('Registro de login: 22 casos de helpers y 11 comprobaciones de uso.');
+console.log('Registro de login: 30 casos de helpers y 13 comprobaciones de uso.');
