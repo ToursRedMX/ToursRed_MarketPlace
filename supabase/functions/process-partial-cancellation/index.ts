@@ -92,7 +92,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, status, user_id, total_price, deposit_amount, points_earned, points_used, agency_id,
         has_payment_plan, travel_insurance_included, travel_insurance_cost,
-        selected_date, selected_time, approval_status,
+        selected_date, selected_time, approval_status, slot_id, selected_seats,
         tours (id, name, start_date, cancellation_not_allowed, tour_type,
                flexible_hours, flexible_refund_percentage, moderate_hours, moderate_refund_percentage),
         agencies (id, user_id)
@@ -382,17 +382,46 @@ Deno.serve(async (req: Request) => {
     const bookingUpdate: Record<string, any> = {
       has_partial_cancellations: true,
       active_travelers_count: newActiveCount,
+      // trg_update_slot_booked_count (y el conteo de disponibilidad para tours
+      // sin slot en create_booking_atomic) usan bookings.travelers_count, no
+      // active_travelers_count, para recalcular cupo. Sin este campo la
+      // cancelacion parcial nunca liberaba lugar: el tour seguia mostrando el
+      // cupo de antes de cancelar.
+      travelers_count: newActiveCount,
     };
     // Reduce travel_insurance_cost by the refunded amount to prevent double refunds
     if (policy.insuranceRefund > 0) {
       bookingUpdate.travel_insurance_cost = Math.max(0, insuranceCost - policy.insuranceRefund);
     }
+
+    // Libera tantos asientos como viajeros cancelados. booking_travelers no
+    // guarda que asiento le toco a cada quien, asi que se liberan los ultimos
+    // N de bookings.selected_seats (orden estable, sin necesidad de mapeo).
+    const currentSeats: number[] = ((booking as any).selected_seats as number[] | null) || [];
+    let seatsToRelease: number[] = [];
+    if (currentSeats.length > 0) {
+      seatsToRelease = currentSeats.slice(-travelerIds.length);
+      const remainingSeats = currentSeats.slice(0, currentSeats.length - seatsToRelease.length);
+      bookingUpdate.selected_seats = remainingSeats.length > 0 ? remainingSeats : null;
+    }
+
     const { error: updateBookingError } = await supabase
       .from("bookings")
       .update(bookingUpdate)
       .eq("id", bookingId);
 
     if (updateBookingError) return err("Error actualizando reserva: " + updateBookingError.message);
+
+    if (seatsToRelease.length > 0) {
+      const { error: seatReleaseError } = await supabase
+        .from("slot_seat_status")
+        .delete()
+        .eq("booking_id", bookingId)
+        .in("seat_number", seatsToRelease);
+      if (seatReleaseError) {
+        console.error("Error liberando asientos de cancelación parcial (no crítico):", seatReleaseError);
+      }
+    }
 
     // 7. Penalty record when applicable
     if (
