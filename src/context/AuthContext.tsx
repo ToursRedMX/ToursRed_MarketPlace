@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as Sentry from '@sentry/react';
 import { supabase, UserRole } from '../lib/supabase';
+import type { Session } from '@supabase/supabase-js';
+import {
+  CLAVE_ULTIMO_LOGIN_REGISTRADO,
+  debeRegistrarLogin,
+  metodoDeLogin,
+  sessionIdDeToken,
+  vieneDeOAuth,
+} from '../utils/registroDeLogin';
 
 export interface AdminPermissions {
   canManageAgencies: boolean;
@@ -79,6 +87,40 @@ async function callRecordSessionEvent(payload: Record<string, unknown>): Promise
   } catch {
     // best-effort — never throw
   }
+}
+
+// Se evalua al cargar el modulo, antes de que supabase-js limpie la URL al
+// terminar el intercambio del codigo de OAuth.
+const VIENE_DE_OAUTH = typeof window !== 'undefined' && vieneDeOAuth(window.location.href);
+
+/**
+ * Registra el login una sola vez por sesion de GoTrue. Ver
+ * src/utils/registroDeLogin.ts para por que.
+ */
+function registrarLoginUnaVez(session: Session | null): void {
+  if (!session?.user) return;
+  const sessionId = sessionIdDeToken(session.access_token);
+  let ultimo: string | null = null;
+  try {
+    ultimo = window.localStorage.getItem(CLAVE_ULTIMO_LOGIN_REGISTRADO);
+  } catch {
+    // almacenamiento bloqueado: se registra igual; a lo mas, un duplicado
+  }
+  if (!debeRegistrarLogin(sessionId, ultimo)) return;
+  try {
+    if (sessionId) window.localStorage.setItem(CLAVE_ULTIMO_LOGIN_REGISTRADO, sessionId);
+  } catch {
+    // ver arriba
+  }
+  callRecordSessionEvent({
+    event_type: 'login',
+    user_id: session.user.id,
+    email: session.user.email,
+    session_id: sessionId ?? undefined,
+    device_fingerprint: computeDeviceFingerprint(),
+    user_agent: navigator.userAgent,
+    login_method: metodoDeLogin(session.user),
+  });
 }
 
 export interface AgencyStaffPermissions {
@@ -905,6 +947,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (authUser) {
           initializedUserIdRef.current = authUser.id;
         }
+        // Retorno de OAuth: la sesion llega por la URL y el SIGNED_IN puede
+        // salir por la guarda de abajo. Una recarga normal NO es un login.
+        if (session && VIENE_DE_OAUTH) {
+          registrarLoginUnaVez(session);
+        }
 
         if (mounted) {
           // forceRefresh=true para siempre consultar BD en la carga inicial,
@@ -929,24 +976,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (event === 'SIGNED_IN') {
         const incomingUserId = session?.user?.id;
+        // Se registra ANTES de la guarda de «mismo usuario»: al volver de
+        // Google, initializeAuth ya marco al usuario y la guarda sale aqui
+        // sin registrar nada. registrarLoginUnaVez deduplica por sesion.
+        registrarLoginUnaVez(session);
         if (incomingUserId && incomingUserId === initializedUserIdRef.current) {
           return;
         }
         initializedUserIdRef.current = incomingUserId ?? null;
         updateAuthState(session?.user ?? null, true).catch(() => {});
-
-        // Record login session event (best-effort)
-        if (session?.user) {
-          callRecordSessionEvent({
-            event_type: 'login',
-            user_id: session.user.id,
-            email: session.user.email,
-            session_id: session.access_token ? undefined : undefined,
-            device_fingerprint: computeDeviceFingerprint(),
-            user_agent: navigator.userAgent,
-            login_method: 'email_password',
-          });
-        }
       } else if (event === 'TOKEN_REFRESHED') {
         if (session?.user) {
           setUser(session.user);

@@ -12,6 +12,13 @@ project_id = "ToursRed_MarketPlace"
 [functions."check-login-risk"]
 verify_jwt = false
 
+# failed_login llega SIN sesion (quien lo manda acaba de fallar el login). Con
+# verify_jwt = true (el default del CLI al no estar declarada) el gateway lo
+# rechazaba con 401 y failed_login_attempts no tuvo filas desde el 16-jul-2026.
+# login/logout siguen exigiendo JWT valido: lo verifica la funcion con getUser().
+[functions."record-session-event"]
+verify_jwt = false
+
 [functions."cleanup-incomplete-google-users"]
 verify_jwt = false
 
