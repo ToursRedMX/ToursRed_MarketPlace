@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { enmascararIp, extraerIpDelCliente } from "../_shared/contextoAuditoria.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { llamadaInterna } from "../_shared/auth.ts";
+import { metodoDeLaSesion, metodosDelToken } from "../_shared/metodoDeSesion.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,6 +30,8 @@ interface SessionEventBody {
   user_agent?: string;
   device_fingerprint?: string;
   login_method?: string;
+  /** Proveedor OAuth segun la ruta de regreso; el token no lo trae. */
+  oauth_provider?: string;
   failure_reason?: string;
   browser?: string;
   browser_version?: string;
@@ -44,6 +47,24 @@ interface ParsedUA {
   os: string | null;
   os_version: string | null;
   device_type: "mobile" | "tablet" | "desktop" | null;
+}
+
+/**
+ * `session_id` del JWT de GoTrue. Solo se usa DESPUES de que getUser() valido
+ * el token, asi que no hace falta verificar la firma aqui: es leer un claim de
+ * un token ya aceptado. null si no hay token o no trae el claim.
+ */
+function sessionIdDelToken(authHeader: string | null): string | null {
+  try {
+    const token = (authHeader ?? "").replace(/^Bearer\s+/i, "");
+    const cuerpo = token.split(".")[1];
+    if (!cuerpo) return null;
+    const json = atob(cuerpo.replace(/-/g, "+").replace(/_/g, "/"));
+    const sid = JSON.parse(json)?.session_id;
+    return typeof sid === "string" ? sid : null;
+  } catch {
+    return null;
+  }
 }
 
 function parseUserAgent(ua: string | undefined | null): ParsedUA {
@@ -165,10 +186,19 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey, sinUserAgentDeNavegador(opcionesConContexto(req)));
 
-    // Verify caller identity: require a valid JWT (user session or anon-key session).
-    // The service_role key is also accepted for internal calls.
+    // Verify caller identity: login/logout require a valid user JWT; the
+    // service_role key is also accepted for internal calls.
+    //
+    // failed_login NO lleva sesion, por definicion: quien lo manda acaba de
+    // fallar el login. Hasta el 25-sep-2026 esta funcion exigia Authorization
+    // para todo (y ademas estaba en verify_jwt = true), asi que LoginPage, que
+    // llama sin sesion, recibia 401 y `failed_login_attempts` no tuvo una fila
+    // desde el 16-jul-2026. `check-login-risk` decide la demora por usuario y
+    // el bloqueo por IP leyendo esa tabla: la proteccion contra fuerza bruta
+    // del login estuvo ciega mas de dos meses.
+    const esIntentoFallido = event_type === "failed_login";
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader && !esIntentoFallido) {
       return new Response(
         JSON.stringify({ error: "No autorizado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -181,7 +211,7 @@ Deno.serve(async (req: Request) => {
     let verifiedUserId: string | null = null;
     let verifiedEmail: string | null = null;
 
-    if (!isServiceRole) {
+    if (!isServiceRole && !esIntentoFallido && authHeader) {
       const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
       const userClient = createClient(supabaseUrl, anonKey, opcionesConContexto(req, {
         global: { headers: { Authorization: authHeader } },
@@ -240,16 +270,39 @@ Deno.serve(async (req: Request) => {
     if (event_type === "failed_login") {
       // For failed_login, use the email from the body (the email that failed to log in).
       // user_id may or may not be known — keep it from the body if provided.
-      const failedEmail = body.email ?? null;
-      const failedUserId = body.user_id ?? null;
+      //
+      // Sin sesion no hay identidad verificada: el user_id del cuerpo lo pone
+      // quien quiera, asi que solo se acepta de una llamada interna. El correo
+      // se valida para no llenar la tabla de basura; la IP sale de las
+      // cabeceras del servidor, no del cuerpo.
+      const failedEmail = typeof body.email === "string" && body.email.length <= 254 &&
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())
+        ? body.email.trim().toLowerCase()
+        : null;
+      if (!failedEmail) {
+        return new Response(
+          JSON.stringify({ error: "email invalido" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const failedUserId = isServiceRole ? (body.user_id ?? null) : null;
 
-      await supabase.from("failed_login_attempts").insert({
+      const { error: failedInsertError } = await supabase.from("failed_login_attempts").insert({
         user_id: failedUserId,
         email: failedEmail,
         ip_address: ip_address ?? null,
         device_fingerprint: device_fingerprint ?? null,
         failure_reason: failure_reason ?? "unknown",
       });
+      if (failedInsertError) {
+        // Antes no se revisaba: asi se pudo perder esta tabla dos meses sin
+        // que nadie lo viera.
+        console.error("record-session-event: no se pudo registrar el intento fallido:", failedInsertError);
+        return new Response(
+          JSON.stringify({ error: "No se pudo registrar el intento" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       await supabase.rpc("insert_audit_log", {
         p_tenant_type: "system",
@@ -261,7 +314,7 @@ Deno.serve(async (req: Request) => {
         p_ip_address: ip_address ?? null,
         p_ip_masked: ipMasked,
         p_user_agent: user_agent ?? null,
-        p_session_id: session_id ?? null,
+        p_session_id: session_id ?? sessionIdDelToken(authHeader),
         p_metadata: JSON.stringify({ failure_reason, device_fingerprint }),
         p_country: (geoData.country as string) ?? null,
         p_country_code: (geoData.country_code as string) ?? null,
@@ -296,14 +349,31 @@ Deno.serve(async (req: Request) => {
     }
 
     if (event_type === "login") {
-      await supabase.from("user_sessions").insert({
+      // Idempotente por session_id (indice unico, migracion 20260926060000): el
+      // 25-sep-2026 un mismo login con Google dejo dos filas a 38 ms una de
+      // otra, probablemente dos pestanas recibiendo el mismo SIGNED_IN. La
+      // deduplicacion del front no puede ganarle a esa carrera; la base si.
+      const sesionId = session_id ?? sessionIdDelToken(authHeader);
+      const metodoFinal = isServiceRole
+        ? (login_method ?? "email_password")
+        : metodoDeLaSesion(authHeader, body.oauth_provider, login_method);
+      if (!isServiceRole && metodoFinal !== login_method) {
+        // Diagnostico: solo los metodos del amr, nunca el token.
+        console.warn(
+          `record-session-event: el cliente mando login_method=${login_method}, ` +
+          `el token dice amr=[${metodosDelToken(authHeader).join(",")}], se guarda ${metodoFinal}`,
+        );
+      }
+      const { data: sesionNueva, error: sessionInsertError } = await supabase.from("user_sessions").upsert({
         user_id: effectiveUserId,
-        session_id: session_id ?? null,
+        // El front nunca lo mandaba (`session.access_token ? undefined : undefined`).
+        // El token ya paso por getUser(), asi que su claim es confiable.
+        session_id: sesionId,
         ip_address: ip_address ?? null,
         ip_masked: ipMasked,
         user_agent: user_agent ?? null,
         device_fingerprint: device_fingerprint ?? null,
-        login_method,
+        login_method: metodoFinal,
         success: true,
         browser: browser ?? null,
         browser_version: browser_version ?? null,
@@ -312,7 +382,18 @@ Deno.serve(async (req: Request) => {
         device_type: device_type ?? null,
         device_name: device_name ?? null,
         ...geoData,
-      });
+      }, { onConflict: "session_id", ignoreDuplicates: true }).select("id");
+      if (sessionInsertError) {
+        console.error("record-session-event: no se pudo registrar la sesion:", sessionInsertError);
+      }
+      // Si la sesion ya estaba registrada, el upsert no devuelve fila: no se
+      // escribe un segundo LOGIN en la bitacora.
+      if (!sessionInsertError && sesionId && (sesionNueva ?? []).length === 0) {
+        return new Response(
+          JSON.stringify({ ok: true, duplicado: true }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       await supabase.rpc("insert_audit_log", {
         p_tenant_type: "system",
@@ -323,8 +404,8 @@ Deno.serve(async (req: Request) => {
         p_ip_address: ip_address ?? null,
         p_ip_masked: ipMasked,
         p_user_agent: user_agent ?? null,
-        p_session_id: session_id ?? null,
-        p_metadata: JSON.stringify({ login_method, device_fingerprint, device_type }),
+        p_session_id: session_id ?? sessionIdDelToken(authHeader),
+        p_metadata: JSON.stringify({ login_method: metodoFinal, device_fingerprint, device_type }),
         p_country: (geoData.country as string) ?? null,
         p_country_code: (geoData.country_code as string) ?? null,
         p_city: (geoData.city as string) ?? null,
@@ -356,7 +437,7 @@ Deno.serve(async (req: Request) => {
         p_ip_address: ip_address ?? null,
         p_ip_masked: ipMasked,
         p_user_agent: user_agent ?? null,
-        p_session_id: session_id ?? null,
+        p_session_id: session_id ?? sessionIdDelToken(authHeader),
         p_metadata: null,
       });
     }
