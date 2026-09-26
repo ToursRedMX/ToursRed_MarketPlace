@@ -122,6 +122,9 @@ function registrarLoginUnaVez(session: Session | null): void {
     device_fingerprint: computeDeviceFingerprint(),
     user_agent: navigator.userAgent,
     login_method: metodoDeLogin(session.access_token, PROVEEDOR_DEL_RETORNO),
+    // El servidor decide el metodo con el amr del token verificado; esto es
+    // solo el nombre del proveedor, que el token no trae.
+    oauth_provider: PROVEEDOR_DEL_RETORNO ?? undefined,
   });
 }
 

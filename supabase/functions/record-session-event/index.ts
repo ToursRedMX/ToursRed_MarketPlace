@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { enmascararIp, extraerIpDelCliente } from "../_shared/contextoAuditoria.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { llamadaInterna } from "../_shared/auth.ts";
+import { metodoDeLaSesion, metodosDelToken } from "../_shared/metodoDeSesion.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,6 +30,8 @@ interface SessionEventBody {
   user_agent?: string;
   device_fingerprint?: string;
   login_method?: string;
+  /** Proveedor OAuth segun la ruta de regreso; el token no lo trae. */
+  oauth_provider?: string;
   failure_reason?: string;
   browser?: string;
   browser_version?: string;
@@ -351,6 +354,16 @@ Deno.serve(async (req: Request) => {
       // otra, probablemente dos pestanas recibiendo el mismo SIGNED_IN. La
       // deduplicacion del front no puede ganarle a esa carrera; la base si.
       const sesionId = session_id ?? sessionIdDelToken(authHeader);
+      const metodoFinal = isServiceRole
+        ? (login_method ?? "email_password")
+        : metodoDeLaSesion(authHeader, body.oauth_provider, login_method);
+      if (!isServiceRole && metodoFinal !== login_method) {
+        // Diagnostico: solo los metodos del amr, nunca el token.
+        console.warn(
+          `record-session-event: el cliente mando login_method=${login_method}, ` +
+          `el token dice amr=[${metodosDelToken(authHeader).join(",")}], se guarda ${metodoFinal}`,
+        );
+      }
       const { data: sesionNueva, error: sessionInsertError } = await supabase.from("user_sessions").upsert({
         user_id: effectiveUserId,
         // El front nunca lo mandaba (`session.access_token ? undefined : undefined`).
@@ -360,7 +373,7 @@ Deno.serve(async (req: Request) => {
         ip_masked: ipMasked,
         user_agent: user_agent ?? null,
         device_fingerprint: device_fingerprint ?? null,
-        login_method,
+        login_method: metodoFinal,
         success: true,
         browser: browser ?? null,
         browser_version: browser_version ?? null,
@@ -392,7 +405,7 @@ Deno.serve(async (req: Request) => {
         p_ip_masked: ipMasked,
         p_user_agent: user_agent ?? null,
         p_session_id: session_id ?? sessionIdDelToken(authHeader),
-        p_metadata: JSON.stringify({ login_method, device_fingerprint, device_type }),
+        p_metadata: JSON.stringify({ login_method: metodoFinal, device_fingerprint, device_type }),
         p_country: (geoData.country as string) ?? null,
         p_country_code: (geoData.country_code as string) ?? null,
         p_city: (geoData.city as string) ?? null,
