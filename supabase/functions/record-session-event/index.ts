@@ -311,7 +311,7 @@ Deno.serve(async (req: Request) => {
         p_ip_address: ip_address ?? null,
         p_ip_masked: ipMasked,
         p_user_agent: user_agent ?? null,
-        p_session_id: session_id ?? null,
+        p_session_id: session_id ?? sessionIdDelToken(authHeader),
         p_metadata: JSON.stringify({ failure_reason, device_fingerprint }),
         p_country: (geoData.country as string) ?? null,
         p_country_code: (geoData.country_code as string) ?? null,
@@ -346,11 +346,16 @@ Deno.serve(async (req: Request) => {
     }
 
     if (event_type === "login") {
-      const { error: sessionInsertError } = await supabase.from("user_sessions").insert({
+      // Idempotente por session_id (indice unico, migracion 20260926060000): el
+      // 25-sep-2026 un mismo login con Google dejo dos filas a 38 ms una de
+      // otra, probablemente dos pestanas recibiendo el mismo SIGNED_IN. La
+      // deduplicacion del front no puede ganarle a esa carrera; la base si.
+      const sesionId = session_id ?? sessionIdDelToken(authHeader);
+      const { data: sesionNueva, error: sessionInsertError } = await supabase.from("user_sessions").upsert({
         user_id: effectiveUserId,
         // El front nunca lo mandaba (`session.access_token ? undefined : undefined`).
         // El token ya paso por getUser(), asi que su claim es confiable.
-        session_id: session_id ?? sessionIdDelToken(authHeader),
+        session_id: sesionId,
         ip_address: ip_address ?? null,
         ip_masked: ipMasked,
         user_agent: user_agent ?? null,
@@ -364,9 +369,17 @@ Deno.serve(async (req: Request) => {
         device_type: device_type ?? null,
         device_name: device_name ?? null,
         ...geoData,
-      });
+      }, { onConflict: "session_id", ignoreDuplicates: true }).select("id");
       if (sessionInsertError) {
         console.error("record-session-event: no se pudo registrar la sesion:", sessionInsertError);
+      }
+      // Si la sesion ya estaba registrada, el upsert no devuelve fila: no se
+      // escribe un segundo LOGIN en la bitacora.
+      if (!sessionInsertError && sesionId && (sesionNueva ?? []).length === 0) {
+        return new Response(
+          JSON.stringify({ ok: true, duplicado: true }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       await supabase.rpc("insert_audit_log", {
@@ -378,7 +391,7 @@ Deno.serve(async (req: Request) => {
         p_ip_address: ip_address ?? null,
         p_ip_masked: ipMasked,
         p_user_agent: user_agent ?? null,
-        p_session_id: session_id ?? null,
+        p_session_id: session_id ?? sessionIdDelToken(authHeader),
         p_metadata: JSON.stringify({ login_method, device_fingerprint, device_type }),
         p_country: (geoData.country as string) ?? null,
         p_country_code: (geoData.country_code as string) ?? null,
@@ -411,7 +424,7 @@ Deno.serve(async (req: Request) => {
         p_ip_address: ip_address ?? null,
         p_ip_masked: ipMasked,
         p_user_agent: user_agent ?? null,
-        p_session_id: session_id ?? null,
+        p_session_id: session_id ?? sessionIdDelToken(authHeader),
         p_metadata: null,
       });
     }
