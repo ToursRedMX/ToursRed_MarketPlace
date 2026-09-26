@@ -18,7 +18,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, globSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 
@@ -77,6 +77,18 @@ assert.doesNotMatch(parcial, /rpc\("update_wallet_balance"/,
   'la parcial no acredita Cash por su cuenta: asi convertia puntos en dinero');
 assert.match(parcial, /points_share:\s*pointsShare/, 'la parcial registra los puntos que consumio');
 
+// ── 3b. reparto_parcial multiplica antes de dividir ─────────────────────────
+// La primera version hacia floor(puntos * least(1, parte / principal)): parte/
+// principal suele ser periodico y el floor perdia un punto por parcial (44bec1b8:
+// 22,499 en vez de 22,500). Se mira la ULTIMA migracion que define la funcion.
+const definiciones = globSync('supabase/migrations/*.sql').sort()
+  .filter((f) => /CREATE OR REPLACE FUNCTION public\.reparto_parcial\(/.test(readFileSync(f, 'utf8')));
+const ultima = readFileSync(definiciones.at(-1), 'utf8');
+assert.match(ultima, /\*\s*least\(v_parte, p_principal\)\s*\/\s*p_principal/,
+  `${definiciones.at(-1)}: reparto_parcial tiene que multiplicar antes de dividir`);
+assert.doesNotMatch(ultima, /least\(1, v_parte \/ p_principal\)/,
+  `${definiciones.at(-1)}: dividir primero pierde un punto por truncamiento`);
+
 // ── 4. La base descuenta lo consumido; el modal tambien ────────────────────
 const migracion = readFileSync('supabase/migrations/20260925240000_cancelacion_parcial_por_medio_y_saldo.sql', 'utf8');
 assert.match(migracion, /v_consumido := public\.consumido_por_parciales\(p_booking_id\)/,
@@ -87,4 +99,4 @@ const modal = readFileSync('src/pages/traveler/TravelerBookings.tsx', 'utf8');
 assert.match(modal, /politica\.refundAmountToTraveler - pct \* principalConsumido/,
   'la vista previa de la cancelacion total resta lo consumido por parciales');
 
-console.log(`Cancelacion parcial: ${casos.length} casos de politica, 4 de fecha y 10 comprobaciones de uso.`);
+console.log(`Cancelacion parcial: ${casos.length} casos de politica, 4 de fecha y 12 comprobaciones de uso.`);
