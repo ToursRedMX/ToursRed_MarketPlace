@@ -651,8 +651,9 @@ const TourPromotionsManager: React.FC<TourPromotionsManagerProps> = ({ tourId, a
                   <button
                     type="button"
                     onClick={() => handleDelete(promo.id)}
-                    title="Eliminar"
-                    className="p-1.5 rounded hover:bg-white transition-colors"
+                    disabled={promo.times_used > 0}
+                    title={promo.times_used > 0 ? 'Ya tiene reservas: solo puedes desactivarla' : 'Eliminar'}
+                    className="p-1.5 rounded hover:bg-white transition-colors disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
                   >
                     <Trash2 className="w-4 h-4 text-red-400 hover:text-red-600" />
                   </button>
