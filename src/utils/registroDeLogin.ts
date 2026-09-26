@@ -29,11 +29,47 @@ export function sessionIdDeToken(accessToken: string | null | undefined): string
   }
 }
 
-/** 'email_password' para correo, y el proveedor tal cual para OAuth (p. ej. 'google'). */
-export function metodoDeLogin(user: { app_metadata?: { provider?: string } } | null | undefined): string {
-  const proveedor = user?.app_metadata?.provider;
-  if (!proveedor || proveedor === 'email') return 'email_password';
-  return proveedor;
+/**
+ * Proveedor OAuth segun la ruta de regreso: cada boton de AuthContext vuelve a
+ * su propia ruta (`/auth/google-callback`, `/auth/azure-callback`...). null si
+ * la URL no es un retorno de OAuth.
+ */
+export function proveedorDelRetorno(href: string): string | null {
+  const m = /\/auth\/(google|azure|x|facebook|linkedin)-callback\b/.exec(href);
+  if (!m) return null;
+  return m[1] === 'linkedin' ? 'linkedin_oidc' : m[1];
+}
+
+/**
+ * Metodo con el que se abrio ESTA sesion.
+ *
+ * No sale de `user.app_metadata.provider`: ese es el PRIMER proveedor con el
+ * que se creo la cuenta, no el de esta sesion. El 25-sep-2026 un login con
+ * Google quedo como 'email_password' porque la cuenta nacio con correo (y
+ * tiene seis proveedores vinculados).
+ *
+ * Sale del claim `amr` del token (lo firma GoTrue): 'password' ->
+ * 'email_password'; 'oauth' -> el proveedor de la ruta de regreso, o 'oauth'
+ * si no se sabe. Se ignoran los factores de MFA (totp), que se agregan
+ * encima del primero.
+ */
+export function metodoDeLogin(accessToken: string | null | undefined, proveedorRetorno: string | null): string {
+  let metodo: string | null = null;
+  try {
+    const cuerpo = (accessToken ?? '').split('.')[1];
+    const amr = cuerpo ? JSON.parse(atob(cuerpo.replace(/-/g, '+').replace(/_/g, '/')))?.amr : null;
+    if (Array.isArray(amr)) {
+      const primeros = amr
+        .filter((a) => a && typeof a.method === 'string' && a.method !== 'totp' && !a.method.startsWith('mfa'))
+        .sort((a, b) => Number(b.timestamp ?? 0) - Number(a.timestamp ?? 0));
+      metodo = primeros[0]?.method ?? null;
+    }
+  } catch {
+    metodo = null;
+  }
+  if (metodo === 'oauth') return proveedorRetorno ?? 'oauth';
+  if (metodo === 'password' || metodo === null) return 'email_password';
+  return metodo;
 }
 
 /** true si la URL es el retorno de un proveedor OAuth (PKCE `code=` o implicito `access_token=`). */

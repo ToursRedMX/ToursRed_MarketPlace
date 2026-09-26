@@ -6,6 +6,7 @@ import {
   CLAVE_ULTIMO_LOGIN_REGISTRADO,
   debeRegistrarLogin,
   metodoDeLogin,
+  proveedorDelRetorno,
   sessionIdDeToken,
   vieneDeOAuth,
 } from '../utils/registroDeLogin';
@@ -92,6 +93,7 @@ async function callRecordSessionEvent(payload: Record<string, unknown>): Promise
 // Se evalua al cargar el modulo, antes de que supabase-js limpie la URL al
 // terminar el intercambio del codigo de OAuth.
 const VIENE_DE_OAUTH = typeof window !== 'undefined' && vieneDeOAuth(window.location.href);
+const PROVEEDOR_DEL_RETORNO = typeof window !== 'undefined' ? proveedorDelRetorno(window.location.href) : null;
 
 /**
  * Registra el login una sola vez por sesion de GoTrue. Ver
@@ -119,7 +121,7 @@ function registrarLoginUnaVez(session: Session | null): void {
     session_id: sessionId ?? undefined,
     device_fingerprint: computeDeviceFingerprint(),
     user_agent: navigator.userAgent,
-    login_method: metodoDeLogin(session.user),
+    login_method: metodoDeLogin(session.access_token, PROVEEDOR_DEL_RETORNO),
   });
 }
 
