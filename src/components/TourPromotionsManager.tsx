@@ -261,14 +261,28 @@ const TourPromotionsManager: React.FC<TourPromotionsManagerProps> = ({ tourId, a
   const handleDelete = async (promoId: string) => {
     if (!confirm('¿Estás seguro de que quieres eliminar esta promoción?')) return;
 
-    const { error: deleteError } = await supabase
+    setError('');
+    setSuccess('');
+
+    const { data: deleteData, error: deleteError } = await supabase
       .from('tour_promotions')
       .delete()
-      .eq('id', promoId);
+      .eq('id', promoId)
+      .select();
 
-    if (!deleteError) {
-      await loadPromotions();
+    if (deleteError) {
+      console.error('Error al eliminar promoción:', deleteError);
+      setError(deleteError.message || 'Error al eliminar la promoción.');
+      return;
     }
+
+    if (!deleteData || deleteData.length === 0) {
+      setError('No se pudo eliminar la promoción. Verifica que tu sesión esté activa y que seas el dueño del tour.');
+      return;
+    }
+
+    setSuccess('Promoción eliminada correctamente.');
+    await loadPromotions();
   };
 
   const getPromotionLabel = (promo: TourPromotion) => {
