@@ -341,7 +341,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Aprobacion normal: solo actualizar approval_status
+    // Aprobacion normal: actualizar approval_status y dar 12h para pagar.
+    // payment_due_at queda NULL en el camino auto-confirmado de arriba porque
+    // ahi el pago ya se completo con wallet/puntos en la misma operacion.
+    const paymentDueAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
     const { error: updateError } = await supabase
       .from("bookings")
       .update({
@@ -349,6 +352,7 @@ Deno.serve(async (req: Request) => {
         approval_notes: notes || null,
         approved_at: now,
         approved_by: user.id,
+        payment_due_at: paymentDueAt,
         updated_at: now,
       })
       .eq("id", booking_id);

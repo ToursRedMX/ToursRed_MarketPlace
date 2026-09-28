@@ -388,7 +388,11 @@ const TourCard: React.FC<TourCardProps> = ({
         {tour.tour_type === 'receptivo' ? (
           <div className="flex items-center text-gray-500 text-sm mb-3">
             <RefreshCw className="w-4 h-4 mr-1 text-teal-600" />
-            <span className="text-teal-700">Disponible según calendario</span>
+            <span className="text-teal-700">
+              {tour.booking_approval_type === 'manual'
+                ? 'A demanda — sujeto a confirmación'
+                : 'Disponible según calendario'}
+            </span>
           </div>
         ) : (
           <div className="flex items-center text-gray-500 text-sm mb-3">

@@ -658,6 +658,7 @@ export const getTours = async (filters: any = {}) => {
       category,
       tour_type,
       activity_type,
+      booking_approval_type,
       agencies(id, name, rating, is_active)
     `;
 
@@ -756,6 +757,7 @@ export const getPopularTours = async (limit = 20) => {
         pet_friendly,
         category,
         tour_type,
+        booking_approval_type,
         agencies(id, name, rating, is_active),
         bookings(id, status)
       `)
@@ -817,6 +819,7 @@ export const getActiveFeaturedTours = async () => {
           pet_friendly,
           category,
           tour_type,
+          booking_approval_type,
           preventa_activa,
           preventa_inicio,
           preventa_fin,
@@ -868,6 +871,7 @@ export const getNewTours = async (limit = 20) => {
         pet_friendly,
         category,
         tour_type,
+        booking_approval_type,
         created_at,
         preventa_activa,
         preventa_inicio,
