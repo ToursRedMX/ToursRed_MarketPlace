@@ -155,6 +155,8 @@ Deno.serve(async (req: Request) => {
       ? "Membresia ToursRed Plus"
       : cfdi.invoice_type === "commission"
       ? "Comision"
+      : cfdi.invoice_type === "featured_slot"
+      ? "Tour Destacado"
       : "Servicio de Viaje";
 
     const folioDisplay = cfdi.folio ? `${cfdi.serie || ""}${cfdi.folio}` : cfdi.id.slice(0, 8).toUpperCase();

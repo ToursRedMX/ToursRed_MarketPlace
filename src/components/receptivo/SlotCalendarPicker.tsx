@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, isPast, addMonths, subMonths, addDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, endOfDay, eachDayOfInterval, isSameMonth, isSameDay, isToday, isPast, addMonths, subMonths, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '../../lib/supabase';
 import { Tour, TourSlot } from '../../types';
@@ -78,12 +78,17 @@ const SlotCalendarPicker: React.FC<SlotCalendarPickerProps> = ({ tour, selectedD
   const startDayOffset = startOfMonth(currentMonth).getDay();
   const blanks = Array.from({ length: startDayOffset });
 
-  const minDate = addDays(new Date(), tour.min_advance_booking_hours ? Math.ceil(tour.min_advance_booking_hours / 24) : 1);
-  const maxDate = addDays(new Date(), tour.max_advance_booking_days || 90);
+  // Horas reales, no dias redondeados: con min_advance_booking_hours=48 exactas,
+  // "manana" debe quedar bloqueado por completo (su fin de dia sigue a menos de
+  // 48h de ahora), pero pasado manana no debe perder medio dia de margen solo
+  // porque Math.ceil(48/24) sumaba dias completos sobre la hora actual.
+  const now = new Date();
+  const minDateTime = new Date(now.getTime() + (tour.min_advance_booking_hours || 0) * 60 * 60 * 1000);
+  const maxDate = addDays(now, tour.max_advance_booking_days || 90);
 
   const isDayDisabled = (date: Date) => {
     if (isPast(date) && !isToday(date)) return true;
-    if (date < minDate) return true;
+    if (endOfDay(date) < minDateTime) return true;
     if (date > maxDate) return true;
     const dateKey = format(date, 'yyyy-MM-dd');
     const avail = availability.get(dateKey);

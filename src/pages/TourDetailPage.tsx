@@ -1166,7 +1166,11 @@ const TourDetailPage: React.FC = () => {
                       {tour.tour_type === 'receptivo' ? 'Disponibilidad' : 'Fechas'}
                     </h4>
                     {tour.tour_type === 'receptivo' ? (
-                      <p className="text-gray-600">Disponible según calendario</p>
+                      <p className="text-gray-600">
+                        {tour.booking_approval_type === 'manual'
+                          ? 'A demanda — sujeto a confirmación'
+                          : 'Disponible según calendario'}
+                      </p>
                     ) : (
                       <p className="text-gray-600">
                         {formatDate(tour.start_date)} - {formatDate(tour.end_date)}

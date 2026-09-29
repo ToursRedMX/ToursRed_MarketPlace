@@ -539,6 +539,12 @@ const BookingFlowStep4: React.FC = () => {
 
     try {
       const bookingDate = flow.selectedSlot?.slot_date || flow.selectedDate || new Date().toISOString().split('T')[0];
+      // Tours "a demanda" (booking_approval_type='manual', tipicamente receptivo):
+      // la reserva entra pendiente de que la agencia la apruebe, y el cobro se
+      // dispara despues (desde approve-booking si se cubre con wallet/puntos, o
+      // por el viajero desde TravelerBookings al aprobarse). Ver create_booking_atomic,
+      // que ya acepta approval_status en el payload y por default usa 'approved'.
+      const isManualApproval = tour.booking_approval_type === 'manual';
 
       const bookingData: Record<string, any> = {
         user_id: user.id,
@@ -569,7 +575,7 @@ const BookingFlowStep4: React.FC = () => {
         selected_time: flow.selectedTime || null,
         status: 'pending',
         payment_status: 'pending',
-        approval_status: 'approved',
+        approval_status: isManualApproval ? 'pending' : 'approved',
         count_adultos: flow.travelerCounts.adultos,
         count_ninos: flow.travelerCounts.ninos,
         count_infantes: flow.travelerCounts.infantes,
@@ -681,6 +687,16 @@ const BookingFlowStep4: React.FC = () => {
         }
       } catch {
         // non-critical
+      }
+
+      // Aprobacion manual: no se dispara ningun cobro aqui, ni siquiera si
+      // wallet/puntos cubririan el 100% (eso lo resuelve approve-booking cuando
+      // la agencia aprueba). El viajero espera en booking-pending y, si se
+      // aprueba, completa el pago desde TravelerBookings sin rehacer el flujo.
+      if (isManualApproval) {
+        resetFlow();
+        navigate(`/booking-pending/${bookingId}`);
+        return;
       }
 
       const isWalletOnly = srvIsFullWallet || srvAmountToCharge === 0;
@@ -837,7 +853,7 @@ const BookingFlowStep4: React.FC = () => {
       }
 
       resetFlow();
-      navigate(`/booking-pending?booking_id=${bookingId}`);
+      navigate(`/booking-pending/${bookingId}`);
     } catch (err: any) {
       setCreateError(err.message || 'Error al procesar la reserva. Intenta de nuevo.');
     } finally {

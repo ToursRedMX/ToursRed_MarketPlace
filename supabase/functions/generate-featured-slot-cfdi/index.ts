@@ -2,7 +2,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
-import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
+import { registrarFallo, vigilarResultado, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -188,9 +188,9 @@ Deno.serve(async (req: Request) => {
         id, agency_id, plan_id, status,
         subtotal, tax_amount, total_amount, payment_confirmed_at,
         featured_plans (name, duration_days, price),
-        agencies (
+        agencies!featured_tour_slots_agency_id_fkey (
           id, name, user_id, rfc, razon_social, regimen_fiscal, postal_code,
-          users (rfc, razon_social, regimen_fiscal, uso_cfdi, codigo_postal_fiscal)
+          users!agencies_user_id_fkey (rfc, razon_social, regimen_fiscal, uso_cfdi, codigo_postal_fiscal)
         )
       `)
       .eq("id", slot_id)
@@ -387,6 +387,24 @@ Deno.serve(async (req: Request) => {
     // Crear asiento contable (fire and forget)
     EdgeRuntime.waitUntil(
       Promise.resolve(supabase.rpc("create_accounting_entry_for_featured_slot", { p_slot_id: slot_id })).then((r: unknown) => vigilarResultado(r, "generate-featured-slot-cfdi -> create_accounting_entry_for_featured_slot")).catch((e: unknown) => registrarFallo("generate-featured-slot-cfdi -> create_accounting_entry_for_featured_slot", e))
+    );
+
+    // Avisar a la agencia que su tour ya quedo destacado, con la vigencia (fire and forget)
+    EdgeRuntime.waitUntil(
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-featured-slot-activation-notification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({ slot_id }),
+      }).then((res: Response) => vigilarRespuesta(res, "generate-featured-slot-cfdi -> send-featured-slot-activation-notification")).catch((e: unknown) => registrarFallo("generate-featured-slot-cfdi -> send-featured-slot-activation-notification", e))
+    );
+
+    // Enviar el CFDI (PDF+XML adjuntos) a la agencia -- mismo mecanismo que usan
+    // generate-booking-cfdi, generate-commission-cfdi, etc. A esta funcion nomas
+    // le faltaba la llamada (fire and forget)
+    EdgeRuntime.waitUntil(
+      Promise.resolve(supabase.functions.invoke("send-cfdi-email", {
+        body: { cfdi_invoice_id: cfdiRecord.id, recipient_type: "agency" },
+      })).then((r: unknown) => vigilarResultado(r, "generate-featured-slot-cfdi -> send-cfdi-email")).catch((e: unknown) => registrarFallo("generate-featured-slot-cfdi -> send-cfdi-email", e))
     );
 
     return new Response(

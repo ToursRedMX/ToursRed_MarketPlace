@@ -17,20 +17,20 @@ import SlotCalendarPicker from '../../components/receptivo/SlotCalendarPicker';
 import SlotTimePicker from '../../components/receptivo/SlotTimePicker';
 import MinTravelersAlert from '../../components/receptivo/MinTravelersAlert';
 
-const getPrecioPorCategoria = (tour: Tour, categoria: string): number => {
+const getPrecioPorCategoria = (tour: Tour, categoria: string, preventaRatio: number = 1): number => {
   switch (categoria) {
     case 'adulto':
-      return tour.precio_adulto ?? tour.price;
+      return (tour.precio_adulto ?? tour.price) * preventaRatio;
     case 'nino':
-      return tour.precio_nino ?? 0;
+      return (tour.precio_nino ?? 0) * preventaRatio;
     case 'infante':
-      return tour.precio_infante ?? 0;
+      return (tour.precio_infante ?? 0) * preventaRatio;
     case 'adulto_mayor':
-      return tour.precio_adulto_mayor ?? tour.precio_adulto ?? tour.price;
+      return (tour.precio_adulto_mayor ?? tour.precio_adulto ?? tour.price) * preventaRatio;
     case 'mascota':
       return tour.precio_mascota ?? 0;
     default:
-      return tour.price;
+      return tour.price * preventaRatio;
   }
 };
 
@@ -244,6 +244,16 @@ const BookingFlowStep1: React.FC = () => {
     return Math.max(0, tour.price - tour.preventa_descuento_valor);
   })();
 
+  // Mismo ratio que create_booking_atomic (20260929030000) y que
+  // BookingForm.tsx en el flujo viejo: solo aplica a socios activos dentro
+  // de la ventana de preventa, y solo a categorias humanas (mascota queda
+  // fuera en el servidor, asi que tampoco se descuenta aqui).
+  const preventaRatio = isEnPreventa && hasActiveMembership && tour.preventa_precio_especial && tour.preventa_descuento_valor
+    ? (tour.preventa_tipo_descuento === 'porcentaje'
+        ? Math.max(0, 1 - tour.preventa_descuento_valor / 100)
+        : (tour.price > 0 ? Math.max(0, tour.price - tour.preventa_descuento_valor) / tour.price : 1))
+    : 1;
+
   return (
     <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
       <div className="p-6">
@@ -286,10 +296,25 @@ const BookingFlowStep1: React.FC = () => {
         {/* Price */}
         <div className="mb-6 p-4 bg-gray-50 rounded-xl">
           <div className="text-sm text-gray-500 mb-1">Precio por persona</div>
-          <div className="text-2xl font-bold text-primary-600">{formatCurrencyMXN(tour.price)}</div>
-          <div className="text-sm text-gray-500 mt-1">
-            Deposito: {formatCurrencyMXN(getDepositAmount(tour.price, tour, flow.selectedDate))} ({getEffectiveDepositPct(tour, flow.selectedDate)}%)
-          </div>
+          {isEnPreventa && hasActiveMembership ? (
+            <>
+              <div className="flex items-baseline gap-2">
+                <div className="text-2xl font-bold text-amber-600">{formatCurrencyMXN(preventaPrecioBase)}</div>
+                <div className="text-sm text-gray-400 line-through">{formatCurrencyMXN(tour.price)}</div>
+              </div>
+              <div className="text-xs text-amber-700 font-medium">Precio de preventa ToursRed Plus</div>
+              <div className="text-sm text-gray-500 mt-1">
+                Deposito: {formatCurrencyMXN(getDepositAmount(preventaPrecioBase, tour, flow.selectedDate))} ({getEffectiveDepositPct(tour, flow.selectedDate)}%)
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-bold text-primary-600">{formatCurrencyMXN(tour.price)}</div>
+              <div className="text-sm text-gray-500 mt-1">
+                Deposito: {formatCurrencyMXN(getDepositAmount(tour.price, tour, flow.selectedDate))} ({getEffectiveDepositPct(tour, flow.selectedDate)}%)
+              </div>
+            </>
+          )}
         </div>
 
         {/* Date / Slot Selection */}
@@ -413,7 +438,7 @@ const BookingFlowStep1: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-medium text-gray-900">Adultos</div>
-                          <div className="text-xs text-gray-500">13-59 anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'adulto'))}/persona</div>
+                          <div className="text-xs text-gray-500">13-59 anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'adulto', preventaRatio))}/persona</div>
                         </div>
                         <div className="flex items-center gap-x-3">
                           <button type="button" onClick={() => handleCountChange('adultos', -1)} disabled={travelerCounts.adultos === 0} className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-primary-600 disabled:opacity-30 disabled:cursor-not-allowed">
@@ -430,7 +455,7 @@ const BookingFlowStep1: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-medium text-gray-900">Ninos</div>
-                          <div className="text-xs text-gray-500">3-12 anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'nino'))}/persona</div>
+                          <div className="text-xs text-gray-500">3-12 anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'nino', preventaRatio))}/persona</div>
                         </div>
                         <div className="flex items-center gap-x-3">
                           <button type="button" onClick={() => handleCountChange('ninos', -1)} disabled={travelerCounts.ninos === 0} className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-primary-600 disabled:opacity-30 disabled:cursor-not-allowed">
@@ -447,7 +472,7 @@ const BookingFlowStep1: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-medium text-gray-900">Infantes</div>
-                          <div className="text-xs text-gray-500">0-2 anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'infante'))}/persona</div>
+                          <div className="text-xs text-gray-500">0-2 anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'infante', preventaRatio))}/persona</div>
                         </div>
                         <div className="flex items-center gap-x-3">
                           <button type="button" onClick={() => handleCountChange('infantes', -1)} disabled={travelerCounts.infantes === 0} className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-primary-600 disabled:opacity-30 disabled:cursor-not-allowed">
@@ -464,7 +489,7 @@ const BookingFlowStep1: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-medium text-gray-900">Adultos Mayores</div>
-                          <div className="text-xs text-gray-500">60+ anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'adulto_mayor'))}/persona</div>
+                          <div className="text-xs text-gray-500">60+ anos &middot; {formatCurrencyMXN(getPrecioPorCategoria(tour, 'adulto_mayor', preventaRatio))}/persona</div>
                         </div>
                         <div className="flex items-center gap-x-3">
                           <button type="button" onClick={() => handleCountChange('adultos_mayores', -1)} disabled={travelerCounts.adultos_mayores === 0} className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-primary-600 disabled:opacity-30 disabled:cursor-not-allowed">
