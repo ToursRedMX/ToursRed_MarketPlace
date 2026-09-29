@@ -18,6 +18,25 @@ Sentry.init({
   environment: import.meta.env.MODE,
   release: import.meta.env.VITE_SENTRY_RELEASE || undefined,
   tunnel: '/sentry-tunnel',
+  // v11 invierte el default de sendDefaultPii: sin esto, Sentry manda cookies
+  // y cuerpos COMPLETOS de request/response por su cuenta (instrumentacion
+  // automatica de browserTracingIntegration), sin pasar por el beforeSend de
+  // abajo -que solo limpia headers, no estas categorias nuevas. Esto
+  // reproduce el comportamiento restrictivo que ya tenia v10 por default.
+  // https://docs.sentry.io/platforms/javascript/migration/v10-to-v11/
+  dataCollection: {
+    userInfo: false,
+    cookies: false,
+    httpHeaders: {
+      request: { deny: ['forwarded', '-ip', 'remote-', 'via', '-user'] },
+      response: { deny: ['forwarded', '-ip', 'remote-', 'via', '-user'] },
+    },
+    httpBodies: [],
+    urlQueryParams: { deny: ['forwarded', '-ip', 'remote-', 'via', '-user'] },
+    genAI: { inputs: false, outputs: false },
+    databaseQueryData: false,
+    graphQL: { document: false, variables: false },
+  },
   integrations: [
     Sentry.browserTracingIntegration(),
     Sentry.replayIntegration({
