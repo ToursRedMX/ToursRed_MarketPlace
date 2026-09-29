@@ -398,6 +398,15 @@ Deno.serve(async (req: Request) => {
       }).then((res: Response) => vigilarRespuesta(res, "generate-featured-slot-cfdi -> send-featured-slot-activation-notification")).catch((e: unknown) => registrarFallo("generate-featured-slot-cfdi -> send-featured-slot-activation-notification", e))
     );
 
+    // Enviar el CFDI (PDF+XML adjuntos) a la agencia -- mismo mecanismo que usan
+    // generate-booking-cfdi, generate-commission-cfdi, etc. A esta funcion nomas
+    // le faltaba la llamada (fire and forget)
+    EdgeRuntime.waitUntil(
+      Promise.resolve(supabase.functions.invoke("send-cfdi-email", {
+        body: { cfdi_invoice_id: cfdiRecord.id, recipient_type: "agency" },
+      })).then((r: unknown) => vigilarResultado(r, "generate-featured-slot-cfdi -> send-cfdi-email")).catch((e: unknown) => registrarFallo("generate-featured-slot-cfdi -> send-cfdi-email", e))
+    );
+
     return new Response(
       JSON.stringify({
         success: true,
