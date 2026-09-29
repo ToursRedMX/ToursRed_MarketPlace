@@ -188,9 +188,9 @@ Deno.serve(async (req: Request) => {
         id, agency_id, plan_id, status,
         subtotal, tax_amount, total_amount, payment_confirmed_at,
         featured_plans (name, duration_days, price),
-        agencies (
+        agencies!featured_tour_slots_agency_id_fkey (
           id, name, user_id, rfc, razon_social, regimen_fiscal, postal_code,
-          users (rfc, razon_social, regimen_fiscal, uso_cfdi, codigo_postal_fiscal)
+          users!agencies_user_id_fkey (rfc, razon_social, regimen_fiscal, uso_cfdi, codigo_postal_fiscal)
         )
       `)
       .eq("id", slot_id)
