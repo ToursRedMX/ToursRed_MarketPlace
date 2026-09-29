@@ -235,6 +235,7 @@ export interface Tour {
   moderate_refund_percentage?: number;
   min_travelers_required?: number;
   min_travelers_confirmation_hours?: number;
+  politica_bajo_minimo?: 'permite_espera' | 'exige_pago_minimo';
   pickup_available?: boolean;
   pickup_free_zone?: string;
   pickup_zones?: any[];

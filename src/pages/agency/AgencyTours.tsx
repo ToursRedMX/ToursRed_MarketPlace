@@ -318,6 +318,7 @@ const AgencyTours: React.FC = () => {
     moderate_refund_percentage: '50',
     min_travelers_required: '1',
     min_travelers_confirmation_hours: '24',
+    politica_bajo_minimo: 'permite_espera' as 'permite_espera' | 'exige_pago_minimo',
   });
 
   const [formData, setFormData] = useState({
@@ -647,6 +648,7 @@ const AgencyTours: React.FC = () => {
       cancellation_refund_percentage: '80',
       min_travelers_required: '1',
       min_travelers_confirmation_hours: '24',
+      politica_bajo_minimo: 'permite_espera',
       flexible_hours: '48',
       flexible_refund_percentage: '100',
       moderate_hours: '24',
@@ -823,6 +825,7 @@ const AgencyTours: React.FC = () => {
         moderate_refund_percentage: tour.moderate_refund_percentage?.toString() || '50',
         min_travelers_required: tour.min_travelers_required?.toString() || '1',
         min_travelers_confirmation_hours: tour.min_travelers_confirmation_hours?.toString() || '24',
+        politica_bajo_minimo: tour.politica_bajo_minimo || 'permite_espera',
       });
     }
     setFormData({
@@ -2166,6 +2169,7 @@ const AgencyTours: React.FC = () => {
         moderate_refund_percentage: isReceptivo ? parseInt(receptivoData.moderate_refund_percentage) : null,
         min_travelers_required: isReceptivo ? parseInt(receptivoData.min_travelers_required) : null,
         min_travelers_confirmation_hours: isReceptivo ? parseInt(receptivoData.min_travelers_confirmation_hours) : null,
+        politica_bajo_minimo: isReceptivo ? receptivoData.politica_bajo_minimo : 'permite_espera',
         pickup_available: isReceptivo ? pickupAvailable : false,
         pickup_free_zone: isReceptivo && pickupAvailable ? pickupFreeZone || null : null,
         pickup_zones: isReceptivo && pickupAvailable && pickupZones.length > 0
@@ -3456,6 +3460,28 @@ const AgencyTours: React.FC = () => {
                           onChange={e => setReceptivoData(prev => ({ ...prev, min_travelers_confirmation_hours: e.target.value }))}
                           className="input" />
                         <p className="text-[11px] text-gray-400 mt-1">Ej: <em>24</em> = se evalúa el mínimo 1 día antes del tour</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Si una reserva no alcanza el mínimo</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setReceptivoData(prev => ({ ...prev, politica_bajo_minimo: 'permite_espera' }))}
+                          className={`p-3 rounded-lg border-2 text-left transition-all ${receptivoData.politica_bajo_minimo === 'permite_espera' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                        >
+                          <p className={`text-sm font-semibold ${receptivoData.politica_bajo_minimo === 'permite_espera' ? 'text-teal-800' : 'text-gray-700'}`}>Permite esperar</p>
+                          <p className="text-xs text-gray-500 mt-0.5">La reserva queda pendiente hasta que se sumen más viajeros (u opcionalmente paguen el mínimo garantizado)</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReceptivoData(prev => ({ ...prev, politica_bajo_minimo: 'exige_pago_minimo' }))}
+                          className={`p-3 rounded-lg border-2 text-left transition-all ${receptivoData.politica_bajo_minimo === 'exige_pago_minimo' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                        >
+                          <p className={`text-sm font-semibold ${receptivoData.politica_bajo_minimo === 'exige_pago_minimo' ? 'text-teal-800' : 'text-gray-700'}`}>Exige pago del mínimo</p>
+                          <p className="text-xs text-gray-500 mt-0.5">No se permite esperar: toda reserva por debajo del mínimo debe pagar los lugares faltantes para crearse</p>
+                        </button>
                       </div>
                     </div>
 
