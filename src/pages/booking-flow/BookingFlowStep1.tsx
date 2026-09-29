@@ -65,6 +65,9 @@ const BookingFlowStep1: React.FC = () => {
   const [error, setError] = useState('');
   const [hasActiveMembership, setHasActiveMembership] = useState(false);
   const [checkingMembership, setCheckingMembership] = useState(true);
+  // Elegir pagar el minimo garantizado cuando politica_bajo_minimo='permite_espera'.
+  // Se resetea si el viajero cambia de slot: el faltante depende del slot elegido.
+  const [payMinimumGuaranteed, setPayMinimumGuaranteed] = useState(false);
   useEffect(() => {
     if (tour) setTour(tour);
   }, [tour, setTour]);
@@ -122,6 +125,15 @@ const BookingFlowStep1: React.FC = () => {
 
   const travelerCounts = flow.travelerCounts;
   const totalTravelers = totalTravelerCount(travelerCounts);
+
+  // Garantia de salida: solo tiene sentido con slot elegido (el minimo se
+  // evalua por salida/horario) y en tours que cobran por persona -un
+  // traslado con precio fijo por vehiculo no gana nada "comprando lugares".
+  const missingForSlot = selectedSlot && tour.min_travelers_required && tour.min_travelers_required > 1
+    ? Math.max(0, tour.min_travelers_required - selectedSlot.booked_count - totalTravelers)
+    : 0;
+  const isUnderMinimum = missingForSlot > 0 && tour.transfer_pricing_mode !== 'per_vehicle';
+  const politicaBajoMinimo = tour.politica_bajo_minimo || 'permite_espera';
 
   const handleCountChange = (categoria: keyof TravelerCounts, delta: number) => {
     updateFlow({
@@ -210,11 +222,19 @@ const BookingFlowStep1: React.FC = () => {
       return;
     }
 
+    // Estimado para mostrar en Step2/Step4; el servidor vuelve a calcular el
+    // faltante de verdad contra tour_slots.booked_count al crear la reserva
+    // (puede cambiar si alguien mas reservo este slot mientras tanto).
+    const finalPaidSpots = isUnderMinimum && (politicaBajoMinimo === 'exige_pago_minimo' || payMinimumGuaranteed)
+      ? totalTravelers + missingForSlot
+      : null;
+
     updateFlow({
       selectedSlot,
       selectedDate: selectedDate ? selectedDate.toISOString().split('T')[0] : null,
       selectedTime: isTransferCustomTime ? customTime : (selectedSlot?.departure_time || null),
       restrictionsAccepted: false,
+      paidSpots: finalPaidSpots,
     });
 
     goToStep(2);
@@ -355,7 +375,7 @@ const BookingFlowStep1: React.FC = () => {
                     tourId={tour.id}
                     selectedDate={selectedDate}
                     selectedSlotId={selectedSlot?.id || null}
-                    onSlotSelect={(slot) => setSelectedSlot(slot as TourSlot)}
+                    onSlotSelect={(slot) => { setSelectedSlot(slot as TourSlot); setPayMinimumGuaranteed(false); }}
                   />
                 )}
                 {selectedSlot && tour.min_travelers_required && tour.min_travelers_required > 1 && (
@@ -364,6 +384,45 @@ const BookingFlowStep1: React.FC = () => {
                     confirmationHours={tour.min_travelers_confirmation_hours || 24}
                     currentSlotBooked={selectedSlot.booked_count}
                   />
+                )}
+                {isUnderMinimum && politicaBajoMinimo === 'exige_pago_minimo' && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm font-semibold text-amber-800">
+                      Este tour requiere un mínimo de {tour.min_travelers_required} lugares pagados para garantizar la salida
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Tu reserva incluye {missingForSlot} lugar{missingForSlot !== 1 ? 'es' : ''} adicional{missingForSlot !== 1 ? 'es' : ''}{' '}
+                      ({formatCurrencyMXN(missingForSlot * getPrecioPorCategoria(tour, 'adulto', preventaRatio))}) para completar el mínimo garantizado.
+                    </p>
+                  </div>
+                )}
+                {isUnderMinimum && politicaBajoMinimo === 'permite_espera' && (
+                  <div className="rounded-xl border border-gray-200 p-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-2">¿Cómo quieres continuar?</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPayMinimumGuaranteed(false)}
+                        className={`p-3 rounded-lg border-2 text-left transition-all ${!payMinimumGuaranteed ? 'border-primary-600 bg-primary-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                      >
+                        <p className={`text-sm font-semibold ${!payMinimumGuaranteed ? 'text-primary-800' : 'text-gray-700'}`}>Esperar a que se complete el grupo</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Tu reserva queda pendiente hasta que se sumen más viajeros</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPayMinimumGuaranteed(true)}
+                        className={`p-3 rounded-lg border-2 text-left transition-all ${payMinimumGuaranteed ? 'border-primary-600 bg-primary-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                      >
+                        <p className={`text-sm font-semibold ${payMinimumGuaranteed ? 'text-primary-800' : 'text-gray-700'}`}>
+                          Confirma de inmediato pagando el mínimo garantizado
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          +{missingForSlot} lugar{missingForSlot !== 1 ? 'es' : ''} adicional{missingForSlot !== 1 ? 'es' : ''}{' '}
+                          ({formatCurrencyMXN(missingForSlot * getPrecioPorCategoria(tour, 'adulto', preventaRatio))}) — tu tour sale asegurado
+                        </p>
+                      </button>
+                    </div>
+                  </div>
                 )}
                 {selectedSlot && (
                   <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 flex items-center gap-2.5">

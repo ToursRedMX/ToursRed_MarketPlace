@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { validateBirthDateForCategory } from '../../utils/birthDateValidation';
 import { totalTravelerCount, FlowTraveler, TravelerCategory, TravelerCounts } from '../../types/booking-flow';
 import type { Tour, FrequentCompanion } from '../../types';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
 
 const CATEGORY_LABELS: Record<TravelerCategory, string> = {
   adulto: 'Adulto',
@@ -118,6 +119,13 @@ const BookingFlowStep2: React.FC = () => {
     : 1;
 
   const totalTravelers = totalTravelerCount(flow.travelerCounts);
+
+  // Lugares extra pagados para completar el minimo garantizado de un tour
+  // compartido (flow.paidSpots, decidido en Step1). No generan viajero: solo
+  // se muestran como una linea de costo aparte. El servidor recalcula el
+  // monto de verdad al crear la reserva; esto es la estimacion de Step1.
+  const extraSpots = tour && flow.paidSpots ? Math.max(0, flow.paidSpots - totalTravelers) : 0;
+  const extraSpotsCost = tour ? extraSpots * getPrecio(tour, 'adulto', preventaRatio) : 0;
 
   useEffect(() => {
     if (!tour || !user || checkingMembership) return;
@@ -289,6 +297,18 @@ const BookingFlowStep2: React.FC = () => {
       <div className="p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Datos de los viajeros</h1>
         <p className="text-sm text-gray-500 mb-6">Paso 2 de 4 — Informacion de cada viajero</p>
+
+        {extraSpots > 0 && (
+          <div className="mb-6 flex justify-between items-center rounded-xl border border-primary-200 bg-primary-50 p-4">
+            <div>
+              <p className="text-sm font-semibold text-primary-800">
+                {extraSpots} lugar{extraSpots !== 1 ? 'es' : ''} adicional{extraSpots !== 1 ? 'es' : ''} para completar el mínimo garantizado
+              </p>
+              <p className="text-xs text-primary-600 mt-0.5">No requieren datos de viajero — solo se cobran para asegurar la salida del tour</p>
+            </div>
+            <span className="font-semibold text-primary-800 whitespace-nowrap ml-4">{formatCurrencyMXN(extraSpotsCost)}</span>
+          </div>
+        )}
 
         {globalError && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start gap-2">

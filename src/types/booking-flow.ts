@@ -126,6 +126,15 @@ export interface BookingFlowState {
 
   restrictionsAccepted: boolean;
 
+  /**
+   * Lugares que se pagan si el viajero elige (o el tour exige) cubrir el
+   * minimo garantizado de un tour compartido por debajo de
+   * min_travelers_required. null = sin buyout (paid_spots = travelers_count,
+   * el comportamiento de siempre). Mismo campo que bookings.paid_spots
+   * (20260929050000).
+   */
+  paidSpots: number | null;
+
   pendingRedirectMessage: string | null;
 }
 
@@ -172,6 +181,7 @@ export const INITIAL_FLOW_STATE: BookingFlowState = {
   partialPaymentAmount: 0,
   bnplProductType: 'aplazo_bnpl',
   restrictionsAccepted: false,
+  paidSpots: null,
   pendingRedirectMessage: null,
 };
 

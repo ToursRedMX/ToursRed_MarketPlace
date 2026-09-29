@@ -43,6 +43,24 @@ const BookingFlowStep4: React.FC = () => {
   const { prices: membershipPrices } = useMembershipPrices();
 
   const tour = flow.tour;
+
+  // Mismo criterio que BookingFlowStep1/Step2: hace falta un preventaRatio
+  // propio aqui porque el precio fijo por vehiculo y los lugares extra de
+  // garantia de salida NO pasan por flow.travelers[].precio_aplicado (que ya
+  // trae el ratio aplicado desde Step2) — son montos que este paso calcula
+  // aparte.
+  const isReceptivo = tour?.tour_type === 'receptivo';
+  const isPrivateTransfer = isReceptivo && tour?.activity_type === 'transport' && tour?.receptivo_modality === 'privado';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isEnPreventa = !!(
+    tour?.preventa_activa &&
+    tour.preventa_inicio &&
+    tour.preventa_fin &&
+    new Date(tour.preventa_inicio + 'T00:00:00') <= today &&
+    new Date(tour.preventa_fin + 'T23:59:59') >= today
+  );
+
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [serviceChargePct, setServiceChargePct] = useState(10);
   const [insurancePricePerDay, setInsurancePricePerDay] = useState(79);
@@ -164,10 +182,29 @@ const BookingFlowStep4: React.FC = () => {
   // Price calculations
   const totalTravelers = totalTravelerCount(flow.travelerCounts);
 
+  const preventaRatio = tour && isEnPreventa && hasMembership && tour.preventa_precio_especial && tour.preventa_descuento_valor
+    ? (tour.preventa_tipo_descuento === 'porcentaje'
+        ? Math.max(0, 1 - tour.preventa_descuento_valor / 100)
+        : (tour.price > 0 ? Math.max(0, tour.price - tour.preventa_descuento_valor) / tour.price : 1))
+    : 1;
+
+  const adultBasePrice = tour ? (tour.precio_adulto ?? tour.price ?? 0) : 0;
+  const esPerVehicle = !!(isPrivateTransfer && tour?.transfer_pricing_mode === 'per_vehicle');
+  // Estimado de Step1; el servidor vuelve a calcular el faltante de verdad
+  // contra tour_slots.booked_count al crear la reserva.
+  const extraSpots = !esPerVehicle && flow.paidSpots ? Math.max(0, flow.paidSpots - totalTravelers) : 0;
+
   const baseTourPrice = useMemo(() => {
     if (!tour) return 0;
-    return flow.travelers.reduce((sum, t) => sum + (t.precio_aplicado || 0), 0);
-  }, [tour, flow.travelers]);
+    if (esPerVehicle) {
+      // Precio fijo por vehiculo: reemplaza la suma por viajero, igual que
+      // create_booking_atomic (20260929060000).
+      return adultBasePrice * preventaRatio;
+    }
+    const travelersSum = flow.travelers.reduce((sum, t) => sum + (t.precio_aplicado || 0), 0);
+    const extraSpotsCost = extraSpots * adultBasePrice * preventaRatio;
+    return travelersSum + extraSpotsCost;
+  }, [tour, flow.travelers, esPerVehicle, adultBasePrice, preventaRatio, extraSpots]);
 
   // Traveler category breakdown
   const travelerCategoryBreakdown = useMemo(() => {
@@ -595,6 +632,11 @@ const BookingFlowStep4: React.FC = () => {
         selected_language: flow.selectedLanguage,
         language_extra_cost: flow.optionalServices.filter(e => e.service_kind === 'language').reduce((s, e) => s + e.subtotal, 0),
         restrictions_accepted: flow.restrictionsAccepted,
+        // create_booking_atomic (20260929060000) recalcula el faltante de
+        // verdad contra tour_slots.booked_count — esto solo manda la
+        // INTENCION (Step1 decidio pagar el minimo garantizado, o el tour lo
+        // exige via politica_bajo_minimo, que el servidor ya sabe del tour).
+        pagar_minimo_garantizado: !!(flow.paidSpots && flow.paidSpots > totalTravelers),
         es_reserva_preventa: false,
         travel_insurance_included: flow.includeInsurance,
         travel_insurance_cost: effectiveInsuranceCost,
@@ -907,8 +949,9 @@ const BookingFlowStep4: React.FC = () => {
         {/* Cost breakdown */}
         <div className="mb-6 p-4 bg-gray-50 rounded-xl flex flex-col gap-y-2">
 
-          {/* Traveler category breakdown */}
-          {travelerCategoryBreakdown.length > 0 && (
+          {/* Traveler category breakdown — no aplica con precio fijo por
+              vehiculo: el precio no escala por categoria/persona. */}
+          {!esPerVehicle && travelerCategoryBreakdown.length > 0 && (
             <div className="flex flex-col gap-y-1 pb-1">
               {travelerCategoryBreakdown.map(({ cat, count, unitPrice, subtotal }) => (
                 <div key={cat} className="flex justify-between text-sm text-gray-500">
@@ -921,9 +964,24 @@ const BookingFlowStep4: React.FC = () => {
             </div>
           )}
 
+          {/* Lugares extra para completar el minimo garantizado — no son
+              viajeros, se muestran aparte. */}
+          {extraSpots > 0 && (
+            <div className="flex justify-between text-sm text-gray-500">
+              <span>
+                {extraSpots} lugar{extraSpots !== 1 ? 'es' : ''} adicional{extraSpots !== 1 ? 'es' : ''} (mínimo garantizado) × {formatCurrencyMXN(adultBasePrice * preventaRatio)}
+              </span>
+              <span>{formatCurrencyMXN(extraSpots * adultBasePrice * preventaRatio)}</span>
+            </div>
+          )}
+
           {/* Tour total */}
           <div className="flex justify-between text-sm border-t border-gray-200 pt-2">
-            <span className="font-medium text-gray-700">Tour ({totalTravelers} viajero{totalTravelers !== 1 ? 's' : ''})</span>
+            <span className="font-medium text-gray-700">
+              {esPerVehicle
+                ? 'Tour (precio fijo por vehículo)'
+                : `Tour (${totalTravelers} viajero${totalTravelers !== 1 ? 's' : ''}${extraSpots > 0 ? ` + ${extraSpots} lugar${extraSpots !== 1 ? 'es' : ''}` : ''})`}
+            </span>
             <span className="font-semibold text-gray-800">{formatCurrencyMXN(baseTourPrice)}</span>
           </div>
 
