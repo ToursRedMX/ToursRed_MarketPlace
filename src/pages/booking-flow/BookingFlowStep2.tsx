@@ -16,12 +16,15 @@ const CATEGORY_LABELS: Record<TravelerCategory, string> = {
   mascota: 'Mascota',
 };
 
-const getPrecio = (tour: Tour, categoria: TravelerCategory): number => {
+// preventaRatio: 1 salvo que el tour este en preventa y el viajero sea socio
+// activo (ver isEnPreventa/preventaRatio en el componente). Mascota queda
+// fuera del descuento, igual que en create_booking_atomic (20260929030000).
+const getPrecio = (tour: Tour, categoria: TravelerCategory, preventaRatio: number = 1): number => {
   switch (categoria) {
-    case 'adulto': return tour.precio_adulto ?? tour.price;
-    case 'nino': return tour.precio_nino ?? 0;
-    case 'infante': return tour.precio_infante ?? 0;
-    case 'adulto_mayor': return tour.precio_adulto_mayor ?? tour.precio_adulto ?? tour.price;
+    case 'adulto': return (tour.precio_adulto ?? tour.price) * preventaRatio;
+    case 'nino': return (tour.precio_nino ?? 0) * preventaRatio;
+    case 'infante': return (tour.precio_infante ?? 0) * preventaRatio;
+    case 'adulto_mayor': return (tour.precio_adulto_mayor ?? tour.precio_adulto ?? tour.price) * preventaRatio;
     case 'mascota': return tour.precio_mascota ?? 0;
   }
 };
@@ -45,7 +48,7 @@ function createEmptyTraveler(categoria: TravelerCategory, precio: number, email:
   };
 }
 
-function buildTravelerList(counts: TravelerCounts, tour: Tour, userEmail: string): FlowTraveler[] {
+function buildTravelerList(counts: TravelerCounts, tour: Tour, userEmail: string, preventaRatio: number = 1): FlowTraveler[] {
   const list: FlowTraveler[] = [];
   const cats: { key: keyof TravelerCounts; cat: TravelerCategory }[] = [
     { key: 'adultos', cat: 'adulto' },
@@ -56,7 +59,7 @@ function buildTravelerList(counts: TravelerCounts, tour: Tour, userEmail: string
   ];
   for (const { key, cat } of cats) {
     for (let i = 0; i < counts[key]; i++) {
-      list.push(createEmptyTraveler(cat, getPrecio(tour, cat), userEmail));
+      list.push(createEmptyTraveler(cat, getPrecio(tour, cat, preventaRatio), userEmail));
     }
   }
   return list;
@@ -78,11 +81,45 @@ const BookingFlowStep2: React.FC = () => {
     date_of_birth?: string; curp?: string; passport_number?: string;
     is_foreign_traveler?: boolean; emergency_contact_name?: string; emergency_contact_phone?: string;
   } | null>(null);
+  const [hasActiveMembership, setHasActiveMembership] = useState(false);
+  const [checkingMembership, setCheckingMembership] = useState(true);
+
+  useEffect(() => {
+    if (!user) {
+      setCheckingMembership(false);
+      return;
+    }
+    Promise.resolve(supabase
+      .rpc('has_active_membership', { p_user_id: user.id })
+      .then(({ data }) => {
+        setHasActiveMembership(!!data);
+        setCheckingMembership(false);
+      }))
+      .catch(() => setCheckingMembership(false));
+  }, [user]);
+
+  // Mismo criterio y misma formula que BookingFlowStep1.tsx y
+  // create_booking_atomic (20260929030000): la preventa solo descuenta a
+  // socios activos dentro de la ventana, y no a mascotas.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isEnPreventa = !!(
+    tour?.preventa_activa &&
+    tour.preventa_inicio &&
+    tour.preventa_fin &&
+    new Date(tour.preventa_inicio + 'T00:00:00') <= today &&
+    new Date(tour.preventa_fin + 'T23:59:59') >= today
+  );
+  const preventaRatio = tour && isEnPreventa && hasActiveMembership && tour.preventa_precio_especial && tour.preventa_descuento_valor
+    ? (tour.preventa_tipo_descuento === 'porcentaje'
+        ? Math.max(0, 1 - tour.preventa_descuento_valor / 100)
+        : (tour.price > 0 ? Math.max(0, tour.price - tour.preventa_descuento_valor) / tour.price : 1))
+    : 1;
 
   const totalTravelers = totalTravelerCount(flow.travelerCounts);
 
   useEffect(() => {
-    if (!tour || !user) return;
+    if (!tour || !user || checkingMembership) return;
 
     if (flow.travelers.length === totalTravelers && flow.travelers.length > 0) {
       setTravelers(flow.travelers);
@@ -107,7 +144,7 @@ const BookingFlowStep2: React.FC = () => {
 
         setUserProfile(userData);
 
-        const list = buildTravelerList(flow.travelerCounts, tour, user.email || '');
+        const list = buildTravelerList(flow.travelerCounts, tour, user.email || '', preventaRatio);
 
         if (userData && list.length > 0 && list[0].categoria_viajero === 'adulto') {
           list[0] = {
@@ -133,7 +170,7 @@ const BookingFlowStep2: React.FC = () => {
         setTravelers(list);
         updateFlow({ travelers: list });
       } catch {
-        const list = buildTravelerList(flow.travelerCounts, tour, user.email || '');
+        const list = buildTravelerList(flow.travelerCounts, tour, user.email || '', preventaRatio);
         setTravelers(list);
         updateFlow({ travelers: list });
       } finally {
@@ -156,7 +193,7 @@ const BookingFlowStep2: React.FC = () => {
       }
     };
     loadCompanions();
-  }, [tour, user]);
+  }, [tour, user, checkingMembership, preventaRatio]);
 
   const handleTravelerChange = (index: number, field: keyof FlowTraveler, value: string) => {
     const updated = [...travelers];
