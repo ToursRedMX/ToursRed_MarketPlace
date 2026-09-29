@@ -85,10 +85,11 @@ const BookingFlowStep2: React.FC = () => {
   const [checkingMembership, setCheckingMembership] = useState(true);
 
   useEffect(() => {
-    if (!user) {
-      setCheckingMembership(false);
-      return;
-    }
+    // Sin user, el otro efecto (que construye la lista de viajeros) ya se
+    // detiene por su propio chequeo `!user` — checkingMembership puede
+    // quedarse en true sin efecto, y evitamos un setState sincrono en el
+    // cuerpo del efecto (react-hooks/set-state-in-effect).
+    if (!user) return;
     Promise.resolve(supabase
       .rpc('has_active_membership', { p_user_id: user.id })
       .then(({ data }) => {
