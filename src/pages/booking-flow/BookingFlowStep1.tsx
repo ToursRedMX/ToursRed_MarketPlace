@@ -130,7 +130,7 @@ const BookingFlowStep1: React.FC = () => {
   // evalua por salida/horario) y en tours que cobran por persona -un
   // traslado con precio fijo por vehiculo no gana nada "comprando lugares".
   const missingForSlot = selectedSlot && tour.min_travelers_required && tour.min_travelers_required > 1
-    ? Math.max(0, tour.min_travelers_required - selectedSlot.booked_count - totalTravelers)
+    ? Math.max(0, tour.min_travelers_required - (selectedSlot.booked_count || 0) - totalTravelers)
     : 0;
   const isUnderMinimum = missingForSlot > 0 && tour.transfer_pricing_mode !== 'per_vehicle';
   const politicaBajoMinimo = tour.politica_bajo_minimo || 'permite_espera';
@@ -385,45 +385,6 @@ const BookingFlowStep1: React.FC = () => {
                     currentSlotBooked={selectedSlot.booked_count}
                   />
                 )}
-                {isUnderMinimum && politicaBajoMinimo === 'exige_pago_minimo' && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                    <p className="text-sm font-semibold text-amber-800">
-                      Este tour requiere un mínimo de {tour.min_travelers_required} lugares pagados para garantizar la salida
-                    </p>
-                    <p className="text-xs text-amber-700 mt-1">
-                      Tu reserva incluye {missingForSlot} lugar{missingForSlot !== 1 ? 'es' : ''} adicional{missingForSlot !== 1 ? 'es' : ''}{' '}
-                      ({formatCurrencyMXN(missingForSlot * getPrecioPorCategoria(tour, 'adulto', preventaRatio))}) para completar el mínimo garantizado.
-                    </p>
-                  </div>
-                )}
-                {isUnderMinimum && politicaBajoMinimo === 'permite_espera' && (
-                  <div className="rounded-xl border border-gray-200 p-4">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">¿Cómo quieres continuar?</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPayMinimumGuaranteed(false)}
-                        className={`p-3 rounded-lg border-2 text-left transition-all ${!payMinimumGuaranteed ? 'border-primary-600 bg-primary-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-                      >
-                        <p className={`text-sm font-semibold ${!payMinimumGuaranteed ? 'text-primary-800' : 'text-gray-700'}`}>Esperar a que se complete el grupo</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Tu reserva queda pendiente hasta que se sumen más viajeros</p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPayMinimumGuaranteed(true)}
-                        className={`p-3 rounded-lg border-2 text-left transition-all ${payMinimumGuaranteed ? 'border-primary-600 bg-primary-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-                      >
-                        <p className={`text-sm font-semibold ${payMinimumGuaranteed ? 'text-primary-800' : 'text-gray-700'}`}>
-                          Confirma de inmediato pagando el mínimo garantizado
-                        </p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          +{missingForSlot} lugar{missingForSlot !== 1 ? 'es' : ''} adicional{missingForSlot !== 1 ? 'es' : ''}{' '}
-                          ({formatCurrencyMXN(missingForSlot * getPrecioPorCategoria(tour, 'adulto', preventaRatio))}) — tu tour sale asegurado
-                        </p>
-                      </button>
-                    </div>
-                  </div>
-                )}
                 {selectedSlot && (
                   <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 flex items-center gap-2.5">
                     <Clock className="w-4 h-4 text-teal-600 flex-shrink-0" />
@@ -583,6 +544,51 @@ const BookingFlowStep1: React.FC = () => {
             </>
           )}
         </div>
+
+        {/* Garantia de salida: aqui, DESPUES del contador de viajeros, no en
+            la seccion de fecha/horario de arriba — ahi totalTravelers todavia
+            era 0 cuando se elegia el slot, asi que el aviso mostraba el
+            faltante equivocado y quedaba fuera de vista al bajar a ajustar
+            viajeros. */}
+        {isUnderMinimum && politicaBajoMinimo === 'exige_pago_minimo' && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-800">
+              Este tour requiere un mínimo de {tour.min_travelers_required} lugares pagados para garantizar la salida
+            </p>
+            <p className="text-xs text-amber-700 mt-1">
+              Tu reserva incluye {missingForSlot} lugar{missingForSlot !== 1 ? 'es' : ''} adicional{missingForSlot !== 1 ? 'es' : ''}{' '}
+              ({formatCurrencyMXN(missingForSlot * getPrecioPorCategoria(tour, 'adulto', preventaRatio))}) para completar el mínimo garantizado.
+            </p>
+          </div>
+        )}
+        {isUnderMinimum && politicaBajoMinimo === 'permite_espera' && (
+          <div className="mb-6 rounded-xl border border-gray-200 p-4">
+            <p className="text-sm font-semibold text-gray-700 mb-2">¿Cómo quieres continuar?</p>
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => setPayMinimumGuaranteed(false)}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${!payMinimumGuaranteed ? 'border-primary-600 bg-primary-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+              >
+                <p className={`text-sm font-semibold ${!payMinimumGuaranteed ? 'text-primary-800' : 'text-gray-700'}`}>Esperar a que se complete el grupo</p>
+                <p className="text-xs text-gray-500 mt-0.5">Tu reserva queda pendiente hasta que se sumen más viajeros</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPayMinimumGuaranteed(true)}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${payMinimumGuaranteed ? 'border-primary-600 bg-primary-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+              >
+                <p className={`text-sm font-semibold ${payMinimumGuaranteed ? 'text-primary-800' : 'text-gray-700'}`}>
+                  Confirma de inmediato pagando el mínimo garantizado
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  +{missingForSlot} lugar{missingForSlot !== 1 ? 'es' : ''} adicional{missingForSlot !== 1 ? 'es' : ''}{' '}
+                  ({formatCurrencyMXN(missingForSlot * getPrecioPorCategoria(tour, 'adulto', preventaRatio))}) — tu tour sale asegurado
+                </p>
+              </button>
+            </div>
+          </div>
+        )}
 
         {hasRestrictions && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
