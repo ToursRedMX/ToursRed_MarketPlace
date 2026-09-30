@@ -445,6 +445,8 @@ Deno.serve(async (req: Request) => {
     const notificationBody = {
       booking_id: booking_id,
       cancellation_id: cancellationRecord.id,
+      points_refunded: pointsRefunded,
+      points_deducted: pointsDeducted,
     };
     supabase.functions.invoke("send-cancellation-notification-traveler", { body: notificationBody })
       .catch((e: unknown) => console.error("Error enviando email viajero:", e));
