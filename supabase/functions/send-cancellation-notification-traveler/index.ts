@@ -28,6 +28,8 @@ interface RequestBody {
   refund_method?: string;
   receipt_url?: string | null;
   receipt_file_path?: string | null;
+  points_refunded?: number;
+  points_deducted?: number;
 }
 
 Deno.serve(async (req: Request) => {
@@ -51,7 +53,9 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { booking_id, cancellation_id, admin_cancellation, admin_reason, refund_amount, refund_method, receipt_url, receipt_file_path } = body;
+    const { booking_id, cancellation_id, admin_cancellation, admin_reason, refund_amount, refund_method, receipt_url, receipt_file_path, points_refunded, points_deducted } = body;
+    const pointsRefunded = Number(points_refunded || 0);
+    const pointsDeducted = Number(points_deducted || 0);
 
     const { data: cancellation, error: cancellationError } = await supabase
       .from('booking_cancellations')
@@ -100,6 +104,14 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     const currentBalance = wallet?.balance || 0;
+
+    const { data: pointsWallet } = await supabase
+      .from('toursred_points_wallets')
+      .select('balance')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const currentPointsBalance = pointsWallet?.balance || 0;
 
     const [{ data: settings }, { data: platformSettingsData }] = await Promise.all([
       supabase.from('email_settings').select('contact_email, smtp_api_key').single(),
@@ -314,6 +326,34 @@ Deno.serve(async (req: Request) => {
                     </td>
                   </tr>
                 </table>
+              </div>
+              ` : ''}
+
+              ${!admin_cancellation && pointsRefunded > 0 ? `
+              <div style="background-color: #eff6ff; border: 2px solid #3b82f6; padding: 20px; margin-bottom: 25px; border-radius: 8px;">
+                <h3 style="color: #1e3a8a; margin: 0 0 15px 0; font-size: 18px;">Puntos ToursRed Devueltos</h3>
+                <table width="100%" style="border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 8px 0; color: #1d4ed8; font-size: 14px;">Puntos devueltos:</td>
+                    <td style="padding: 8px 0; color: #1e3a8a; font-size: 18px; font-weight: bold; text-align: right;">${pointsRefunded.toLocaleString('es-MX')} pts</td>
+                  </tr>
+                  <tr>
+                    <td colspan="2" style="padding-top: 15px; border-top: 1px solid #3b82f6; margin-top: 10px;">
+                      <p style="color: #1d4ed8; font-size: 14px; margin: 10px 0 0 0;">
+                        Tu nuevo balance de puntos: <strong>${currentPointsBalance.toLocaleString('es-MX')} pts</strong>
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+              ` : ''}
+
+              ${!admin_cancellation && pointsDeducted > 0 ? `
+              <div style="background-color: #fffbeb; border: 2px solid #f59e0b; padding: 20px; margin-bottom: 25px; border-radius: 8px;">
+                <h3 style="color: #92400e; margin: 0 0 10px 0; font-size: 16px;">Puntos Revertidos</h3>
+                <p style="color: #92400e; font-size: 14px; line-height: 1.6; margin: 0;">
+                  Como la reserva se canceló, se revirtieron <strong>${pointsDeducted.toLocaleString('es-MX')} pts</strong> que habías ganado por esta compra.
+                </p>
               </div>
               ` : ''}
 
