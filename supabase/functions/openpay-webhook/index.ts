@@ -380,7 +380,14 @@ Deno.serve(async (req: Request) => {
                   // tenia de donde sacar la etiqueta. Mismo valor que escriben los
                   // webhooks de MercadoPago, PayPal y Conekta.
                   payment_method: "openpay",
-                  user_payment: newUserPayment,
+                  // NO se toca user_payment aqui: el trigger de puntos
+                  // (auto_award_points_on_booking_completion) lee esta misma
+                  // columna en este mismo UPDATE para calcular cuantos puntos
+                  // otorgar. Decrementarla a ~0 justo al confirmar le dejaba
+                  // 0 de base y el viajero ganaba 0 puntos pese a haber pagado
+                  // de verdad. Stripe, MercadoPago, PayPal y Conekta nunca
+                  // tocan user_payment al confirmar, por eso a ellos si les
+                  // funciona; aqui se iguala ese comportamiento.
                   paid_at: new Date().toISOString(),
                   status: "confirmed",
                 })
