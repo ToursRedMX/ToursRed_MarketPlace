@@ -133,6 +133,23 @@ Deno.serve(async (req: Request) => {
           await reportEdgeError(e, "sync-booking-to-accounting");
         })
       );
+
+      // Mismo patron que stripe-webhook, openpay-webhook, conekta-webhook,
+      // mercadopago-webhook y capture-paypal-order: todos disparan el correo de
+      // confirmacion al confirmar la reserva. Esta funcion nunca lo hacia -el
+      // viajero solo recibia el CFDI, nunca la confirmacion de la reserva.
+      EdgeRuntime.waitUntil(
+        fetch(`${supabaseUrl}/functions/v1/send-booking-confirmation`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({ booking_id: p_booking_id }),
+        }).catch(async (e) => {
+          await reportEdgeError(e, "send-booking-confirmation");
+        })
+      );
     }
 
     // Un rechazo del RPC devolvia 200 con { success:false }. El front lo detecta
