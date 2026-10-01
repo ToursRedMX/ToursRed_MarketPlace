@@ -132,7 +132,7 @@ Deno.serve(async (req: Request) => {
       // pac_invoice_id es la via normal. El regex queda SOLO como respaldo para
       // filas viejas anteriores a la migracion, que no tienen la columna poblada.
       const invoiceId = commission.pac_invoice_id ??
-        storedUrl?.match(/\/invoices\/([^\/]+)\//)?.[1];
+        storedUrl?.match(/\/invoices\/([^/]+)\//)?.[1];
 
       if (!invoiceId) {
         return new Response(JSON.stringify({ error: "Este CFDI no tiene id de factura registrado" }), {
