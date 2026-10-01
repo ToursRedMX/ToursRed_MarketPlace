@@ -38,6 +38,11 @@ DO $crear$ BEGIN
   END IF;
 END $crear$;
 
+-- Como en Supabase: service_role se salta RLS. Sin esto la politica le esconde
+-- la fila, el UPDATE toca 0 filas y el trigger ni se entera — la primera
+-- version de esta prueba cayo justo ahi.
+ALTER ROLE service_role BYPASSRLS;
+
 GRANT USAGE ON SCHEMA public, auth TO authenticated, anon, service_role;
 
 -- auth.uid() y auth.jwt() de mentiras: leen variables de sesion para poder
