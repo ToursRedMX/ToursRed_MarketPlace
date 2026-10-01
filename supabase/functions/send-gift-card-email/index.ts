@@ -567,7 +567,9 @@ async function sendAdminNotificationEmail(
           ${giftCard.discount_amount > 0 ? `<div class="info-row"><span class="info-label">Descuento aplicado:</span><span class="info-value">${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(giftCard.discount_amount)}</span></div>` : ''}
         </div>
 
-        <p style="font-size: 14px; color: #6B7280;">Puedes ver mas detalles en el panel de administracion de ToursRed.</p>
+        <p style="font-size: 14px; color: #6B7280;">
+          Puedes ver mas detalles en el <a href="${appUrl}/admin/gift-cards" style="color: #1E40AF;">panel de administracion de ToursRed</a>.
+        </p>
       </td>
     </tr>
     <tr>
