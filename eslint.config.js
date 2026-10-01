@@ -23,6 +23,19 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // El repo ya usa el prefijo _ para parametros/variables intencionalmente
+      // sin usar (ej. firmas de callback de terceros que exigen un parametro
+      // que no se necesita), pero la regla por defecto no lo reconocia y los
+      // marcaba como error de todas formas.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
     },
   }
 );
