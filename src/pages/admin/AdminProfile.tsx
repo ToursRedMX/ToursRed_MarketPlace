@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Calendar, Shield, Save, CreditCard as Edit } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Shield, Save, CreditCard as Edit } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import ChangePasswordSection from '../../components/ChangePasswordSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import { PasskeySettingsSection } from '../../components/PasskeySettingsSection';
+import { normalizarTelefono } from '../../lib/telefono';
 
 const AdminProfile: React.FC = () => {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ const AdminProfile: React.FC = () => {
   const [profile, setProfile] = useState({
     first_name: '',
     last_name: '',
+    phone_number: '',
     email: '',
     role: 'admin',
     created_at: '',
@@ -42,6 +44,7 @@ const AdminProfile: React.FC = () => {
           setProfile({
             first_name: data.first_name || '',
             last_name: data.last_name || '',
+            phone_number: data.phone_number || '',
             email: data.email || user.email || '',
             role: data.role || 'admin',
             created_at: data.created_at || '',
@@ -61,6 +64,13 @@ const AdminProfile: React.FC = () => {
   const handleSave = async () => {
     if (!user?.id) return;
 
+    // Vacio es valido (borra el telefono); escrito pero ilegible, no.
+    const telefono = profile.phone_number.trim() ? normalizarTelefono(profile.phone_number) : null;
+    if (profile.phone_number.trim() && !telefono) {
+      setError('El teléfono debe tener 10 dígitos, o empezar con + y la lada del país.');
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError('');
@@ -71,6 +81,7 @@ const AdminProfile: React.FC = () => {
         .update({
           first_name: profile.first_name,
           last_name: profile.last_name,
+          phone_number: telefono,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -79,6 +90,7 @@ const AdminProfile: React.FC = () => {
         throw new Error(error.message);
       }
 
+      setProfile((anterior) => ({ ...anterior, phone_number: telefono ?? '' }));
       setSuccess('Perfil actualizado correctamente');
       setIsEditing(false);
     } catch (err: any) {
@@ -193,6 +205,26 @@ const AdminProfile: React.FC = () => {
                       <div className="flex items-center p-3 bg-gray-50 rounded-md">
                         <User className="h-4 w-4 text-gray-400 mr-2" />
                         <span>{profile.last_name || 'No especificado'}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Teléfono
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="tel"
+                        value={profile.phone_number}
+                        onChange={(e) => setProfile({...profile, phone_number: e.target.value})}
+                        className="input"
+                        placeholder="55 1234 5678"
+                      />
+                    ) : (
+                      <div className="flex items-center p-3 bg-gray-50 rounded-md">
+                        <Phone className="h-4 w-4 text-gray-400 mr-2" />
+                        <span>{profile.phone_number || 'No especificado'}</span>
                       </div>
                     )}
                   </div>

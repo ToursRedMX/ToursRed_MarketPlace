@@ -34,7 +34,11 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { email, code, newPassword } = await req.json();
+    const cuerpo = await req.json();
+    // send-password-reset guarda el correo en minusculas; si aqui se buscara tal
+    // cual se escribio, "Axel@..." pediria el codigo bien y nunca lo encontraria.
+    const email = String(cuerpo.email ?? "").trim().toLowerCase();
+    const { code, newPassword } = cuerpo;
 
     if (!email || !code || !newPassword) {
       return new Response(

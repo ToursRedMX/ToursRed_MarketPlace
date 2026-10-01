@@ -10,7 +10,7 @@ export interface MfaGateProps {
 }
 
 export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
-  const { user, isAdmin, isAccountant, isSuperAdmin } = useAuth();
+  const { user, isAdmin, isAccountant, isSuperAdmin, isAccountExecutive } = useAuth();
   const [state, setState] = useState<GateState>('loading');
   const [, setMfaFactors] = useState<any[]>([]);
   const [qrUrl, setQrUrl] = useState<string>('');
@@ -27,7 +27,7 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
       return;
     }
 
-    const requiresMfa = isAdmin || isSuperAdmin || isAccountant;
+    const requiresMfa = isAdmin || isSuperAdmin || isAccountant || isAccountExecutive;
     if (!requiresMfa) {
       setState('not_required');
       return;
@@ -52,7 +52,10 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
       const adminToggle = settings?.mfa_required_for_admins ?? false;
       const accountantToggle = settings?.mfa_required_for_accountant ?? false;
 
-      const adminNeedsMfa = (isAdmin || isSuperAdmin) && adminToggle;
+      // El ejecutivo va con el toggle de admins: desde el 01-oct-2026 su contrasena
+      // se recupera solo con el correo (send-password-reset), asi que sin MFA el
+      // correo seria lo unico entre un atacante y su cuenta.
+      const adminNeedsMfa = (isAdmin || isSuperAdmin || isAccountExecutive) && adminToggle;
       const accountantNeedsMfa = isAccountant && accountantToggle;
 
       if (!adminNeedsMfa && !accountantNeedsMfa) {
@@ -109,7 +112,7 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
       setError('No pudimos verificar tu autenticacion en dos pasos. Reintenta en unos segundos.');
       setState('error');
     }
-  }, [user, isAdmin, isAccountant, isSuperAdmin]);
+  }, [user, isAdmin, isAccountant, isSuperAdmin, isAccountExecutive]);
 
   useEffect(() => {
     checkMfaStatus();
@@ -282,8 +285,8 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
           </h1>
           <p className="text-slate-500 mt-2 text-sm">
             {state === 'needs_enrollment'
-              ? 'Por seguridad, los administradores deben configurar autenticacion de dos factores (TOTP) antes de continuar.'
-              : 'Ingresa el codigo de tu app autenticadora para acceder al panel de administracion.'}
+              ? 'Por seguridad, las cuentas de administracion deben configurar autenticacion de dos factores (TOTP) antes de continuar.'
+              : 'Ingresa el codigo de tu app autenticadora para continuar.'}
           </p>
         </div>
 

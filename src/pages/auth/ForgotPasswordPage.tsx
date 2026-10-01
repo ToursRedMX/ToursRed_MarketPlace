@@ -90,7 +90,7 @@ const ForgotPasswordPage: React.FC = () => {
 
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                Número de teléfono
+                Número de teléfono <span className="font-normal text-gray-400">(viajeros y agencias)</span>
               </label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -100,12 +100,11 @@ const ForgotPasswordPage: React.FC = () => {
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="1234567890"
-                  required
+                  placeholder="55 1234 5678"
                 />
               </div>
               <p className="mt-2 text-sm text-gray-500">
-                Ingresa el número asociado a tu cuenta
+                Ingresa el número asociado a tu cuenta. Las cuentas de administración no lo necesitan.
               </p>
             </div>
 

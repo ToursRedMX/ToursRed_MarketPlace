@@ -9,6 +9,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Los telefonos se guardan en formatos distintos segun quien los capturo
+// (+525513209470, 5513209470, " 9831820183"), y el usuario escribe el suyo como
+// quiere. Comparar el texto tal cual hacia que el codigo no saliera nunca —sin
+// error, con la misma respuesta generica— mientras la pantalla decia que si.
+// Se comparan los ultimos 10 digitos: el numero nacional de Mexico.
+function ultimos10Digitos(telefono: string | null | undefined): string | null {
+  const digitos = (telefono ?? "").replace(/\D/g, "");
+  return digitos.length >= 10 ? digitos.slice(-10) : null;
+}
+
+// Roles que recuperan su contrasena SOLO con el correo. El telefono de este
+// flujo no es un segundo factor —no se manda ningun SMS, solo se compara contra
+// lo que el usuario escribe—, y estas cuentas o no tenian donde guardarlo
+// (admin) o lo guardan en otra tabla (account_executives.phone), asi que nunca
+// podian recuperar su contrasena. Su segundo factor real es el TOTP que MfaGate
+// les exige al entrar.
+const ROLES_SOLO_CORREO = new Set(["admin", "super_admin", "accountant", "account_executive"]);
+
+// Para los logs: lo suficiente para encontrar el caso, sin dejar el correo entero.
+function correoEnmascarado(correo: string): string {
+  const [usuario, dominio] = correo.split("@");
+  return `${(usuario ?? "").slice(0, 2)}***@${dominio ?? ""}`;
+}
+
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -36,11 +60,15 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { email, phoneNumber } = await req.json();
+    const cuerpo = await req.json();
+    // auth.users guarda el correo en minusculas y sync_user_email lo copia asi a
+    // public.users, de modo que "Axel@..." no encontraba la cuenta.
+    const email = String(cuerpo.email ?? "").trim().toLowerCase();
+    const phoneNumber = String(cuerpo.phoneNumber ?? "").trim();
 
-    if (!email || !phoneNumber) {
+    if (!email) {
       return new Response(
-        JSON.stringify({ success: false, error: "Email y número de teléfono son requeridos" }),
+        JSON.stringify({ success: false, error: "El correo electrónico es requerido" }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
@@ -71,6 +99,7 @@ Deno.serve(async (req: Request) => {
     const GENERIC_MSG = "Si los datos coinciden con una cuenta registrada, se enviará un código de verificación.";
 
     if (!userData) {
+      console.warn(`send-password-reset: ${correoEnmascarado(email)} no tiene cuenta, no se manda codigo`);
       return new Response(
         JSON.stringify({ success: true, message: GENERIC_MSG }),
         {
@@ -80,9 +109,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    let userPhoneNumber = userData.phone_number;
+    const soloCorreo = ROLES_SOLO_CORREO.has(userData.role);
+    const telefonosDeLaCuenta: (string | null)[] = [userData.phone_number];
 
-    if (userData.role === 'agency') {
+    if (!soloCorreo && userData.role === 'agency') {
       const { data: agencyData, error: agencyError } = await supabase
         .from("agencies")
         .select("contact_phone")
@@ -101,11 +131,21 @@ Deno.serve(async (req: Request) => {
       }
 
       if (agencyData) {
-        userPhoneNumber = agencyData.contact_phone;
+        telefonosDeLaCuenta.unshift(agencyData.contact_phone);
       }
     }
 
-    if (!userPhoneNumber || userPhoneNumber !== phoneNumber) {
+    const telefonoEscrito = ultimos10Digitos(phoneNumber);
+    const telefonoCoincide = telefonoEscrito !== null &&
+      telefonosDeLaCuenta.some((t) => ultimos10Digitos(t) === telefonoEscrito);
+
+    if (!soloCorreo && !telefonoCoincide) {
+      const tieneTelefono = telefonosDeLaCuenta.some((t) => ultimos10Digitos(t) !== null);
+      console.warn(
+        `send-password-reset: ${correoEnmascarado(email)} (${userData.role}) ` +
+        (tieneTelefono ? "escribio un telefono que no coincide" : "no tiene telefono registrado") +
+        ", no se manda codigo",
+      );
       return new Response(
         JSON.stringify({ success: true, message: GENERIC_MSG }),
         {

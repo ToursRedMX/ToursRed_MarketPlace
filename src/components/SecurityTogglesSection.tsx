@@ -144,7 +144,7 @@ export const SecurityTogglesSection: React.FC = () => {
               <h4 className="font-medium text-slate-800">MFA obligatorio para administradores</h4>
             </div>
             <p className="text-sm text-slate-500 mt-1 ml-7">
-              Los admin y super admin deben tener MFA configurado para escribir en tablas protegidas.
+              Los admin y super admin deben tener MFA configurado para escribir en tablas protegidas. Los ejecutivos de cuenta tambien deben configurarlo para entrar a su panel.
             </p>
             {!hasMfa && (
               <div className="mt-2 ml-7 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
