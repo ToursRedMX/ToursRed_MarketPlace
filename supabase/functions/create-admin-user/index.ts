@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
+import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import { checkAal2Required, aal2Response } from '../_shared/aal2Check.ts';
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";

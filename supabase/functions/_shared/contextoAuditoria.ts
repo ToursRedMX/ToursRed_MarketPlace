@@ -153,7 +153,7 @@ export function cabecerasDeContexto(req: Request): Record<string, string> {
  * LA MEZCLA QUE MOTIVO ESTA FIRMA YA NO EXISTE
  *
  * Ese mismo 10-sep-2026, mas tarde, los 175 imports se unificaron en
- * `npm:@supabase/supabase-js@2.116.0` y la regla de version unica de
+ * `npm:@supabase/supabase-js@2.117.2` y la regla de version unica de
  * `check-edge-deps.mjs` paso a impedir que vuelvan a divergir. O sea que la
  * segunda copia ya no podria darse.
  *

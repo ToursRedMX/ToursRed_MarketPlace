@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.116.0";
+import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 // El default de `npm:pdfmake` ES la clase PdfPrinter, y hay que importarlo asi
 // y no por la subruta `/js/printer.js`: esa carpeta NO EXISTE en el paquete
 // (0.2.20 trae `build/` y `src/`), asi que el runtime moria con
