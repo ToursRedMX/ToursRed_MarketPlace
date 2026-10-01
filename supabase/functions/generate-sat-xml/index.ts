@@ -38,7 +38,6 @@ function formatAmount(n: number | null | undefined): string {
 
 // XML Catalogo de Cuentas — CT_RFC_AAAAMM.xml
 function buildCatalogXml(accounts: any[], rfc: string, year: number, month: number): string {
-  const ym = `${year}-${pad2(month)}`;
   const rows = accounts.map((a) => {
     const tipo = a.nature === "deudora" ? "D" : "A";
     return `    <catalogocuentas:Ctas CodAgrup="${xmlEscape(a.sat_group_code)}" NumCta="${xmlEscape(a.code)}" Desc="${xmlEscape(a.name)}" Nivel="${a.level}" Natur="${tipo}"/>`;
@@ -53,15 +52,32 @@ ${rows.join("\n")}
 }
 
 // XML Balanza de Comprobacion — BC_RFC_AAAAMM.xml
+//
+// get_trial_balance regresa opening_debit/opening_credit y
+// closing_debit/closing_credit BRUTOS, sin netear por naturaleza de cuenta
+// (confirmado leyendo la funcion SQL: son sumas de movimientos, cualquier
+// cuenta puede traer los dos lados con datos). SaldoIni/SaldoFin del
+// esquema del SAT son UN solo numero por cuenta -el saldo neto del lado
+// natural de la cuenta-, no el lado deudor a secas. Antes de este fix se
+// imprimia siempre formatAmount(r.opening_debit)/(r.closing_debit): para
+// cualquier cuenta acreedora (pasivo, capital, ingreso -la mayoria del
+// catalogo-) el saldo real vive del lado acreedor, asi que salia en 0.00 o
+// incompleto en el XML que se sube al SAT.
+//
+// Misma regla que ya usa get_account_balances_full (CASE WHEN nature =
+// 'deudora' THEN debit-credit ELSE credit-debit END), no una nueva.
 function buildTrialBalanceXml(rows: any[], rfc: string, year: number, month: number): string {
   const cuentas = rows.map((r) => {
-    const saldoIniDeudor = formatAmount(r.opening_debit);
-    const saldoIniAcreedor = formatAmount(r.opening_credit);
+    const esDeudora = r.nature === "deudora";
+    const saldoIni = esDeudora
+      ? Number(r.opening_debit || 0) - Number(r.opening_credit || 0)
+      : Number(r.opening_credit || 0) - Number(r.opening_debit || 0);
     const debe = formatAmount(r.period_debit);
     const haber = formatAmount(r.period_credit);
-    const saldoFinDeudor = formatAmount(r.closing_debit);
-    const saldoFinAcreedor = formatAmount(r.closing_credit);
-    return `    <BCE:Ctas NumCta="${xmlEscape(r.code)}" SaldoIni="${saldoIniDeudor}" Debe="${debe}" Haber="${haber}" SaldoFin="${saldoFinDeudor}"/>`;
+    const saldoFin = esDeudora
+      ? Number(r.closing_debit || 0) - Number(r.closing_credit || 0)
+      : Number(r.closing_credit || 0) - Number(r.closing_debit || 0);
+    return `    <BCE:Ctas NumCta="${xmlEscape(r.code)}" SaldoIni="${formatAmount(saldoIni)}" Debe="${debe}" Haber="${haber}" SaldoFin="${formatAmount(saldoFin)}"/>`;
   });
   return `<?xml version="1.0" encoding="UTF-8"?>
 <BCE:Balanza xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"

@@ -43,7 +43,7 @@ export const useFormPersistence = <T extends Record<string, any>>(
                 keysToRemove.push(storageKey);
               }
             }
-          } catch (e) {
+          } catch {
             keysToRemove.push(storageKey);
           }
         }

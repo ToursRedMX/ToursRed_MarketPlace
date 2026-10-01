@@ -171,7 +171,7 @@ Deno.serve(async (req: Request) => {
         const refundAmount = principalPaid + originalServiceCharge + insuranceRefund + optionalServicesRefundable;
 
         // Atomic refund + booking status update with row-level locking
-        const { data: refundResult, error: refundError } = await supabase.rpc(
+        const { error: refundError } = await supabase.rpc(
           "process_cancellation_refund",
           {
             p_booking_id: booking.id,

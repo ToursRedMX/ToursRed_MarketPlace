@@ -172,7 +172,6 @@ Deno.serve(async (req: Request) => {
 
     const tour = (booking as any).tours;
     const agency = (booking as any).agencies;
-    const bookingUser = (booking as any).users;
 
     // Fetch refundable optional services â€” two-bucket model
     // Each optional (pickup, language, traditional) has its own total_paid bucket.
@@ -228,7 +227,6 @@ Deno.serve(async (req: Request) => {
     }
     optionalsRefundBucket = Math.round(optionalsRefundBucket * 100) / 100;
 
-    const optionalServicesRefundable = optionalsRefundBucket;
     let optionalServicesServiceCharge = 0;
     for (const os of (optionalServices || [])) {
       optionalServicesServiceCharge += Number((os as any).service_charge || 0);

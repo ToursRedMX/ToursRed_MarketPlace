@@ -1521,7 +1521,7 @@ const AgencyTours: React.FC = () => {
           slots: slotsData || [],
           isLoadingSlots: false,
         }));
-      } catch (err: any) {
+      } catch {
         setReceptivoActionsModal(prev => ({
           ...prev,
           error: 'Error al cargar los slots disponibles',

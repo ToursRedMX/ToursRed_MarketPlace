@@ -83,7 +83,7 @@ async function facturapiStamp(
   apiKey: string,
   organizationId: string,
   request: CfdiRequest,
-  sandboxMode: boolean
+  _sandboxMode: boolean
 ): Promise<CfdiResult> {
   const baseUrl = "https://www.facturapi.io/v2";
 

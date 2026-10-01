@@ -41,7 +41,7 @@ const AgencyScheduleManager: React.FC<AgencyScheduleManagerProps> = ({ tourId, a
         .order('departure_time', { ascending: true });
       if (err) throw err;
       setSchedules(data || []);
-    } catch (err) {
+    } catch {
       setError('No se pudieron cargar los horarios.');
     } finally {
       setIsLoading(false);
@@ -116,7 +116,7 @@ const AgencyScheduleManager: React.FC<AgencyScheduleManagerProps> = ({ tourId, a
       const { error: err } = await supabase.from('tour_schedules').delete().eq('id', id);
       if (err) throw err;
       await fetchSchedules();
-    } catch (err) {
+    } catch {
       setError('No se pudo eliminar el horario.');
     }
   };

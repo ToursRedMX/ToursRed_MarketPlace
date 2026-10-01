@@ -57,7 +57,6 @@ Deno.serve(async (req: Request) => {
       plan_id,
       amount,
       payment_method,
-      stripe_payment_intent_id,
       paypal_order_id,
       mercadopago_payment_id,
       conekta_method,

@@ -79,7 +79,6 @@ Deno.serve(async (req: Request) => {
       amount,
       payment_method_type,
       provider_charge_id,
-      order_id,
       description,
       idempotency_key,
     } = await req.json();

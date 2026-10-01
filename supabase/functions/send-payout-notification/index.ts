@@ -165,7 +165,6 @@ Deno.serve(async (req)=>{
       console.error("Failed to send email:", errorText);
       throw new Error(`Failed to send email: ${errorText}`);
     }
-    const emailResult = await emailResponse.json();
     return new Response(JSON.stringify({
       success: true,
       message: "Payout notification email sent successfully"

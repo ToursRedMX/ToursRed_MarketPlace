@@ -136,11 +136,9 @@ Deno.serve(async (req: Request) => {
 
     const oldTotalPaid = Number(supplement.total_paid) || 0;
     const oldServiceCharge = Number(supplement.service_charge) || 0;
-    const unitPrice = Number(supplement.unit_price) || 0;
 
     let refundAmount: number;
     let updatePayload: Record<string, any>;
-    const exemptionUsedTotal = Number(supplement.membership_exemption_used) || 0;
 
     if (isFullCancel) {
       refundAmount = isCancellable ? oldTotalPaid : 0;

@@ -115,7 +115,7 @@ export async function vigilarRespuesta(
   datos?: Record<string, unknown>,
 ): Promise<void> {
   if (res.ok) return;
-  let cuerpo = "";
+  let cuerpo: string;
   try {
     cuerpo = (await res.text()).slice(0, 500);
   } catch {

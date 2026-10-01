@@ -81,11 +81,7 @@ function formatDateShort(dateStr: string | null | undefined): string {
 
 async function generateXlsxBase64(
   travelers: any[],
-  bookingCode: string,
-  tourName: string,
-  agencyName: string,
-  tourStart: string,
-  tourEnd: string
+  bookingCode: string
 ): Promise<{ base64: string; filename: string }> {
   const headers = [
     "Nombre",
@@ -424,11 +420,7 @@ Deno.serve(async (req: Request) => {
     // Generar Excel adjunto
     const { base64: xlsxBase64, filename: xlsxFilename } = await generateXlsxBase64(
       travelers,
-      booking_code,
-      tour_name,
-      agency_name,
-      tour_start_date,
-      tour_end_date
+      booking_code
     );
 
     const emailPayload: any = {

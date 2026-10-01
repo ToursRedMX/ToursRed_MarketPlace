@@ -233,64 +233,64 @@ ID de Cotizacion: ${inquiry.id}
   </style>
 </head>
 <body>
-  <div class=\"container\">
-    <div class=\"logo-section\">
-      <img src=\"${logoUrl}\" alt=\"ToursRed Logo\" class=\"logo\" />
+  <div class="container">
+    <div class="logo-section">
+      <img src="${logoUrl}" alt="ToursRed Logo" class="logo" />
     </div>
-    <div class=\"header\">
+    <div class="header">
       <h1>Nueva Cotizacion Internacional</h1>
       <p>Fuente: <strong>${sourceLabel}</strong> | ${destination}</p>
     </div>
-    <div class=\"content\">
-      <div class=\"section\">
-        <div class=\"section-title\">Informacion del Viajero</div>
-        <div class=\"info-row\">
-          <span class=\"info-label\">Nombre:</span> <span class=\"info-value\">${name}</span>
+    <div class="content">
+      <div class="section">
+        <div class="section-title">Informacion del Viajero</div>
+        <div class="info-row">
+          <span class="info-label">Nombre:</span> <span class="info-value">${name}</span>
         </div>
-        <div class=\"info-row\">
-          <span class=\"info-label\">Email:</span> <span class=\"info-value\"><a href=\"mailto:${email}\">${email}</a></span>
+        <div class="info-row">
+          <span class="info-label">Email:</span> <span class="info-value"><a href="mailto:${email}">${email}</a></span>
         </div>
-        <div class=\"info-row\">
-          <span class=\"info-label\">Telefono:</span> <span class=\"info-value\"><a href=\"tel:${phone}\">${phone}</a></span>
+        <div class="info-row">
+          <span class="info-label">Telefono:</span> <span class="info-value"><a href="tel:${phone}">${phone}</a></span>
         </div>
       </div>
 
-      <div class=\"section\">
-        <div class=\"section-title\">Detalles del Viaje</div>
-        <div class=\"info-row\">
-          <span class=\"info-label\">${destinationLabel}:</span> <span class=\"info-value\"><strong>${destination}</strong></span>
+      <div class="section">
+        <div class="section-title">Detalles del Viaje</div>
+        <div class="info-row">
+          <span class="info-label">${destinationLabel}:</span> <span class="info-value"><strong>${destination}</strong></span>
         </div>
         ${formattedTourCode ? `
-        <div class=\"info-row\">
-          <span class=\"info-label\">Codigo de Viaje:</span> <span class=\"info-value\"><strong style=\"color: #f59e0b; font-size: 16px;\">${formattedTourCode}</strong></span>
+        <div class="info-row">
+          <span class="info-label">Codigo de Viaje:</span> <span class="info-value"><strong style="color: #f59e0b; font-size: 16px;">${formattedTourCode}</strong></span>
         </div>
         ` : ''}
-        <div class=\"info-row\">
-          <span class=\"info-label\">Fecha Aproximada:</span> <span class=\"info-value\">${travel_date || "No especificada"}</span>
+        <div class="info-row">
+          <span class="info-label">Fecha Aproximada:</span> <span class="info-value">${travel_date || "No especificada"}</span>
         </div>
-        <div class=\"info-row\">
-          <span class=\"info-label\">Numero de Personas:</span> <span class=\"info-value\">${num_people}</span>
+        <div class="info-row">
+          <span class="info-label">Numero de Personas:</span> <span class="info-value">${num_people}</span>
         </div>
       </div>
 
       ${message ? `
-      <div class=\"section\">
-        <div class=\"section-title\">Mensaje/Comentarios</div>
-        <div class=\"message-box\">
+      <div class="section">
+        <div class="section-title">Mensaje/Comentarios</div>
+        <div class="message-box">
           ${message.replace(/\n/g, "<br>")}
         </div>
       </div>
       ` : ''}
 
-      <div style=\"text-align: center; margin-top: 30px;\">
-        <a href=\"mailto:${email}\" class=\"btn\">Responder al Viajero</a>
+      <div style="text-align: center; margin-top: 30px;">
+        <a href="mailto:${email}" class="btn">Responder al Viajero</a>
       </div>
     </div>
-    <div class=\"footer\">
-      <p style=\"margin: 0;\"><strong>ToursRed</strong></p>
-      <p style=\"margin: 4px 0;\">Red de Agencias de Viajes Aliadas</p>
-      <p style=\"margin: 4px 0;\">ID: ${inquiry.id}</p>
-      <p style=\"margin: 4px 0;\">Recibida el ${new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+    <div class="footer">
+      <p style="margin: 0;"><strong>ToursRed</strong></p>
+      <p style="margin: 4px 0;">Red de Agencias de Viajes Aliadas</p>
+      <p style="margin: 4px 0;">ID: ${inquiry.id}</p>
+      <p style="margin: 4px 0;">Recibida el ${new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
     </div>
   </div>
 </body>
@@ -384,53 +384,53 @@ Red de Agencias de Viajes Aliadas
   </style>
 </head>
 <body>
-  <div class=\"container\">
-    <div class=\"logo-section\">
-      <img src=\"${logoUrl}\" alt=\"ToursRed Logo\" class=\"logo\" />
+  <div class="container">
+    <div class="logo-section">
+      <img src="${logoUrl}" alt="ToursRed Logo" class="logo" />
     </div>
-    <div class=\"content\">
-      <div class=\"title-section\">
+    <div class="content">
+      <div class="title-section">
         <h1>Hemos recibido tu solicitud</h1>
         <p>Nuestro equipo la esta revisando y se pondra en contacto contigo en menos de 24 horas.</p>
       </div>
 
-      <div class=\"section\">
-        <div class=\"section-title\">Resumen de tu Solicitud</div>
-        <div class=\"info-row\">
-          <span class=\"info-label\">Nombre:</span> <span class=\"info-value\">${name}</span>
+      <div class="section">
+        <div class="section-title">Resumen de tu Solicitud</div>
+        <div class="info-row">
+          <span class="info-label">Nombre:</span> <span class="info-value">${name}</span>
         </div>
-        <div class=\"info-row\">
-          <span class=\"info-label\">Email:</span> <span class=\"info-value\"><a href=\"mailto:${email}\">${email}</a></span>
+        <div class="info-row">
+          <span class="info-label">Email:</span> <span class="info-value"><a href="mailto:${email}">${email}</a></span>
         </div>
-        <div class=\"info-row\">
-          <span class=\"info-label\">Telefono:</span> <span class=\"info-value\">${phone}</span>
+        <div class="info-row">
+          <span class="info-label">Telefono:</span> <span class="info-value">${phone}</span>
         </div>
-        <div class=\"info-row\">
-          <span class=\"info-label\">${destinationLabel}:</span> <span class=\"info-value\"><strong>${destination}</strong></span>
+        <div class="info-row">
+          <span class="info-label">${destinationLabel}:</span> <span class="info-value"><strong>${destination}</strong></span>
         </div>
         ${formattedTourCode ? `
-        <div class=\"info-row\">
-          <span class=\"info-label\">Codigo de Viaje:</span> <span class=\"info-value\"><strong style=\"color: #f59e0b;\">${formattedTourCode}</strong></span>
+        <div class="info-row">
+          <span class="info-label">Codigo de Viaje:</span> <span class="info-value"><strong style="color: #f59e0b;">${formattedTourCode}</strong></span>
         </div>
         ` : ''}
-        <div class=\"info-row\">
-          <span class=\"info-label\">Fecha Aproximada:</span> <span class=\"info-value\">${travel_date || "Por definir"}</span>
+        <div class="info-row">
+          <span class="info-label">Fecha Aproximada:</span> <span class="info-value">${travel_date || "Por definir"}</span>
         </div>
-        <div class=\"info-row\">
-          <span class=\"info-label\">Numero de Personas:</span> <span class=\"info-value\">${num_people}</span>
+        <div class="info-row">
+          <span class="info-label">Numero de Personas:</span> <span class="info-value">${num_people}</span>
         </div>
       </div>
     </div>
-    <div class=\"contact-section\">
+    <div class="contact-section">
       <h3>Necesitas ayuda inmediata?</h3>
       <p><strong>Telefono:</strong> ${contactPhone}</p>
-      <p><strong>Email:</strong> <a href=\"mailto:${contactEmail}\">${contactEmail}</a></p>
+      <p><strong>Email:</strong> <a href="mailto:${contactEmail}">${contactEmail}</a></p>
       <p><strong>Horario:</strong> Lunes a Viernes, 9:00 AM - 6:00 PM</p>
     </div>
-    <div class=\"footer\">
-      <p style=\"margin: 0;\"><strong>ToursRed</strong></p>
-      <p style=\"margin: 4px 0;\">Red de Agencias de Viajes Aliadas</p>
-      <p style=\"margin: 8px 0 0 0;\"><a href=\"mailto:${contactEmail}\">${contactEmail}</a> | ${contactPhone}</p>
+    <div class="footer">
+      <p style="margin: 0;"><strong>ToursRed</strong></p>
+      <p style="margin: 4px 0;">Red de Agencias de Viajes Aliadas</p>
+      <p style="margin: 8px 0 0 0;"><a href="mailto:${contactEmail}">${contactEmail}</a> | ${contactPhone}</p>
     </div>
   </div>
 </body>

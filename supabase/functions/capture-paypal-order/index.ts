@@ -496,7 +496,6 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
               } else {
                 const bookingDate = new Date();
                 const departureDate = tour?.start_date ? new Date(tour.start_date) : null;
-                const daysBeforeDeparture = tour?.full_payment_days_before_departure || 15;
 
                 const installments = defs.map((def: any, idx: number) => {
                   const amount = Math.round(totalPrice * (def.pct_of_total / 100) * 100) / 100;
@@ -643,9 +642,6 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    let captureData: any;
-    let captureStatus: string;
-
     if (!captureResponse.ok) {
       const errorBody = await captureResponse.text();
       console.error("PayPal capture error status:", captureResponse.status, "body:", errorBody);
@@ -769,8 +765,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    captureData = await captureResponse.json();
-    captureStatus = captureData.status;
+    const captureData: any = await captureResponse.json();
+    const captureStatus: string = captureData.status;
 
     console.log("PayPal capture status:", captureStatus, "orderId:", orderId);
 

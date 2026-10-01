@@ -53,7 +53,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { booking_id, cancellation_id, admin_cancellation, admin_reason, refund_amount, refund_method, receipt_url, receipt_file_path, points_refunded, points_deducted } = body;
+    const { cancellation_id, admin_cancellation, admin_reason, refund_amount, refund_method, receipt_url, receipt_file_path, points_refunded, points_deducted } = body;
     const pointsRefunded = Number(points_refunded || 0);
     const pointsDeducted = Number(points_deducted || 0);
 

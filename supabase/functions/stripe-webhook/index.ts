@@ -1,6 +1,5 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.116.0";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
@@ -10,12 +9,6 @@ import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/context
 import { crearAsientoContable, notificarAdmins, alertarOps, avisosCon } from "../_shared/avisosDePago.ts";
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { asentarCobroStripe, estadoSegunStripe } from "../_shared/cobrosStripe.ts";
-
-// Se nombra el tipo del cliente para no sumar mas `any` a un archivo que ya
-// tiene varios. Se importa en vez de derivarlo con ReturnType<typeof
-// createClient>, que resuelve a SupabaseClient<unknown, never, ...> y no
-// acepta el cliente real.
-type ClienteSupabase = SupabaseClient;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -489,11 +482,6 @@ Deno.serve(async (req) => {
                 pac_provider
               `)
               .maybeSingle();
-            const { data: secrets } = await supabase
-              .from('platform_secrets')
-              .select('pac_api_key_encrypted')
-              .maybeSingle();
-
             const serviceChargePct = platformSettings?.service_charge_percentage ?? 5;
 
             let subtotal = 0;
@@ -564,7 +552,6 @@ Deno.serve(async (req) => {
             const grossServiceCharge = parseFloat((subtotal * serviceChargePct / 100).toFixed(2));
             const { data: exemptionResult } = await supabase
               .rpc('apply_membership_service_fee_exemption', { p_user_id: extraUserId, p_gross_service_charge: grossServiceCharge });
-            const exemptionApplied = parseFloat(exemptionResult?.exemption_applied ?? '0');
             const netServiceChargeExtra = parseFloat(exemptionResult?.net_service_charge ?? grossServiceCharge.toString());
 
             // Award points if member
@@ -1603,7 +1590,6 @@ Deno.serve(async (req) => {
                         } else {
                           const bookingDate = new Date();
                           const departureDate = tour?.start_date ? new Date(tour.start_date) : null;
-                          const daysBeforeDeparture = tour?.full_payment_days_before_departure || 15;
 
                           const installments = defs.map((def: any, idx: number) => {
                             const amount = Math.round(totalPrice * (def.pct_of_total / 100) * 100) / 100;

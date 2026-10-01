@@ -205,7 +205,7 @@ const BookingFlowStep3: React.FC = () => {
       } else {
         updateFlow({ selectedSeats: seats, seatsHeld: true });
       }
-    } catch (err: any) {
+    } catch {
       setHoldError('No se pudieron apartar los asientos. Intenta de nuevo.');
     } finally {
       setIsHoldingSeats(false);

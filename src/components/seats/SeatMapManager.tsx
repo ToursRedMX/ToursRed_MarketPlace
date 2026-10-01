@@ -183,7 +183,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
       }));
 
       setSeatsWithStatus(combined);
-    } catch (err: any) {
+    } catch {
       setError('Error al cargar el mapa de asientos.');
     } finally {
       setIsLoading(false);
@@ -293,7 +293,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
 
       setBlockModal({ open: false, seatNumber: 0, note: '', isSubmitting: false, blockAllSlots: false });
       await loadData();
-    } catch (err: any) {
+    } catch {
       setBlockModal(prev => ({ ...prev, isSubmitting: false }));
     }
   };

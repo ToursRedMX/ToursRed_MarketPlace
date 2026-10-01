@@ -40,7 +40,7 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey, sinUserAgentDeNavegador(opcionesConContexto(req)));
 
   // ── Step 1: Log raw payload immediately ──────────────────────
-  let rawBody: any = null;
+  let rawBody: any;
   try {
     rawBody = await req.json();
   } catch {
@@ -174,7 +174,7 @@ Deno.serve(async (req: Request) => {
       .select("*")
       .eq("provider_charge_id", transaction.id);
 
-    const { data: topupByChargeId, error: topupError } = await topupQuery.maybeSingle();
+    const { data: topupByChargeId } = await topupQuery.maybeSingle();
 
     let topup = topupByChargeId;
 
@@ -925,7 +925,7 @@ Deno.serve(async (req: Request) => {
       ? "openpay_codi_topup"
       : "openpay_spei_topup";
 
-    const { data: creditResult, error: creditError } = await supabase.rpc(
+    const { error: creditError } = await supabase.rpc(
       "update_wallet_balance",
       {
         p_user_id: topup.user_id,

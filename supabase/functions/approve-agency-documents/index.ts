@@ -61,7 +61,7 @@ function buildDomicilio(a: {
   return [streetLine, rest.join(", ")].filter(Boolean).join(", ") || "A confirmar";
 }
 
-function generateFolio(agencyId: string): string {
+function generateFolio(): string {
   const hex = Array.from(crypto.getRandomValues(new Uint8Array(2)))
     .map(b => b.toString(16).padStart(2, "0"))
     .join("")
@@ -187,7 +187,7 @@ Deno.serve(async (req: Request) => {
         .eq("agency_id", agency_id)
         .eq("status", "pending");
 
-      const folio = generateFolio(agency_id);
+      const folio = generateFolio();
       const nowDate = new Date();
       const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 
@@ -408,7 +408,7 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        const folio = generateFolio(agency_id);
+        const folio = generateFolio();
 
         // Create contract_acceptances record — PDF is generated at signing time (verify-contract-otp)
         await supabase.from("contract_acceptances").insert({

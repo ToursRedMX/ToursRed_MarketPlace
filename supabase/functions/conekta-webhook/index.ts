@@ -257,7 +257,6 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const orderStatus: string = conektaOrder?.payment_status || eventData.payment_status || "";
     const bookingId: string = tx.booking_id;
     const paymentMethodType: string = tx.payment_method_type || "";
     const chargeContext: string = tx.charge_context || "booking_deposit";

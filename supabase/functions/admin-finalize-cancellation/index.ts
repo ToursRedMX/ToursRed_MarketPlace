@@ -182,10 +182,6 @@ Deno.serve(async (req: Request) => {
     // ============================================================
     // Step 1: Clawback earned points
     // ============================================================
-    const totalRefundAmount = (refunds || []).reduce(
-      (sum, r) => sum + Number(r.requested_amount || 0),
-      0
-    );
     const { data: earnedPoints } = await serviceClient.rpc("get_earned_points_for_reference", {
       p_reference_id: booking_id,
       p_reference_type: "booking",

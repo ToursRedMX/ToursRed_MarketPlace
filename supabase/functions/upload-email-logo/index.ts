@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
 
     const fileBuffer = await file.arrayBuffer();
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from("images")
       .upload("email-logo.png", fileBuffer, {
         contentType: file.type || "image/png",

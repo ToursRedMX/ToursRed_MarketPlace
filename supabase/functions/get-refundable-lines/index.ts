@@ -18,16 +18,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const CHARGE_CONTEXT_TO_REFERENCE_TYPE: Record<string, string> = {
-  booking_deposit: "booking",
-  payment_plan_installment: "payment_plan",
-  supplement: "supplement",
-  insurance: "insurance_payment",
-  optional_service: "optional_service_payment",
-  membership: "membership",
-  featured_slot: "featured_slot",
-};
-
 const NON_REFUNDABLE_METHODS = ["OXXO", "Transferencia Bancaria", "Efectivo", "bnpl", "cash", "spei"];
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -279,7 +269,7 @@ Deno.serve(async (req: Request) => {
     const lines = transactions.map((tx) => {
       const ctx = tx.charge_context || "booking_deposit";
       const refId = tx.charge_reference_id ? String(tx.charge_reference_id) : null;
-      let description = "Pago";
+      let description: string;
       switch (ctx) {
         case "booking_deposit":
           description = "Anticipo de reserva";

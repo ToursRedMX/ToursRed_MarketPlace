@@ -11,7 +11,7 @@ import PdfPrinter from "npm:pdfmake@0.2.20";
 import { Buffer } from "node:buffer";
 import { ROBOTO_NORMAL_B64, ROBOTO_BOLD_B64, ROBOTO_ITALICS_B64, ROBOTO_BOLDITALICS_B64 } from "../_shared/robotoFonts.ts";
 import { buildSignedContractDocDefinition } from "../_shared/contractDocDefinition.ts";
-import type { ContractData, AnexoBData } from "../_shared/contractDocDefinition.ts";
+import type { ContractData } from "../_shared/contractDocDefinition.ts";
 import { envRequerida } from "../_shared/env.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";

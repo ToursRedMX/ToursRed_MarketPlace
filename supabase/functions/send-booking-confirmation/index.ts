@@ -366,6 +366,11 @@ Deno.serve(async (req: Request) => {
           <img src="${qrImageUrl}" alt="Código QR de Check-in" style="width: 200px; height: 200px; display: block; margin: 0 auto;" />
           <div style="font-size: 11px; color: #94a3b8; margin-top: 10px;">Válido hasta 24h después del inicio del tour</div>
         </div>
+        ${checkinPageUrl ? `
+        <p style="font-size: 13px; margin-top: 12px;">
+          <a href="${checkinPageUrl}" style="color: #667eea;">¿No puedes escanear el código? Haz clic aquí</a>
+        </p>
+        ` : ''}
       </div>
     ` : '';
 

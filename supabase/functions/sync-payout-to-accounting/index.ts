@@ -201,8 +201,6 @@ Deno.serve(async (req: Request) => {
     const commissionAmount = Number(payout.platform_commission_amount ?? 0);
     const grossAmount = totalPayout + commissionAmount;
     const reference = payout.payout_code || payout.bank_reference || payout_id;
-    // Referencia fiscal del proveedor, conservada para trazabilidad del payout.
-    const billNumber = payout.bill_number || null;
 
     const journalRes = await supabase.functions.invoke("sync-to-accounting", {
       body: {

@@ -165,7 +165,7 @@ Gracias por unirte a ToursRed+. Tu membresía ha sido activada exitosamente.
 DETALLES DE TU MEMBRESÍA:
 Plan: ${planName}
 Precio: ${planPrice}
-Fecha de inicio: ${formattedStartDate}
+${planType === 'annual' && annualSavings > 0 ? `Ahorro vs. plan mensual: $${annualSavings.toFixed(0)} MXN/año\n` : ''}Fecha de inicio: ${formattedStartDate}
 Fecha de renovación: ${formattedEndDate}
 
 BENEFICIOS INCLUIDOS:
@@ -248,6 +248,12 @@ Equipo ToursRed
           <span class="detail-label">Precio:</span>
           <span class="detail-value"><strong>${planPrice}</strong></span>
         </div>
+        ${planType === 'annual' && annualSavings > 0 ? `
+        <div class="detail-row">
+          <span class="detail-label">Ahorro vs. plan mensual:</span>
+          <span class="detail-value" style="color: #059669;"><strong>$${annualSavings.toFixed(0)} MXN/año</strong></span>
+        </div>
+        ` : ''}
         <div class="detail-row">
           <span class="detail-label">Fecha de inicio:</span>
           <span class="detail-value">${formattedStartDate}</span>

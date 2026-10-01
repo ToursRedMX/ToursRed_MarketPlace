@@ -52,7 +52,7 @@ Deno.serve(async (req: Request) => {
 
     const body: RequestBody = await req.json();
     const {
-      booking_id, cancellation_id,
+      cancellation_id,
       admin_cancellation, admin_reason_for_traveler, admin_reason_for_agency,
       refund_amount, refund_method, receipt_url
     } = body;

@@ -213,7 +213,7 @@ const TravelerReferralsPage: React.FC = () => {
 
         setTimeout(() => setCodeSuccess(''), 4000);
       }
-    } catch (err) {
+    } catch {
       setCodeError('Error de conexión. Intenta de nuevo.');
     } finally {
       setIsSavingCode(false);
