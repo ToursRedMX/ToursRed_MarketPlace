@@ -54,7 +54,6 @@ Deno.serve(async (req: Request) => {
     const {
       booking_supplement_id,
       payment_method,
-      stripe_payment_intent_id,
       mercadopago_payment_id,
       paypal_order_id,
       conekta_method,

@@ -58,7 +58,6 @@ Deno.serve(async (req: Request) => {
       tour_optional_service_id,
       quantity,
       payment_method,
-      stripe_payment_intent_id,
       mercadopago_payment_id,
       paypal_order_id,
       conekta_method,        // "card" | "cash" | "spei" | "bnpl"

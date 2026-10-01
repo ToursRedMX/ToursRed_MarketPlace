@@ -203,13 +203,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Fetch platform commission rate
-    const { data: platformSettings } = await supabase
-      .from("platform_settings")
-      .select("agency_commission_percentage")
-      .maybeSingle();
-    const commissionRate = ((platformSettings as any)?.agency_commission_percentage || 15) / 100;
-
     const originalDepositAmount = Number((booking as any).deposit_amount || 0);
     let originalServiceCharge = Number((booking as any).service_charge || 0);
 

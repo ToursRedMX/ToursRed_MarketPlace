@@ -141,7 +141,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const approvalStatus = action === "approve" ? "approved" : "rejected";
     const now = new Date().toISOString();
 
     // Si es rechazo, solo actualizar approval_status

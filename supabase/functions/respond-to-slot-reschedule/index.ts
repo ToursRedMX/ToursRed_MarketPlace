@@ -409,7 +409,6 @@ Deno.serve(async (req: Request) => {
       const availableInTarget: number | null = rescheduleRequest.available_spots_in_target;
       const travelersCount = booking.travelers_count || 1;
 
-      let confirmedSpot = true;
       let alternativeSlots: any[] = [];
 
       if (availableInTarget !== null) {
@@ -421,8 +420,6 @@ Deno.serve(async (req: Request) => {
         const remainingSpots = availableInTarget - alreadyConfirmedTravelers;
 
         if (remainingSpots < travelersCount) {
-          confirmedSpot = false;
-
           const { data: altSlots } = await adminClient.rpc("get_alternative_slots_for_reschedule", {
             p_tour_id: rescheduleRequest.tour_id,
             p_original_slot_id: rescheduleRequest.original_slot_id,

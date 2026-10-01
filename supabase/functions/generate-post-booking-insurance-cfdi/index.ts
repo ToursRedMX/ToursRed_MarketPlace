@@ -164,17 +164,6 @@ Deno.serve(async (req: Request) => {
     const netServiceCharge = Number(service_charge ?? 0);
     const exactTotal = insuranceCost;
 
-    // Load agency
-    let agencyData: { id: string; postal_code?: string } | null = null;
-    if (bookingData.agency_id) {
-      const { data: ag } = await supabase
-        .from("agencies")
-        .select("id, postal_code")
-        .eq("id", bookingData.agency_id)
-        .maybeSingle();
-      agencyData = ag;
-    }
-
     // Load traveler
     const { data: traveler } = await supabase
       .from("users")

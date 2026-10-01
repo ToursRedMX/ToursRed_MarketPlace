@@ -599,7 +599,6 @@ function buildDesgloseLineItems(
     service_charge: Number(opt.service_charge) || 0,
   }));
 
-  const optionalsSubtotalTotal = optionalLines.reduce((s: number, o: any) => s + o.subtotal, 0);
   const optionalsServiceChargeTotal = optionalLines.reduce((s: number, o: any) => s + o.service_charge, 0);
 
   // Combined service charge line: tour's service charge + all optionals' service charges

@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { booking_id, cancellation_id, admin_cancellation, admin_reason }: RequestBody = await req.json();
+    const { cancellation_id, admin_cancellation, admin_reason }: RequestBody = await req.json();
 
     const { data: cancellation, error: cancellationError } = await supabase
       .from('booking_cancellations')
