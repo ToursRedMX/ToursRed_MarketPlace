@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2.116.0";
+import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 
 const corsHeaders = {
