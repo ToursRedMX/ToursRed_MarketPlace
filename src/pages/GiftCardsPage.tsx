@@ -35,7 +35,6 @@ export default function GiftCardsPage() {
     code: string;
     discount_type: string;
     discount_value: number;
-    discountAmount: number;
   } | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [giftCardAmounts, setGiftCardAmounts] = useState<number[]>(DEFAULT_GIFT_CARD_AMOUNTS);
@@ -134,18 +133,10 @@ export default function GiftCardsPage() {
         return;
       }
 
-      let discountAmount = 0;
-      if (data.discount_type === 'gift_card_percentage') {
-        discountAmount = (selectedAmount * data.discount_value) / 100;
-      } else if (data.discount_type === 'gift_card_fixed') {
-        discountAmount = Math.min(data.discount_value, selectedAmount);
-      }
-
       setAppliedDiscount({
         code: discountCode.trim().toUpperCase(),
         discount_type: data.discount_type,
         discount_value: data.discount_value,
-        discountAmount: Math.round(discountAmount * 100) / 100
       });
       setDiscountCode('');
       setCodeError(null);
@@ -162,25 +153,21 @@ export default function GiftCardsPage() {
     setCodeError(null);
   };
 
-  useEffect(() => {
-    if (appliedDiscount) {
-      let newDiscountAmount = 0;
-      if (appliedDiscount.discount_type === 'gift_card_percentage') {
-        newDiscountAmount = (selectedAmount * appliedDiscount.discount_value) / 100;
-      } else if (appliedDiscount.discount_type === 'gift_card_fixed') {
-        newDiscountAmount = Math.min(appliedDiscount.discount_value, selectedAmount);
-      }
-
-      setAppliedDiscount({
-        ...appliedDiscount,
-        discountAmount: Math.round(newDiscountAmount * 100) / 100
-      });
-    }
-  }, [selectedAmount]);
+  // Se calcula en cada render a partir de selectedAmount: antes se guardaba
+  // como estado sincronizado por un efecto que solo escuchaba [selectedAmount],
+  // asi que habia un render donde selectedAmount ya habia cambiado pero
+  // discountAmount todavia reflejaba el monto anterior.
+  const discountAmount = appliedDiscount
+    ? Math.round(
+        (appliedDiscount.discount_type === 'gift_card_percentage'
+          ? (selectedAmount * appliedDiscount.discount_value) / 100
+          : Math.min(appliedDiscount.discount_value, selectedAmount)) * 100
+      ) / 100
+    : 0;
 
   const calculateFinalAmount = () => {
     if (!appliedDiscount) return selectedAmount;
-    return Math.max(0, selectedAmount - appliedDiscount.discountAmount);
+    return Math.max(0, selectedAmount - discountAmount);
   };
 
   const handlePurchase = async (e: React.FormEvent) => {
@@ -687,7 +674,7 @@ export default function GiftCardsPage() {
                   <div className="flex justify-between items-center text-lg text-green-600">
                     <span>Descuento:</span>
                     <span className="text-xl font-semibold">
-                      -{formatCurrencyMXN(appliedDiscount.discountAmount)} MXN
+                      -{formatCurrencyMXN(discountAmount)} MXN
                     </span>
                   </div>
                 )}
@@ -758,7 +745,7 @@ export default function GiftCardsPage() {
                       <div>
                         <p className="font-semibold text-green-900">Código aplicado: {appliedDiscount.code}</p>
                         <p className="text-sm text-green-700">
-                          Descuento de {formatCurrencyMXN(appliedDiscount.discountAmount)} MXN
+                          Descuento de {formatCurrencyMXN(discountAmount)} MXN
                         </p>
                       </div>
                     </div>
