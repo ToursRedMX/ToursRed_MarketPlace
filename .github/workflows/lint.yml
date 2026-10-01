@@ -351,6 +351,21 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d revocacion -v ON_ERROR_STOP=1 -f test-revocar-sesion.sql
 
+      # La politica de UPDATE de users deja a cada quien escribir su propia
+      # fila sin mirar columnas, y authenticated tiene UPDATE sobre todas: un
+      # viajero se hacia super admin desde la consola del navegador. El INSERT
+      # se cerro el 30-ago; el UPDATE quedo abierto hasta el 01-oct. La prueba
+      # reproduce el hueco ANTES de aplicar la migracion, y despues comprueba
+      # tanto lo que se cierra como lo que no se puede romper (Mi perfil, el
+      # super admin aprobando, service_role, las SECURITY DEFINER).
+      - name: Verify nobody can raise their own privileges on users
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS escalada;" -c "CREATE DATABASE escalada;"
+          cd scripts
+          psql -h localhost -U postgres -d escalada -v ON_ERROR_STOP=1 -f test-users-auto-escalada.sql
+
       # La conciliacion contable diaria mira 7 dias, no uno: sin traslape,
       # cualquier noche que el job falle pierde ese dia para siempre. La prueba
       # levanta un pg_cron de mentiras porque la extension no esta en CI, y lo
