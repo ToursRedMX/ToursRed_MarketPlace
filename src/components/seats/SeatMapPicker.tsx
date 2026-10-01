@@ -271,7 +271,7 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
       }));
 
       setSeatsWithStatus(combined);
-    } catch (err: any) {
+    } catch {
       setError('Error al cargar el mapa de asientos.');
     } finally {
       setIsLoading(false);

@@ -178,7 +178,7 @@ const AdminCategories: React.FC = () => {
       await updateTourCategory(swapCategory.id, { display_order: category.display_order });
 
       await fetchCategories();
-    } catch (err: any) {
+    } catch {
       setError('Error al reordenar las categorías');
     }
   };

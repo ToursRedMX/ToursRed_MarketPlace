@@ -30,7 +30,7 @@ const SlotTimePicker: React.FC<SlotTimePickerProps> = ({ tourId, selectedDate, s
         });
         if (rpcError) throw rpcError;
         setSlots((data as TourSlot[]) || []);
-      } catch (err) {
+      } catch {
         setError('No se pudieron cargar los horarios disponibles.');
       } finally {
         setIsLoading(false);

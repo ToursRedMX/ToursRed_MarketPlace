@@ -60,7 +60,7 @@ Deno.serve(async (req: Request) => {
         });
         const { data: { user } } = await supabaseClient.auth.getUser();
         userId = user?.id || null;
-      } catch (authError) {
+      } catch {
         console.log("No authenticated user found");
       }
     }

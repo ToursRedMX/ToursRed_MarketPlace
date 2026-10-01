@@ -125,7 +125,7 @@ const BookingFlowLayout: React.FC = () => {
 
         setTour(tourData);
         setResolvedSlug(slug);
-      } catch (err: any) {
+      } catch {
         setError('Error al cargar la informacion del tour.');
       } finally {
         setIsLoading(false);

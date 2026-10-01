@@ -74,7 +74,7 @@ export default function PaymentReturnPage() {
               setMessage(errData.error || 'Hubo un problema al confirmar tu pago del suplemento. Contacta soporte.');
               return;
             }
-          } catch (err) {
+          } catch {
             setStatus('error');
             setMessage('Error al confirmar el pago del suplemento. Contacta soporte si el cargo fue aplicado.');
             return;
@@ -113,7 +113,7 @@ export default function PaymentReturnPage() {
               setMessage(errData.error || 'Hubo un problema al confirmar tu pago del extra. Contacta soporte.');
               return;
             }
-          } catch (err) {
+          } catch {
             setStatus('error');
             setMessage('Error al confirmar el pago del extra. Contacta soporte si el cargo fue aplicado.');
             return;
@@ -151,7 +151,7 @@ export default function PaymentReturnPage() {
               setMessage(errData.error || 'Hubo un problema al confirmar tu abono. Contacta soporte.');
               return;
             }
-          } catch (err) {
+          } catch {
             setStatus('error');
             setMessage('Error al confirmar el abono. Contacta soporte si el cargo fue aplicado.');
             return;
