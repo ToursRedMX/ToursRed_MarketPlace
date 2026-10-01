@@ -1770,8 +1770,8 @@ const TravelerBookings: React.FC = () => {
     });
 
   const getStatusBadge = (status: string, paymentStatus?: string, approvalStatus?: string, isNoShow?: boolean) => {
-    let statusText = '';
-    let statusClass = '';
+    let statusText: string;
+    let statusClass: string;
 
     if (isNoShow) {
       statusText = 'No Show';
@@ -1820,8 +1820,8 @@ const TravelerBookings: React.FC = () => {
   const getPaymentStatusBadge = (paymentStatus?: string) => {
     if (!paymentStatus) return null;
 
-    let statusText = '';
-    let statusClass = '';
+    let statusText: string;
+    let statusClass: string;
 
     switch (paymentStatus) {
       case 'succeeded':

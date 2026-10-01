@@ -70,7 +70,7 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return firstResponse;
     }
 
-    let body: any = null;
+    let body: any;
     try {
       body = await firstResponse.clone().json();
     } catch {

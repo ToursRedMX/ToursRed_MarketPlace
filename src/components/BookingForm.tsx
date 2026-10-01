@@ -677,7 +677,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   const insuranceDiscountAmount = (() => {
     if (!includeInsurance || !appliedInsuranceDiscount || insuranceCost <= 0) return 0;
     if (appliedInsuranceDiscount.discount_type === 'insurance_free') return insuranceCost;
-    let d = 0;
+    let d: number;
     if (appliedInsuranceDiscount.discount_type === 'insurance_percentage') {
       d = insuranceCost * (appliedInsuranceDiscount.discount_value / 100);
     } else {
@@ -874,7 +874,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
   // Calculate discount amount
   const calculateDiscountAmount = (baseAmount: number): number => {
     if (!appliedDiscount) return 0;
-    let discount = 0;
+    let discount: number;
     if (appliedDiscount.discount_type.includes('percentage')) {
       discount = baseAmount * (appliedDiscount.discount_value / 100);
     } else {

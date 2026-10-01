@@ -268,8 +268,8 @@ const AgencyBookings: React.FC = () => {
   };
 
   const getStatusBadge = (status: string, paymentStatus?: string) => {
-    let statusText = '';
-    let statusClass = '';
+    let statusText: string;
+    let statusClass: string;
     let icon = null;
 
     switch (status) {
@@ -309,9 +309,9 @@ const AgencyBookings: React.FC = () => {
   const getApprovalStatusBadge = (approvalStatus?: string) => {
     if (!approvalStatus) return null;
 
-    let statusText = '';
-    let statusClass = '';
-    let icon = null;
+    let statusText: string;
+    let statusClass: string;
+    let icon;
 
     switch (approvalStatus) {
       case 'pending':
@@ -447,8 +447,8 @@ const AgencyBookings: React.FC = () => {
   const getPaymentStatusBadge = (paymentStatus?: string) => {
     if (!paymentStatus) return null;
 
-    let statusText = '';
-    let statusClass = '';
+    let statusText: string;
+    let statusClass: string;
 
     switch (paymentStatus) {
       case 'succeeded':
