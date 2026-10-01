@@ -7,6 +7,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
+import { normalizarTelefono } from '../../lib/telefono';
 
 interface ExecutiveProfile {
   id: string;
@@ -59,7 +60,7 @@ const SectionMessage = ({ section, message, onDismiss }: { section: string; mess
   ) : null;
 
 export default function ExecutivePerfil() {
-  const { accountExecutiveInfo } = useAuth();
+  const { user, accountExecutiveInfo } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [profile, setProfile] = useState<ExecutiveProfile | null>(null);
@@ -180,12 +181,27 @@ export default function ExecutivePerfil() {
   const savePersonal = async () => {
     if (!profile) return;
     if (!firstName.trim() || !lastName.trim()) { showMsg('error', 'El nombre y apellido son requeridos.', 'personal'); return; }
+    const telefono = phone.trim() ? normalizarTelefono(phone) : null;
+    if (phone.trim() && !telefono) {
+      showMsg('error', 'El teléfono debe tener 10 dígitos, o empezar con + y la lada del país.', 'personal');
+      return;
+    }
     setIsSavingPersonal(true);
     try {
       const { error } = await supabase.from('account_executives')
-        .update({ first_name: firstName.trim(), last_name: lastName.trim(), phone: phone.trim() || null })
+        .update({ first_name: firstName.trim(), last_name: lastName.trim(), phone: telefono })
         .eq('id', profile.id);
       if (error) throw error;
+      // users.phone_number es donde se busca el telefono de cualquier cuenta
+      // (recuperar contrasena, y a futuro SMS/WhatsApp). Antes del 01-oct-2026 el
+      // del ejecutivo solo vivia en account_executives y nadie lo encontraba.
+      if (user?.id) {
+        const { error: errorUsuario } = await supabase.from('users')
+          .update({ phone_number: telefono })
+          .eq('id', user.id);
+        if (errorUsuario) throw errorUsuario;
+      }
+      setPhone(telefono ?? '');
       showMsg('success', 'Información personal guardada.', 'personal');
     } catch (e: any) {
       showMsg('error', e.message || 'Error al guardar.', 'personal');
