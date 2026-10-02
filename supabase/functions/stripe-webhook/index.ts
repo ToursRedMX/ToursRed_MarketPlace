@@ -10,6 +10,7 @@ import { crearAsientoContable, notificarAdmins, alertarOps, avisosCon } from "..
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { asentarCobroStripe, estadoSegunStripe } from "../_shared/cobrosStripe.ts";
 import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
+import { motivoParaNoConfirmar } from "../_shared/cupoAlConfirmar.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1005,7 +1006,7 @@ Deno.serve(async (req) => {
             // audit log de BOOKING_CONFIRMED se guardaba con p_actor_id nulo y
             // el fallback del user_id de la membresia de carrito mixto quedaba
             // en undefined.
-            .select('tour_id, travelers_count, user_id')
+            .select('tour_id, travelers_count, user_id, slot_id')
             .eq('id', bookingId)
             .single();
 
@@ -1014,17 +1015,51 @@ Deno.serve(async (req) => {
             break;
           }
 
-          const { data: availability, error: availabilityError } = await supabase
-            .rpc('get_tour_availability', { p_tour_id: booking.tour_id });
-
-          if (availabilityError || !availability || availability.length === 0) {
-            console.error(`Error checking tour availability:`, availabilityError);
-            break;
+          // ── Cupo: el lugar ya se aparto al CREAR la reserva ──
+          // Ver _shared/cupoAlConfirmar.ts: hasta el 02-oct-2026 aqui se usaba
+          // get_tour_availability(tour), que no sabe de horarios, y el webhook
+          // salia con un `break` mudo — Stripe cobraba y la reserva se quedaba
+          // en pending sin transaccion, sin alerta y sin rastro.
+          let motivoSinCupo: string | null;
+          if (booking.slot_id) {
+            const { data: horario, error: errorHorario } = await supabase
+              .from('tour_slots')
+              .select('capacity, booked_count')
+              .eq('id', booking.slot_id)
+              .maybeSingle();
+            motivoSinCupo = motivoParaNoConfirmar({
+              slotId: booking.slot_id,
+              viajeros: booking.travelers_count,
+              horario,
+              errorHorario: errorHorario?.message ?? null,
+            });
+          } else {
+            const { data: availability, error: availabilityError } = await supabase
+              .rpc('get_tour_availability', { p_tour_id: booking.tour_id });
+            motivoSinCupo = motivoParaNoConfirmar({
+              slotId: null,
+              viajeros: booking.travelers_count,
+              disponibleEnTour: availability?.[0]?.available_spots ?? null,
+              errorTour: availabilityError?.message ?? null,
+            });
           }
 
-          if (availability[0].available_spots < booking.travelers_count) {
-            console.error(`Insufficient availability for booking ${bookingId}. Available: ${availability[0].available_spots}, Required: ${booking.travelers_count}`);
-            console.log(`Tour ${booking.tour_id} has insufficient spots. This booking will NOT be confirmed.`);
+          if (motivoSinCupo) {
+            // El dinero YA entro. No confirmar puede ser lo correcto (sobreventa),
+            // pero nunca en silencio: alguien tiene que reembolsar o reacomodar.
+            const montoCobrado = ((session.amount_total ?? 0) / 100).toFixed(2);
+            await registrarFallo(
+              'stripe-webhook/cobrado-sin-confirmar',
+              `Pago de Stripe cobrado y reserva ${bookingId} SIN confirmar: ${motivoSinCupo}`,
+              { bookingId, sessionId: session.id, monto: montoCobrado },
+            );
+            await alertarOps(supabase, `[ALERTA] Pago de Stripe cobrado y reserva SIN confirmar - $${montoCobrado} MXN`, [
+              ['Reserva', bookingId],
+              ['Motivo', motivoSinCupo],
+              ['Checkout session', session.id],
+              ['Monto cobrado', `$${montoCobrado} MXN`],
+              ['Que hacer', 'Reembolsar desde Stripe o reacomodar al viajero en otro horario'],
+            ]);
             break;
           }
 
