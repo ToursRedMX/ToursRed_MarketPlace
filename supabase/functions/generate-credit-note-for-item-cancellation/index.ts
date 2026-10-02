@@ -224,7 +224,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Idempotency check â€” avoid duplicate credit notes for the same item + amount
+    // Idempotency check — avoid duplicate credit notes for the same item + amount
     const { data: existing } = await supabase
       .from("cfdi_invoices")
       .select("id, status")
@@ -253,7 +253,7 @@ Deno.serve(async (req: Request) => {
     const issuerPostalCode = settings.pac_issuer_postal_code || "";
     if (!issuerPostalCode) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -310,7 +310,7 @@ Deno.serve(async (req: Request) => {
         clave_prod_serv: "90121500",
         cantidad: 1,
         clave_unidad: "E48",
-        descripcion: `Nota de crÃ©dito â€” ${item_description}`,
+        descripcion: `Nota de crédito — ${item_description}`,
         valor_unitario: cnTaxCfdi.taxableBase,
         tercero: tercero_agencia || null,
       });
@@ -320,7 +320,7 @@ Deno.serve(async (req: Request) => {
         clave_prod_serv: "90121500",
         cantidad: 1,
         clave_unidad: "E48",
-        descripcion: `Nota de crÃ©dito â€” ${item_description}`,
+        descripcion: `Nota de crédito — ${item_description}`,
         valor_unitario: cnTaxCfdi.exemptAmount,
         exento: true,
         tercero: tercero_agencia || null,

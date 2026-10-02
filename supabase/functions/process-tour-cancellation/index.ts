@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
 
     const { tour_id, cancellation_reason } = await req.json();
     if (!tour_id || !cancellation_reason) throw new Error("Missing required fields");
-    if (cancellation_reason.trim().length < 50) throw new Error("El motivo de cancelaciÃ³n debe tener al menos 50 caracteres");
+    if (cancellation_reason.trim().length < 50) throw new Error("El motivo de cancelación debe tener al menos 50 caracteres");
 
     const { data: tour, error: tourError } = await supabase
       .from("tours")
@@ -88,7 +88,7 @@ Deno.serve(async (req: Request) => {
     const now = new Date();
     tourStartDate.setHours(0, 0, 0, 0);
     now.setHours(0, 0, 0, 0);
-    if (tourStartDate <= now) throw new Error("No se puede cancelar un tour que ya iniciÃ³ o estÃ¡ en curso");
+    if (tourStartDate <= now) throw new Error("No se puede cancelar un tour que ya inició o está en curso");
 
     const { data: activeBookings, error: bookingsError } = await supabase
       .from("bookings")
@@ -111,7 +111,7 @@ Deno.serve(async (req: Request) => {
       .select()
       .single();
 
-    if (cancellationError || !cancellationRecord) throw new Error("Error al crear el registro de cancelaciÃ³n");
+    if (cancellationError || !cancellationRecord) throw new Error("Error al crear el registro de cancelación");
 
     let totalRefunded = 0;
     let successfulRefunds = 0;
@@ -120,7 +120,7 @@ Deno.serve(async (req: Request) => {
     for (const booking of activeBookings) {
       try {
         // ============================================================
-        // Calculate refund â€” agency always refunds EVERYTHING
+        // Calculate refund — agency always refunds EVERYTHING
         // including service charge and payment plan installments
         // ============================================================
         const originalDepositAmount = Number(booking.deposit_amount || 0);
@@ -177,14 +177,14 @@ Deno.serve(async (req: Request) => {
             p_booking_id: booking.id,
             p_refund_amount: refundAmount,
             p_reference_type: "tour_cancellation",
-            p_description: `Reembolso completo por cancelaciÃ³n del tour: ${tour.name}`,
+            p_description: `Reembolso completo por cancelación del tour: ${tour.name}`,
             p_new_status: "cancelled",
             p_set_cancelled_at: true,
             p_cancellation_type: "agency_cancellation",
             p_cancellation_refund_amount: refundAmount,
           }
         );
-        if (refundError) throw new Error(`Error en reembolso atÃ³mico: ${refundError.message}`);
+        if (refundError) throw new Error(`Error en reembolso atómico: ${refundError.message}`);
 
         // Create booking_cancellations record with correct amounts
         // Note: booking is now cancelled (status + cancelled_at set atomically above)
@@ -199,7 +199,7 @@ Deno.serve(async (req: Request) => {
             total_principal_paid: principalPaid, refund_amount_to_traveler: refundAmount,
             amount_to_agency: 0, amount_to_platform: 0, refund_processed: true,
             cancelled_by_agency: true,
-            cancellation_reason: `CancelaciÃ³n de tour completo por agencia: ${cancellation_reason.trim()}`,
+            cancellation_reason: `Cancelación de tour completo por agencia: ${cancellation_reason.trim()}`,
             service_charge_refunded_amount: originalServiceCharge + optionalServicesServiceCharge,
             insurance_refund_amount: insuranceRefund,
             optional_services_refund_amount: optionalServicesRefundable,
@@ -240,7 +240,7 @@ Deno.serve(async (req: Request) => {
               p_user_id: booking.user_id,
               p_amount: supRefundAmount,
               p_type: "refund",
-              p_description: `Reembolso suplemento "${(sup.tour_supplements as any)?.name}" por cancelaciÃ³n del tour: ${tour.name}`,
+              p_description: `Reembolso suplemento "${(sup.tour_supplements as any)?.name}" por cancelación del tour: ${tour.name}`,
               p_reference_id: sup.id,
               p_reference_type: "supplement_cancellation",
               p_idempotency_key: `${sup.id}_tour_cancel_supplement_refund`,
@@ -256,7 +256,7 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        // Deduct points â€” 1 peso = 1 punto
+        // Deduct points — 1 peso = 1 punto
         if (refundAmount > 0) {
           const { data: earnedPoints } = await supabase.rpc("get_earned_points_for_reference", {
             p_reference_id: booking.id,
@@ -268,7 +268,7 @@ Deno.serve(async (req: Request) => {
               const { error: deductErr } = await supabase.rpc("deduct_points", {
                 p_user_id: booking.user_id,
                 p_amount: pointsToDeduct,
-                p_description: `Puntos revertidos por cancelaciÃ³n de tour - ${tour.name}`,
+                p_description: `Puntos revertidos por cancelación de tour - ${tour.name}`,
                 p_reference_id: booking.id,
                 p_reference_type: "tour_cancellation",
               });
@@ -288,7 +288,7 @@ Deno.serve(async (req: Request) => {
               p_cancellation_type: "agency_booking",
             });
           } catch (accountingError) {
-            console.error("Error generando pÃ³liza contable para reserva:", booking.id, accountingError);
+            console.error("Error generando póliza contable para reserva:", booking.id, accountingError);
           }
 
           // Cancel stamped CFDIs (async, non-blocking)
@@ -356,7 +356,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return new Response(JSON.stringify({ success: false, error: error.message || "Error al procesar la cancelaciÃ³n del tour" }), {
+    return new Response(JSON.stringify({ success: false, error: error.message || "Error al procesar la cancelación del tour" }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

@@ -151,7 +151,7 @@ const BOOKING_COLUMNS = [
 /**
  * Cierra el circulo en la direccion que fallo: si alguien agrega un campo a
  * BookingRow y olvida pedirlo en BOOKING_COLUMNS, esto NO COMPILA. Sin esto el
- * tipo prometeria una columna que PostgREST nunca devuelve â€” exactamente el
+ * tipo prometeria una columna que PostgREST nunca devuelve — exactamente el
  * bug de tax_treatment, solo que declarado.
  */
 type MissingBookingColumn = Exclude<
@@ -308,7 +308,7 @@ Deno.serve(async (req: Request) => {
     //
     // El select y el tipo se derivan uno del otro a proposito. Hasta el
     // 01-sep-2026 este select NO pedia tax_treatment ni exempt_ratio, pero el
-    // codigo de mas abajo si los leia â€” a traves de un `booking as {...}` que
+    // codigo de mas abajo si los leia — a traves de un `booking as {...}` que
     // dejaba a TypeScript sin nada que revisar. PostgREST devuelve unicamente
     // las columnas pedidas, asi que ambas llegaban `undefined`, caian en el
     // `?? "taxable_16"` y TODO tour se facturaba al 16%: la ruta de exentos
@@ -466,7 +466,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // -------------------------------------------------------
-    // MONTOS: difieren segÃºn si es cobro de check-in o reserva
+    // MONTOS: difieren según si es cobro de check-in o reserva
     // -------------------------------------------------------
     // Bruto del tour (IVA incluido) antes de separar base e IVA. Se necesita
     // aparte de precioTourBruto porque ese ya viene dividido entre 1.16 y el
@@ -485,8 +485,8 @@ Deno.serve(async (req: Request) => {
     let invoiceType: string;
     let effectivePaymentForm: string;
     let exactTotal: number; // monto exacto cobrado al cliente (IVA incluido)
-    // FIX (bug crÃ­tico detectado 2026-08-20): estas dos variables se referencian
-    // mÃ¡s abajo (en p_tour_amount) FUERA de los bloques if/else donde antes
+    // FIX (bug crítico detectado 2026-08-20): estas dos variables se referencian
+    // más abajo (en p_tour_amount) FUERA de los bloques if/else donde antes
     // estaban declaradas con const, causando ReferenceError en el 100% de las
     // llamadas desde finales de julio. Se elevan a este scope con let.
     let amountCharged: number | undefined;
@@ -531,7 +531,7 @@ Deno.serve(async (req: Request) => {
       const serviceChargeDiscountRaw = Number(booking.service_charge_discount || 0);
       const insuranceCost = booking.travel_insurance_included ? Number(booking.travel_insurance_cost || 0) : 0;
 
-      // r6 definido en bloque anterior; tambiÃ©n aplica aquÃ­
+      // r6 definido en bloque anterior; también aplica aquí
       const r6b = (n: number) => Math.round(n * 1000000) / 1000000;
 
       const membershipIncluded = booking.membership_purchased === true;
@@ -618,7 +618,7 @@ Deno.serve(async (req: Request) => {
     const issuerPostalCode = settings.pac_issuer_postal_code || "";
     if (!issuerPostalCode) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -653,7 +653,7 @@ Deno.serve(async (req: Request) => {
       receptorCP = issuerPostalCode;
     }
 
-    // Build "a cuenta de terceros" (agency pass-through) â€” solo aplica al concepto del tour
+    // Build "a cuenta de terceros" (agency pass-through) — solo aplica al concepto del tour
     // SAT CFDI40188: el RFC del tercero no puede coincidir con el del emisor ni el del receptor
     let terceroAgencia: CfdiTercero | undefined;
     if (
@@ -665,7 +665,7 @@ Deno.serve(async (req: Request) => {
       if (!agencyData.regimen_fiscal || !agencyData.postal_code) {
         return new Response(
           JSON.stringify({
-            error: "La agencia debe completar su rÃ©gimen fiscal y cÃ³digo postal en su expediente antes de poder facturar a cuenta de terceros.",
+            error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
           }),
           { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -744,7 +744,11 @@ Deno.serve(async (req: Request) => {
         clave_prod_serv: "90121500",
         cantidad: 1,
         clave_unidad: "E48",
-        descripcion: `Anticipo por servicio turÃ­stico: ${tourName} (Reserva ${bookingRef})${checkinLabel}`,
+        // Antes decia "Anticipo por servicio turistico". En CFDI "anticipo" es un
+        // proceso propio (se factura y luego se aplica contra la factura final);
+        // esta linea es la parte exenta del MISMO servicio, no un anticipo.
+        // Redaccion confirmada por el contador el 02-oct-2026.
+        descripcion: `Servicio de viaje: ${tourName} (porción exenta) (Reserva ${bookingRef})${checkinLabel}`,
         valor_unitario: tourTax.exemptAmount,
         ...(descuentoTourExento > 0 ? { descuento: descuentoTourExento } : {}),
         exento: true,
@@ -810,7 +814,7 @@ Deno.serve(async (req: Request) => {
           : opt.service_kind === "language"
             ? "90121702"
             : "90121500";
-        const optDesc = opt.description || (opt.service_kind === "pickup" ? "Pick Up" : opt.service_kind === "language" ? "Idioma/IntÃ©rprete" : "Servicio opcional");
+        const optDesc = opt.description || (opt.service_kind === "pickup" ? "Pick Up" : opt.service_kind === "language" ? "Idioma/Intérprete" : "Servicio opcional");
 
         // Cada opcional usa SU PROPIO snapshot fiscal. No hereda nada del tour:
         // un tour gravado puede llevar una "Entrada a Six Flags" exenta
@@ -914,7 +918,7 @@ Deno.serve(async (req: Request) => {
     //
     // Corre DESPUES de repartir puntos y saldo. Cuando corria antes comparaba
     // conceptos sin descontar contra un exactTotal que ya venia descontado, asi
-    // que toda reserva con puntos reportaba un descuadre falso a Sentry â€” y ese
+    // que toda reserva con puntos reportaba un descuadre falso a Sentry — y ese
     // ruido tapaba justamente los descuadres reales que la guardia busca.
     //
     // NO BLOQUEA a proposito: un CFDI que no se timbra deja al viajero sin
@@ -1092,7 +1096,7 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", cfdiRecord.id);
     if (stampedUpdateError) {
-      throw new Error(`Facturapi timbrÃ³ pero no se pudo guardar el CFDI localmente: ${stampedUpdateError.message}`);
+      throw new Error(`Facturapi timbró pero no se pudo guardar el CFDI localmente: ${stampedUpdateError.message}`);
     }
 
     // Send email notification (fire and forget)

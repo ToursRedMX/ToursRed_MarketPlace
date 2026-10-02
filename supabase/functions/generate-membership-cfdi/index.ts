@@ -183,7 +183,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Cargar datos de la membresÃ­a
+    // Cargar datos de la membresía
     const { data: membership, error: memError } = await supabase
       .from("memberships")
       .select("id, user_id, plan_type, status, current_period_start, current_period_end")
@@ -204,7 +204,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", membership.user_id)
       .maybeSingle();
 
-    // Cargar configuraciÃ³n de plataforma
+    // Cargar configuración de plataforma
     const { data: settings } = await supabase
       .from("platform_settings")
       .select("pac_provider, pac_organization_id, cfdi_serie_booking, pac_sandbox_mode, pac_issuer_rfc, membership_monthly_price, membership_annual_price, pac_issuer_postal_code")
@@ -223,19 +223,19 @@ Deno.serve(async (req: Request) => {
       );
     }
     if (settings.pac_provider !== "facturapi") {
-      return new Response(JSON.stringify({ error: "Facturapi es el Ãºnico PAC habilitado" }), {
+      return new Response(JSON.stringify({ error: "Facturapi es el único PAC habilitado" }), {
         status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Determinar precio segÃºn plan (precio bruto de catÃ¡logo, siempre sin descuento)
+    // Determinar precio según plan (precio bruto de catálogo, siempre sin descuento)
     const isAnnual = membership.plan_type === "annual";
     const membershipPrice = isAnnual
       ? Number(settings.membership_annual_price || 999)
       : Number(settings.membership_monthly_price || 99);
 
     // Si se recibe stripe_amount_paid (centavos), calcular el descuento aplicado
-    // Solo aplica al primer pago con cupÃ³n; renovaciones no llevan descuento
+    // Solo aplica al primer pago con cupón; renovaciones no llevan descuento
     const amountPaidMxn = stripe_amount_paid != null ? Math.round(Number(stripe_amount_paid)) / 100 : null;
     const hasDiscount = amountPaidMxn != null && amountPaidMxn < membershipPrice - 0.01;
 
@@ -258,7 +258,7 @@ Deno.serve(async (req: Request) => {
     const total = exactTotal;
 
     if (hasDiscount) {
-      console.log(`CFDI membresÃ­a con descuento: precio catÃ¡logo $${membershipPrice}, pagado $${amountPaidMxn}, descuento -$${descuentoConIva} MXN, total CFDI $${total} MXN`);
+      console.log(`CFDI membresía con descuento: precio catálogo $${membershipPrice}, pagado $${amountPaidMxn}, descuento -$${descuentoConIva} MXN, total CFDI $${total} MXN`);
     }
 
     // Construir receptor siguiendo las reglas del SAT
@@ -276,7 +276,7 @@ Deno.serve(async (req: Request) => {
     const issuerPostalCode = settings.pac_issuer_postal_code || "";
     if (!issuerPostalCode) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

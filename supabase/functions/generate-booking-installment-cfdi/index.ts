@@ -303,7 +303,7 @@ Deno.serve(async (req: Request) => {
     const issuerPostalCode = settings.pac_issuer_postal_code || "";
     if (!issuerPostalCode) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -344,7 +344,7 @@ Deno.serve(async (req: Request) => {
       if (!agencyData.regimen_fiscal || !agencyData.postal_code) {
         return new Response(
           JSON.stringify({
-            error: "La agencia debe completar su rÃ©gimen fiscal y cÃ³digo postal en su expediente antes de poder facturar a cuenta de terceros.",
+            error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
           }),
           { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -364,7 +364,7 @@ Deno.serve(async (req: Request) => {
 
     const conceptos: CfdiConcepto[] = [];
 
-    // Concepto 1 â€” Parcialidad (principal, CON tercero = agencia)
+    // Concepto 1 — Parcialidad (principal, CON tercero = agencia)
     //
     // El principal es una porcion del TOUR, asi que conserva su composicion
     // fiscal: se lee el snapshot de la reserva, no la config viva del tour.
@@ -400,20 +400,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Concepto 2 â€” PenalizaciÃ³n por pago tardÃ­o (CON tercero = agencia), solo si hubo penalidad
+    // Concepto 2 — Penalización por pago tardío (CON tercero = agencia), solo si hubo penalidad
     if (penaltyAmount > 0) {
       const penaltyBruto = r6(penaltyAmount / 1.16);
       conceptos.push({
         clave_prod_serv: "90121500",
         cantidad: 1,
         clave_unidad: "E48",
-        descripcion: `PenalizaciÃ³n por pago tardÃ­o - ${tourName} (Reserva ${bookingCode}) - Parcialidad ${installment.installment_number}`,
+        descripcion: `Penalización por pago tardío - ${tourName} (Reserva ${bookingCode}) - Parcialidad ${installment.installment_number}`,
         valor_unitario: penaltyBruto,
         tercero: terceroAgencia,
       });
     }
 
-    // Concepto 3 â€” Cargo de servicio (SIN tercero, ingreso directo de ToursRed), solo si hubo cargo
+    // Concepto 3 — Cargo de servicio (SIN tercero, ingreso directo de ToursRed), solo si hubo cargo
     if (txnServiceCharge > 0) {
       const serviceBruto = r6(txnServiceCharge / 1.16);
       conceptos.push({
@@ -500,7 +500,7 @@ Deno.serve(async (req: Request) => {
       error_message: null,
     }).eq("id", cfdiRecord.id);
     if (stampedUpdateError) {
-      throw new Error(`Facturapi timbrÃ³ pero no se pudo guardar el CFDI localmente: ${stampedUpdateError.message}`);
+      throw new Error(`Facturapi timbró pero no se pudo guardar el CFDI localmente: ${stampedUpdateError.message}`);
     }
 
     // Update installment with cfdi reference
