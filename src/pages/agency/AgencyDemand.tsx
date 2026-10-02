@@ -7,7 +7,7 @@ import { downloadExcel } from '../../utils/excelExport';
  * Demanda de viajeros: que buscan en ToursRed y que buscan sin encontrar.
  *
  * Los datos salen de `agency_demand_summary` y `agency_demand_top`
- * (migracion 20261002180000), que devuelven solo agregados: un termino aparece
+ * (migracion 20261002235551), que devuelven solo agregados: un termino aparece
  * si se busco al menos 3 veces, y nunca hay datos de personas. Las agencias no
  * leen `search_events` directamente.
  */

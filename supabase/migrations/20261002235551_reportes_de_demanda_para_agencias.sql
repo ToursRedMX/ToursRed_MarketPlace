@@ -1,5 +1,8 @@
 -- Reportes de demanda para agencias, a partir de public.search_events.
 --
+-- Aplicada primero con apply_migration (autorizado por Axel el 02-oct-2026); el
+-- ledger registro la version 20261002235551, que es la de este archivo.
+--
 -- POR QUE
 --
 -- La bitacora de busquedas (20261002155309) guarda lo que el viajero escribe y
