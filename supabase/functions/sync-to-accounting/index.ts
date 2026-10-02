@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
     const { data: settings, error: settingsError } = await supabase.from("platform_settings").select("accounting_provider, accounting_sync_enabled").maybeSingle();
     if (settingsError) throw settingsError;
     if (action === "health_check") return reply({ healthy: settings?.accounting_provider === "internal" && settings?.accounting_sync_enabled === true, provider: settings?.accounting_provider ?? "none" });
-    if (settings?.accounting_provider !== "internal") return reply({ error: "El ERP interno es el Ãºnico proveedor contable habilitado" }, 409);
+    if (settings?.accounting_provider !== "internal") return reply({ error: "El ERP interno es el único proveedor contable habilitado" }, 409);
     if (settings.accounting_sync_enabled !== true) return reply({ skipped: true, reason: "Accounting sync disabled" });
     if (action === "retry_errors") return reply({ retried: 0, succeeded: 0, failed: 0, reason: "No hay adaptadores externos que reintentar" });
     const recordId = body.record_id as string | undefined;
@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
       await logSync(supabase, body.record_type || "contact_agency", recordId, "synced", result);
       return reply({ success: true, provider: "internal", ...result });
     }
-    if (action !== "sync_journal") return reply({ error: `La operaciÃ³n ${action} no es vÃ¡lida para el ERP interno` }, 400);
+    if (action !== "sync_journal") return reply({ error: `La operación ${action} no es válida para el ERP interno` }, 400);
     const isPayout = payload.journal_type === "vendor_payment";
     const recordType = isPayout ? "payout_journal" : "booking";
     await logSync(supabase, recordType, recordId, "pending", undefined, undefined, { total: payload.total ?? payload.gross_amount, reference: payload.reference });

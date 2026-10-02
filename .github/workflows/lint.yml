@@ -265,6 +265,12 @@ jobs:
       - name: Verify a mixed-cart charge is recorded once, split
         run: node scripts/test-reparto-cobro-mixto.mjs
 
+      # e920572 (09-sep-2026) volvio a guardar como UTF-8 archivos leidos como
+      # cp1252: 144 lineas en 19 Edge Functions, entre ellas conceptos de CFDI
+      # que se timbraban con "turÃ­stico". Nadie lo vio en 3 semanas.
+      - name: Verify there is no double-encoded text
+        run: node scripts/test-sin-mojibake.mjs
+
       # `max_uses` topa los grupos DENTRO de una misma reserva: 12 viajeros con
       # min_travelers=4 son tres grupos, y si solo quedan dos usos el tercero
       # paga completo. Sin ese tope una reserva grande se lleva mas descuento

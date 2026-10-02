@@ -326,7 +326,7 @@ Deno.serve(async (req: Request) => {
     const rec = resolveReceptor(traveler, settings.pac_issuer_postal_code || "");
     if (!settings.pac_issuer_postal_code) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -338,7 +338,7 @@ Deno.serve(async (req: Request) => {
     if (needsTercero && (!agency.regimen_fiscal || !agency.codigo_postal_fiscal)) {
       return new Response(
         JSON.stringify({
-          error: "La agencia debe completar su rÃ©gimen fiscal y cÃ³digo postal en su expediente antes de poder facturar a cuenta de terceros.",
+          error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
         }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -396,8 +396,8 @@ Deno.serve(async (req: Request) => {
         decimals: 6,
       });
       const subDesc = isDeposit
-        ? `${tourName} (Reserva ${bookingCode}) â€” DepÃ³sito`
-        : `${tourName} (Reserva ${bookingCode}) â€” Parcialidad`;
+        ? `${tourName} (Reserva ${bookingCode}) — Depósito`
+        : `${tourName} (Reserva ${bookingCode}) — Parcialidad`;
 
       if (subTax.taxableBase > 0) {
         conceptos.push({
@@ -426,7 +426,7 @@ Deno.serve(async (req: Request) => {
           clave_prod_serv: "90111500",
           cantidad: 1,
           clave_unidad: "E48",
-          descripcion: `Seguro de viaje â€” ${tourName} (Reserva ${bookingCode})`,
+          descripcion: `Seguro de viaje — ${tourName} (Reserva ${bookingCode})`,
           valor_unitario: r6(newSeguroAmount / 1.16),
           tercero: terceroAgencia,
         });
@@ -449,7 +449,7 @@ Deno.serve(async (req: Request) => {
           clave_prod_serv: "81141600",
           cantidad: 1,
           clave_unidad: "E48",
-          descripcion: `Cargo por servicio y penalizaciones conservados â€” ${tourName} (Reserva ${bookingCode})`,
+          descripcion: `Cargo por servicio y penalizaciones conservados — ${tourName} (Reserva ${bookingCode})`,
           valor_unitario: r6(nonTourNonSeguro / 1.16),
         });
       }
@@ -560,7 +560,7 @@ Deno.serve(async (req: Request) => {
           },
         });
       } catch (cancelErr) {
-        console.error(`Error cancelling original CFDI ${originalCfdi.id} (no crÃ­tico):`, cancelErr);
+        console.error(`Error cancelling original CFDI ${originalCfdi.id} (no crítico):`, cancelErr);
       }
 
       EdgeRuntime.waitUntil(

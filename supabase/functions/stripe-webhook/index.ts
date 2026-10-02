@@ -2676,7 +2676,16 @@ Deno.serve(async (req) => {
 
               if (!cfdiSettings?.pac_provider || cfdiSettings.pac_provider === 'none') return;
 
-              if (isSubscriptionCreate) {
+              if (isSubscriptionCreate && facturaMixta) {
+                // Carrito mixto: un cobro, un CFDI. generate-booking-cfdi ya
+                // incluye la membresia como concepto del CFDI de la reserva, asi
+                // que generar aqui el de membresia la facturaba DOS veces (02-oct-
+                // 2026: F-91 por $89 y F-92 por $589 que tambien la traia).
+                console.log(
+                  `CFDI de membresia ${membership!.id} omitido: alta en carrito mixto, ` +
+                  `la membresia va en el CFDI de la reserva (invoice ${invoice.id})`,
+                );
+              } else if (isSubscriptionCreate) {
                 await supabase
                   .from('cfdi_invoices')
                   .delete()

@@ -255,7 +255,7 @@ Deno.serve(async (req: Request) => {
     // If nothing was retained, no replacement CFDI needed
     if (conservedAmount <= 0) {
       return new Response(
-        JSON.stringify({ success: true, message: "No service charge retained â€” no replacement CFDI needed" }),
+        JSON.stringify({ success: true, message: "No service charge retained — no replacement CFDI needed" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -279,7 +279,7 @@ Deno.serve(async (req: Request) => {
       );
     }
     if (settings.pac_provider !== "facturapi") {
-      return new Response(JSON.stringify({ error: "Facturapi es el Ãºnico PAC habilitado" }), {
+      return new Response(JSON.stringify({ error: "Facturapi es el único PAC habilitado" }), {
         status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -297,7 +297,7 @@ Deno.serve(async (req: Request) => {
     const issuerPostalCode = settings.pac_issuer_postal_code || "";
     if (!issuerPostalCode) {
       return new Response(
-        JSON.stringify({ error: "Debe configurar el cÃ³digo postal fiscal de la plataforma en ConfiguraciÃ³n antes de generar CFDIs" }),
+        JSON.stringify({ error: "Debe configurar el código postal fiscal de la plataforma en Configuración antes de generar CFDIs" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

@@ -196,7 +196,7 @@ Deno.serve(async (req: Request) => {
     if (!agency.regimen_fiscal || !agency.postal_code) {
       return new Response(
         JSON.stringify({
-          error: "La agencia debe completar su rÃ©gimen fiscal y cÃ³digo postal en su expediente antes de poder facturar a cuenta de terceros.",
+          error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
         }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

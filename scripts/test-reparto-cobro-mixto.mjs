@@ -107,4 +107,31 @@ caso('invoice.paid consulta la factura con sus pagos cuando el evento no los tra
   assert.match(webhook, /stripe\.invoices\.retrieve\(invoice\.id, \{ expand: \['payments'\] \}\)/);
 });
 
-console.log(`\n${casos} casos OK: un cobro mixto se registra una vez, repartido.`);
+// --- CFDI: un cobro, un CFDI ------------------------------------------------------
+//
+// La segunda prueba del 02-oct-2026 timbro F-91 (membresia, $89) y F-92
+// (reserva, $589 con la membresia como concepto): la membresia facturada dos
+// veces. Y cfdi_invoices guardo F-91 con total $589, el monto cobrado, aunque se
+// timbro por $89.
+
+caso('en un alta de carrito mixto NO se genera el CFDI de membresia', () => {
+  const i = webhook.indexOf('if (isSubscriptionCreate && facturaMixta) {');
+  assert.ok(i > 0, 'falta la rama del alta mixta antes del CFDI de alta nueva');
+  const rama = webhook.slice(i, webhook.indexOf('} else if (isSubscriptionCreate) {', i));
+  assert.ok(rama.length > 0, 'la rama mixta debe ir antes de la de alta nueva');
+  assert.doesNotMatch(rama, /generate-membership-cfdi/, 'la rama mixta no debe pedir el CFDI de membresia');
+});
+
+caso('el CFDI de la reserva SI incluye la membresia (de eso depende omitir el otro)', () => {
+  const cfdiReserva = fs.readFileSync(path.join(RAIZ, 'supabase', 'functions', 'generate-booking-cfdi', 'index.ts'), 'utf8');
+  assert.match(cfdiReserva, /if \(precioMembresiaBruto > 0\) \{[\s\S]{0,400}conceptos\.push\(/,
+    'si el CFDI de la reserva deja de traer la membresia, el alta mixta se quedaria sin facturar');
+});
+
+caso('cfdi_invoices guarda de la membresia lo que se TIMBRA, no lo cobrado', () => {
+  const cfdiMembresia = fs.readFileSync(path.join(RAIZ, 'supabase', 'functions', 'generate-membership-cfdi', 'index.ts'), 'utf8');
+  assert.match(cfdiMembresia, /const exactTotal = hasDiscount \? amountPaidMxn! : membershipPrice;/);
+  assert.doesNotMatch(cfdiMembresia, /const exactTotal = amountPaidMxn \?\? membershipPrice/);
+});
+
+console.log(`\n${casos} casos OK: un cobro mixto se registra una vez, repartido, y se factura una vez.`);
