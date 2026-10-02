@@ -56,14 +56,24 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { userId, verificationCode, userName } = await req.json();
+    const { userId, userName } = await req.json();
 
-    if (!userId || !verificationCode) {
+    if (!userId) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing required fields" }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
+        }
+      );
+    }
+
+    if (userId !== user.id) {
+      return new Response(
+        JSON.stringify({ success: false, error: "No autorizado" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 403,
         }
       );
     }
@@ -80,6 +90,34 @@ Deno.serve(async (req: Request) => {
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 404,
+        }
+      );
+    }
+
+    // El codigo se genera y se guarda aqui, nunca en el navegador: quien lo
+    // genera ya lo conoce, y eso dejaba verificar un correo sin haberlo leido.
+    const randomBuffer = new Uint32Array(1);
+    crypto.getRandomValues(randomBuffer);
+    const verificationCode = (100000 + (randomBuffer[0] % 900000)).toString();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    const { error: codeUpdateError } = await supabase
+      .from("users")
+      .update({
+        verification_code: verificationCode,
+        verification_code_expires_at: expiresAt.toISOString(),
+        verification_code_attempts: 0,
+      })
+      .eq("id", userId);
+
+    if (codeUpdateError) {
+      console.error("Error guardando codigo de verificacion:", codeUpdateError);
+      return new Response(
+        JSON.stringify({ success: false, error: "No se pudo generar el codigo de verificacion" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
         }
       );
     }

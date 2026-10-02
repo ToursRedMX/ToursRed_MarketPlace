@@ -182,21 +182,6 @@ const VerifyEmailPage: React.FC = () => {
     setError('');
 
     try {
-      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 24);
-
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          verification_code: verificationCode,
-          verification_code_expires_at: expiresAt.toISOString(),
-          verification_code_attempts: 0,
-        })
-        .eq('id', user.id);
-
-      if (updateError) throw updateError;
-
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
@@ -226,7 +211,6 @@ const VerifyEmailPage: React.FC = () => {
           },
           body: JSON.stringify({
             userId: user.id,
-            verificationCode: verificationCode,
             userName: userName,
           }),
         }

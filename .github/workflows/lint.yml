@@ -652,6 +652,12 @@ jobs:
       - name: Ninguna Edge Function nueva sin guard de autorizacion
         run: node scripts/check-edge-guards.mjs
 
+      # Pendiente 1 de la entrada 33: el codigo de verificacion se generaba
+      # en el navegador (Math.random), asi que quien lo generaba ya lo
+      # conocia y podia verificar su correo sin haberlo leido nunca.
+      - name: El codigo de verificacion de correo se genera en el servidor
+        run: node scripts/test-codigo-verificacion-servidor.mjs
+
       - name: Run ESLint (el veredicto lo da el paso siguiente)
         run: |
           # bash corre con -e: sin set +e, eslint saliendo != 0 aborta el step.

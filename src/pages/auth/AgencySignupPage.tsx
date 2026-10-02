@@ -165,23 +165,13 @@ const AgencySignupPage: React.FC = () => {
         setTimeout(() => navigate('/dashboard'), 2000);
       } else {
         // Enviar código de verificación
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 24);
-
-        await supabase.from('users').update({
-          verification_code: verificationCode,
-          verification_code_expires_at: expiresAt.toISOString(),
-          verification_code_attempts: 0,
-        }).eq('id', data.user.id);
-
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
             await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-verification-email`, {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: data.user.id, verificationCode, userName: formData.agencyName }),
+              body: JSON.stringify({ userId: data.user.id, userName: formData.agencyName }),
             });
           }
         } catch { /* best-effort */ }

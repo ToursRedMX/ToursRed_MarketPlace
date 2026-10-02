@@ -378,23 +378,6 @@ const SignupPage: React.FC = () => {
         setError('Usuario ya registrado. Se ha iniciado sesión automáticamente.');
         setTimeout(() => navigate('/dashboard'), 2000);
       } else {
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 24);
-
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            verification_code: verificationCode,
-            verification_code_expires_at: expiresAt.toISOString(),
-            verification_code_attempts: 0,
-          })
-          .eq('id', data.user.id);
-
-        if (updateError) {
-          console.error('Error actualizando código de verificación:', updateError);
-        }
-
         try {
           const { data: { session } } = await supabase.auth.getSession();
 
@@ -409,7 +392,6 @@ const SignupPage: React.FC = () => {
                 },
                 body: JSON.stringify({
                   userId: data.user.id,
-                  verificationCode: verificationCode,
                   userName: `${firstName} ${lastName}`.trim(),
                 }),
               }
