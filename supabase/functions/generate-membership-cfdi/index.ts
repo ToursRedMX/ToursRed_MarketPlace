@@ -247,7 +247,12 @@ Deno.serve(async (req: Request) => {
     const descuentoBase = descuentoConIva > 0 ? Math.round((descuentoConIva / 1.16) * 1000000) / 1000000 : 0;
 
     // Monto exacto cobrado al cliente; IVA como complemento â†’ subtotal + iva = total siempre
-    const exactTotal = amountPaidMxn ?? membershipPrice;
+    // Lo que se TIMBRA es el precio del plan, menos el descuento si lo hubo; asi
+    // que el total que se guarda tiene que ser eso mismo. Antes era el monto
+    // cobrado tal cual: con una factura de Stripe que traia algo mas que la
+    // membresia (carrito mixto, 02-oct-2026), cfdi_invoices decia $589 de un
+    // CFDI timbrado por $89.
+    const exactTotal = hasDiscount ? amountPaidMxn! : membershipPrice;
     const iva = Math.round(exactTotal * 16 / 116 * 100) / 100;
     const subtotal = Math.round((exactTotal - iva) * 100) / 100;
     const total = exactTotal;
