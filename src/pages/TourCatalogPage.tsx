@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Filter, MapPin, ChevronRight, ChevronLeft, X, SlidersHorizontal, Building2, Search } from 'lucide-react';
 import SearchBox from '../components/SearchBox';
@@ -8,6 +8,10 @@ import { getTours, getActiveFeaturedTours, supabase } from '../lib/supabase';
 import { useTourPromotionsBatch } from '../hooks/useSharedData';
 import Seo from '../components/Seo';
 import { comoFilas } from '../lib/relacionesSupabase';
+import { canUseAnalytics, getSessionId } from '../lib/cookieManager';
+import { useAuth } from '../context/AuthContext';
+import { isCrawler } from '../utils/isCrawler';
+import { construirEventoDeBusqueda } from '../utils/registroDeBusqueda';
 
 const SITE_URL = (import.meta.env.VITE_APP_URL || 'https://toursredmx.netlify.app/').replace(/\/$/, '');
 
@@ -23,6 +27,12 @@ const TourCatalogPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  // A que busqueda (searchParams) pertenecen los resultados que se pintan. Se
+  // fija en el mismo lote que `isLoading = false`, asi el registro de la
+  // busqueda nunca lee el conteo de la busqueda anterior.
+  const [resultadosDeBusqueda, setResultadosDeBusqueda] = useState('');
+  const ultimaBusquedaRegistrada = useRef('');
+  const { user, isLoading: autenticando } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [popularDestinations, setPopularDestinations] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -179,11 +189,43 @@ const TourCatalogPage: React.FC = () => {
         setError(err.message || 'Error al cargar los tours');
         setTours([]); setTotalCount(0); setFeaturedSlotMapCatalog({}); setFeaturedCount(0);
       } finally {
+        setResultadosDeBusqueda(searchParams.toString());
         setIsLoading(false);
       }
     };
     fetchTours();
   }, [searchParams, currentPage]);
+
+  // Bitacora de busquedas (public.search_events): que busco el viajero y
+  // cuantos resultados vio. Una vez por busqueda — cambiar de pagina no cuenta,
+  // ni tampoco una busqueda que fallo (no se sabe el conteo). Es un adorno
+  // para analitica: si falla, se avisa en consola y la pantalla sigue igual.
+  useEffect(() => {
+    if (isLoading || error || autenticando) return;
+    const clave = searchParams.toString();
+    if (resultadosDeBusqueda !== clave) return;
+    if (ultimaBusquedaRegistrada.current === clave) return;
+    ultimaBusquedaRegistrada.current = clave;
+    if (isCrawler()) return;
+
+    const conAnalitica = canUseAnalytics();
+    const evento = construirEventoDeBusqueda({
+      filtros: initialFilters,
+      totalResultados: totalCount,
+      conAnalitica,
+      sessionId: conAnalitica ? getSessionId() : null,
+      userId: user?.id ?? null,
+      anchoDePantalla: window.innerWidth,
+      idioma: navigator.language,
+      referrer: document.referrer,
+      hostActual: window.location.hostname,
+    });
+    if (!evento) return;
+
+    supabase.from('search_events').insert(evento).then(({ error: errorDeRegistro }) => {
+      if (errorDeRegistro) console.warn('TourCatalogPage: no se pudo registrar la busqueda', errorDeRegistro);
+    });
+  }, [isLoading, error, autenticando, searchParams, resultadosDeBusqueda, initialFilters, totalCount, user]);
 
   useEffect(() => {
     supabase.from('tour_categories').select('id, name, slug').eq('is_active', true).order('name')

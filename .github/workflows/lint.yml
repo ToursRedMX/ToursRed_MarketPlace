@@ -118,6 +118,9 @@ jobs:
       - name: Verify x-correlation-id reaches PostgREST but not Edge Functions
         run: node scripts/test-correlacion-front.mjs
 
+      - name: Verify search logging respects cookie consent
+        run: node scripts/test-registro-de-busqueda.mjs
+
       - name: Verify service-role callers are recognized by apikey, not only Bearer
         run: node scripts/test-llamada-de-servicio.mjs
 
