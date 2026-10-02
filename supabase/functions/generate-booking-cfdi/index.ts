@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
 import { llamadaInterna } from "../_shared/auth.ts";
+import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -787,7 +788,9 @@ Deno.serve(async (req: Request) => {
     }
 
     if (precioMembresiaBruto > 0) {
-      const planLabel = booking.membership_plan === "annual" ? "anual" : "mensual";
+      // La reserva guarda 'anual'/'mensual' (create_booking_atomic); comparar
+      // solo contra 'annual' facturaba una membresia anual como "mensual".
+      const planLabel = normalizarPlanMembresia(booking.membership_plan) === "annual" ? "anual" : "mensual";
       conceptos.push({
         clave_prod_serv: "80141628",
         cantidad: 1,

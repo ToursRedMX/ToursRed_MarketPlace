@@ -242,6 +242,14 @@ jobs:
       - name: Verify leaked passwords are recognized by error code
         run: node scripts/test-contrasena-filtrada.mjs
 
+      # El plan de la membresia viaja como 'mensual'/'anual' (flujo de reserva y
+      # create_booking_atomic) y como 'monthly'/'annual' (Stripe, memberships).
+      # create-checkout-session comparaba contra 'monthly' y cobraba el mensual
+      # como ANUAL. Se traduce en un solo helper, el plan sale de la reserva, y
+      # se prohibe volver a comparar la columna cruda.
+      - name: Verify the membership plan is translated in one place
+        run: node scripts/test-plan-membresia.mjs
+
       # `max_uses` topa los grupos DENTRO de una misma reserva: 12 viajeros con
       # min_travelers=4 son tres grupos, y si solo quedan dos usos el tercero
       # paga completo. Sin ese tope una reserva grande se lleva mas descuento

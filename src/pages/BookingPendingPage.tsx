@@ -5,6 +5,7 @@ import { supabase, parseDateFromDB } from '../lib/supabase';
 import { Booking, Tour } from '../types';
 import { format } from 'date-fns';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
+import { etiquetaPlanMembresia } from '../lib/planMembresia';
 
 const BookingPendingPage: React.FC = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -203,7 +204,7 @@ const BookingPendingPage: React.FC = () => {
 
                   {(booking as any).membership_purchased && (
                     <div className="flex justify-between text-indigo-700">
-                      <span>Membresía ToursRed Plus ({(booking as any).membership_plan === 'monthly' ? 'Mensual' : 'Anual'}):</span>
+                      <span>Membresía ToursRed Plus ({etiquetaPlanMembresia((booking as any).membership_plan) ?? 'Mensual'}):</span>
                       <span className="font-medium">+{formatCurrencyMXN(Number((booking as any).membership_cost) || 0)}</span>
                     </div>
                   )}
