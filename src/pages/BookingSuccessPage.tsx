@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
+import { etiquetaPlanMembresia } from '../lib/planMembresia';
 import { paymentLabel, processorLabel } from '../utils/paymentLabels';
 
 // Mismas etiquetas y mismo orden que `BookingFlowStep4`, que es donde el
@@ -517,7 +518,7 @@ const BookingSuccessPage: React.FC = () => {
                     <div className="flex justify-between items-center bg-indigo-50 border border-indigo-200 rounded px-2 py-1.5 -mx-1">
                       <span className="text-indigo-700 font-medium flex items-center">
                         <Award className="h-4 w-4 mr-1" />
-                        Membresía ToursRed Plus ({(booking as any).membership_plan === 'monthly' ? 'Mensual' : 'Anual'}):
+                        Membresía ToursRed Plus ({etiquetaPlanMembresia((booking as any).membership_plan) ?? 'Mensual'}):
                       </span>
                       <span className="font-bold text-indigo-700">
                         {formatCurrencyMXN(Number((booking as any).membership_cost) || 0)}

@@ -9,6 +9,7 @@ import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/context
 import { crearAsientoContable, notificarAdmins, alertarOps, avisosCon } from "../_shared/avisosDePago.ts";
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { asentarCobroStripe, estadoSegunStripe } from "../_shared/cobrosStripe.ts";
+import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1130,7 +1131,8 @@ Deno.serve(async (req) => {
 
             // Activate membership if purchased alongside booking (mixed-cart)
             const membershipPurchased = session.metadata?.membership_purchased === 'true';
-            const membershipPlan = session.metadata?.membership_plan || 'monthly';
+            // Termina en memberships.plan_type, que solo conoce 'monthly'/'annual'.
+            const membershipPlan = normalizarPlanMembresia(session.metadata?.membership_plan) ?? 'monthly';
             if (membershipPurchased && session.subscription) {
               try {
                 console.log(`Mixed-cart membership detected. Activating for subscription ${session.subscription}`);

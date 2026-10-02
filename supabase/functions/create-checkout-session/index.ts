@@ -4,6 +4,7 @@ import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir, urlDeRetornoSegura } from "../_shared/cors.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -133,7 +134,10 @@ Deno.serve(async (req) => {
         travel_insurance_included,
         travel_insurance_cost,
         deposit_amount,
-        service_charge
+        service_charge,
+        membership_purchased,
+        membership_plan,
+        membership_cost
       `)
       .eq("id", bookingId)
       .single();
@@ -173,6 +177,36 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 403,
         }
+      );
+    }
+
+    // Si se vende membresia, de que plan y a que costo lo decidio
+    // create_booking_atomic al crear la reserva, y quedo en ella. Antes lo
+    // decidia el CUERPO de la peticion, y cada pantalla lo mandaba distinto:
+    // el flujo de 4 pasos 'mensual'/'anual' (y aqui se comparaba contra
+    // 'monthly', asi que el mensual se cobraba como ANUAL), TravelersInfoPage el
+    // plan de la reserva, y TravelerBookings nada. Ahora manda la reserva.
+    // membership_cost > 0 y no solo membership_purchased: la RPC no cobra
+    // membresia a quien ya tiene una activa, aunque la casilla haya viajado.
+    const membershipCost = Number(booking.membership_cost) || 0;
+    const venderMembresia = booking.membership_purchased === true && membershipCost > 0;
+    const planMembresia = venderMembresia ? normalizarPlanMembresia(booking.membership_plan) : null;
+
+    if (venderMembresia && !planMembresia) {
+      console.error(
+        `create-checkout-session: la reserva ${bookingId} compra membresia con un plan ilegible: ${booking.membership_plan}`
+      );
+      return new Response(
+        JSON.stringify({ success: false, error: "El plan de la membresía de esta reserva no es válido." }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
+    if (Boolean(addMembership) !== venderMembresia ||
+        (venderMembresia && normalizarPlanMembresia(membershipPlan) !== planMembresia)) {
+      console.warn(
+        `create-checkout-session: el cliente pidio membresia=${addMembership}/${membershipPlan} y la reserva ${bookingId} ` +
+        `dice ${venderMembresia}/${planMembresia}. Se sigue a la reserva.`
       );
     }
 
@@ -303,14 +337,14 @@ Deno.serve(async (req) => {
           ),
         ),
         booking_id: bookingId,
-        membership_purchased: addMembership ? 'true' : 'false',
-        membership_plan: membershipPlan,
+        membership_purchased: venderMembresia ? 'true' : 'false',
+        membership_plan: planMembresia ?? '',
         toursred_cash_used: cashSolicitado.toString(),
         points_used: puntosSolicitados.toString(),
       },
     };
 
-    if (addMembership) {
+    if (venderMembresia && planMembresia) {
       const { data: settings, error: settingsError } = await supabase
         .from('platform_settings')
         .select('stripe_monthly_price_id, stripe_annual_price_id')
@@ -345,7 +379,24 @@ Deno.serve(async (req) => {
         );
       }
 
-      const priceId = membershipPlan === 'monthly' ? monthlyPriceId : annualPriceId;
+      const priceId = planMembresia === 'monthly' ? monthlyPriceId : annualPriceId;
+
+      // Lo que Stripe va a cobrar por la suscripcion tiene que ser lo que la RPC
+      // le cotizo al viajero (platform_settings.membership_*_price). Son dos
+      // configuraciones separadas; si alguien cambia una y no la otra, mejor
+      // no cobrar que cobrar distinto de lo que se mostro.
+      const precioStripe = await stripe.prices.retrieve(priceId);
+      const montoSuscripcion = (precioStripe.unit_amount ?? 0) / 100;
+      if (Math.abs(montoSuscripcion - membershipCost) >= 0.01) {
+        console.error(
+          `create-checkout-session: el precio ${priceId} (${planMembresia}) cuesta ${montoSuscripcion} en Stripe ` +
+          `y la reserva ${bookingId} cotizo ${membershipCost}. No se cobra.`
+        );
+        return new Response(
+          JSON.stringify({ success: false, error: "El precio de la membresía no está configurado correctamente. Contacta a soporte." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+        );
+      }
 
       sessionConfig.mode = "subscription";
       sessionConfig.payment_method_types = ['card'];
@@ -359,7 +410,7 @@ Deno.serve(async (req) => {
         metadata: {
           user_id: booking.user_id,
           booking_id: bookingId,
-          plan_type: membershipPlan,
+          plan_type: planMembresia,
         },
       };
 
@@ -390,11 +441,17 @@ Deno.serve(async (req) => {
         description
       );
 
-      // En esta rama `amount` ya viene sin el costo de la membresia
-      // (TravelersInfoPage lo resta), y el desglose tampoco la incluye: la
-      // membresia va como linea de suscripcion aparte. Asi que se comparan
-      // magnitudes equivalentes.
-      const errorMonto = validarMontoDelCliente(amount, desgloseItemsSub, bookingId);
+      // El desglose NO incluye la membresia: va como linea de suscripcion
+      // aparte. Pero el `amount` llega de dos maneras: TravelersInfoPage le
+      // resta la membresia, y el flujo de 4 pasos manda amount_to_charge de
+      // create_booking_atomic, que la INCLUYE. Antes solo se aceptaba la
+      // primera, y el flujo de 4 pasos chocaba siempre con 400 "el monto no
+      // coincide". Se acepta cualquiera de las dos: lo que se cobra son
+      // siempre las lineas del servidor, `amount` solo detecta desacuerdo.
+      const montoSinMembresia = Math.abs(Number(amount) - membershipCost - sumarLineas(desgloseItemsSub)) <= TOLERANCIA_MONTO_MXN
+        ? Number(amount) - membershipCost
+        : Number(amount);
+      const errorMonto = validarMontoDelCliente(montoSinMembresia, desgloseItemsSub, bookingId);
       if (errorMonto) {
         return new Response(
           JSON.stringify({ success: false, error: errorMonto, details: "amount_mismatch" }),
@@ -488,7 +545,7 @@ Deno.serve(async (req) => {
     // expirada o ya completada, y no puede pagar. Con el bucket, los reintentos
     // de un mismo arranque se deduplican y un intento nuevo obtiene sesion nueva.
     const ventana = Math.floor(Date.now() / (10 * 60 * 1000));
-    const idempotencyKey = `checkout_${bookingId}_${addMembership ? membershipPlan : 'booking'}_${cashSolicitado}_${puntosSolicitados}_${ventana}`;
+    const idempotencyKey = `checkout_${bookingId}_${planMembresia ?? 'booking'}_${cashSolicitado}_${puntosSolicitados}_${ventana}`;
     const session = await stripe.checkout.sessions.create(sessionConfig, { idempotencyKey });
 
     return new Response(

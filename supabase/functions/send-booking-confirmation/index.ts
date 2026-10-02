@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { llamadaInterna } from "../_shared/auth.ts";
+import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -248,7 +249,9 @@ Deno.serve(async (req: Request) => {
     const travelInsuranceCost = booking.travel_insurance_included ? (Number(booking.travel_insurance_cost) || 0) : 0;
     const insuranceDiscountAmount = Number(booking.insurance_discount_amount) || 0;
     const membershipPurchased = booking.membership_purchased || false;
-    const membershipPlan = booking.membership_plan || null;
+    // Normalizado: la reserva guarda 'mensual'/'anual' y las plantillas de
+    // abajo comparaban una contra 'monthly' y otra contra 'annual'.
+    const membershipPlan = normalizarPlanMembresia(booking.membership_plan);
     const membershipCost = Number(booking.membership_cost) || 0;
 
     const { data: paidOptionalsData } = await supabase
