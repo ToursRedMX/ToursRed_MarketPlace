@@ -297,6 +297,7 @@ const NavBar: React.FC = () => {
     if (info.permissions.canViewBookings) items.push({ to: '/agency/bookings', label: 'Reservas' });
     if (info.permissions.canManageDiscountCodes) items.push({ to: '/agency/discount-codes', label: 'Codigos Descuento' });
     if (info.permissions.canViewFinancials) items.push({ to: '/agency/financials', label: 'Finanzas' });
+    if (info.permissions.canViewReports) items.push({ to: '/agency/demanda', label: 'Demanda' });
     return items;
   };
 
@@ -321,6 +322,7 @@ const NavBar: React.FC = () => {
         { to: '/agency/bookings', label: 'Reservas' },
         { to: '/agency/discount-codes', label: 'Codigos Descuento' },
         { to: '/agency/financials', label: 'Finanzas' },
+        { to: '/agency/demanda', label: 'Demanda' },
         { to: '/agency/invoices', label: 'Facturas' },
         { to: '/agency/staff', label: 'Coordinadores' },
         { to: '/agency/featured-tours', label: 'Tours Destacados' },
