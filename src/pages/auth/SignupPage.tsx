@@ -6,9 +6,7 @@ import { calcularPrefijoCurp } from '../../utils/curpUtils';
 import { useFieldAvailability } from '../../hooks/useFieldAvailability';
 import TurnstileWidget from '../../components/TurnstileWidget';
 import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
-
-const isLeakedPasswordError = (message: string) =>
-  /leaked|pwned|compromised|common password/i.test(message);
+import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -258,7 +256,7 @@ const SignupPage: React.FC = () => {
         ) {
           throw new Error('No pudimos validar tus datos en este momento. Por favor intenta de nuevo en unos segundos.');
         }
-        if (isLeakedPasswordError(error.message)) {
+        if (esContrasenaFiltrada(error)) {
           throw new Error('Esta contraseña ha sido expuesta en brechas de datos conocidas y no puede usarse. Por favor elige una contraseña diferente y más segura.');
         }
         throw error;

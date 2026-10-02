@@ -3,9 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, CheckCircle, XCircle, Loader, Info } from 'lucide-react';
 import { supabase, UserRole } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-
-const isLeakedPasswordError = (message: string) =>
-  /leaked|pwned|compromised|common password/i.test(message);
+import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 
 const GoogleTravelerSignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -182,7 +180,7 @@ const GoogleTravelerSignupPage: React.FC = () => {
       // 2. Update password via Supabase Auth (after insert so users record exists)
       const { error: pwError } = await supabase.auth.updateUser({ password });
       if (pwError) {
-        if (isLeakedPasswordError(pwError.message)) {
+        if (esContrasenaFiltrada(pwError)) {
           throw new Error('Esta contraseña ha sido expuesta en brechas de datos. Por favor elige una más segura.');
         }
         throw pwError;
