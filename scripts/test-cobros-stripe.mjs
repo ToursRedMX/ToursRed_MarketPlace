@@ -231,8 +231,13 @@ casos.push(async () => {
   // La condicion misma del ternario, no «que aparezca cerca»: mirar el
   // vecindario dejaba pasar quitarle el `&& cobroLiquidado` mientras la
   // declaracion seguia arriba sin usarse.
-  const decl = fuente.match(/const stripeFee = ([^\n]*)\n\s*\? await getStripeProcessorFee/);
-  assert.ok(decl, 'no se encontro la declaracion de stripeFee del anticipo');
+  //
+  // Desde el 02-oct-2026 la comision del cobro completo se llama
+  // `comisionDelCobro` y `stripeFee` es la parte de la reserva (en un carrito
+  // mixto la membresia se lleva su proporcion; ver _shared/repartoCobroMixto.ts).
+  // La regla es la misma: a Stripe se le pide solo con el cobro liquidado.
+  const decl = fuente.match(/const comisionDelCobro = ([^\n]*)\n\s*\? await getStripeProcessorFee/);
+  assert.ok(decl, 'no se encontro la declaracion de comisionDelCobro del anticipo');
   assert.ok(/\bcobroLiquidado\b/.test(decl[1]),
     `con la sesion en unpaid todavia no hay charge ni balance_transaction que leer; la condicion es "${decl[1]}"`);
 
