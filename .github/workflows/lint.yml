@@ -250,6 +250,21 @@ jobs:
       - name: Verify the membership plan is translated in one place
         run: node scripts/test-plan-membresia.mjs
 
+      # stripe-webhook decidia si confirmar una reserva YA cobrada con
+      # get_tour_availability(tour), que resta las reservas de todas las fechas
+      # contra la capacidad de un viaje. El 02-oct-2026 cobro $589 y dejo la
+      # reserva en pending con el horario a 5/20, en silencio. Con horario solo
+      # se rechaza la sobreventa, y no confirmar siempre deja rastro y alerta.
+      - name: Verify a paid Stripe booking is confirmed by slot capacity
+        run: node scripts/test-cupo-al-confirmar.mjs
+
+      # Carrito mixto: un solo cobro de Stripe (reserva + membresia) que el
+      # webhook registraba DOS veces completo, con el deposito de la agencia
+      # como ingreso por membresia. Se reparte por las lineas de la factura y
+      # la comision en proporcion, con los numeros reales del 02-oct-2026.
+      - name: Verify a mixed-cart charge is recorded once, split
+        run: node scripts/test-reparto-cobro-mixto.mjs
+
       # `max_uses` topa los grupos DENTRO de una misma reserva: 12 viajeros con
       # min_travelers=4 son tres grupos, y si solo quedan dos usos el tercero
       # paga completo. Sin ese tope una reserva grande se lleva mas descuento

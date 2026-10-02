@@ -10,6 +10,8 @@ import { crearAsientoContable, notificarAdmins, alertarOps, avisosCon } from "..
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { asentarCobroStripe, estadoSegunStripe } from "../_shared/cobrosStripe.ts";
 import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
+import { motivoParaNoConfirmar } from "../_shared/cupoAlConfirmar.ts";
+import { centavosDeSuscripcion, repartirComision } from "../_shared/repartoCobroMixto.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -967,6 +969,10 @@ Deno.serve(async (req) => {
 
         // In subscription mode session.payment_intent is null; retrieve it from the invoice
         let paymentIntentId: string | null = session.payment_intent as string | null;
+        // Carrito mixto: cuantos centavos del cobro son la membresia. Esa parte
+        // la registra invoice.paid como transaccion de membresia; aqui solo va
+        // la reserva. Ver _shared/repartoCobroMixto.ts.
+        let centavosMembresia = 0;
         if (!paymentIntentId && session.mode === 'subscription' && session.invoice) {
           try {
             // La API Basil (2025-03-31) elimino `payment_intent` del objeto
@@ -987,6 +993,17 @@ Deno.serve(async (req) => {
             );
             const intent = pagoConIntent?.payment?.payment_intent;
             paymentIntentId = typeof intent === 'string' ? intent : intent?.id ?? null;
+            centavosMembresia = centavosDeSuscripcion(invoice.lines?.data);
+            if (invoice.lines?.has_more) {
+              // Las lineas vienen paginadas de a 10. Una reserva trae a lo mas
+              // deposito, opcionales, seguro y cargo por servicio, pero si un dia
+              // pasa de 10 la linea de la membresia podria quedar fuera.
+              await registrarFallo(
+                'stripe-webhook/factura-mixta-paginada',
+                `La factura ${session.invoice} trae mas de una pagina de lineas; el reparto reserva/membresia puede estar incompleto`,
+                { bookingId, centavosMembresia },
+              );
+            }
 
             if (paymentIntentId) {
               console.log(`Retrieved payment_intent ${paymentIntentId} from invoice ${session.invoice}`);
@@ -1005,7 +1022,7 @@ Deno.serve(async (req) => {
             // audit log de BOOKING_CONFIRMED se guardaba con p_actor_id nulo y
             // el fallback del user_id de la membresia de carrito mixto quedaba
             // en undefined.
-            .select('tour_id, travelers_count, user_id')
+            .select('tour_id, travelers_count, user_id, slot_id')
             .eq('id', bookingId)
             .single();
 
@@ -1014,17 +1031,51 @@ Deno.serve(async (req) => {
             break;
           }
 
-          const { data: availability, error: availabilityError } = await supabase
-            .rpc('get_tour_availability', { p_tour_id: booking.tour_id });
-
-          if (availabilityError || !availability || availability.length === 0) {
-            console.error(`Error checking tour availability:`, availabilityError);
-            break;
+          // ── Cupo: el lugar ya se aparto al CREAR la reserva ──
+          // Ver _shared/cupoAlConfirmar.ts: hasta el 02-oct-2026 aqui se usaba
+          // get_tour_availability(tour), que no sabe de horarios, y el webhook
+          // salia con un `break` mudo — Stripe cobraba y la reserva se quedaba
+          // en pending sin transaccion, sin alerta y sin rastro.
+          let motivoSinCupo: string | null;
+          if (booking.slot_id) {
+            const { data: horario, error: errorHorario } = await supabase
+              .from('tour_slots')
+              .select('capacity, booked_count')
+              .eq('id', booking.slot_id)
+              .maybeSingle();
+            motivoSinCupo = motivoParaNoConfirmar({
+              slotId: booking.slot_id,
+              viajeros: booking.travelers_count,
+              horario,
+              errorHorario: errorHorario?.message ?? null,
+            });
+          } else {
+            const { data: availability, error: availabilityError } = await supabase
+              .rpc('get_tour_availability', { p_tour_id: booking.tour_id });
+            motivoSinCupo = motivoParaNoConfirmar({
+              slotId: null,
+              viajeros: booking.travelers_count,
+              disponibleEnTour: availability?.[0]?.available_spots ?? null,
+              errorTour: availabilityError?.message ?? null,
+            });
           }
 
-          if (availability[0].available_spots < booking.travelers_count) {
-            console.error(`Insufficient availability for booking ${bookingId}. Available: ${availability[0].available_spots}, Required: ${booking.travelers_count}`);
-            console.log(`Tour ${booking.tour_id} has insufficient spots. This booking will NOT be confirmed.`);
+          if (motivoSinCupo) {
+            // El dinero YA entro. No confirmar puede ser lo correcto (sobreventa),
+            // pero nunca en silencio: alguien tiene que reembolsar o reacomodar.
+            const montoCobrado = ((session.amount_total ?? 0) / 100).toFixed(2);
+            await registrarFallo(
+              'stripe-webhook/cobrado-sin-confirmar',
+              `Pago de Stripe cobrado y reserva ${bookingId} SIN confirmar: ${motivoSinCupo}`,
+              { bookingId, sessionId: session.id, monto: montoCobrado },
+            );
+            await alertarOps(supabase, `[ALERTA] Pago de Stripe cobrado y reserva SIN confirmar - $${montoCobrado} MXN`, [
+              ['Reserva', bookingId],
+              ['Motivo', motivoSinCupo],
+              ['Checkout session', session.id],
+              ['Monto cobrado', `$${montoCobrado} MXN`],
+              ['Que hacer', 'Reembolsar desde Stripe o reacomodar al viajero en otro horario'],
+            ]);
             break;
           }
 
@@ -1061,10 +1112,10 @@ Deno.serve(async (req) => {
                 booking_id: bookingId,
                 stripe_payment_intent_id: paymentIntentId,
                 payment_processor: 'stripe',
-                amount: (session.amount_total ?? 0) / 100,
+                amount: ((session.amount_total ?? 0) - centavosMembresia) / 100,
                 currency: session.currency,
                 payment_method_type: paymentMethod,
-                net_amount: (session.amount_total ?? 0) / 100,
+                net_amount: ((session.amount_total ?? 0) - centavosMembresia) / 100,
                 processor_fee: 0,
                 charge_context: 'booking_deposit',
                 charge_reference_id: bookingId,
@@ -1682,10 +1733,11 @@ Deno.serve(async (req) => {
             booking_id: bookingId,
             stripe_payment_intent_id: paymentIntentId,
             payment_processor: 'stripe',
-            amount: (session.amount_total ?? 0) / 100,
+            // Sin la membresia: esa parte es otra transaccion (invoice.paid).
+            amount: ((session.amount_total ?? 0) - centavosMembresia) / 100,
             currency: session.currency,
             payment_method_type: paymentMethod,
-            net_amount: (session.amount_total ?? 0) / 100,
+            net_amount: ((session.amount_total ?? 0) - centavosMembresia) / 100,
             processor_fee: 0,
             charge_context: 'booking_deposit',
             charge_reference_id: bookingId,
@@ -1704,9 +1756,14 @@ Deno.serve(async (req) => {
         // Tampoco se pide con la sesion en 'unpaid': todavia no hay charge, asi
         // que no hay balance_transaction de donde leer la comision.
         const cobroLiquidado = estadoSegunStripe(paymentStatus) === 'succeeded';
-        const stripeFee = paymentIntentId && cobroLiquidado
+        const comisionDelCobro = paymentIntentId && cobroLiquidado
           ? await getStripeProcessorFee(stripe, paymentIntentId)
           : null;
+        // En carrito mixto la comision es de TODO el cobro; a la reserva le toca
+        // su proporcion y la membresia se lleva el resto desde invoice.paid.
+        const stripeFee = comisionDelCobro && centavosMembresia > 0
+          ? repartirComision(comisionDelCobro, centavosMembresia, session.amount_total ?? 0).reserva
+          : comisionDelCobro;
         if (!paymentIntentId) {
           console.warn(`Sin payment_intent para la reserva ${bookingId}: no se registra processor_fee`);
         }
@@ -2467,7 +2524,18 @@ Deno.serve(async (req) => {
         // cobro de membresia NO va a ligar con su payment_transaction, porque
         // _shared/disputas.ts busca por payment intent. La disputa se registra
         // igual, pero sin reserva ni transaccion asociada.
-        const membershipAmount = invoice.amount_paid ? invoice.amount_paid / 100 : 0;
+        // Carrito mixto: la factura de alta trae la membresia (linea de
+        // suscripcion) Y el desglose de la reserva (lineas sueltas) en un solo
+        // cobro. Hasta el 02-oct-2026 aqui se registraba invoice.amount_paid
+        // completo —$589 por una membresia de $89—, y los $500 del deposito
+        // entraban como ingreso por membresia. Ver _shared/repartoCobroMixto.ts.
+        const lineasDeFactura = invoice.lines?.data ?? [];
+        const centavosMembresia = centavosDeSuscripcion(lineasDeFactura);
+        const facturaMixta = centavosMembresia > 0 &&
+          lineasDeFactura.some((l) => l?.parent?.type !== 'subscription_item_details');
+        const membershipAmount = facturaMixta
+          ? centavosMembresia / 100
+          : (invoice.amount_paid ? invoice.amount_paid / 100 : 0);
         const { data: existingMembershipTx } = await supabase
           .from('payment_transactions')
           .select('id')
@@ -2536,9 +2604,24 @@ Deno.serve(async (req) => {
               payment_intent?: string | { id?: string };
               payments?: { data?: { payment?: { payment_intent?: string | { id?: string } } }[] };
             };
-            const crudo = fac.payment_intent
+            let crudo = fac.payment_intent
               ?? fac.payments?.data?.[0]?.payment?.payment_intent
               ?? null;
+            // El payload del evento NO trae invoice.payments: es una lista que
+            // solo llega si se pide expandida. Por eso la membresia del
+            // 02-oct-2026 quedo con comision 0 aunque Stripe si la cobro
+            // ($31.49 sobre $589). Se consulta la factura, como ya hace la rama
+            // de checkout.session.completed.
+            if (!crudo) {
+              try {
+                const conPagos = await stripe.invoices.retrieve(invoice.id, { expand: ['payments'] });
+                crudo = conPagos.payments?.data.find(
+                  (p) => p.payment?.type === 'payment_intent' && p.payment?.payment_intent,
+                )?.payment?.payment_intent ?? null;
+              } catch (errFactura) {
+                console.error(`No se pudo consultar la factura ${invoice.id} con sus pagos: ${mensajeDeError(errFactura)}`);
+              }
+            }
             const piDeFactura = typeof crudo === 'string' ? crudo : crudo?.id ?? null;
 
             if (!piDeFactura) {
@@ -2547,7 +2630,13 @@ Deno.serve(async (req) => {
                 `payment_intent, no se puede consultar la comision. Queda en 0.`,
               );
             } else {
-              const comision = await getStripeProcessorFee(stripe, piDeFactura);
+              const comisionDelCobro = await getStripeProcessorFee(stripe, piDeFactura);
+              // En una factura mixta la comision es de todo el cobro: a la
+              // membresia le toca su proporcion; la reserva se lleva el resto
+              // desde checkout.session.completed.
+              const comision = comisionDelCobro && facturaMixta
+                ? repartirComision(comisionDelCobro, centavosMembresia, invoice.amount_paid ?? 0).membresia
+                : comisionDelCobro;
               if (comision) {
                 await supabase
                   .from('payment_transactions')
