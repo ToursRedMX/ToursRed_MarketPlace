@@ -235,6 +235,13 @@ jobs:
       - name: Verify booking discount codes hit the right total
         run: node scripts/test-descuento-de-reserva.mjs
 
+      # 14 copias de una regex sobre el TEXTO del error decidian si una
+      # contrasena estaba filtrada; Supabase cambio la redaccion y ninguna
+      # casaba (el reset devolvia 500). Ahora se mira el codigo weak_password +
+      # reasons, con la clase real de auth-js, y se prohibe volver a copiarla.
+      - name: Verify leaked passwords are recognized by error code
+        run: node scripts/test-contrasena-filtrada.mjs
+
       # `max_uses` topa los grupos DENTRO de una misma reserva: 12 viajeros con
       # min_travelers=4 son tres grupos, y si solo quedan dos usos el tercero
       # paga completo. Sin ese tope una reserva grande se lleva mas descuento

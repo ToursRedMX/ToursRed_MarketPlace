@@ -159,17 +159,31 @@ Deno.serve(async (req: Request) => {
 
     if (updateError) {
       console.error("Error actualizando contraseña:", updateError);
-      const isLeaked = /leaked|pwned|compromised|common password/i.test(updateError.message ?? "");
+      // Por el CODIGO, no por el texto: Supabase cambio la redaccion a "Password
+      // is known to be weak..." y la regex vieja ya no casaba, asi que una
+      // contrasena filtrada salia como 500 "Error al actualizar la contrasena".
+      // Misma regla que src/lib/contrasenaFiltrada.ts (las funciones no importan
+      // de src/).
+      const errorDeContrasena = updateError as { code?: string; reasons?: string[] };
+      const isLeaked = errorDeContrasena.code === "weak_password" && Array.isArray(errorDeContrasena.reasons)
+        ? errorDeContrasena.reasons.includes("pwned")
+        : /known to be weak|leaked|pwned|compromised|common password/i.test(updateError.message ?? "");
+      // Las otras razones de weak_password ("length", "characters") tambien son
+      // culpa de la contrasena elegida, no del servidor: 422 y un mensaje que
+      // diga que hacer, en vez del 500 generico.
+      const isDebil = !isLeaked && errorDeContrasena.code === "weak_password";
       return new Response(
         JSON.stringify({
           success: false,
           error: isLeaked
             ? "Esta contraseña ha sido expuesta en brechas de datos conocidas y no puede usarse. Por favor elige una contraseña diferente y más segura."
-            : "Error al actualizar la contraseña",
+            : isDebil
+              ? "La contraseña no cumple los requisitos de seguridad. Usa una más larga, con mayúsculas, minúsculas, números y símbolos."
+              : "Error al actualizar la contraseña",
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: isLeaked ? 422 : 500,
+          status: isLeaked || isDebil ? 422 : 500,
         }
       );
     }

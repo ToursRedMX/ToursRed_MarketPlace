@@ -9,9 +9,7 @@ import AgencySignupFormBody, {
   AgencyFormData,
   defaultAgencyFormData,
 } from './AgencySignupFormBody';
-
-const isLeakedPasswordError = (message: string) =>
-  /leaked|pwned|compromised|common password/i.test(message);
+import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 
 const AgencySignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -91,7 +89,7 @@ const AgencySignupPage: React.FC = () => {
         if (signUpError.message === 'NO_SE_PUDO_VERIFICAR_CORREO') {
           throw new Error('No pudimos validar tus datos en este momento. Por favor intenta de nuevo en unos segundos.');
         }
-        if (isLeakedPasswordError(signUpError.message)) {
+        if (esContrasenaFiltrada(signUpError)) {
           throw new Error('Esta contraseña ha sido expuesta en brechas de datos conocidas y no puede usarse. Por favor elige una contraseña diferente y más segura.');
         }
         throw signUpError;

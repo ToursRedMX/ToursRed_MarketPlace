@@ -5,9 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useFieldAvailability } from '../../hooks/useFieldAvailability';
 import { validarRfcAgencia } from '../../lib/validarRfcAgencia';
 import AgencySignupFormBody, { AgencyFormData, defaultAgencyFormData } from './AgencySignupFormBody';
-
-const isLeakedPasswordError = (message: string) =>
-  /leaked|pwned|compromised|common password/i.test(message);
+import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 
 const XIcon = (
   <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true" fill="currentColor">
@@ -95,7 +93,7 @@ const XAgencySignupPage: React.FC = () => {
       // Primero la contraseña: si es débil o filtrada falla antes de escribir en BD.
       const { error: pwError } = await supabase.auth.updateUser({ password });
       if (pwError) {
-        if (isLeakedPasswordError(pwError.message)) throw new Error('Esta contraseña ha sido expuesta en brechas de datos. Por favor elige una más segura.');
+        if (esContrasenaFiltrada(pwError)) throw new Error('Esta contraseña ha sido expuesta en brechas de datos. Por favor elige una más segura.');
         throw pwError;
       }
 
