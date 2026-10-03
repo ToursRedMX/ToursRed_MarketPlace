@@ -402,6 +402,20 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d escalada -v ON_ERROR_STOP=1 -f test-users-auto-escalada.sql
 
+      # can_manage_travelers nunca tuvo respaldo en RLS para escribir: solo
+      # auth.uid() = id O is_super_admin() podian pasar el UPDATE, asi que un
+      # admin con el permiso (sin ser super admin) tocaba 0 filas de otro
+      # usuario, sin error. Pendiente 2 de la entrada 33; cerrado en la
+      # entrada 35. La prueba corre AMBAS migraciones (20261001010000 y
+      # 20261002010000) contra Postgres real.
+      - name: Verify can_manage_travelers can toggle is_active, and nothing else
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS permiso_travelers;" -c "CREATE DATABASE permiso_travelers;"
+          cd scripts
+          psql -h localhost -U postgres -d permiso_travelers -v ON_ERROR_STOP=1 -f test-users-permiso-travelers.sql
+
       # La conciliacion contable diaria mira 7 dias, no uno: sin traslape,
       # cualquier noche que el job falle pierde ese dia para siempre. La prueba
       # levanta un pg_cron de mentiras porque la extension no esta en CI, y lo

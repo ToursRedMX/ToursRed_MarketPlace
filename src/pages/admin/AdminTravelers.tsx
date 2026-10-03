@@ -184,12 +184,19 @@ export default function AdminTravelers() {
 
   const toggleActiveStatus = async (travelerId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
+      const { data: filasActualizadas, error } = await supabase
         .from('users')
         .update({ is_active: !currentStatus })
-        .eq('id', travelerId);
+        .eq('id', travelerId)
+        .select('id');
 
       if (error) throw error;
+
+      // RLS puede bloquear la fila sin devolver error (0 filas, 200 OK): el
+      // optimistic update de abajo mentiria si no se comprueba esto primero.
+      if (!filasActualizadas || filasActualizadas.length === 0) {
+        throw new Error('No se guardo el cambio (sin permiso sobre este usuario)');
+      }
 
       setTravelers(travelers.map(t =>
         t.id === travelerId ? { ...t, is_active: !currentStatus } : t
