@@ -30,9 +30,11 @@ type Props = {
   onSelectGroup: (id: string | null) => void;
   /** Modo "elegir asiento": los libres se vuelven clicables. */
   pick?: { prompt: string; busy: boolean; onPick: (seat: number) => void; onCancel: () => void } | null;
+  /** Oculta la leyenda de "toca un asiento para resaltar su reserva" donde no aplica. */
+  hideHint?: boolean;
 };
 
-export default function AgendaSeatMap({ tourId, seats, resolve, activeGroupId, onSelectGroup, pick }: Props) {
+export default function AgendaSeatMap({ tourId, seats, resolve, activeGroupId, onSelectGroup, pick, hideHint }: Props) {
   const { data: layout, isPending, error } = useLayout(tourId);
   if (isPending) return <div className="h-48 animate-pulse rounded-xl bg-slate-100" />;
   if (error) return <p role="alert" className="text-sm text-red-700">No se pudo cargar el mapa de asientos.</p>;
@@ -114,7 +116,7 @@ export default function AgendaSeatMap({ tourId, seats, resolve, activeGroupId, o
           }))}
         </svg>
       </div>
-      {!pick && <p className="mt-2 text-center text-xs text-slate-500">Toca un asiento ocupado para resaltar toda su reserva.</p>}
+      {!pick && !hideHint && <p className="mt-2 text-center text-xs text-slate-500">Toca un asiento ocupado para resaltar toda su reserva.</p>}
     </div>
   );
 }

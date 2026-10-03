@@ -13,6 +13,7 @@ export function useLayout(tourId: string) {
   return useQuery({
     queryKey: ['agenda-seat-layout', tourId],
     staleTime: 5 * 60_000,
+    enabled: !!tourId,
     queryFn: async (): Promise<VehicleSeatLayout | null> => {
       const { data: tour, error: tourError } = await supabase.from('tours').select('vehicle_map_type').eq('id', tourId).maybeSingle();
       if (tourError) throw tourError;
