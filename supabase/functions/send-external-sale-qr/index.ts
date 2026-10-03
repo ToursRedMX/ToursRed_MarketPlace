@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import QRCode from "npm:qrcode@1.5.4";
 import { requireUser } from "../_shared/auth.ts";
 import { externalEmailHtml } from "../_shared/externalSaleEmail.ts";
+import { buildEmailSeats } from "../_shared/externalSaleSeats.ts";
 import type { ExternalEmail } from "../_shared/externalSaleEmail.ts";
 const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-client-info, x-correlation-id"};
 const json=(body:Record<string,unknown>,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,"Content-Type":"application/json"}});
@@ -26,6 +27,16 @@ Deno.serve(async(req:Request)=>{
  const result=await user.rpc("prepare_external_sale_email",{p_id:external_sale_id});
  if(result.error) return json({error:result.error.message},403);
  prepared=result.data as Prepared;
+ // Asientos asignados: se leen justo antes de enviar, asi el correo trae los de AHORA. Si algo falla, el correo sale sin asientos (nunca se bloquea el envio por esto).
+ let seats:ReturnType<typeof buildEmailSeats>=[];
+ try{
+ const travelers=await admin.from("external_sale_travelers").select("id,first_name,last_name").eq("external_sale_id",prepared.id).eq("is_cancelled",false);
+ const ids=(travelers.data??[]).map((t:{id:string})=>t.id);
+ if(!travelers.error&&ids.length){
+ const rows=await admin.from("slot_seat_status").select("seat_number,external_sale_traveler_id").in("external_sale_traveler_id",ids);
+ if(!rows.error) seats=buildEmailSeats(travelers.data,rows.data??[]);
+ }
+ }catch{console.error("external_qr_email_seats_failed");}
  const qrUrl=new URL("/agency/agenda",Deno.env.get("SITE_URL")||"https://toursred.com");
  qrUrl.searchParams.set("tour",prepared.tour_id);if(prepared.slot_id)qrUrl.searchParams.set("slot",prepared.slot_id);
  qrUrl.hash="external-qr="+prepared.token;
@@ -33,7 +44,7 @@ Deno.serve(async(req:Request)=>{
  const response=await fetch("https://api.smtp2go.com/v3/email/send",{method:"POST",headers:{"Content-Type":"application/json"},
  body:JSON.stringify({api_key:settings.data.smtp_api_key,to:[prepared.email],sender:settings.data.contact_email,
  subject:prepared.agency.name.replace(/[\r\n]/g," ")+" · QR de check-in",
- html_body:externalEmailHtml(prepared,url+"/storage/v1/object/public/images/email-logo.png"),
+ html_body:externalEmailHtml({...prepared,seats},url+"/storage/v1/object/public/images/email-logo.png"),
  custom_headers:[{header:"Reply-To",value:prepared.agency.contact_email.replace(/[\r\n]/g,"")}],
  inlines:[{filename:"checkin.png",fileblob:png.split(",")[1],mimetype:"image/png"}]}),
  signal:AbortSignal.timeout(20000)});
