@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import TurnstileWidget from './TurnstileWidget';
 import { useTurnstileEnabled } from '../hooks/useTurnstileEnabled';
 import { esContrasenaFiltrada } from '../lib/contrasenaFiltrada';
+import { validarContrasena } from '../lib/politicaContrasena';
 
 const ChangePasswordSection: React.FC = () => {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -21,22 +22,6 @@ const ChangePasswordSection: React.FC = () => {
     newPassword: '',
     confirmPassword: ''
   });
-
-  const validatePassword = (password: string): string | null => {
-    if (password.length < 6) {
-      return 'La contraseña debe tener al menos 6 caracteres';
-    }
-    if (!/[A-Z]/.test(password)) {
-      return 'La contraseña debe contener al menos una letra mayúscula';
-    }
-    if (!/[a-z]/.test(password)) {
-      return 'La contraseña debe contener al menos una letra minúscula';
-    }
-    if (!/[0-9]/.test(password)) {
-      return 'La contraseña debe contener al menos un número';
-    }
-    return null;
-  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +43,7 @@ const ChangePasswordSection: React.FC = () => {
       return;
     }
 
-    const validationError = validatePassword(passwordForm.newPassword);
+    const validationError = validarContrasena(passwordForm.newPassword);
     if (validationError) {
       setError(validationError);
       return;
@@ -197,7 +182,7 @@ const ChangePasswordSection: React.FC = () => {
             </button>
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            Mínimo 6 caracteres, debe incluir mayúsculas, minúsculas y números
+            Mínimo 8 caracteres, debe incluir mayúsculas, minúsculas y números
           </p>
         </div>
 

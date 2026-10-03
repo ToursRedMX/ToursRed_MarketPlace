@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import { checkAal2Required, aal2Response } from '../_shared/aal2Check.ts';
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { validarContrasena } from "../_shared/politicaContrasena.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -169,6 +170,17 @@ Deno.serve(async (req: Request) => {
     if (!email || !password || !nombre || !apellido) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    const errorContrasena = validarContrasena(password);
+    if (errorContrasena) {
+      return new Response(
+        JSON.stringify({ error: errorContrasena }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { avisosCon } from "../_shared/avisosDePago.ts";
+import { separarFeeBaseIva } from "../_shared/separarFeeBaseIva.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -180,6 +181,19 @@ Deno.serve(async (req: Request) => {
     const isLiveMode = body?.live_mode !== false;
 
     console.log("MercadoPago webhook received:", { notificationType, notificationId, isLiveMode });
+
+    // Rastro del evento crudo, igual que stripe-webhook y paypal-webhook.
+    // MercadoPago no lo tenia: no habia forma de comprobar despues que un
+    // pago de verdad trajo (o no) `fee_details`. No bloqueante.
+    try {
+      await supabase.from("webhook_logs").insert({
+        event_type: `mercadopago.${notificationType || "unknown"}`,
+        event_id: notificationId ? String(notificationId) : null,
+        payload: body,
+      });
+    } catch (logErr) {
+      console.error("Error logging MercadoPago webhook event:", logErr);
+    }
 
     // ── Contracargos ────────────────────────────────────────────
     // Va ANTES del corte de abajo, que devuelve 200 y descarta todo lo que no
@@ -403,6 +417,7 @@ Deno.serve(async (req: Request) => {
         const insFee = Array.isArray(payment.fee_details)
           ? payment.fee_details.filter((fd: any) => fd.type === "mercadopago_fee").reduce((s: number, fd: any) => s + parseFloat(fd.amount || "0"), 0)
           : 0;
+        const insFeeSplit = separarFeeBaseIva(insFee);
 
         await supabase.from("bookings").update({
           travel_insurance_included: true,
@@ -413,6 +428,8 @@ Deno.serve(async (req: Request) => {
         await supabase.from("payment_transactions").update({
           status: "succeeded",
           processor_fee: insFee,
+          processor_fee_base: insFeeSplit.base,
+          processor_fee_iva: insFeeSplit.iva,
           net_amount: insAmount - insFee,
           mercadopago_payment_id: String(notificationId),
         }).eq("id", pendingInsurance.id);
@@ -463,6 +480,7 @@ Deno.serve(async (req: Request) => {
         const optFee = Array.isArray(payment.fee_details)
           ? payment.fee_details.filter((fd: any) => fd.type === "mercadopago_fee").reduce((s: number, fd: any) => s + parseFloat(fd.amount || "0"), 0)
           : 0;
+        const optFeeSplit = separarFeeBaseIva(optFee);
 
         await supabase.from("booking_optional_services").update({
           paid_at: new Date().toISOString(),
@@ -478,6 +496,8 @@ Deno.serve(async (req: Request) => {
           status: "succeeded",
           payment_processor: "mercadopago",
           processor_fee: optFee,
+          processor_fee_base: optFeeSplit.base,
+          processor_fee_iva: optFeeSplit.iva,
           net_amount: optAmount - optFee,
           charge_context: "optional_service",
           charge_reference_id: externalReference,
@@ -548,6 +568,7 @@ Deno.serve(async (req: Request) => {
                     .filter((fd: any) => fd.type === "mercadopago_fee")
                     .reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
                 : 0;
+              const suppFeeSplit = separarFeeBaseIva(suppFee);
               const suppAmount = Number(suppDetails.total_paid) || 0;
               await supabase.from("payment_transactions").insert({
                 booking_id: suppDetails.booking_id,
@@ -557,6 +578,8 @@ Deno.serve(async (req: Request) => {
                 status: "succeeded",
                 payment_processor: "mercadopago",
                 processor_fee: suppFee,
+                processor_fee_base: suppFeeSplit.base,
+                processor_fee_iva: suppFeeSplit.iva,
                 net_amount: suppAmount - suppFee,
                 charge_context: "supplement",
                 charge_reference_id: externalReference,
@@ -605,6 +628,7 @@ Deno.serve(async (req: Request) => {
                 .filter((fd: any) => fd.type === "mercadopago_fee")
                 .reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
             : 0;
+          const mpFeeSplit = separarFeeBaseIva(mpFee);
 
           const { data: existingTx } = await supabase
             .from("payment_transactions")
@@ -622,6 +646,8 @@ Deno.serve(async (req: Request) => {
               status: "succeeded",
               payment_method_type: "Tarjeta",
               processor_fee: mpFee,
+              processor_fee_base: mpFeeSplit.base,
+              processor_fee_iva: mpFeeSplit.iva,
               net_amount: mpAmount - mpFee,
               metadata: payment,
             });
@@ -642,7 +668,12 @@ Deno.serve(async (req: Request) => {
             // seria peor que no tocar nada.
             const { error: feeErr } = await supabase
               .from("payment_transactions")
-              .update({ processor_fee: mpFee, net_amount: mpAmount - mpFee })
+              .update({
+                processor_fee: mpFee,
+                processor_fee_base: mpFeeSplit.base,
+                processor_fee_iva: mpFeeSplit.iva,
+                net_amount: mpAmount - mpFee,
+              })
               .eq("id", existingTx.id);
 
             if (feeErr) {

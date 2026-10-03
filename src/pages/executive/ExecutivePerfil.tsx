@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import { normalizarTelefono } from '../../lib/telefono';
+import { validarContrasena } from '../../lib/politicaContrasena';
 
 interface ExecutiveProfile {
   id: string;
@@ -274,7 +275,8 @@ export default function ExecutivePerfil() {
 
   const savePassword = async () => {
     if (!newPassword || !confirmPassword) { showMsg('error', 'Ingresa y confirma tu nueva contraseña.', 'password'); return; }
-    if (newPassword.length < 8) { showMsg('error', 'La contraseña debe tener al menos 8 caracteres.', 'password'); return; }
+    const errorContrasena = validarContrasena(newPassword);
+    if (errorContrasena) { showMsg('error', errorContrasena, 'password'); return; }
     if (newPassword !== confirmPassword) { showMsg('error', 'Las contraseñas no coinciden.', 'password'); return; }
     setIsSavingPassword(true);
     try {
@@ -552,7 +554,7 @@ export default function ExecutivePerfil() {
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Nueva contraseña</label>
               <div className="relative">
-                <input type={showNewPw ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full border border-gray-200 rounded-lg pl-3 pr-10 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-400" placeholder="Mínimo 8 caracteres" />
+                <input type={showNewPw ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full border border-gray-200 rounded-lg pl-3 pr-10 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-gray-400" placeholder="Mínimo 8 caracteres, con mayúscula, minúscula y número" />
                 <button type="button" onClick={() => setShowNewPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

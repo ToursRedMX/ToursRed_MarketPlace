@@ -411,6 +411,67 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d escalada -v ON_ERROR_STOP=1 -f test-users-auto-escalada.sql
 
+      # can_manage_travelers nunca tuvo respaldo en RLS para escribir: solo
+      # auth.uid() = id O is_super_admin() podian pasar el UPDATE, asi que un
+      # admin con el permiso (sin ser super admin) tocaba 0 filas de otro
+      # usuario, sin error. Pendiente 2 de la entrada 33; cerrado en la
+      # entrada 35. La prueba corre AMBAS migraciones (20261001010000 y
+      # 20261002010000) contra Postgres real.
+      - name: Verify can_manage_travelers can toggle is_active, and nothing else
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS permiso_travelers;" -c "CREATE DATABASE permiso_travelers;"
+          cd scripts
+          psql -h localhost -U postgres -d permiso_travelers -v ON_ERROR_STOP=1 -f test-users-permiso-travelers.sql
+
+      # stripe-webhook llamaba insert_audit_log('BOOKING_CONFIRMED') justo
+      # despues del UPDATE que confirma la reserva, duplicando la fila que
+      # audit_bookings_change() (trigger generico) ya escribe sola. Medido en
+      # produccion: 10 reservas con la fila de mas. Pendiente 4 de la entrada
+      # 33, cerrado en la entrada 37.
+      - name: Confirmar una reserva deja una sola fila BOOKING_CONFIRMED
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS audit_bookings;" -c "CREATE DATABASE audit_bookings;"
+          cd scripts
+          psql -h localhost -U postgres -d audit_bookings -v ON_ERROR_STOP=1 -f test-audit-bookings-sin-duplicar.sql
+
+      - name: stripe-webhook no vuelve a duplicar BOOKING_CONFIRMED
+        run: node scripts/check-sin-booking-confirmed-duplicado.mjs
+
+      # Conekta: 14 de 14 cobros historicos en processor_fee = 0.00 (sandbox
+      # no manda la comision real). conekta-webhook ahora la estima con la
+      # misma formula que create_accounting_entry_for_booking ya usa como
+      # respaldo. Pendiente 5 de la entrada 33, cerrado en la entrada 38.
+      - name: La comision estimada de Conekta usa la formula ya existente
+        run: node scripts/test-comision-estimada.mjs
+
+      # MercadoPago manda la comision con IVA incluido en un solo monto
+      # (fee_details) y nunca escribia processor_fee_base/processor_fee_iva.
+      # Pendiente 6 de la entrada 33, cerrado en la entrada 39.
+      - name: processor_fee_base + processor_fee_iva reconstruyen el total de MP
+        run: node scripts/test-separar-fee-base-iva.mjs
+
+      # Conekta y MercadoPago no guardaban el payload crudo de su webhook en
+      # ninguna tabla, a diferencia de Stripe/PayPal/OpenPay. Pedido explicito
+      # de Axel al retomar el pendiente 6.
+      - name: Los cinco webhooks de pago guardan su payload crudo
+        run: node scripts/check-webhooks-guardan-payload.mjs
+
+      # Los 11 generadores automaticos de CFDI mandan payment_method: "PUE" a
+      # FacturAPI pero nunca lo guardaban en cfdi_invoices.payment_method_sat
+      # (72 de 72 filas en NULL). Pendiente 7 de la entrada 33, entrada 41.
+      - name: Los generadores de CFDI guardan payment_method_sat al timbrar
+        run: node scripts/check-cfdi-payment-method-sat.mjs
+
+      # La cancelacion total repartia la penalizacion 60/40 y la parcial
+      # 70/30. Decision de Axel: homologar a 70/30 en ambas. Pendiente 8 de
+      # la entrada 33, entrada 42.
+      - name: Cancelacion total y parcial reparten la penalizacion igual (70/30)
+        run: node scripts/check-penalizacion-homologada.mjs
+
       # La conciliacion contable diaria mira 7 dias, no uno: sin traslape,
       # cualquier noche que el job falle pierde ese dia para siempre. La prueba
       # levanta un pg_cron de mentiras porque la extension no esta en CI, y lo
@@ -660,6 +721,20 @@ jobs:
       # ver scripts/edge-guards-linea-base.json.
       - name: Ninguna Edge Function nueva sin guard de autorizacion
         run: node scripts/check-edge-guards.mjs
+
+      # Pendiente 1 de la entrada 33: el codigo de verificacion se generaba
+      # en el navegador (Math.random), asi que quien lo generaba ya lo
+      # conocia y podia verificar su correo sin haberlo leido nunca.
+      - name: El codigo de verificacion de correo se genera en el servidor
+        run: node scripts/test-codigo-verificacion-servidor.mjs
+
+      # Pendiente 3 de la entrada 33: 6 caracteres sin exigir nada mas, igual
+      # en 6 lugares (y dos mas ya habian subido a 8 por su cuenta, cada una
+      # con su propia copia). Centralizado en politicaContrasena.ts; minimo
+      # 8 + mayuscula + minuscula + numero en los ~20 lugares que crean o
+      # cambian una contrasena elegida por una persona.
+      - name: La politica de contrasena es la misma en todos lados, y subio a 8
+        run: node scripts/test-politica-contrasena.mjs
 
       - name: Run ESLint (el veredicto lo da el paso siguiente)
         run: |
