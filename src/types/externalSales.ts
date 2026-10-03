@@ -22,7 +22,7 @@ export type DepartureReservation = {
  total_amount: number | null; collected_amount: number | null; pending_amount: number | null;
  release_pending_amount: number | null; released_amount: number | null; currency: string | null;
 };
-export type DepartureSeat = { seat_number: number; status: 'reservado_online' | 'bloqueado_agencia' | string; booking_id: string | null; block_note: string | null };
+export type DepartureSeat = { seat_number: number; status: 'reservado_online' | 'bloqueado_agencia' | string; booking_id: string | null; block_note: string | null; external_traveler_id: string | null };
 export const CHANNELS: Record<string,string> = { whatsapp:'WhatsApp',facebook:'Facebook',instagram:'Instagram',website:'Sitio web propio',office:'Oficina',phone:'Teléfono',direct:'Venta directa',other:'Otro' };
 export const PAYMENT_METHODS: Record<string,string> = { cash:'Efectivo',bank_transfer:'Transferencia bancaria',card:'Tarjeta (fuera de ToursRed)',other:'Otro' };
 export const EXTERNAL_NOTICE = 'Esta venta fue realizada fuera de ToursRed. Los importes capturados son únicamente para tu control interno y no generan comisión ni movimientos financieros en ToursRed.';

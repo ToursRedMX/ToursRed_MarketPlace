@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import type { VehicleSeatLayout } from '../../types/seats';
 
-export type SeatBooking = { id: string; holder: string; code: string | null; people: number; color: string };
+// Quien ocupa un asiento. groupId agrupa los asientos de una misma reserva para resaltarlos juntos.
+export type SeatOwner = { groupId: string; label: string; color: string };
+export const EXTERNAL_COLOR = '#d97706';
 
 // Una paleta corta que se repite: lo importante es distinguir reservas vecinas, no identificarlas.
 export const BOOKING_COLORS = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#0d9488', '#ca8a04', '#4f46e5', '#059669'];

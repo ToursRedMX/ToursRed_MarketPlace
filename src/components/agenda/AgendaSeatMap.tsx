@@ -1,7 +1,7 @@
 import type { DepartureSeat } from '../../types/externalSales';
 import type { SeatDefinition, VehicleShape } from '../../types/seats';
 import { useLayout } from './seatMapData';
-import type { SeatBooking } from './seatMapData';
+import type { SeatOwner } from './seatMapData';
 
 const SEAT = 38;
 const GAP = 6;
@@ -25,12 +25,14 @@ function geometry(shape: VehicleShape) {
 type Props = {
   tourId: string;
   seats: DepartureSeat[];
-  bookings: Map<string, SeatBooking>;
-  activeBookingId: string | null;
-  onSelectBooking: (id: string | null) => void;
+  resolve: (seat: DepartureSeat) => SeatOwner | null;
+  activeGroupId: string | null;
+  onSelectGroup: (id: string | null) => void;
+  /** Modo "elegir asiento": los libres se vuelven clicables. */
+  pick?: { prompt: string; busy: boolean; onPick: (seat: number) => void; onCancel: () => void } | null;
 };
 
-export default function AgendaSeatMap({ tourId, seats, bookings, activeBookingId, onSelectBooking }: Props) {
+export default function AgendaSeatMap({ tourId, seats, resolve, activeGroupId, onSelectGroup, pick }: Props) {
   const { data: layout, isPending, error } = useLayout(tourId);
   if (isPending) return <div className="h-48 animate-pulse rounded-xl bg-slate-100" />;
   if (error) return <p role="alert" className="text-sm text-red-700">No se pudo cargar el mapa de asientos.</p>;
@@ -47,6 +49,12 @@ export default function AgendaSeatMap({ tourId, seats, bookings, activeBookingId
 
   return (
     <div>
+      {pick && (
+        <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900 ring-1 ring-emerald-200">
+          <span className="font-medium">{pick.busy ? 'Guardando…' : pick.prompt}</span>
+          <button type="button" onClick={pick.onCancel} disabled={pick.busy} className="rounded-lg border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold hover:bg-emerald-100 disabled:opacity-50">Cancelar</button>
+        </div>
+      )}
       <div className="mb-3 flex flex-wrap gap-2 text-xs">
         <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-800 ring-1 ring-emerald-200">{free} libres</span>
         <span className="rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-800 ring-1 ring-blue-200">{taken} asignados</span>
@@ -72,35 +80,41 @@ export default function AgendaSeatMap({ tourId, seats, bookings, activeBookingId
             const def = grid.get(`${row}-${col}`);
             if (!def) return null;
             const state = byNumber.get(def.number);
-            const booking = state?.booking_id ? bookings.get(state.booking_id) : undefined;
+            const owner = state ? resolve(state) : null;
             const isBlocked = state?.status === 'bloqueado_agencia';
             const isTaken = state?.status === 'reservado_online';
-            const dimmed = activeBookingId !== null && !(booking && booking.id === activeBookingId);
+            const isFree = !isBlocked && !isTaken;
+            const pickable = !!pick && isFree && !pick.busy;
+            const dimmed = activeGroupId !== null && !(owner && owner.groupId === activeGroupId);
             const x = g.colX(col);
             const y = g.rowY(row);
-            const fill = isBlocked ? '#e2e8f0' : isTaken ? (booking?.color ?? '#64748b') : '#ffffff';
-            const stroke = isBlocked ? '#94a3b8' : isTaken ? (booking?.color ?? '#475569') : '#10b981';
+            const fill = isBlocked ? '#e2e8f0' : isTaken ? (owner?.color ?? '#64748b') : pickable ? '#ecfdf5' : '#ffffff';
+            const stroke = isBlocked ? '#94a3b8' : isTaken ? (owner?.color ?? '#475569') : '#10b981';
             const label = isBlocked
               ? `Asiento ${def.number} · Bloqueado${state?.block_note ? `: ${state.block_note}` : ''}`
               : isTaken
-                ? `Asiento ${def.number} · ${booking ? `${booking.holder}${booking.code ? ` (${booking.code})` : ''} · ${booking.people} ${booking.people === 1 ? 'viajero' : 'viajeros'}` : 'Reservado'}`
-                : `Asiento ${def.number} · Libre`;
+                ? `Asiento ${def.number} · ${owner?.label ?? 'Ocupado'}`
+                : pickable ? `Asignar el asiento ${def.number}` : `Asiento ${def.number} · Libre`;
+            const clickable = pickable || (!pick && !!owner);
             return (
               <g
                 key={def.number}
                 opacity={dimmed && isTaken ? 0.3 : 1}
-                style={{ cursor: booking ? 'pointer' : 'default' }}
-                onClick={() => booking && onSelectBooking(activeBookingId === booking.id ? null : booking.id)}
+                style={{ cursor: clickable ? 'pointer' : 'default' }}
+                onClick={() => {
+                  if (pickable) pick.onPick(def.number);
+                  else if (!pick && owner) onSelectGroup(activeGroupId === owner.groupId ? null : owner.groupId);
+                }}
               >
                 <title>{label}</title>
-                <rect x={x} y={y} width={SEAT} height={SEAT} rx={8} fill={fill} stroke={stroke} strokeWidth={isTaken && booking?.id === activeBookingId ? 3 : 1.5} strokeDasharray={isBlocked ? '3,3' : undefined} />
+                <rect x={x} y={y} width={SEAT} height={SEAT} rx={8} fill={fill} stroke={stroke} strokeWidth={isTaken && owner?.groupId === activeGroupId ? 3 : pickable ? 2.5 : 1.5} strokeDasharray={isBlocked ? '3,3' : undefined} />
                 <text x={x + SEAT / 2} y={y + SEAT / 2 + 1} textAnchor="middle" dominantBaseline="middle" fontSize={12} fontWeight={600} fill={isTaken ? '#ffffff' : isBlocked ? '#64748b' : '#047857'}>{def.number}</text>
               </g>
             );
           }))}
         </svg>
       </div>
-      <p className="mt-2 text-center text-xs text-slate-500">Toca un asiento ocupado para resaltar toda su reserva.</p>
+      {!pick && <p className="mt-2 text-center text-xs text-slate-500">Toca un asiento ocupado para resaltar toda su reserva.</p>}
     </div>
   );
 }

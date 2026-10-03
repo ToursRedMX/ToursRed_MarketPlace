@@ -36,6 +36,11 @@ export async function loadDepartureSeats(tour: string, slot: string|null): Promi
  const {data,error}=await supabase.rpc('get_departure_seats',{p_tour_id:tour,p_slot_id:slot});
  if(error) throw error; return (data??[]) as DepartureSeat[];
 }
+export type SeatAssignment = { traveler_id: string; seat_number: number | null };
+// seat_number null = quitar el asiento. Todo o nada: si uno falla, ninguno cambia.
+export async function assignExternalSeats(saleId: string, assignments: SeatAssignment[]) {
+ const {error}=await supabase.rpc('assign_external_seats',{p_sale_id:saleId,p_assignments:assignments}); if(error) throw error;
+}
 export async function saveExternalSale(sale: Record<string,unknown>,travelers: ExternalTraveler[],existing?: ExternalSale) {
  const {data,error}=await supabase.rpc('save_external_sale',{p_sale:sale,p_travelers:travelers,p_id:existing?.id ?? null,p_version:existing?.version ?? null});
  if(error) throw error; return data as string;

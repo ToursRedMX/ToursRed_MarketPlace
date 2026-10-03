@@ -3,16 +3,17 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
-import { ChevronDown, CircleCheck, FileSpreadsheet, FileText, MessageCircle, Phone, QrCode, X } from 'lucide-react';
-import { loadDepartureReservations, loadDepartureSeats, loadManifest, checkinExternal, errorText } from '../../lib/externalSales';
+import { Armchair, ChevronDown, CircleCheck, FileSpreadsheet, FileText, MessageCircle, Phone, QrCode, X } from 'lucide-react';
+import { assignExternalSeats, loadDepartureReservations, loadDepartureSeats, loadManifest, checkinExternal, errorText } from '../../lib/externalSales';
+import { useAuth } from '../../context/AuthContext';
 import { pendingExternalQr } from '../../lib/externalQrSession';
 import { downloadExcel } from '../../utils/excelExport';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { CHANNELS } from '../../types/externalSales';
-import type { DepartureReservation, ManifestRow, Operation } from '../../types/externalSales';
+import type { DepartureReservation, DepartureSeat, ManifestRow, Operation } from '../../types/externalSales';
 import AgendaSeatMap from './AgendaSeatMap';
-import { BOOKING_COLORS, useHasSeatMap } from './seatMapData';
-import type { SeatBooking } from './seatMapData';
+import { BOOKING_COLORS, EXTERNAL_COLOR, useHasSeatMap } from './seatMapData';
+import type { SeatOwner } from './seatMapData';
 import DepartureFinance from './DepartureFinance';
 import { canSeeMoney } from './financeMath';
 import { OccupancyBar, OriginBadge } from './shared';
@@ -36,6 +37,14 @@ export default function DepartureDetail({ op, agency, onClose, onRefresh }: Prop
   const [token, setToken] = useState(pendingExternalQr);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  // Viajero externo al que se le esta eligiendo asiento en el mapa.
+  const [assigning, setAssigning] = useState<{ saleId: string; travelerId: string; name: string } | null>(null);
+  const [seatBusy, setSeatBusy] = useState(false);
+  const [seatMsg, setSeatMsg] = useState('');
+  const mapRef = useRef<HTMLElement>(null);
+  const { isAgencyStaff, staffInfo } = useAuth();
+  // Mismo criterio que la base (external_sale_access 'manage'): dueño, o staff con ambos permisos.
+  const canAssign = !isAgencyStaff || (!!staffInfo?.permissions.canManageTours && !!staffInfo?.permissions.canViewFinancials);
 
   const keyBase = [agency, op.tour_id, op.slot_id];
   const manifest = useQuery({ queryKey: ['operational-manifest', ...keyBase], queryFn: () => loadManifest(op.tour_id, op.slot_id), refetchInterval: REFRESH_MS });
@@ -55,17 +64,60 @@ export default function DepartureDetail({ op, agency, onClose, onRefresh }: Prop
   const rows: DepartureReservation[] = useMemo(() => reservations.data ?? [], [reservations.data]);
   const money = canSeeMoney(rows);
 
-  // Reservas ToursRed con color propio y los asientos que ocupa cada una.
+  // Reservas ToursRed con color propio; las ventas externas comparten uno.
   const bookings = useMemo(() => {
-    const m = new Map<string, SeatBooking>();
-    rows.filter(r => r.origin === 'ToursRed').forEach((r, i) => m.set(r.reservation_id, { id: r.reservation_id, holder: r.holder_name, code: r.reservation_code, people: r.people, color: BOOKING_COLORS[i % BOOKING_COLORS.length] }));
+    const m = new Map<string, { holder: string; code: string | null; people: number; color: string }>();
+    rows.filter(r => r.origin === 'ToursRed').forEach((r, i) => m.set(r.reservation_id, { holder: r.holder_name, code: r.reservation_code, people: r.people, color: BOOKING_COLORS[i % BOOKING_COLORS.length] }));
     return m;
   }, [rows]);
-  const seatsOf = useMemo(() => {
-    const m = new Map<string, number[]>();
-    (seats.data ?? []).forEach(s => { if (s.booking_id && s.status === 'reservado_online') m.set(s.booking_id, [...(m.get(s.booking_id) ?? []), s.seat_number]); });
+  // Viajero externo -> su venta, para saber de quien es cada asiento del mapa.
+  const externalOf = useMemo(() => {
+    const m = new Map<string, { saleId: string; name: string }>();
+    (manifest.data ?? []).forEach(t => { if (t.origin === 'Externa' && t.traveler_id) m.set(t.traveler_id, { saleId: t.reservation_id, name: t.traveler_name }); });
     return m;
-  }, [seats.data]);
+  }, [manifest.data]);
+  // Asientos por reserva (ToursRed por booking_id, externas por el viajero) y el asiento de cada viajero externo.
+  const { seatsOf, seatOfTraveler } = useMemo(() => {
+    const byRes = new Map<string, number[]>();
+    const byTraveler = new Map<string, number>();
+    (seats.data ?? []).forEach(st => {
+      if (st.status !== 'reservado_online') return;
+      let res: string | undefined;
+      if (st.booking_id) res = st.booking_id;
+      else if (st.external_traveler_id) { res = externalOf.get(st.external_traveler_id)?.saleId; byTraveler.set(st.external_traveler_id, st.seat_number); }
+      if (res) byRes.set(res, [...(byRes.get(res) ?? []), st.seat_number]);
+    });
+    return { seatsOf: byRes, seatOfTraveler: byTraveler };
+  }, [seats.data, externalOf]);
+  const resolveSeat = (st: DepartureSeat): SeatOwner | null => {
+    if (st.booking_id) {
+      const b = bookings.get(st.booking_id);
+      return b ? { groupId: st.booking_id, color: b.color, label: `${b.holder}${b.code ? ` (${b.code})` : ''} · ${b.people} ${b.people === 1 ? 'viajero' : 'viajeros'}` } : null;
+    }
+    if (st.external_traveler_id) {
+      const e = externalOf.get(st.external_traveler_id);
+      return e ? { groupId: e.saleId, color: EXTERNAL_COLOR, label: `${e.name} · venta externa` } : { groupId: st.external_traveler_id, color: EXTERNAL_COLOR, label: 'Venta externa' };
+    }
+    return null;
+  };
+  const seatedExternal = [...seatOfTraveler.keys()].filter(id => externalOf.has(id)).length;
+  const unseatedExternal = Math.max(0, externalOf.size - seatedExternal);
+
+  async function saveSeat(saleId: string, travelerId: string, seat: number | null) {
+    setSeatBusy(true); setSeatMsg('');
+    try {
+      await assignExternalSeats(saleId, [{ traveler_id: travelerId, seat_number: seat }]);
+      await seats.refetch();
+      setAssigning(null);
+    } catch (e) { setSeatMsg(errorText(e)); await seats.refetch(); } finally { setSeatBusy(false); }
+  }
+  function startAssign(saleId: string, travelerId: string, name: string) {
+    setAssigning({ saleId, travelerId, name }); setSeatMsg(''); setActive(null);
+  }
+  // Al empezar a elegir asiento, lleva el mapa a la vista.
+  const assigningId = assigning?.travelerId;
+  useEffect(() => { if (assigningId) mapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [assigningId]);
+
   const travelersOf = useMemo(() => {
     const m = new Map<string, ManifestRow[]>();
     (manifest.data ?? []).forEach(t => m.set(t.reservation_id, [...(m.get(t.reservation_id) ?? []), t]));
@@ -80,15 +132,14 @@ export default function DepartureDetail({ op, agency, onClose, onRefresh }: Prop
   const attendees = manifest.data ?? [];
   const checkedIn = attendees.filter(t => t.checked_in_at).reduce((s, t) => s + t.people, 0);
   const totalPeople = attendees.reduce((s, t) => s + t.people, 0);
-  const externalPeople = op.external;
   const t = tone(op);
 
-  // Un viajero por renglon, con el lugar de su reserva (los asientos se guardan por reserva, no por persona).
+  // Un viajero por renglon. ToursRed guarda los asientos por reserva; las ventas externas, por persona.
   const exportRows = (list: ManifestRow[]) => list.map(r => [
     r.traveler_name, r.origin, bookings.get(r.reservation_id)?.code ?? '', r.people, TYPE_LABEL[r.traveler_type] ?? r.traveler_type,
-    [...(seatsOf.get(r.reservation_id) ?? [])].sort((a, b) => a - b).join(', '), STATUS_LABEL[r.status] ?? r.status, r.checked_in_at ? 'Realizado' : 'Pendiente', r.phone ?? '',
+    r.origin === 'Externa' ? String((r.traveler_id && seatOfTraveler.get(r.traveler_id)) || '') : [...(seatsOf.get(r.reservation_id) ?? [])].sort((a, b) => a - b).join(', '), STATUS_LABEL[r.status] ?? r.status, r.checked_in_at ? 'Realizado' : 'Pendiente', r.phone ?? '',
   ]);
-  const headers = ['Viajero', 'Origen', 'Reserva', 'Personas', 'Tipo', 'Asientos de la reserva', 'Estado', 'Check-in', 'Teléfono'];
+  const headers = ['Viajero', 'Origen', 'Reserva', 'Personas', 'Tipo', 'Asiento(s)', 'Estado', 'Check-in', 'Teléfono'];
   const exportList = attendees.filter(r => origin === 'Todos' || r.origin === origin);
   const title = `${op.tour_name} · ${op.departure_date} ${time5(op.departure_time)}`;
   async function exportExcel() {
@@ -147,12 +198,15 @@ export default function DepartureDetail({ op, agency, onClose, onRefresh }: Prop
           {money && <DepartureFinance rows={rows} />}
 
           {hasMap && (
-            <section aria-label="Mapa de asientos" className="rounded-2xl border border-slate-200 bg-white p-4">
+            <section ref={mapRef} aria-label="Mapa de asientos" className="rounded-2xl border border-slate-200 bg-white p-4">
               <h3 className="mb-3 text-base font-semibold text-slate-900">Mapa de asientos</h3>
               {seats.error
                 ? <p role="alert" className="text-sm text-red-700">No se pudo cargar la ocupación de asientos; el mapa no se muestra para no enseñar lugares libres que no lo son. {errorText(seats.error)}</p>
-                : <AgendaSeatMap tourId={op.tour_id} seats={seats.data ?? []} bookings={bookings} activeBookingId={active} onSelectBooking={setActive} />}
-              {externalPeople > 0 && <p className="mt-3 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900">{externalPeople} viajero(s) de ventas externas ocupan lugar en la salida pero no tienen asiento asignado en el mapa, así que los lugares libres del mapa pueden ser más que los disponibles reales ({op.available}).</p>}
+                : <AgendaSeatMap
+                    tourId={op.tour_id} seats={seats.data ?? []} resolve={resolveSeat} activeGroupId={active} onSelectGroup={setActive}
+                    pick={assigning ? { prompt: `Elige un asiento libre para ${assigning.name}`, busy: seatBusy, onPick: n => void saveSeat(assigning.saleId, assigning.travelerId, n), onCancel: () => setAssigning(null) } : null} />}
+              {seatMsg && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-2.5 text-sm text-red-800">{seatMsg}</p>}
+              {unseatedExternal > 0 && <p className="mt-3 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900">{unseatedExternal} viajero(s) de ventas externas ocupan lugar en la salida pero aún no tienen asiento. {canAssign ? 'Asígnalos desde su reserva, más abajo.' : 'Quien administre la agencia puede asignárselos.'} Mientras tanto, los lugares libres del mapa pueden ser más que los disponibles reales ({op.available}).</p>}
             </section>
           )}
 
@@ -185,8 +239,8 @@ export default function DepartureDetail({ op, agency, onClose, onRefresh }: Prop
                 return (
                   <li key={r.origin + r.reservation_id} className={'rounded-xl border bg-white ' + (isActive ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200')}>
                     <div className="flex items-start gap-3 p-3">
-                      <span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ background: b?.color ?? '#f59e0b' }} aria-hidden />
-                      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { toggle(r.reservation_id); if (b && mySeats.length) setActive(isActive ? null : r.reservation_id); }} aria-expanded={expanded}>
+                      <span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ background: b?.color ?? EXTERNAL_COLOR }} aria-hidden />
+                      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { toggle(r.reservation_id); if (mySeats.length) setActive(isActive ? null : r.reservation_id); }} aria-expanded={expanded}>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-slate-900">{r.holder_name || 'Sin nombre'}</span>
                           <OriginBadge origin={r.origin} />
@@ -196,10 +250,9 @@ export default function DepartureDetail({ op, agency, onClose, onRefresh }: Prop
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
                           <span>{r.people} {r.people === 1 ? 'viajero' : 'viajeros'}</span>
                           <span>{STATUS_LABEL[r.status] ?? r.status}</span>
-                          {hasMap && r.origin === 'ToursRed' && (mySeats.length
-                            ? <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs font-semibold text-blue-800">Asientos {mySeats.join(', ')}</span>
+                          {hasMap && (mySeats.length
+                            ? <span className={'rounded px-1.5 py-0.5 text-xs font-semibold ' + (r.origin === 'Externa' ? 'bg-amber-50 text-amber-900' : 'bg-blue-50 text-blue-800')}>{mySeats.length === 1 ? 'Asiento' : 'Asientos'} {mySeats.join(', ')}</span>
                             : <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800">Sin asiento asignado</span>)}
-                          {hasMap && r.origin === 'Externa' && <span className="text-xs text-slate-500">Sin asiento (venta externa)</span>}
                         </div>
                         {r.total_amount !== null && (
                           <div className="mt-1.5 flex flex-wrap gap-x-4 text-xs tabular-nums text-slate-600">
@@ -224,7 +277,24 @@ export default function DepartureDetail({ op, agency, onClose, onRefresh }: Prop
                             {people.map((p, i) => (
                               <li key={(p.traveler_id ?? 'x') + i} className="flex items-center justify-between gap-2 py-1.5">
                                 <span className="text-slate-800">{p.traveler_name}<span className="ml-2 text-xs text-slate-500">{TYPE_LABEL[p.traveler_type] ?? p.traveler_type}</span></span>
-                                {p.checked_in_at ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><CircleCheck className="h-3.5 w-3.5" aria-hidden />Check-in</span> : <span className="text-xs text-slate-400">Pendiente</span>}
+                                <span className="flex items-center gap-3">
+                                  {hasMap && r.origin === 'Externa' && p.traveler_id && (() => {
+                                    const seat = seatOfTraveler.get(p.traveler_id);
+                                    const picking = assigning?.travelerId === p.traveler_id;
+                                    return (
+                                      <span className="flex items-center gap-1.5">
+                                        {seat !== undefined && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs font-semibold text-amber-900">Asiento {seat}</span>}
+                                        {canAssign && !p.checked_in_at && (
+                                          <>
+                                            <button type="button" disabled={seatBusy} onClick={() => picking ? setAssigning(null) : startAssign(r.reservation_id, p.traveler_id!, p.traveler_name)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"><Armchair className="h-3 w-3" aria-hidden />{picking ? 'Cancelar' : seat !== undefined ? 'Cambiar' : 'Asignar asiento'}</button>
+                                            {seat !== undefined && !picking && <button type="button" disabled={seatBusy} onClick={() => void saveSeat(r.reservation_id, p.traveler_id!, null)} className="text-xs text-red-700 underline disabled:opacity-50">Quitar</button>}
+                                          </>
+                                        )}
+                                      </span>
+                                    );
+                                  })()}
+                                  {p.checked_in_at ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><CircleCheck className="h-3.5 w-3.5" aria-hidden />Check-in</span> : <span className="text-xs text-slate-400">Pendiente</span>}
+                                </span>
                               </li>
                             ))}
                           </ul>
