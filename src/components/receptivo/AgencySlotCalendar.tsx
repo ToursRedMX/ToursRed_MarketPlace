@@ -59,7 +59,7 @@ const AgencySlotCalendar: React.FC<AgencySlotCalendarProps> = ({ tourId, agencyI
   const blanks = Array.from({ length: startDayOffset });
 
   const getSlotStatusColor = (slot: TourSlot) => {
-    const available = slot.capacity - slot.booked_count;
+    const available = slot.available_count ?? 0;
     if (slot.status === 'cancelado') return 'bg-gray-200 text-gray-500';
     if (slot.status === 'bloqueado') return 'bg-orange-100 text-orange-600';
     if (available === 0 || slot.status === 'lleno') return 'bg-red-100 text-red-600';

@@ -100,6 +100,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify external QR privacy
+        run: node scripts/test-external-qr-privacy.mjs
+
+      - name: Verify external reservation email isolation
+        run: node scripts/test-external-sale-email.mjs
+
       - name: Verify MFA helper and privileged handlers
         run: node scripts/test-mfa-aal2.mjs
 

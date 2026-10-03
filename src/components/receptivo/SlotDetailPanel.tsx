@@ -145,7 +145,7 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ dateKey, slots, onClo
       ) : (
         <div className="divide-y divide-gray-100">
           {slots.map(slot => {
-            const available = Math.max(0, slot.capacity - slot.booked_count);
+            const available = slot.available_count ?? 0;
             const isEditingThis = editingCapacity === slot.id;
             const isCanceling = cancelingId === slot.id;
             const isUpdatingThis = isUpdating === slot.id;

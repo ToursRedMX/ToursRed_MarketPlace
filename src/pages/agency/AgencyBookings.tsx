@@ -10,6 +10,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import ReviewForm from '../../components/ReviewForm';
 import { exportTourReportToExcel, exportTourReportToPDF } from '../../utils/reportExports';
 import TourMassMessageModal from '../../components/TourMassMessageModal';
+import AgencyAgenda from './AgencyAgenda';
 import { useAgencyId } from '../../hooks/useAgencyId';
 
 const AgencyBookings: React.FC = () => {
@@ -1949,7 +1950,8 @@ const AgencyBookings: React.FC = () => {
 
       {activeTab === 'reports' && (
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-2xl font-bold mb-4">Reportes de Asistentes por Tour</h2>
+          <AgencyAgenda embedded />
+          <h2 className="text-2xl font-bold mt-8 mb-4">Detalle de reservas ToursRed</h2>
           <p className="text-gray-600 mb-6">
             Genera reportes detallados con la lista de asistentes y acompañantes para cada tour.
             Exporta en Excel o PDF para el día del tour.

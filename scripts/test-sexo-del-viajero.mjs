@@ -132,7 +132,7 @@ casos.push(() => {
 // --- 8. Un valor desconocido no se cuela --------------------------------------
 casos.push(() => {
   for (const fuente of [xlsx, correo]) {
-    const mapeo = fuente.match(/const etiquetaDeSexo[\s\S]*?;\n/)?.[0] ?? '';
+    const mapeo = fuente.match(/const etiquetaDeSexo[\s\S]*?;\r?\n/)?.[0] ?? '';
     assert.ok(/: "";/.test(mapeo),
       'el mapeo no cae en cadena vacia ante un valor desconocido');
     assert.ok(!/sexo\b(?!\s*===)/.test(mapeo.replace(/etiquetaDeSexo|\(sexo:[^)]*\)/g, '')),

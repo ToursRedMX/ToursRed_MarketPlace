@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+const source=fs.readFileSync('supabase/functions/_shared/externalSaleEmail.ts','utf8');
+const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const context={exports:{},URL};vm.runInNewContext(code,context);
+const html=context.exports.externalEmailHtml({agency:{name:'Agencia <Test>',logo:'javascript:alert(1)',contact_email:'test@example.invalid'},tour_name:'Tour <script>alert(1)</script>',date:'2026-10-10',time:'07:00',travelers_count:3,meeting:'Puerta & entrada'},'https://example.invalid/logo.png');
+assert.ok(html.includes('Agencia &lt;Test&gt;'));
+assert.ok(html.includes('Powered by ToursRed'));
+assert.ok(html.includes('cid:checkin.png'));
+assert.ok(html.includes('no recibió el pago'));
+assert.ok(!html.includes('<script>'));
+assert.ok(!html.includes('javascript:'));
+assert.ok(!html.includes('amount_paid'));
+assert.ok(!html.includes('Crear cuenta'));
+assert.ok(html.includes('Puerta &amp; entrada'));
+console.log('9 assertions passed: agency branding, inline QR, no amounts/marketing and escaped untrusted content.');

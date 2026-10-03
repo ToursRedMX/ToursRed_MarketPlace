@@ -10,6 +10,9 @@ import { StepUpProvider } from './context/StepUpContext.tsx';
 import { queryClient } from './lib/queryClient';
 import SentryFallback from './components/SentryFallback';
 
+import { captureExternalQr } from './lib/externalQrSession';
+
+captureExternalQr();
 const dsn = import.meta.env.VITE_SENTRY_DSN;
 
 Sentry.init({
