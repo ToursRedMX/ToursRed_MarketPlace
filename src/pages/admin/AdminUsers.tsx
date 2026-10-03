@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth, AdminPermissions } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { UserPlus, Shield, X, Check, AlertCircle, Lock, Unlock, Trash2, Eye, EyeOff } from 'lucide-react';
+import { validarContrasena } from '../../lib/politicaContrasena';
 
 /** Los dos roles internos que esta pantalla da de alta y administra. */
 type RolInterno = 'admin' | 'accountant';
@@ -208,6 +209,12 @@ const AdminUsers: React.FC = () => {
   const handleCreateUser = async () => {
     if (!newUser.email || !newUser.password || !newUser.nombre || !newUser.apellido) {
       setError('Todos los campos son obligatorios');
+      return;
+    }
+
+    const errorContrasena = validarContrasena(newUser.password);
+    if (errorContrasena) {
+      setError(errorContrasena);
       return;
     }
 
@@ -888,7 +895,8 @@ const AdminUsers: React.FC = () => {
                         value={newUser.password}
                         onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                         className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Contraseña segura"
+                        placeholder="Mínimo 8 caracteres, con mayúscula, minúscula y número"
+                        minLength={8}
                       />
                       <button
                         type="button"

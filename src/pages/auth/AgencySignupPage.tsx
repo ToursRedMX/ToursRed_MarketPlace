@@ -10,6 +10,7 @@ import AgencySignupFormBody, {
   defaultAgencyFormData,
 } from './AgencySignupFormBody';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
+import { validarContrasena } from '../../lib/politicaContrasena';
 
 const AgencySignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -52,6 +53,9 @@ const AgencySignupPage: React.FC = () => {
     } = formData;
 
     if (password.trim() !== confirmPassword.trim()) { setError('Las contraseñas no coinciden'); setIsLoading(false); return; }
+
+    const errorContrasena = validarContrasena(password);
+    if (errorContrasena) { setError(errorContrasena); setIsLoading(false); return; }
     if (!firstName.trim()) { setError('El nombre es obligatorio'); setIsLoading(false); return; }
     if (!apellidoPaterno.trim()) { setError('El apellido paterno es obligatorio'); setIsLoading(false); return; }
     if (!sexo) { setError('El sexo es obligatorio'); setIsLoading(false); return; }
@@ -165,23 +169,13 @@ const AgencySignupPage: React.FC = () => {
         setTimeout(() => navigate('/dashboard'), 2000);
       } else {
         // Enviar código de verificación
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 24);
-
-        await supabase.from('users').update({
-          verification_code: verificationCode,
-          verification_code_expires_at: expiresAt.toISOString(),
-          verification_code_attempts: 0,
-        }).eq('id', data.user.id);
-
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
             await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-verification-email`, {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: data.user.id, verificationCode, userName: formData.agencyName }),
+              body: JSON.stringify({ userId: data.user.id, userName: formData.agencyName }),
             });
           }
         } catch { /* best-effort */ }

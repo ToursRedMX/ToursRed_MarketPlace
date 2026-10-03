@@ -4,6 +4,7 @@ import { Eye, EyeOff, CheckCircle, XCircle, Loader, Info } from 'lucide-react';
 import { supabase, UserRole } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
+import { validarContrasena } from '../../lib/politicaContrasena';
 
 const MicrosoftIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg viewBox="0 0 23 23" className={className} aria-hidden="true">
@@ -123,6 +124,14 @@ const AzureTravelerSignupPage: React.FC = () => {
       setIsLoading(false);
       return;
     }
+
+    const errorContrasena = validarContrasena(password);
+    if (errorContrasena) {
+      setError(errorContrasena);
+      setIsLoading(false);
+      return;
+    }
+
     if (!apellidoPaterno.trim()) {
       setError('El apellido paterno es requerido');
       setIsLoading(false);
@@ -421,7 +430,7 @@ const AzureTravelerSignupPage: React.FC = () => {
                 <p className="text-sm text-gray-600 mb-3">Asigna una contraseña para poder iniciar sesión también con tu correo y contraseña.</p>
                 <label className="block text-sm font-medium text-gray-700">Contraseña</label>
                 <div className="mt-1 relative">
-                  <input name="password" type={showPassword ? 'text' : 'password'} value={formData.password} onChange={handleInputChange} required autoComplete="new-password" className={`${inputClass} pr-10`} />
+                  <input name="password" type={showPassword ? 'text' : 'password'} value={formData.password} onChange={handleInputChange} required autoComplete="new-password" minLength={8} className={`${inputClass} pr-10`} />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400">
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>

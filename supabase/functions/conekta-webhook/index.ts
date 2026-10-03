@@ -5,6 +5,7 @@ import { cubreElAnticipo } from "../_shared/exigible.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { avisosCon } from "../_shared/avisosDePago.ts";
+import { estimarComisionProcesador } from "../_shared/estimarComisionProcesador.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -130,6 +131,20 @@ Deno.serve(async (req: Request) => {
     const orderId: string = eventData.id || body.data?.id || "";
 
     console.log(`Conekta webhook: type=${eventType}, order=${orderId}, event=${eventId}`);
+
+    // Rastro del evento crudo, igual que stripe-webhook y paypal-webhook: sin
+    // esto no hay forma de comprobar despues que Conekta de verdad no manda
+    // `charge.fee` (ver _shared/estimarComisionProcesador.ts) salvo leyendo el
+    // resultado ya procesado. No bloqueante: si falla el log, el webhook sigue.
+    try {
+      await supabase.from("webhook_logs").insert({
+        event_type: `conekta.${eventType}`,
+        event_id: eventId || null,
+        payload: body,
+      });
+    } catch (logErr) {
+      console.error("Error logging Conekta webhook event:", logErr);
+    }
 
     // ── Contracargos ────────────────────────────────────────────
     // Va ANTES del corte por `orderId`: en un contracargo, `data.object.id`
@@ -296,21 +311,52 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ received: true });
       }
 
-      // Capture the real Conekta fee from the paid charge (fee is in centavos)
+      // Capture the real Conekta fee from the paid charge (fee is in centavos).
+      // Medido el 03-oct-2026 (pendiente 5 de la entrada 33): 14 de 14 cobros
+      // historicos de Conekta, de julio a hoy, quedaron en processor_fee = 0.00
+      // -- la API de sandbox no manda `charge.fee` (o lo manda en 0), asi que
+      // nunca hay nada que capturar. Sin un segundo camino, ese 0 se queda para
+      // siempre y net_amount = amount, igual que le pasaba a OpenPay y
+      // MercadoPago antes del #211/#213 (entrada 1). Cuando el fee real no
+      // llega o llega en 0, se ESTIMA con la misma formula (pct + fijo de
+      // platform_settings) que ya usa create_accounting_entry_for_booking como
+      // respaldo (migracion 20260804042551) -- no se inventa una tasa nueva, se
+      // reusa la que ya existe para el mismo proposito.
       if (conektaOrder) {
         const charge = conektaOrder.charges?.data?.[0] || conektaOrder.charges?.[0];
         const feeCentavos = charge?.fee;
-        if (feeCentavos != null) {
-          const conektaFee = Number(feeCentavos) / 100;
-          const txAmount = Number(tx.amount) || 0;
-          await supabase
-            .from("payment_transactions")
-            .update({
-              processor_fee: conektaFee,
-              net_amount: txAmount - conektaFee,
-            })
-            .eq("id", tx.id);
+        const txAmount = Number(tx.amount) || 0;
+        let conektaFee = feeCentavos != null ? Number(feeCentavos) / 100 : 0;
+        let feeEstimada = false;
+
+        if (conektaFee === 0 && txAmount > 0) {
+          const { data: settings } = await supabase
+            .from("platform_settings")
+            .select("conekta_commission_pct, conekta_commission_fixed")
+            .limit(1)
+            .maybeSingle();
+          const pct = Number(settings?.conekta_commission_pct ?? 3.29);
+          const fijo = Number(settings?.conekta_commission_fixed ?? 2.5);
+          conektaFee = estimarComisionProcesador(txAmount, pct, fijo);
+          feeEstimada = true;
+          console.warn(
+            `Conekta no mando comision real para la orden ${orderId} (charge.fee=${feeCentavos}); ` +
+            `estimada en ${conektaFee} con ${pct}% + $${fijo}`
+          );
         }
+
+        await supabase
+          .from("payment_transactions")
+          .update({
+            processor_fee: conektaFee,
+            net_amount: txAmount - conektaFee,
+            // Solo se toca metadata cuando se estima: en el camino normal (fee
+            // real > 0) no hay nada que agregar, y sobreescribirla igual
+            // arriesgaria perder algo que otro camino le haya escrito desde
+            // que se leyo `tx` al principio de la funcion.
+            ...(feeEstimada ? { metadata: { ...(tx.metadata || {}), processor_fee_estimada: true } } : {}),
+          })
+          .eq("id", tx.id);
       }
 
       // Sync the real BNPL product_type from the paid order (Conekta's Hosted Checkout

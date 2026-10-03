@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Lock, Key, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { validarContrasena } from '../../lib/politicaContrasena';
 
 const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
@@ -34,8 +35,9 @@ const ResetPasswordPage: React.FC = () => {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
+    const errorContrasena = validarContrasena(newPassword);
+    if (errorContrasena) {
+      setError(errorContrasena);
       return;
     }
 
@@ -207,7 +209,8 @@ const ResetPasswordPage: React.FC = () => {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres, con mayúscula, minúscula y número"
+                  minLength={8}
                   required
                 />
                 <button

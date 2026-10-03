@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { validarContrasena } from "../_shared/politicaContrasena.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,9 +51,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (newPassword.length < 6) {
+    const errorContrasena = validarContrasena(newPassword);
+    if (errorContrasena) {
       return new Response(
-        JSON.stringify({ success: false, error: "La contraseña debe tener al menos 6 caracteres" }),
+        JSON.stringify({ success: false, error: errorContrasena }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
