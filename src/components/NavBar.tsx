@@ -204,6 +204,8 @@ const NavBar: React.FC = () => {
       contenidoItems.push({ to: '/admin/tours', label: 'Comisiones de Tours', icon: <Bus className="h-4 w-4" /> });
     if (isSuperAdmin)
       contenidoItems.push({ to: '/admin/tour-metrics', label: 'Metricas de Tours', icon: <BarChart2 className="h-4 w-4" /> });
+    if (isSuperAdmin)
+      contenidoItems.push({ to: '/admin/demanda', label: 'Demanda de Viajeros', icon: <Search className="h-4 w-4" /> });
     if (isSuperAdmin || permissions?.canManageDeparturePoints)
       contenidoItems.push({ to: '/admin/departure-points', label: 'Puntos de Partida', icon: <Navigation className="h-4 w-4" /> });
     if (isSuperAdmin || permissions?.canManageReviews)

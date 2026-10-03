@@ -17,7 +17,7 @@ export default function PrivacyPolicyPage() {
             <h1 className="text-4xl font-bold">Aviso de Privacidad</h1>
           </div>
           <p className="text-xl text-blue-100">
-            Última actualización: 23 de diciembre de 2024
+            Última actualización: 2 de octubre de 2026
           </p>
         </div>
       </div>
@@ -92,6 +92,12 @@ export default function PrivacyPolicyPage() {
                 <ul className="list-disc list-inside text-gray-700 flex flex-col gap-y-1 mt-2">
                   <li>Enviar comunicaciones promocionales y ofertas especiales</li>
                   <li>Realizar análisis estadísticos y mejoras del servicio</li>
+                  <li>
+                    Analizar las búsquedas que realiza en la plataforma (qué busca y cuántos resultados encontró) para entender
+                    la demanda de viajeros y mejorar el catálogo. Cuando usted acepta todas las cookies y ha iniciado sesión, la búsqueda
+                    puede asociarse a su cuenta; en caso contrario se guarda sin identificarlo. A las agencias solo se les
+                    muestran cifras agregadas, nunca quién buscó
+                  </li>
                   <li>Personalizar su experiencia en la plataforma</li>
                 </ul>
                 <p className="text-sm text-gray-600 mt-2">
