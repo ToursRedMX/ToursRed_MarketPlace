@@ -98,6 +98,10 @@ export default function PrivacyPolicyPage() {
                     puede asociarse a su cuenta; en caso contrario se guarda sin identificarlo. A las agencias solo se les
                     muestran cifras agregadas, nunca quién buscó
                   </li>
+                  <li>
+                    Enviarle un correo cuando se publique un tour del destino que buscó, únicamente si usted lo solicita
+                    con el botón «Avísame». Es un solo aviso por destino y puede cancelarlo desde el enlace del correo
+                  </li>
                   <li>Personalizar su experiencia en la plataforma</li>
                 </ul>
                 <p className="text-sm text-gray-600 mt-2">

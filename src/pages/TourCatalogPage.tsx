@@ -11,7 +11,8 @@ import { comoFilas } from '../lib/relacionesSupabase';
 import { canUseAnalytics, getSessionId } from '../lib/cookieManager';
 import { useAuth } from '../context/AuthContext';
 import { isCrawler } from '../utils/isCrawler';
-import { construirEventoDeBusqueda } from '../utils/registroDeBusqueda';
+import { construirEventoDeBusqueda, textoDeBusqueda } from '../utils/registroDeBusqueda';
+import AvisameButton from '../components/AvisameButton';
 
 const SITE_URL = (import.meta.env.VITE_APP_URL || 'https://toursredmx.netlify.app/').replace(/\/$/, '');
 
@@ -560,6 +561,10 @@ const TourCatalogPage: React.FC = () => {
                   {tours.length === 0 ? 'Las agencias aún no han publicado tours. ¡Vuelve pronto!' : 'Intenta ajustar o limpiar los filtros para ver más opciones.'}
                 </p>
                 <a href="/tours" className="btn btn-primary">Ver todos los tours</a>
+                {(() => {
+                  const busqueda = textoDeBusqueda(initialFilters);
+                  return busqueda ? <AvisameButton termino={busqueda.texto} userId={user?.id ?? null} /> : null;
+                })()}
               </div>
             ) : (
               <>

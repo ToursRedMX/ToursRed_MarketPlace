@@ -113,6 +113,7 @@ import AgencyPublicProfile from './pages/AgencyPublicProfile';
 import NotFoundPage from './pages/NotFoundPage';
 import QaSentryTestPage from './pages/QaSentryTestPage';
 import UnsubscribePage from './pages/UnsubscribePage';
+import AvisoBajaPage from './pages/AvisoBajaPage';
 import GiftCardsPage from './pages/GiftCardsPage';
 import GiftCardRedeemPage from './pages/GiftCardRedeemPage';
 import GiftCardSuccessPage from './pages/GiftCardSuccessPage';
@@ -163,7 +164,7 @@ const PROTECTED_PREFIXES = [
   '/cancel', '/booking-success', '/booking-cancel', '/booking-pending', '/payment-pending', '/booking-travelers',
   '/supplement-success', '/payment-plan-success', '/extras-success', '/notifications',
   '/gift-card/redeem', '/gift-card/success', '/payment-return', '/booking-checkin',
-  '/soporte/viajero', '/soporte/agencia', '/unsubscribe',
+  '/soporte/viajero', '/soporte/agencia', '/unsubscribe', '/avisos/baja',
   '/reservar',
 ];
 
@@ -232,6 +233,7 @@ const App: React.FC = () => {
           <Route path="/terminos-servicio" element={<TermsOfServicePage />} />
           <Route path="/politica-cookies" element={<CookiePolicyPage />} />
           <Route path="/unsubscribe" element={<UnsubscribePage />} />
+          <Route path="/avisos/baja" element={<AvisoBajaPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/agency-signup" element={<AgencySignupPage />} />
