@@ -1,11 +1,12 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { cubreElAnticipo } from "../_shared/exigible.ts";
 import { asentarCobroPaypal } from "../_shared/cobrosPaypal.ts";
 import { registrarFallo } from "../_shared/falloSilencioso.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { DefinicionParcialidad } from "../_shared/planesDePago.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -47,7 +48,7 @@ async function getPayPalAccessToken(clientId: string, clientSecret: string, isSa
   return data.access_token;
 }
 
-async function getPayPalOrderDetails(base: string, accessToken: string, orderId: string): Promise<any> {
+async function getPayPalOrderDetails(base: string, accessToken: string, orderId: string): Promise<CapturaPaypal> {
   const response = await fetch(`${base}/v2/checkout/orders/${orderId}`, {
     method: "GET",
     headers: {
@@ -63,7 +64,7 @@ async function getPayPalOrderDetails(base: string, accessToken: string, orderId:
   return response.json();
 }
 
-async function activateGiftCard(supabase: any, giftCardId: string, paypalTransactionId: string | null) {
+async function activateGiftCard(supabase: SupabaseClient, giftCardId: string, paypalTransactionId: string | null) {
   const { data: existingGc } = await supabase
     .from("gift_cards")
     .select("payment_status")
@@ -117,11 +118,17 @@ interface ClienteDeCobros {
   };
 }
 
-/** Lo que interesa de la captura de PayPal; el resto del payload se guarda tal cual. */
+/** Lo que interesa de la orden/captura de PayPal; el resto del payload se guarda tal cual. */
 interface CapturaPaypal {
+  id?: string;
+  status?: string;
   amount?: { value?: string; currency_code?: string };
   seller_receivable_breakdown?: { paypal_fee?: { value?: string } };
-  purchase_units?: Array<{ payments?: { captures?: CapturaPaypal[] } }>;
+  purchase_units?: Array<{
+    reference_id?: string;
+    custom_id?: string;
+    payments?: { captures?: CapturaPaypal[] };
+  }>;
 }
 
 /**
@@ -185,7 +192,7 @@ async function registrarCobroPaypal(
   }
 }
 
-async function confirmBooking(supabase: any, bookingId: string, paypalTransactionId: string | null, captureData?: any, usuarioAutenticado?: string | null) {
+async function confirmBooking(supabase: SupabaseClient, bookingId: string, paypalTransactionId: string | null, captureData?: CapturaPaypal, usuarioAutenticado?: string | null) {
   const { data: existingBooking, error: errorReserva } = await supabase
     .from("bookings")
       .select("payment_status, deposit_amount, amount_due_now, membership_cost, user_id, toursred_cash_used, points_used")
@@ -229,7 +236,7 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
     .eq("status", "succeeded")
     .eq("payment_processor", "paypal")
     .eq("charge_context", "booking_deposit");
-  const alreadyPaid = (priorPaypalPayments || []).reduce((sum: number, tx: any) => sum + Number(tx.amount || 0), 0);
+  const alreadyPaid = (priorPaypalPayments || []).reduce((sum: number, tx: { amount: number | string | null }) => sum + Number(tx.amount || 0), 0);
   const totalPaid = alreadyPaid + capturedAmount;
   // Ver `_shared/exigible.ts`. El maximo con `amount_due_now` convertia esto en
   // un piso que quien pago con puntos o ToursRed Cash NUNCA alcanza: la reserva
@@ -248,7 +255,7 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
     //      reserva no confirmaba nunca. El viajero pagaba dos veces.
     //
     // El webhook de Stripe hace justo esto en el mismo caso.
-    await registrarCobroPaypal(supabase, bookingId, paypalTransactionId, captureData);
+    await registrarCobroPaypal(supabase as unknown as ClienteDeCobros, bookingId, paypalTransactionId, captureData);
     await supabase.from("bookings").update({ payment_status: "processing" }).eq("id", bookingId);
     await registrarFallo(
       "capture-paypal-order/cobertura-insuficiente",
@@ -340,7 +347,7 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
   }
 
   // Persist payment_transactions record for multi-processor refund support
-  await registrarCobroPaypal(supabase, bookingId, paypalTransactionId, captureData);
+  await registrarCobroPaypal(supabase as unknown as ClienteDeCobros, bookingId, paypalTransactionId, captureData);
 
   // Process unpaid optional services (pickup, language, traditional optionals)
   try {
@@ -466,10 +473,16 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
           .maybeSingle();
 
         if (bkForPlan?.selected_payment_mode === 'plan') {
-          const tour = bkForPlan.tours as any;
+          const tour = bkForPlan.tours as unknown as {
+            payment_option?: string;
+            payment_plan_mode?: string;
+            installment_definitions?: DefinicionParcialidad[];
+            start_date?: string;
+            full_payment_days_before_departure?: number;
+          } | null;
           const totalPrice = parseFloat(bkForPlan.total_price) || 0;
           const depositPaid = parseFloat(bkForPlan.deposit_amount) || 0;
-          const defs: any[] = tour?.installment_definitions || [];
+          const defs: DefinicionParcialidad[] = tour?.installment_definitions || [];
 
           if (defs.length > 0) {
             const { data: existingPlan } = await supabase
@@ -498,7 +511,7 @@ async function confirmBooking(supabase: any, bookingId: string, paypalTransactio
                 const bookingDate = new Date();
                 const departureDate = tour?.start_date ? new Date(tour.start_date) : null;
 
-                const installments = defs.map((def: any, idx: number) => {
+                const installments = defs.map((def: DefinicionParcialidad, idx: number) => {
                   const amount = Math.round(totalPrice * (def.pct_of_total / 100) * 100) / 100;
                   let dueDate: Date;
                   if (def.specific_date) {
@@ -647,12 +660,12 @@ Deno.serve(async (req: Request) => {
       const errorBody = await captureResponse.text();
       console.error("PayPal capture error status:", captureResponse.status, "body:", errorBody);
 
-      let errorJson: any = {};
-      try { errorJson = JSON.parse(errorBody); } catch {}
+      let errorJson: { details?: Array<{ issue?: string }> } = {};
+      try { errorJson = JSON.parse(errorBody); } catch { /* cuerpo no-JSON, isAlreadyCaptured queda en false */ }
 
       const isAlreadyCaptured =
         captureResponse.status === 422 &&
-        errorJson?.details?.some((d: any) => d.issue === "ORDER_ALREADY_CAPTURED");
+        errorJson?.details?.some((d) => d.issue === "ORDER_ALREADY_CAPTURED");
 
       if (isAlreadyCaptured) {
         console.log("Order already captured, fetching order details to confirm payment:", orderId);
@@ -766,8 +779,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const captureData: any = await captureResponse.json();
-    const captureStatus: string = captureData.status;
+    const captureData: CapturaPaypal = await captureResponse.json();
+    const captureStatus: string = captureData.status ?? "UNKNOWN";
 
     console.log("PayPal capture status:", captureStatus, "orderId:", orderId);
 

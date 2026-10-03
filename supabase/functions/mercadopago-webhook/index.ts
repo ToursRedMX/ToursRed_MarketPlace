@@ -6,6 +6,7 @@ import { registrarDisputa } from "../_shared/disputas.ts";
 import { avisosCon } from "../_shared/avisosDePago.ts";
 import { separarFeeBaseIva } from "../_shared/separarFeeBaseIva.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { DefinicionParcialidad } from "../_shared/planesDePago.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -909,10 +910,16 @@ Deno.serve(async (req: Request) => {
             .maybeSingle();
 
           if (bkForPlan?.selected_payment_mode === 'plan') {
-            const tour = bkForPlan.tours as any;
+            const tour = bkForPlan.tours as unknown as {
+              payment_option?: string;
+              payment_plan_mode?: string;
+              installment_definitions?: DefinicionParcialidad[];
+              start_date?: string;
+              full_payment_days_before_departure?: number;
+            } | null;
             const totalPrice = parseFloat(bkForPlan.total_price) || 0;
             const depositPaid = parseFloat(bkForPlan.deposit_amount) || 0;
-            const defs: any[] = tour?.installment_definitions || [];
+            const defs: DefinicionParcialidad[] = tour?.installment_definitions || [];
 
             if (defs.length > 0) {
               const { data: existingPlan } = await supabase
@@ -941,7 +948,7 @@ Deno.serve(async (req: Request) => {
                   const bookingDate = new Date();
                   const departureDate = tour?.start_date ? new Date(tour.start_date) : null;
 
-                  const installments = defs.map((def: any, idx: number) => {
+                  const installments = defs.map((def: DefinicionParcialidad, idx: number) => {
                     const amount = Math.round(totalPrice * (def.pct_of_total / 100) * 100) / 100;
                     let dueDate: Date;
                     if (def.specific_date) {
