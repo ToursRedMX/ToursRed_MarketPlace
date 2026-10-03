@@ -3,6 +3,7 @@ import { Download, Search, SearchX, ShieldAlert, TrendingDown, TrendingUp, X } f
 import { format } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 import { downloadExcel } from '../../utils/excelExport';
+import AdminDemandAliases from './AdminDemandAliases';
 
 /**
  * Demanda de viajeros, vista de superadmin: sin umbral y con el detalle de quien
@@ -53,6 +54,8 @@ function Tendencia({ actual, anterior }: { actual: number; anterior: number }) {
 const AdminDemand: React.FC = () => {
   const [dias, setDias] = useState(30);
   const [soloSin, setSoloSin] = useState(false);
+  // Sube cuando se une/separa una variante, para recargar la tabla de terminos.
+  const [versionAlias, setVersionAlias] = useState(0);
   const [terminos, setTerminos] = useState<{
     clave: string; error: string | null; filas: TerminoAdmin[];
   } | null>(null);
@@ -61,8 +64,8 @@ const AdminDemand: React.FC = () => {
     clave: string; error: string | null; filas: BusquedaAdmin[];
   } | null>(null);
 
-  const claveTerminos = `${dias}|${soloSin}`;
-  const claveDetalle = seleccion ? `${seleccion.llave}|${Math.max(dias, 90)}` : '';
+  const claveTerminos = `${dias}|${soloSin}|${versionAlias}`;
+  const claveDetalle = seleccion ? `${seleccion.llave}|${Math.max(dias, 90)}|${versionAlias}` : '';
 
   useEffect(() => {
     let cancelado = false;
@@ -308,6 +311,8 @@ const AdminDemand: React.FC = () => {
           )}
         </section>
       </div>
+
+      <AdminDemandAliases dias={dias} onCambio={() => { setSeleccion(null); setVersionAlias((v) => v + 1); }} />
     </div>
   );
 };
