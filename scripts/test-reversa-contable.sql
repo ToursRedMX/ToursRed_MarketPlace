@@ -66,7 +66,7 @@ ALTER TABLE accounting_entries ADD COLUMN IF NOT EXISTS updated_at timestamptz;
 
 -- La pieza real bajo prueba: el parche a create_accounting_entry_atomic, el
 -- nuevo source_type, y reverse_accounting_entry.
-\ir ../supabase/migrations/20261003120000_reverse_accounting_entry.sql
+\ir ../supabase/migrations/20261003205202_reverse_accounting_entry.sql
 
 DO $$
 DECLARE
