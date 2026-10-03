@@ -111,6 +111,26 @@ Deno.serve(async (req: Request) => {
       success: true,
     });
 
+    // El codigo prueba identidad, pero no basta con "validarlo": mientras el
+    // factor TOTP viejo siga ahi, MfaGate vuelve a pedirlo en el siguiente
+    // login y la persona sigue atrapada -- es el mismo dispositivo que ya
+    // perdio. Se borran TODOS los factores verified (puede haber mas de uno,
+    // "Agregar otro factor" en Seguridad) para que el proximo login la lleve
+    // derecho a `needs_enrollment`. deleteFactor cierra todas las sesiones
+    // activas del usuario si el factor era verified -- correcto aqui: mata
+    // de paso cualquier sesion de un atacante que haya llegado hasta aqui.
+    const { data: factoresData } = await userClient.auth.mfa.listFactors();
+    const factoresVerificados = (factoresData?.totp ?? []).filter(f => f.status === "verified");
+    for (const factor of factoresVerificados) {
+      const { error: deleteFactorError } = await adminClient.auth.admin.mfa.deleteFactor({
+        id: factor.id,
+        userId: user.id,
+      });
+      if (deleteFactorError) {
+        console.error(`No se pudo borrar el factor ${factor.id} tras usar un codigo de recuperacion:`, deleteFactorError);
+      }
+    }
+
     // Audit log (correct insert_audit_log signature: p_tenant_type is required)
     try {
       const { data: actorProfile } = await adminClient
@@ -131,7 +151,7 @@ Deno.serve(async (req: Request) => {
 
     return new Response(JSON.stringify({
       success: true,
-      message: "Codigo validado. Te recomendamos reconfigurar tu Authenticator lo antes posible desde Seguridad.",
+      message: "Codigo validado. Tu dispositivo anterior ya no esta vinculado -- inicia sesion de nuevo para configurar uno nuevo.",
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

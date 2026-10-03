@@ -472,6 +472,15 @@ jobs:
       - name: Cancelacion total y parcial reparten la penalizacion igual (70/30)
         run: node scripts/check-penalizacion-homologada.mjs
 
+      # generate-recovery-codes generaba codigos que nadie podia usar:
+      # use-recovery-code existia pero ningun front lo llamaba, y aunque se
+      # llamara no elevaba la sesion a AAL2 -- esa elevacion solo la da
+      # Supabase al completar un reto TOTP real. Ahora borra el factor TOTP
+      # atascado para que el siguiente login mande a enrolar uno nuevo.
+      # Pendiente 10 de la entrada 33, entrada 44.
+      - name: use-recovery-code desvincula el factor TOTP atascado al validar
+        run: node scripts/test-use-recovery-code-borra-factor.mjs
+
       # La conciliacion contable diaria mira 7 dias, no uno: sin traslape,
       # cualquier noche que el job falle pierde ese dia para siempre. La prueba
       # levanta un pg_cron de mentiras porque la extension no esta en CI, y lo
