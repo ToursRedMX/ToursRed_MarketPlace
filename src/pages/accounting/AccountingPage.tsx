@@ -515,6 +515,7 @@ const AccountingPage: React.FC = () => {
       setReversingEntryId(null);
       setReversalReason('');
       loadManualEntries();
+      loadEntries();
       loadReports();
     }
     setReversingId(null);
@@ -993,8 +994,8 @@ const AccountingPage: React.FC = () => {
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 {filteredEntries.map((e, idx) => (
                   <div key={e.id} className={`${idx > 0 ? 'border-t border-gray-100' : ''}`}>
-                    <button onClick={() => toggleEntry(e.id)}
-                      className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50 transition-colors">
+                    <div onClick={() => toggleEntry(e.id)}
+                      className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50 transition-colors cursor-pointer">
                       {entryTypeIcon(e.entry_type)}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-gray-800">{e.entry_number}</p>
@@ -1005,9 +1006,18 @@ const AccountingPage: React.FC = () => {
                         <span className={`text-xs px-2 py-0.5 rounded-full ${
                           e.is_posted ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
                         }`}>{e.is_posted ? 'Confirmada' : 'Borrador'}</span>
+                        {(isAdmin || isAccountant) && e.is_posted && (
+                          <button
+                            onClick={(ev) => { ev.stopPropagation(); setReversingEntryId(e.id); setReversalReason(''); }}
+                            title="Reversar poliza"
+                            className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
                         {expandedEntry === e.id ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                       </div>
-                    </button>
+                    </div>
 
                     {expandedEntry === e.id && (
                       <div className="px-5 pb-4">
@@ -1032,6 +1042,42 @@ const AccountingPage: React.FC = () => {
                               ))}
                             </tbody>
                           </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Reverse confirm */}
+                    {reversingEntryId === e.id && (
+                      <div className="mx-5 mb-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                        <div className="flex items-start gap-3">
+                          <RotateCcw className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm text-amber-800 mb-2">
+                              Esto publica una poliza nueva con las partidas invertidas de {e.entry_number}. No borra ni edita la original.
+                            </p>
+                            <input
+                              type="text"
+                              value={reversalReason}
+                              onChange={(ev) => setReversalReason(ev.target.value)}
+                              placeholder="Motivo de la reversa (obligatorio)"
+                              className="w-full px-3 py-1.5 text-sm border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-3 justify-end">
+                          <button
+                            onClick={() => { setReversingEntryId(null); setReversalReason(''); }}
+                            className="px-3 py-1.5 bg-white text-gray-600 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={() => handleReverseEntry(e.id)}
+                            disabled={reversingId === e.id || !reversalReason.trim()}
+                            className="px-3 py-1.5 bg-amber-500 text-white text-xs font-medium rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                          >
+                            {reversingId === e.id ? 'Reversando...' : 'Reversar'}
+                          </button>
                         </div>
                       </div>
                     )}
@@ -1068,6 +1114,7 @@ const AccountingPage: React.FC = () => {
                       <th className="text-left px-4 py-3 font-semibold text-gray-600">Cuenta / Concepto</th>
                       <th className="text-right px-4 py-3 font-semibold text-gray-600 w-32">Debe</th>
                       <th className="text-right px-4 py-3 font-semibold text-gray-600 w-32">Haber</th>
+                      <th className="text-right px-4 py-3 font-semibold text-gray-600 w-16">Accion</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1103,6 +1150,17 @@ const AccountingPage: React.FC = () => {
                                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
                               </td>
                               <td className="px-4 py-2.5" />
+                              <td className="px-4 py-2.5 text-right" onClick={(ev) => ev.stopPropagation()}>
+                                {(isAdmin || isAccountant) && entry.is_posted && (
+                                  <button
+                                    onClick={() => { setReversingEntryId(entry.id); setReversalReason(''); }}
+                                    title="Reversar poliza"
+                                    className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </td>
                             </tr>
                             {/* Entry lines */}
                             {isExpanded && lines.map((line, idx) => (
@@ -1118,13 +1176,51 @@ const AccountingPage: React.FC = () => {
                                 <td className="px-4 py-2 text-right font-mono text-xs text-gray-700">
                                   {line.credit > 0 ? fmt(line.credit) : ''}
                                 </td>
+                                <td className="px-4 py-2" />
                               </tr>
                             ))}
+                            {/* Reverse confirm */}
+                            {reversingEntryId === entry.id && (
+                              <tr>
+                                <td colSpan={6} className="px-4 py-3 bg-amber-50 border-b border-amber-200">
+                                  <div className="flex items-start gap-3">
+                                    <RotateCcw className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                      <p className="text-sm text-amber-800 mb-2">
+                                        Esto publica una poliza nueva con las partidas invertidas de {entry.entry_number}. No borra ni edita la original.
+                                      </p>
+                                      <input
+                                        type="text"
+                                        value={reversalReason}
+                                        onChange={(ev) => setReversalReason(ev.target.value)}
+                                        placeholder="Motivo de la reversa (obligatorio)"
+                                        className="w-full px-3 py-1.5 text-sm border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                      />
+                                      <div className="flex items-center gap-2 mt-2 justify-end">
+                                        <button
+                                          onClick={() => { setReversingEntryId(null); setReversalReason(''); }}
+                                          className="px-3 py-1.5 bg-white text-gray-600 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                                        >
+                                          Cancelar
+                                        </button>
+                                        <button
+                                          onClick={() => handleReverseEntry(entry.id)}
+                                          disabled={reversingId === entry.id || !reversalReason.trim()}
+                                          className="px-3 py-1.5 bg-amber-500 text-white text-xs font-medium rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                                        >
+                                          {reversingId === entry.id ? 'Reversando...' : 'Reversar'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
                           </React.Fragment>
                         );
                       })}
                     {entries.filter(e => entryFilter === 'all' || e.entry_type === entryFilter).length === 0 && (
-                      <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-gray-400">Sin polizas en este periodo</td></tr>
+                      <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">Sin polizas en este periodo</td></tr>
                     )}
                   </tbody>
                   {/* Totals footer from expanded lines */}
@@ -1140,10 +1236,11 @@ const AccountingPage: React.FC = () => {
                           <td colSpan={3} className="px-4 py-3 text-sm text-gray-700">Total del periodo (polizas expandidas)</td>
                           <td className="px-4 py-3 text-right font-mono text-sm text-gray-800">{fmt(totalDebit)}</td>
                           <td className="px-4 py-3 text-right font-mono text-sm text-gray-800">{fmt(totalCredit)}</td>
+                          <td />
                         </tr>
                         {Math.abs(totalDebit - totalCredit) > 0.01 && (
                           <tr className="bg-red-50">
-                            <td colSpan={5} className="px-4 py-2 text-center text-xs text-red-600 font-medium">
+                            <td colSpan={6} className="px-4 py-2 text-center text-xs text-red-600 font-medium">
                               Diferencia: {fmt(Math.abs(totalDebit - totalCredit))} — revisa las polizas marcadas
                             </td>
                           </tr>
