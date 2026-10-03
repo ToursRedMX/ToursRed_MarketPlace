@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Armchair, CalendarDays, Info, Plus, Trash2, UserRound, Users, Wallet, X } from 'lucide-react';
 import type { DepartureSeat, ExternalSale, ExternalTraveler, Operation } from '../../types/externalSales';
 import { CHANNELS, PAYMENT_METHODS, EXTERNAL_NOTICE, operationKey } from '../../types/externalSales';
-import { assignExternalSeats, loadDepartureSeats, saveExternalSale, errorText } from '../../lib/externalSales';
+import { assignExternalSeats, loadDepartureSeats, saveExternalSale, sendExternalQrEmail, errorText } from '../../lib/externalSales';
 import AgendaSeatMap from '../agenda/AgendaSeatMap';
 import { EXTERNAL_COLOR, useHasSeatMap } from '../agenda/seatMapData';
 import { OccupancyBar } from '../agenda/shared';
@@ -21,7 +21,7 @@ function Section({n,icon,title,hint,children,className='border-slate-200 bg-whit
 }
 // El id nace aqui para poder asignar asiento justo despues de guardar, sin esperar a que la base lo invente.
 const blankTraveler = (): ExternalTraveler => ({id:crypto.randomUUID(),first_name:'',last_name:'',traveler_type:'adulto',is_primary:false});
-export default function ExternalSaleForm({operations,existing,onSaved,onClose}:{operations:Operation[];existing?:ExternalSale;onSaved:(id:string,warning?:string)=>void;onClose:()=>void}) {
+export default function ExternalSaleForm({operations,existing,onSaved,onClose}:{operations:Operation[];existing?:ExternalSale;onSaved:(id:string,warning?:string,emailSent?:boolean)=>void;onClose:()=>void}) {
  const [departure,setDeparture]=useState(existing?operationKey(existing):'');
  const [source,setSource]=useState(existing?.source??'whatsapp');
  const [reference,setReference]=useState(existing?.external_reference??'');
@@ -34,6 +34,7 @@ export default function ExternalSaleForm({operations,existing,onSaved,onClose}:{
  const [method,setMethod]=useState(existing?.external_sale_financials?.payment_method??'cash');
  const [notes,setNotes]=useState(existing?.notes??'');
  const [consent,setConsent]=useState(existing?.operational_email_authorized??false);
+ const [sendEmail,setSendEmail]=useState(false);
  const [travelers,setTravelers]=useState<ExternalTraveler[]>(existing?.external_sale_travelers.filter(t=>!t.is_cancelled)??[{...blankTraveler(),is_primary:true}]);
  const [busy,setBusy]=useState(false); const [error,setError]=useState('');
  const op=operations.find(o=>operationKey(o)===departure);
@@ -61,6 +62,8 @@ export default function ExternalSaleForm({operations,existing,onSaved,onClose}:{
   return null;
  };
  const pending=Number(total)-Number(paid);
+ // Mismo criterio que la base (prepare_external_sale_email): correo con forma valida Y autorizacion operativa.
+ const canEmail=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())&&consent;
  const paidPct=Number(total)>0&&Number.isFinite(pending)?Math.min(100,Math.max(0,Math.round(Number(paid)/Number(total)*100))):0;
  const fmt=(n:number)=>Number.isFinite(n)?new Intl.NumberFormat('es-MX',{style:'currency',currency}).format(n):'—';
  // Mientras el formulario esta abierto la pagina de atras no debe desplazarse.
@@ -75,7 +78,13 @@ export default function ExternalSaleForm({operations,existing,onSaved,onClose}:{
  let warning='';
  const changes=hasMap&&!seatsQ.error?travelers.map(t=>({traveler_id:t.id as string,seat_number:seatOf(t)})).filter(a=>a.seat_number!==(savedSeat.get(a.traveler_id)??null)):[];
  if(changes.length){try{await assignExternalSeats(id,changes);}catch(err){warning='No se pudieron guardar los asientos ('+errorText(err)+'). Asígnalos desde la Agenda.';}}
- onSaved(id,warning||undefined);
+ // Correo con el QR: va DESPUES de guardar y de asignar asientos para que ya los traiga. Si los asientos fallaron no se manda (saldria incompleto).
+ let emailSent=false;
+ if(sendEmail&&canEmail) {
+  if(warning) warning+=' No se envió el correo con el QR porque los asientos no se guardaron: asígnalos y envíalo desde la tarjeta de la venta.';
+  else {try{await sendExternalQrEmail(id);emailSent=true;}catch(err){warning='La venta se guardó, pero el correo con el QR no se envió ('+errorText(err)+'). Puedes enviarlo desde la tarjeta de la venta.';}}
+ }
+ onSaved(id,warning||undefined,emailSent);
  } catch(e) {setError(errorText(e));} finally {setBusy(false);}
  }
  function travelerField(index:number,key:keyof ExternalTraveler,value:string) {setTravelers(ts=>ts.map((t,i)=>i===index?{...t,[key]:value}:t));}
@@ -109,6 +118,8 @@ export default function ExternalSaleForm({operations,existing,onSaved,onClose}:{
   <label className={`${lbl} md:col-span-2`}>Correo electrónico<input type="email" maxLength={254} className={ctl} value={email} onChange={e=>setEmail(e.target.value)}/></label>
   </div>
   <label className="flex gap-2.5 rounded-xl bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200"><input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={consent} onChange={e=>setConsent(e.target.checked)}/>El viajero autorizó usar este correo para recibir información operativa de esta reservación. No se enviará marketing ni se creará una cuenta.</label>
+  <label className={`flex gap-2.5 rounded-xl p-3 text-sm ring-1 ${canEmail?'bg-blue-50 text-slate-800 ring-blue-200':'bg-slate-50 text-slate-400 ring-slate-200'}`}><input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={sendEmail&&canEmail} disabled={!canEmail} onChange={e=>setSendEmail(e.target.checked)}/>
+   <span><strong className="font-semibold">Enviar el QR de check-in por correo al guardar.</strong> El correo ya incluye los asientos asignados.{!canEmail&&<span className="mt-0.5 block text-xs">Para activarlo escribe el correo del viajero y marca la autorización de arriba.</span>}</span></label>
  </Section>
 
  <Section n={3} icon={<Users className="h-4 w-4 text-blue-700" aria-hidden/>} title={`Viajeros y acompañantes (${travelers.length})`} hint="El primero es el viajero principal.">
