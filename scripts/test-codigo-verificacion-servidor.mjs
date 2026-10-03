@@ -54,7 +54,14 @@ async function run(test) {
     Response,
     console: quiet,
     crypto,
-    require() { return { mensajeDeError: (e) => String(e?.message ?? e) }; },
+    // Las lineas `import` se borran antes de compilar (ver mas abajo); lo que
+    // importaban queda como identificador libre, no como una llamada a
+    // require(). Por eso van aqui como globals del contexto, no en un mock
+    // de require() -- ese mock nunca hizo nada, y no se habia notado porque
+    // ningun escenario disparaba la excepcion que lo necesitaba.
+    mensajeDeError: (e) => String(e?.message ?? e),
+    opcionesConContexto: (_req, extra) => extra ?? {},
+    sinUserAgentDeNavegador: (opts) => opts,
     Deno: {
       env: { get: (key) => ({ SUPABASE_URL: 'https://db.test', SUPABASE_SERVICE_ROLE_KEY: 'service' })[key] },
       serve(fn) { handler = fn; },
