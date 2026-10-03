@@ -1092,6 +1092,7 @@ Deno.serve(async (req: Request) => {
         serie: cfdiResult.serie,
         stamped_at: cfdiResult.stamped_at,
         status: "stamped",
+        payment_method_sat: "PUE",
         error_message: null,
       })
       .eq("id", cfdiRecord.id);

@@ -454,6 +454,12 @@ jobs:
       - name: Los cinco webhooks de pago guardan su payload crudo
         run: node scripts/check-webhooks-guardan-payload.mjs
 
+      # Los 11 generadores automaticos de CFDI mandan payment_method: "PUE" a
+      # FacturAPI pero nunca lo guardaban en cfdi_invoices.payment_method_sat
+      # (72 de 72 filas en NULL). Pendiente 7 de la entrada 33, entrada 41.
+      - name: Los generadores de CFDI guardan payment_method_sat al timbrar
+        run: node scripts/check-cfdi-payment-method-sat.mjs
+
       # La conciliacion contable diaria mira 7 dias, no uno: sin traslape,
       # cualquier noche que el job falle pierde ese dia para siempre. La prueba
       # levanta un pg_cron de mentiras porque la extension no esta en CI, y lo
