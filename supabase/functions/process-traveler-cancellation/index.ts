@@ -263,9 +263,12 @@ Deno.serve(async (req: Request) => {
 
     const principalRefund = principalPaid * refundPct;
     const refundAmountToTraveler = principalRefund + optionalServicesRefundable + insuranceRefund;
-    // Penalty split: 60% to agency, 40% to platform (only applies when penaltyAmount > 0)
-    const PENALTY_AGENCY_SHARE = 0.60;
-    const PENALTY_PLATFORM_SHARE = 0.40;
+    // Penalty split: 70% to agency, 30% to platform (only applies when penaltyAmount > 0).
+    // Homologado con process-partial-cancellation (ya usaba 70/30) por decision
+    // de Axel el 03-oct-2026 -- antes esta cancelacion total usaba 60/40, la
+    // unica de las dos que no coincidia (pendiente 8 de la entrada 33).
+    const PENALTY_AGENCY_SHARE = 0.70;
+    const PENALTY_PLATFORM_SHARE = 0.30;
     const amountToAgency = penaltyAmount * PENALTY_AGENCY_SHARE;
     const amountToPlatform = penaltyAmount * PENALTY_PLATFORM_SHARE;
 

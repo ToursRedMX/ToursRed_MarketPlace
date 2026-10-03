@@ -460,6 +460,12 @@ jobs:
       - name: Los generadores de CFDI guardan payment_method_sat al timbrar
         run: node scripts/check-cfdi-payment-method-sat.mjs
 
+      # La cancelacion total repartia la penalizacion 60/40 y la parcial
+      # 70/30. Decision de Axel: homologar a 70/30 en ambas. Pendiente 8 de
+      # la entrada 33, entrada 42.
+      - name: Cancelacion total y parcial reparten la penalizacion igual (70/30)
+        run: node scripts/check-penalizacion-homologada.mjs
+
       # La conciliacion contable diaria mira 7 dias, no uno: sin traslape,
       # cualquier noche que el job falle pierde ese dia para siempre. La prueba
       # levanta un pg_cron de mentiras porque la extension no esta en CI, y lo
