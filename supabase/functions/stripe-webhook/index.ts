@@ -11,7 +11,7 @@ import { registrarDisputa } from "../_shared/disputas.ts";
 import { asentarCobroStripe, estadoSegunStripe } from "../_shared/cobrosStripe.ts";
 import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
 import { motivoParaNoConfirmar } from "../_shared/cupoAlConfirmar.ts";
-import { centavosDeSuscripcion, repartirComision } from "../_shared/repartoCobroMixto.ts";
+import { centavosDeSuscripcion, lineasCompletasDeFactura, repartirComision } from "../_shared/repartoCobroMixto.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -993,14 +993,17 @@ Deno.serve(async (req) => {
             );
             const intent = pagoConIntent?.payment?.payment_intent;
             paymentIntentId = typeof intent === 'string' ? intent : intent?.id ?? null;
-            centavosMembresia = centavosDeSuscripcion(invoice.lines?.data);
+            // Las lineas vienen paginadas de a 10 en el objeto embebido. Si
+            // hay mas, se repite la consulta con el paginador de Stripe en
+            // vez de quedarse con la primera pagina (ver
+            // _shared/repartoCobroMixto.ts) -- antes esto solo dejaba
+            // `registrarFallo` y seguia con el reparto incompleto.
+            const lineasFacturaCompleto = await lineasCompletasDeFactura(stripe, session.invoice as string, invoice.lines);
+            centavosMembresia = centavosDeSuscripcion(lineasFacturaCompleto);
             if (invoice.lines?.has_more) {
-              // Las lineas vienen paginadas de a 10. Una reserva trae a lo mas
-              // deposito, opcionales, seguro y cargo por servicio, pero si un dia
-              // pasa de 10 la linea de la membresia podria quedar fuera.
               await registrarFallo(
                 'stripe-webhook/factura-mixta-paginada',
-                `La factura ${session.invoice} trae mas de una pagina de lineas; el reparto reserva/membresia puede estar incompleto`,
+                `La factura ${session.invoice} trae mas de una pagina de lineas; se volvio a consultar completa para el reparto reserva/membresia`,
                 { bookingId, centavosMembresia },
               );
             }
@@ -2522,7 +2525,19 @@ Deno.serve(async (req) => {
         // cobro. Hasta el 02-oct-2026 aqui se registraba invoice.amount_paid
         // completo —$589 por una membresia de $89—, y los $500 del deposito
         // entraban como ingreso por membresia. Ver _shared/repartoCobroMixto.ts.
-        const lineasDeFactura = invoice.lines?.data ?? [];
+        // Mismo riesgo de paginacion que en checkout.session.completed: el
+        // objeto embebido trae a lo mas 10 lineas. Sin este chequeo, una
+        // factura con muchos opcionales podia dejar la linea de membresia
+        // fuera de la primera pagina y nada se enteraba -- a diferencia de la
+        // rama de checkout.session.completed, aqui no habia ni `registrarFallo`.
+        if (invoice.lines?.has_more) {
+          await registrarFallo(
+            'stripe-webhook/factura-mixta-paginada',
+            `La factura ${invoice.id} trae mas de una pagina de lineas; se volvio a consultar completa para el reparto reserva/membresia`,
+            { invoiceId: invoice.id },
+          );
+        }
+        const lineasDeFactura = await lineasCompletasDeFactura(stripe, invoice.id, invoice.lines);
         const centavosMembresia = centavosDeSuscripcion(lineasDeFactura);
         const facturaMixta = centavosMembresia > 0 &&
           lineasDeFactura.some((l) => l?.parent?.type !== 'subscription_item_details');
