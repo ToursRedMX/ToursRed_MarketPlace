@@ -1165,20 +1165,13 @@ Deno.serve(async (req) => {
           } else {
             console.log(`Successfully updated booking ${bookingId} to paid status`);
 
-            // Audit log: booking confirmed by Stripe webhook
-            try {
-              await supabase.rpc('insert_audit_log', {
-                p_tenant_type: 'traveler',
-                p_actor_id: booking.user_id,
-                p_actor_role: 'stripe_webhook',
-                p_target_id: bookingId,
-                p_target_table: 'bookings',
-                p_action: 'BOOKING_CONFIRMED',
-                p_metadata: { payment_method: paymentMethod, payment_intent_id: paymentIntentId },
-              });
-            } catch (e) {
-              console.error('Audit log failed (non-blocking):', e);
-            }
+            // El BOOKING_CONFIRMED ya lo escribe audit_bookings_change() (trigger
+            // generico en UPDATE de bookings, dispara con el UPDATE de arriba):
+            // llamar insert_audit_log aqui tambien duplicaba la fila, una con
+            // actor y otra sin el, a milisegundos de distancia. El payment_method
+            // y payment_intent_id que mandaba esta llamada ya estan en NEW dentro
+            // del trigger (misma migracion 20261003010000 los agrega ahi), asi que
+            // no se pierden al quitarla.
 
             // Activate membership if purchased alongside booking (mixed-cart)
             const membershipPurchased = session.metadata?.membership_purchased === 'true';
