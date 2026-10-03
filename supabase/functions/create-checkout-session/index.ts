@@ -432,7 +432,7 @@ Deno.serve(async (req) => {
         (opt: any) => opt.paid_at === null && Number(opt.subtotal) > 0
       );
 
-      const desgloseItemsSub = buildDesgloseLineItems(
+      const { lineItems: desgloseItemsSub, sobrante: sobranteSuscripcion } = buildDesgloseLineItems(
         booking,
         unpaidOptionalsSub,
         puntosSolicitados,
@@ -442,15 +442,23 @@ Deno.serve(async (req) => {
       );
 
       // El desglose NO incluye la membresia: va como linea de suscripcion
-      // aparte. Pero el `amount` llega de dos maneras: TravelersInfoPage le
-      // resta la membresia, y el flujo de 4 pasos manda amount_to_charge de
+      // aparte, a precio fijo (tiene que cobrar lo mismo los meses
+      // siguientes). Pero el tope de puntos/Cash del front SI cuenta la
+      // membresia dentro de lo que pueden cubrir (netBeforeCharges en
+      // BookingFlowStep4), asi que el sobrante que buildDesgloseLineItems no
+      // pudo absorber en deposito/opcionales/seguro/cargo le toca a la
+      // membresia -- via un cupon de un solo uso (duration: 'once') mas abajo,
+      // nunca bajando el precio de la suscripcion. Pendiente 11 de la entrada 33.
+      //
+      // El `amount` llega de dos maneras: TravelersInfoPage le resta la
+      // membresia, y el flujo de 4 pasos manda amount_to_charge de
       // create_booking_atomic, que la INCLUYE. Antes solo se aceptaba la
       // primera, y el flujo de 4 pasos chocaba siempre con 400 "el monto no
       // coincide". Se acepta cualquiera de las dos: lo que se cobra son
       // siempre las lineas del servidor, `amount` solo detecta desacuerdo.
-      const montoSinMembresia = Math.abs(Number(amount) - membershipCost - sumarLineas(desgloseItemsSub)) <= TOLERANCIA_MONTO_MXN
-        ? Number(amount) - membershipCost
-        : Number(amount);
+      const montoSinMembresia = Math.abs(Number(amount) - membershipCost + sobranteSuscripcion - sumarLineas(desgloseItemsSub)) <= TOLERANCIA_MONTO_MXN
+        ? Number(amount) - membershipCost + sobranteSuscripcion
+        : Number(amount) + sobranteSuscripcion;
       const errorMonto = validarMontoDelCliente(montoSinMembresia, desgloseItemsSub, bookingId);
       if (errorMonto) {
         return new Response(
@@ -460,6 +468,25 @@ Deno.serve(async (req) => {
             status: 400,
           }
         );
+      }
+
+      if (sobranteSuscripcion > 0) {
+        // Cupon de UN SOLO USO: descuenta la primera factura (la que trae la
+        // membresia + el desglose de la reserva) y no toca el `priceId`, que
+        // sigue cobrando el precio completo los meses siguientes.
+        const centavosSobrante = Math.min(
+          Math.round(sobranteSuscripcion * 100),
+          Math.round(membershipCost * 100),
+        );
+        if (centavosSobrante > 0) {
+          const cupon = await stripe.coupons.create({
+            amount_off: centavosSobrante,
+            currency,
+            duration: 'once',
+            name: `Puntos/Cash sobre membresia (reserva ${bookingId})`,
+          });
+          sessionConfig.discounts = [{ coupon: cupon.id }];
+        }
       }
 
       for (const item of desgloseItemsSub) {
@@ -482,7 +509,10 @@ Deno.serve(async (req) => {
         (opt: any) => opt.paid_at === null && Number(opt.subtotal) > 0
       );
 
-      const lineItems = buildDesgloseLineItems(
+      // Sin membresia, el tope de puntos/Cash del front no incluye nada mas
+      // que absorber: `sobrante` siempre es 0 aqui en la practica (no hay
+      // membresia a la que descontarle). Se ignora a proposito.
+      const { lineItems } = buildDesgloseLineItems(
         booking,
         unpaidOptionals,
         puntosSolicitados,
@@ -636,7 +666,7 @@ function buildDesgloseLineItems(
   toursRedCashUsed: number,
   currency: string,
   description: string
-): any[] {
+): { lineItems: any[]; sobrante: number } {
   const totalDiscount = (Number(pointsUsed) || 0) / 100 + (Number(toursRedCashUsed) || 0);
 
   // --- Raw gross amounts (verified stored as pre-discount) ---
@@ -680,6 +710,10 @@ function buildDesgloseLineItems(
   remainingDiscount = Math.max(0, Math.round((remainingDiscount - insuranceRaw) * 100) / 100);
 
   const serviceChargeFinal = Math.max(0, Math.round((serviceChargeCombinedRaw - remainingDiscount) * 100) / 100);
+  // Hasta aqui nadie leia `remainingDiscount` despues de esta linea, asi que
+  // no hacia falta restarle el cargo por servicio. Ahora si: es lo que decide
+  // cuanto le toca a la membresia via el cupon (`sobrante`, mas abajo).
+  remainingDiscount = Math.max(0, Math.round((remainingDiscount - serviceChargeCombinedRaw) * 100) / 100);
 
   // --- Build line items ---
   const lineItems: any[] = [];
@@ -762,5 +796,11 @@ function buildDesgloseLineItems(
   // en manos de quien llama. El contraste se hace ahora fuera de esta funcion, en
   // validarMontoDelCliente(), y ya no ajusta nada: si no cuadra, se rechaza.
 
-  return lineItems;
+  // `remainingDiscount` aqui es lo que sobro de puntos+Cash despues de vaciar
+  // deposito+opcionales+seguro+cargo por servicio. En la reserva sola el front
+  // nunca deja que pase de 0 (el tope no incluye nada mas que absorber). En
+  // carrito mixto SI puede ser > 0: el tope del front incluye la membresia
+  // (netBeforeCharges la suma), pero esta funcion no conoce la membresia. Le
+  // toca al llamador descontarlo de ahi -- ver pendiente 11 de la entrada 33.
+  return { lineItems, sobrante: remainingDiscount };
 }

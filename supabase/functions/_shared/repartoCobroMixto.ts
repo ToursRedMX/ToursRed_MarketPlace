@@ -23,6 +23,28 @@ export interface LineaDeFactura {
   parent?: { type?: string | null } | null;
 }
 
+// El objeto `invoice` que llega en el webhook (embebido en el evento, o de un
+// `retrieve` sin pedir todas las paginas) trae como mucho 10 lineas en
+// `lines.data`, con `has_more` avisando que faltan. Una reserva normal no
+// pasa de ahi (deposito + seguro + cargo + membresia), pero una con varios
+// opcionales si puede, y entonces `centavosDeSuscripcion` suma solo la
+// primera pagina: si la linea de membresia cae en la segunda, el reparto
+// queda incompleto SIN que nada lo note. Pendiente 11 de la entrada 33.
+export async function lineasCompletasDeFactura(
+  stripe: { invoices: { listLineItems: (id: string, params: { limit: number }) => { autoPagingToArray: (opts: { limit: number }) => Promise<unknown[]> } } },
+  invoiceId: string,
+  lineas: { data?: LineaDeFactura[] | null; has_more?: boolean | null } | null | undefined,
+): Promise<LineaDeFactura[]> {
+  const primeraPagina = lineas?.data ?? [];
+  if (!lineas?.has_more) return primeraPagina;
+  // Se repite desde cero con el paginador de Stripe en vez de completar a
+  // partir de `primeraPagina`: mas simple y sin riesgo de contar una linea
+  // dos veces si el cursor no calzara exacto con lo que ya trajo el evento.
+  const todas = await stripe.invoices.listLineItems(invoiceId, { limit: 100 })
+    .autoPagingToArray({ limit: 1000 });
+  return todas as LineaDeFactura[];
+}
+
 export interface Comision {
   fee: number;
   net: number;
