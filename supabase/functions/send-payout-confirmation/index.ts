@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -355,7 +356,7 @@ Equipo ToursRed
       }
     );
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error en send-payout-confirmation:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -368,7 +369,7 @@ Equipo ToursRed
     }
     return new Response(
       JSON.stringify({
-        error: error.message || "Error al enviar confirmacion de pago"
+        error: mensajeDeError(error) || "Error al enviar confirmacion de pago"
       }),
       {
         status: 500,

@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -399,7 +400,7 @@ Deno.serve(async (req: Request) => {
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error en cancel-optional-service:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -410,7 +411,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return new Response(JSON.stringify({ error: error.message || "Error al cancelar servicio opcional" }), {
+    return new Response(JSON.stringify({ error: mensajeDeError(error) || "Error al cancelar servicio opcional" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

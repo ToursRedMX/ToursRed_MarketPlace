@@ -130,7 +130,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ codes }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
+  } catch (err) {
     if (sentryDsn) {
       Sentry.captureException(err, {
         tags: {

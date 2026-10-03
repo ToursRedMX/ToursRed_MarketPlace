@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { exigibleAlProcesador } from "../_shared/exigible.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -510,7 +511,7 @@ Deno.serve(async (req: Request) => {
       is_split: !!(sub_charges && sub_charges.length >= 2),
       split_charges: splitChargeDetails.length > 0 ? splitChargeDetails : undefined,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error in create-conekta-order:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -521,7 +522,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return jsonResponse({ error: err.message || "Error interno" }, 500);
+    return jsonResponse({ error: mensajeDeError(err) || "Error interno" }, 500);
   }
 });
 

@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { politicaDelTour, salidaDelTour } from "../_shared/politicaCancelacion.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -510,7 +511,7 @@ Deno.serve(async (req: Request) => {
       partial_cancellation_id: partialCancellation.id,
       policy,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error en process-partial-cancellation:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -521,6 +522,6 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return err(error.message || "Error al procesar la cancelación parcial");
+    return err(mensajeDeError(error) || "Error al procesar la cancelación parcial");
   }
 });

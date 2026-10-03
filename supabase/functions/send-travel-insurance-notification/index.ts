@@ -4,6 +4,7 @@ import writeExcelFile from "npm:write-excel-file@4.1.1/universal";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const etiquetaDeSexo = (sexo: string | null | undefined): string =>
   sexo === "masculino" ? "MASCULINO"
@@ -460,7 +461,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("send-travel-insurance-notification error:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -471,7 +472,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: mensajeDeError(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

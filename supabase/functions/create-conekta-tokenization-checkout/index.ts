@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -138,7 +139,7 @@ Deno.serve(async (req: Request) => {
       checkout_id: checkoutId,
       order_id: order.id,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error in create-conekta-tokenization-checkout:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -149,7 +150,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return jsonResponse({ error: err.message || "Error interno" }, 500);
+    return jsonResponse({ error: mensajeDeError(err) || "Error interno" }, 500);
   }
 });
 

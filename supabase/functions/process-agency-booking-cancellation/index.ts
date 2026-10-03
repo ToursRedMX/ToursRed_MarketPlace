@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.1
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -319,7 +320,7 @@ Deno.serve(async (req: Request) => {
       points_deducted: pointsDeducted,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("process-agency-booking-cancellation error:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -330,7 +331,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return err(error.message || "Error al procesar la cancelación");
+    return err(mensajeDeError(error) || "Error al procesar la cancelación");
   }
 });
 

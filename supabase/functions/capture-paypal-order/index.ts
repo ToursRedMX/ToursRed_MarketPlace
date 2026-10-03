@@ -5,6 +5,7 @@ import { cubreElAnticipo } from "../_shared/exigible.ts";
 import { asentarCobroPaypal } from "../_shared/cobrosPaypal.ts";
 import { registrarFallo } from "../_shared/falloSilencioso.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -750,7 +751,7 @@ Deno.serve(async (req: Request) => {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
           }
-        } catch (orderErr: any) {
+        } catch (orderErr) {
           console.error("Error fetching order details after already captured:", orderErr);
           return new Response(JSON.stringify({ error: "Error al verificar estado del pago" }), {
             status: 500,
@@ -942,7 +943,7 @@ Deno.serve(async (req: Request) => {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error in capture-paypal-order:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -953,7 +954,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return new Response(JSON.stringify({ error: err.message || "Error interno" }), {
+    return new Response(JSON.stringify({ error: mensajeDeError(err) || "Error interno" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -1013,8 +1013,8 @@ Deno.serve(async (req) => {
             } else {
               console.warn(`Invoice ${session.invoice} sin payment_intent en invoice.payments`);
             }
-          } catch (invoiceErr: any) {
-            console.error(`Error retrieving invoice for payment_intent: ${invoiceErr.message}`);
+          } catch (invoiceErr) {
+            console.error(`Error retrieving invoice for payment_intent: ${mensajeDeError(invoiceErr)}`);
           }
         }
 

@@ -5,6 +5,7 @@ import { isConfigured as isOpenpayConfigured, getDashboardUrl, getMerchantId, cr
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -764,8 +765,8 @@ Deno.serve(async (req: Request) => {
           first_name: userRecordOp?.first_name, last_name: userRecordOp?.last_name,
           email: userRecordOp?.email || user.email || "", phone_number: userRecordOp?.phone_number,
         });
-      } catch (e: any) {
-        return new Response(JSON.stringify({ error: e.message }), {
+      } catch (e) {
+        return new Response(JSON.stringify({ error: mensajeDeError(e) }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -789,8 +790,8 @@ Deno.serve(async (req: Request) => {
             gross_service_charge: String(grossServiceCharge), membership_exemption_applied: String(exemptionApplied > 0),
           });
         }
-      } catch (e: any) {
-        return new Response(JSON.stringify({ error: e.message }), {
+      } catch (e) {
+        return new Response(JSON.stringify({ error: mensajeDeError(e) }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
