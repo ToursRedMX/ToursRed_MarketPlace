@@ -294,6 +294,23 @@ const AgencyDashboard: React.FC = () => {
         </div>
       )}
 
+      {(!isAgencyStaff || staffInfo?.permissions.canViewReports) && (
+        <button
+          type="button"
+          onClick={() => navigate('/agency/demanda')}
+          className="mb-6 w-full text-left bg-white border border-gray-200 hover:border-primary-300 rounded-lg p-4 flex items-center gap-4 transition-colors"
+        >
+          <div className="bg-blue-100 rounded-xl p-2.5 shrink-0">
+            <BarChart2 className="h-5 w-5 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-gray-900 text-sm">Demanda de viajeros</p>
+            <p className="text-gray-500 text-xs">Qué buscan los viajeros en ToursRed y qué buscan sin encontrar.</p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-gray-400" />
+        </button>
+      )}
+
       {/* Información sobre el sistema de pagos */}
       {stats.totalRevenue === 0 && stats.totalBookings > 0 && (
         <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">

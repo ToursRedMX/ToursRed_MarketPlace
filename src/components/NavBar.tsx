@@ -204,6 +204,8 @@ const NavBar: React.FC = () => {
       contenidoItems.push({ to: '/admin/tours', label: 'Comisiones de Tours', icon: <Bus className="h-4 w-4" /> });
     if (isSuperAdmin)
       contenidoItems.push({ to: '/admin/tour-metrics', label: 'Metricas de Tours', icon: <BarChart2 className="h-4 w-4" /> });
+    if (isSuperAdmin)
+      contenidoItems.push({ to: '/admin/demanda', label: 'Demanda de Viajeros', icon: <Search className="h-4 w-4" /> });
     if (isSuperAdmin || permissions?.canManageDeparturePoints)
       contenidoItems.push({ to: '/admin/departure-points', label: 'Puntos de Partida', icon: <Navigation className="h-4 w-4" /> });
     if (isSuperAdmin || permissions?.canManageReviews)
@@ -297,6 +299,7 @@ const NavBar: React.FC = () => {
     if (info.permissions.canViewBookings) items.push({ to: '/agency/bookings', label: 'Reservas' });
     if (info.permissions.canManageDiscountCodes) items.push({ to: '/agency/discount-codes', label: 'Codigos Descuento' });
     if (info.permissions.canViewFinancials) items.push({ to: '/agency/financials', label: 'Finanzas' });
+    if (info.permissions.canViewReports) items.push({ to: '/agency/demanda', label: 'Demanda' });
     return items;
   };
 
@@ -321,6 +324,7 @@ const NavBar: React.FC = () => {
         { to: '/agency/bookings', label: 'Reservas' },
         { to: '/agency/discount-codes', label: 'Codigos Descuento' },
         { to: '/agency/financials', label: 'Finanzas' },
+        { to: '/agency/demanda', label: 'Demanda' },
         { to: '/agency/invoices', label: 'Facturas' },
         { to: '/agency/staff', label: 'Coordinadores' },
         { to: '/agency/featured-tours', label: 'Tours Destacados' },

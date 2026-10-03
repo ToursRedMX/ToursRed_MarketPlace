@@ -93,6 +93,14 @@ const AgencyPendingApproval: React.FC = () => {
                 </p>
               </div>
 
+              {/* Beneficio que los espera */}
+              <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  <strong>Al activarse tu cuenta</strong> tendrás un reporte de <strong>demanda de viajeros</strong>: qué destinos
+                  son los más buscados en ToursRed y qué buscan los viajeros sin encontrar, para que sepas qué tours publicar.
+                </p>
+              </div>
+
               {/* Contact */}
               <div className="border-t border-gray-100 pt-6">
                 <p className="text-xs text-gray-500 text-center mb-3 font-medium uppercase tracking-wide">

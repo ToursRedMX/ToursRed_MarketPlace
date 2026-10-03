@@ -74,6 +74,10 @@ const AgencyOnboardingLayout: React.FC<Props> = ({ children, currentStep, steps 
       <main className="flex-1 flex items-start justify-center px-4 py-10">
         <div className="max-w-2xl w-full">
           {children}
+          <p className="mt-6 text-center text-xs text-gray-500">
+            Al activar tu cuenta tendrás un reporte de <strong className="text-gray-700">demanda de viajeros</strong>:
+            qué destinos son los más buscados en ToursRed y qué buscan sin encontrar, para decidir qué tours publicar.
+          </p>
         </div>
       </main>
     </div>

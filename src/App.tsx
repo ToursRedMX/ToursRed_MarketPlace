@@ -56,6 +56,7 @@ import AgencyDestinations from './pages/agency/AgencyDestinations';
 import AgencyDiscountCodes from './pages/agency/AgencyDiscountCodes';
 import AgencyFinancials from './pages/agency/AgencyFinancials';
 import AgencyInvoices from './pages/agency/AgencyInvoices';
+import AgencyDemand from './pages/agency/AgencyDemand';
 import AgencyStaff from './pages/agency/AgencyStaff';
 import AgencyFeaturedTours from './pages/agency/AgencyFeaturedTours';
 import AgencyPendingApproval from './pages/agency/AgencyPendingApproval';
@@ -72,6 +73,7 @@ import AdminDeparturePoints from './pages/admin/AdminDeparturePoints';
 import AdminCategories from './pages/admin/AdminCategories';
 import AdminTours from './pages/admin/AdminTours';
 import AdminTourMetrics from './pages/admin/AdminTourMetrics';
+import AdminDemand from './pages/admin/AdminDemand';
 import AdminProfile from './pages/admin/AdminProfile';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminMemberships from './pages/admin/AdminMemberships';
@@ -111,6 +113,7 @@ import AgencyPublicProfile from './pages/AgencyPublicProfile';
 import NotFoundPage from './pages/NotFoundPage';
 import QaSentryTestPage from './pages/QaSentryTestPage';
 import UnsubscribePage from './pages/UnsubscribePage';
+import AvisoBajaPage from './pages/AvisoBajaPage';
 import GiftCardsPage from './pages/GiftCardsPage';
 import GiftCardRedeemPage from './pages/GiftCardRedeemPage';
 import GiftCardSuccessPage from './pages/GiftCardSuccessPage';
@@ -161,7 +164,7 @@ const PROTECTED_PREFIXES = [
   '/cancel', '/booking-success', '/booking-cancel', '/booking-pending', '/payment-pending', '/booking-travelers',
   '/supplement-success', '/payment-plan-success', '/extras-success', '/notifications',
   '/gift-card/redeem', '/gift-card/success', '/payment-return', '/booking-checkin',
-  '/soporte/viajero', '/soporte/agencia', '/unsubscribe',
+  '/soporte/viajero', '/soporte/agencia', '/unsubscribe', '/avisos/baja',
   '/reservar',
 ];
 
@@ -230,6 +233,7 @@ const App: React.FC = () => {
           <Route path="/terminos-servicio" element={<TermsOfServicePage />} />
           <Route path="/politica-cookies" element={<CookiePolicyPage />} />
           <Route path="/unsubscribe" element={<UnsubscribePage />} />
+          <Route path="/avisos/baja" element={<AvisoBajaPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/agency-signup" element={<AgencySignupPage />} />
@@ -435,6 +439,14 @@ const App: React.FC = () => {
             }
           />
           <Route
+            path="/agency/demanda"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.AGENCY]} staffPermission="canViewReports">
+                <AgencyDemand />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/agency/invoices"
             element={
               <ProtectedRoute allowedRoles={[UserRole.AGENCY]} staffPermission="canViewFinancials">
@@ -586,6 +598,14 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
                 <AdminTourMetrics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/demanda"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <AdminDemand />
               </ProtectedRoute>
             }
           />
