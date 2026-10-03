@@ -432,6 +432,13 @@ jobs:
       - name: stripe-webhook no vuelve a duplicar BOOKING_CONFIRMED
         run: node scripts/check-sin-booking-confirmed-duplicado.mjs
 
+      # Conekta: 14 de 14 cobros historicos en processor_fee = 0.00 (sandbox
+      # no manda la comision real). conekta-webhook ahora la estima con la
+      # misma formula que create_accounting_entry_for_booking ya usa como
+      # respaldo. Pendiente 5 de la entrada 33, cerrado en la entrada 38.
+      - name: La comision estimada de Conekta usa la formula ya existente
+        run: node scripts/test-comision-estimada.mjs
+
       # La conciliacion contable diaria mira 7 dias, no uno: sin traslape,
       # cualquier noche que el job falle pierde ese dia para siempre. La prueba
       # levanta un pg_cron de mentiras porque la extension no esta en CI, y lo
