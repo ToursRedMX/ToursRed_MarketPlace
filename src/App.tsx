@@ -56,6 +56,7 @@ import AgencyDestinations from './pages/agency/AgencyDestinations';
 import AgencyDiscountCodes from './pages/agency/AgencyDiscountCodes';
 import AgencyFinancials from './pages/agency/AgencyFinancials';
 import AgencyInvoices from './pages/agency/AgencyInvoices';
+import AgencyDemand from './pages/agency/AgencyDemand';
 import AgencyStaff from './pages/agency/AgencyStaff';
 import AgencyFeaturedTours from './pages/agency/AgencyFeaturedTours';
 import AgencyPendingApproval from './pages/agency/AgencyPendingApproval';
@@ -431,6 +432,14 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={[UserRole.AGENCY]} staffPermission="canViewFinancials">
                 <AgencyFinancials />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agency/demanda"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.AGENCY]} staffPermission="canViewReports">
+                <AgencyDemand />
               </ProtectedRoute>
             }
           />
