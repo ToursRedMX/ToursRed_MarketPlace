@@ -2,7 +2,7 @@
 -- solo difieren en puntuacion, y guardia contra inflado/duplicados en search_events.
 --
 -- 1. search_term_key: llave de agrupacion. Quita puntuacion y espacios de mas
---    ("Sian Ka'an" y "Sian Kaan" son la misma busqueda). NO resuelve alias de
+--    ("Sian Ka'an", "Sian Kaan" y "sian-kaan" son la misma busqueda). NO resuelve alias de
 --    verdad (Teotihuacan vs San Juan Teotihuacan): eso espera volumen real.
 --    No toca la columna `query_normalized` (generada y almacenada).
 -- 2. agency_demand_top ahora agrupa por esa llave (mismas reglas de privacidad).
@@ -21,8 +21,11 @@ language sql
 immutable
 set search_path to 'public'
 as $$
+  -- Apostrofes se quitan (Ka'an -> kaan); el resto de la puntuacion es espacio (sian-kaan -> sian kaan).
   select btrim(regexp_replace(
-    regexp_replace(public.normalize_search_text(txt), '[^a-z0-9 ]', '', 'g'),
+    regexp_replace(
+      regexp_replace(public.normalize_search_text(txt), E'[\'`\u2019]', '', 'g'),
+      '[^a-z0-9 ]', ' ', 'g'),
     '\s+', ' ', 'g'));
 $$;
 
@@ -298,7 +301,6 @@ $$;
 
 revoke all on function public.search_events_guardia() from public, anon, authenticated;
 
-drop trigger if exists trg_search_events_guardia on public.search_events;
-create trigger trg_search_events_guardia
+create or replace trigger trg_search_events_guardia
   before insert on public.search_events
   for each row execute function public.search_events_guardia();
