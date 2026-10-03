@@ -241,6 +241,9 @@ const AccountingPage: React.FC = () => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [reversingEntryId, setReversingEntryId] = useState<string | null>(null);
+  const [reversalReason, setReversalReason] = useState('');
+  const [reversingId, setReversingId] = useState<string | null>(null);
 
   // Insurance tab
   const [insuranceSettlements, setInsuranceSettlements] = useState<InsuranceSettlement[]>([]);
@@ -494,6 +497,27 @@ const AccountingPage: React.FC = () => {
     if (error) showToast('Error al eliminar el movimiento', false);
     else { showToast('Movimiento eliminado'); setConfirmDeleteId(null); loadManualEntries(); }
     setDeletingId(null);
+  };
+
+  const handleReverseEntry = async (id: string) => {
+    if (!reversalReason.trim()) {
+      showToast('Indica el motivo de la reversa', false);
+      return;
+    }
+    setReversingId(id);
+    const { error } = await supabase.rpc('reverse_accounting_entry', {
+      p_entry_id: id,
+      p_reason: reversalReason.trim(),
+    });
+    if (error) showToast(error.message || 'Error al reversar el movimiento', false);
+    else {
+      showToast('Poliza reversada');
+      setReversingEntryId(null);
+      setReversalReason('');
+      loadManualEntries();
+      loadReports();
+    }
+    setReversingId(null);
   };
 
   const handleMarkSettlementPaid = async (id: string) => {
@@ -1666,6 +1690,15 @@ const AccountingPage: React.FC = () => {
                               </button>
                             </>
                           )}
+                          {e.is_posted && (
+                            <button
+                              onClick={() => { setReversingEntryId(e.id); setReversalReason(''); }}
+                              title="Reversar poliza"
+                              className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() => toggleEntry(e.id)}
                             className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors"
@@ -1728,6 +1761,42 @@ const AccountingPage: React.FC = () => {
                         >
                           Cancelar
                         </button>
+                      </div>
+                    )}
+
+                    {/* Reverse confirm */}
+                    {reversingEntryId === e.id && (
+                      <div className="mx-5 mb-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                        <div className="flex items-start gap-3">
+                          <RotateCcw className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm text-amber-800 mb-2">
+                              Esto publica una poliza nueva con las partidas invertidas de {e.entry_number}. No borra ni edita la original.
+                            </p>
+                            <input
+                              type="text"
+                              value={reversalReason}
+                              onChange={(ev) => setReversalReason(ev.target.value)}
+                              placeholder="Motivo de la reversa (obligatorio)"
+                              className="w-full px-3 py-1.5 text-sm border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-3 justify-end">
+                          <button
+                            onClick={() => { setReversingEntryId(null); setReversalReason(''); }}
+                            className="px-3 py-1.5 bg-white text-gray-600 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={() => handleReverseEntry(e.id)}
+                            disabled={reversingId === e.id || !reversalReason.trim()}
+                            className="px-3 py-1.5 bg-amber-500 text-white text-xs font-medium rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                          >
+                            {reversingId === e.id ? 'Reversando...' : 'Reversar'}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
