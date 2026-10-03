@@ -51,6 +51,18 @@ export async function cancelExternalSale(sale:ExternalSale,reason:string) {
 export async function generateExternalQr(id:string) {
  const {data,error}=await supabase.rpc('generate_external_sale_qr',{p_id:id}); if(error) throw error; return data as string;
 }
+// Envia el correo con el QR (y los asientos asignados). Un error del servidor llega como "non-2xx" sin detalle:
+// el motivo real (p. ej. "Espera un minuto antes de reenviar") viene en el cuerpo de la respuesta y se rescata aqui.
+export async function sendExternalQrEmail(saleId:string) {
+ const {data,error}=await supabase.functions.invoke('send-external-sale-qr',{body:{external_sale_id:saleId}});
+ if(error) {
+  let message=error.message;
+  const ctx=(error as {context?:Response}).context;
+  if(ctx&&typeof ctx.json==='function') {try {const body=await ctx.json();if(body?.error)message=String(body.error);} catch {/* cuerpo ilegible: se queda el mensaje generico */}}
+  throw new Error(message);
+ }
+ if(!data?.success) throw new Error(data?.error??'No se pudo enviar el correo');
+}
 export function externalQrUrl(sale: Pick<ExternalSale,'tour_id'|'slot_id'>, token:string) {
  const url=new URL('/agency/agenda',window.location.origin);
  url.searchParams.set('tour',sale.tour_id); if(sale.slot_id) url.searchParams.set('slot',sale.slot_id);

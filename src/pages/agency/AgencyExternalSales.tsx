@@ -8,8 +8,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Banknote, CalendarDays, ClipboardList, FilterX, HandCoins, Info, Mail, Pencil, Plus, QrCode, Users, Wallet, XCircle } from 'lucide-react';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
-import { loadExternalSales, loadOperations, cancelExternalSale, generateExternalQr, externalQrUrl, errorText } from '../../lib/externalSales';
+import { loadExternalSales, loadOperations, cancelExternalSale, generateExternalQr, externalQrUrl, sendExternalQrEmail, errorText } from '../../lib/externalSales';
 import { CHANNELS, EXTERNAL_NOTICE } from '../../types/externalSales';
 import type { ExternalSale } from '../../types/externalSales';
 import ExternalSaleForm from '../../components/external-sales/ExternalSaleForm';
@@ -86,8 +85,7 @@ export default function AgencyExternalSales() {
   async function showQr(s: ExternalSale) { const token = await generateExternalQr(s.id); setQr({ url: externalQrUrl(s, token), sale: s }); }
   async function sendQr(s: ExternalSale) {
     if (!s.operational_email_authorized) throw new Error('Registra primero la autorización de correo operativo.');
-    const { data, error } = await supabase.functions.invoke('send-external-sale-qr', { body: { external_sale_id: s.id } });
-    if (error || !data?.success) throw new Error(data?.error ?? error?.message ?? 'No se pudo enviar el correo');
+    await sendExternalQrEmail(s.id);
     setMessage('QR enviado con la marca de tu agencia.'); setQr(null);
   }
   function clearFilters() { setTour(''); setChannel(''); setStatus(''); setPayment(''); }
@@ -227,7 +225,7 @@ export default function AgencyExternalSales() {
         </div>
       )}
 
-      {form && <ExternalSaleForm key={form === 'new' ? 'new' : form.id} operations={operations.data ?? []} existing={form === 'new' ? undefined : form} onClose={() => setForm(null)} onSaved={(id, warning) => { setForm(null); const extra = warning ? ' ' + warning : ''; setMessage('Venta externa guardada. Ya puedes generar o enviar el QR de check-in.' + extra); void run(async () => { await sales.refetch(); const s = (await loadExternalSales(agencyId!, from, to)).find(s => s.id === id); if (s) setMessage('Venta externa guardada. Genera o envía su QR desde la tarjeta de la venta.' + extra); }); }} />}
+      {form && <ExternalSaleForm key={form === 'new' ? 'new' : form.id} operations={operations.data ?? []} existing={form === 'new' ? undefined : form} onClose={() => setForm(null)} onSaved={(_id, warning, emailSent) => { setForm(null); const extra = warning ? ' ' + warning : ''; const saved = emailSent ? 'Venta externa guardada y QR enviado por correo al viajero.' : 'Venta externa guardada. Genera o envía su QR desde la tarjeta de la venta.'; setMessage(saved + extra); void run(async () => { await sales.refetch(); setMessage(saved + extra); }); }} />}
     </main>
   );
 }
