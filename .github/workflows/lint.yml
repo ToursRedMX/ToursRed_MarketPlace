@@ -439,6 +439,18 @@ jobs:
       - name: La comision estimada de Conekta usa la formula ya existente
         run: node scripts/test-comision-estimada.mjs
 
+      # MercadoPago manda la comision con IVA incluido en un solo monto
+      # (fee_details) y nunca escribia processor_fee_base/processor_fee_iva.
+      # Pendiente 6 de la entrada 33, cerrado en la entrada 39.
+      - name: processor_fee_base + processor_fee_iva reconstruyen el total de MP
+        run: node scripts/test-separar-fee-base-iva.mjs
+
+      # Conekta y MercadoPago no guardaban el payload crudo de su webhook en
+      # ninguna tabla, a diferencia de Stripe/PayPal/OpenPay. Pedido explicito
+      # de Axel al retomar el pendiente 6.
+      - name: Los cinco webhooks de pago guardan su payload crudo
+        run: node scripts/check-webhooks-guardan-payload.mjs
+
       # La conciliacion contable diaria mira 7 dias, no uno: sin traslape,
       # cualquier noche que el job falle pierde ese dia para siempre. La prueba
       # levanta un pg_cron de mentiras porque la extension no esta en CI, y lo

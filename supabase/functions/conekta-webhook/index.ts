@@ -132,6 +132,20 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Conekta webhook: type=${eventType}, order=${orderId}, event=${eventId}`);
 
+    // Rastro del evento crudo, igual que stripe-webhook y paypal-webhook: sin
+    // esto no hay forma de comprobar despues que Conekta de verdad no manda
+    // `charge.fee` (ver _shared/estimarComisionProcesador.ts) salvo leyendo el
+    // resultado ya procesado. No bloqueante: si falla el log, el webhook sigue.
+    try {
+      await supabase.from("webhook_logs").insert({
+        event_type: `conekta.${eventType}`,
+        event_id: eventId || null,
+        payload: body,
+      });
+    } catch (logErr) {
+      console.error("Error logging Conekta webhook event:", logErr);
+    }
+
     // ── Contracargos ────────────────────────────────────────────
     // Va ANTES del corte por `orderId`: en un contracargo, `data.object.id`
     // es el id del contracargo, no el de la orden, asi que ese corte lo
