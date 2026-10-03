@@ -574,6 +574,23 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d pagos -v ON_ERROR_STOP=1 -f test-pagar-gasto.sql
 
+      # No existia una forma de reversar una poliza publicada: las tres
+      # primeras reversas del ERP se armaron a mano, invirtiendo cada partida.
+      # reverse_accounting_entry automatiza eso y ademas amplia el permiso
+      # interno de create_accounting_entry_atomic (admin+contador, el mismo
+      # techo que ya tienen las politicas RLS de accounting_entries) — sin
+      # ese segundo cambio, un contador pasaria el primer permiso y chocaria
+      # con "Acceso no autorizado" dentro de la funcion que de verdad escribe.
+      - name: Verify an accounting entry can be reversed
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS reversa;" -c "CREATE DATABASE reversa;"
+          cd scripts
+          psql -h localhost -U postgres -d reversa -v ON_ERROR_STOP=1 -f test-reversa-contable.sql
+
       # El parche de `create_booking_atomic` es un replace de dos trozos exactos
       # sobre una funcion de 743 lineas, asi que la unica prueba que vale algo es
       # la que corre contra el texto REAL: con una funcion inventada el replace
