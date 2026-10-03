@@ -41,7 +41,7 @@ const SlotCalendarPicker: React.FC<SlotCalendarPickerProps> = ({ tour, selectedD
       (data as TourSlot[] || []).forEach((slot) => {
         const dateKey = slot.slot_date;
         const existing = map.get(dateKey);
-        const available = slot.available_count != null ? slot.available_count : Math.max(0, slot.capacity - slot.booked_count);
+        const available = slot.available_count ?? 0;
         if (!existing) {
           map.set(dateKey, {
             date: dateKey,

@@ -256,37 +256,9 @@ const TourDetailPage: React.FC = () => {
 
     const fetchAvailability = async () => {
       try {
-        // Lugares libres = suma de los horarios FUTUROS activos. Hasta el
-        // 02-oct-2026 se usaba get_tour_availability(tour), que resta las
-        // reservas de TODAS las fechas contra la capacidad de UN viaje:
-        // Teotihuacan salia "Agotado" con 34 reservas acumuladas y su proximo
-        // horario a 5 de 20. La misma funcion hacia que stripe-webhook no
-        // confirmara reservas ya cobradas.
-        const hoy = new Date().toISOString().slice(0, 10);
-        const { data: horarios, error: errorHorarios } = await supabase
-          .from('tour_slots')
-          .select('capacity, booked_count')
-          .eq('tour_id', tour.id)
-          .eq('status', 'activo')
-          .gte('slot_date', hoy);
-
-        if (errorHorarios) {
-          console.error('Error fetching tour slots for availability:', errorHorarios);
-          return;
-        }
-
-        if (horarios && horarios.length > 0) {
-          setTotalCapacity(horarios.reduce((s, h) => s + (Number(h.capacity) || 0), 0));
-          setAvailableSpots(horarios.reduce(
-            (s, h) => s + Math.max(0, (Number(h.capacity) || 0) - (Number(h.booked_count) || 0)),
-            0,
-          ));
-          return;
-        }
-
-        // Tour sin horarios generados: se conserva el calculo anterior.
+        // Unified server inventory includes external sales, blocks and active holds.
         const { data, error } = await supabase
-          .rpc('get_tour_availability', { p_tour_id: tour.id });
+          .rpc('get_tour_inventory_summary', { p_tour_id: tour.id });
 
         if (error) {
           console.error('Error fetching availability from RPC:', error);

@@ -9,6 +9,9 @@
 
 project_id = "ToursRed_MarketPlace"
 
+[functions."send-external-sale-qr"]
+verify_jwt = false # requireUser validates the user; RPC validates agency permissions.
+
 [functions."check-login-risk"]
 verify_jwt = false
 

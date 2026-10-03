@@ -297,6 +297,8 @@ const NavBar: React.FC = () => {
     if (info.permissions.canViewTours || info.permissions.canEditTours || info.permissions.canManageTours) items.push({ to: '/agency/tours', label: 'Tours' });
     if (info.permissions.canManageDestinations) items.push({ to: '/agency/destinations', label: 'Destinos' });
     if (info.permissions.canViewBookings) items.push({ to: '/agency/bookings', label: 'Reservas' });
+    if (info.permissions.canViewBookings || info.permissions.canViewReports || info.permissions.canScanCheckin) items.push({ to: '/agency/agenda', label: 'Agenda' });
+    if (info.permissions.canViewBookings || (info.permissions.canManageTours && info.permissions.canViewFinancials)) items.push({ to: '/agency/external-sales', label: 'Ventas externas' });
     if (info.permissions.canManageDiscountCodes) items.push({ to: '/agency/discount-codes', label: 'Codigos Descuento' });
     if (info.permissions.canViewFinancials) items.push({ to: '/agency/financials', label: 'Finanzas' });
     if (info.permissions.canViewReports) items.push({ to: '/agency/demanda', label: 'Demanda' });
@@ -322,6 +324,8 @@ const NavBar: React.FC = () => {
         { to: '/agency/tours', label: 'Tours' },
         { to: '/agency/destinations', label: 'Destinos' },
         { to: '/agency/bookings', label: 'Reservas' },
+        { to: '/agency/agenda', label: 'Agenda' },
+        { to: '/agency/external-sales', label: 'Ventas externas' },
         { to: '/agency/discount-codes', label: 'Codigos Descuento' },
         { to: '/agency/financials', label: 'Finanzas' },
         { to: '/agency/demanda', label: 'Demanda' },

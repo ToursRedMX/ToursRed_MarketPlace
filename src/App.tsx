@@ -51,6 +51,8 @@ import TravelerInvoices from './pages/traveler/TravelerInvoices';
 import AgencyDashboard from './pages/agency/AgencyDashboard';
 import AgencyTours from './pages/agency/AgencyTours';
 import AgencyBookings from './pages/agency/AgencyBookings';
+import AgencyAgenda from './pages/agency/AgencyAgenda';
+import AgencyExternalSales from './pages/agency/AgencyExternalSales';
 import AgencyProfile from './pages/agency/AgencyProfile';
 import AgencyDestinations from './pages/agency/AgencyDestinations';
 import AgencyDiscountCodes from './pages/agency/AgencyDiscountCodes';
@@ -398,6 +400,11 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/agency/agenda"
+            element={<ProtectedRoute allowedRoles={[UserRole.AGENCY]}><AgencyAgenda /></ProtectedRoute>}
+          />
+          <Route path="/agency/external-sales" element={<ProtectedRoute allowedRoles={[UserRole.AGENCY]}><AgencyExternalSales /></ProtectedRoute>} />
           <Route
             path="/agency/bookings"
             element={
