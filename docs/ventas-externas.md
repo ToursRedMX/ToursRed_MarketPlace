@@ -1,6 +1,6 @@
 # Ventas externas y Agenda operativa — PR #316
 
-Estado: implementación en rama aislada `codex/trabajo-2026-10-02`. No aplicada al Supabase compartido. No se modifica la rama ni el worktree de Claude.
+Estado: migración 20261003035425 aplicada al Supabase compartido el 03-oct-2026 con autorización de Axel. Edge send-external-sale-qr desplegada; OPTIONS 200, ledger, seis tablas con RLS y cuatro políticas verificados. No se modifica la rama ni el worktree de Claude.
 
 ## Arquitectura inspeccionada
 
@@ -96,7 +96,7 @@ Typecheck frontend, Edge types (0 errores), guards, dependencies, comprobación 
 1. Revisar el PR y los resultados; aplicar la migración **por su versión de archivo** al entorno autorizado. Revisar el ledger/dry-run antes, sin aplicar migraciones ajenas de Claude.
 2. Desplegar send-external-sale-qr con config.toml y verificar OPTIONS.
 3. Publicar frontend después del esquema y probar en preview con dos agencias, staff y una reserva ToursRed. Enviar un correo operativo a una dirección de prueba autorizada.
-4. No se aplicaron cambios al Supabase remoto ni se mergeó main en esta tarea.
+4. Migración y Edge desplegadas el 03-oct-2026. La validación visual y un correo real autorizado permanecen como comprobaciones operativas posteriores.
 
 El módulo utiliza salidas ya definidas. Un tour recurrente sin slots o sin fecha fija necesita configurar primero sus salidas en la herramienta existente. No inventa capacidad por fecha para tours que actualmente no la tienen. No asigna un asiento numerado a la venta externa: consume cupo; los asientos físicos específicos siguen siendo la función existente. El check-in externo es por grupo. No hay reembolsos ni cobros externos automáticos. La edición tras check-in está bloqueada para preservar evidencia.
 
