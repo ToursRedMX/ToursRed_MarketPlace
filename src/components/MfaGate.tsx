@@ -20,6 +20,10 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [factorId, setFactorId] = useState<string>('');
+  const [useRecoveryMode, setUseRecoveryMode] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [isUsingRecoveryCode, setIsUsingRecoveryCode] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState('');
 
   const checkMfaStatus = useCallback(async () => {
     if (!user) {
@@ -241,6 +245,60 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
     }
   }, [factorId, challengeCode]);
 
+  // use-recovery-code borra el factor TOTP atascado y cierra todas las
+  // sesiones del usuario -- la sesion local tambien queda invalida del lado
+  // del servidor, asi que signOut() + mandar a login es lo correcto, no
+  // seguir en este componente esperando un estado que ya no puede pasar.
+  const useRecoveryCode = useCallback(async () => {
+    setError('');
+    if (!recoveryCode.trim()) {
+      setError('Ingresa tu codigo de recuperacion.');
+      return;
+    }
+    setIsUsingRecoveryCode(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/use-recovery-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ code: recoveryCode.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Codigo de recuperacion invalido.');
+
+      setRecoveryMessage(data.message || 'Codigo validado. Inicia sesion de nuevo para configurar un nuevo dispositivo.');
+      await supabase.auth.signOut();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo validar el codigo de recuperacion.');
+    } finally {
+      setIsUsingRecoveryCode(false);
+    }
+  }, [recoveryCode]);
+
+  if (recoveryMessage) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-200 px-4 py-8">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mb-4 mx-auto">
+            <ShieldCheck className="w-8 h-8 text-green-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900">Dispositivo desvinculado</h1>
+          <p className="text-slate-500 mt-2 text-sm">{recoveryMessage}</p>
+          <button
+            onClick={() => { window.location.href = '/login'; }}
+            className="mt-6 w-full flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-blue-700 transition-colors"
+          >
+            Ir a iniciar sesion
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (state === 'loading' || state === 'not_required' || state === 'passed') {
     return <>{children}</>;
   }
@@ -345,7 +403,7 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
           </div>
         )}
 
-        {state === 'needs_challenge' && (
+        {state === 'needs_challenge' && !useRecoveryMode && (
           <div className="space-y-4">
             {!factorId ? (
               <button
@@ -383,8 +441,57 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
                   {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
                   Verificar
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setUseRecoveryMode(true); setError(''); }}
+                  className="w-full text-sm text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  ¿Perdiste tu dispositivo? Usa un codigo de recuperacion
+                </button>
               </>
             )}
+          </div>
+        )}
+
+        {state === 'needs_challenge' && useRecoveryMode && (
+          <div className="space-y-4">
+            <div className="bg-amber-50 rounded-xl p-4 flex gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-slate-600">
+                Al usar un codigo de recuperacion, tu dispositivo actual se desvincula y se cierran todas tus sesiones activas. Tendras que iniciar sesion de nuevo y configurar un dispositivo nuevo.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Codigo de recuperacion</label>
+              <input
+                type="text"
+                value={recoveryCode}
+                onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
+                placeholder="TR-XXXX-XXXX-XXXX"
+                className="w-full text-center text-lg tracking-widest font-mono border border-slate-300 rounded-xl py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                autoFocus
+              />
+            </div>
+            {error && (
+              <div className="flex items-center gap-2 text-red-600 text-sm">
+                <AlertTriangle className="w-4 h-4" /> {error}
+              </div>
+            )}
+            <button
+              onClick={useRecoveryCode}
+              disabled={isUsingRecoveryCode || !recoveryCode.trim()}
+              className="w-full flex items-center justify-center gap-2 bg-green-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              {isUsingRecoveryCode ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+              Usar codigo de recuperacion
+            </button>
+            <button
+              type="button"
+              onClick={() => { setUseRecoveryMode(false); setRecoveryCode(''); setError(''); }}
+              className="w-full text-sm text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Volver a ingresar el codigo de mi app autenticadora
+            </button>
           </div>
         )}
 
