@@ -672,6 +672,14 @@ jobs:
       - name: El codigo de verificacion de correo se genera en el servidor
         run: node scripts/test-codigo-verificacion-servidor.mjs
 
+      # Pendiente 3 de la entrada 33: 6 caracteres sin exigir nada mas, igual
+      # en 6 lugares (y dos mas ya habian subido a 8 por su cuenta, cada una
+      # con su propia copia). Centralizado en politicaContrasena.ts; minimo
+      # 8 + mayuscula + minuscula + numero en los ~20 lugares que crean o
+      # cambian una contrasena elegida por una persona.
+      - name: La politica de contrasena es la misma en todos lados, y subio a 8
+        run: node scripts/test-politica-contrasena.mjs
+
       - name: Run ESLint (el veredicto lo da el paso siguiente)
         run: |
           # bash corre con -e: sin set +e, eslint saliendo != 0 aborta el step.

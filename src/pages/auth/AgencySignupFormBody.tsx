@@ -595,7 +595,7 @@ const AgencySignupFormBody: React.FC<Props> = ({
                   <div className="mt-1 relative">
                     <input
                       type={showPassword ? 'text' : 'password'} value={formData.password} required
-                      autoComplete="new-password" minLength={6}
+                      autoComplete="new-password" minLength={8}
                       onChange={e => onChange('password', e.target.value)}
                       className={`${inputClass} pr-10`}
                     />
@@ -604,13 +604,14 @@ const AgencySignupFormBody: React.FC<Props> = ({
                       {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
                   </div>
+                  <p className="mt-1 text-xs text-gray-500">Mínimo 8 caracteres, con mayúscula, minúscula y número</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Confirmar Contraseña *</label>
                   <div className="mt-1 relative">
                     <input
                       type={showConfirmPassword ? 'text' : 'password'} value={formData.confirmPassword} required
-                      autoComplete="new-password" minLength={6}
+                      autoComplete="new-password" minLength={8}
                       onChange={e => onChange('confirmPassword', e.target.value)}
                       className={`${inputClass} pr-10`}
                     />

@@ -6,6 +6,7 @@ import { useFieldAvailability } from '../../hooks/useFieldAvailability';
 import { validarRfcAgencia } from '../../lib/validarRfcAgencia';
 import AgencySignupFormBody, { AgencyFormData, defaultAgencyFormData } from './AgencySignupFormBody';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
+import { validarContrasena } from '../../lib/politicaContrasena';
 
 const MicrosoftIcon = (
   <svg viewBox="0 0 23 23" className="w-5 h-5" aria-hidden="true">
@@ -68,6 +69,9 @@ const AzureAgencySignupPage: React.FC = () => {
     if (!apellidoPaterno.trim()) { setError('El apellido paterno es obligatorio'); setIsLoading(false); return; }
     if (!sexo) { setError('El sexo es obligatorio'); setIsLoading(false); return; }
     if (password !== confirmPassword) { setError('Las contraseñas no coinciden'); setIsLoading(false); return; }
+
+    const errorContrasena = validarContrasena(password);
+    if (errorContrasena) { setError(errorContrasena); setIsLoading(false); return; }
     if (!agencyName.trim()) { setError('El nombre de la agencia es obligatorio'); setIsLoading(false); return; }
     if (!website.trim()) { setError('El sitio web o página de Facebook es obligatorio'); setIsLoading(false); return; }
     if (!rfc.trim()) { setError('El RFC es obligatorio'); setIsLoading(false); return; }

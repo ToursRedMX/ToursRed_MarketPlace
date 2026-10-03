@@ -10,6 +10,7 @@ import AgencySignupFormBody, {
   defaultAgencyFormData,
 } from './AgencySignupFormBody';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
+import { validarContrasena } from '../../lib/politicaContrasena';
 
 const AgencySignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -52,6 +53,9 @@ const AgencySignupPage: React.FC = () => {
     } = formData;
 
     if (password.trim() !== confirmPassword.trim()) { setError('Las contraseñas no coinciden'); setIsLoading(false); return; }
+
+    const errorContrasena = validarContrasena(password);
+    if (errorContrasena) { setError(errorContrasena); setIsLoading(false); return; }
     if (!firstName.trim()) { setError('El nombre es obligatorio'); setIsLoading(false); return; }
     if (!apellidoPaterno.trim()) { setError('El apellido paterno es obligatorio'); setIsLoading(false); return; }
     if (!sexo) { setError('El sexo es obligatorio'); setIsLoading(false); return; }

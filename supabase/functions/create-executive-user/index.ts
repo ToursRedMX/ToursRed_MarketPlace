@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import { checkAal2Required, aal2Response } from '../_shared/aal2Check.ts';
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { validarContrasena } from "../_shared/politicaContrasena.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,6 +74,13 @@ Deno.serve(async (req: Request) => {
 
     if (!email || !password || !first_name) {
       return new Response(JSON.stringify({ error: 'email, password y first_name son requeridos' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const errorContrasena = validarContrasena(password);
+    if (errorContrasena) {
+      return new Response(JSON.stringify({ error: errorContrasena }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

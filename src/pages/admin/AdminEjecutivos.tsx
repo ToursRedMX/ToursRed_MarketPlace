@@ -7,6 +7,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { validarContrasena } from '../../lib/politicaContrasena';
 
 interface Executive {
   id: string;
@@ -120,7 +121,8 @@ export default function AdminEjecutivos() {
         }).eq('id', editingExec.id);
         if (error) throw error;
       } else {
-        if (!form.password || form.password.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+        const errorContrasena = form.password ? validarContrasena(form.password) : 'La contraseña es requerida.';
+        if (errorContrasena) throw new Error(errorContrasena);
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('Sesión expirada. Vuelve a iniciar sesión.');
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-executive-user`, {
@@ -322,7 +324,7 @@ export default function AdminEjecutivos() {
                 {!editingExec && (
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Contraseña temporal *</label>
-                    <input type="text" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="Mínimo 6 caracteres" />
+                    <input type="text" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="Mínimo 8 caracteres, con mayúscula, minúscula y número" />
                   </div>
                 )}
                 <div>

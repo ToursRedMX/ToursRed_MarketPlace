@@ -7,6 +7,7 @@ import { useFieldAvailability } from '../../hooks/useFieldAvailability';
 import TurnstileWidget from '../../components/TurnstileWidget';
 import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
+import { validarContrasena } from '../../lib/politicaContrasena';
 
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -179,6 +180,13 @@ const SignupPage: React.FC = () => {
 
     if (password !== confirmPassword) {
       setError('Las contraseñas no coinciden');
+      setIsLoading(false);
+      return;
+    }
+
+    const errorContrasena = validarContrasena(password);
+    if (errorContrasena) {
+      setError(errorContrasena);
       setIsLoading(false);
       return;
     }
@@ -912,6 +920,7 @@ const SignupPage: React.FC = () => {
                   onChange={handleInputChange}
                   autoComplete="new-password"
                   required
+                  minLength={8}
                   className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                 />
                 <button
@@ -926,6 +935,7 @@ const SignupPage: React.FC = () => {
                   )}
                 </button>
               </div>
+              <p className="mt-1 text-xs text-gray-500">Mínimo 8 caracteres, con mayúscula, minúscula y número</p>
             </div>
 
             <div>

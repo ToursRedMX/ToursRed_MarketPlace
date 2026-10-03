@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { validarContrasena } from '../lib/politicaContrasena';
 
 interface FirstLoginPasswordGateProps {
   userId: string;
@@ -17,11 +18,9 @@ export default function FirstLoginPasswordGate({ userId, onPasswordChanged }: Fi
   const [success, setSuccess] = useState(false);
 
   const validate = (): string | null => {
-    if (newPassword.length < 8) return 'La contraseña debe tener al menos 8 caracteres.';
+    const errorContrasena = validarContrasena(newPassword);
+    if (errorContrasena) return errorContrasena;
     if (newPassword !== confirmPassword) return 'Las contraseñas no coinciden.';
-    if (!/[A-Z]/.test(newPassword)) return 'La contraseña debe incluir al menos una mayúscula.';
-    if (!/[a-z]/.test(newPassword)) return 'La contraseña debe incluir al menos una minúscula.';
-    if (!/[0-9]/.test(newPassword)) return 'La contraseña debe incluir al menos un número.';
     return null;
   };
 
