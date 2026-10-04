@@ -10,6 +10,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface CancelledTravelerRow {
+  nombre: string;
+  categoria_viajero: string;
+  precio_aplicado: number;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -97,7 +103,7 @@ Deno.serve(async (req: Request) => {
     const commissionRate = platformSettings?.agency_commission_percentage || 15;
     const appUrl = platformSettings?.platform_url || "https://toursredmx.netlify.app";
 
-    const travelers: any[] = pc.travelers_cancelled || [];
+    const travelers: CancelledTravelerRow[] = pc.travelers_cancelled || [];
     const categoryLabels: Record<string, string> = {
       adulto: 'Adulto',
       nino: 'Niño',
@@ -122,7 +128,7 @@ Deno.serve(async (req: Request) => {
       paymentInfo = `<strong>Recibirá $${Number(pc.amount_to_agency).toFixed(2)}</strong> (70% del 50% retenido) en su próximo depósito de comisiones.`;
     }
 
-    const travelersRows = travelers.map((t: any) => `
+    const travelersRows = travelers.map((t) => `
       <tr>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; color: #1f2937; font-size: 14px;">${t.nombre}</td>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-size: 14px;">${categoryLabels[t.categoria_viajero] || t.categoria_viajero}</td>

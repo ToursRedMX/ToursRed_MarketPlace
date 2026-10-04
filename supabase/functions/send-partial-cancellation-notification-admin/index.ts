@@ -10,6 +10,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface CancelledTravelerRow {
+  nombre: string;
+  categoria_viajero: string;
+  precio_aplicado: number;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -94,7 +100,7 @@ Deno.serve(async (req: Request) => {
 
     const commissionRate = platformSettings?.agency_commission_percentage || 15;
 
-    const travelers: any[] = pc.travelers_cancelled || [];
+    const travelers: CancelledTravelerRow[] = pc.travelers_cancelled || [];
     const categoryLabels: Record<string, string> = {
       adulto: 'Adulto',
       nino: 'Niño',
@@ -109,7 +115,7 @@ Deno.serve(async (req: Request) => {
 
     const activeCount = booking.active_travelers_count ?? ((booking.travelers_count || 0) - travelers.length);
 
-    const travelersRows = travelers.map((t: any) => `
+    const travelersRows = travelers.map((t) => `
       <tr>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 13px; color: #1f2937;">${t.nombre}</td>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 13px; color: #6b7280;">${categoryLabels[t.categoria_viajero] || t.categoria_viajero}</td>
