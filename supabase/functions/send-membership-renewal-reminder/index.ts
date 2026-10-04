@@ -88,7 +88,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const appUrl = platformSettings?.platform_url || "https://toursredmx.netlify.app";
-    const serviceFeeExemptionLimit = parseFloat((platformSettings as any)?.membership_service_fee_exemption_monthly_limit) || 500;
+    const serviceFeeExemptionLimit = parseFloat(platformSettings?.membership_service_fee_exemption_monthly_limit) || 500;
     const planName = planType === 'monthly' ? 'Mensual' : 'Anual';
 
     const formattedRenewalDate = new Date(renewalDate).toLocaleDateString('es-MX', {

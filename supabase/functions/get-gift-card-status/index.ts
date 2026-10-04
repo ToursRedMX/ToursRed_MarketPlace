@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const result: Record<string, any> = {
+    const result: Record<string, unknown> = {
       id: gc.id,
       amount: Number(gc.amount) || 0,
       discount_amount: Number(gc.discount_amount) || 0,
@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (tx?.metadata) {
-        const meta = tx.metadata as Record<string, any>;
+        const meta = tx.metadata as Record<string, unknown>;
         result.payment_instructions = {
           openpay_method: meta.openpay_method || null,
           openpay_status: meta.openpay_status || null,

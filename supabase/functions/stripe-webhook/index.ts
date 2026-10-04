@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
@@ -12,6 +12,7 @@ import { asentarCobroStripe, estadoSegunStripe } from "../_shared/cobrosStripe.t
 import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
 import { motivoParaNoConfirmar } from "../_shared/cupoAlConfirmar.ts";
 import { centavosDeSuscripcion, lineasCompletasDeFactura, repartirComision } from "../_shared/repartoCobroMixto.ts";
+import { DefinicionParcialidad } from "../_shared/planesDePago.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,7 +43,7 @@ function resolveInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   return typeof bruto === 'string' ? bruto : bruto.id;
 }
 
-function resolvePlanType(metadata: any, periodStart: number, periodEnd: number, fallback: string = 'monthly'): string {
+function resolvePlanType(metadata: Stripe.Metadata | null | undefined, periodStart: number, periodEnd: number, fallback: string = 'monthly'): string {
   if (metadata?.plan_type === 'annual' || metadata?.plan_type === 'monthly') return metadata.plan_type;
   const daysDiff = (periodEnd - periodStart) / 86400;
   return daysDiff >= 360 ? 'annual' : fallback;
@@ -85,14 +86,20 @@ function getStripePaymentForm(paymentMethodType: string, cardFunding?: string | 
  * si Stripe parte la comision en varias lineas.
  */
 async function getStripeProcessorFee(
-  stripe: any,
+  stripe: Stripe,
   paymentIntentId: string,
 ): Promise<{ fee: number; net: number; base: number | null; iva: number | null } | null> {
   try {
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
       expand: ['latest_charge.balance_transaction'],
     });
-    const balanceTxn = pi.latest_charge?.balance_transaction;
+    // El `expand` de arriba garantiza en runtime que las dos vengan como
+    // objeto completo, no como id en string -- los tipos de Stripe no pueden
+    // saber eso por si solos, asi que se angosta explicito en vez de `any`.
+    const charge = pi.latest_charge && typeof pi.latest_charge !== 'string' ? pi.latest_charge : null;
+    const balanceTxn = charge?.balance_transaction && typeof charge.balance_transaction !== 'string'
+      ? charge.balance_transaction
+      : null;
     if (!balanceTxn) return null;
 
     const fee = balanceTxn.fee / 100;
@@ -259,7 +266,7 @@ Deno.serve(async (req) => {
       payload: event
     });
 
-    const getPaymentMethodType = async (session: any): Promise<{ type: string; cardFunding: string | null }> => {
+    const getPaymentMethodType = async (session: Stripe.Checkout.Session): Promise<{ type: string; cardFunding: string | null }> => {
       try {
         if (session.payment_intent) {
           const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent as string);
@@ -330,7 +337,7 @@ Deno.serve(async (req) => {
               break;
             }
 
-            const userId = (suppReq.bookings as any).user_id;
+            const userId = (suppReq.bookings as unknown as { user_id: string }).user_id;
             const subtotal = Number(suppReq.unit_price) * suppReq.quantity;
             const serviceChargePct = 5; // same default used when creating the record
             const grossServiceCharge = parseFloat((subtotal * serviceChargePct / 100).toFixed(2));
@@ -498,7 +505,7 @@ Deno.serve(async (req) => {
                 .maybeSingle();
 
               const pricePerDay = parseFloat(platformSettings?.travel_insurance_price_per_day_per_traveler ?? '79');
-              const tourData = (bk?.tours as any);
+              const tourData = (bk?.tours as unknown as { start_date: string; end_date: string } | null);
               const refDate = bk?.selected_date || tourData?.start_date;
               const endDate = tourData?.end_date;
               let tourDays = 1;
@@ -728,7 +735,13 @@ Deno.serve(async (req) => {
               break;
             }
 
-            const bookingRow = planData.bookings as any;
+            const bookingRow = planData.bookings as unknown as {
+              id: string;
+              user_id: string;
+              tour_id: string;
+              booking_code: string | null;
+              tours: { name: string } | null;
+            };
 
             // Load overdue and pending installments ordered by due_date (oldest first)
             const { data: installments } = await supabase
@@ -1013,8 +1026,8 @@ Deno.serve(async (req) => {
             } else {
               console.warn(`Invoice ${session.invoice} sin payment_intent en invoice.payments`);
             }
-          } catch (invoiceErr: any) {
-            console.error(`Error retrieving invoice for payment_intent: ${invoiceErr.message}`);
+          } catch (invoiceErr) {
+            console.error(`Error retrieving invoice for payment_intent: ${mensajeDeError(invoiceErr)}`);
           }
         }
 
@@ -1217,11 +1230,11 @@ Deno.serve(async (req) => {
                     user_id: membershipUserId,
                     stripe_customer_id: subscriptionData.customer as string,
                     stripe_subscription_id: subscriptionId,
-                    plan_type: resolvePlanType(subscriptionData.metadata, (subscriptionData as any).items.data[0].current_period_start, (subscriptionData as any).items.data[0].current_period_end, membershipPlan),
+                    plan_type: resolvePlanType(subscriptionData.metadata, subscriptionData.items.data[0].current_period_start, subscriptionData.items.data[0].current_period_end, membershipPlan),
                     status: statusMapMixed[subscriptionData.status] || 'active',
                     start_date: new Date((subscriptionData.start_date as number) * 1000).toISOString(),
-                    current_period_start: new Date((subscriptionData as any).items.data[0].current_period_start * 1000).toISOString(),
-                    current_period_end: new Date((subscriptionData as any).items.data[0].current_period_end * 1000).toISOString(),
+                    current_period_start: new Date(subscriptionData.items.data[0].current_period_start * 1000).toISOString(),
+                    current_period_end: new Date(subscriptionData.items.data[0].current_period_end * 1000).toISOString(),
                     cancel_at_period_end: subscriptionData.cancel_at_period_end || false,
                     cancelled_at: subscriptionData.canceled_at ? new Date(subscriptionData.canceled_at * 1000).toISOString() : null,
                     service_fee_exemption_reset_date: nms.toISOString(),
@@ -1251,9 +1264,9 @@ Deno.serve(async (req) => {
                           body: JSON.stringify({
                             email: userData.email,
                             firstName: userData.first_name || 'Viajero',
-                            planType: resolvePlanType(subscriptionData.metadata, (subscriptionData as any).items.data[0].current_period_start, (subscriptionData as any).items.data[0].current_period_end, membershipPlan),
-                            startDate: new Date((subscriptionData as any).items.data[0].current_period_start * 1000).toISOString(),
-                            endDate: new Date((subscriptionData as any).items.data[0].current_period_end * 1000).toISOString(),
+                            planType: resolvePlanType(subscriptionData.metadata, subscriptionData.items.data[0].current_period_start, subscriptionData.items.data[0].current_period_end, membershipPlan),
+                            startDate: new Date(subscriptionData.items.data[0].current_period_start * 1000).toISOString(),
+                            endDate: new Date(subscriptionData.items.data[0].current_period_end * 1000).toISOString(),
                           }),
                         }
                       );
@@ -1608,10 +1621,16 @@ Deno.serve(async (req) => {
                     .maybeSingle();
 
                   if (bkForPlan?.selected_payment_mode === 'plan') {
-                    const tour = bkForPlan.tours as any;
+                    const tour = bkForPlan.tours as unknown as {
+                      payment_option?: string;
+                      payment_plan_mode?: string;
+                      installment_definitions?: DefinicionParcialidad[];
+                      start_date?: string;
+                      full_payment_days_before_departure?: number;
+                    } | null;
                     const totalPrice = parseFloat(bkForPlan.total_price) || 0;
                     const depositPaid = parseFloat(bkForPlan.deposit_amount) || 0;
-                    const defs: any[] = tour?.installment_definitions || [];
+                    const defs: DefinicionParcialidad[] = tour?.installment_definitions || [];
 
                     if (defs.length > 0) {
                       const { data: existingPlan } = await supabase
@@ -1640,7 +1659,7 @@ Deno.serve(async (req) => {
                           const bookingDate = new Date();
                           const departureDate = tour?.start_date ? new Date(tour.start_date) : null;
 
-                          const installments = defs.map((def: any, idx: number) => {
+                          const installments = defs.map((def: DefinicionParcialidad, idx: number) => {
                             const amount = Math.round(totalPrice * (def.pct_of_total / 100) * 100) / 100;
                             let dueDate: Date;
                             if (def.specific_date) {
@@ -2430,11 +2449,11 @@ Deno.serve(async (req) => {
                   user_id: userId,
                   stripe_customer_id: subscriptionData.customer as string,
                   stripe_subscription_id: subscriptionData.id,
-                  plan_type: resolvePlanType(subscriptionData.metadata, (subscriptionData as any).items.data[0].current_period_start, (subscriptionData as any).items.data[0].current_period_end),
+                  plan_type: resolvePlanType(subscriptionData.metadata, subscriptionData.items.data[0].current_period_start, subscriptionData.items.data[0].current_period_end),
                   status: statusMapLocal[subscriptionData.status] || 'active',
                   start_date: new Date((subscriptionData.start_date as number) * 1000).toISOString(),
-                  current_period_start: new Date((subscriptionData as any).items.data[0].current_period_start * 1000).toISOString(),
-                  current_period_end: new Date((subscriptionData as any).items.data[0].current_period_end * 1000).toISOString(),
+                  current_period_start: new Date(subscriptionData.items.data[0].current_period_start * 1000).toISOString(),
+                  current_period_end: new Date(subscriptionData.items.data[0].current_period_end * 1000).toISOString(),
                   cancel_at_period_end: subscriptionData.cancel_at_period_end || false,
                   cancelled_at: subscriptionData.canceled_at ? new Date(subscriptionData.canceled_at * 1000).toISOString() : null,
                   service_fee_exemption_reset_date: nms.toISOString(),
@@ -2488,8 +2507,8 @@ Deno.serve(async (req) => {
                       email: userData.email,
                       firstName: userData.first_name || 'Viajero',
                       planType: currentMembership.plan_type || 'monthly',
-                      startDate: new Date((subscriptionData as any).items.data[0].current_period_start * 1000).toISOString(),
-                      endDate: new Date((subscriptionData as any).items.data[0].current_period_end * 1000).toISOString(),
+                      startDate: new Date(subscriptionData.items.data[0].current_period_start * 1000).toISOString(),
+                      endDate: new Date(subscriptionData.items.data[0].current_period_end * 1000).toISOString(),
                     }),
                   }
                 );
@@ -2869,7 +2888,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        const expiredUpdate: Record<string, any> = {
+        const expiredUpdate: Record<string, unknown> = {
           status: 'cancelled',
           payment_status: 'expired',
         };
@@ -2943,7 +2962,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        const failedUpdate: Record<string, any> = {
+        const failedUpdate: Record<string, unknown> = {
           status: 'cancelled',
           payment_status: 'failed',
         };
@@ -3340,7 +3359,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function createStripeRefundFeeAccountingEntry(supabase: any, refundId: string, feeAmount: number) {
+async function createStripeRefundFeeAccountingEntry(supabase: SupabaseClient, refundId: string, feeAmount: number) {
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth() + 1;

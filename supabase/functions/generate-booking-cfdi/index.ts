@@ -562,7 +562,7 @@ Deno.serve(async (req: Request) => {
       .not("paid_at", "is", null);
 
     if (paidOptionals && paidOptionals.length > 0) {
-      const optionalsTotal = paidOptionals.reduce((sum: number, opt: any) => sum + (opt.total_paid || opt.subtotal), 0);
+      const optionalsTotal = paidOptionals.reduce((sum: number, opt: { total_paid: number | null; subtotal: number }) => sum + (opt.total_paid || opt.subtotal), 0);
       exactTotal = Math.round((exactTotal + optionalsTotal) * 100) / 100;
     }
 

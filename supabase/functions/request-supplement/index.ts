@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
         .eq("id", rpcResult.tour_id)
         .maybeSingle();
 
-      const agencyUserId = (tourData?.agencies as any)?.user_id;
+      const agencyUserId = (tourData?.agencies as unknown as { user_id?: string } | null)?.user_id;
       if (agencyUserId) {
         await supabase.from("notifications").insert({
           user_id: agencyUserId,

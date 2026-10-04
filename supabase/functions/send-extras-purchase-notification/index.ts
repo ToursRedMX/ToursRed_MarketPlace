@@ -2,12 +2,33 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+interface NotificationTour {
+  name: string;
+  destination: string | null;
+  start_date: string;
+  end_date: string;
+  image_url: string | null;
+  agencies: { name: string; contact_email: string | null } | null;
+}
+
+interface NotificationUser {
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+}
+
+interface TourOptionalServiceInfo {
+  name: string;
+  description: string | null;
+}
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -125,9 +146,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const tour = booking.tours as any;
-    const agency = tour?.agencies as any;
-    const user = booking.users as any;
+    const tour = booking.tours as unknown as NotificationTour | null;
+    const agency = tour?.agencies;
+    const user = booking.users as unknown as NotificationUser | null;
 
     const travelerName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || "Viajero";
     const travelerEmail = user?.email || "";
@@ -264,7 +285,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const serviceInfo = bos.tour_optional_services as any;
+      const serviceInfo = bos.tour_optional_services as unknown as TourOptionalServiceInfo;
       const serviceName = serviceInfo?.name || "Servicio opcional";
       const subtotal = Number(bos.subtotal || Number(bos.unit_price) * bos.quantity);
 
@@ -385,7 +406,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: "extra_type no valido" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("send-extras-purchase-notification error:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -396,7 +417,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: mensajeDeError(err) }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

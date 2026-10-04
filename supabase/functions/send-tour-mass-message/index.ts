@@ -115,7 +115,7 @@ Deno.serve(async (req: Request) => {
         .eq("is_active", true)
         .maybeSingle();
 
-      const perms = staffRecord?.agency_staff_permissions as any;
+      const perms = staffRecord?.agency_staff_permissions as unknown as { can_manage_tours?: boolean; can_view_messages?: boolean } | null;
       const hasPermission = perms?.can_manage_tours || perms?.can_view_messages;
 
       if (!staffRecord || !hasPermission) {

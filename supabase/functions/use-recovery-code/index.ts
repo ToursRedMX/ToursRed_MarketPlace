@@ -155,7 +155,7 @@ Deno.serve(async (req: Request) => {
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
+  } catch (err) {
     if (sentryDsn) {
       Sentry.captureException(err, {
         tags: {

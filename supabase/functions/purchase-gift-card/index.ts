@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import Stripe from "npm:stripe@22.3.0";
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
@@ -265,7 +265,7 @@ Deno.serve(async (req: Request) => {
       productDescription = `${productDescription} | Precio original: $${amount} MXN | Descuento: -$${discountAmount} MXN`;
     }
 
-    const lineItems: any[] = [
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         price_data: {
           currency: "mxn",
@@ -345,7 +345,7 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function generateGiftCardCode(supabase: any): Promise<string> {
+async function generateGiftCardCode(supabase: SupabaseClient): Promise<string> {
   const { data, error } = await supabase.rpc("generate_gift_card_code");
 
   if (error) {

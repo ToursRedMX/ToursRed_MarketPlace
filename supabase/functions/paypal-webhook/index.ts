@@ -1,9 +1,45 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { avisosCon } from "../_shared/avisosDePago.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
+
+// Forma minima de lo que de verdad se lee de `resource`: PayPal manda un
+// objeto distinto por cada event_type (captura, reembolso, disputa...), asi
+// que es la union laxa de los campos que los distintos `case` del switch
+// leen, no el esquema completo de ninguno de los recursos reales de PayPal.
+interface PayPalMoney {
+  value?: string;
+  currency_code?: string;
+}
+
+interface PayPalResource {
+  id?: string;
+  status?: string;
+  amount?: PayPalMoney;
+  seller_receivable_breakdown?: { paypal_fee?: PayPalMoney };
+  purchase_units?: Array<{ payments?: { refunds?: Array<{ id?: string }> } }>;
+  links?: Array<{ rel?: string; href?: string }>;
+  dispute_id?: string;
+  dispute_amount?: PayPalMoney;
+  dispute_state?: string;
+  dispute_outcome?: { outcome_code?: string };
+  disputed_transactions?: Array<{
+    gross_amount?: PayPalMoney;
+    seller_transaction_id?: string;
+    buyer_transaction_id?: string;
+  }>;
+  reason?: string;
+  seller_response_due_date?: string;
+}
+
+interface PayPalEvent {
+  event_type: string;
+  id?: string;
+  resource?: PayPalResource;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,7 +57,7 @@ if (sentryDsn) {
   });
 }
 
-async function getPayPalAccessToken(supabase: any): Promise<{ token: string; base: string }> {
+async function getPayPalAccessToken(supabase: SupabaseClient): Promise<{ token: string; base: string }> {
   let paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID");
   let paypalClientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
   let isSandbox = Deno.env.get("PAYPAL_SANDBOX") === "true";
@@ -138,7 +174,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    let event: any;
+    let event: PayPalEvent;
     try {
       event = JSON.parse(rawBody);
     } catch {
@@ -177,17 +213,17 @@ Deno.serve(async (req: Request) => {
         // Look up payment_refunds by processor_refund_id
         const { data: refundRecord } = await supabase
           .from("payment_refunds")
-          .select("id, processor_fee_lost, payment_processor")
+          .select("id, status, processor_fee_lost, payment_processor")
           .eq("processor_refund_id", refundId)
           .maybeSingle();
 
         if (!refundRecord) {
           // Try lookup by metadata — the refund ID might be in a different field
-          const captureId = resource?.links?.find((l: any) => l.rel === "up")?.href?.split("/").pop();
+          const captureId = resource?.links?.find((l) => l.rel === "up")?.href?.split("/").pop();
           if (captureId) {
             const { data: byCapture } = await supabase
               .from("payment_refunds")
-              .select("id, processor_fee_lost, payment_processor")
+              .select("id, status, processor_fee_lost, payment_processor")
               .eq("processor_original_reference", captureId)
               .eq("payment_processor", "paypal")
               .maybeSingle();
@@ -359,7 +395,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ received: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error in paypal-webhook:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -371,13 +407,20 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: err.message || "Error interno" }),
+      JSON.stringify({ error: mensajeDeError(err) || "Error interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
 
-async function confirmPayPalRefund(supabase: any, refundRecord: any, processorRefundId: string, event: any) {
+interface PaymentRefundRecord {
+  id: string;
+  status: string;
+  processor_fee_lost: number | string | null;
+  payment_processor: string;
+}
+
+async function confirmPayPalRefund(supabase: SupabaseClient, refundRecord: PaymentRefundRecord, processorRefundId: string, event: PayPalEvent) {
   // Idempotency check: if already succeeded, skip to prevent duplicate accounting entries
   if (refundRecord.status === "succeeded") {
     console.log(`PayPal refund ${processorRefundId} already confirmed, skipping duplicate webhook`);
@@ -418,9 +461,9 @@ async function confirmPayPalRefund(supabase: any, refundRecord: any, processorRe
     .eq("id", refundRecord.id);
 
   // Create accounting entry for non-recoverable processor fee
-  if (parseFloat(refundRecord.processor_fee_lost) > 0) {
+  if (parseFloat(String(refundRecord.processor_fee_lost || 0)) > 0) {
     try {
-      await createRefundFeeAccountingEntry(supabase, refundRecord.id, parseFloat(refundRecord.processor_fee_lost), "paypal");
+      await createRefundFeeAccountingEntry(supabase, refundRecord.id, parseFloat(String(refundRecord.processor_fee_lost || 0)), "paypal");
     } catch (acctErr) {
       console.error("Error creating accounting entry for PayPal refund fee:", acctErr);
     }
@@ -479,13 +522,15 @@ async function confirmPayPalRefund(supabase: any, refundRecord: any, processorRe
   console.log(`PayPal refund ${processorRefundId} confirmed for payment_refund ${refundRecord.id}`);
 }
 
-async function createRefundFeeAccountingEntry(supabase: any, refundId: string, feeAmount: number, processor: string) {
+async function createRefundFeeAccountingEntry(supabase: SupabaseClient, refundId: string, feeAmount: number, processor: string) {
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth() + 1;
 
-  // Generate entry number
-  const { data: entryCount } = await supabase
+  // Generate entry number. `head: true` no devuelve filas -- el conteo va en
+  // `count`, no en `data` (asi lo tenia ya, bien, el gemelo de stripe-webhook;
+  // aqui `data` siempre fue null y el folio nunca avanzaba de 00001).
+  const { count: entryCount } = await supabase
     .from("accounting_entries")
     .select("id", { count: "exact", head: true })
     .eq("period_year", year)
@@ -498,7 +543,12 @@ async function createRefundFeeAccountingEntry(supabase: any, refundId: string, f
     .from("accounting_entries")
     .insert({
       entry_number: entryNumber,
-      entry_type: "pago",
+      // Era "pago", que el CHECK de accounting_entries no admite (solo
+      // ingreso/egreso/diario/apertura) -- el mismo bug ya encontrado y
+      // corregido en el gemelo de stripe-webhook, nunca propagado aqui. El
+      // insert fallaba siempre, en silencio (el catch de abajo solo hace
+      // console.error): 0 filas con entry_number 'AS-%' en la base.
+      entry_type: "egreso",
       entry_date: today.toISOString().split("T")[0],
       period_year: year,
       period_month: month,

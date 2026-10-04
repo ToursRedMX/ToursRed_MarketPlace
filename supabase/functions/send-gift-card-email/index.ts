@@ -16,6 +16,23 @@ interface SendGiftCardEmailRequest {
   sendToPurchaser?: boolean;
 }
 
+interface GiftCardForEmail {
+  amount: number;
+  expires_at: string;
+  code: string;
+  recipient_email: string | null;
+  recipient_name: string | null;
+  personal_message: string | null;
+  purchaser_name: string;
+  purchaser_email: string;
+  payment_status: string;
+  email_sent_at: string | null;
+  purchased_at: string | null;
+  created_at: string;
+  payment_provider: string | null;
+  discount_amount: number | null;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -280,7 +297,7 @@ Deno.serve(async (req: Request) => {
 
 async function sendGiftCardEmail(
   apiKey: string,
-  giftCard: any,
+  giftCard: GiftCardForEmail,
   recipientEmail: string,
   recipientName: string,
   redeemUrl: string,
@@ -508,7 +525,7 @@ Válida hasta: ${expiryDate}
 async function sendAdminNotificationEmail(
   apiKey: string,
   adminEmail: string,
-  giftCard: any,
+  giftCard: GiftCardForEmail,
   appUrl: string
 ): Promise<void> {
   const formattedAmount = new Intl.NumberFormat("es-MX", {
@@ -564,7 +581,7 @@ async function sendAdminNotificationEmail(
           ${giftCard.recipient_email ? `<div class="info-row"><span class="info-label">Receptor:</span><span class="info-value">${giftCard.recipient_name || 'N/A'} (${giftCard.recipient_email})</span></div>` : ''}
           <div class="info-row"><span class="info-label">Fecha de compra:</span><span class="info-value">${purchaseDate}</span></div>
           <div class="info-row"><span class="info-label">Proveedor de pago:</span><span class="info-value">${giftCard.payment_provider || 'stripe'}</span></div>
-          ${giftCard.discount_amount > 0 ? `<div class="info-row"><span class="info-label">Descuento aplicado:</span><span class="info-value">${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(giftCard.discount_amount)}</span></div>` : ''}
+          ${(giftCard.discount_amount ?? 0) > 0 ? `<div class="info-row"><span class="info-label">Descuento aplicado:</span><span class="info-value">${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(giftCard.discount_amount ?? 0)}</span></div>` : ''}
         </div>
 
         <p style="font-size: 14px; color: #6B7280;">

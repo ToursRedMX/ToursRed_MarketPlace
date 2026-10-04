@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import Stripe from "npm:stripe@22.3.0";
 import { isConfigured as isOpenpayConfigured, getDashboardUrl, getMerchantId, createOrReuseCustomer as createOrReuseOpenpayCustomer, createSpeiCharge, createCashCharge, createCardCheckoutCharge } from "../_shared/openpay.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -353,7 +354,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const amountInCents = Math.round(finalAmount * 100);
-      const orderPayload: any = {
+      const orderPayload: Record<string, unknown> = {
         currency: "MXN",
         amount: amountInCents,
         customer_info: { name: user.email || "Agencia", email: user.email || "no-email@toursred.com" },
@@ -434,8 +435,8 @@ Deno.serve(async (req: Request) => {
         customerIdOp = await createOrReuseOpenpayCustomer(supabase, user.id, {
           first_name: user.email?.split("@")[0] || "Agencia", email: user.email || "no-email@toursred.com",
         });
-      } catch (e: any) {
-        return new Response(JSON.stringify({ error: e.message }), {
+      } catch (e) {
+        return new Response(JSON.stringify({ error: mensajeDeError(e) }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -455,13 +456,13 @@ Deno.serve(async (req: Request) => {
             charge_context: "featured_slot", charge_reference_id: slot_id,
           });
         }
-      } catch (e: any) {
-        return new Response(JSON.stringify({ error: e.message }), {
+      } catch (e) {
+        return new Response(JSON.stringify({ error: mensajeDeError(e) }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const paymentMethodMetadataFs: Record<string, any> = {
+      const paymentMethodMetadataFs: Record<string, unknown> = {
         openpay_method, openpay_charge_id: chargeOp.id, openpay_status: chargeOp.status,
       };
       if (openpay_method === "spei") {

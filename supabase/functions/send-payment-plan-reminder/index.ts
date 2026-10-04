@@ -9,6 +9,23 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface ReminderTour {
+  id: string;
+  name: string;
+}
+
+interface ReminderBooking {
+  id: string;
+  user_id: string;
+  booking_code: string;
+  tours: ReminderTour;
+}
+
+interface ReminderPaymentPlan {
+  id: string;
+  bookings: ReminderBooking;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -37,7 +54,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { installment_id, notification_type = "payment_plan_reminder" } = await req.json();
+    const { installment_id, notification_type = "payment_plan_reminder", deadline_date } = await req.json();
     if (!installment_id) {
       return new Response(JSON.stringify({ error: "installment_id es requerido" }), {
         status: 400,
@@ -69,9 +86,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const plan = (installment.booking_payment_plans as any);
-    const booking = plan.bookings as any;
-    const tour = booking.tours as any;
+    const plan = installment.booking_payment_plans as unknown as ReminderPaymentPlan;
+    const booking = plan.bookings;
+    const tour = booking.tours;
 
     const amountPending = parseFloat(
       (Number(installment.amount_due) + Number(installment.penalty_applied) - Number(installment.amount_paid)).toFixed(2)
@@ -88,8 +105,7 @@ Deno.serve(async (req: Request) => {
       title = `Pago en mora crítica: ${tour.name}`;
       message = `Tu parcialidad "${installment.label}" por ${amountPending.toFixed(2)} MXN lleva más de 30 días vencida. Tu reserva puede ser cancelada.`;
     } else if (notification_type === "payment_plan_final_deadline_warning") {
-      const deadlineDate = (req as any).body?.deadline_date;
-      const deadlineStr = deadlineDate ? new Date(deadlineDate).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" }) : "16 días antes de la fecha del tour";
+      const deadlineStr = deadline_date ? new Date(deadline_date).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" }) : "16 días antes de la fecha del tour";
       title = `Última oportunidad: liquida tu reserva o será cancelada — ${tour.name}`;
       message = `Tienes hasta el ${deadlineStr} para liquidar el anticipo y todas tus parcialidades pendientes. Si no completas el pago de tu plan, tu reserva será cancelada automáticamente y el monto pagado se reembolsará a tu monedero ToursRed Cash (excepto cargos de servicio).`;
     } else {
@@ -119,7 +135,7 @@ Deno.serve(async (req: Request) => {
       .select("smtp_api_key, contact_email, platform_url")
       .maybeSingle();
 
-    const appUrl = (emailSettings as any)?.platform_url || "https://toursredmx.netlify.app";
+    const appUrl = emailSettings?.platform_url || "https://toursredmx.netlify.app";
 
     const { data: traveler } = await supabase
       .from("users")

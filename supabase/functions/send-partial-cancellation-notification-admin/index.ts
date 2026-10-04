@@ -2,12 +2,19 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+interface CancelledTravelerRow {
+  nombre: string;
+  categoria_viajero: string;
+  precio_aplicado: number;
+}
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -93,7 +100,7 @@ Deno.serve(async (req: Request) => {
 
     const commissionRate = platformSettings?.agency_commission_percentage || 15;
 
-    const travelers: any[] = pc.travelers_cancelled || [];
+    const travelers: CancelledTravelerRow[] = pc.travelers_cancelled || [];
     const categoryLabels: Record<string, string> = {
       adulto: 'Adulto',
       nino: 'Niño',
@@ -108,7 +115,7 @@ Deno.serve(async (req: Request) => {
 
     const activeCount = booking.active_travelers_count ?? ((booking.travelers_count || 0) - travelers.length);
 
-    const travelersRows = travelers.map((t: any) => `
+    const travelersRows = travelers.map((t) => `
       <tr>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 13px; color: #1f2937;">${t.nombre}</td>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 13px; color: #6b7280;">${categoryLabels[t.categoria_viajero] || t.categoria_viajero}</td>
@@ -280,7 +287,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ success: true, message: 'Email enviado al admin' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error:', error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -292,7 +299,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: mensajeDeError(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

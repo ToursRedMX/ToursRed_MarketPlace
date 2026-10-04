@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -105,7 +106,7 @@ Deno.serve(async (req: Request) => {
       .order("created_at", { ascending: false });
 
     // Build a map: txId -> latest refund (first one since we ordered desc)
-    const refundMap: Record<string, any> = {};
+    const refundMap: Record<string, { id: string; payment_transaction_id: string; status: string; requested_amount: number; processor_refund_id: string | null; failure_reason: string | null }> = {};
     for (const r of existingRefunds || []) {
       if (!refundMap[r.payment_transaction_id]) {
         refundMap[r.payment_transaction_id] = r;
@@ -165,7 +166,7 @@ Deno.serve(async (req: Request) => {
         .select("id, tour_supplements(name)")
         .in("id", supplementRefIds);
       for (const s of supps || []) {
-        supplementNames[String(s.id)] = (s as any).tour_supplements?.name || "Suplemento";
+        supplementNames[String(s.id)] = (s.tour_supplements as unknown as { name?: string } | null)?.name || "Suplemento";
       }
     }
 
@@ -181,7 +182,7 @@ Deno.serve(async (req: Request) => {
         .select("id, description, tour_optional_services(name)")
         .in("id", optionalRefIds);
       for (const o of opts || []) {
-        const name = (o as any).tour_optional_services?.name || o.description || "Servicio opcional";
+        const name = (o.tour_optional_services as unknown as { name?: string } | null)?.name || o.description || "Servicio opcional";
         optionalNames[String(o.id)] = name;
       }
     }
@@ -220,10 +221,10 @@ Deno.serve(async (req: Request) => {
         .select("id, plan_id, amount, status")
         .in("id", installmentTxIds);
 
-      const planIds = [...new Set((planTxRows || []).map((r: any) => r.plan_id))];
+      const planIds = [...new Set((planTxRows || []).map((r) => r.plan_id))];
       txToPlanIdMap = {};
       for (const r of (planTxRows || [])) {
-        txToPlanIdMap[String((r as any).id)] = String((r as any).plan_id);
+        txToPlanIdMap[String(r.id)] = String(r.plan_id);
       }
 
       if (planIds.length > 0) {
@@ -259,8 +260,8 @@ Deno.serve(async (req: Request) => {
           .eq("status", "completed");
 
         for (const r of (allPlanTx || [])) {
-          const key = String((r as any).plan_id);
-          planTotalAmountMap[key] = (planTotalAmountMap[key] || 0) + Number((r as any).amount || 0);
+          const key = String(r.plan_id);
+          planTotalAmountMap[key] = (planTotalAmountMap[key] || 0) + Number(r.amount || 0);
         }
       }
     }
@@ -353,7 +354,7 @@ Deno.serve(async (req: Request) => {
     });
 
     return jsonResponse({ lines });
-  } catch (err: any) {
+  } catch (err) {
     console.error("get-refundable-lines error:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -364,6 +365,6 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return jsonResponse({ error: err.message || "Internal server error" }, 500);
+    return jsonResponse({ error: mensajeDeError(err) || "Internal server error" }, 500);
   }
 });

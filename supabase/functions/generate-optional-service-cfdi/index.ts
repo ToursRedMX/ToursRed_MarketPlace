@@ -11,6 +11,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface OptionalServiceCfdiTourOptionalService {
+  id: string;
+  name: string;
+  tour_id: string;
+}
+
+interface OptionalServiceCfdiBooking {
+  id: string;
+  user_id: string;
+  tour_id: string;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -176,8 +188,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const tourId = (bosRecord.tour_optional_service as any)?.tour_id;
-    const userId = (bosRecord.bookings as any)?.user_id;
+    const cfdiTourOptionalService = bosRecord.tour_optional_service as unknown as OptionalServiceCfdiTourOptionalService;
+    const cfdiBosBooking = bosRecord.bookings as unknown as OptionalServiceCfdiBooking;
+    const tourId = cfdiTourOptionalService?.tour_id;
+    const userId = cfdiBosBooking?.user_id;
 
     // Load agency
     const { data: tourData } = await supabase.from("tours").select("agency_id").eq("id", tourId).maybeSingle();
@@ -297,7 +311,7 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    const serviceName = (bosRecord.tour_optional_service as any)?.name || "Servicio opcional";
+    const serviceName = cfdiTourOptionalService?.name || "Servicio opcional";
     const ref = booking_optional_service_id.slice(0, 8).toUpperCase();
     const serie = (settings.cfdi_serie_booking || "A") + "X";
 

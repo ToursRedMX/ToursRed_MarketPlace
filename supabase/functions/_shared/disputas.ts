@@ -43,9 +43,19 @@
  * `scripts/test-disputas.mjs`.
  */
 
-/** Tipo estructural minimo: lo unico que este modulo usa del cliente. */
+/**
+ * Tipo estructural minimo: lo unico que este modulo usa del cliente.
+ *
+ * `any` aqui es deliberado: el query builder real de supabase-js tiene
+ * decenas de sobrecargas segun el generic `Database`, y reproducirlo a
+ * mano da "Type instantiation is excessively deep" en cuanto un llamador
+ * pasa su cliente real tipado (visto el 03-oct-2026 al intentarlo en
+ * `cobrosStripe.ts`).
+ */
 export interface ClienteMinimo {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   from(tabla: string): any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rpc(nombre: string, args?: Record<string, unknown>): any;
 }
 

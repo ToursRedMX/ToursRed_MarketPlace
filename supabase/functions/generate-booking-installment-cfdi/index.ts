@@ -11,6 +11,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface InstallmentCfdiTour {
+  id: string;
+  name: string;
+  agency_id: string;
+}
+
+interface InstallmentCfdiBooking {
+  id: string;
+  user_id: string;
+  booking_code: string;
+  tour_id: string;
+  tax_treatment: string | null;
+  exempt_ratio: number | null;
+  tours: InstallmentCfdiTour;
+}
+
+interface InstallmentCfdiPaymentPlan {
+  id: string;
+  bookings: InstallmentCfdiBooking;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -206,9 +227,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const plan = (installment.booking_payment_plans as any);
-    const booking = plan.bookings as any;
-    const tour = booking.tours as any;
+    const plan = installment.booking_payment_plans as unknown as InstallmentCfdiPaymentPlan;
+    const booking = plan.bookings;
+    const tour = booking.tours;
 
     // --- Autorizacion ---
     // Los importes se leen de la parcialidad, no del body, asi que el dueno de

@@ -12,6 +12,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface SupplementPaymentBooking {
+  id: string;
+  user_id: string;
+  status: string;
+}
+
+interface SupplementPaymentTourSupplement {
+  id: string;
+  name: string;
+  tour_id: string;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -93,13 +105,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if ((suppReq.bookings as any)?.status === "cancellation_processing") {
+    const suppBooking = suppReq.bookings as unknown as SupplementPaymentBooking;
+    const suppTourSupplement = suppReq.tour_supplements as unknown as SupplementPaymentTourSupplement;
+
+    if (suppBooking?.status === "cancellation_processing") {
       return new Response(JSON.stringify({ error: "La reserva está en proceso de cancelación" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if ((suppReq.bookings as any).user_id !== user.id) {
+    if (suppBooking.user_id !== user.id) {
       return new Response(JSON.stringify({ error: "No autorizado" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -183,7 +198,7 @@ Deno.serve(async (req: Request) => {
     const supplementCommission = parseFloat((subtotal * supplementCommissionPct / 100).toFixed(2));
     const totalToPay = parseFloat((subtotal + netServiceCharge).toFixed(2));
 
-    const supplementName = (suppReq.tour_supplements as any)?.name ?? "Suplemento";
+    const supplementName = suppTourSupplement?.name ?? "Suplemento";
 
     const finalizePayment = async (method: string, intentId: string | null) => {
       let pointsEarned = 0;
@@ -656,7 +671,7 @@ Deno.serve(async (req: Request) => {
       const cancelUrl = `${origin}/traveler/bookings`;
       const amountInCents = Math.round(totalToPay * 100);
 
-      const orderPayload: any = {
+      const orderPayload: Record<string, unknown> = {
         currency: "MXN",
         amount: amountInCents,
         customer_info: { name: conektaCustomerName, email: user.email || "no-email@toursred.com" },
@@ -694,7 +709,9 @@ Deno.serve(async (req: Request) => {
         const errorBody = await apiResponse.text();
         console.error("Conekta API error (supplement):", errorBody);
         let errorMsg = "Error al crear orden de Conekta";
-        try { const parsed = JSON.parse(errorBody); errorMsg = parsed?.details?.[0]?.message || parsed?.message || errorMsg; } catch {}
+        try { const parsed = JSON.parse(errorBody); errorMsg = parsed?.details?.[0]?.message || parsed?.message || errorMsg; } catch {
+          // errorBody no es JSON valido; se usa el mensaje generico de arriba.
+        }
         return new Response(JSON.stringify({ error: errorMsg }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

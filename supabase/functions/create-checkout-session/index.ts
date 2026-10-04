@@ -22,6 +22,61 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+interface OptionalServiceRow {
+  id: string;
+  service_kind: string | null;
+  description: string | null;
+  subtotal: number;
+  service_charge: number;
+  total_paid: number | null;
+  is_cancelled: boolean;
+  paid_at: string | null;
+}
+
+interface BookingForCheckout {
+  user_id: string;
+  travel_insurance_included: boolean;
+  travel_insurance_cost: number | null;
+  deposit_amount: number | null;
+  service_charge: number | null;
+  membership_purchased: boolean | null;
+  membership_plan: string | null;
+  membership_cost: number | null;
+}
+
+interface CheckoutLineItem {
+  price?: string;
+  price_data?: {
+    currency: string;
+    product_data: { name: string };
+    unit_amount: number;
+  };
+  quantity: number;
+  metadata?: Record<string, string>;
+}
+
+interface OptionalLineForCheckout {
+  id: string;
+  description: string;
+  service_kind: string;
+  subtotal: number;
+  service_charge: number;
+}
+
+interface CheckoutSessionConfig {
+  customer: string;
+  success_url: string;
+  cancel_url: string;
+  metadata: Record<string, string>;
+  mode?: "payment" | "subscription";
+  payment_method_types?: Stripe.Checkout.SessionCreateParams.PaymentMethodType[];
+  line_items?: CheckoutLineItem[];
+  subscription_data?: { metadata: Record<string, string> };
+  discounts?: { coupon: string }[];
+  payment_method_options?: Record<string, unknown>;
+  payment_intent_data?: { metadata: Record<string, string> };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -317,7 +372,7 @@ Deno.serve(async (req) => {
       customerId = customers.customer_id;
     }
 
-    const sessionConfig: any = {
+    const sessionConfig: CheckoutSessionConfig = {
       customer: customerId,
       // Estas dos venian del CUERPO de la peticion sin ninguna validacion:
       // quien llamaba podia fijar a donde se devuelve al viajero despues de
@@ -429,7 +484,7 @@ Deno.serve(async (req) => {
       }
 
       const unpaidOptionalsSub = (optDataSub || []).filter(
-        (opt: any) => opt.paid_at === null && Number(opt.subtotal) > 0
+        (opt: OptionalServiceRow) => opt.paid_at === null && Number(opt.subtotal) > 0
       );
 
       const { lineItems: desgloseItemsSub, sobrante: sobranteSuscripcion } = buildDesgloseLineItems(
@@ -506,7 +561,7 @@ Deno.serve(async (req) => {
       }
 
       const unpaidOptionals = (optionalServices || []).filter(
-        (opt: any) => opt.paid_at === null && Number(opt.subtotal) > 0
+        (opt: OptionalServiceRow) => opt.paid_at === null && Number(opt.subtotal) > 0
       );
 
       // Sin membresia, el tope de puntos/Cash del front no incluye nada mas
@@ -619,9 +674,9 @@ Deno.serve(async (req) => {
 // intento de pagar de menos, y en los dos casos lo correcto es no cobrar.
 const TOLERANCIA_MONTO_MXN = 1;
 
-function sumarLineas(lineas: any[]): number {
+function sumarLineas(lineas: CheckoutLineItem[]): number {
   const centavos = lineas.reduce(
-    (s: number, li: any) => s + Number(li?.price_data?.unit_amount || 0),
+    (s: number, li) => s + Number(li?.price_data?.unit_amount || 0),
     0
   );
   return Math.round(centavos) / 100;
@@ -632,7 +687,7 @@ function sumarLineas(lineas: any[]): number {
 // para detectar desacuerdo, nunca para fijar el precio.
 function validarMontoDelCliente(
   amount: number,
-  lineas: any[],
+  lineas: CheckoutLineItem[],
   bookingId: string
 ): string | null {
   const totalServidor = sumarLineas(lineas);
@@ -660,13 +715,13 @@ function validarMontoDelCliente(
 // Order of discount application: deposit → optionals → insurance → service charge.
 // The service charge line is protected last so it only absorbs leftover discount.
 function buildDesgloseLineItems(
-  booking: any,
-  unpaidOptionals: any[],
+  booking: BookingForCheckout,
+  unpaidOptionals: OptionalServiceRow[],
   pointsUsed: number,
   toursRedCashUsed: number,
   currency: string,
   description: string
-): { lineItems: any[]; sobrante: number } {
+): { lineItems: CheckoutLineItem[]; sobrante: number } {
   const totalDiscount = (Number(pointsUsed) || 0) / 100 + (Number(toursRedCashUsed) || 0);
 
   // --- Raw gross amounts (verified stored as pre-discount) ---
@@ -678,7 +733,7 @@ function buildDesgloseLineItems(
       : 0;
 
   // Optionals: subtotal is pure agency amount, service_charge is ToursRed's 5%
-  const optionalLines = unpaidOptionals.map((opt: any) => ({
+  const optionalLines: OptionalLineForCheckout[] = unpaidOptionals.map((opt) => ({
     id: opt.id,
     description: opt.description || (opt.service_kind === 'pickup' ? 'Pick Up' : opt.service_kind === 'language' ? 'Idioma/Intérprete' : 'Servicio opcional'),
     service_kind: opt.service_kind || 'optional_service',
@@ -686,7 +741,7 @@ function buildDesgloseLineItems(
     service_charge: Number(opt.service_charge) || 0,
   }));
 
-  const optionalsServiceChargeTotal = optionalLines.reduce((s: number, o: any) => s + o.service_charge, 0);
+  const optionalsServiceChargeTotal = optionalLines.reduce((s: number, o) => s + o.service_charge, 0);
 
   // Combined service charge line: tour's service charge + all optionals' service charges
   const serviceChargeCombinedRaw = serviceChargeTourRaw + optionalsServiceChargeTotal;
@@ -699,7 +754,7 @@ function buildDesgloseLineItems(
 
   // Optionals: apply discount across all subtotals proportionally is over-complex;
   // apply sequentially per optional for transparency
-  const optionalsAfterDiscount = optionalLines.map((o: any) => {
+  const optionalsAfterDiscount = optionalLines.map((o) => {
     if (remainingDiscount <= 0) return { ...o, final: o.subtotal };
     const applied = Math.min(o.subtotal, remainingDiscount);
     remainingDiscount = Math.max(0, Math.round((remainingDiscount - applied) * 100) / 100);
@@ -716,7 +771,7 @@ function buildDesgloseLineItems(
   remainingDiscount = Math.max(0, Math.round((remainingDiscount - serviceChargeCombinedRaw) * 100) / 100);
 
   // --- Build line items ---
-  const lineItems: any[] = [];
+  const lineItems: CheckoutLineItem[] = [];
 
   // 1. Depósito (tour portion) — pure, no service charge mixed in
   if (depositFinal > 0) {

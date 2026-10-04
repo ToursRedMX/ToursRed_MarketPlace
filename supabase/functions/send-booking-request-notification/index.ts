@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireUser } from "../_shared/auth.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -238,7 +239,7 @@ Deno.serve(async (req: Request) => {
       }
     );
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error sending booking request notification:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -252,7 +253,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || "Error al enviar la notificación"
+        error: mensajeDeError(error) || "Error al enviar la notificación"
       }),
       {
         status: 500,

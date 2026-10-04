@@ -4,6 +4,7 @@ import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 async function cancelStampedCfds(
   // Solo se usan .from() y .functions.invoke(). Pedir el cliente completo
@@ -239,18 +240,19 @@ Deno.serve(async (req: Request) => {
     try {
       const { data: paidSupplements } = await serviceClient
         .from("booking_supplements")
-        .select("id, tour_supplements(is_cancellable)")
+        .select("id, total_paid, tour_supplements(is_cancellable)")
         .eq("booking_id", booking_id)
         .eq("status", "paid");
 
       for (const supp of (paidSupplements || [])) {
-        if ((supp as any).tour_supplements?.is_cancellable !== false) {
+        const tourSupplement = supp.tour_supplements as unknown as { is_cancellable?: boolean } | null;
+        if (tourSupplement?.is_cancellable !== false) {
           await serviceClient.from("booking_supplements")
             .update({
               status: "cancelled",
               cancelled_at: new Date().toISOString(),
               cancelled_by: "tour_cancellation",
-              refund_amount: (supp as any).total_paid || 0,
+              refund_amount: supp.total_paid || 0,
               updated_at: new Date().toISOString(),
             })
             .eq("id", supp.id);
@@ -424,7 +426,7 @@ Deno.serve(async (req: Request) => {
       points_deducted: pointsDeducted,
       booking_status: "cancelled",
     });
-  } catch (e: any) {
+  } catch (e) {
     console.error("admin-finalize-cancellation error:", e);
     if (sentryDsn) {
       Sentry.captureException(e, {
@@ -435,7 +437,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return err(e.message || "Error interno", 500);
+    return err(mensajeDeError(e) || "Error interno", 500);
   }
 });
 

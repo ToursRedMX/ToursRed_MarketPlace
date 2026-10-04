@@ -4,6 +4,7 @@ import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta, vigilarResultado } from "../_shared/falloSilencioso.ts";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -127,8 +128,8 @@ Deno.serve(async (req: Request) => {
     let cancellationsProcessed = 0;
 
     for (const bookingRaw of bookings) {
-      const booking = bookingRaw as any;
-      const tour = booking.tours as any;
+      const booking = bookingRaw;
+      const tour = booking.tours as unknown as { id: string; name: string; start_date: string | null; tour_type: string };
 
       // Check payment plan status
       const { data: plan, error: planError } = await supabase
@@ -249,8 +250,8 @@ Deno.serve(async (req: Request) => {
         }
 
         for (const inst of (installments || [])) {
-          if ((inst as any).installment_number > 1) {
-            totalPaid += Number((inst as any).amount_paid || 0);
+          if (inst.installment_number > 1) {
+            totalPaid += Number(inst.amount_paid || 0);
           }
         }
 
@@ -271,7 +272,7 @@ Deno.serve(async (req: Request) => {
         }
 
         for (const tx of (ppTransactions || [])) {
-          totalServiceCharge += Number((tx as any).service_charge || 0);
+          totalServiceCharge += Number(tx.service_charge || 0);
         }
 
         // refundAmount = totalPaid directly (service charges are NOT subtracted —
@@ -453,7 +454,7 @@ Deno.serve(async (req: Request) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error in process-payment-plan-tour-deadline:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -464,7 +465,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return new Response(JSON.stringify({ error: err.message || "Internal server error" }), {
+    return new Response(JSON.stringify({ error: mensajeDeError(err) || "Internal server error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

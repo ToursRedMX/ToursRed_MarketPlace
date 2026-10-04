@@ -161,7 +161,20 @@ async function facturapiStamp(
   };
 }
 
-function resolveReceptor(traveler: any, fallbackCP: string): {
+interface TravelerFiscalData {
+  first_name?: string | null;
+  last_name?: string | null;
+  rfc?: string | null;
+  razon_social?: string | null;
+  regimen_fiscal?: string | null;
+  uso_cfdi?: string | null;
+  codigo_postal_fiscal?: string | null;
+  is_foreign_traveler?: boolean | null;
+  num_reg_id_trib?: string | null;
+  residencia_fiscal?: string | null;
+}
+
+function resolveReceptor(traveler: TravelerFiscalData | null, fallbackCP: string): {
   rfc: string; nombre: string; regimen: string; usoCfdi: string; cp: string;
   numRegIdTrib?: string; residenciaFiscal?: string;
 } {
@@ -186,7 +199,7 @@ function resolveReceptor(traveler: any, fallbackCP: string): {
       usoCfdi: "S01",
       cp: issuerPostalCode,
       numRegIdTrib: traveler.num_reg_id_trib,
-      residenciaFiscal: traveler.residencia_fiscal,
+      residenciaFiscal: traveler.residencia_fiscal ?? undefined,
     };
   }
   return {
@@ -241,7 +254,7 @@ Deno.serve(async (req: Request) => {
         id, booking_code, user_id, total_price, deposit_amount,
         travel_insurance_included, travel_insurance_cost, tax_treatment, exempt_ratio,
         tours (name),
-        agencies (id, rfc, razon_social, regimen_fiscal, codigo_postal_fiscal)
+        agencies (id, rfc, razon_social, regimen_fiscal, postal_code)
       `)
       .eq("id", booking_id)
       .maybeSingle();
@@ -264,7 +277,7 @@ Deno.serve(async (req: Request) => {
       .eq("booking_id", booking_id);
 
     const activeTravelersPrecioSum = (activeTravelers || []).reduce(
-      (sum: number, t: any) => sum + Number(t.precio_aplicado), 0
+      (sum: number, t: { precio_aplicado: number }) => sum + Number(t.precio_aplicado), 0
     );
     const activeTravelerCount = activeTravelers?.length || 0;
     const totalPrice = Number(booking.total_price) || 0;
@@ -330,12 +343,12 @@ Deno.serve(async (req: Request) => {
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const tourName = (booking as any).tours?.name || "";
+    const tourName = (booking.tours as unknown as { name?: string } | null)?.name || "";
     const bookingCode = booking.booking_code || booking_id;
 
-    const agency = (booking as any).agencies;
+    const agency = booking.agencies as unknown as { id: string; rfc?: string; razon_social?: string; regimen_fiscal?: string; postal_code?: string } | null;
     const needsTercero = agency?.rfc && agency.rfc !== rec.rfc;
-    if (needsTercero && (!agency.regimen_fiscal || !agency.codigo_postal_fiscal)) {
+    if (needsTercero && (!agency.regimen_fiscal || !agency.postal_code)) {
       return new Response(
         JSON.stringify({
           error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
@@ -343,12 +356,15 @@ Deno.serve(async (req: Request) => {
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const terceroAgencia = needsTercero && agency?.codigo_postal_fiscal
+    // needsTercero ya exige agency?.rfc truthy, y el early-return de arriba ya
+    // exige agency.regimen_fiscal truthy cuando needsTercero es true -- los
+    // non-null assertions reflejan esas dos validaciones, no las reemplazan.
+    const terceroAgencia = needsTercero && agency?.postal_code
       ? {
-          rfc: agency.rfc,
+          rfc: agency.rfc!,
           nombre: agency.razon_social || "Agencia",
-          regimen_fiscal: agency.regimen_fiscal,
-          domicilio_fiscal: agency.codigo_postal_fiscal,
+          regimen_fiscal: agency.regimen_fiscal!,
+          domicilio_fiscal: agency.postal_code,
         }
       : null;
 
@@ -375,7 +391,7 @@ Deno.serve(async (req: Request) => {
           newSeguroAmount = insuranceCost * insuranceRatio;
         }
       } else {
-        const txnAmount = Number((originalCfdi as any).booking_payment_plan_transactions?.amount) || 0;
+        const txnAmount = Number((originalCfdi.booking_payment_plan_transactions as unknown as { amount?: number } | null)?.amount) || 0;
         if (txnAmount <= 0) {
           console.warn(`Installment CFDI ${originalCfdi.id} has no transaction amount, skipping`);
           failureCount++;
@@ -437,7 +453,7 @@ Deno.serve(async (req: Request) => {
       // the same subtraction logic: total of the CFDI minus the tour and seguro amounts
       // that CFDI specifically represented.
       const originalTourAmount = isInstallment
-        ? (Number((originalCfdi as any).booking_payment_plan_transactions?.amount) || 0)
+        ? (Number((originalCfdi.booking_payment_plan_transactions as unknown as { amount?: number } | null)?.amount) || 0)
         : (originalCfdi.tour_amount != null ? Number(originalCfdi.tour_amount) : depositAmount);
       const originalSeguroAmount = (isDeposit && insuranceIncluded) ? insuranceCost : 0;
       const nonTourNonSeguro = Math.max(0,

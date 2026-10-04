@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.1
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -100,7 +101,12 @@ Deno.serve(async (req: Request) => {
 
     if (bookingError || !booking) return err("Reserva no encontrada");
 
-    const tour = (booking as any).tours as any;
+    const reserva = booking as unknown as {
+      has_payment_plan?: boolean | null;
+      travel_insurance_included?: boolean | null;
+      travel_insurance_cost?: number | string | null;
+    };
+    const tour = booking.tours as unknown as { id: string; name: string; start_date: string } | null;
     if (!tour) return err("Información del tour no encontrada");
 
     // Security: verify the caller belongs to the agency that owns this tour
@@ -133,7 +139,7 @@ Deno.serve(async (req: Request) => {
 
     // Include payment plan installments (installment_number > 1)
     let installmentsPaid = 0;
-    if ((booking as any).has_payment_plan) {
+    if (reserva.has_payment_plan) {
       const { data: installments } = await supabase
         .from("booking_payment_plan_installments")
         .select("installment_number, amount_paid")
@@ -141,8 +147,8 @@ Deno.serve(async (req: Request) => {
         .in("status", ["paid", "partially_paid"]);
 
       for (const inst of (installments || [])) {
-        if ((inst as any).installment_number > 1) {
-          installmentsPaid += Number((inst as any).amount_paid || 0);
+        if (inst.installment_number > 1) {
+          installmentsPaid += Number(inst.amount_paid || 0);
         }
       }
 
@@ -154,14 +160,14 @@ Deno.serve(async (req: Request) => {
         .eq("status", "completed");
 
       for (const tx of (ppTransactions || [])) {
-        originalServiceCharge += Number((tx as any).service_charge || 0);
+        originalServiceCharge += Number(tx.service_charge || 0);
       }
     }
     const principalPaid = originalDepositAmount + installmentsPaid;
 
     // Insurance refund
-    const insuranceRefund = (booking as any).travel_insurance_included
-      ? Number((booking as any).travel_insurance_cost || 0)
+    const insuranceRefund = reserva.travel_insurance_included
+      ? Number(reserva.travel_insurance_cost || 0)
       : 0;
 
     // Optional services refund
@@ -174,8 +180,8 @@ Deno.serve(async (req: Request) => {
     let optionalServicesRefundable = 0;
     let optionalServicesServiceCharge = 0;
     for (const bos of (optionalServicesData || [])) {
-      optionalServicesRefundable += Number((bos as any).total_paid || (bos as any).subtotal || 0);
-      optionalServicesServiceCharge += Number((bos as any).service_charge || 0);
+      optionalServicesRefundable += Number(bos.total_paid || bos.subtotal || 0);
+      optionalServicesServiceCharge += Number(bos.service_charge || 0);
     }
 
     // Total refund = principal + service charge + insurance + optionals
@@ -319,7 +325,7 @@ Deno.serve(async (req: Request) => {
       points_deducted: pointsDeducted,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("process-agency-booking-cancellation error:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -330,7 +336,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return err(error.message || "Error al procesar la cancelación");
+    return err(mensajeDeError(error) || "Error al procesar la cancelación");
   }
 });
 

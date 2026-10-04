@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
-import { politicaDelTour, salidaDelTour } from "../_shared/politicaCancelacion.ts";
+import { politicaDelTour, salidaDelTour, type TourConPolitica } from "../_shared/politicaCancelacion.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -121,7 +122,7 @@ Deno.serve(async (req: Request) => {
     const currentActiveCount = activeTravelers?.length || 0;
 
     // Validate that ALL traveler_ids belong to this booking's active travelers
-    const activeTravelerIds = new Set((activeTravelers || []).map((t: any) => t.id));
+    const activeTravelerIds = new Set((activeTravelers || []).map((t: { id: string }) => t.id));
     for (const tid of travelerIds) {
       if (!activeTravelerIds.has(tid)) {
         return err("Uno o más viajeros seleccionados no pertenecen a esta reserva o ya fueron cancelados");
@@ -134,21 +135,30 @@ Deno.serve(async (req: Request) => {
     }
 
     // Get the travelers to cancel (with precio_aplicado read from DB, not from client)
-    const travelersToCancel = (activeTravelers || []).filter((t: any) => travelerIds.includes(t.id));
+    const travelersToCancel = (activeTravelers || []).filter((t: { id: string }) => travelerIds.includes(t.id));
 
     // ── Politica: la MISMA del tour que la cancelacion total ──
     // Hasta el 25-sep-2026 aqui iban dias fijos (15+ -> 100%, 7-14 -> 50%,
     // <7 -> 0) y la total usaba la politica del tour: en un receptivo de 48 h,
     // quitar a un viajero 5 dias antes daba 0% y cancelar la reserva entera el
     // mismo dia daba 100%. Axel decidio que las dos usen la del tour.
-    const tour = (booking as any).tours as any;
     // Campos que usan la politica y el reparto, tipados en vez de `as any`.
     const reserva = booking as unknown as {
       points_used?: number | null;
       approval_status?: string | null;
       selected_date?: string | null;
       selected_time?: string | null;
+      total_price?: number | string | null;
+      deposit_amount?: number | string | null;
+      has_payment_plan?: boolean | null;
+      travel_insurance_included?: boolean | null;
+      travel_insurance_cost?: number | string | null;
+      points_earned?: number | string | null;
+      selected_seats?: number[] | null;
+      agency_id?: string | null;
+      agencies?: { id: string; user_id: string } | null;
     };
+    const tour = (booking as unknown as { tours: TourConPolitica & { id: string; name: string } }).tours;
     const salida = salidaDelTour(tour, reserva);
     if (!salida) return err("El tour no tiene fecha de inicio configurada");
     const hoursBeforeTour = (salida.salida.getTime() - Date.now()) / (1000 * 60 * 60);
@@ -158,16 +168,16 @@ Deno.serve(async (req: Request) => {
       tour, hoursBeforeTour, reserva.approval_status === "pending");
 
     const fullPriceOfCancelledTravelers = travelersToCancel.reduce(
-      (sum: number, t: any) => sum + Number(t.precio_aplicado),
+      (sum: number, t: { precio_aplicado: number }) => sum + Number(t.precio_aplicado),
       0
     );
 
-    const totalPrice = Number((booking as any).total_price) || 0;
-    const depositAmount = Number((booking as any).deposit_amount) || totalPrice;
+    const totalPrice = Number(reserva.total_price) || 0;
+    const depositAmount = Number(reserva.deposit_amount) || totalPrice;
 
     // Include installments paid (excluding the anticipo, installment_number > 1) when a payment plan exists
     let totalPrincipalPaid = depositAmount;
-    if ((booking as any).has_payment_plan) {
+    if (reserva.has_payment_plan) {
       const { data: installments } = await supabase
         .from("booking_payment_plan_installments")
         .select("amount_paid, status")
@@ -175,7 +185,7 @@ Deno.serve(async (req: Request) => {
         .in("status", ["paid", "partially_paid"])
         .gt("installment_number", 1);
       const installmentsPaid = (installments || []).reduce(
-        (sum: number, inst: any) => sum + Number(inst.amount_paid),
+        (sum: number, inst: { amount_paid: number }) => sum + Number(inst.amount_paid),
         0
       );
       totalPrincipalPaid = depositAmount + installmentsPaid;
@@ -185,8 +195,8 @@ Deno.serve(async (req: Request) => {
     const originalPartialAmount = Math.round(fullPriceOfCancelledTravelers * depositRatio * 100) / 100;
 
     // Calculate proportional travel insurance refund
-    const insuranceIncluded = (booking as any).travel_insurance_included === true;
-    const insuranceCost = Number((booking as any).travel_insurance_cost) || 0;
+    const insuranceIncluded = reserva.travel_insurance_included === true;
+    const insuranceCost = Number(reserva.travel_insurance_cost) || 0;
     let insuranceRefund = 0;
     if (insuranceIncluded && insuranceCost > 0) {
       // Total traveler count (including already-cancelled) is the base for per-traveler insurance
@@ -207,7 +217,7 @@ Deno.serve(async (req: Request) => {
       .select("agency_commission_percentage")
       .maybeSingle();
 
-    const commissionRate = ((platformSettings as any)?.agency_commission_percentage || 15) / 100;
+    const commissionRate = ((platformSettings as { agency_commission_percentage?: number } | null)?.agency_commission_percentage || 15) / 100;
 
     // Cada medio en su moneda: la parte de los puntos que corresponde a estos
     // viajeros vuelve como puntos, lo demas como Cash. La regla vive en
@@ -308,7 +318,7 @@ Deno.serve(async (req: Request) => {
         tour_start_date: salida.fechaParaRegistro,
         days_before_tour: policy.daysBeforeTour,
         cancellation_policy_type: policy.policyType,
-        travelers_cancelled: travelersToCancel.map((t: any) => ({
+        travelers_cancelled: travelersToCancel.map((t: { id: string; nombre: string; categoria_viajero: string; precio_aplicado: number }) => ({
           id: t.id,
           nombre: t.nombre,
           categoria_viajero: t.categoria_viajero,
@@ -337,13 +347,13 @@ Deno.serve(async (req: Request) => {
           p_cancellation_id: partialCancellation.id,
           p_cancellation_type: "partial",
         })
-        .then(({ error: accErr }: { error: any }) => {
+        .then(({ error: accErr }) => {
           if (accErr) console.error("Error generando póliza contable de cancelación parcial:", accErr);
         });
     }
 
     // 4. Deduct points
-    const pointsEarned = Number((booking as any).points_earned) || 0;
+    const pointsEarned = Number(reserva.points_earned) || 0;
     if (pointsEarned > 0) {
       const pointsToDeduct = Math.min(Math.floor(policy.originalPartialAmount), pointsEarned);
 
@@ -379,7 +389,7 @@ Deno.serve(async (req: Request) => {
 
     // 6. Update booking flags
     const newActiveCount = currentActiveCount - travelerIds.length;
-    const bookingUpdate: Record<string, any> = {
+    const bookingUpdate: Record<string, unknown> = {
       has_partial_cancellations: true,
       active_travelers_count: newActiveCount,
       // trg_update_slot_booked_count (y el conteo de disponibilidad para tours
@@ -397,7 +407,7 @@ Deno.serve(async (req: Request) => {
     // Libera tantos asientos como viajeros cancelados. booking_travelers no
     // guarda que asiento le toco a cada quien, asi que se liberan los ultimos
     // N de bookings.selected_seats (orden estable, sin necesidad de mapeo).
-    const currentSeats: number[] = ((booking as any).selected_seats as number[] | null) || [];
+    const currentSeats: number[] = reserva.selected_seats || [];
     let seatsToRelease: number[] = [];
     if (currentSeats.length > 0) {
       seatsToRelease = currentSeats.slice(-travelerIds.length);
@@ -432,7 +442,7 @@ Deno.serve(async (req: Request) => {
         .from("cancellation_penalty_records")
         .insert({
           booking_id: bookingId,
-          agency_id: (booking as any).agency_id,
+          agency_id: reserva.agency_id,
           tour_id: tour.id,
           cancellation_type: "partial",
           partial_cancellation_id: partialCancellation.id,
@@ -451,7 +461,7 @@ Deno.serve(async (req: Request) => {
 
     // 8. Realtime notification to agency
     try {
-      const agencyUserId = (booking as any).agencies?.user_id;
+      const agencyUserId = reserva.agencies?.user_id;
       if (agencyUserId) {
         await supabase.rpc("create_user_notification", {
           p_user_id: agencyUserId,
@@ -486,7 +496,7 @@ Deno.serve(async (req: Request) => {
         supabase.functions.invoke("send-partial-cancellation-notification-admin", { body: emailBody }),
       ]);
 
-      const allSent = responses.every((r: any) => !r.error);
+      const allSent = responses.every((r) => !r.error);
       await supabase
         .from("booking_partial_cancellations")
         .update({ emails_sent: allSent })
@@ -502,7 +512,7 @@ Deno.serve(async (req: Request) => {
     EdgeRuntime.waitUntil(
       supabase.functions.invoke("substitute-cfdi-for-partial-cancellation", {
         body: { booking_id: bookingId, partial_cancellation_id: partialCancellation.id },
-      }).catch((err: any) => console.error("Error substituting CFDIs (no crítico):", err))
+      }).catch((err) => console.error("Error substituting CFDIs (no crítico):", err))
     );
 
     return ok({
@@ -510,7 +520,7 @@ Deno.serve(async (req: Request) => {
       partial_cancellation_id: partialCancellation.id,
       policy,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error en process-partial-cancellation:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -521,6 +531,6 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return err(error.message || "Error al procesar la cancelación parcial");
+    return err(mensajeDeError(error) || "Error al procesar la cancelación parcial");
   }
 });

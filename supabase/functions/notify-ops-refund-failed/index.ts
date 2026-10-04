@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -76,7 +77,7 @@ Deno.serve(async (req: Request) => {
     const fromEmail = emailSettings?.contact_email || "no-reply@toursred.com";
 
     const bookingCode = booking?.booking_code || refund.booking_id;
-    const tourName = (booking?.tours as any)?.name || "N/A";
+    const tourName = (booking?.tours as unknown as { name?: string } | null)?.name || "N/A";
     const travelerEmail = user?.email || "N/A";
     const travelerName = user?.first_name || "N/A";
 
@@ -131,7 +132,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ success: true, message: "Notification processed" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error in notify-ops-refund-failed:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -143,7 +144,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: err.message || "Error interno" }),
+      JSON.stringify({ error: mensajeDeError(err) || "Error interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

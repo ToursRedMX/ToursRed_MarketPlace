@@ -63,6 +63,8 @@
 // migracion `20260909030735` de `confirm_booking_paid_with_wallet`, para no
 // pelear con redondeos de centavos.
 
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+
 const TOLERANCIA_MXN = 0.5;
 
 export interface Cobertura {
@@ -96,7 +98,7 @@ export interface Cobertura {
  * puede reintentar la conciliacion cuando la base vuelva a responder.
  */
 export async function verificarCoberturaDePago(
-  supabase: any,
+  supabase: SupabaseClient,
   bookingId: string,
   montoDeEsteCobro: number,
   /**
@@ -149,11 +151,11 @@ export async function verificarCoberturaDePago(
   // `.neq()` se perderian y el total quedaria por debajo de lo real, que es
   // justo la direccion que bloquea reservas legitimas.
   const pagadoPrevio = (previos ?? [])
-    .filter((fila: any) =>
+    .filter((fila: { stripe_payment_intent_id: string | null }) =>
       !paymentIntentIdDeEsteCobro ||
       fila?.stripe_payment_intent_id !== paymentIntentIdDeEsteCobro
     )
-    .reduce((suma: number, fila: any) => suma + (Number(fila?.amount) || 0), 0);
+    .reduce((suma: number, fila: { amount: number }) => suma + (Number(fila?.amount) || 0), 0);
 
   const pagado = redondear(pagadoPrevio + monto);
   const billetera = redondear((Number(reserva.points_used) || 0) / 100 + (Number(reserva.toursred_cash_used) || 0));

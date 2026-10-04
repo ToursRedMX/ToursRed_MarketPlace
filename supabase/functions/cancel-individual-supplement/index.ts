@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -105,7 +106,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: booking, error: bookingError } = await serviceClient
       .from("bookings")
-      .select("id, user_id, status, tours (name), agencies (id, user_id, rfc, razon_social, regimen_fiscal, codigo_postal_fiscal)")
+      .select("id, user_id, status, tours (name), agencies (id, user_id, rfc, razon_social, regimen_fiscal, postal_code)")
       .eq("id", booking_id)
       .maybeSingle();
 
@@ -130,15 +131,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const isCancellable = (supplement as any).tour_supplements?.is_cancellable === true;
-    const supplementName = (supplement as any).tour_supplements?.name || "Suplemento";
-    const tourName = (booking as any).tours?.name || "Tour";
+    const isCancellable = (supplement.tour_supplements as unknown as { is_cancellable?: boolean; name?: string } | null)?.is_cancellable === true;
+    const supplementName = (supplement.tour_supplements as unknown as { is_cancellable?: boolean; name?: string } | null)?.name || "Suplemento";
+    const tourName = (booking.tours as unknown as { name?: string } | null)?.name || "Tour";
 
     const oldTotalPaid = Number(supplement.total_paid) || 0;
     const oldServiceCharge = Number(supplement.service_charge) || 0;
 
     let refundAmount: number;
-    let updatePayload: Record<string, any>;
+    let updatePayload: Record<string, unknown>;
 
     if (isFullCancel) {
       refundAmount = isCancellable ? oldTotalPaid : 0;
@@ -279,13 +280,13 @@ Deno.serve(async (req: Request) => {
             );
           } else {
             // Partial cancellation: generate credit note (tipo E, tipo_relacion "01")
-            const agency = (booking as any).agencies;
-            const terceroAgencia = agency?.rfc && agency?.codigo_postal_fiscal
+            const agency = booking.agencies as unknown as { id: string; user_id: string; rfc?: string; razon_social?: string; regimen_fiscal?: string; postal_code?: string } | null;
+            const terceroAgencia = agency?.rfc && agency?.postal_code
               ? {
                   rfc: agency.rfc,
                   nombre: agency.razon_social || supplementName,
                   regimen_fiscal: agency.regimen_fiscal || "601",
-                  domicilio_fiscal: agency.codigo_postal_fiscal,
+                  domicilio_fiscal: agency.postal_code,
                 }
               : null;
 
@@ -308,7 +309,7 @@ Deno.serve(async (req: Request) => {
                   tax_treatment: (supplement as { tax_treatment?: string }).tax_treatment ?? null,
                   exempt_ratio: (supplement as { exempt_ratio?: number }).exempt_ratio ?? null,
                 },
-              }).catch((err: any) => console.error("Credit note generation failed (no crítico):", err))
+              }).catch((err) => console.error("Credit note generation failed (no crítico):", err))
             );
           }
         }
@@ -318,7 +319,7 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-      const agencyUserId = (booking as any).agencies?.user_id;
+      const agencyUserId = (booking.agencies as unknown as { user_id?: string } | null)?.user_id;
       if (agencyUserId) {
         await serviceClient.rpc("create_user_notification", {
           p_user_id: agencyUserId,
@@ -345,7 +346,7 @@ Deno.serve(async (req: Request) => {
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error en cancel-individual-supplement:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -356,7 +357,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return new Response(JSON.stringify({ error: error.message || "Error al cancelar suplemento" }), {
+    return new Response(JSON.stringify({ error: mensajeDeError(error) || "Error al cancelar suplemento" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

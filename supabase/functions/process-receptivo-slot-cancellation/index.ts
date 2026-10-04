@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,8 +78,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const agencyId = (slot.tours as any).agency_id;
-    const agencyUserId = (slot.tours as any).agencies?.user_id;
+    const agencyId = (slot.tours as unknown as { agency_id: string; agencies?: { user_id: string } }).agency_id;
+    const agencyUserId = (slot.tours as unknown as { agency_id: string; agencies?: { user_id: string } }).agencies?.user_id;
 
     const { data: userData } = await adminClient
       .from("users")
@@ -98,7 +99,7 @@ Deno.serve(async (req: Request) => {
         .eq("is_active", true)
         .single();
 
-      const canManage = (staffData?.permissions as any)?.canManageTours;
+      const canManage = (staffData?.permissions as { canManageTours?: boolean } | null)?.canManageTours;
       if (!canManage) {
         return new Response(JSON.stringify({ success: false, error: "Sin permisos para esta accion" }), {
           status: 403,
@@ -134,14 +135,14 @@ Deno.serve(async (req: Request) => {
         .neq("status", "cancelado")
         .neq("status", "bloqueado");
 
-      const targetSlot = existingSlots?.find((s: any) =>
+      const targetSlot = existingSlots?.find((s: { departure_time: string }) =>
         s.departure_time === rescheduleTime || s.departure_time === reschedule_to_time
       ) || (existingSlots && existingSlots.length === 1 ? existingSlots[0] : null);
 
       // Verificar conflicto de cupo solo si ya hay reservas y hay slot existente en destino
       if (affectedBookings && affectedBookings.length > 0 && targetSlot) {
         const availableSpots = targetSlot.capacity - targetSlot.booked_count;
-        const travelersAffected = affectedBookings.reduce((sum: number, b: any) => sum + (b.travelers_count || 1), 0);
+        const travelersAffected = affectedBookings.reduce((sum: number, b: { travelers_count: number | null }) => sum + (b.travelers_count || 1), 0);
 
         if (availableSpots < travelersAffected) {
           // Hay conflicto de cupo - devolver para que la UI muestre opciones
@@ -248,7 +249,7 @@ Deno.serve(async (req: Request) => {
           .single();
 
         // Crear respuestas individuales y notificar a cada viajero
-        const responseInserts = affectedBookings.map((booking: any) => ({
+        const responseInserts = affectedBookings.map((booking: { id: string; user_id: string }) => ({
           request_id: rescheduleRequest.id,
           booking_id: booking.id,
           user_id: booking.user_id,
@@ -257,7 +258,7 @@ Deno.serve(async (req: Request) => {
 
         await adminClient.from("slot_reschedule_responses").insert(responseInserts);
 
-        const bookingIds = affectedBookings.map((b: any) => b.id);
+        const bookingIds = affectedBookings.map((b: { id: string }) => b.id);
         await adminClient
           .from("bookings")
           .update({ has_pending_slot_reschedule: true })
@@ -265,10 +266,10 @@ Deno.serve(async (req: Request) => {
 
         const newDate = destSlotData?.slot_date || reschedule_to_date;
         const newTime = destSlotData?.departure_time || rescheduleTime;
-        const tourName = (slot.tours as any).name;
+        const tourName = (slot.tours as unknown as { name: string }).name;
 
         // Notificaciones in-app + emails
-        const notifyPromises = affectedBookings.map(async (booking: any) => {
+        const notifyPromises = affectedBookings.map(async (booking: { id: string; user_id: string }) => {
           await adminClient.rpc("create_user_notification", {
             p_user_id: booking.user_id,
             p_type: "slot_reschedule_pending",
@@ -364,10 +365,10 @@ Deno.serve(async (req: Request) => {
 
     // --- Flujo de CANCELACION pura (sin nueva fecha) ---
     // Reembolso inmediato del 100%
-    const tourName = (slot.tours as any).name;
+    const tourName = (slot.tours as unknown as { name: string }).name;
     const affectedCount = affectedBookings?.length || 0;
 
-    const refundPromises = (affectedBookings || []).map(async (booking: any) => {
+    const refundPromises = (affectedBookings || []).map(async (booking: { id: string; user_id: string; deposit_amount: number | null; service_charge: number | null; toursred_cash_used: number | null }) => {
       const depositAmount = Number(booking.deposit_amount || 0);
 
       const { error: refundError } = await adminClient.rpc("process_cancellation_refund", {
@@ -442,7 +443,7 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -454,7 +455,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ success: false, error: error.message || "Error interno" }),
+      JSON.stringify({ success: false, error: mensajeDeError(error) || "Error interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -98,7 +99,7 @@ Deno.serve(async (req: Request) => {
             .maybeSingle();
 
           if (userData?.email) {
-            const tourName = (booking.tours as any)?.name || "tu tour";
+            const tourName = (booking.tours as unknown as { name?: string } | null)?.name || "tu tour";
             const remainingAmount = requiredAmount - paidAmount;
 
             await fetch(`${supabaseUrl}/functions/v1/send-payment-plan-reminder`, {
@@ -124,9 +125,9 @@ Deno.serve(async (req: Request) => {
           if (updErr) throw updErr;
 
           reminders72hSent++;
-        } catch (err: any) {
+        } catch (err) {
           console.error(`Error processing 72h reminder for booking ${booking.id}:`, err);
-          errors.push({ booking_id: booking.id, step: "72h_reminder", message: err.message || String(err) });
+          errors.push({ booking_id: booking.id, step: "72h_reminder", message: mensajeDeError(err) || String(err) });
         }
       }
 
@@ -140,7 +141,7 @@ Deno.serve(async (req: Request) => {
             .maybeSingle();
 
           if (userData?.email) {
-            const tourName = (booking.tours as any)?.name || "tu tour";
+            const tourName = (booking.tours as unknown as { name?: string } | null)?.name || "tu tour";
             const remainingAmount = requiredAmount - paidAmount;
 
             await fetch(`${supabaseUrl}/functions/v1/send-payment-plan-reminder`, {
@@ -166,9 +167,9 @@ Deno.serve(async (req: Request) => {
           if (updErr) throw updErr;
 
           reminders24hSent++;
-        } catch (err: any) {
+        } catch (err) {
           console.error(`Error processing 24h reminder for booking ${booking.id}:`, err);
-          errors.push({ booking_id: booking.id, step: "24h_reminder", message: err.message || String(err) });
+          errors.push({ booking_id: booking.id, step: "24h_reminder", message: mensajeDeError(err) || String(err) });
         }
       }
 
@@ -227,9 +228,9 @@ Deno.serve(async (req: Request) => {
 
           cancellationsProcessed++;
           console.log(`Booking ${booking.id} cancelled for incomplete payment after 7 days (exempt=${isServiceChargeExempt}, refund=${refundAmount})`);
-        } catch (err: any) {
+        } catch (err) {
           console.error(`Error processing cancellation for booking ${booking.id}:`, err);
-          errors.push({ booking_id: booking.id, step: "cancellation", message: err.message || String(err) });
+          errors.push({ booking_id: booking.id, step: "cancellation", message: mensajeDeError(err) || String(err) });
         }
       }
     }
@@ -245,7 +246,7 @@ Deno.serve(async (req: Request) => {
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error in process-incremental-payment-deadlines:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -256,7 +257,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return new Response(JSON.stringify({ error: err.message || "Internal server error" }), {
+    return new Response(JSON.stringify({ error: mensajeDeError(err) || "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

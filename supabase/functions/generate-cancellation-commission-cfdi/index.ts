@@ -328,7 +328,7 @@ Deno.serve(async (req: Request) => {
       receptorCP = issuerPostalCode;
     }
 
-    const tourName = (booking.tours as any)?.name || "";
+    const tourName = (booking.tours as unknown as { name?: string } | null)?.name || "";
     const bookingRef = booking.booking_code || booking_id;
 
     // Build CFDI: single concept for the retained service charge

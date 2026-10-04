@@ -2,6 +2,18 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 
+interface SupplementBooking {
+  id: string;
+  user_id: string;
+  status: string;
+}
+
+interface SupplementTourSupplement {
+  id: string;
+  name: string;
+  tour_id: string;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -71,7 +83,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if ((supplementRequest.bookings as any)?.status === "cancellation_processing") {
+    const supplementBooking = supplementRequest.bookings as unknown as SupplementBooking;
+    const tourSupplement = supplementRequest.tour_supplements as unknown as SupplementTourSupplement;
+
+    if (supplementBooking?.status === "cancellation_processing") {
       return new Response(JSON.stringify({ error: "La reserva está en proceso de cancelación" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -84,7 +99,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Validate agency ownership
-    const tourId = (supplementRequest.tour_supplements as any)?.tour_id;
+    const tourId = tourSupplement?.tour_id;
     const { data: tour } = await supabase
       .from("tours")
       .select("id, agency_id, agencies!inner(user_id)")
@@ -98,7 +113,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     const isAdmin = ["admin", "super_admin"].includes(currentUser?.role || "");
-    const isAgencyOwner = (tour?.agencies as any)?.user_id === user.id;
+    const isAgencyOwner = (tour?.agencies as unknown as { user_id?: string } | null)?.user_id === user.id;
 
     let isStaff = false;
     if (!isAdmin && !isAgencyOwner && tour?.agency_id) {
@@ -135,8 +150,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Notify traveler
-    const travelerId = (supplementRequest.bookings as any)?.user_id;
-    const supplementName = (supplementRequest.tour_supplements as any)?.name;
+    const travelerId = supplementBooking?.user_id;
+    const supplementName = tourSupplement?.name;
     if (travelerId) {
       await supabase.from("notifications").insert({
         user_id: travelerId,

@@ -224,7 +224,7 @@ Deno.serve(async (req: Request) => {
       });
 
       const results = await Promise.all(emailPromises);
-      results.forEach(ok => { ok ? successCount++ : errorCount++; });
+      results.forEach(ok => { if (ok) { successCount++; } else { errorCount++; } });
     }
 
     await supabase

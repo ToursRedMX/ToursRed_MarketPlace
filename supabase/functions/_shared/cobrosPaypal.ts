@@ -50,9 +50,18 @@
  * y que ya dio un error de tipos real en `stripe-webhook`.
  */
 
-/** Tipo estructural minimo: lo unico que este modulo usa del cliente. */
+/**
+ * Tipo estructural minimo: lo unico que este modulo usa del cliente.
+ *
+ * `any` aqui es deliberado: el query builder real de supabase-js tiene
+ * decenas de sobrecargas segun el generic `Database`, y reproducirlo a
+ * mano da "Type instantiation is excessively deep" en cuanto un llamador
+ * pasa su cliente real tipado (visto el 03-oct-2026 al intentarlo en
+ * `cobrosStripe.ts`). `deno-lint-ignore` no basta: es la regla de Deno,
+ * no la de ESLint.
+ */
 export interface ClienteMinimo {
-  // deno-lint-ignore no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   from(tabla: string): any;
 }
 

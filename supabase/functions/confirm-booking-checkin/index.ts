@@ -228,7 +228,7 @@ Deno.serve(async (req: Request) => {
         .select("nombre")
         .in("id", no_show_traveler_ids);
 
-      noShowTravelerNames = (noShowTravelers || []).map((t: any) => t.nombre);
+      noShowTravelerNames = (noShowTravelers || []).map((t: { nombre: string }) => t.nombre);
 
       await supabase
         .from("users")

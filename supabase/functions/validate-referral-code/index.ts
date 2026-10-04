@@ -7,6 +7,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
+interface ReferrerUser {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  role: string;
+}
+
 interface ValidateReferralCodeRequest {
   code: string;
   userId?: string;
@@ -122,7 +130,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const referrerUser = referralCode.users as any;
+    const referrerUser = referralCode.users as unknown as ReferrerUser | null;
 
     if (!referrerUser || referrerUser.role !== 'traveler') {
       return new Response(
@@ -183,7 +191,7 @@ Deno.serve(async (req: Request) => {
 
     const referrerName = referrerUser.first_name && referrerUser.last_name
       ? `${referrerUser.first_name} ${referrerUser.last_name}`
-      : referrerUser.email;
+      : referrerUser.email ?? undefined;
 
     const response: ValidationResponse = {
       valid: true,

@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -416,7 +417,7 @@ Deno.serve(async (req: Request) => {
     `;
 
     // For bank transfer refunds, try to attach the receipt file
-    let attachments: any[] = [];
+    let attachments: { filename: string; fileblob: string; mimetype: string }[] = [];
     if (admin_cancellation && refund_method === 'bank_transfer' && receipt_file_path) {
       try {
         const { data: fileData, error: fileErr } = await supabase.storage
@@ -453,7 +454,7 @@ Deno.serve(async (req: Request) => {
       ? `Cancelación Administrativa - ${tour.name}`
       : `Confirmación de Cancelación - ${tour.name}`;
 
-    const emailPayload: any = {
+    const emailPayload: Record<string, unknown> = {
       api_key: settings.smtp_api_key,
       to: [user.email],
       sender: settings.contact_email,
@@ -487,7 +488,7 @@ Deno.serve(async (req: Request) => {
         },
       }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error:', error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -499,7 +500,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: mensajeDeError(error) }),
       {
         status: 500,
         headers: {

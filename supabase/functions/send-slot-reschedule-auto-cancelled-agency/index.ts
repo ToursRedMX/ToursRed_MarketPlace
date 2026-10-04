@@ -2,12 +2,32 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+interface AutoCancelTour {
+  id: string;
+  name: string;
+  destination: string | null;
+}
+
+interface AutoCancelAgency {
+  id: string;
+  name: string;
+  contact_email: string | null;
+}
+
+interface AutoCancelTraveler {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+}
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -67,7 +87,8 @@ Deno.serve(async (req: Request) => {
       throw new Error("Reserva no encontrada");
     }
 
-    const agencyEmail = (booking.agency as any)?.contact_email;
+    const agency = booking.agency as unknown as AutoCancelAgency | null;
+    const agencyEmail = agency?.contact_email;
     if (!agencyEmail) {
       throw new Error("Email de agencia no encontrado");
     }
@@ -85,9 +106,10 @@ Deno.serve(async (req: Request) => {
     const appUrl = platformSettingsData?.platform_url || "https://toursredmx.netlify.app";
 
     const totalRefund: number = refund_amount ?? 0;
-    const tourName = (booking.tour as any)?.name ?? "Tour";
-    const agencyName = (booking.agency as any)?.name ?? "Agencia";
-    const traveler = (booking.traveler as any);
+    const tour = booking.tour as unknown as AutoCancelTour | null;
+    const tourName = tour?.name ?? "Tour";
+    const agencyName = agency?.name ?? "Agencia";
+    const traveler = booking.traveler as unknown as AutoCancelTraveler | null;
     const travelerName = traveler
       ? `${traveler.first_name} ${traveler.last_name}`.trim()
       : "El viajero";
@@ -237,7 +259,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ success: true, sent_to: agencyEmail }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -249,7 +271,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: mensajeDeError(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

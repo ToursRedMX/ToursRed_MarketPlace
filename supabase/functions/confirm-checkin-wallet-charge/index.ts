@@ -228,7 +228,7 @@ Deno.serve(async (req: Request) => {
         p_user_id: booking.user_id,
         p_amount: -totalToDeduct,
         p_type: "debit",
-        p_description: `Cobro en check-in por ${(booking.agency as any)?.name || 'agencia'} - ${amountToCharge.toFixed(2)} + cargo servicio ${netServiceCharge.toFixed(2)}`,
+        p_description: `Cobro en check-in por ${booking.agency?.name || 'agencia'} - ${amountToCharge.toFixed(2)} + cargo servicio ${netServiceCharge.toFixed(2)}`,
         p_reference_id: booking_id,
         p_reference_type: "booking_checkin_charge",
         p_idempotency_key: checkinChargeId,
@@ -363,7 +363,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const newRemaining = Math.max(0, remainingAmount - amountToCharge);
-    const walletResultJson = walletResult as any;
+    const walletResultJson = walletResult as { new_balance?: number } | null;
     const newWalletBalance = walletResultJson?.new_balance ?? (walletBalance - totalToDeduct);
 
     return new Response(

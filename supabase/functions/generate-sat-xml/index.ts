@@ -18,6 +18,43 @@ if (sentryDsn) {
   });
 }
 
+interface ChartAccount {
+  code: string;
+  sat_group_code: string | null;
+  name: string;
+  level: number;
+  nature: string;
+  account_type?: string;
+}
+
+interface TrialBalanceRow {
+  code: string;
+  nature: string;
+  opening_debit: number | null;
+  opening_credit: number | null;
+  period_debit: number | null;
+  period_credit: number | null;
+  closing_debit: number | null;
+  closing_credit: number | null;
+}
+
+interface AccountingEntryRow {
+  id: string;
+  entry_number: string;
+  entry_type: string;
+  entry_date: string;
+  description: string | null;
+}
+
+interface AccountingEntryLine {
+  entry_id: string;
+  account_code: string;
+  description: string | null;
+  debit: number | null;
+  credit: number | null;
+  cfdi_uuid: string | null;
+}
+
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -37,7 +74,7 @@ function formatAmount(n: number | null | undefined): string {
 }
 
 // XML Catalogo de Cuentas — CT_RFC_AAAAMM.xml
-function buildCatalogXml(accounts: any[], rfc: string, year: number, month: number): string {
+function buildCatalogXml(accounts: ChartAccount[], rfc: string, year: number, month: number): string {
   const rows = accounts.map((a) => {
     const tipo = a.nature === "deudora" ? "D" : "A";
     return `    <catalogocuentas:Ctas CodAgrup="${xmlEscape(a.sat_group_code)}" NumCta="${xmlEscape(a.code)}" Desc="${xmlEscape(a.name)}" Nivel="${a.level}" Natur="${tipo}"/>`;
@@ -66,7 +103,7 @@ ${rows.join("\n")}
 //
 // Misma regla que ya usa get_account_balances_full (CASE WHEN nature =
 // 'deudora' THEN debit-credit ELSE credit-debit END), no una nueva.
-function buildTrialBalanceXml(rows: any[], rfc: string, year: number, month: number): string {
+function buildTrialBalanceXml(rows: TrialBalanceRow[], rfc: string, year: number, month: number): string {
   const cuentas = rows.map((r) => {
     const esDeudora = r.nature === "deudora";
     const saldoIni = esDeudora
@@ -89,8 +126,8 @@ ${cuentas.join("\n")}
 }
 
 // XML Polizas — PL_RFC_AAAAMM.xml
-function buildJournalXml(entries: any[], lines: any[], rfc: string, year: number, month: number): string {
-  const linesMap = new Map<string, any[]>();
+function buildJournalXml(entries: AccountingEntryRow[], lines: AccountingEntryLine[], rfc: string, year: number, month: number): string {
+  const linesMap = new Map<string, AccountingEntryLine[]>();
   for (const l of lines) {
     if (!linesMap.has(l.entry_id)) linesMap.set(l.entry_id, []);
     linesMap.get(l.entry_id)!.push(l);
@@ -98,7 +135,7 @@ function buildJournalXml(entries: any[], lines: any[], rfc: string, year: number
 
   const polizas = entries.map((e) => {
     const tipo = e.entry_type === "ingreso" ? "I" : e.entry_type === "egreso" ? "E" : "D";
-    const eLines = (linesMap.get(e.id) ?? []).map((l: any) => {
+    const eLines = (linesMap.get(e.id) ?? []).map((l) => {
       const cfdiAttr = l.cfdi_uuid ? ` UUID="${xmlEscape(l.cfdi_uuid)}"` : "";
       return `        <PLZ:Transaccion NumCta="${xmlEscape(l.account_code)}" Concepto="${xmlEscape(l.description)}" Debe="${formatAmount(l.debit)}" Haber="${formatAmount(l.credit)}"${cfdiAttr}/>`;
     });
@@ -303,9 +340,9 @@ Deno.serve(async (req: Request) => {
 
     if (entErr) throw entErr;
 
-    let lines: any[] = [];
+    let lines: AccountingEntryLine[] = [];
     if (entries && entries.length > 0) {
-      const entryIds = entries.map((e: any) => e.id);
+      const entryIds = entries.map((e) => e.id);
       const { data: linesData, error: linesErr } = await supabase
         .from("accounting_entry_lines")
         .select("entry_id, account_code, description, debit, credit, cfdi_uuid")

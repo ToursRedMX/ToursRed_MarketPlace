@@ -2,6 +2,17 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 
+interface RejectSupplementBooking {
+  id: string;
+  user_id: string;
+}
+
+interface RejectSupplementTourSupplement {
+  id: string;
+  name: string;
+  tour_id: string;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -77,8 +88,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const rejectTourSupplement = supplementRequest.tour_supplements as unknown as RejectSupplementTourSupplement;
+    const rejectBooking = supplementRequest.bookings as unknown as RejectSupplementBooking;
+
     // Validate agency ownership
-    const tourId = (supplementRequest.tour_supplements as any)?.tour_id;
+    const tourId = rejectTourSupplement?.tour_id;
     const { data: tour } = await supabase
       .from("tours")
       .select("id, agency_id, agencies!inner(user_id)")
@@ -92,7 +106,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     const isAdmin = ["admin", "super_admin"].includes(currentUser?.role || "");
-    const isAgencyOwner = (tour?.agencies as any)?.user_id === user.id;
+    const isAgencyOwner = (tour?.agencies as unknown as { user_id?: string } | null)?.user_id === user.id;
 
     let isStaff = false;
     if (!isAdmin && !isAgencyOwner && tour?.agency_id) {
@@ -127,8 +141,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Notify traveler
-    const travelerId = (supplementRequest.bookings as any)?.user_id;
-    const supplementName = (supplementRequest.tour_supplements as any)?.name;
+    const travelerId = rejectBooking?.user_id;
+    const supplementName = rejectTourSupplement?.name;
     if (travelerId) {
       const noteMsg = rejection_note?.trim() ? ` Motivo: ${rejection_note.trim()}` : "";
       await supabase.from("notifications").insert({

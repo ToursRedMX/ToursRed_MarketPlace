@@ -266,12 +266,15 @@ Deno.serve(async (req: Request) => {
       .not("paid_at", "is", null)
       .eq("is_cancelled", false);
 
-    const paidOptionals = (paidOptionalsData || []).map((row: any) => ({
-      name: row.tour_optional_services?.name || "Servicio opcional",
-      total_paid: Number(row.total_paid) || 0,
-      service_charge: Number(row.service_charge) || 0,
-      agency_commission: Number(row.agency_commission) || 0,
-    }));
+    const paidOptionals = (paidOptionalsData || []).map((row) => {
+      const tourOptionalService = row.tour_optional_services as unknown as { name: string } | null;
+      return {
+        name: tourOptionalService?.name || "Servicio opcional",
+        total_paid: Number(row.total_paid) || 0,
+        service_charge: Number(row.service_charge) || 0,
+        agency_commission: Number(row.agency_commission) || 0,
+      };
+    });
     const optionalsTotal = paidOptionals.reduce((sum, o) => sum + o.total_paid, 0);
     const optionalsCommissionTotal = paidOptionals.reduce((sum, o) => sum + o.agency_commission, 0);
     const optionalsServiceChargeTotal = paidOptionals.reduce((sum, o) => sum + o.service_charge, 0);
@@ -282,7 +285,7 @@ Deno.serve(async (req: Request) => {
       .eq("booking_id", booking_id)
       .order("created_at", { ascending: true });
 
-    const companions = (companionsData || []).map((c: any) => ({
+    const companions = (companionsData || []).map((c) => ({
       nombre: c.nombre,
       apellido: c.apellido || '',
       categoria: c.categoria_viajero,
