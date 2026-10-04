@@ -455,10 +455,15 @@ export interface Booking {
   booking_approval_type?: 'automatic' | 'manual';
   toursred_cash_used?: number;
   has_pending_reschedule?: boolean;
-  // `auto_cancelled` lo escribe `process_expired_slot_reschedules` cuando
-  // vence el plazo para responder. Faltaba aqui, asi que el mensaje que lo
-  // anuncia al viajero no se pintaba nunca.
-  reschedule_response?: 'accepted' | 'rejected' | 'auto_accepted' | 'auto_cancelled';
+  // `bookings_reschedule_response_check` (reagendamiento de TOUR completo) solo
+  // permite estos tres valores. `auto_cancelled` vivia aqui antes por error: lo
+  // escribe `process_expired_slot_reschedules`, pero en la columna
+  // `slot_reschedule_response` de abajo (reagendamiento de UN SLOT), no en
+  // esta. Con `auto_cancelled` aqui, el mensaje que lo anuncia en
+  // TravelerBookings.tsx comparaba contra un valor que esta columna nunca
+  // tiene — codigo muerto que parecia cobertura. Verificado contra el CHECK
+  // constraint real el 04-oct-2026, no releyendo el codigo.
+  reschedule_response?: 'accepted' | 'rejected' | 'auto_accepted';
   reschedule_responded_at?: string;
   original_booking_date?: string;
   discount_code_id?: string;
@@ -467,6 +472,20 @@ export interface Booking {
   discount_codes?: DiscountCode;
   slot_id?: string;
   selected_date?: string;
+  // Reagendamiento de UN SLOT (cupo especifico), distinto del reagendamiento
+  // de tour completo de arriba. `bookings_slot_reschedule_response_check`
+  // agrega `accepted_no_availability`/`auto_accepted_no_availability` para
+  // cuando el slot original ya no tiene lugar al confirmar.
+  slot_reschedule_response?: 'accepted' | 'rejected' | 'auto_accepted' | 'auto_cancelled' | 'accepted_no_availability' | 'auto_accepted_no_availability';
+  has_pending_slot_reschedule?: boolean;
+  is_no_show?: boolean;
+  no_show_marked_at?: string | null;
+  needs_seat_reselection?: boolean;
+  selected_seats?: number[] | null;
+  has_partial_cancellations?: boolean;
+  paypal_transaction_id?: string | null;
+  active_travelers_count?: number;
+  previous_selected_seats?: number[] | null;
   selected_time?: string;
   tour_slots?: TourSlot;
   pickup_type?: 'meeting_point' | 'pickup';

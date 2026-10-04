@@ -850,12 +850,12 @@ const TravelerBookings: React.FC = () => {
   };
 
   const handleOpenCancellationModal = async (booking: Booking) => {
-    if ((booking as any).is_no_show) {
+    if (booking.is_no_show) {
       alert('Esta reserva ya está marcada como No Show y no puede ser cancelada.');
       return;
     }
 
-    if ((booking as any).approval_status === 'rejected') {
+    if (booking.approval_status === 'rejected') {
       alert('Esta reserva fue rechazada por la agencia y no puede ser cancelada.');
       return;
     }
@@ -1028,9 +1028,8 @@ const TravelerBookings: React.FC = () => {
   };
 
   const getTourEffectiveDate = (booking: Booking): Date => {
-    const tour = booking.tours as any;
     // Tours receptivos no tienen start_date; usar booking_date o selected_date
-    const dateStr = tour?.start_date ?? (booking as any).selected_date ?? (booking as any).booking_date;
+    const dateStr = booking.tours?.start_date ?? booking.selected_date ?? booking.booking_date;
     return parseDateFromDB(dateStr ?? null);
   };
 
@@ -1038,8 +1037,8 @@ const TravelerBookings: React.FC = () => {
     if (!booking.tours) return false;
 
     if (booking.status === 'cancelled' || booking.status === 'cancellation_processing') return false;
-    if ((booking as any).is_no_show) return false;
-    if ((booking as any).approval_status === 'rejected') return false;
+    if (booking.is_no_show) return false;
+    if (booking.approval_status === 'rejected') return false;
     if (!['pending', 'confirmed'].includes(booking.status)) return false;
 
     const tourDate = getTourEffectiveDate(booking);
@@ -1054,12 +1053,12 @@ const TravelerBookings: React.FC = () => {
   const canPartialCancelBooking = (booking: Booking) => {
     if (!booking.tours) return false;
     if (booking.status === 'cancelled' || booking.status === 'cancellation_processing') return false;
-    if ((booking as any).is_no_show) return false;
-    if ((booking as any).approval_status === 'rejected') return false;
+    if (booking.is_no_show) return false;
+    if (booking.approval_status === 'rejected') return false;
     if (!['confirmed'].includes(booking.status)) return false;
     if (booking.payment_status !== 'succeeded') return false;
 
-    const activeTravelersCount = (booking as any).active_travelers_count ?? booking.travelers_count;
+    const activeTravelersCount = booking.active_travelers_count ?? booking.travelers_count;
     if (!activeTravelersCount || activeTravelersCount < 2) return false;
 
     const tourDate = getTourEffectiveDate(booking);
@@ -1205,7 +1204,7 @@ const TravelerBookings: React.FC = () => {
           .eq('booking_id', booking.id)
           .eq('is_cancelled', false)
           .order('created_at', { ascending: true }),
-        (booking as any).has_payment_plan
+        booking.has_payment_plan
           ? supabase
               .from('booking_payment_plan_installments')
               .select('amount_paid, status')
@@ -1403,7 +1402,7 @@ const TravelerBookings: React.FC = () => {
         .eq('booking_id', booking.id);
 
       if (!travelerError && travelerData && travelerData.length > 0) {
-        const tourStartDate = (booking as any).tours?.start_date || (booking as any).booking_date;
+        const tourStartDate = booking.tours?.start_date || booking.booking_date;
         const { isValid, errors } = validateAllTravelers(travelerData, tourStartDate);
         if (!isValid) {
           const firstErrorIdx = errors.findIndex(e => e !== '');
@@ -2099,12 +2098,12 @@ const TravelerBookings: React.FC = () => {
       }
       const hasActiveServices = Object.values(existingBos).some(b => !b.is_cancelled);
 
-      const alreadyBought = (booking as any).travel_insurance_included === true;
-      let insuranceCost = Number((booking as any).travel_insurance_cost || 0);
+      const alreadyBought = booking.travel_insurance_included === true;
+      let insuranceCost = Number(booking.travel_insurance_cost || 0);
       let insurancePricePerDay = 0;
 
-      const activityType = (booking.tours as any)?.activity_type;
-      const isStandaloneActivity = ['transport', 'experience', 'ticket'].includes(activityType);
+      const activityType = booking.tours?.activity_type;
+      const isStandaloneActivity = ['transport', 'experience', 'ticket'].includes(activityType ?? '');
 
       // Si el booking no tiene costo de seguro guardado, calcularlo desde platform_settings
       if (!alreadyBought && insuranceCost === 0) {
@@ -2203,7 +2202,7 @@ const TravelerBookings: React.FC = () => {
       };
 
       const isStandaloneInsurance = type === 'insurance' &&
-        ['transport', 'experience', 'ticket'].includes((booking.tours as any)?.activity_type);
+        ['transport', 'experience', 'ticket'].includes(booking.tours?.activity_type ?? '');
       const conektaExtra = selectedMethod === 'conekta'
         ? { conekta_method: extrasPaymentModal.conektaMethod, ...(extrasPaymentModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) }
         : {};
@@ -2224,7 +2223,7 @@ const TravelerBookings: React.FC = () => {
       if (selectedMethod === 'paypal') {
         const amount = type === 'optional_service'
           ? Number(item.price_per_person) * quantity
-          : extrasModal.insuranceCost || Number((booking as any).travel_insurance_cost || 0);
+          : extrasModal.insuranceCost || Number(booking.travel_insurance_cost || 0);
         const ppRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-paypal-order`, {
           method: 'POST', headers,
           body: JSON.stringify({ bookingId: booking.id, amount, description: type === 'optional_service' ? `Servicio: ${item.name}` : 'Seguro de viaje', context: 'extras', extrasBody: body }),
@@ -2497,7 +2496,7 @@ const TravelerBookings: React.FC = () => {
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute top-4 left-4">
-                      {getStatusBadge(booking.status, booking.payment_status, (booking as any).approval_status, (booking as any).is_no_show)}
+                      {getStatusBadge(booking.status, booking.payment_status, booking.approval_status, booking.is_no_show)}
                       {getPaymentStatusBadge(booking.payment_status)}
                     </div>
                   </div>
@@ -2517,10 +2516,10 @@ const TravelerBookings: React.FC = () => {
                       <div className="flex items-center text-gray-600">
                         <Calendar className="h-4 w-4 mr-1" />
                         <span>
-                          Fecha del Tour: {(booking as any).selected_date ? formatDate((booking as any).selected_date) : formatDate(booking.booking_date)}
-                          {(booking as any).selected_time && (
+                          Fecha del Tour: {booking.selected_date ? formatDate(booking.selected_date) : formatDate(booking.booking_date)}
+                          {booking.selected_time && (
                             <span className="ml-1 font-medium text-gray-800">
-                              a las {(booking as any).selected_time.slice(0, 5)}
+                              a las {booking.selected_time.slice(0, 5)}
                             </span>
                           )}
                         </span>
@@ -2559,8 +2558,8 @@ const TravelerBookings: React.FC = () => {
                       <div>
                         <div className="text-sm text-gray-500">Viajeros</div>
                         <div className="font-medium">
-                          {(booking as any).has_partial_cancellations
-                            ? `${(booking as any).active_travelers_count ?? booking.travelers_count} activos`
+                          {booking.has_partial_cancellations
+                            ? `${booking.active_travelers_count ?? booking.travelers_count} activos`
                             : booking.travelers_count}
                         </div>
                       </div>
@@ -2570,7 +2569,7 @@ const TravelerBookings: React.FC = () => {
                       <DollarSign className="h-4 w-4 text-gray-400 mr-2" />
                       <div>
                         <div className="text-sm text-gray-500">Total Pagado</div>
-                        <div className="font-medium">{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (totalPaidByBooking[booking.id] ?? 0))}</div>
+                        <div className="font-medium">{formatCurrencyMXN(booking.has_payment_plan ? (booking.payment_plan_paid ?? 0) : (totalPaidByBooking[booking.id] ?? 0))}</div>
                       </div>
                     </div>
 
@@ -2592,32 +2591,32 @@ const TravelerBookings: React.FC = () => {
                   </div>
 
                   {/* Pickup & Language Info - Receptivo tours */}
-                  {((booking as any).pickup_type || (booking as any).selected_language) && (
+                  {(booking.pickup_type || booking.selected_language) && (
                     <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 mb-4">
                       <h4 className="font-medium mb-3 flex items-center gap-2 text-teal-800">
                         <Car className="h-4 w-4" />
                         Traslado e Idioma
                       </h4>
                       <div className="space-y-2">
-                        {(booking as any).pickup_type && (
+                        {booking.pickup_type && (
                           <div className="flex items-start gap-2">
                             <MapPin className="h-4 w-4 text-teal-600 mt-0.5 flex-shrink-0" />
                             <div>
                               <span className="text-xs text-teal-700 font-medium">Tipo de traslado: </span>
                               <span className="text-sm text-gray-800">
-                                {(booking as any).pickup_type === 'meeting_point'
+                                {booking.pickup_type === 'meeting_point'
                                   ? 'Me presento en el punto de encuentro'
                                   : 'Recogida en hotel solicitada'}
                               </span>
                             </div>
                           </div>
                         )}
-                        {(booking as any).pickup_type === 'pickup' && (booking as any).pickup_zone_name && (
+                        {booking.pickup_type === 'pickup' && booking.pickup_zone_name && (
                           <div className="flex items-start gap-2">
                             <Car className="h-4 w-4 text-teal-600 mt-0.5 flex-shrink-0" />
                             <div>
                               <span className="text-xs text-teal-700 font-medium">Zona / Hotel: </span>
-                              <span className="text-sm text-gray-800">{(booking as any).pickup_zone_name}</span>
+                              <span className="text-sm text-gray-800">{booking.pickup_zone_name}</span>
                               {(bookingOptionalServices[booking.id] || []).filter((bos: any) => bos.service_kind === 'pickup').map((bos: any) => (
                                 <span key={bos.id} className="ml-2 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">
                                   +${bos.total_paid || bos.subtotal} {bos.quantity > 1 ? '/persona' : '/reserva'}
@@ -2626,12 +2625,12 @@ const TravelerBookings: React.FC = () => {
                             </div>
                           </div>
                         )}
-                        {(booking as any).selected_language && (
+                        {booking.selected_language && (
                           <div className="flex items-start gap-2">
                             <Globe className="h-4 w-4 text-teal-600 mt-0.5 flex-shrink-0" />
                             <div>
                               <span className="text-xs text-teal-700 font-medium">Idioma del tour: </span>
-                              <span className="text-sm text-gray-800 capitalize">{(booking as any).selected_language}</span>
+                              <span className="text-sm text-gray-800 capitalize">{booking.selected_language}</span>
                               {(bookingOptionalServices[booking.id] || []).filter((bos: any) => bos.service_kind === 'language').map((bos: any) => (
                                 <span key={bos.id} className="ml-2 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">
                                   +${bos.total_paid || bos.subtotal} {bos.quantity > 1 ? '/persona' : 'fijo'}
@@ -2683,14 +2682,14 @@ const TravelerBookings: React.FC = () => {
                   )}
 
                   {/* Selected Seats */}
-                  {(booking.tours as any)?.vehicle_map_type && (booking as any).selected_seats && (booking as any).selected_seats.length > 0 && !(booking as any).needs_seat_reselection && (
+                  {booking.tours?.vehicle_map_type && booking.selected_seats && booking.selected_seats.length > 0 && !booking.needs_seat_reselection && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                       <h4 className="font-medium mb-2 flex items-center gap-2 text-blue-800">
                         <Users className="h-4 w-4" />
                         Asientos Asignados
                       </h4>
                       <div className="flex flex-wrap gap-2">
-                        {[...(booking as any).selected_seats].sort((a: number, b: number) => a - b).map((seat: number) => (
+                        {[...booking.selected_seats].sort((a: number, b: number) => a - b).map((seat: number) => (
                           <span
                             key={seat}
                             className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-600 text-white text-sm font-bold shadow-xs"
@@ -2700,9 +2699,9 @@ const TravelerBookings: React.FC = () => {
                         ))}
                       </div>
                       <p className="text-xs text-blue-700 mt-2">
-                        {(booking as any).selected_seats.length === 1
+                        {booking.selected_seats.length === 1
                           ? '1 asiento reservado'
-                          : `${(booking as any).selected_seats.length} asientos reservados`}
+                          : `${booking.selected_seats.length} asientos reservados`}
                       </p>
                     </div>
                   )}
@@ -2745,17 +2744,17 @@ const TravelerBookings: React.FC = () => {
                             const adj = computeAdjustedTotals(booking);
                             if (adj) return formatCurrencyMXN(adj.adjustedBalance);
                             return formatCurrencyMXN(
-                              (booking as any).has_payment_plan
-                                ? ((booking as any).payment_plan_total || 0) - ((booking as any).payment_plan_paid || 0)
+                              booking.has_payment_plan
+                                ? (booking.payment_plan_total || 0) - (booking.payment_plan_paid || 0)
                                 : (booking.total_price || 0) - (booking.deposit_amount || 0)
                             );
                           })()}
                         </div>
                       </div>
-                      {(booking as any).paypal_transaction_id && (
+                      {booking.paypal_transaction_id && (
                         <div className="col-span-2">
                           <div className="text-gray-500">ID de Transacción PayPal:</div>
-                          <div className="font-medium font-mono text-xs tracking-wide">{(booking as any).paypal_transaction_id}</div>
+                          <div className="font-medium font-mono text-xs tracking-wide">{booking.paypal_transaction_id}</div>
                         </div>
                       )}
                     </div>
@@ -2816,7 +2815,7 @@ const TravelerBookings: React.FC = () => {
 
                     {booking.status === 'pending' &&
                      booking.payment_status !== 'succeeded' &&
-                     (booking as any).approval_status === 'approved' && (
+                     booking.approval_status === 'approved' && (
                       <button
                         onClick={() => handleCompletePayment(booking)}
                         className="btn btn-primary flex items-center justify-center"
@@ -2864,7 +2863,7 @@ const TravelerBookings: React.FC = () => {
                   </div>
 
                   {/* Plan de Pagos */}
-                  {((booking as any).has_payment_plan || (booking as any).payment_plan_status === 'active') && (
+                  {(booking.has_payment_plan || booking.payment_plan_status === 'active') && (
                     <div className="mt-4">
                       <PaymentPlanCalendar
                         bookingId={booking.id}
@@ -2950,7 +2949,6 @@ const TravelerBookings: React.FC = () => {
                           {booking.reschedule_response === 'accepted' && '✓ Has aceptado la nueva fecha'}
                           {booking.reschedule_response === 'rejected' && '✗ Rechazaste el reagendamiento y recibiste reembolso'}
                           {booking.reschedule_response === 'auto_accepted' && '↻ La nueva fecha fue aceptada automaticamente'}
-                          {booking.reschedule_response === 'auto_cancelled' && '✗ Reserva cancelada automaticamente - reembolso procesado en ToursRed Cash'}
                         </strong>
                         {booking.reschedule_responded_at && (
                           <span className="block mt-1 text-xs">
@@ -2962,7 +2960,7 @@ const TravelerBookings: React.FC = () => {
                   )}
 
                   {/* Slot Reschedule Pending Alert */}
-                  {(booking as any).has_pending_slot_reschedule && (() => {
+                  {booking.has_pending_slot_reschedule && (() => {
                     const slotInfo = pendingSlotReschedules[booking.id];
                     const newSlot = slotInfo?.slot_reschedule_requests?.tour_slots;
                     const reason = slotInfo?.slot_reschedule_requests?.reason;
@@ -2985,8 +2983,8 @@ const TravelerBookings: React.FC = () => {
                               <div>
                                 <div className="text-xs text-gray-600 mb-1">Horario anterior:</div>
                                 <div className="font-semibold text-gray-900 line-through text-sm">
-                                  {(booking as any).selected_date || booking.booking_date}
-                                  {(booking as any).selected_time && ` ${(booking as any).selected_time.slice(0, 5)}`}
+                                  {booking.selected_date || booking.booking_date}
+                                  {booking.selected_time && ` ${booking.selected_time.slice(0, 5)}`}
                                 </div>
                               </div>
                               <div>
@@ -3042,14 +3040,14 @@ const TravelerBookings: React.FC = () => {
                   })()}
 
                   {/* Seat Reselection Required */}
-                  {(booking as any).needs_seat_reselection && booking.status !== 'cancelled' && (
+                  {booking.needs_seat_reselection && booking.status !== 'cancelled' && (
                     <div className="mt-4 p-4 bg-amber-50 border-2 border-amber-400 rounded-xl">
                       <div className="flex items-start gap-3">
                         <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
                         <div className="flex-1">
                           <p className="font-semibold text-amber-900 text-sm">Debes seleccionar nuevos asientos</p>
                           <p className="text-xs text-amber-800 mt-1 mb-3">
-                            Tus asientos anteriores ({((booking as any).previous_selected_seats || []).sort((a: number, b: number) => a - b).join(', ')}) ya no estan disponibles en el nuevo horario. Por favor elige nuevos asientos.
+                            Tus asientos anteriores ({(booking.previous_selected_seats || []).sort((a: number, b: number) => a - b).join(', ')}) ya no estan disponibles en el nuevo horario. Por favor elige nuevos asientos.
                           </p>
                           <button
                             onClick={() => {
@@ -3077,42 +3075,42 @@ const TravelerBookings: React.FC = () => {
                   )}
 
                   {/* Slot Reschedule Response Status */}
-                  {!(booking as any).has_pending_slot_reschedule && (booking as any).slot_reschedule_response && !(booking as any).needs_seat_reselection && (
+                  {!booking.has_pending_slot_reschedule && booking.slot_reschedule_response && !booking.needs_seat_reselection && (
                     <div className={`mt-4 p-3 rounded-md border ${
-                      (booking as any).slot_reschedule_response === 'accepted' ? 'bg-green-50 border-green-200' :
-                      (booking as any).slot_reschedule_response === 'rejected' ? 'bg-red-50 border-red-200' :
+                      booking.slot_reschedule_response === 'accepted' ? 'bg-green-50 border-green-200' :
+                      booking.slot_reschedule_response === 'rejected' ? 'bg-red-50 border-red-200' :
                       'bg-blue-50 border-blue-200'
                     }`}>
                       <p className={`text-sm ${
-                        (booking as any).slot_reschedule_response === 'accepted' ? 'text-green-800' :
-                        (booking as any).slot_reschedule_response === 'rejected' ? 'text-red-800' :
+                        booking.slot_reschedule_response === 'accepted' ? 'text-green-800' :
+                        booking.slot_reschedule_response === 'rejected' ? 'text-red-800' :
                         'text-blue-800'
                       }`}>
                         <strong>
-                          {(booking as any).slot_reschedule_response === 'accepted' && '✓ Aceptaste el cambio de horario'}
-                          {(booking as any).slot_reschedule_response === 'rejected' && '✗ Rechazaste el cambio de horario y recibiste reembolso'}
-                          {(booking as any).slot_reschedule_response === 'auto_accepted' && '↻ El cambio de horario fue aceptado automaticamente'}
-                          {(booking as any).slot_reschedule_response === 'auto_cancelled' && '✗ Reserva cancelada automaticamente - reembolso en ToursRed Cash'}
+                          {booking.slot_reschedule_response === 'accepted' && '✓ Aceptaste el cambio de horario'}
+                          {booking.slot_reschedule_response === 'rejected' && '✗ Rechazaste el cambio de horario y recibiste reembolso'}
+                          {booking.slot_reschedule_response === 'auto_accepted' && '↻ El cambio de horario fue aceptado automaticamente'}
+                          {booking.slot_reschedule_response === 'auto_cancelled' && '✗ Reserva cancelada automaticamente - reembolso en ToursRed Cash'}
                         </strong>
                       </p>
                     </div>
                   )}
 
                   {/* Important Notes */}
-                  {(booking as any).is_no_show && (
+                  {booking.is_no_show && (
                     <div className="mt-4 p-3 bg-gray-900 border border-gray-800 rounded-md">
                       <p className="text-sm text-white">
                         <strong>⚠️ Marcada como No Show.</strong> Esta reserva fue marcada como No Show porque no te presentaste al tour. Esta acción ha sido registrada en tu historial y puede afectar futuras reservas.
-                        {(booking as any).no_show_marked_at && (
+                        {booking.no_show_marked_at && (
                           <span className="block mt-2 text-gray-300">
-                            <strong>Fecha:</strong> {formatDate((booking as any).no_show_marked_at)}
+                            <strong>Fecha:</strong> {formatDate(booking.no_show_marked_at)}
                           </span>
                         )}
                       </p>
                     </div>
                   )}
 
-                  {(booking as any).approval_status === 'pending' && (
+                  {booking.approval_status === 'pending' && (
                     <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                       <p className="text-sm text-yellow-800">
                         <strong>Pendiente de aprobación.</strong> La agencia está revisando tu solicitud. Te notificaremos cuando tomen una decisión.
@@ -3120,20 +3118,20 @@ const TravelerBookings: React.FC = () => {
                     </div>
                   )}
 
-                  {(booking as any).approval_status === 'rejected' && (
+                  {booking.approval_status === 'rejected' && (
                     <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
                       <p className="text-sm text-red-800">
                         <strong>Reserva rechazada.</strong> La agencia no pudo aprobar tu solicitud.
-                        {(booking as any).approval_notes && (
+                        {booking.approval_notes && (
                           <span className="block mt-2">
-                            <strong>Motivo:</strong> {(booking as any).approval_notes}
+                            <strong>Motivo:</strong> {booking.approval_notes}
                           </span>
                         )}
                       </p>
                     </div>
                   )}
 
-                  {(booking as any).approval_status === 'approved' && booking.status === 'pending' && booking.payment_status !== 'succeeded' && (
+                  {booking.approval_status === 'approved' && booking.status === 'pending' && booking.payment_status !== 'succeeded' && (
                     <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
                       <p className="text-sm text-green-800">
                         <strong>¡Solicitud aprobada!</strong> Tu reserva ha sido aprobada por la agencia. Ahora puedes completar el pago.
@@ -3201,7 +3199,7 @@ const TravelerBookings: React.FC = () => {
                         className="w-full h-full object-cover grayscale-[30%]"
                       />
                       <div className="absolute top-3 left-3">
-                        {getStatusBadge(booking.status, booking.payment_status, (booking as any).approval_status, (booking as any).is_no_show)}
+                        {getStatusBadge(booking.status, booking.payment_status, booking.approval_status, booking.is_no_show)}
                       </div>
                     </div>
                   </div>
@@ -3211,7 +3209,7 @@ const TravelerBookings: React.FC = () => {
                         <h3 className="text-lg font-semibold text-gray-700">{booking.tours?.name || 'Tour sin nombre'}</h3>
                         <div className="flex items-center text-gray-500 text-sm mt-1 gap-3">
                           <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{booking.tours?.destination || 'Destino no especificado'}</span>
-                          <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{(booking as any).selected_date ? formatDate((booking as any).selected_date) : formatDate(booking.booking_date)}</span>
+                          <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{booking.selected_date ? formatDate(booking.selected_date) : formatDate(booking.booking_date)}</span>
                         </div>
                       </div>
                       <div className="text-right">
@@ -3221,7 +3219,7 @@ const TravelerBookings: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-6 text-sm text-gray-600 mb-4">
                       <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5 text-gray-400" />{booking.travelers_count} viajero{booking.travelers_count !== 1 ? 's' : ''}</span>
-                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5 text-gray-400" />{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (totalPaidByBooking[booking.id] ?? 0))}</span>
+                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5 text-gray-400" />{formatCurrencyMXN(booking.has_payment_plan ? (booking.payment_plan_paid ?? 0) : (totalPaidByBooking[booking.id] ?? 0))}</span>
                       {booking.agencies?.name && <span className="text-gray-500">Operado por: <strong>{booking.agencies.name}</strong></span>}
                     </div>
                     {(pastOptionalServices[booking.id] || []).length > 0 && (
@@ -3283,7 +3281,7 @@ const TravelerBookings: React.FC = () => {
                         className="w-full h-full object-cover grayscale"
                       />
                       <div className="absolute top-3 left-3">
-                        {getStatusBadge(booking.status, booking.payment_status, (booking as any).approval_status, (booking as any).is_no_show)}
+                        {getStatusBadge(booking.status, booking.payment_status, booking.approval_status, booking.is_no_show)}
                       </div>
                     </div>
                   </div>
@@ -3293,7 +3291,7 @@ const TravelerBookings: React.FC = () => {
                         <h3 className="text-lg font-semibold text-gray-500">{booking.tours?.name || 'Tour sin nombre'}</h3>
                         <div className="flex items-center text-gray-400 text-sm mt-1 gap-3">
                           <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{booking.tours?.destination || 'Destino no especificado'}</span>
-                          <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{(booking as any).selected_date ? formatDate((booking as any).selected_date) : formatDate(booking.booking_date)}</span>
+                          <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{booking.selected_date ? formatDate(booking.selected_date) : formatDate(booking.booking_date)}</span>
                         </div>
                       </div>
                       <div className="text-right">
@@ -3303,7 +3301,7 @@ const TravelerBookings: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-6 text-sm text-gray-400 mb-3">
                       <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{booking.travelers_count} viajero{booking.travelers_count !== 1 ? 's' : ''}</span>
-                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" />{formatCurrencyMXN((booking as any).has_payment_plan ? ((booking as any).payment_plan_paid ?? 0) : (totalPaidByBooking[booking.id] ?? 0))}</span>
+                      <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" />{formatCurrencyMXN(booking.has_payment_plan ? (booking.payment_plan_paid ?? 0) : (totalPaidByBooking[booking.id] ?? 0))}</span>
                     </div>
                     <div className="p-3 bg-red-50 border border-red-100 rounded-md text-sm text-red-600">
                       <strong>Reserva cancelada.</strong> Si tienes preguntas, contacta a nuestro equipo de soporte.
@@ -3531,7 +3529,7 @@ const TravelerBookings: React.FC = () => {
                     <div className="flex justify-center py-8">
                       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
                     </div>
-                  ) : (cancellationModal.booking as any).payment_status !== 'succeeded' ? (
+                  ) : cancellationModal.booking!.payment_status !== 'succeeded' ? (
                     <>
                       <div className="mb-6">
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
@@ -3613,7 +3611,7 @@ const TravelerBookings: React.FC = () => {
                             </span>
                           </div>
                           <div className="text-sm text-gray-600">
-                            Fecha del tour: {formatFullDate((cancellationModal.booking as any).selected_date ?? (cancellationModal.booking.tours as any).start_date)}
+                            Fecha del tour: {formatFullDate(cancellationModal.booking!.selected_date ?? cancellationModal.booking!.tours!.start_date)}
                           </div>
                         </div>
 
