@@ -28,6 +28,44 @@ interface SubCharge {
   token_id?: string;
 }
 
+interface ConektaPaymentMethod {
+  type?: string;
+  clabe?: string;
+  bank_account_number?: string;
+  bank?: string;
+  expires_at?: number;
+  reference?: string;
+  cash_on_delivery_reference?: string;
+  barcode_url?: string;
+  reference_url?: string;
+  token_id?: string;
+}
+
+interface ConektaCharge {
+  payment_method?: ConektaPaymentMethod;
+  payment_method_type?: string;
+  amount: number;
+  status?: string;
+}
+
+interface ConektaOrder {
+  id?: string;
+  checkout?: { url?: string };
+  charges?: { data: ConektaCharge[] };
+}
+
+interface SplitChargeDetail {
+  payment_method_type: string;
+  amount: number;
+  status: string;
+  clabe?: string;
+  bank?: string;
+  reference?: string;
+  barcode_url?: string;
+  expires_at?: number;
+  token_id?: string;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -105,7 +143,7 @@ Deno.serve(async (req: Request) => {
         .eq("charge_context", "booking_deposit")
         .eq("status", "succeeded");
 
-      const alreadyPaid = (alreadySucceeded || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+      const alreadyPaid = (alreadySucceeded || []).reduce((sum: number, t: { amount: number }) => sum + Number(t.amount), 0);
       // Ver `_shared/exigible.ts`: con el maximo se cobraba por encima de lo
       // debido a quien pago parte con billetera.
       const requiredNow = exigibleAlProcesador(booking);
@@ -266,7 +304,7 @@ Deno.serve(async (req: Request) => {
     const amountInCents = Math.round(amount * 100);
 
     // Build Conekta order payload
-    let orderPayload: any;
+    let orderPayload: Record<string, unknown>;
 
     if (payment_method_type === "bnpl") {
       orderPayload = {
@@ -396,11 +434,13 @@ Deno.serve(async (req: Request) => {
       try {
         const parsed = JSON.parse(errorBody);
         errorMsg = parsed?.details?.[0]?.message || parsed?.message || errorMsg;
-      } catch {}
+      } catch {
+        // errorBody no es JSON valido; se usa el mensaje generico de arriba.
+      }
       return jsonResponse({ error: errorMsg }, 500);
     }
 
-    const order = await apiResponse.json();
+    const order = await apiResponse.json() as ConektaOrder;
     const orderId = order.id;
     const checkoutUrl = order.checkout?.url;
 
@@ -410,24 +450,14 @@ Deno.serve(async (req: Request) => {
     }
 
     // For split orders, extract per-charge payment instructions from the response
-    let splitChargeDetails: Array<{
-      payment_method_type: string;
-      amount: number;
-      status: string;
-      clabe?: string;
-      bank?: string;
-      reference?: string;
-      barcode_url?: string;
-      expires_at?: number;
-      token_id?: string;
-    }> = [];
+    let splitChargeDetails: SplitChargeDetail[] = [];
 
     const isSplitOrder = !!(sub_charges && sub_charges.length >= 2);
 
     if (isSplitOrder && order.charges && Array.isArray(order.charges.data)) {
-      splitChargeDetails = order.charges.data.map((charge: any) => {
+      splitChargeDetails = order.charges.data.map((charge: ConektaCharge) => {
         const pm = charge.payment_method || {};
-        const detail: any = {
+        const detail: SplitChargeDetail = {
           payment_method_type: pm.type || charge.payment_method_type || "unknown",
           amount: charge.amount / 100,
           status: charge.status || "pending",
