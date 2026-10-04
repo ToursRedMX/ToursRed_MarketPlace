@@ -30,7 +30,25 @@ if (sentryDsn) {
 // `JSON.stringify({ payment_form: unaPromise })` da `{"payment_form":{}}` — o
 // sea que la forma de pago del CFDI viajaba como objeto vacio en vez del codigo
 // del SAT. El cuerpo no tiene ningun await, asi que sobra el `async`.
-function getMercadoPagoPaymentForm(payment: any): string {
+interface MercadoPagoFeeDetail {
+  type?: string;
+  amount?: string;
+}
+
+// Repetido 4 veces, literal, en los 4 caminos que leen fee_details (seguro,
+// servicio opcional, suplemento, reserva): se extrae una sola vez.
+function sumaFeeMercadoPago(feeDetails: unknown): number {
+  if (!Array.isArray(feeDetails)) return 0;
+  return (feeDetails as MercadoPagoFeeDetail[])
+    .filter((fd) => fd.type === "mercadopago_fee")
+    .reduce((sum, fd) => sum + parseFloat(fd.amount || "0"), 0);
+}
+
+function getMercadoPagoPaymentForm(payment: {
+  payment_type_id?: string;
+  payment_type?: string;
+  card?: { tags?: string[] };
+}): string {
   const paymentType = payment?.payment_type_id || payment?.payment_type || "";
   const cardTags = Array.isArray(payment?.card?.tags) ? payment.card.tags : [];
   if (paymentType === "ticket" || paymentType === "atm") return "01";
@@ -154,7 +172,21 @@ Deno.serve(async (req: Request) => {
 
     console.log(`MercadoPago webhook signature válida con secreto: ${matchedLabel}`);
 
-    let body: any = {};
+    let body: {
+      data?: {
+        id?: string;
+        status?: string;
+        payments?: unknown[];
+        payment_id?: string | number;
+        amount?: number;
+        currency?: string;
+        reason?: string;
+        date_documentation_deadline?: string;
+      };
+      type?: string;
+      live_mode?: boolean;
+      action?: string;
+    } = {};
     try {
       body = JSON.parse(rawBody);
     } catch {
@@ -240,7 +272,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (!isLiveMode && (notificationId === "123456" || notificationId === 123456)) {
+    if (!isLiveMode && String(notificationId) === "123456") {
       console.log("Simulated test notification received, skipping payment lookup");
       return new Response(JSON.stringify({ received: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -416,9 +448,7 @@ Deno.serve(async (req: Request) => {
           console.error(`Mercado Pago insurance amount mismatch: ${insAmount} vs ${pendingInsurance.amount}`);
           return new Response(JSON.stringify({ received: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-        const insFee = Array.isArray(payment.fee_details)
-          ? payment.fee_details.filter((fd: any) => fd.type === "mercadopago_fee").reduce((s: number, fd: any) => s + parseFloat(fd.amount || "0"), 0)
-          : 0;
+        const insFee = sumaFeeMercadoPago(payment.fee_details);
         const insFeeSplit = separarFeeBaseIva(insFee);
 
         await supabase.from("bookings").update({
@@ -479,9 +509,7 @@ Deno.serve(async (req: Request) => {
           console.error(`Mercado Pago optional service amount mismatch for ${externalReference}`);
           return new Response(JSON.stringify({ received: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-        const optFee = Array.isArray(payment.fee_details)
-          ? payment.fee_details.filter((fd: any) => fd.type === "mercadopago_fee").reduce((s: number, fd: any) => s + parseFloat(fd.amount || "0"), 0)
-          : 0;
+        const optFee = sumaFeeMercadoPago(payment.fee_details);
         const optFeeSplit = separarFeeBaseIva(optFee);
 
         await supabase.from("booking_optional_services").update({
@@ -565,11 +593,7 @@ Deno.serve(async (req: Request) => {
               .eq("id", externalReference)
               .maybeSingle();
             if (suppDetails) {
-              const suppFee = Array.isArray(payment.fee_details)
-                ? payment.fee_details
-                    .filter((fd: any) => fd.type === "mercadopago_fee")
-                    .reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
-                : 0;
+              const suppFee = sumaFeeMercadoPago(payment.fee_details);
               const suppFeeSplit = separarFeeBaseIva(suppFee);
               const suppAmount = Number(suppDetails.total_paid) || 0;
               await supabase.from("payment_transactions").insert({
@@ -625,11 +649,7 @@ Deno.serve(async (req: Request) => {
         let mpAmount = 0;
         try {
           mpAmount = parseFloat(payment.transaction_amount || payment.amount || "0");
-          const mpFee = Array.isArray(payment.fee_details)
-            ? payment.fee_details
-                .filter((fd: any) => fd.type === "mercadopago_fee")
-                .reduce((sum: number, fd: any) => sum + parseFloat(fd.amount || "0"), 0)
-            : 0;
+          const mpFee = sumaFeeMercadoPago(payment.fee_details);
           const mpFeeSplit = separarFeeBaseIva(mpFee);
 
           const { data: existingTx } = await supabase
