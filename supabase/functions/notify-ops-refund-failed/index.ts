@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
     const fromEmail = emailSettings?.contact_email || "no-reply@toursred.com";
 
     const bookingCode = booking?.booking_code || refund.booking_id;
-    const tourName = (booking?.tours as any)?.name || "N/A";
+    const tourName = (booking?.tours as unknown as { name?: string } | null)?.name || "N/A";
     const travelerEmail = user?.email || "N/A";
     const travelerName = user?.first_name || "N/A";
 

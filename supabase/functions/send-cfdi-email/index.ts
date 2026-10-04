@@ -340,7 +340,7 @@ Deno.serve(async (req: Request) => {
     // sendRes.ok, asi que la funcion devolvia success:true y marcaba
     // email_sent = true para correos que nunca salieron.
     const sendBody = await sendRes.text();
-    let sendJson: any = null;
+    let sendJson: { data?: { succeeded?: number; failed?: number; failures?: unknown; error?: unknown } } | null = null;
     try { sendJson = JSON.parse(sendBody); } catch { /* respuesta no-JSON */ }
 
     const succeeded = Number(sendJson?.data?.succeeded ?? 0);

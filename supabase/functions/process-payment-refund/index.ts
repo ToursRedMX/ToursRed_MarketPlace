@@ -189,7 +189,7 @@ Deno.serve(async (req: Request) => {
       .eq("payment_transaction_id", tx.id)
       .in("status", ["succeeded", "processing", "pending"]);
 
-    const alreadyRefunded = (priorRefunds || []).reduce((sum: number, r: any) => sum + parseFloat(r.requested_amount), 0);
+    const alreadyRefunded = (priorRefunds || []).reduce((sum: number, r: { requested_amount: string }) => sum + parseFloat(r.requested_amount), 0);
     const maxRefundable = originalAmount - alreadyRefunded;
 
     if (amount > maxRefundable) {

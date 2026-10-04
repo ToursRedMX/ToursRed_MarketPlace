@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
     if (booking.status === "cancellation_processing")
       return err("Esta reserva ya tiene una cancelación en proceso");
 
-    const tour = (booking as any).tours;
+    const tour = booking.tours as unknown as { id: string; name: string; start_date: string } | null;
     const now = new Date().toISOString();
     const tourStartDate = tour?.start_date || now.split("T")[0];
 
