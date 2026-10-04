@@ -2,6 +2,14 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 
+interface ExecutiveCommissionRow {
+  id: string;
+  executive_id: string;
+  amount: number;
+  commission_type: string;
+  agencies: { id: string; name: string } | null;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -101,7 +109,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const executiveIds = [...new Set(commissions.map((c: any) => c.executive_id))];
+    // El join de supabase-js infiere `agencies` como arreglo (one-to-many
+    // generico) aunque en runtime sea un solo objeto (relacion 1-a-1 real).
+    const commissionRows = commissions as unknown as ExecutiveCommissionRow[];
+
+    const executiveIds = [...new Set(commissionRows.map((c) => c.executive_id))];
     if (executiveIds.length > 1) {
       return new Response(JSON.stringify({ error: "All commissions must belong to the same executive" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -158,7 +170,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const totalAmount = commissions.reduce((s: number, c: any) => s + Number(c.amount), 0);
+    const totalAmount = commissionRows.reduce((s, c) => s + Number(c.amount), 0);
     const subtotalFacturapi = Math.round((totalAmount / 1.16) * 1000000) / 1000000;
     const ivaAmount = Math.round(totalAmount * 16 / 116 * 100) / 100;
     const subtotal = Math.round((totalAmount - ivaAmount) * 100) / 100;
@@ -166,7 +178,7 @@ Deno.serve(async (req: Request) => {
     const isrAmount = withholdIsr ? Math.round(subtotal * 0.10 * 100) / 100 : 0;
 
     const serie = platform.cfdi_serie_commission || "B";
-    const description = `Honorarios / Comisiones de ejecutivo de cuenta - ${commissions.map((c: any) => (c.agencies as any)?.name || c.id).join(", ")}`;
+    const description = `Honorarios / Comisiones de ejecutivo de cuenta - ${commissionRows.map((c) => c.agencies?.name || c.id).join(", ")}`;
 
     const taxes: Record<string, unknown>[] = [
       { type: "IVA", rate: 0.16, factor: "Tasa", withholding: false },
@@ -174,7 +186,7 @@ Deno.serve(async (req: Request) => {
     if (withholdIsr) taxes.push({ type: "ISR", rate: 0.10, factor: "Tasa", withholding: true });
 
     const facturapiBody = {
-      idempotency_key: `executive-commission-${exec.id}-${commissions.map((c: any) => c.id).sort().join("-")}`,
+      idempotency_key: `executive-commission-${exec.id}-${commissionRows.map((c) => c.id).sort().join("-")}`,
       type: "I",
       series: serie,
       payment_form: "03",
@@ -209,7 +221,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const now = new Date().toISOString();
-    for (const comm of commissions) {
+    for (const comm of commissionRows) {
       // No se guardan xml_url/pdf_url: son la API PRIVADA de FacturAPI y exigen la
       // API key del ejecutivo, asi que no sirven como enlace. pac_invoice_id es la
       // unica via real, y download-executive-cfdi las reconstruye a partir de el.
@@ -220,7 +232,7 @@ Deno.serve(async (req: Request) => {
         cfdi_uuid_fiscal: cfdiResult.uuid_fiscal,
         cfdi_total: totalAmount,
         cfdi_uploaded_at: now,
-      }).eq("id", (comm as any).id);
+      }).eq("id", comm.id);
     }
 
     return new Response(
