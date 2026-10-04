@@ -15,8 +15,16 @@ if (sentryDsn) {
   });
 }
 
-// deno-lint-ignore no-explicit-any
-async function pdfDocToBytes(pdfDoc: any): Promise<Uint8Array> {
+// pdfmake no tiene tipos para Deno; pdfDoc es el PDFKit.PDFDocument que
+// devuelve createPdfKitDocument() (un stream Node-like: on/end).
+interface PdfKitDocLike {
+  on(event: "data", cb: (chunk: Uint8Array) => void): void;
+  on(event: "error", cb: (err: Error) => void): void;
+  on(event: "end", cb: () => void): void;
+  end(): void;
+}
+
+async function pdfDocToBytes(pdfDoc: PdfKitDocLike): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   return new Promise((resolve, reject) => {
     pdfDoc.on("data",  (chunk: Uint8Array) => chunks.push(chunk));
@@ -230,8 +238,7 @@ Deno.serve(async (req: Request) => {
         },
       };
 
-      // deno-lint-ignore no-explicit-any
-      const printer  = new (PdfPrinter as any)(fonts);
+      const printer = new (PdfPrinter as unknown as new (fonts: unknown) => { createPdfKitDocument(docDefinition: unknown): PdfKitDocLike })(fonts);
       const docDef   = buildContractDocDefinition(contractData);
       const pdfDoc   = printer.createPdfKitDocument(docDef);
       const pdfBytes = await pdfDocToBytes(pdfDoc);
@@ -355,8 +362,8 @@ Deno.serve(async (req: Request) => {
         .neq("key", "contrato_agencia");
 
       const requiredKeys = (reqTypes ?? [])
-        .filter((r: any) => r.applies_to === "ambas" || r.applies_to === personaType)
-        .map((r: any) => r.key);
+        .filter((r: { key: string; applies_to: string }) => r.applies_to === "ambas" || r.applies_to === personaType)
+        .map((r: { key: string; applies_to: string }) => r.key);
 
       // All required current docs that are APPROVED (not just "not rejected")
       const { data: currentDocs } = await supabase
@@ -367,7 +374,7 @@ Deno.serve(async (req: Request) => {
         .eq("status", "approved")
         .neq("document_type_key", "contrato_agencia");
 
-      const presentKeys = (currentDocs ?? []).map((d: any) => d.document_type_key);
+      const presentKeys = (currentDocs ?? []).map((d: { document_type_key: string }) => d.document_type_key);
       const allPresent = requiredKeys.every((k: string) => presentKeys.includes(k));
 
       if (allPresent) {
@@ -547,7 +554,7 @@ Deno.serve(async (req: Request) => {
         .eq("agency_id", agency_id);
 
       // Fetch labels for those document types
-      const rejectedKeys = (rejectedDocs ?? []).map((d: any) => d.document_type_key);
+      const rejectedKeys = (rejectedDocs ?? []).map((d: { document_type_key: string }) => d.document_type_key);
       let docLabels: string[] = rejectedKeys;
       if (rejectedKeys.length > 0) {
         const { data: docTypes } = await supabase
