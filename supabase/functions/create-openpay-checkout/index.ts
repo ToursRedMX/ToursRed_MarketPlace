@@ -143,7 +143,7 @@ Deno.serve(async (req: Request) => {
         .eq("charge_context", "booking_deposit")
         .eq("status", "succeeded");
 
-      const alreadyPaid = (alreadySucceeded || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+      const alreadyPaid = (alreadySucceeded || []).reduce((sum: number, t: { amount: number }) => sum + Number(t.amount), 0);
       // amount_due_now es el exigible del primer cobro que calculo create_booking_atomic
       // (anticipo + cargo por servicio + extras + seguro + membresia - puntos - wallet).
       // deposit_amount es solo el anticipo del tour y deja fuera cargos y extras.
@@ -365,7 +365,7 @@ Deno.serve(async (req: Request) => {
       charge = result;
     }
 
-    const paymentMethodMetadata: Record<string, any> = {
+    const paymentMethodMetadata: Record<string, unknown> = {
       openpay_method: paymentMethod,
       openpay_charge_id: charge.id,
       openpay_status: charge.status,
@@ -418,7 +418,7 @@ Deno.serve(async (req: Request) => {
 
     const checkoutUrl = charge.payment_method?.url || charge.checkout_url;
 
-    const responseData: Record<string, any> = {
+    const responseData: Record<string, unknown> = {
       success: true,
       chargeId: charge.id,
       openpayChargeId: charge.id,
