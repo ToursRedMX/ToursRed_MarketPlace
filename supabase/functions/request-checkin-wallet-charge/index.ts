@@ -231,8 +231,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Enviar email con el OTP al viajero
-    const traveler = booking.traveler as any;
-    const agencyName = (booking.agency as any)?.name || "La agencia";
+    const traveler = booking.traveler;
+    const agencyName = booking.agency?.name || "La agencia";
     const travelerName = `${traveler?.first_name || ''} ${traveler?.last_name || ''}`.trim() || 'Viajero';
 
     const { data: emailSettings } = await supabase
