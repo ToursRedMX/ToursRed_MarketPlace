@@ -151,7 +151,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const subscriptionData: any = {
+    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         user_id: user.id,
         plan_type: planType,
@@ -182,7 +182,7 @@ Deno.serve(async (req: Request) => {
       stripeCouponId = coupon.id;
     }
 
-    const sessionParams: any = {
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       customer: customer.id,
       mode: 'subscription',
       payment_method_types: ['card'],
