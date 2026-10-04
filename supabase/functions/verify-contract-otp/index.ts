@@ -35,10 +35,16 @@ async function hashOtp(otp: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-// deno-lint-ignore no-explicit-any
+interface PdfKitDocLike {
+  on(event: "data", cb: (chunk: Uint8Array) => void): void;
+  on(event: "error", cb: (err: Error) => void): void;
+  on(event: "end", cb: () => void): void;
+  end(): void;
+}
+
 // Uint8Array<ArrayBuffer>: el default generico es ArrayBufferLike y
 // crypto.subtle.digest pide BufferSource, que exige ArrayBuffer.
-async function pdfDocToBytes(pdfDoc: any): Promise<Uint8Array<ArrayBuffer>> {
+async function pdfDocToBytes(pdfDoc: PdfKitDocLike): Promise<Uint8Array<ArrayBuffer>> {
   const chunks: Uint8Array[] = [];
   return new Promise((resolve, reject) => {
     pdfDoc.on("data",  (chunk: Uint8Array) => chunks.push(chunk));
@@ -254,8 +260,7 @@ Deno.serve(async (req: Request) => {
       };
 
       const docDefinition = buildSignedContractDocDefinition(contractData, anexoB);
-      // deno-lint-ignore no-explicit-any
-      const printer = new (PdfPrinter as any)(fonts);
+      const printer = new (PdfPrinter as unknown as new (fonts: unknown) => { createPdfKitDocument(docDefinition: unknown): PdfKitDocLike })(fonts);
       const pdfDoc = printer.createPdfKitDocument(docDefinition);
 
       pdfBytes = await pdfDocToBytes(pdfDoc);
