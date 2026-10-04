@@ -99,7 +99,7 @@ Deno.serve(async (req: Request) => {
             .maybeSingle();
 
           if (userData?.email) {
-            const tourName = (booking.tours as any)?.name || "tu tour";
+            const tourName = (booking.tours as unknown as { name?: string } | null)?.name || "tu tour";
             const remainingAmount = requiredAmount - paidAmount;
 
             await fetch(`${supabaseUrl}/functions/v1/send-payment-plan-reminder`, {
@@ -141,7 +141,7 @@ Deno.serve(async (req: Request) => {
             .maybeSingle();
 
           if (userData?.email) {
-            const tourName = (booking.tours as any)?.name || "tu tour";
+            const tourName = (booking.tours as unknown as { name?: string } | null)?.name || "tu tour";
             const remainingAmount = requiredAmount - paidAmount;
 
             await fetch(`${supabaseUrl}/functions/v1/send-payment-plan-reminder`, {
