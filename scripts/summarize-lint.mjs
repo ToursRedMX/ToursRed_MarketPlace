@@ -35,33 +35,33 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Base por regla, medida por CI el 07-sep-2026 sobre 98fee3f (job
-// 101883996483), con eslint 10 / typescript-eslint 8.68.0. Mover junto con las
-// BASELINE_* de lint.yml: si una baja, se actualizan las dos.
+// Base por regla, medida por CI el 03-oct-2026 sobre 6adfe80 (job
+// 37172647793, PR #330), con eslint 10 / typescript-eslint 8.68.0. Mover junto
+// con las BASELINE_* de lint.yml: si una baja, se actualizan las dos.
 const BASE = {
-  '@typescript-eslint/no-explicit-any': 1615,
-  'no-useless-escape': 171,
-  'react-hooks/set-state-in-effect': 108,
-  'react-hooks/exhaustive-deps': 84,
+  '@typescript-eslint/no-explicit-any': 1144,
+  'react-hooks/set-state-in-effect': 107,
+  'react-hooks/exhaustive-deps': 83,
   'react-hooks/immutability': 82,
-  '@typescript-eslint/no-unused-vars': 79,
   'react-hooks/refs': 21,
-  'no-useless-assignment': 17,
-  'no-empty': 9,
   'react-hooks/preserve-manual-memoization': 4,
   'react-refresh/only-export-components': 4,
-  '@typescript-eslint/no-unused-expressions': 2,
-  'prefer-const': 2,
+  'no-empty': 3,
+  '@typescript-eslint/no-unused-expressions': 1,
   'react-hooks/purity': 1,
   // react-hooks/rules-of-hooks y react-hooks/static-components NO van aqui a
   // proposito: los dos quedaron en 0. Fuera de BASE, si reaparecen se marcan
   // con el aviso de "reglas fuera de la base" ademas del delta, que es la
   // senal que queremos.
   //
-  // Reajustada el 11-sep-2026 contra la medicion de CI del PR #242. La
-  // anterior era del 07-sep y habia quedado floja: `no-unused-vars` decia 310
-  // cuando ya eran 79, y `no-explicit-any` 1648 cuando eran 1615 — 264 de
-  // holgura solo entre esas dos.
+  // Reajustada el 03-oct-2026 contra la medicion de CI del PR #330 (el
+  // barrido de `no-explicit-any` en supabase/functions/, 461 -> 0). La
+  // anterior era del 11-sep y habia quedado floja: `no-explicit-any` decia
+  // 1615 cuando ya eran 1144, y cuatro reglas que habian llegado a 0 solas
+  // seguian apareciendo con numeros viejos (`no-unused-vars` 79,
+  // `no-useless-escape` 171, `no-useless-assignment` 17, `prefer-const` 2) —
+  // se retiran de la tabla porque entrarian con base 0 y cualquier aparicion
+  // ya se marca por "reglas fuera de la base".
   //
   // OJO CON LO QUE ESTA TABLA NO IMPIDE: el corte que BLOQUEA es el total de
   // errores, no la fila. Mientras estuvo floja se colaron en main dos subidas
@@ -74,10 +74,10 @@ const BASE = {
 // Corriendo local sin las env del workflow, se cae a la misma base para que
 // los deltas sigan teniendo sentido.
 const num = (name, fallback) => Number(process.env[name] ?? fallback);
-const BASELINE_ERRORS = num('BASELINE_ERRORS', 2111);
-const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 88);
-const BASELINE_TOTAL = num('BASELINE_TOTAL', 2199);
-const BASELINE_FILES = num('BASELINE_FILES', 316);
+const BASELINE_ERRORS = num('BASELINE_ERRORS', 1363);
+const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 87);
+const BASELINE_TOTAL = num('BASELINE_TOTAL', 1450);
+const BASELINE_FILES = num('BASELINE_FILES', 196);
 
 const argv = process.argv.slice(2);
 const estricto = argv.includes('--strict');
@@ -136,7 +136,7 @@ const sumHooks = (obj, get) =>
 const hooks = sumHooks(byRule, count);
 const hooksBase = sumHooks(BASE, (r) => BASE[r]);
 const rest = total - count(ANY) - count(UNUSED) - hooks;
-const restBase = BASELINE_TOTAL - BASE[ANY] - BASE[UNUSED] - hooksBase;
+const restBase = BASELINE_TOTAL - (BASE[ANY] ?? 0) - (BASE[UNUSED] ?? 0) - hooksBase;
 
 const pct = (x) => (total ? ` (${Math.round((x / total) * 100)}%)` : '');
 
@@ -150,7 +150,7 @@ if (lintedFiles === 0) {
   out.push('> **no es comparable con la base**: revisar `ignores` en `eslint.config.js`.');
   out.push('');
 }
-out.push('| | Ahora | Base 07-sep | Δ |');
+out.push('| | Ahora | Base 03-oct | Δ |');
 out.push('|---|---|---|---|');
 out.push(`| **Problemas** | **${total}** en ${files} archivos | ${BASELINE_TOTAL} en ${BASELINE_FILES} | ${delta(total, BASELINE_TOTAL)} |`);
 out.push(`| Errores | ${errors} | ${BASELINE_ERRORS} | ${delta(errors, BASELINE_ERRORS)} |`);
@@ -161,7 +161,7 @@ out.push('');
 out.push('| Familia | Ahora | Base | Δ |');
 out.push('|---|---|---|---|');
 out.push(`| \`no-explicit-any\` | ${count(ANY)}${pct(count(ANY))} | ${BASE[ANY]} | ${delta(count(ANY), BASE[ANY])} |`);
-out.push(`| \`no-unused-vars\` | ${count(UNUSED)}${pct(count(UNUSED))} | ${BASE[UNUSED]} | ${delta(count(UNUSED), BASE[UNUSED])} |`);
+out.push(`| \`no-unused-vars\` | ${count(UNUSED)}${pct(count(UNUSED))} | ${BASE[UNUSED] ?? 0} | ${delta(count(UNUSED), BASE[UNUSED] ?? 0)} |`);
 out.push(`| \`react-hooks/*\` | ${hooks}${pct(hooks)} | ${hooksBase} | ${delta(hooks, hooksBase)} |`);
 out.push(`| Resto | ${rest}${pct(rest)} | ${restBase} | ${delta(rest, restBase)} |`);
 out.push('');

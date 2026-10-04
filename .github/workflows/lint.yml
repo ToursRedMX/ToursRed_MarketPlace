@@ -61,10 +61,18 @@ env:
   #                      se tocan a bulto: 58 son `useEffect(() => fetchX())`,
   #                      el patron de carga del repo, y el resto pide leer caso
   #                      por caso. Ver la entrada 24 de la bitacora.
-  BASELINE_ERRORS: 2111
-  BASELINE_WARNINGS: 88
-  BASELINE_TOTAL: 2199
-  BASELINE_FILES: 316
+  #   03-oct  1450/1363  se eliminan los 461 `no-explicit-any` de
+  #                      `supabase/functions/` (PR #330) -- la base llevaba
+  #                      desde el 11-sep sin bajar mientras el conteo real caia
+  #                      por otros PRs (no-unused-vars, no-useless-escape,
+  #                      no-useless-assignment y prefer-const ya habian llegado
+  #                      a 0 solos), asi que habia 749 problemas de HOLGURA.
+  #                      Numero MEDIDO por CI en el job 37172647793 (PR #330)
+  #                      sobre 6adfe80, no local.
+  BASELINE_ERRORS: 1363
+  BASELINE_WARNINGS: 87
+  BASELINE_TOTAL: 1450
+  BASELINE_FILES: 196
 
 jobs:
   lint:
