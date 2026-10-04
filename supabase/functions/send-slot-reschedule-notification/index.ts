@@ -75,10 +75,13 @@ Deno.serve(async (req: Request) => {
 
     const appUrl = platformSettingsData?.platform_url || "https://toursredmx.netlify.app";
 
-    const recipientEmail = (booking.user as any).email;
-    const recipientName = `${(booking.user as any).first_name} ${(booking.user as any).last_name}`;
-    const tourName = (booking.tour as any).name;
-    const agencyName = (booking.agency as any).name;
+    const bookingUser = booking.user as unknown as { first_name: string; last_name: string; email: string };
+    const bookingTour = booking.tour as unknown as { name: string; destination: string | null };
+    const bookingAgency = booking.agency as unknown as { name: string };
+    const recipientEmail = bookingUser.email;
+    const recipientName = `${bookingUser.first_name} ${bookingUser.last_name}`;
+    const tourName = bookingTour.name;
+    const agencyName = bookingAgency.name;
     const bookingCode = booking.booking_code || booking_id.slice(0, 8).toUpperCase();
 
     const formatDate = (dateStr: string) => {
