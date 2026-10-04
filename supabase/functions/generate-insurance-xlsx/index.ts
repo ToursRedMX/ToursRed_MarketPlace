@@ -4,6 +4,11 @@ import writeExcelFile from "npm:write-excel-file@4.1.1/universal";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
 
+interface BookingTourAgency {
+  tour: { name: string; start_date: string; end_date: string } | null;
+  agency: { name: string; user_id: string } | null;
+}
+
 const etiquetaDeSexo = (sexo: string | null | undefined): string =>
   sexo === "masculino" ? "MASCULINO"
   : sexo === "femenino" ? "FEMENINO"
@@ -102,7 +107,11 @@ Deno.serve(async (req: Request) => {
     // Authorization: booking owner, agency owner, or admin/super_admin
     const isAdmin = callerRole === "admin" || callerRole === "super_admin";
     const isOwner = booking.user_id === user.id;
-    const agencyUserId = (booking.agency as any)?.user_id;
+    // El join de supabase-js infiere tour/agency como arreglo (one-to-many
+    // generico) aunque en runtime cada reserva tenga un solo tour y una sola
+    // agencia -- se castea una vez aqui.
+    const { tour, agency } = booking as unknown as BookingTourAgency;
+    const agencyUserId = agency?.user_id;
     const isAgencyOwner = agencyUserId === user.id;
 
     if (!isAdmin && !isOwner && !isAgencyOwner) {
@@ -170,10 +179,10 @@ Deno.serve(async (req: Request) => {
     const metadata = [
       ["Campo", "Valor"],
       ["Código de reserva", booking.booking_code],
-      ["Tour", (booking.tour as any)?.name || ""],
-      ["Agencia", (booking.agency as any)?.name || ""],
-      ["Fecha inicio", formatDateMX((booking.tour as any)?.start_date)],
-      ["Fecha fin", formatDateMX((booking.tour as any)?.end_date)],
+      ["Tour", tour?.name || ""],
+      ["Agencia", agency?.name || ""],
+      ["Fecha inicio", formatDateMX(tour?.start_date)],
+      ["Fecha fin", formatDateMX(tour?.end_date)],
       ["Total viajeros asegurados", rows.length],
     ];
 
