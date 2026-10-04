@@ -11,6 +11,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface SupplementCfdiTourSupplement {
+  id: string;
+  name: string;
+  tour_id: string;
+}
+
+interface SupplementCfdiBooking {
+  id: string;
+  user_id: string;
+  tour_id: string;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -174,8 +186,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const tourId = (suppReq.tour_supplements as any)?.tour_id;
-    const userId = (suppReq.bookings as any)?.user_id;
+    const cfdiTourSupplement = suppReq.tour_supplements as unknown as SupplementCfdiTourSupplement;
+    const cfdiBooking = suppReq.bookings as unknown as SupplementCfdiBooking;
+    const tourId = cfdiTourSupplement?.tour_id;
+    const userId = cfdiBooking?.user_id;
 
     // --- Autorizacion ---
     // Los importes salen de booking_supplements (ya validado status = paid),
@@ -318,7 +332,7 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    const supplementName = (suppReq.tour_supplements as any)?.name || "Suplemento";
+    const supplementName = cfdiTourSupplement?.name || "Suplemento";
     const suppRef = booking_supplement_id.slice(0, 8).toUpperCase();
     const serie = (settings.cfdi_serie_booking || "A") + "S";
     const effectivePaymentForm = payment_form || "03";
