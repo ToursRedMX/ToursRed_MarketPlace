@@ -417,7 +417,7 @@ Deno.serve(async (req: Request) => {
     `;
 
     // For bank transfer refunds, try to attach the receipt file
-    let attachments: any[] = [];
+    let attachments: { filename: string; fileblob: string; mimetype: string }[] = [];
     if (admin_cancellation && refund_method === 'bank_transfer' && receipt_file_path) {
       try {
         const { data: fileData, error: fileErr } = await supabase.storage
@@ -454,7 +454,7 @@ Deno.serve(async (req: Request) => {
       ? `Cancelación Administrativa - ${tour.name}`
       : `Confirmación de Cancelación - ${tour.name}`;
 
-    const emailPayload: any = {
+    const emailPayload: Record<string, unknown> = {
       api_key: settings.smtp_api_key,
       to: [user.email],
       sender: settings.contact_email,
