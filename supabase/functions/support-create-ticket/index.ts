@@ -9,6 +9,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface TicketData {
+  tipo: string;
+  subcategory_id: string;
+  solicitante_nombre: string;
+  solicitante_email: string;
+  descripcion: string;
+  user_id?: string;
+  extra_data?: Record<string, unknown>;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -30,7 +40,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const contentType = req.headers.get("content-type") ?? "";
-    let ticketData: any;
+    let ticketData: TicketData;
     let files: File[] = [];
 
     if (contentType.includes("multipart/form-data")) {

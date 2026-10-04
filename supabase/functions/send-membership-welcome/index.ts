@@ -107,7 +107,7 @@ Deno.serve(async (req: Request) => {
     const monthlyPrice = parseFloat(platformSettings.membership_monthly_price) || 89;
     const annualPrice = parseFloat(platformSettings.membership_annual_price) || 890;
     const annualSavings = (monthlyPrice * 12) - annualPrice;
-    const serviceFeeExemptionLimit = parseFloat((platformSettings as any).membership_service_fee_exemption_monthly_limit) || 500;
+    const serviceFeeExemptionLimit = parseFloat(platformSettings.membership_service_fee_exemption_monthly_limit) || 500;
 
     const planName = planType === 'monthly' ? 'Mensual' : 'Anual';
     const planPrice = planType === 'monthly' ? `$${monthlyPrice.toFixed(0)} MXN/mes` : `$${annualPrice.toFixed(0)} MXN/año`;
