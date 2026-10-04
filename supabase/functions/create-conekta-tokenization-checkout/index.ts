@@ -122,7 +122,9 @@ Deno.serve(async (req: Request) => {
       try {
         const parsed = JSON.parse(errorBody);
         errorMsg = parsed?.details?.[0]?.message || parsed?.message || errorMsg;
-      } catch {}
+      } catch {
+        // errorBody no es JSON valido; se usa el mensaje generico de arriba.
+      }
       return jsonResponse({ error: errorMsg }, 500);
     }
 
