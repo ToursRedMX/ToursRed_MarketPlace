@@ -128,7 +128,7 @@ Deno.serve(async (req: Request) => {
         let originalServiceCharge = Number(booking.service_charge || 0);
 
         let installmentsPaid = 0;
-        if ((booking as any).has_payment_plan) {
+        if (booking.has_payment_plan) {
           const { data: installments } = await supabase
             .from("booking_payment_plan_installments")
             .select("installment_number, amount_paid")
@@ -136,8 +136,8 @@ Deno.serve(async (req: Request) => {
             .in("status", ["paid", "partially_paid"]);
 
           for (const inst of (installments || [])) {
-            if ((inst as any).installment_number > 1) {
-              installmentsPaid += Number((inst as any).amount_paid || 0);
+            if (inst.installment_number > 1) {
+              installmentsPaid += Number(inst.amount_paid || 0);
             }
           }
 
@@ -148,13 +148,13 @@ Deno.serve(async (req: Request) => {
             .eq("status", "completed");
 
           for (const tx of (ppTransactions || [])) {
-            originalServiceCharge += Number((tx as any).service_charge || 0);
+            originalServiceCharge += Number(tx.service_charge || 0);
           }
         }
         const principalPaid = originalDepositAmount + installmentsPaid;
 
-        const insuranceRefund = (booking as any).travel_insurance_included
-          ? Number((booking as any).travel_insurance_cost || 0) : 0;
+        const insuranceRefund = booking.travel_insurance_included
+          ? Number(booking.travel_insurance_cost || 0) : 0;
 
         const { data: optionalServicesData } = await supabase
           .from("booking_optional_services")
@@ -165,8 +165,8 @@ Deno.serve(async (req: Request) => {
         let optionalServicesRefundable = 0;
         let optionalServicesServiceCharge = 0;
         for (const bos of (optionalServicesData || [])) {
-          optionalServicesRefundable += Number((bos as any).total_paid || (bos as any).subtotal || 0);
-          optionalServicesServiceCharge += Number((bos as any).service_charge || 0);
+          optionalServicesRefundable += Number(bos.total_paid || bos.subtotal || 0);
+          optionalServicesServiceCharge += Number(bos.service_charge || 0);
         }
 
         const refundAmount = principalPaid + originalServiceCharge + insuranceRefund + optionalServicesRefundable;
@@ -241,7 +241,7 @@ Deno.serve(async (req: Request) => {
               p_user_id: booking.user_id,
               p_amount: supRefundAmount,
               p_type: "refund",
-              p_description: `Reembolso suplemento "${(sup.tour_supplements as any)?.name}" por cancelación del tour: ${tour.name}`,
+              p_description: `Reembolso suplemento "${(sup.tour_supplements as unknown as { name: string } | null)?.name}" por cancelación del tour: ${tour.name}`,
               p_reference_id: sup.id,
               p_reference_type: "supplement_cancellation",
               p_idempotency_key: `${sup.id}_tour_cancel_supplement_refund`,
