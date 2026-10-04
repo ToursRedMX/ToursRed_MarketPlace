@@ -3,6 +3,7 @@ import { useAuth, AdminPermissions } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { UserPlus, Shield, X, Check, AlertCircle, Lock, Unlock, Trash2, Eye, EyeOff } from 'lucide-react';
 import { validarContrasena } from '../../lib/politicaContrasena';
+import { mensajeDeError } from '../../lib/errores';
 
 /** Los dos roles internos que esta pantalla da de alta y administra. */
 type RolInterno = 'admin' | 'accountant';
@@ -198,7 +199,7 @@ const AdminUsers: React.FC = () => {
       );
 
       setStaffUsers(staffWithPermissions);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cargando usuarios staff:', err);
       setError('Error al cargar los usuarios');
     } finally {
@@ -299,9 +300,9 @@ const AdminUsers: React.FC = () => {
       });
 
       await loadStaffUsers();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creando usuario:', err);
-      setError(err.message || 'Error al crear usuario');
+      setError(mensajeDeError(err) || 'Error al crear usuario');
     } finally {
       setLoading(false);
     }
@@ -343,7 +344,7 @@ const AdminUsers: React.FC = () => {
 
       setEditingPermissions(null);
       await loadStaffUsers();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error actualizando permisos:', err);
       setError('Error al actualizar permisos');
     } finally {
@@ -384,7 +385,7 @@ const AdminUsers: React.FC = () => {
       if (updateError) throw updateError;
 
       await loadStaffUsers();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error actualizando estado del usuario:', err);
       setError('Error al actualizar el estado del usuario');
     } finally {
@@ -416,7 +417,7 @@ const AdminUsers: React.FC = () => {
           },
           body: JSON.stringify({ user_id: userId }),
         });
-      } catch (authErr: any) {
+      } catch (authErr) {
         console.warn('Could not delete auth identity (may already be gone):', authErr);
       }
 
@@ -435,7 +436,7 @@ const AdminUsers: React.FC = () => {
       if (userError) throw userError;
 
       await loadStaffUsers();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error eliminando usuario:', err);
       setError('Error al eliminar el usuario');
     } finally {

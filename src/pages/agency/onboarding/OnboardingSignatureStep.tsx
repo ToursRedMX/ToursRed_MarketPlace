@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Ligature as FileSignature, Send, CheckCircle, RefreshCw, AlertCircle, Download, ArrowRight } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import ContractDraftViewer from '../../../components/contracts/ContractDraftViewer';
+import { mensajeDeError } from '../../../lib/errores';
 
 interface Props {
   agencyId: string;
@@ -10,6 +11,12 @@ interface Props {
 }
 
 type Stage = 'intro' | 'otp_sent' | 'signed';
+
+interface HttpFnError {
+  status: number;
+  message: string;
+  retry_after_minutes?: number;
+}
 
 const CONTRACT_VERSION = '1.0';
 
@@ -42,12 +49,13 @@ const OnboardingSignatureStep: React.FC<Props> = ({ agencyId, agencyEmail, onSig
     try {
       await callFn('request-contract-otp', { contract_version: CONTRACT_VERSION });
       setStage('otp_sent');
-    } catch (err: any) {
-      if (err.status === 429) {
-        setRetryAfter(err.retry_after_minutes ?? null);
-        setError(err.message ?? 'Demasiados intentos. Espera antes de solicitar otro código.');
+    } catch (err) {
+      const httpErr = err as Partial<HttpFnError>;
+      if (httpErr.status === 429) {
+        setRetryAfter(httpErr.retry_after_minutes ?? null);
+        setError(mensajeDeError(err) ?? 'Demasiados intentos. Espera antes de solicitar otro código.');
       } else {
-        setError(err.message ?? 'Error al enviar el código. Intenta de nuevo.');
+        setError(mensajeDeError(err) ?? 'Error al enviar el código. Intenta de nuevo.');
       }
     } finally {
       setLoading(false);
@@ -63,8 +71,8 @@ const OnboardingSignatureStep: React.FC<Props> = ({ agencyId, agencyEmail, onSig
       setStage('signed');
       setFolio(result?.folio ?? null);
       setSignedUrl(result?.signed_url ?? null);
-    } catch (err: any) {
-      setError(err.message ?? 'Código incorrecto o expirado.');
+    } catch (err) {
+      setError(mensajeDeError(err) ?? 'Código incorrecto o expirado.');
     } finally {
       setLoading(false);
     }

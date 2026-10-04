@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Plus, Edit, Trash2, Save, X, Eye, EyeOff, ArrowUp, ArrowDown } from 'lucide-react';
 import { getTourCategories, createTourCategory, updateTourCategory, deleteTourCategory } from '../../lib/supabase';
+import { mensajeDeError } from '../../lib/errores';
 
 interface TourCategory {
   id: string;
@@ -43,8 +44,8 @@ const AdminCategories: React.FC = () => {
       }
 
       setCategories(data || []);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar las categorías');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cargar las categorías');
     } finally {
       setIsLoading(false);
     }
@@ -125,8 +126,8 @@ const AdminCategories: React.FC = () => {
       handleCancel();
 
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Error al guardar la categoría');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al guardar la categoría');
     }
   };
 
@@ -138,8 +139,8 @@ const AdminCategories: React.FC = () => {
       if (error) throw new Error(error.message);
 
       await fetchCategories();
-    } catch (err: any) {
-      setError(err.message || 'Error al cambiar el estado');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cambiar el estado');
     }
   };
 
@@ -158,8 +159,8 @@ const AdminCategories: React.FC = () => {
       await fetchCategories();
 
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Error al eliminar la categoría');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al eliminar la categoría');
     }
   };
 

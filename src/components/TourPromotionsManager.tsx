@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Tag, Plus, CreditCard as Edit2, Trash2, ToggleLeft, ToggleRight, AlertCircle, Check, X, Calendar, Users, Loader2, Info, Percent } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../utils/formatCurrency';
+import { mensajeDeError } from '../lib/errores';
 
 interface TourPromotion {
   id: string;
@@ -230,11 +231,11 @@ const TourPromotionsManager: React.FC<TourPromotionsManagerProps> = ({ tourId, a
       await loadPromotions();
       setShowForm(false);
       setEditingPromotion(null);
-    } catch (err: any) {
-      if (err.code === '23505') {
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === '23505') {
         setError('Ya existe una promoción activa para este tour. Solo puede haber una activa a la vez.');
       } else {
-        setError(err.message || 'Error al guardar la promoción.');
+        setError(mensajeDeError(err) || 'Error al guardar la promoción.');
       }
     } finally {
       setIsSubmitting(false);

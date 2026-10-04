@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useFormPersistence } from '../../hooks/useFormPersistence';
 import { usePreventUnload } from '../../hooks/usePreventUnload';
+import { mensajeDeError } from '../../lib/errores';
 
 interface Message {
   id: string;
@@ -110,9 +111,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({
       }));
 
       setMessages(enrichedMessages || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching messages:', err);
-      setError(err.message || 'Error al cargar mensajes');
+      setError(mensajeDeError(err) || 'Error al cargar mensajes');
     } finally {
       setIsLoading(false);
     }
@@ -123,7 +124,7 @@ const MessageThread: React.FC<MessageThreadProps> = ({
       await supabase.rpc('mark_conversation_read', {
         p_conversation_id: conversationId
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error marking messages as read:', err);
     }
   };
@@ -147,9 +148,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({
       newMessagePersistence.clearStorage();
       setNewMessage('');
       await fetchMessages();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error sending message:', err);
-      setError(err.message || 'Error al enviar mensaje');
+      setError(mensajeDeError(err) || 'Error al enviar mensaje');
     } finally {
       setIsSending(false);
     }
@@ -182,9 +183,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({
       editMessagePersistence.clearStorage();
       setEditingMessageId(null);
       setEditContent('');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error editing message:', err);
-      setError(err.message || 'Error al editar mensaje');
+      setError(mensajeDeError(err) || 'Error al editar mensaje');
     }
   };
 
@@ -208,9 +209,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({
       }
 
       setMessages(prev => prev.filter(msg => msg.id !== messageId));
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting message:', err);
-      setError(err.message || 'Error al eliminar mensaje');
+      setError(mensajeDeError(err) || 'Error al eliminar mensaje');
     }
   };
 

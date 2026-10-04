@@ -11,6 +11,7 @@ import AgencySignupFormBody, {
 } from './AgencySignupFormBody';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
+import { mensajeDeError } from '../../lib/errores';
 
 const AgencySignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -183,8 +184,8 @@ const AgencySignupPage: React.FC = () => {
         const postVerifyRedirect = redirectUrl ?? '/agency/onboarding';
         navigate(`/verify-email?redirect=${encodeURIComponent(postVerifyRedirect)}`);
       }
-    } catch (err: any) {
-      setError(err.message || 'Ocurrió un error durante el registro');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Ocurrió un error durante el registro');
     } finally {
       // El token de Turnstile es de un solo uso y Supabase lo manda a
       // siteverify ANTES de mirar las credenciales, asi que un intento fallido

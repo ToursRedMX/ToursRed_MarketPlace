@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Download, ExternalLink, Loader2, AlertCircle, FileText, Building2, User, Receipt, Shield } from 'lucide-react';
+import { mensajeDeError } from '../lib/errores';
 
 // ── Minimal QR Code generator (pure TS, no deps) ────────────────────────────
 // Supports alphanumeric + byte mode, versions 1-40, ECC level M.
@@ -480,8 +481,8 @@ export default function CfdiViewerModal({ xmlUrl, onClose }: Props) {
       const text = await res.text();
       const data = parseCfdiXmlFull(text);
       setCfdi(data);
-    } catch (e: any) {
-      setError(e.message || 'Error al cargar el CFDI.');
+    } catch (e) {
+      setError(mensajeDeError(e) || 'Error al cargar el CFDI.');
     } finally {
       setIsLoading(false);
     }

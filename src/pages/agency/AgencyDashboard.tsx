@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
 import { supabase } from '../../lib/supabase';
+import { mensajeDeError } from '../../lib/errores';
 
 interface DashboardStats {
   totalTours: number;
@@ -211,9 +212,9 @@ const AgencyDashboard: React.FC = () => {
         setPreventaStats([]);
       }
       
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando datos de agencia:', err);
-      setError(err.message || 'Error al cargar los datos de la agencia');
+      setError(mensajeDeError(err) || 'Error al cargar los datos de la agencia');
     } finally {
       setIsLoading(false);
     }

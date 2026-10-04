@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Plus, Building2, QrCode, Copy, Check, AlertCircle, Loader2, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { supabase } from '../lib/supabase';
+import { mensajeDeError } from '../lib/errores';
 type TopupStep = 'select-method' | 'select-amount' | 'processing' | 'spei-instructions' | 'codi-qr' | 'error' | 'success';
 type PaymentMethod = 'spei' | 'codi';
 
@@ -110,8 +111,8 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
 
       setTopupData(data);
       setStep(method === 'spei' ? 'spei-instructions' : 'codi-qr');
-    } catch (err: any) {
-      setError(err.message || 'Error de conexion. Intenta nuevamente.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error de conexion. Intenta nuevamente.');
       setStep('error');
     }
   };

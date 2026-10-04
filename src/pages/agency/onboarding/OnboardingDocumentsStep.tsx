@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Upload, CheckCircle, XCircle, Clock, AlertCircle, RefreshCw, Send, FileCheck } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
+import { mensajeDeError } from '../../../lib/errores';
 
 interface DocType {
   key: string;
@@ -88,8 +89,8 @@ const OnboardingDocumentsStep: React.FC<Props> = ({ agencyId, personaType, docum
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Error al subir');
       await fetchDocs();
-    } catch (err: any) {
-      setUploadErr(prev => ({ ...prev, [typeKey]: err.message }));
+    } catch (err) {
+      setUploadErr(prev => ({ ...prev, [typeKey]: mensajeDeError(err) }));
     } finally {
       setUploading(prev => ({ ...prev, [typeKey]: false }));
     }
@@ -107,8 +108,8 @@ const OnboardingDocumentsStep: React.FC<Props> = ({ agencyId, personaType, docum
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Error al enviar la notificación');
       onSubmitted();
-    } catch (err: any) {
-      setSendError(err.message);
+    } catch (err) {
+      setSendError(mensajeDeError(err));
     } finally {
       setSending(false);
     }

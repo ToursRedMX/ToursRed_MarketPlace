@@ -440,7 +440,7 @@ export interface Booking {
   payment_intent_id?: string;
   payment_status?: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled';
   initial_payment_amount?: number;
-  payment_method?: string;
+  payment_method?: string | null;
   paid_at?: string;
   approval_status?: 'pending' | 'approved' | 'rejected';
   // Las tres son NULLABLE en la base y el codigo les escribe null.
@@ -455,10 +455,15 @@ export interface Booking {
   booking_approval_type?: 'automatic' | 'manual';
   toursred_cash_used?: number;
   has_pending_reschedule?: boolean;
-  // `auto_cancelled` lo escribe `process_expired_slot_reschedules` cuando
-  // vence el plazo para responder. Faltaba aqui, asi que el mensaje que lo
-  // anuncia al viajero no se pintaba nunca.
-  reschedule_response?: 'accepted' | 'rejected' | 'auto_accepted' | 'auto_cancelled';
+  // `bookings_reschedule_response_check` (reagendamiento de TOUR completo) solo
+  // permite estos tres valores. `auto_cancelled` vivia aqui antes por error: lo
+  // escribe `process_expired_slot_reschedules`, pero en la columna
+  // `slot_reschedule_response` de abajo (reagendamiento de UN SLOT), no en
+  // esta. Con `auto_cancelled` aqui, el mensaje que lo anuncia en
+  // TravelerBookings.tsx comparaba contra un valor que esta columna nunca
+  // tiene — codigo muerto que parecia cobertura. Verificado contra el CHECK
+  // constraint real el 04-oct-2026, no releyendo el codigo.
+  reschedule_response?: 'accepted' | 'rejected' | 'auto_accepted';
   reschedule_responded_at?: string;
   original_booking_date?: string;
   discount_code_id?: string;
@@ -467,6 +472,26 @@ export interface Booking {
   discount_codes?: DiscountCode;
   slot_id?: string;
   selected_date?: string;
+  // Reagendamiento de UN SLOT (cupo especifico), distinto del reagendamiento
+  // de tour completo de arriba. `bookings_slot_reschedule_response_check`
+  // agrega `accepted_no_availability`/`auto_accepted_no_availability` para
+  // cuando el slot original ya no tiene lugar al confirmar.
+  slot_reschedule_response?: 'accepted' | 'rejected' | 'auto_accepted' | 'auto_cancelled' | 'accepted_no_availability' | 'auto_accepted_no_availability';
+  has_pending_slot_reschedule?: boolean;
+  is_no_show?: boolean;
+  no_show_marked_at?: string | null;
+  needs_seat_reselection?: boolean;
+  selected_seats?: number[] | null;
+  has_partial_cancellations?: boolean;
+  paypal_transaction_id?: string | null;
+  active_travelers_count?: number;
+  previous_selected_seats?: number[] | null;
+  checkin_status?: 'full' | 'partial' | null;
+  cancelled_by_agency_at?: string | null;
+  cancellation_refund_amount?: number | null;
+  // Sin CHECK constraint: lo escriben varias funciones SQL con sus propias
+  // etiquetas de politica (100_percent, no_show, agency_cancellation, etc).
+  cancellation_type?: string | null;
   selected_time?: string;
   tour_slots?: TourSlot;
   pickup_type?: 'meeting_point' | 'pickup';
@@ -539,6 +564,52 @@ export interface BookingOptionalService {
   membership_exemption_used?: number;
   payment_method?: string | null;
   paid_at?: string | null;
+  // Select parcial del catalogo: solo lo que las pantallas de reserva piden.
+  tour_optional_services?: Pick<TourOptionalService, 'name' | 'is_refundable'>;
+}
+
+/** Un suplemento tal y como lo define el tour (el catalogo). */
+export interface TourSupplement {
+  id: string;
+  tour_id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  requires_approval: boolean;
+  is_cancellable: boolean;
+  max_capacity: number | null;
+  is_active: boolean;
+  display_order: number;
+}
+
+/** Lo que una reserva CONTRATA de un `TourSupplement`. */
+export interface BookingSupplement {
+  id: string;
+  booking_id: string;
+  tour_supplement_id: string;
+  quantity: number;
+  unit_price: number;
+  service_charge: number;
+  membership_exemption_used: number;
+  supplement_commission: number;
+  total_paid: number;
+  status: 'pending_approval' | 'approved' | 'rejected' | 'pending_payment' | 'paid' | 'cancelled';
+  payment_method?: string | null;
+  payment_intent_id?: string | null;
+  rejection_note?: string | null;
+  expires_at?: string | null;
+  requested_at: string;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  paid_at?: string | null;
+  approved_by?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: 'traveler' | 'agency' | 'system' | 'expiry' | 'tour_cancellation' | null;
+  refund_amount: number;
+  points_earned: number;
+  // Select parcial del catalogo: cada pantalla pide un subconjunto distinto
+  // de columnas, de ahi el `Partial` (ninguna esta garantizada presente).
+  tour_supplements?: Partial<Pick<TourSupplement, 'name' | 'description' | 'price' | 'is_cancellable' | 'requires_approval'>>;
 }
 
 /**

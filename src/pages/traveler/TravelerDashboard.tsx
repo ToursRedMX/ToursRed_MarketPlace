@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
 import { supabase } from '../../lib/supabase';
 import { Link } from 'react-router-dom';
+import { mensajeDeError } from '../../lib/errores';
 
 interface Booking {
   id: string;
@@ -302,9 +303,9 @@ const TravelerDashboard: React.FC = () => {
       alert('Tu suscripción se cancelará al final del período actual. Seguirás teniendo acceso a los beneficios hasta esa fecha.');
       setShowCancelModal(false);
       await loadDashboardData();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error cancelling subscription:', error);
-      alert(error.message || 'Error al cancelar la suscripción');
+      alert(mensajeDeError(error) || 'Error al cancelar la suscripción');
     } finally {
       setActionLoading(false);
     }
@@ -336,9 +337,9 @@ const TravelerDashboard: React.FC = () => {
       alert('¡Tu plan se actualizó a Anual! Se cobró la diferencia prorrateada por los días restantes de tu mes actual. Tu membresía anual es válida por 12 meses desde hoy.');
       setShowUpgradeModal(false);
       await loadDashboardData();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error upgrading subscription:', error);
-      alert(error.message || 'Error al actualizar la suscripción');
+      alert(mensajeDeError(error) || 'Error al actualizar la suscripción');
     } finally {
       setActionLoading(false);
     }
@@ -369,9 +370,9 @@ const TravelerDashboard: React.FC = () => {
 
       alert('¡Tu suscripción ha sido reactivada! Seguirás disfrutando de los beneficios ToursRed+.');
       await loadDashboardData();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error reactivating subscription:', error);
-      alert(error.message || 'Error al reactivar la suscripción');
+      alert(mensajeDeError(error) || 'Error al reactivar la suscripción');
     } finally {
       setActionLoading(false);
     }

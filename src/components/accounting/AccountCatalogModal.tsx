@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, AlertCircle, CheckCircle, ChevronDown, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { mensajeDeError } from '../../lib/errores';
 
 interface ChartAccount {
   id: string;
@@ -171,8 +172,8 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
       }
       onSaved();
       onClose();
-    } catch (e: any) {
-      setError(e.message ?? 'Error al guardar la cuenta.');
+    } catch (e) {
+      setError(mensajeDeError(e) ?? 'Error al guardar la cuenta.');
     } finally {
       setSaving(false);
     }

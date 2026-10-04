@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { SupportCategory, SupportSubcategory } from '../../types';
 import SupportFileUpload, { UploadedFile } from '../../components/support/SupportFileUpload';
+import { mensajeDeError } from '../../lib/errores';
 
 const SupportTravelerPage: React.FC = () => {
   const { user } = useAuth();
@@ -88,8 +89,8 @@ const SupportTravelerPage: React.FC = () => {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error ?? 'Error al crear el ticket');
       setFolio(result.folio);
-    } catch (err: any) {
-      setError(err.message ?? 'Error inesperado');
+    } catch (err) {
+      setError(mensajeDeError(err) ?? 'Error inesperado');
     } finally {
       setSubmitting(false);
     }

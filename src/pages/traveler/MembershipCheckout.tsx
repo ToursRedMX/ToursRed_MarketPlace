@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { mensajeDeError } from '../../lib/errores';
 
 interface AppliedDiscount {
   code: string;
@@ -225,8 +226,8 @@ export default function MembershipCheckout() {
         description: data.description || '',
       });
       setDiscountCode('');
-    } catch (err: any) {
-      setDiscountError(err.message || 'Error al validar el codigo');
+    } catch (err) {
+      setDiscountError(mensajeDeError(err) || 'Error al validar el codigo');
     } finally {
       setValidating(false);
     }
@@ -266,8 +267,8 @@ export default function MembershipCheckout() {
       if (data.url) {
         window.location.href = data.url;
       }
-    } catch (err: any) {
-      setError(err.message || 'Error al procesar la suscripcion');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al procesar la suscripcion');
     } finally {
       setSubmitting(false);
     }

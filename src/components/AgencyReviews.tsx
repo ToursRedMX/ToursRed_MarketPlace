@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Star, User, Calendar, MessageSquare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { mensajeDeError } from '../lib/errores';
 
 interface Review {
   id: string;
@@ -188,8 +189,8 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
       setHasReviewed(true);
       setCanReview(false);
       fetchReviews();
-    } catch (err: any) {
-      setError(err.message || 'Error al enviar reseña');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al enviar reseña');
     } finally {
       setIsSubmitting(false);
     }

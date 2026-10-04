@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { Notification } from '../types';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { mensajeDeError } from '../lib/errores';
 
 const NotificationsPage: React.FC = () => {
   const { user } = useAuth();
@@ -36,9 +37,9 @@ const NotificationsPage: React.FC = () => {
       }
       
       setNotifications(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching notifications:', err);
-      setError(err.message || 'Error al cargar las notificaciones');
+      setError(mensajeDeError(err) || 'Error al cargar las notificaciones');
     } finally {
       setIsLoading(false);
     }

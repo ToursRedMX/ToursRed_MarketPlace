@@ -5,6 +5,7 @@ import { supabase, UserRole } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
+import { mensajeDeError } from '../../lib/errores';
 
 const GoogleTravelerSignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -243,8 +244,8 @@ const GoogleTravelerSignupPage: React.FC = () => {
       await completeOnboarding();
 
       navigate('/traveler/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Ocurrió un error al completar el registro');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Ocurrió un error al completar el registro');
     } finally {
       setIsLoading(false);
     }

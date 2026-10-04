@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Shield, ShieldCheck, KeyRound, Smartphone, AlertTriangle, Loader2, ArrowRight } from 'lucide-react';
+import { mensajeDeError } from '../lib/errores';
 
 type GateState = 'loading' | 'not_required' | 'needs_enrollment' | 'needs_challenge' | 'passed' | 'error';
 
@@ -109,7 +110,7 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
 
       setFactorId('');
       setState('needs_challenge');
-    } catch (err: any) {
+    } catch (err) {
       // Cualquier fallo inesperado tambien bloquea: antes caia en 'not_required'
       // y dejaba entrar al panel sin segundo factor.
       console.error('MfaGate: fallo al verificar el estado de MFA', err);
@@ -135,8 +136,8 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
       setFactorId(data.id);
       setTotpSecret(data.totp.secret);
       setQrUrl(data.totp.qr_code);
-    } catch (err: any) {
-      setError(err.message || 'Error al configurar MFA');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al configurar MFA');
     } finally {
       setIsSubmitting(false);
     }
@@ -165,8 +166,8 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
 
       setState('passed');
       setVerifyCode('');
-    } catch (err: any) {
-      setError(err.message || 'Codigo incorrecto. Intenta de nuevo.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Codigo incorrecto. Intenta de nuevo.');
     } finally {
       setIsSubmitting(false);
     }
@@ -201,8 +202,8 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
       // muchisimo: la IP era 187.190.63.128 en las cuatro peticiones. El
       // problema nunca fue la IP, era el challenge gastado.
       setFactorId(verifiedFactor.id);
-    } catch (err: any) {
-      setError(err.message || 'Error al iniciar verificacion');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al iniciar verificacion');
     } finally {
       setIsSubmitting(false);
     }
@@ -238,8 +239,8 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
 
       setState('passed');
       setChallengeCode('');
-    } catch (err: any) {
-      setError(err.message || 'Codigo incorrecto. Intenta de nuevo.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Codigo incorrecto. Intenta de nuevo.');
     } finally {
       setIsSubmitting(false);
     }

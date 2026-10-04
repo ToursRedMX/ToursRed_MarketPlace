@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { mensajeDeError } from '../../lib/errores';
 
 interface WebhookEvent {
   id: string;
@@ -161,8 +162,8 @@ const AdminOpenPayConciliation: React.FC = () => {
         setActionResult('Saldo acreditado exitosamente');
         await loadData();
       }
-    } catch (err: any) {
-      setActionResult(`Error: ${err.message}`);
+    } catch (err) {
+      setActionResult(`Error: ${mensajeDeError(err)}`);
     } finally {
       setIsProcessing(false);
     }
@@ -191,8 +192,8 @@ const AdminOpenPayConciliation: React.FC = () => {
       setActionResult('Evento marcado como resuelto sin acreditar');
       setSelectedEvent(null);
       await loadData();
-    } catch (err: any) {
-      setActionResult(`Error: ${err.message}`);
+    } catch (err) {
+      setActionResult(`Error: ${mensajeDeError(err)}`);
     } finally {
       setIsProcessing(false);
     }
@@ -380,8 +381,8 @@ const AdminOpenPayConciliation: React.FC = () => {
       setAssignUserId('');
       setAssignAmount('');
       await loadData();
-    } catch (err: any) {
-      setActionResult(`Error: ${err.message}`);
+    } catch (err) {
+      setActionResult(`Error: ${mensajeDeError(err)}`);
     } finally {
       setIsProcessing(false);
     }

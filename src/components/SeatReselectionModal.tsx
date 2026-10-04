@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, AlertTriangle, CheckCircle, Loader2, MapPin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import SeatMapPicker from './seats/SeatMapPicker';
+import { mensajeDeError } from '../lib/errores';
 
 interface SeatReselectionModalProps {
   bookingId: string;
@@ -89,8 +90,8 @@ const SeatReselectionModal: React.FC<SeatReselectionModalProps> = ({
       setTimeout(() => {
         onSuccess();
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'Error al guardar los asientos. Intenta de nuevo.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al guardar los asientos. Intenta de nuevo.');
     } finally {
       setIsSubmitting(false);
     }

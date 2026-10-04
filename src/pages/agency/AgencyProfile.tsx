@@ -8,6 +8,7 @@ import ImageUploader from '../../components/ImageUploader';
 import ChangePasswordSection from '../../components/ChangePasswordSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import LinkedAccountsSection from '../../components/LinkedAccountsSection';
+import { mensajeDeError } from '../../lib/errores';
 
 interface AgencyProfile {
   id: string;
@@ -216,9 +217,9 @@ const AgencyProfile: React.FC = () => {
       // Inicializar formulario de edición
       setEditForm(formularioDesdeLaAgencia(agencyData));
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando perfil de agencia:', err);
-      setError(err.message || 'Error al cargar el perfil de la agencia');
+      setError(mensajeDeError(err) || 'Error al cargar el perfil de la agencia');
     } finally {
       setIsLoading(false);
     }
@@ -239,8 +240,8 @@ const AgencyProfile: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-    } catch (e: any) {
-      alert('No se pudo descargar el contrato: ' + (e?.message || 'error desconocido'));
+    } catch (e) {
+      alert('No se pudo descargar el contrato: ' + (mensajeDeError(e) || 'error desconocido'));
     } finally {
       setDownloadingContract(false);
     }
@@ -352,9 +353,9 @@ const AgencyProfile: React.FC = () => {
       // Recargar datos
       await fetchAgencyProfile(agency.id);
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error guardando perfil:', err);
-      setError(err.message || 'Error al guardar los cambios');
+      setError(mensajeDeError(err) || 'Error al guardar los cambios');
     } finally {
       setIsSaving(false);
     }

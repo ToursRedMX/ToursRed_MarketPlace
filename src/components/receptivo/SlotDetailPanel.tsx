@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '../../lib/supabase';
 import { TourSlot, SlotStatus } from '../../types';
+import { mensajeDeError } from '../../lib/errores';
 
 interface SlotDetailPanelProps {
   tourId: string;
@@ -67,8 +68,8 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ dateKey, slots, onClo
       if (err) throw err;
       setEditingCapacity(null);
       onRefresh();
-    } catch (err: any) {
-      setError(err.message || 'Error al actualizar la capacidad.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al actualizar la capacidad.');
     } finally {
       setIsUpdating(null);
     }
@@ -84,8 +85,8 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ dateKey, slots, onClo
         .eq('id', slot.id);
       if (err) throw err;
       onRefresh();
-    } catch (err: any) {
-      setError(err.message || 'Error al cambiar el estado.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cambiar el estado.');
     } finally {
       setIsUpdating(null);
     }
@@ -112,8 +113,8 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ dateKey, slots, onClo
       setCancelingId(null);
       setCancelReason('');
       onRefresh();
-    } catch (err: any) {
-      setError(err.message || 'Error al cancelar el slot.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cancelar el slot.');
     } finally {
       setIsUpdating(null);
     }

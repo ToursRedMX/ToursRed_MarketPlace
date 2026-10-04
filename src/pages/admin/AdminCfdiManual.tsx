@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { mensajeDeError } from '../../lib/errores';
 
 // ─── Catalogos SAT ────────────────────────────────────────────────────────────
 
@@ -733,8 +734,8 @@ const AdminCfdiManual: React.FC = () => {
       setNotes('');
       setSelectedPpd(null);
       fetchSupportData();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message ?? 'Error desconocido' });
+    } catch (err) {
+      setMessage({ type: 'error', text: mensajeDeError(err) ?? 'Error desconocido' });
     } finally {
       setIsSubmitting(false);
     }
@@ -766,8 +767,8 @@ const AdminCfdiManual: React.FC = () => {
       setMessage({ type: 'success', text: 'CFDI cancelado correctamente' });
       setCancelModal(null);
       fetchSupportData();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message ?? 'Error al cancelar' });
+    } catch (err) {
+      setMessage({ type: 'error', text: mensajeDeError(err) ?? 'Error al cancelar' });
     } finally {
       setIsCancelling(false);
     }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Settings, DollarSign, Plus, Trash2, CheckCircle, AlertCircle, X, Save, Award, Target } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { mensajeDeError } from '../../lib/errores';
 
 interface CommissionSettings {
   id: string;
@@ -126,8 +127,8 @@ export default function AdminEjecutivosConfig() {
       }
       setMessage({ type: 'success', text: 'Configuración de comisiones guardada correctamente.' });
       loadData();
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al guardar.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al guardar.' });
     } finally {
       setIsSaving(false);
     }
@@ -158,8 +159,8 @@ export default function AdminEjecutivosConfig() {
       setBonusCondition('agencies_approved_count'); setBonusRecurring(false);
       setShowBonusForm(false);
       loadData();
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al guardar bono.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al guardar bono.' });
     } finally {
       setIsSavingBonus(false);
     }

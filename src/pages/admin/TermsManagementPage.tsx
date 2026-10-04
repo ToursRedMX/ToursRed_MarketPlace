@@ -8,6 +8,7 @@ import { autoTable } from 'jspdf-autotable';
 import RichTextEditor from '../../components/RichTextEditor';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import { downloadExcel } from '../../utils/excelExport';
+import { mensajeDeError } from '../../lib/errores';
 
 interface TermsVersion {
   id: string;
@@ -72,8 +73,8 @@ const PublishModal: React.FC<{
       if (rpcError) throw rpcError;
       if (!data?.success) throw new Error(data?.error || 'Error al publicar');
       onPublished();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(mensajeDeError(err));
     } finally {
       setSaving(false);
     }

@@ -4,6 +4,7 @@ import {
   AlertCircle, CheckCircle, FileText, CreditCard, Banknote, Building2
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { mensajeDeError } from '../../lib/errores';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -240,8 +241,8 @@ const ManualEntryModal: React.FC<Props> = ({ year, month, onClose, onSaved }) =>
 
       onSaved();
       onClose();
-    } catch (e: any) {
-      setError(e.message ?? 'Error al guardar el movimiento.');
+    } catch (e) {
+      setError(mensajeDeError(e) ?? 'Error al guardar el movimiento.');
     } finally {
       setSaving(false);
     }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../utils/formatCurrency';
+import { mensajeDeError } from '../lib/errores';
 
 interface MembershipPrices {
   monthlyPrice: number;
@@ -58,9 +59,9 @@ export function useMembershipPrices() {
       };
 
       setPrices(priceData);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching membership prices:', err);
-      setError(err.message || 'Error al cargar los precios');
+      setError(mensajeDeError(err) || 'Error al cargar los precios');
 
       const defaultPrices: MembershipPrices = {
         monthlyPrice: 49,

@@ -6,6 +6,7 @@ import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, CornerDownLeft, Link2, Link2Off, ImagePlus, Loader2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { mensajeDeError } from '../lib/errores';
 
 const ImageExtension = Node.create({
   name: 'image',
@@ -162,8 +163,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       if (urlData?.publicUrl) {
         editor.chain().focus().setImage({ src: urlData.publicUrl, alt: file.name }).run();
       }
-    } catch (err: any) {
-      alert('Error al subir la imagen: ' + (err.message || 'intenta de nuevo'));
+    } catch (err) {
+      alert('Error al subir la imagen: ' + (mensajeDeError(err) || 'intenta de nuevo'));
     } finally {
       setUploading(false);
       e.target.value = '';

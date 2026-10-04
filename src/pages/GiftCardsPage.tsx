@@ -9,6 +9,7 @@ import { formatCurrencyMXN } from '../utils/formatCurrency';
 import Seo from '../components/Seo';
 import { getMpDeviceId } from '../utils/mercadopagoDevice';
 import PaymentProviderSelector, { PaymentProvider, ConektaMethod, OpenpayMethod } from '../components/PaymentProviderSelector';
+import { mensajeDeError } from '../lib/errores';
 
 const DEFAULT_GIFT_CARD_AMOUNTS = [100, 200, 500, 1000];
 const DEFAULT_MAX_AMOUNT = 10000;
@@ -140,7 +141,7 @@ export default function GiftCardsPage() {
       });
       setDiscountCode('');
       setCodeError(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error validating discount code:', err);
       setCodeError('Error al validar el código');
     } finally {
@@ -435,10 +436,10 @@ export default function GiftCardsPage() {
       } else {
         throw new Error('No se pudo crear la sesión de pago');
       }
-    } catch (err: any) {
+    } catch (err) {
       clearTimeout(timeoutId);
       console.error('Error purchasing gift card:', err);
-      setError(err.message || 'Error al procesar tu solicitud. Por favor intenta nuevamente.');
+      setError(mensajeDeError(err) || 'Error al procesar tu solicitud. Por favor intenta nuevamente.');
       setIsProcessing(false);
     }
   };

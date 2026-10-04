@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, Mail, Phone, Globe, MapPin, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import AgencyContractSection from '../../components/AgencyContractSection';
+import { mensajeDeError } from '../../lib/errores';
 
 interface AgencyDetail {
   id: string;
@@ -72,8 +73,8 @@ export default function ExecutiveAgencyProfile() {
         return;
       }
       setAgency(data);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar los datos de la agencia.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cargar los datos de la agencia.');
     } finally {
       setIsLoading(false);
     }

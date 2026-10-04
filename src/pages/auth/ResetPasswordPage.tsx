@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Lock, Key, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { validarContrasena } from '../../lib/politicaContrasena';
+import { mensajeDeError } from '../../lib/errores';
 
 const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
@@ -77,10 +78,10 @@ const ResetPasswordPage: React.FC = () => {
       setTimeout(() => {
         navigate('/login');
       }, 3000);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error completo:', err);
-      console.error('Error message:', err.message);
-      setError(err.message || 'Error al restablecer la contraseña');
+      console.error('Error message:', mensajeDeError(err));
+      setError(mensajeDeError(err) || 'Error al restablecer la contraseña');
     } finally {
       setIsLoading(false);
     }
@@ -115,9 +116,9 @@ const ResetPasswordPage: React.FC = () => {
 
       setResendSuccess('Código reenviado exitosamente. Revisa tu correo.');
       setTimeout(() => setResendSuccess(''), 5000);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error reenviando código:', err);
-      setError(err.message || 'Error al reenviar el código');
+      setError(mensajeDeError(err) || 'Error al reenviar el código');
     } finally {
       setIsResending(false);
     }

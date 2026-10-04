@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { validarContrasena } from '../lib/politicaContrasena';
+import { mensajeDeError } from '../lib/errores';
 
 interface FirstLoginPasswordGateProps {
   userId: string;
@@ -52,8 +53,8 @@ export default function FirstLoginPasswordGate({ userId, onPasswordChanged }: Fi
       setTimeout(() => {
         onPasswordChanged();
       }, 1500);
-    } catch (err: any) {
-      setError(err.message || 'Error al cambiar la contraseña. Intenta de nuevo.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cambiar la contraseña. Intenta de nuevo.');
     } finally {
       setIsSubmitting(false);
     }

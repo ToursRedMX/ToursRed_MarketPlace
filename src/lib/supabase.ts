@@ -3,6 +3,9 @@ import type { Session, User } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { formatCurrency } from '../utils/formatCurrency';
 import { crearFetchConCorrelacion } from './fetchConCorrelacion';
+import { mensajeDeError } from './errores';
+import { comoFilas } from './relacionesSupabase';
+import type { Booking } from '../types';
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -275,9 +278,14 @@ export const signUp = async (
     }
 
     return { data, error: null, profileData: profile, isExistingUser };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en signUp:', error);
-    return { data: null, error, profileData: null, isExistingUser: false };
+    return {
+      data: null,
+      error: error instanceof Error ? error : { message: mensajeDeError(error) },
+      profileData: null,
+      isExistingUser: false,
+    };
   }
 };
 
@@ -333,9 +341,9 @@ export const signIn = async (email: string, password: string, captchaToken?: str
     }
 
     return { data, error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en signIn:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : { message: mensajeDeError(error) } };
   }
 };
 
@@ -344,9 +352,9 @@ export const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     return { error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en signOut:', error);
-    return { error };
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -384,9 +392,9 @@ export const createAgencyProfile = async (
       .single();
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en createAgencyProfile:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -425,9 +433,9 @@ export const updateAgencyStatus = async (agencyId: string, isActive: boolean) =>
       .single();
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en updateAgencyStatus:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -451,9 +459,9 @@ export const getAllAgencies = async () => {
       .order('created_at', { ascending: false });
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getAllAgencies:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -731,11 +739,23 @@ export const getTours = async (filters: any = {}) => {
     const { data, count, error } = await query;
 
     return { data: data ?? [], error, count: count ?? data?.length ?? 0 };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTours:', error);
-    return { data: null, error, count: 0 };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)), count: 0 };
   }
 };
+
+interface TourRecommendationRow {
+  agency_id: string;
+  agencies?: { id: string; name: string; rating: number; is_active: boolean } | null;
+  bookings?: { id: string; status: string }[];
+  [key: string]: unknown;
+}
+
+interface TourRecommendationScored extends TourRecommendationRow {
+  booking_count: number;
+  _score: number;
+}
 
 export const getPopularTours = async (limit = 20) => {
   try {
@@ -767,20 +787,20 @@ export const getPopularTours = async (limit = 20) => {
     if (error) return { data: [], error };
 
     // 70% confirmed bookings + 30% agency rating, max 3 per agency
-    const normalized = (data ?? [])
-      .filter((t: any) => t.agencies?.is_active !== false)
-      .map((t: any) => {
+    const normalized = (data as unknown as TourRecommendationRow[] ?? [])
+      .filter((t) => t.agencies?.is_active !== false)
+      .map((t) => {
         const confirmedBookings = Array.isArray(t.bookings)
-          ? t.bookings.filter((b: any) => b.status !== 'cancelled').length
+          ? t.bookings.filter((b) => b.status !== 'cancelled').length
           : 0;
         const agencyRating = t.agencies?.rating ?? 0;
-        return { ...t, booking_count: confirmedBookings, _score: confirmedBookings * 0.7 + agencyRating * 0.3 };
+        return { ...t, booking_count: confirmedBookings, _score: confirmedBookings * 0.7 + agencyRating * 0.3 } as TourRecommendationScored;
       })
-      .sort((a: any, b: any) => b._score - a._score);
+      .sort((a, b) => b._score - a._score);
 
     // Cap max 3 per agency
     const agencyCounts: Record<string, number> = {};
-    const capped: any[] = [];
+    const capped: TourRecommendationScored[] = [];
     for (const t of normalized) {
       const aid = t.agency_id;
       agencyCounts[aid] = (agencyCounts[aid] || 0) + 1;
@@ -789,8 +809,8 @@ export const getPopularTours = async (limit = 20) => {
     }
 
     return { data: capped, error: null };
-  } catch (error: any) {
-    return { data: [], error };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -846,8 +866,8 @@ export const getActiveFeaturedTours = async () => {
     }
 
     return { data: tours, slotMap, error: null };
-  } catch (error: any) {
-    return { data: [], slotMap: {}, error };
+  } catch (error) {
+    return { data: [], slotMap: {}, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -898,8 +918,8 @@ export const getNewTours = async (limit = 20) => {
     }
 
     return { data: capped, error: null };
-  } catch (error: any) {
-    return { data: [], error };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -911,8 +931,8 @@ export const getFeaturedPlans = async () => {
       .eq('is_active', true)
       .order('display_order');
     return { data: data ?? [], error };
-  } catch (error: any) {
-    return { data: [], error };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -935,8 +955,8 @@ export const getAgencyFeaturedSlots = async (agencyId: string) => {
         : slot.featured_tour_stats,
     }));
     return { data: normalized, error };
-  } catch (error: any) {
-    return { data: [], error };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -949,8 +969,8 @@ export const getAgencyFeaturedWaitlist = async (agencyId: string) => {
       .in('status', ['waiting', 'notified'])
       .order('created_at', { ascending: false });
     return { data: data ?? [], error };
-  } catch (error: any) {
-    return { data: [], error };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1013,8 +1033,8 @@ export const joinFeaturedWaitlist = async (tourId: string, planId: string, agenc
       .insert({ tour_id: tourId, agency_id: agencyId, plan_id: planId, position: nextPosition });
 
     return { error };
-  } catch (error: any) {
-    return { error };
+  } catch (error) {
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1030,9 +1050,9 @@ export const getTourById = async (id: string) => {
       .maybeSingle();
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTourById:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1048,9 +1068,9 @@ export const getTourBySlug = async (slug: string) => {
       .maybeSingle();
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTourBySlug:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1069,7 +1089,7 @@ export const resolveTourSlug = async (oldSlug: string): Promise<string | null> =
     }
 
     return null;
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en resolveTourSlug:', error);
     return null;
   }
@@ -1089,7 +1109,7 @@ export const checkSlugAvailable = async (slug: string, excludeTourId?: string): 
     }
 
     return data as boolean;
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en checkSlugAvailable:', error);
     return false;
   }
@@ -1122,9 +1142,9 @@ export const updateTourSlug = async (
     }
 
     return { success: false, slug: null, message: 'Respuesta vacía del servidor' };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en updateTourSlug:', error);
-    return { success: false, slug: null, message: error.message };
+    return { success: false, slug: null, message: mensajeDeError(error) };
   }
 };
 
@@ -1174,9 +1194,9 @@ export const createTour = async (tourData: any, destinations: string[], userId: 
     }
     
     return { data: tour, error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en createTour:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1190,9 +1210,9 @@ export const updateTour = async (tourId: string, tourData: any) => {
       .single();
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en updateTour:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1204,9 +1224,9 @@ export const deleteTour = async (tourId: string) => {
       .eq('id', tourId);
     
     return { error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en deleteTour:', error);
-    return { error };
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1231,15 +1251,21 @@ export const createBooking = async (bookingData: any) => {
     }
 
     return { data, error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en createBooking:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
+interface PaymentTransactionSlim {
+  booking_id: string;
+  payment_method_type: string | null;
+  created_at: string;
+}
+
 export const getUserBookings = async (userId: string) => {
   try {
-    const { data: bookings, error } = await supabase
+    const { data: bookingsData, error } = await supabase
       .from('bookings')
       .select(BOOKING_SELECT_FIELDS)
       .eq('user_id', userId)
@@ -1249,9 +1275,10 @@ export const getUserBookings = async (userId: string) => {
       .neq('status', 'cancellation_processing')
       .order('created_at', { ascending: false });
 
-    if (error || !bookings) {
-      return { data: bookings, error };
+    if (error || !bookingsData) {
+      return { data: bookingsData, error };
     }
+    const bookings = comoFilas<Booking>(bookingsData);
 
     // OPTIMIZED: Get all payment transactions in ONE query instead of N queries
     const bookingIds = bookings.map(b => b.id);
@@ -1267,8 +1294,8 @@ export const getUserBookings = async (userId: string) => {
     }
 
     // Group transactions by booking_id and get the most recent
-    const transactionsByBooking: Record<string, any> = {};
-    (allTransactions || []).forEach((tx: any) => {
+    const transactionsByBooking: Record<string, PaymentTransactionSlim> = {};
+    comoFilas<PaymentTransactionSlim>(allTransactions).forEach((tx) => {
       if (!transactionsByBooking[tx.booking_id] ||
           new Date(tx.created_at) > new Date(transactionsByBooking[tx.booking_id].created_at)) {
         transactionsByBooking[tx.booking_id] = tx;
@@ -1277,7 +1304,7 @@ export const getUserBookings = async (userId: string) => {
 
     // Map bookings with payment methods (no more N+1!)
     const bookingsWithPaymentMethod = bookings.map((booking) => {
-      let paymentMethod = (booking as any).payment_method || null;
+      let paymentMethod = booking.payment_method || null;
 
       // If no payment_method, use the most recent transaction
       if (!paymentMethod && transactionsByBooking[booking.id]) {
@@ -1291,9 +1318,9 @@ export const getUserBookings = async (userId: string) => {
     });
 
     return { data: bookingsWithPaymentMethod, error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getUserBookings:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1314,7 +1341,7 @@ const BOOKING_SELECT_FIELDS = `
 
 export const getUserPastBookings = async (userId: string) => {
   try {
-    const { data: bookings, error } = await supabase
+    const { data: bookingsData, error } = await supabase
       .from('bookings')
       .select(BOOKING_SELECT_FIELDS)
       .eq('user_id', userId)
@@ -1322,9 +1349,10 @@ export const getUserPastBookings = async (userId: string) => {
       .order('created_at', { ascending: false })
       .limit(100);
 
-    if (error || !bookings) return { data: bookings, error };
+    if (error || !bookingsData) return { data: bookingsData, error };
+    const bookings = comoFilas<Booking>(bookingsData);
 
-    const bookingIds = bookings.map((b: any) => b.id);
+    const bookingIds = bookings.map((b) => b.id);
     const { data: allTransactions, error: errorTransacciones } = await supabase
       .from('payment_transactions')
       .select('booking_id, payment_method_type, created_at')
@@ -1336,27 +1364,27 @@ export const getUserPastBookings = async (userId: string) => {
       console.error('❌ Error leyendo payment_transactions para el metodo de pago:', errorTransacciones);
     }
 
-    const transactionsByBooking: Record<string, any> = {};
-    (allTransactions || []).forEach((tx: any) => {
+    const transactionsByBooking: Record<string, PaymentTransactionSlim> = {};
+    comoFilas<PaymentTransactionSlim>(allTransactions).forEach((tx) => {
       if (!transactionsByBooking[tx.booking_id] ||
           new Date(tx.created_at) > new Date(transactionsByBooking[tx.booking_id].created_at)) {
         transactionsByBooking[tx.booking_id] = tx;
       }
     });
 
-    const result = bookings.map((booking: any) => ({
+    const result = bookings.map((booking) => ({
       ...booking,
       payment_method: booking.payment_method || transactionsByBooking[booking.id]?.payment_method_type || null,
     }));
     return { data: result, error: null };
-  } catch (error: any) {
-    return { data: null, error };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
 export const getUserCancelledBookings = async (userId: string) => {
   try {
-    const { data: bookings, error } = await supabase
+    const { data: bookingsData, error } = await supabase
       .from('bookings')
       .select(BOOKING_SELECT_FIELDS)
       .eq('user_id', userId)
@@ -1364,9 +1392,10 @@ export const getUserCancelledBookings = async (userId: string) => {
       .order('created_at', { ascending: false })
       .limit(100);
 
-    if (error || !bookings) return { data: bookings, error };
+    if (error || !bookingsData) return { data: bookingsData, error };
+    const bookings = comoFilas<Booking>(bookingsData);
 
-    const bookingIds = bookings.map((b: any) => b.id);
+    const bookingIds = bookings.map((b) => b.id);
     const { data: allTransactions, error: errorTransacciones } = await supabase
       .from('payment_transactions')
       .select('booking_id, payment_method_type, created_at')
@@ -1378,27 +1407,27 @@ export const getUserCancelledBookings = async (userId: string) => {
       console.error('❌ Error leyendo payment_transactions para el metodo de pago:', errorTransacciones);
     }
 
-    const transactionsByBooking: Record<string, any> = {};
-    (allTransactions || []).forEach((tx: any) => {
+    const transactionsByBooking: Record<string, PaymentTransactionSlim> = {};
+    comoFilas<PaymentTransactionSlim>(allTransactions).forEach((tx) => {
       if (!transactionsByBooking[tx.booking_id] ||
           new Date(tx.created_at) > new Date(transactionsByBooking[tx.booking_id].created_at)) {
         transactionsByBooking[tx.booking_id] = tx;
       }
     });
 
-    const result = bookings.map((booking: any) => ({
+    const result = bookings.map((booking) => ({
       ...booking,
       payment_method: booking.payment_method || transactionsByBooking[booking.id]?.payment_method_type || null,
     }));
     return { data: result, error: null };
-  } catch (error: any) {
-    return { data: null, error };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
 export const getAgencyBookings = async (agencyId: string) => {
   try {
-    const { data: bookings, error } = await supabase
+    const { data: bookingsData, error } = await supabase
       .from('bookings')
       .select(`
         *,
@@ -1409,9 +1438,10 @@ export const getAgencyBookings = async (agencyId: string) => {
       .neq('status', 'draft')
       .order('created_at', { ascending: false });
 
-    if (error || !bookings) {
-      return { data: bookings, error };
+    if (error || !bookingsData) {
+      return { data: bookingsData, error };
     }
+    const bookings = comoFilas<Booking>(bookingsData);
 
     // OPTIMIZED: Get all payment transactions in ONE query instead of N queries
     const bookingIds = bookings.map(b => b.id);
@@ -1427,8 +1457,8 @@ export const getAgencyBookings = async (agencyId: string) => {
     }
 
     // Group transactions by booking_id and get the most recent
-    const transactionsByBooking: Record<string, any> = {};
-    (allTransactions || []).forEach((tx: any) => {
+    const transactionsByBooking: Record<string, PaymentTransactionSlim> = {};
+    comoFilas<PaymentTransactionSlim>(allTransactions).forEach((tx) => {
       if (!transactionsByBooking[tx.booking_id] ||
           new Date(tx.created_at) > new Date(transactionsByBooking[tx.booking_id].created_at)) {
         transactionsByBooking[tx.booking_id] = tx;
@@ -1437,7 +1467,7 @@ export const getAgencyBookings = async (agencyId: string) => {
 
     // Map bookings with payment methods (no more N+1!)
     const bookingsWithPaymentMethod = bookings.map((booking) => {
-      let paymentMethod = (booking as any).payment_method || null;
+      let paymentMethod = booking.payment_method || null;
 
       // If no payment_method, use the most recent transaction
       if (!paymentMethod && transactionsByBooking[booking.id]) {
@@ -1451,11 +1481,64 @@ export const getAgencyBookings = async (agencyId: string) => {
     });
 
     return { data: bookingsWithPaymentMethod, error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getAgencyBookings:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
+
+interface ReportBookingUser {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone_number: string | null;
+}
+
+interface ReportTraveler {
+  id: string;
+  booking_id: string;
+  categoria_viajero: string;
+  nombre: string;
+  precio_aplicado: number;
+}
+
+export interface TourBookingReportBooking {
+  id: string;
+  booking_code: string;
+  user_id: string;
+  deposit_amount: number;
+  total_price: number;
+  user_payment: number;
+  payment_method: string | null;
+  booking_date: string;
+  created_at: string;
+  status: string;
+  count_adultos: number;
+  count_ninos: number;
+  count_infantes: number;
+  count_adultos_mayores: number;
+  count_mascotas: number;
+  toursred_cash_used: number;
+  has_payment_plan?: boolean;
+  payment_plan_total?: number;
+  payment_plan_paid?: number;
+  users: ReportBookingUser | null;
+  travelers: ReportTraveler[];
+}
+
+export interface TourBookingReport {
+  tour: { id: string; name: string; destination: string; start_date: string; end_date: string };
+  bookings: TourBookingReportBooking[];
+  summary: {
+    totalBookings: number;
+    totalTravelers: number;
+    totalsByCategory: { adultos: number; ninos: number; infantes: number; adultos_mayores: number; mascotas: number };
+    totalDeposit: number;
+    totalRemaining: number;
+    totalRevenue: number;
+  };
+}
 
 export const getTourBookingReport = async (tourId: string, agencyId: string) => {
   try {
@@ -1489,6 +1572,9 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
         count_adultos_mayores,
         count_mascotas,
         toursred_cash_used,
+        has_payment_plan,
+        payment_plan_total,
+        payment_plan_paid,
         users:user_id(id, first_name, last_name, email, phone_number)
       `)
       .eq('tour_id', tourId)
@@ -1524,19 +1610,20 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
           { key: 'mascota', label: 'mascota', count: booking.count_mascotas || 0 },
         ];
 
-        const travelersFromCounts: any[] = [];
+        const travelersFromCounts: ReportTraveler[] = [];
         for (const cat of categoryMap) {
           if (cat.count <= 0) continue;
           const registered = (travelersRaw || []).filter(
-            (t: any) => t.categoria_viajero === cat.key
+            (t) => t.categoria_viajero === cat.key
           );
           for (let i = 0; i < cat.count; i++) {
             if (registered[i]) {
               travelersFromCounts.push(registered[i]);
             } else {
               // Viajero sin datos de acompañante registrado (ej. 2x1)
-              const firstName = (booking as any).users?.first_name || '';
-              const lastName = (booking as any).users?.last_name || '';
+              const bookingUser = booking.users as unknown as ReportBookingUser | null;
+              const firstName = bookingUser?.first_name || '';
+              const lastName = bookingUser?.last_name || '';
               travelersFromCounts.push({
                 id: `${booking.id}-${cat.key}-${i}`,
                 booking_id: booking.id,
@@ -1569,7 +1656,7 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
           ...booking,
           travelers: travelersFromCounts,
           payment_method: paymentMethod
-        };
+        } as unknown as TourBookingReportBooking;
       })
     );
 
@@ -1590,8 +1677,8 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
 
     const totalDeposit = bookingsWithTravelers.reduce((sum, b) => sum + Number(b.deposit_amount || 0), 0);
     const totalRemaining = bookingsWithTravelers.reduce((sum, b) => {
-      if ((b as any).has_payment_plan) {
-        return sum + (Number((b as any).payment_plan_total || 0) - Number((b as any).payment_plan_paid || 0));
+      if (b.has_payment_plan) {
+        return sum + (Number(b.payment_plan_total || 0) - Number(b.payment_plan_paid || 0));
       }
       return sum + (Number(b.total_price || 0) - Number(b.deposit_amount || 0));
     }, 0);
@@ -1612,9 +1699,9 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
       },
       error: null
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTourBookingReport:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1632,9 +1719,9 @@ export const getTourReviews = async (tourId: string) => {
       .order('created_at', { ascending: false });
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTourReviews:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1651,9 +1738,9 @@ export const getAllDestinations = async () => {
       .order('name', { ascending: true });
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getAllDestinations:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1667,9 +1754,9 @@ export const searchDestinations = async (query: string) => {
       .limit(5);
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en searchDestinations:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1690,9 +1777,9 @@ export const createDestination = async (destinationData: any) => {
     }
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en createDestination:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1713,9 +1800,9 @@ export const updateDestination = async (destinationId: string, destinationData: 
     }
     
     return { data: data[0], error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en updateDestination:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1727,9 +1814,9 @@ export const deleteDestination = async (destinationId: string) => {
       .eq('id', destinationId);
     
     return { error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en deleteDestination:', error);
-    return { error };
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1745,9 +1832,9 @@ export const addDestinationImage = async (destinationId: string, imageData: any)
       .single();
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en addDestinationImage:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1759,9 +1846,9 @@ export const deleteDestinationImage = async (imageId: string) => {
       .eq('id', imageId);
     
     return { error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en deleteDestinationImage:', error);
-    return { error };
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1775,9 +1862,9 @@ export const getUserNotifications = async (limit = 10, offset = 0, includeRead =
     });
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getUserNotifications:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1788,9 +1875,9 @@ export const markNotificationAsRead = async (notificationId: string) => {
     });
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en markNotificationAsRead:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1799,9 +1886,9 @@ export const markAllNotificationsAsRead = async () => {
     const { data, error } = await supabase.rpc('mark_all_notifications_as_read');
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en markAllNotificationsAsRead:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1810,9 +1897,9 @@ export const getUnreadNotificationCount = async () => {
     const { data, error } = await supabase.rpc('get_unread_notifications_count');
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getUnreadNotificationCount:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1841,9 +1928,9 @@ export const getTourCategories = async (includeInactive: boolean = false) => {
 
     const { data, error } = await query;
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTourCategories:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1861,9 +1948,9 @@ export const createTourCategory = async (categoryData: {
       .single();
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en createTourCategory:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1886,9 +1973,9 @@ export const updateTourCategory = async (
       .single();
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en updateTourCategory:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1925,9 +2012,9 @@ export const deleteTourCategory = async (id: string) => {
       .eq('id', id);
 
     return { error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en deleteTourCategory:', error);
-    return { error };
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -2019,11 +2106,11 @@ export const validateCancellationEligibility = async (bookingId: string) => {
       error: null,
       booking
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en validateCancellationEligibility:', error);
     return {
       eligible: false,
-      error: error.message || 'Error al validar la elegibilidad de cancelación',
+      error: mensajeDeError(error) || 'Error al validar la elegibilidad de cancelación',
       booking: null
     };
   }

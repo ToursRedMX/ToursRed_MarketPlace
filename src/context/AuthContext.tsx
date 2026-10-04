@@ -10,6 +10,7 @@ import {
   sessionIdDeToken,
   vieneDeOAuth,
 } from '../utils/registroDeLogin';
+import { mensajeDeError } from '../lib/errores';
 
 export interface AdminPermissions {
   canManageAgencies: boolean;
@@ -481,13 +482,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch { /**/ }
         return { role, emailVerified };
       }
-    } catch (err: any) {
+    } catch (err) {
       // Los dos centinelas tienen que salir de aqui intactos. Si caen en el
       // fallback de abajo, el usuario entra con el rol de su metadata y la
       // denegacion se deshace sola.
       if (
-        err?.message === ERROR_USUARIO_BLOQUEADO ||
-        err?.message === ERROR_VERIFICACION_NO_DISPONIBLE
+        mensajeDeError(err) === ERROR_USUARIO_BLOQUEADO ||
+        mensajeDeError(err) === ERROR_VERIFICACION_NO_DISPONIBLE
       ) {
         throw err;
       }
@@ -868,13 +869,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsAgencyApproved(true);
         clearAuthCache();
       }
-    } catch (err: any) {
+    } catch (err) {
       // Mismo motivo que en `determineUserRole`: el fallback de abajo concede
       // el rol cacheado o TRAVELER, asi que una denegacion que llegue hasta
       // aqui se convertiria en un acceso concedido.
       if (
-        err?.message === ERROR_USUARIO_BLOQUEADO ||
-        err?.message === ERROR_VERIFICACION_NO_DISPONIBLE
+        mensajeDeError(err) === ERROR_USUARIO_BLOQUEADO ||
+        mensajeDeError(err) === ERROR_VERIFICACION_NO_DISPONIBLE
       ) {
         return;
       }

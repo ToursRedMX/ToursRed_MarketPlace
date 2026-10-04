@@ -6,6 +6,7 @@ import { Booking, Tour } from '../types';
 import { format } from 'date-fns';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { etiquetaPlanMembresia } from '../lib/planMembresia';
+import { mensajeDeError } from '../lib/errores';
 
 const BookingPendingPage: React.FC = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -56,8 +57,8 @@ const BookingPendingPage: React.FC = () => {
       setBooking(bookingData);
       setTour(bookingData.tours);
 
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar los detalles de la reserva');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cargar los detalles de la reserva');
     } finally {
       setIsLoading(false);
     }

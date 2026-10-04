@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useStepUp } from '../context/StepUpContext';
 import { validateBirthDateForCategory, validateAllTravelers } from '../utils/birthDateValidation';
 import { getMpDeviceId, preloadMpDeviceId } from '../utils/mercadopagoDevice';
+import { mensajeDeError } from '../lib/errores';
 
 interface TravelerFormData {
   categoria_viajero: 'adulto' | 'nino' | 'infante' | 'adulto_mayor' | 'mascota';
@@ -113,9 +114,9 @@ const TravelersInfoPage: React.FC = () => {
         await initializeTravelerForms(bookingData);
       }
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error loading booking:', err);
-      setError(err.message || 'Error al cargar la reserva');
+      setError(mensajeDeError(err) || 'Error al cargar la reserva');
     } finally {
       setIsLoading(false);
     }
@@ -548,9 +549,9 @@ const TravelersInfoPage: React.FC = () => {
           proceedToPayment();
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving travelers:', err);
-      setError(err.message || 'Error al guardar los datos');
+      setError(mensajeDeError(err) || 'Error al guardar los datos');
     } finally {
       setIsSaving(false);
     }
@@ -906,9 +907,9 @@ const TravelersInfoPage: React.FC = () => {
         }
       }
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creando sesión de checkout:', error);
-      setError(error.message || 'Error al procesar el pago');
+      setError(mensajeDeError(error) || 'Error al procesar el pago');
     }
   };
 

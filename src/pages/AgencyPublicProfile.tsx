@@ -6,6 +6,7 @@ import TourCard from '../components/TourCard';
 import AgencyReviews from '../components/AgencyReviews';
 import Seo from '../components/Seo';
 import type { Agency, Tour } from '../types';
+import { mensajeDeError } from '../lib/errores';
 
 const SITE_URL = (import.meta.env.VITE_APP_URL || 'https://toursredmx.netlify.app/').replace(/\/$/, '');
 
@@ -81,9 +82,9 @@ const AgencyPublicProfile: React.FC = () => {
       if (errorResenas) console.error('AgencyPublicProfile: no se pudieron contar las reseñas', errorResenas);
 
       setReviewCount(count || 0);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cargando datos de agencia:', err);
-      setError(err.message || 'Error al cargar la información de la agencia');
+      setError(mensajeDeError(err) || 'Error al cargar la información de la agencia');
     } finally {
       setIsLoading(false);
     }

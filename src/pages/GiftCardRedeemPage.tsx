@@ -4,6 +4,7 @@ import { Gift, Check, AlertCircle, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
+import { mensajeDeError } from '../lib/errores';
 
 export default function GiftCardRedeemPage() {
   const [searchParams] = useSearchParams();
@@ -63,9 +64,9 @@ export default function GiftCardRedeemPage() {
       } else {
         setError(data?.error || 'Código inválido');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error validating gift card:', err);
-      setError(err.message || 'Error al validar el código');
+      setError(mensajeDeError(err) || 'Error al validar el código');
     } finally {
       setIsValidating(false);
     }
@@ -103,9 +104,9 @@ export default function GiftCardRedeemPage() {
       } else {
         setError(data?.error || 'Error al canjear la tarjeta');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error redeeming gift card:', err);
-      setError(err.message || 'Error al canjear la tarjeta');
+      setError(mensajeDeError(err) || 'Error al canjear la tarjeta');
     } finally {
       setIsRedeeming(false);
     }

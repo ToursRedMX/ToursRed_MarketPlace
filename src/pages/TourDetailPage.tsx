@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { format } from 'date-fns';
 import Seo from '../components/Seo';
+import { mensajeDeError } from '../lib/errores';
 
 const SITE_URL = (import.meta.env.VITE_APP_URL || 'https://toursredmx.netlify.app/').replace(/\/$/, '');
 
@@ -174,9 +175,9 @@ const TourDetailPage: React.FC = () => {
           }
         }
         
-      } catch (err: any) {
+      } catch (err) {
         console.error('❌ Error en fetchTour:', err);
-        setError(err.message || 'Error al cargar los detalles del tour');
+        setError(mensajeDeError(err) || 'Error al cargar los detalles del tour');
       } finally {
         setIsLoading(false);
       }
@@ -355,9 +356,9 @@ const TourDetailPage: React.FC = () => {
       // Redirigir a la página de mensajes con la conversación seleccionada
       navigate(`/messages?conversation=${conversationId}`);
       
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error creando conversación:', err);
-      setError(err.message || 'Error al iniciar conversación con la agencia');
+      setError(mensajeDeError(err) || 'Error al iniciar conversación con la agencia');
     } finally {
       setIsCreatingChat(false);
     }

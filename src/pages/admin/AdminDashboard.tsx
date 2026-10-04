@@ -3,6 +3,7 @@ import { Users, Building, MapPin, Calendar, TrendingUp, Activity, BarChart2, Arr
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { mensajeDeError } from '../../lib/errores';
 
 interface DashboardStats {
   totalUsers: number;
@@ -152,9 +153,9 @@ const AdminDashboard: React.FC = () => {
         destinations: destinationsResult.count
       });
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando estadísticas:', err);
-      setError(err.message || 'Error al cargar las estadísticas');
+      setError(mensajeDeError(err) || 'Error al cargar las estadísticas');
     } finally {
       setIsLoading(false);
     }

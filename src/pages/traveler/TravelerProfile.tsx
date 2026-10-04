@@ -10,6 +10,7 @@ import ProfilePictureUploader from '../../components/ProfilePictureUploader';
 import ChangePasswordSection from '../../components/ChangePasswordSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import LinkedAccountsSection from '../../components/LinkedAccountsSection';
+import { mensajeDeError } from '../../lib/errores';
 
 interface TravelerProfile {
   id: string;
@@ -309,9 +310,9 @@ const TravelerProfile: React.FC = () => {
         emergency_contact_phone: profileData.emergency_contact_phone || ''
       });
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando perfil de viajero:', err);
-      setError(err.message || 'Error al cargar el perfil');
+      setError(mensajeDeError(err) || 'Error al cargar el perfil');
     } finally {
       setIsLoading(false);
     }
@@ -395,9 +396,9 @@ const TravelerProfile: React.FC = () => {
       // Recargar datos
       await fetchProfile();
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error guardando perfil:', err);
-      setError(err.message || 'Error al guardar los cambios');
+      setError(mensajeDeError(err) || 'Error al guardar los cambios');
     } finally {
       setIsSaving(false);
     }
@@ -454,7 +455,7 @@ const TravelerProfile: React.FC = () => {
 
       setProfile(prev => prev ? { ...prev, profile_picture_url: url } : null);
       setSuccess('Foto de perfil actualizada correctamente');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error updating profile picture:', err);
       setError('Error al actualizar la foto de perfil');
     }

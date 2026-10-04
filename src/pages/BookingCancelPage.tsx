@@ -52,7 +52,7 @@ const BookingCancelPage: React.FC = () => {
       if (result.booking_code) {
         setBookingCode(result.booking_code);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error in updateBookingStatus:', err);
     } finally {
       setIsLoading(false);

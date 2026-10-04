@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Send, Search, Filter, Eye, X, Users, Calendar, CheckCircle, AlertCircle, Clock, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { comoFilas } from '../../lib/relacionesSupabase';
+import { mensajeDeError } from '../../lib/errores';
 
 interface TourMessage {
   id: string;
@@ -80,8 +81,8 @@ const AdminTourMessages: React.FC = () => {
 
       if (err) throw new Error(err.message);
       setMessages(comoFilas<TourMessage>(data));
-    } catch (e: any) {
-      setError(e.message || 'Error al cargar mensajes');
+    } catch (e) {
+      setError(mensajeDeError(e) || 'Error al cargar mensajes');
     } finally {
       setIsLoading(false);
     }

@@ -3,6 +3,7 @@ import { X, MapPin, AlertCircle, ExternalLink, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { DeparturePoint } from '../types';
+import { mensajeDeError } from '../lib/errores';
 
 interface DeparturePointFormProps {
   onClose: () => void;
@@ -118,9 +119,9 @@ const DeparturePointForm: React.FC<DeparturePointFormProps> = ({ onClose, onSucc
 
       onSuccess(data);
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating departure point:', err);
-      setError(err.message || 'Error al crear el punto de salida');
+      setError(mensajeDeError(err) || 'Error al crear el punto de salida');
     } finally {
       setIsSubmitting(false);
     }

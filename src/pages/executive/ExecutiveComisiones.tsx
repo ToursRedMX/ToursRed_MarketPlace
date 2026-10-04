@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import CfdiViewerModal from '../../components/CfdiViewerModal';
+import { mensajeDeError } from '../../lib/errores';
 
 interface Commission {
   id: string;
@@ -201,8 +202,8 @@ export default function ExecutiveComisiones() {
         warnings.push('No tienes RFC registrado en tu perfil. Se omitió la validación del emisor.');
       }
       setValidation({ status: errors.length > 0 ? 'error' : 'ok', parsed, errors, warnings });
-    } catch (e: any) {
-      setValidation({ status: 'error', parsed: null, errors: [e.message || 'Error al leer el archivo XML.'], warnings: [] });
+    } catch (e) {
+      setValidation({ status: 'error', parsed: null, errors: [mensajeDeError(e) || 'Error al leer el archivo XML.'], warnings: [] });
     }
   };
 
@@ -225,8 +226,8 @@ export default function ExecutiveComisiones() {
       if (!res.ok) throw new Error(result.error || 'Error al generar el CFDI.');
       setGeneratedResult(result as GeneratedCfdiResult);
       loadCommissions();
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al generar el CFDI.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al generar el CFDI.' });
       setCfdiModal(null);
     } finally { setIsGenerating(false); }
   };
@@ -255,8 +256,8 @@ export default function ExecutiveComisiones() {
       setCfdiModal(null); setCfdiXmlFile(null);
       setValidation({ status: 'idle', parsed: null, errors: [], warnings: [] });
       setSelectedIds([]); loadCommissions();
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al subir el CFDI.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al subir el CFDI.' });
     } finally { setIsSaving(false); }
   };
 

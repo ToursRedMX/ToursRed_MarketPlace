@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, X, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { mensajeDeError } from '../lib/errores';
 
 interface ImageUploaderProps {
   onImageSelect: (publicUrl: string, type: string, size: number) => void;
@@ -108,8 +109,8 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       setPreview(urlData.publicUrl);
       onImageSelect(urlData.publicUrl, file.type, file.size);
-    } catch (err: any) {
-      setError(err.message || 'Error al subir la imagen');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al subir la imagen');
     } finally {
       setIsUploading(false);
     }

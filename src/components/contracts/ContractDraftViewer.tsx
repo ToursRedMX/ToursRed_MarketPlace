@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { FileText, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import contractTemplate from './contrato_agencia_template.html?raw';
+import { mensajeDeError } from '../../lib/errores';
 
 interface Props {
   agencyId: string;
@@ -77,8 +78,8 @@ const ContractDraftViewer: React.FC<Props> = ({ agencyId }) => {
         }
 
         if (!cancelled) setHtml(template);
-      } catch (err: any) {
-        if (!cancelled) setError(err.message ?? 'Error al cargar el contrato');
+      } catch (err) {
+        if (!cancelled) setError(mensajeDeError(err) ?? 'Error al cargar el contrato');
       } finally {
         if (!cancelled) setLoading(false);
       }

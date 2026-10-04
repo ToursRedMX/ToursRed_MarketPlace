@@ -5,6 +5,7 @@ import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { tasaEfectivaAgencia } from '../../utils/comisionAgencia';
 import AgencyContractSection from '../../components/AgencyContractSection';
 import { comoFila } from '../../lib/relacionesSupabase';
+import { mensajeDeError } from '../../lib/errores';
 
 interface Agency {
   id: string;
@@ -261,9 +262,9 @@ const AdminAgencies: React.FC = () => {
       }));
 
       setAgencies(agenciesWithExec);
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando agencias:', err);
-      setError(err.message || 'Error al cargar las agencias');
+      setError(mensajeDeError(err) || 'Error al cargar las agencias');
     } finally {
       setIsLoading(false);
     }
@@ -341,8 +342,8 @@ const AdminAgencies: React.FC = () => {
       }
 
       setError('');
-    } catch (err: any) {
-      setError(err.message || 'Error al cambiar estado de aprobación');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cambiar estado de aprobación');
     } finally {
       setIsUpdating(null);
     }
@@ -366,9 +367,9 @@ const AdminAgencies: React.FC = () => {
       ));
 
       console.log(`✅ Estado de agencia ${agencyId} actualizado a:`, !currentStatus);
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error actualizando estado de agencia:', err);
-      setError(err.message || 'Error al actualizar el estado de la agencia');
+      setError(mensajeDeError(err) || 'Error al actualizar el estado de la agencia');
     } finally {
       setIsUpdating(null);
     }
@@ -519,9 +520,9 @@ const AdminAgencies: React.FC = () => {
       await fetchAgencies();
       setIsEditingAgency(false);
       setSelectedAgency(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error actualizando agencia:', err);
-      setError(err.message || 'Error al actualizar la agencia');
+      setError(mensajeDeError(err) || 'Error al actualizar la agencia');
     } finally {
       setIsUpdating(null);
     }

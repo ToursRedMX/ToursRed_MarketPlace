@@ -18,6 +18,7 @@ import { createBooking, supabase } from '../lib/supabase';
 import { formatCurrency, formatCurrencyMXN } from '../utils/formatCurrency';
 import { useMembershipPrices } from '../hooks/useMembershipPrices';
 import { isCrawler } from '../utils/isCrawler';
+import { mensajeDeError } from '../lib/errores';
 
 interface BookingFormProps {
   tour: Tour;
@@ -607,8 +608,8 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
       } else {
         setDiscountCodeError(data?.error || 'Codigo invalido');
       }
-    } catch (err: any) {
-      setDiscountCodeError(err.message || 'Error al validar el codigo');
+    } catch (err) {
+      setDiscountCodeError(mensajeDeError(err) || 'Error al validar el codigo');
     } finally {
       setIsValidatingCode(false);
     }
@@ -642,8 +643,8 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
       } else {
         setInsuranceDiscountError(data?.error || 'Codigo invalido');
       }
-    } catch (err: any) {
-      setInsuranceDiscountError(err.message || 'Error al validar el codigo');
+    } catch (err) {
+      setInsuranceDiscountError(mensajeDeError(err) || 'Error al validar el codigo');
     } finally {
       setIsValidatingInsuranceCode(false);
     }
@@ -1375,9 +1376,9 @@ const BookingForm: React.FC<BookingFormProps> = ({ tour }) => {
 
       navigate(`/booking-travelers/${data.id}`);
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ Error en el proceso de reserva:', error);
-      setError(error.message || 'Hubo un error al procesar tu reserva. Por favor, intenta de nuevo.');
+      setError(mensajeDeError(error) || 'Hubo un error al procesar tu reserva. Por favor, intenta de nuevo.');
     } finally {
       setIsSubmitting(false);
     }

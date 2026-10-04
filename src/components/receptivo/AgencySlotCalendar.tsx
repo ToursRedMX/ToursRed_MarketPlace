@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import { supabase } from '../../lib/supabase';
 import { TourSlot } from '../../types';
 import SlotDetailPanel from './SlotDetailPanel';
+import { mensajeDeError } from '../../lib/errores';
 
 interface AgencySlotCalendarProps {
   tourId: string;
@@ -75,8 +76,8 @@ const AgencySlotCalendar: React.FC<AgencySlotCalendarProps> = ({ tourId, agencyI
       await onGenerateSlots(genStart, genEnd);
       await fetchSlots(currentMonth);
       setShowGenerateModal(false);
-    } catch (err: any) {
-      alert(`Error al generar slots: ${err.message || 'Error desconocido'}`);
+    } catch (err) {
+      alert(`Error al generar slots: ${mensajeDeError(err) || 'Error desconocido'}`);
     } finally {
       setIsGenerating(false);
     }

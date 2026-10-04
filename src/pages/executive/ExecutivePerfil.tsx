@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import { normalizarTelefono } from '../../lib/telefono';
 import { validarContrasena } from '../../lib/politicaContrasena';
+import { mensajeDeError } from '../../lib/errores';
 
 interface ExecutiveProfile {
   id: string;
@@ -171,8 +172,8 @@ export default function ExecutivePerfil() {
       if (errorFirmada) console.error('ExecutivePerfil: no se pudo firmar la URL de la foto nueva', errorFirmada);
       if (signed?.signedUrl) setPhotoUrl(signed.signedUrl);
       showMsg('success', 'Foto de perfil actualizada.', 'photo');
-    } catch (e: any) {
-      showMsg('error', e.message || 'Error al subir la foto.', 'photo');
+    } catch (e) {
+      showMsg('error', mensajeDeError(e) || 'Error al subir la foto.', 'photo');
     } finally {
       setIsUploadingPhoto(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -204,8 +205,8 @@ export default function ExecutivePerfil() {
       }
       setPhone(telefono ?? '');
       showMsg('success', 'Información personal guardada.', 'personal');
-    } catch (e: any) {
-      showMsg('error', e.message || 'Error al guardar.', 'personal');
+    } catch (e) {
+      showMsg('error', mensajeDeError(e) || 'Error al guardar.', 'personal');
     } finally { setIsSavingPersonal(false); }
   };
 
@@ -223,8 +224,8 @@ export default function ExecutivePerfil() {
       }).eq('id', profile.id);
       if (error) throw error;
       showMsg('success', 'Datos fiscales guardados.', 'fiscal');
-    } catch (e: any) {
-      showMsg('error', e.message || 'Error al guardar.', 'fiscal');
+    } catch (e) {
+      showMsg('error', mensajeDeError(e) || 'Error al guardar.', 'fiscal');
     } finally { setIsSavingFiscal(false); }
   };
 
@@ -243,8 +244,8 @@ export default function ExecutivePerfil() {
       }).eq('id', profile.id);
       if (error) throw error;
       showMsg('success', 'Datos bancarios guardados.', 'bank');
-    } catch (e: any) {
-      showMsg('error', e.message || 'Error al guardar.', 'bank');
+    } catch (e) {
+      showMsg('error', mensajeDeError(e) || 'Error al guardar.', 'bank');
     } finally { setIsSavingBank(false); }
   };
 
@@ -268,8 +269,8 @@ export default function ExecutivePerfil() {
       setProfile(p => p ? { ...p, facturapi_configured: true, facturapi_configured_at: new Date().toISOString() } : p);
       setFacturApiKey('');
       showMsg('success', 'FacturAPI configurado y verificado correctamente.', 'facturapi');
-    } catch (e: any) {
-      showMsg('error', e.message || 'Error al verificar con FacturAPI.', 'facturapi');
+    } catch (e) {
+      showMsg('error', mensajeDeError(e) || 'Error al verificar con FacturAPI.', 'facturapi');
     } finally { setIsVerifyingFacturapi(false); }
   };
 
@@ -284,8 +285,8 @@ export default function ExecutivePerfil() {
       if (error) throw error;
       setNewPassword(''); setConfirmPassword('');
       showMsg('success', 'Contraseña actualizada correctamente.', 'password');
-    } catch (e: any) {
-      showMsg('error', e.message || 'Error al cambiar la contraseña.', 'password');
+    } catch (e) {
+      showMsg('error', mensajeDeError(e) || 'Error al cambiar la contraseña.', 'password');
     } finally { setIsSavingPassword(false); }
   };
 

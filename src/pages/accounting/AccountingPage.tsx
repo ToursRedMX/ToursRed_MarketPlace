@@ -7,6 +7,7 @@ import AccountCatalogModal from '../../components/accounting/AccountCatalogModal
 import AperturaModal from '../../components/accounting/AperturaModal';
 import InsuranceSettlementModal from '../../components/accounting/InsuranceSettlementModal';
 import InsuranceCommissionModal from '../../components/accounting/InsuranceCommissionModal';
+import { mensajeDeError } from '../../lib/errores';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -651,8 +652,8 @@ const AccountingPage: React.FC = () => {
       showToast(`Procesadas: ${r.bookings_processed} reservas, ${r.completions_processed} tours completados, ${r.payouts_processed} pagos`);
       loadEntries();
       loadReports();
-    } catch (e: any) {
-      showToast(e.message ?? 'Error al generar polizas', false);
+    } catch (e) {
+      showToast(mensajeDeError(e) ?? 'Error al generar polizas', false);
     } finally {
       setGenerating(false);
     }
@@ -678,8 +679,8 @@ const AccountingPage: React.FC = () => {
       a.download = `ContabilidadElectronica_${year}${String(month).padStart(2,'0')}.zip`;
       a.click();
       showToast('XMLs descargados correctamente');
-    } catch (e: any) {
-      showToast(e.message ?? 'Error al exportar', false);
+    } catch (e) {
+      showToast(mensajeDeError(e) ?? 'Error al exportar', false);
     } finally {
       setExporting(false);
     }

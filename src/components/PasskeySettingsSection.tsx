@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { KeyRound, Plus, Trash2, Loader2, Check, AlertTriangle, Fingerprint } from 'lucide-react';
+import { mensajeDeError } from '../lib/errores';
 
 interface PasskeyInfo {
   id: string;
@@ -27,7 +28,7 @@ export const PasskeySettingsSection: React.FC = () => {
       } else {
         setPasskeys((data ?? []) as PasskeyInfo[]);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Exception listing passkeys:', err);
       setPasskeys([]);
     } finally {
@@ -79,9 +80,9 @@ export const PasskeySettingsSection: React.FC = () => {
       }
       setSuccess('Clave de acceso registrada correctamente');
       await loadPasskeys();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error registering passkey:', err);
-      const msg = err.message || err.name || 'Error al registrar clave de acceso';
+      const msg = mensajeDeError(err) || 'Error al registrar clave de acceso';
       setError(msg);
     } finally {
       setRegistering(false);
@@ -99,8 +100,8 @@ export const PasskeySettingsSection: React.FC = () => {
       if (deleteError) throw deleteError;
       setSuccess('Clave eliminada');
       await loadPasskeys();
-    } catch (err: any) {
-      setError(err.message || 'Error al eliminar clave');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al eliminar clave');
     }
   };
 

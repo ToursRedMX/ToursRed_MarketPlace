@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, X, CheckCircle, Building2, MailCheck, Send, Loader2, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { mensajeDeError } from '../../lib/errores';
 
 type LeadStatus = 'prospecto' | 'contactado' | 'negociacion' | 'registrado' | 'aprobado' | 'perdido';
 
@@ -142,8 +143,8 @@ export default function AdminLeads() {
       setFixEmailLead(null);
       setFixEmailValue('');
       loadLeads();
-    } catch (err: any) {
-      setActionMessage(err.message || 'Error al corregir el correo');
+    } catch (err) {
+      setActionMessage(mensajeDeError(err) || 'Error al corregir el correo');
     } finally {
       setActionLoading(false);
     }
@@ -170,8 +171,8 @@ export default function AdminLeads() {
         ? 'El servicio de correo confirmó el envío de las credenciales.'
         : 'La contraseña ya se actualizó, pero no se pudo confirmar el envío. No repitas la operación: generaría otra contraseña. Contacta a soporte para verificar el envío.');
       setResendLead(null);
-    } catch (err: any) {
-      setActionMessage(err.message || 'Error al reenviar credenciales');
+    } catch (err) {
+      setActionMessage(mensajeDeError(err) || 'Error al reenviar credenciales');
     } finally {
       setActionLoading(false);
     }

@@ -119,6 +119,7 @@ function entorno({ respuestas, signOutLanza = false }) {
     UserRole, supabase,
     console: { log() {}, warn() {}, error() {} },
     Sentry: { captureException() {} },
+    mensajeDeError: (e) => String(e?.message ?? e),
     setTimeout, Promise,
     window: { get location() { return { set href(v) { registro.destino = v; } }; } },
     sessionStorage: { getItem: () => null, setItem: () => {} },
@@ -307,7 +308,7 @@ casos.push(async () => {
 casos.push(async () => {
   const catchUpdate = recortarBloque(
     authContext.slice(authContext.indexOf('const updateAuthState')),
-    '} catch (err: any) {',
+    '} catch (err) {',
   );
   assert.ok(
     !/setIsSuperAdmin\(\s*true\s*\)/.test(soloCodigo(catchUpdate)),
@@ -327,7 +328,7 @@ casos.push(async () => {
 casos.push(async () => {
   const catchDetermine = recortarBloque(
     authContext.slice(authContext.indexOf('const determineUserRole')),
-    '} catch (err: any) {',
+    '} catch (err) {',
   );
   for (const centinela of ['ERROR_USUARIO_BLOQUEADO', 'ERROR_VERIFICACION_NO_DISPONIBLE']) {
     assert.ok(
@@ -341,7 +342,7 @@ casos.push(async () => {
 casos.push(async () => {
   const catchUpdate = recortarBloque(
     authContext.slice(authContext.indexOf('const updateAuthState')),
-    '} catch (err: any) {',
+    '} catch (err) {',
   );
   for (const centinela of ['ERROR_USUARIO_BLOQUEADO', 'ERROR_VERIFICACION_NO_DISPONIBLE']) {
     assert.ok(

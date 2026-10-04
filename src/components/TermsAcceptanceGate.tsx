@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FileText, LogOut, Check, AlertTriangle, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
+import { mensajeDeError } from '../lib/errores';
 
 interface ActiveTerms {
   id: string;
@@ -56,8 +57,8 @@ const TermsAcceptanceGate: React.FC<Props> = ({ termsType, onAccepted, onSignOut
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Error al registrar aceptación');
       onAccepted();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(mensajeDeError(err));
     } finally {
       setSaving(false);
     }

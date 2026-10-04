@@ -198,7 +198,7 @@ const TourMassMessageModal: React.FC<TourMassMessageModalProps> = ({
         successCount: result.success_count,
         errorCount: result.error_count,
       });
-    } catch (err: any) {
+    } catch (err) {
       setSendResult({ success: false, successCount: 0, errorCount: recipientCount || 0 });
       console.error('Error sending mass message:', err);
     } finally {

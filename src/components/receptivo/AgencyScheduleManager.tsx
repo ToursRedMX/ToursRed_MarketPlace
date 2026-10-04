@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, CreditCard as Edit2, Trash2, Clock, Save, X, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { TourSchedule } from '../../types';
+import { mensajeDeError } from '../../lib/errores';
 
 interface AgencyScheduleManagerProps {
   tourId: string;
@@ -88,8 +89,8 @@ const AgencyScheduleManager: React.FC<AgencyScheduleManagerProps> = ({ tourId, a
       setShowForm(false);
       setEditingId(null);
       setForm(emptyForm);
-    } catch (err: any) {
-      setError(err.message || 'Error al guardar el horario.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al guardar el horario.');
     } finally {
       setIsSubmitting(false);
     }

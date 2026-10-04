@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { DollarSign, Calendar, Clock, CheckCircle, AlertCircle, RefreshCw, Upload, ShieldAlert, MapPin, Plus } from 'lucide-react';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { format } from 'date-fns';
+import { mensajeDeError } from '../../lib/errores';
 
 interface AgencyPayoutSummary {
   agency_id: string;
@@ -207,8 +208,8 @@ const AdminPayouts: React.FC = () => {
       } else {
         setCreationMessage({ type: 'error', text: data.message || 'Error al crear comisiones' });
       }
-    } catch (error: any) {
-      setCreationMessage({ type: 'error', text: error.message || 'Error al crear comisiones' });
+    } catch (error) {
+      setCreationMessage({ type: 'error', text: mensajeDeError(error) || 'Error al crear comisiones' });
     } finally {
       setIsCreatingCommissions(false);
       setTimeout(() => setCreationMessage(null), 5000);
@@ -227,8 +228,8 @@ const AdminPayouts: React.FC = () => {
       } else {
         setCreationMessage({ type: 'error', text: data.message || 'Error al crear comisiones' });
       }
-    } catch (error: any) {
-      setCreationMessage({ type: 'error', text: error.message || 'Error al crear comisiones' });
+    } catch (error) {
+      setCreationMessage({ type: 'error', text: mensajeDeError(error) || 'Error al crear comisiones' });
     } finally {
       setIsCreatingCommissions(false);
       setTimeout(() => setCreationMessage(null), 5000);
@@ -896,8 +897,8 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
       }
 
       onSuccess();
-    } catch (error: any) {
-      setErrorMessage(error.message || 'Error desconocido al procesar el pago');
+    } catch (error) {
+      setErrorMessage(mensajeDeError(error) || 'Error desconocido al procesar el pago');
     } finally {
       setIsProcessing(false);
       setUploadingReceipt(false);
@@ -1099,8 +1100,8 @@ const ProcessPenaltyModal: React.FC<ProcessPenaltyModalProps> = ({ isOpen, penal
       }).in('id', penaltyIds);
       if (error) throw error;
       onSuccess();
-    } catch (error: any) {
-      setErrorMessage(error.message || 'Error al procesar el pago');
+    } catch (error) {
+      setErrorMessage(mensajeDeError(error) || 'Error al procesar el pago');
     } finally {
       setIsProcessing(false);
       setUploadingReceipt(false);

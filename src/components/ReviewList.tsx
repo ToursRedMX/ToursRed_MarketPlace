@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Star, ThumbsUp, Flag } from 'lucide-react';
 import { Review } from '../types';
 import { getTourReviews } from '../lib/supabase';
+import { mensajeDeError } from '../lib/errores';
 
 interface ReviewListProps {
   tourId: string;
@@ -72,8 +73,8 @@ const ReviewList: React.FC<ReviewListProps> = ({ tourId }) => {
         }
         
         setReviews(data || []);
-      } catch (err: any) {
-        setError(err.message || 'Error al cargar las reseñas');
+      } catch (err) {
+        setError(mensajeDeError(err) || 'Error al cargar las reseñas');
       } finally {
         setIsLoading(false);
       }

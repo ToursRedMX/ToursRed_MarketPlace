@@ -66,6 +66,7 @@ import TaxTreatmentFields from '../../components/agency/TaxTreatmentFields';
 import type { TaxTreatment } from '../../utils/taxBreakdown';
 import DeparturePointSelector from '../../components/DeparturePointSelector';
 import DeparturePointForm from '../../components/DeparturePointForm';
+import { mensajeDeError } from '../../lib/errores';
 
 interface TourCategory {
   id: string;
@@ -519,7 +520,7 @@ const AgencyTours: React.FC = () => {
       const { data, error } = await getAllDestinations();
       if (error) throw error;
       setAllAvailableDestinations(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando destinos:', err);
     }
   };
@@ -537,7 +538,7 @@ const AgencyTours: React.FC = () => {
           category: [data[0].slug]
         }));
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando categorías:', err);
     }
   };
@@ -579,9 +580,9 @@ const AgencyTours: React.FC = () => {
       console.log('✅ Tours cargados:', toursData);
       setTours(toursData || []);
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando tours de agencia:', err);
-      setError(err.message || 'Error al cargar los tours');
+      setError(mensajeDeError(err) || 'Error al cargar los tours');
     } finally {
       setIsLoading(false);
     }
@@ -1164,8 +1165,8 @@ const AgencyTours: React.FC = () => {
       } else {
         throw new Error('No se recibio URL de pago');
       }
-    } catch (err: any) {
-      setFeaturedModal(prev => ({ ...prev, isSubmitting: false, error: err.message || 'Error al iniciar el pago' }));
+    } catch (err) {
+      setFeaturedModal(prev => ({ ...prev, isSubmitting: false, error: mensajeDeError(err) || 'Error al iniciar el pago' }));
     }
   };
 
@@ -1218,8 +1219,8 @@ const AgencyTours: React.FC = () => {
 
       await fetchAgencyTours();
       console.log('✅ Tour eliminado correctamente');
-    } catch (err: any) {
-      setError(err.message || 'Error al eliminar el tour');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al eliminar el tour');
     } finally {
       setIsSubmitting(false);
     }
@@ -1312,8 +1313,8 @@ const AgencyTours: React.FC = () => {
       await fetchAgencyTours();
       handleDuplicateCancel();
       console.log('✅ Tour duplicado correctamente');
-    } catch (err: any) {
-      setError(err.message || 'Error al duplicar el tour');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al duplicar el tour');
     } finally {
       setIsSubmitting(false);
     }
@@ -1370,7 +1371,7 @@ const AgencyTours: React.FC = () => {
         activeBookingsCount: count || 0,
         isLoading: false,
       }));
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error loading bookings count:', err);
       setRescheduleModal(prev => ({
         ...prev,
@@ -1468,9 +1469,9 @@ const AgencyTours: React.FC = () => {
         handleCloseReschedule();
         fetchAgencyTours();
       }, 2000);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error rescheduling tour:', err);
-      const errorMessage = err.message || err.error || 'Error al procesar el reagendamiento';
+      const errorMessage = mensajeDeError(err) || 'Error al procesar el reagendamiento';
       setRescheduleModal(prev => ({
         ...prev,
         isSubmitting: false,
@@ -1673,11 +1674,11 @@ const AgencyTours: React.FC = () => {
         handleCloseReceptivoActions();
         fetchAgencyTours();
       }, 2500);
-    } catch (err: any) {
+    } catch (err) {
       setReceptivoActionsModal(prev => ({
         ...prev,
         isSubmitting: false,
-        error: err.message || 'Error al procesar la accion',
+        error: mensajeDeError(err) || 'Error al procesar la accion',
       }));
     }
   };
@@ -1733,11 +1734,11 @@ const AgencyTours: React.FC = () => {
         handleCloseReceptivoActions();
         fetchAgencyTours();
       }, 2500);
-    } catch (err: any) {
+    } catch (err) {
       setCapacityConflictModal(prev => ({
         ...prev,
         isSubmitting: false,
-        error: err.message || 'Error al procesar la resolucion',
+        error: mensajeDeError(err) || 'Error al procesar la resolucion',
       }));
     }
   };
@@ -1769,11 +1770,11 @@ const AgencyTours: React.FC = () => {
         handleCloseReceptivoActions();
         fetchAgencyTours();
       }, 2500);
-    } catch (err: any) {
+    } catch (err) {
       setReceptivoActionsModal(prev => ({
         ...prev,
         isSubmitting: false,
-        error: err.message || 'Error al cancelar el tour',
+        error: mensajeDeError(err) || 'Error al cancelar el tour',
       }));
     }
   };
@@ -1834,7 +1835,7 @@ const AgencyTours: React.FC = () => {
         activeBookingsCount: count || 0,
         isLoading: false,
       }));
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error loading bookings count:', err);
       setCancelModal(prev => ({
         ...prev,
@@ -1906,9 +1907,9 @@ const AgencyTours: React.FC = () => {
         handleCloseCancel();
         fetchAgencyTours();
       }, 2500);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cancelling tour:', err);
-      const errorMessage = err.message || err.error || 'Error al procesar la cancelación del tour';
+      const errorMessage = mensajeDeError(err) || 'Error al procesar la cancelación del tour';
       setCancelModal(prev => ({
         ...prev,
         isSubmitting: false,
@@ -2599,8 +2600,8 @@ const AgencyTours: React.FC = () => {
             return;
           }
           await fetchAgencyTours();
-        } catch (slugErr: any) {
-          setError(`Error al actualizar la URL: ${slugErr.message}`);
+        } catch (slugErr) {
+          setError(`Error al actualizar la URL: ${mensajeDeError(slugErr)}`);
           setSlugSaving(false);
           setIsSubmitting(false);
           return;
@@ -2623,8 +2624,8 @@ const AgencyTours: React.FC = () => {
         handleCancel();
       }
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(mensajeDeError(err));
     } finally {
       setIsSubmitting(false);
     }

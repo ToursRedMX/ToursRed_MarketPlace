@@ -7,6 +7,7 @@ import { validarRfcAgencia } from '../../lib/validarRfcAgencia';
 import AgencySignupFormBody, { AgencyFormData, defaultAgencyFormData } from './AgencySignupFormBody';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
+import { mensajeDeError } from '../../lib/errores';
 
 const MicrosoftIcon = (
   <svg viewBox="0 0 23 23" className="w-5 h-5" aria-hidden="true">
@@ -173,8 +174,8 @@ const AzureAgencySignupPage: React.FC = () => {
 
       await completeOnboarding();
       navigate('/agency/onboarding');
-    } catch (err: any) {
-      setError(err.message || 'Ocurrió un error al completar el registro');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Ocurrió un error al completar el registro');
     } finally {
       setIsLoading(false);
     }

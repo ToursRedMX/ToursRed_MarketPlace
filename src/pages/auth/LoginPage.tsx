@@ -5,6 +5,7 @@ import { signIn, supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import TurnstileWidget from '../../components/TurnstileWidget';
 import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
+import { mensajeDeError } from '../../lib/errores';
 
 interface OAuthToggles {
   google: boolean;
@@ -174,15 +175,15 @@ const LoginPage: React.FC = () => {
           navigate(from, { replace: true });
         }
       }
-    } catch (err: any) {
-      if (err.message === 'USUARIO_BLOQUEADO') {
+    } catch (err) {
+      if (mensajeDeError(err) === 'USUARIO_BLOQUEADO') {
         setError('Su cuenta ha sido bloqueada. Para mayor información contáctenos.');
-      } else if (err.message === 'VERIFICACION_NO_DISPONIBLE') {
+      } else if (mensajeDeError(err) === 'VERIFICACION_NO_DISPONIBLE') {
         setError('No pudimos verificar el estado de tu cuenta en este momento. Vuelve a intentar en unos minutos.');
       } else {
         // Generic message — anti-enumeration
         setError('Credenciales incorrectas. Por favor verifica tu correo y contraseña.');
-        recordFailedLogin(err.message ?? 'unknown');
+        recordFailedLogin(mensajeDeError(err) ?? 'unknown');
       }
     } finally {
       // El token de Turnstile es de un solo uso y Supabase lo manda a
@@ -389,7 +390,7 @@ const LoginPage: React.FC = () => {
                         navigate(from, { replace: true });
                       }
                     }
-                  } catch (err: any) {
+                  } catch (err) {
                     console.error('[passkey] signInWithPasskey failed:', err);
                     setError('No se pudo iniciar sesion con clave de acceso.');
                   } finally {
