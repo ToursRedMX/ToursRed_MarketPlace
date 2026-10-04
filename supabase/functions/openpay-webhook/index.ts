@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 import { isConfigured, getCharge, getChargeMerchant } from "../_shared/openpay.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
@@ -23,6 +23,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface OpenpayTransaction {
+  id?: string;
+  order_id?: string;
+  amount?: number;
+  currency?: string;
+  status?: string;
+  error_message?: string;
+  description?: string;
+  metadata?: Record<string, string | undefined>;
+}
+
+interface OpenpayWebhookPayload {
+  type?: string;
+  verification_code?: string;
+  id?: string;
+  transaction?: OpenpayTransaction;
+  raw_text?: string;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -40,9 +59,9 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey, sinUserAgentDeNavegador(opcionesConContexto(req)));
 
   // ── Step 1: Log raw payload immediately ──────────────────────
-  let rawBody: any;
+  let rawBody: OpenpayWebhookPayload;
   try {
-    rawBody = await req.json();
+    rawBody = await req.json() as OpenpayWebhookPayload;
   } catch {
     // Non-JSON body, still log it
     const text = await req.text().catch(() => "");
@@ -353,7 +372,7 @@ Deno.serve(async (req: Request) => {
             .eq("charge_context", "booking_deposit")
             .eq("status", "succeeded");
 
-          const totalPaid = (allTx || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+          const totalPaid = (allTx || []).reduce((sum: number, t: { amount: number }) => sum + Number(t.amount), 0);
 
           const { data: booking } = await supabase
             .from("bookings")
@@ -747,7 +766,7 @@ Deno.serve(async (req: Request) => {
             if (confirmErrOp) {
               console.error(`Error confirming featured slot ${slotOp.id} (Openpay):`, confirmErrOp.message);
             } else {
-              const existingMeta = (slotOp.pending_payment_metadata as Record<string, any>) || {};
+              const existingMeta = (slotOp.pending_payment_metadata as Record<string, unknown>) || {};
               await supabase.from("featured_tour_slots").update({
                 pending_payment_metadata: { ...existingMeta, openpay_status: "completed" },
               }).eq("id", slotOp.id);
@@ -1027,7 +1046,7 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function awardExtraPointsOpenpay(supabase: any, bookingId: string, subtotal: number, referenceId: string, referenceType: string, description: string) {
+async function awardExtraPointsOpenpay(supabase: SupabaseClient, bookingId: string, subtotal: number, referenceId: string, referenceType: string, description: string) {
   try {
     const { data: booking } = await supabase.from("bookings").select("user_id").eq("id", bookingId).maybeSingle();
     if (!booking?.user_id || subtotal <= 0) return;
