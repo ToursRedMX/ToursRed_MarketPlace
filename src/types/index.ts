@@ -558,6 +558,8 @@ export interface BookingOptionalService {
   membership_exemption_used?: number;
   payment_method?: string | null;
   paid_at?: string | null;
+  // Select parcial del catalogo: solo lo que las pantallas de reserva piden.
+  tour_optional_services?: Pick<TourOptionalService, 'name' | 'is_refundable'>;
 }
 
 /** Un suplemento tal y como lo define el tour (el catalogo). */

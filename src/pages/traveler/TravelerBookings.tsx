@@ -4,7 +4,7 @@ import SeatReselectionModal from '../../components/SeatReselectionModal';
 import PaymentPlanCalendar from '../../components/PaymentPlanCalendar';
 import { useAuth } from '../../context/AuthContext';
 import { getUserBookings, getUserPastBookings, getUserCancelledBookings, parseDateFromDB, supabase, calculateCancellationPolicy } from '../../lib/supabase';
-import { Booking, PendingReschedule } from '../../types';
+import { Booking, PendingReschedule, BookingSupplement, TourSupplement, BookingOptionalService } from '../../types';
 import { format } from 'date-fns';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStepUp } from '../../context/StepUpContext';
@@ -20,6 +20,39 @@ import { comoFilas } from '../../lib/relacionesSupabase';
 import { reembolsoPorMedio } from '../../utils/reembolsoPorMedio';
 import { mensajeDeError } from '../../lib/errores';
 
+interface TotalPaidRow {
+  booking_id: string;
+  total_paid: number | string;
+}
+
+interface PartialCancellationTraveler {
+  nombre: string;
+  precio_aplicado: number;
+}
+
+interface PartialCancellationRow {
+  id: string;
+  booking_id: string;
+  travelers_cancelled: PartialCancellationTraveler[];
+  original_partial_amount: number;
+  insurance_refund_amount: number;
+  refund_amount_to_traveler: number;
+  cancelled_at: string;
+}
+
+interface SlotRescheduleInfo {
+  booking_id: string;
+  slot_reschedule_requests: {
+    id: string;
+    resolution_type: string;
+    reason: string | null;
+    response_deadline: string;
+    status: string;
+    target_slot_id: string;
+    tour_slots: { slot_date: string; departure_time: string } | null;
+  };
+}
+
 const TravelerBookings: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -29,9 +62,9 @@ const TravelerBookings: React.FC = () => {
   const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [bookingOptionalServices, setBookingOptionalServices] = useState<Record<string, any[]>>({});
-  const [bookingSupplements, setBookingSupplements] = useState<Record<string, any[]>>({});
-  const [tourSupplements, setTourSupplements] = useState<Record<string, any[]>>({});
+  const [bookingOptionalServices, setBookingOptionalServices] = useState<Record<string, BookingOptionalService[]>>({});
+  const [bookingSupplements, setBookingSupplements] = useState<Record<string, BookingSupplement[]>>({});
+  const [tourSupplements, setTourSupplements] = useState<Record<string, TourSupplement[]>>({});
   const [supplementPaymentModal, setSupplementPaymentModal] = useState<{
     open: boolean;
     supplement: any | null;
@@ -250,7 +283,7 @@ const TravelerBookings: React.FC = () => {
     action: null,
   });
   const [pendingReschedules, setPendingReschedules] = useState<{ [bookingId: string]: PendingReschedule }>({});
-  const [pendingSlotReschedules, setPendingSlotReschedules] = useState<{ [bookingId: string]: any }>({});
+  const [pendingSlotReschedules, setPendingSlotReschedules] = useState<{ [bookingId: string]: SlotRescheduleInfo }>({});
   const [slotRescheduleModal, setSlotRescheduleModal] = useState<{
     open: boolean;
     booking: Booking | null;
@@ -292,10 +325,10 @@ const TravelerBookings: React.FC = () => {
   const [isLoadingCancelled, setIsLoadingCancelled] = useState(false);
   const [pastLoaded, setPastLoaded] = useState(false);
   const [cancelledLoaded, setCancelledLoaded] = useState(false);
-  const [pastOptionalServices, setPastOptionalServices] = useState<Record<string, any[]>>({});
-  const [, setPastSupplements] = useState<Record<string, any[]>>({});
+  const [pastOptionalServices, setPastOptionalServices] = useState<Record<string, BookingOptionalService[]>>({});
+  const [, setPastSupplements] = useState<Record<string, BookingSupplement[]>>({});
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
-  const [partialCancellationsByBooking, setPartialCancellationsByBooking] = useState<Record<string, any[]>>({});
+  const [partialCancellationsByBooking, setPartialCancellationsByBooking] = useState<Record<string, PartialCancellationRow[]>>({});
   const [totalPaidByBooking, setTotalPaidByBooking] = useState<Record<string, number>>({});
 
   const cancellationFormPersistence = useFormPersistence(
@@ -381,15 +414,15 @@ const TravelerBookings: React.FC = () => {
       setBookings(activeList);
       if (expiredList.length > 0) {
         setPastBookings(prev => {
-          const existingIds = new Set(prev.map((x: any) => x.id));
-          return [...prev, ...expiredList.filter((x: any) => !existingIds.has(x.id))];
+          const existingIds = new Set(prev.map((x) => x.id));
+          return [...prev, ...expiredList.filter((x) => !existingIds.has(x.id))];
         });
       }
 
       if (data && data.length > 0 && activeList.length > 0) {
-        const ids = activeList.map((b: any) => b.id);
-        const bookingsWithReschedule = activeList.filter((b: any) => b.has_pending_reschedule);
-        const bookingsWithSlotReschedule = activeList.filter((b: any) => b.has_pending_slot_reschedule);
+        const ids = activeList.map((b) => b.id);
+        const bookingsWithReschedule = activeList.filter((b) => b.has_pending_reschedule);
+        const bookingsWithSlotReschedule = activeList.filter((b) => b.has_pending_slot_reschedule);
 
         const [optSvcsResult, , slotReschedulesResult, partialCancResult, totalPaidResult] = await Promise.all([
           supabase
@@ -408,7 +441,7 @@ const TravelerBookings: React.FC = () => {
                     tour_slots!slot_reschedule_requests_target_slot_id_fkey(slot_date, departure_time)
                   )
                 `)
-                .in('booking_id', bookingsWithSlotReschedule.map((b: any) => b.id))
+                .in('booking_id', bookingsWithSlotReschedule.map((b) => b.id))
                 .eq('response', 'pending')
             : Promise.resolve({ data: [], error: null }),
           supabase
@@ -420,14 +453,14 @@ const TravelerBookings: React.FC = () => {
 
         if (totalPaidResult.data) {
           const paidMap: Record<string, number> = {};
-          for (const row of totalPaidResult.data as any[]) {
+          for (const row of totalPaidResult.data as TotalPaidRow[]) {
             paidMap[row.booking_id] = Number(row.total_paid) || 0;
           }
           setTotalPaidByBooking(paidMap);
         }
 
         if (optSvcsResult.data) {
-          const grouped: Record<string, any[]> = {};
+          const grouped: Record<string, BookingOptionalService[]> = {};
           for (const bos of optSvcsResult.data) {
             if (!grouped[bos.booking_id]) grouped[bos.booking_id] = [];
             grouped[bos.booking_id].push(bos);
@@ -436,7 +469,7 @@ const TravelerBookings: React.FC = () => {
         }
 
         if (partialCancResult.data) {
-          const groupedPc: Record<string, any[]> = {};
+          const groupedPc: Record<string, PartialCancellationRow[]> = {};
           for (const pc of partialCancResult.data) {
             if (!groupedPc[pc.booking_id]) groupedPc[pc.booking_id] = [];
             groupedPc[pc.booking_id].push(pc);
@@ -458,7 +491,7 @@ const TravelerBookings: React.FC = () => {
         }
 
         if (suppData) {
-          const groupedSupp: Record<string, any[]> = {};
+          const groupedSupp: Record<string, BookingSupplement[]> = {};
           for (const bs of suppData) {
             if (!groupedSupp[bs.booking_id]) groupedSupp[bs.booking_id] = [];
             groupedSupp[bs.booking_id].push(bs);
@@ -468,7 +501,7 @@ const TravelerBookings: React.FC = () => {
 
         // Load available tour supplements for active bookings
         const activeTourIds = [...new Set(
-          activeList.filter((b: any) => ['confirmed', 'pending'].includes(b.status)).map((b: any) => b.tour_id)
+          activeList.filter((b) => ['confirmed', 'pending'].includes(b.status)).map((b) => b.tour_id)
         )];
         if (activeTourIds.length > 0) {
           // F-1: si falla, la reserva aparece sin suplementos disponibles.
@@ -484,7 +517,7 @@ const TravelerBookings: React.FC = () => {
           }
 
           if (tourSupData) {
-            const groupedTourSup: Record<string, any[]> = {};
+            const groupedTourSup: Record<string, TourSupplement[]> = {};
             for (const ts of tourSupData) {
               if (!groupedTourSup[ts.tour_id]) groupedTourSup[ts.tour_id] = [];
               groupedTourSup[ts.tour_id].push(ts);
@@ -494,9 +527,9 @@ const TravelerBookings: React.FC = () => {
         }
 
         if (slotReschedulesResult.data && slotReschedulesResult.data.length > 0) {
-          const slotReschedules: { [bookingId: string]: any } = {};
-          for (const row of slotReschedulesResult.data) {
-            slotReschedules[(row as any).booking_id] = row;
+          const slotReschedules: { [bookingId: string]: SlotRescheduleInfo } = {};
+          for (const row of slotReschedulesResult.data as unknown as SlotRescheduleInfo[]) {
+            slotReschedules[row.booking_id] = row;
           }
           setPendingSlotReschedules(slotReschedules);
         }
@@ -520,9 +553,9 @@ const TravelerBookings: React.FC = () => {
 
       // Merge completed bookings with expired-active ones already pre-loaded
       setPastBookings(prev => {
-        const completedIds = new Set(completedList.map((x: any) => x.id));
-        const expiredKept = prev.filter((x: any) => !completedIds.has(x.id));
-        return [...completedList, ...expiredKept].sort((a: any, b: any) =>
+        const completedIds = new Set(completedList.map((x) => x.id));
+        const expiredKept = prev.filter((x) => !completedIds.has(x.id));
+        return [...completedList, ...expiredKept].sort((a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
       });
@@ -530,7 +563,7 @@ const TravelerBookings: React.FC = () => {
       // Fetch optional services and supplements for the completed ones
       // (expired-active ones were already handled in the initial fetchBookings)
       if (completedList.length > 0) {
-        const ids = completedList.map((b: any) => b.id);
+        const ids = completedList.map((b) => b.id);
         const [optRes, suppRes, pastPaidRes] = await Promise.all([
           supabase.from('booking_optional_services').select('*, tour_optional_services(name, is_refundable)').in('booking_id', ids),
           supabase.from('booking_supplements').select('*, tour_supplements(name, description, price, is_cancellable, requires_approval)').in('booking_id', ids).order('requested_at', { ascending: false }),
@@ -540,14 +573,14 @@ const TravelerBookings: React.FC = () => {
         if (pastPaidRes.data) {
           setTotalPaidByBooking(prev => {
             const updated = { ...prev };
-            for (const row of pastPaidRes.data as any[]) {
+            for (const row of pastPaidRes.data as TotalPaidRow[]) {
               updated[row.booking_id] = Number(row.total_paid) || 0;
             }
             return updated;
           });
         }
         if (optRes.data) {
-          const grouped: Record<string, any[]> = {};
+          const grouped: Record<string, BookingOptionalService[]> = {};
           for (const bos of optRes.data) {
             if (!grouped[bos.booking_id]) grouped[bos.booking_id] = [];
             grouped[bos.booking_id].push(bos);
@@ -555,7 +588,7 @@ const TravelerBookings: React.FC = () => {
           setPastOptionalServices(grouped);
         }
         if (suppRes.data) {
-          const grouped: Record<string, any[]> = {};
+          const grouped: Record<string, BookingSupplement[]> = {};
           for (const bs of suppRes.data) {
             if (!grouped[bs.booking_id]) grouped[bs.booking_id] = [];
             grouped[bs.booking_id].push(bs);
@@ -590,7 +623,7 @@ const TravelerBookings: React.FC = () => {
         if (cancelledPaidRes) {
           setTotalPaidByBooking(prev => {
             const updated = { ...prev };
-            for (const row of cancelledPaidRes as any[]) {
+            for (const row of cancelledPaidRes as TotalPaidRow[]) {
               updated[row.booking_id] = Number(row.total_paid) || 0;
             }
             return updated;
@@ -1072,7 +1105,7 @@ const TravelerBookings: React.FC = () => {
   const [cancelingOptServiceId, setCancelingOptServiceId] = useState<string | null>(null);
   const [cancelingSupplementId, setCancelingSupplementId] = useState<string | null>(null);
 
-  const computeAdjustedTotals = (booking: any) => {
+  const computeAdjustedTotals = (booking: Booking) => {
     const partialCancs = partialCancellationsByBooking[booking.id] || [];
     if (partialCancs.length === 0) return null;
 
