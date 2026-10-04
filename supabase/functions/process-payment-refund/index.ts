@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -477,7 +478,7 @@ Deno.serve(async (req: Request) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
 
-    } catch (processorError: any) {
+    } catch (processorError) {
       if (sentryDsn) {
         Sentry.captureException(processorError, {
           tags: {
@@ -491,7 +492,7 @@ Deno.serve(async (req: Request) => {
         .from("payment_refunds")
         .update({
           status: "failed",
-          failure_reason: processorError.message,
+          failure_reason: mensajeDeError(processorError),
           updated_at: new Date().toISOString(),
         })
         .eq("id", refundId);
@@ -512,12 +513,12 @@ Deno.serve(async (req: Request) => {
           success: false,
           payment_refund_id: refundId,
           status: "failed",
-          error: processorError.message,
+          error: mensajeDeError(processorError),
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-  } catch (err: any) {
+  } catch (err) {
     if (sentryDsn) {
       Sentry.captureException(err, {
         tags: {
@@ -529,7 +530,7 @@ Deno.serve(async (req: Request) => {
     }
     console.error("Error in process-payment-refund:", err);
     return new Response(
-      JSON.stringify({ error: err.message || "Error interno" }),
+      JSON.stringify({ error: mensajeDeError(err) || "Error interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

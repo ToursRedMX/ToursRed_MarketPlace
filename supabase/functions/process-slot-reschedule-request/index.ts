@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -106,9 +107,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const agencyId = (slot.tours as any).agency_id;
-    const agencyUserId = (slot.tours as any).agencies?.user_id;
-    const tourName = (slot.tours as any).name;
+    const agencyId = (slot.tours as unknown as { agency_id: string; agencies?: { user_id: string }; name: string }).agency_id;
+    const agencyUserId = (slot.tours as unknown as { agency_id: string; agencies?: { user_id: string }; name: string }).agencies?.user_id;
+    const tourName = (slot.tours as unknown as { agency_id: string; agencies?: { user_id: string }; name: string }).name;
 
     const { data: userData } = await adminClient
       .from("users")
@@ -128,7 +129,7 @@ Deno.serve(async (req: Request) => {
         .eq("is_active", true)
         .single();
 
-      const canManage = (staffData?.permissions as any)?.canManageTours;
+      const canManage = (staffData?.permissions as { canManageTours?: boolean } | null)?.canManageTours;
       if (!canManage) {
         return new Response(JSON.stringify({ success: false, error: "Sin permisos para esta accion" }), {
           status: 403,
@@ -203,7 +204,7 @@ Deno.serve(async (req: Request) => {
 
       const finalCapacity = new_capacity ? Number(new_capacity) : targetSlot.capacity;
 
-      const updatePayload: any = { capacity: finalCapacity, status: "activo" };
+      const updatePayload: Record<string, unknown> = { capacity: finalCapacity, status: "activo" };
       if (new_vehicle_map_type) {
         await adminClient
           .from("tours")
@@ -234,7 +235,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const totalAffectedTravelers = affectedBookings.reduce((sum: number, b: any) => sum + (b.travelers_count || 1), 0);
+      const totalAffectedTravelers = affectedBookings.reduce((sum: number, b: { travelers_count: number | null }) => sum + (b.travelers_count || 1), 0);
       const minRequired = targetSlot.booked_count + totalAffectedTravelers;
       const finalCapacity = Math.max(targetSlot.capacity, minRequired);
 
@@ -263,7 +264,7 @@ Deno.serve(async (req: Request) => {
       availableSpotsInTarget = targetSlot.capacity - targetSlot.booked_count;
     }
 
-    const totalAffectedTravelers = affectedBookings.reduce((sum: number, b: any) => sum + (b.travelers_count || 1), 0);
+    const totalAffectedTravelers = affectedBookings.reduce((sum: number, b: { travelers_count: number | null }) => sum + (b.travelers_count || 1), 0);
     const capacitySufficient = availableSpotsInTarget === null || availableSpotsInTarget >= totalAffectedTravelers;
 
     const responseDeadline = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
@@ -301,7 +302,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", finalTargetSlotId!)
       .single();
 
-    const responseInserts = affectedBookings.map((booking: any) => ({
+    const responseInserts = affectedBookings.map((booking: { id: string; user_id: string; created_at: string }) => ({
       request_id: rescheduleRequest.id,
       booking_id: booking.id,
       user_id: booking.user_id,
@@ -315,7 +316,7 @@ Deno.serve(async (req: Request) => {
 
     if (responsesError) throw responsesError;
 
-    const bookingIds = affectedBookings.map((b: any) => b.id);
+    const bookingIds = affectedBookings.map((b: { id: string }) => b.id);
     const { error: bookingUpdateError } = await adminClient
       .from("bookings")
       .update({ has_pending_slot_reschedule: true })
@@ -323,7 +324,7 @@ Deno.serve(async (req: Request) => {
 
     if (bookingUpdateError) throw bookingUpdateError;
 
-    const notificationPromises = affectedBookings.map(async (booking: any) => {
+    const notificationPromises = affectedBookings.map(async (booking: { id: string; user_id: string }) => {
       const newDate = targetSlotData?.slot_date || new_slot_date;
       const newTime = targetSlotData?.departure_time || new_slot_time;
 
@@ -392,7 +393,7 @@ Deno.serve(async (req: Request) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error:", error);
     if (sentryDsn) {
       Sentry.captureException(error, {
@@ -404,7 +405,7 @@ Deno.serve(async (req: Request) => {
       await Sentry.flush(2000);
     }
     return new Response(
-      JSON.stringify({ success: false, error: error.message || "Error interno" }),
+      JSON.stringify({ success: false, error: mensajeDeError(error) || "Error interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

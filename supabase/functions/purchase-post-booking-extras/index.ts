@@ -6,6 +6,7 @@ import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -835,9 +836,9 @@ Deno.serve(async (req: Request) => {
           first_name: userRecordOp?.first_name, last_name: userRecordOp?.last_name,
           email: userRecordOp?.email || user.email || "", phone_number: userRecordOp?.phone_number,
         });
-      } catch (e: any) {
+      } catch (e) {
         if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
-        return new Response(JSON.stringify({ error: e.message }), {
+        return new Response(JSON.stringify({ error: mensajeDeError(e) }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -860,9 +861,9 @@ Deno.serve(async (req: Request) => {
             charge_context: extraChargeContext, charge_reference_id: extraRefId,
           });
         }
-      } catch (e: any) {
+      } catch (e) {
         if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
-        return new Response(JSON.stringify({ error: e.message }), {
+        return new Response(JSON.stringify({ error: mensajeDeError(e) }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

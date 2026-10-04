@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -133,7 +134,7 @@ Deno.serve(async (req: Request) => {
       success: true,
       wallet_result: walletResult,
     });
-  } catch (e: any) {
+  } catch (e) {
     console.error("admin-credit-wallet-topup error:", e);
     if (sentryDsn) {
       Sentry.captureException(e, {
@@ -144,6 +145,6 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return err(e.message || "Error interno", 500);
+    return err(mensajeDeError(e) || "Error interno", 500);
   }
 });

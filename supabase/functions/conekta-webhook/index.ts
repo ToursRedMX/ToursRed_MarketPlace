@@ -6,6 +6,7 @@ import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/context
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { avisosCon } from "../_shared/avisosDePago.ts";
 import { estimarComisionProcesador } from "../_shared/estimarComisionProcesador.ts";
+import { mensajeDeError } from "../_shared/errores.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -928,7 +929,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", tx.id);
 
     return jsonResponse({ received: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error in conekta-webhook:", err);
     if (sentryDsn) {
       Sentry.captureException(err, {
@@ -939,7 +940,7 @@ Deno.serve(async (req: Request) => {
       });
       await Sentry.flush(2000);
     }
-    return jsonResponse({ error: err.message || "Internal server error" }, 500);
+    return jsonResponse({ error: mensajeDeError(err) || "Internal server error" }, 500);
   }
 });
 
