@@ -22,6 +22,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface PayPalOrderLink {
+  rel: string;
+  href: string;
+}
+
+interface PayPalOrder {
+  id: string;
+  links?: PayPalOrderLink[];
+}
+
 async function getPayPalAccessToken(clientId: string, clientSecret: string, sandbox: boolean): Promise<string> {
   const base = sandbox
     ? "https://api-m.sandbox.paypal.com"
@@ -141,7 +151,8 @@ Deno.serve(async (req: Request) => {
           return new Response(JSON.stringify({ error: "Servicio opcional no disponible" }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
         const requestedQuantity = Math.max(1, Number(extrasBody?.quantity || service.quantity || 1));
-        const unitPrice = Number((service.tour_optional_services as any)?.price_per_person || 0);
+        const tourOptionalService = service.tour_optional_services as unknown as { price_per_person: number } | null;
+        const unitPrice = Number(tourOptionalService?.price_per_person || 0);
         amount = unitPrice > 0 ? Number((unitPrice * requestedQuantity).toFixed(2)) : Number(service.total_paid || service.subtotal || 0);
       } else {
         const { data: bookingExtra } = await supabase
@@ -155,7 +166,7 @@ Deno.serve(async (req: Request) => {
           .maybeSingle();
         if (!bookingExtra) throw new Error("Reserva no encontrada");
         const travelers = Math.max(1, Number(bookingExtra.travelers_count || 0) || Number(bookingExtra.count_adultos || 0) + Number(bookingExtra.count_ninos || 0) + Number(bookingExtra.count_infantes || 0) + Number(bookingExtra.count_adultos_mayores || 0));
-        const tour = bookingExtra.tours as any;
+        const tour = bookingExtra.tours as unknown as { start_date: string; end_date: string } | null;
         const start = new Date(bookingExtra.selected_date || tour?.start_date || Date.now());
         const end = tour?.end_date ? new Date(tour.end_date) : start;
         const days = Math.max(1, Math.min(30, Number(extrasBody?.insurance_days) || Math.ceil(Math.max(0, end.getTime() - start.getTime()) / 86400000) || 1));
@@ -171,7 +182,7 @@ Deno.serve(async (req: Request) => {
         .select("amount_due, amount_paid, status, booking_id")
         .eq("plan_id", plan_id)
         .in("status", ["pending", "partially_paid"]);
-      const remaining = (installments || []).reduce((sum: number, row: any) => sum + Math.max(0, Number(row.amount_due || 0) - Number(row.amount_paid || 0)), 0);
+      const remaining = (installments || []).reduce((sum: number, row: { amount_due: number; amount_paid: number }) => sum + Math.max(0, Number(row.amount_due || 0) - Number(row.amount_paid || 0)), 0);
       const requested = bodyAmount != null ? Number(bodyAmount) : remaining;
       if (!remaining || !requested || requested <= 0 || requested > remaining + 0.01) {
         return new Response(JSON.stringify({ error: "Monto de cuota inválido o superior al saldo pendiente" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -328,8 +339,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const order = await orderResponse.json();
-    const approveLink = order.links?.find((l: any) => l.rel === "approve")?.href;
+    const order = await orderResponse.json() as PayPalOrder;
+    const approveLink = order.links?.find((l) => l.rel === "approve")?.href;
 
     if (!approveLink) {
       return new Response(JSON.stringify({ error: "No se pudo obtener URL de PayPal" }), {
