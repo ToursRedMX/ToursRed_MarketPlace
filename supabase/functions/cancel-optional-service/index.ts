@@ -108,7 +108,7 @@ Deno.serve(async (req: Request) => {
     // Verify booking ownership
     const { data: booking, error: bookingError } = await serviceClient
       .from("bookings")
-      .select("id, user_id, status, tours (name), agencies (id, user_id)")
+      .select("id, user_id, status, tours (name), agencies (id, user_id, rfc, razon_social, regimen_fiscal, postal_code)")
       .eq("id", booking_id)
       .maybeSingle();
 
@@ -133,16 +133,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const isRefundable = (optService as any).tour_optional_services?.is_refundable === true;
-    const serviceName = (optService as any).tour_optional_services?.name || "Servicio opcional";
-    const tourName = (booking as any).tours?.name || "Tour";
+    const isRefundable = (optService.tour_optional_services as unknown as { is_refundable?: boolean; name?: string } | null)?.is_refundable === true;
+    const serviceName = (optService.tour_optional_services as unknown as { is_refundable?: boolean; name?: string } | null)?.name || "Servicio opcional";
+    const tourName = (booking.tours as unknown as { name?: string } | null)?.name || "Tour";
 
     const oldSubtotal = Number(optService.subtotal) || 0;
     const oldServiceCharge = Number(optService.service_charge) || 0;
     const oldTotalPaid = Number(optService.total_paid) || 0;
 
     let refundAmount: number;
-    let updatePayload: Record<string, any>;
+    let updatePayload: Record<string, unknown>;
     const exemptionUsedTotal = Number(optService.membership_exemption_used) || 0;
 
     if (isFullCancel) {
@@ -292,13 +292,13 @@ Deno.serve(async (req: Request) => {
             );
           } else {
             // Partial cancellation: generate credit note (tipo E, tipo_relacion "01")
-            const agency = (booking as any).agencies;
-            const terceroAgencia = agency?.rfc && agency?.codigo_postal_fiscal
+            const agency = booking.agencies as unknown as { id: string; user_id: string; rfc?: string; razon_social?: string; regimen_fiscal?: string; postal_code?: string } | null;
+            const terceroAgencia = agency?.rfc && agency?.postal_code
               ? {
                   rfc: agency.rfc,
                   nombre: agency.razon_social || serviceName,
                   regimen_fiscal: agency.regimen_fiscal || "601",
-                  domicilio_fiscal: agency.codigo_postal_fiscal,
+                  domicilio_fiscal: agency.postal_code,
                 }
               : null;
 
@@ -320,7 +320,7 @@ Deno.serve(async (req: Request) => {
                   tax_treatment: (optService as { tax_treatment?: string }).tax_treatment ?? null,
                   exempt_ratio: (optService as { exempt_ratio?: number }).exempt_ratio ?? null,
                 },
-              }).catch((err: any) => console.error("Credit note generation failed (no crítico):", err))
+              }).catch((err) => console.error("Credit note generation failed (no crítico):", err))
             );
           }
         } else {
@@ -334,13 +334,13 @@ Deno.serve(async (req: Request) => {
             .maybeSingle();
 
           if (depositCfdi && depositCfdi.uuid_fiscal) {
-            const agency = (booking as any).agencies;
-            const terceroAgencia = agency?.rfc && agency?.codigo_postal_fiscal
+            const agency = booking.agencies as unknown as { id: string; user_id: string; rfc?: string; razon_social?: string; regimen_fiscal?: string; postal_code?: string } | null;
+            const terceroAgencia = agency?.rfc && agency?.postal_code
               ? {
                   rfc: agency.rfc,
                   nombre: agency.razon_social || serviceName,
                   regimen_fiscal: agency.regimen_fiscal || "601",
-                  domicilio_fiscal: agency.codigo_postal_fiscal,
+                  domicilio_fiscal: agency.postal_code,
                 }
               : null;
 
@@ -362,7 +362,7 @@ Deno.serve(async (req: Request) => {
                   tax_treatment: (optService as { tax_treatment?: string }).tax_treatment ?? null,
                   exempt_ratio: (optService as { exempt_ratio?: number }).exempt_ratio ?? null,
                 },
-              }).catch((err: any) => console.error("Credit note generation failed (no crítico):", err))
+              }).catch((err) => console.error("Credit note generation failed (no crítico):", err))
             );
           }
         }
@@ -373,7 +373,7 @@ Deno.serve(async (req: Request) => {
 
     // Notify the agency in-app
     try {
-      const agencyUserId = (booking as any).agencies?.user_id;
+      const agencyUserId = (booking.agencies as unknown as { user_id?: string } | null)?.user_id;
       if (agencyUserId) {
         await serviceClient.rpc("create_user_notification", {
           p_user_id: agencyUserId,
