@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { cubreElAnticipo } from "../_shared/exigible.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
@@ -7,6 +7,43 @@ import { registrarDisputa } from "../_shared/disputas.ts";
 import { avisosCon } from "../_shared/avisosDePago.ts";
 import { estimarComisionProcesador } from "../_shared/estimarComisionProcesador.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+
+interface ConektaCharge {
+  id: string;
+  status?: string;
+  paid_at?: number | null;
+  fee?: number;
+  payment_method?: { type?: string; product_type?: string };
+}
+
+// Forma unificada de `data`/`data.object`: cubre tanto una orden (id, amount)
+// como un chargeback (charge_id, order_id, currency, reason, status,
+// evidence_due_by) -- Conekta manda eventos de ambos tipos por el mismo webhook.
+interface ConektaEventObject {
+  id?: string;
+  amount?: number;
+  charge_id?: string;
+  charge?: string;
+  order_id?: string;
+  currency?: string;
+  reason?: string;
+  status?: string;
+  evidence_due_by?: string;
+}
+
+interface ConektaOrder {
+  amount?: number;
+  metadata?: Record<string, string | undefined>;
+  charges?: ConektaCharge[] | { data?: ConektaCharge[] };
+}
+
+// Conekta manda `charges` como arreglo plano en algunas respuestas y como
+// `{ data: [...] }` en otras -- normaliza las dos formas a un solo arreglo.
+function chargesArray(order: ConektaOrder | null | undefined): ConektaCharge[] {
+  const c = order?.charges;
+  if (!c) return [];
+  return Array.isArray(c) ? c : (c.data ?? []);
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,7 +156,13 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Invalid signature" }, 401);
     }
 
-    let body: any;
+    let body: {
+      type?: string;
+      event_type?: string;
+      id?: string;
+      event_id?: string;
+      data?: ConektaEventObject & { object?: ConektaEventObject };
+    };
     try {
       body = JSON.parse(rawBody);
     } catch {
@@ -213,7 +256,7 @@ Deno.serve(async (req: Request) => {
       if (slot && eventType === "order.paid") {
         const conektaApiBaseFs = Deno.env.get("CONEKTA_API_BASE") || "https://api.conekta.io";
         const conektaPrivateKeyFs = Deno.env.get("CONEKTA_PRIVATE_KEY");
-        let conektaOrderFs: any = null;
+        let conektaOrderFs: ConektaOrder | null = null;
         if (conektaPrivateKeyFs) {
           const orderRespFs = await fetch(`${conektaApiBaseFs}/orders/${orderId}`, {
             headers: { "Accept": "application/vnd.conekta-v2.2.0+json", "Authorization": `Bearer ${conektaPrivateKeyFs}` },
@@ -260,7 +303,7 @@ Deno.serve(async (req: Request) => {
     const conektaPrivateKey = Deno.env.get("CONEKTA_PRIVATE_KEY");
     const conektaApiBase = Deno.env.get("CONEKTA_API_BASE") || "https://api.conekta.io";
 
-    let conektaOrder: any = null;
+    let conektaOrder: ConektaOrder | null = null;
     if (conektaPrivateKey) {
       const orderResp = await fetch(`${conektaApiBase}/orders/${orderId}`, {
         headers: {
@@ -324,7 +367,7 @@ Deno.serve(async (req: Request) => {
       // respaldo (migracion 20260804042551) -- no se inventa una tasa nueva, se
       // reusa la que ya existe para el mismo proposito.
       if (conektaOrder) {
-        const charge = conektaOrder.charges?.data?.[0] || conektaOrder.charges?.[0];
+        const charge = chargesArray(conektaOrder)[0];
         const feeCentavos = charge?.fee;
         const txAmount = Number(tx.amount) || 0;
         let conektaFee = feeCentavos != null ? Number(feeCentavos) / 100 : 0;
@@ -363,10 +406,7 @@ Deno.serve(async (req: Request) => {
       // Sync the real BNPL product_type from the paid order (Conekta's Hosted Checkout
       // lets the user pick the financier there, so we don't know it until the order is paid)
       if (paymentMethodType === "bnpl" && conektaOrder) {
-        const realProductType =
-          conektaOrder.charges?.data?.[0]?.payment_method?.product_type ||
-          conektaOrder.charges?.[0]?.payment_method?.product_type ||
-          null;
+        const realProductType = chargesArray(conektaOrder)[0]?.payment_method?.product_type || null;
 
         if (realProductType) {
           await supabase
@@ -383,46 +423,27 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Update sub-charge records if this was a split order
-      if (conektaOrder?.charges?.data && Array.isArray(conektaOrder.charges.data)) {
-        for (const charge of conektaOrder.charges.data) {
-          if (charge.payment_method?.type) {
-            const chargeMethod = charge.payment_method.type === "card" ? "card"
-              : charge.payment_method.type === "cash" ? "cash"
-              : charge.payment_method.type === "spei" ? "spei"
-              : charge.payment_method.type;
+      // Update sub-charge records if this was a split order. Conekta manda
+      // `charges` como arreglo plano o como { data: [...] } segun el
+      // endpoint -- chargesArray() normaliza las dos formas (antes este
+      // bloque estaba duplicado literal, uno por cada forma).
+      for (const charge of chargesArray(conektaOrder)) {
+        if (charge.payment_method?.type) {
+          const chargeMethod = charge.payment_method.type === "card" ? "card"
+            : charge.payment_method.type === "cash" ? "cash"
+            : charge.payment_method.type === "spei" ? "spei"
+            : charge.payment_method.type;
 
-            await supabase
-              .from("payment_transaction_charges")
-              .update({
-                conekta_charge_id: charge.id,
-                status: charge.status === "paid" ? "paid" : "pending",
-                paid_at: charge.paid_at ? new Date(charge.paid_at * 1000).toISOString() : new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("payment_transaction_id", tx.id)
-              .eq("payment_method_type", chargeMethod);
-          }
-        }
-      } else if (conektaOrder?.charges && Array.isArray(conektaOrder.charges)) {
-        for (const charge of conektaOrder.charges) {
-          if (charge.payment_method?.type) {
-            const chargeMethod = charge.payment_method.type === "card" ? "card"
-              : charge.payment_method.type === "cash" ? "cash"
-              : charge.payment_method.type === "spei" ? "spei"
-              : charge.payment_method.type;
-
-            await supabase
-              .from("payment_transaction_charges")
-              .update({
-                conekta_charge_id: charge.id,
-                status: charge.status === "paid" ? "paid" : "pending",
-                paid_at: charge.paid_at ? new Date(charge.paid_at * 1000).toISOString() : new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("payment_transaction_id", tx.id)
-              .eq("payment_method_type", chargeMethod);
-          }
+          await supabase
+            .from("payment_transaction_charges")
+            .update({
+              conekta_charge_id: charge.id,
+              status: charge.status === "paid" ? "paid" : "pending",
+              paid_at: charge.paid_at ? new Date(charge.paid_at * 1000).toISOString() : new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("payment_transaction_id", tx.id)
+            .eq("payment_method_type", chargeMethod);
         }
       }
 
@@ -436,7 +457,7 @@ Deno.serve(async (req: Request) => {
           .eq("charge_context", "booking_deposit")
           .eq("status", "succeeded");
 
-        const totalPaid = (allTx || []).reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+        const totalPaid = (allTx || []).reduce((sum: number, t: { amount: number }) => sum + Number(t.amount), 0);
 
         const { data: booking } = await supabase
           .from("bookings")
@@ -783,7 +804,7 @@ Deno.serve(async (req: Request) => {
 
             if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none") {
               const paymentForm = getPaymentFormForConekta(paymentMethodType, conektaOrder);
-              const returnedAllocations = (allocResult.allocations as any[]) || [];
+              const returnedAllocations = (allocResult.allocations as Array<{ installment_id: string }>) || [];
 
               for (const alloc of returnedAllocations) {
                 // Check if this installment is now fully paid
@@ -945,7 +966,7 @@ Deno.serve(async (req: Request) => {
 });
 
 // Determine the SAT Forma de Pago based on Conekta payment_method_type
-function getPaymentFormForConekta(paymentMethodType: string, conektaOrder: any): string {
+function getPaymentFormForConekta(paymentMethodType: string, conektaOrder: ConektaOrder | null): string {
   if (paymentMethodType === "bnpl") {
     return "03"; // Transferencia electrónica de fondos
   }
@@ -957,7 +978,7 @@ function getPaymentFormForConekta(paymentMethodType: string, conektaOrder: any):
   }
   if (paymentMethodType === "card") {
     // Check if it's credit or debit card from Conekta charge data
-    const charges = conektaOrder?.charges?.data || conektaOrder?.charges || [];
+    const charges = chargesArray(conektaOrder);
     if (Array.isArray(charges) && charges.length > 0) {
       const cardType = charges[0]?.payment_method?.type;
       // "credit" → 04 (Tarjeta de crédito), "debit" → 28 (Tarjeta de débito)
@@ -968,7 +989,7 @@ function getPaymentFormForConekta(paymentMethodType: string, conektaOrder: any):
   }
   if (paymentMethodType === "split") {
     // For split orders, use the first charge's method — each charge gets its own CFDI
-    const charges = conektaOrder?.charges?.data || conektaOrder?.charges || [];
+    const charges = chargesArray(conektaOrder);
     if (Array.isArray(charges) && charges.length > 0) {
       const firstChargeMethod = charges[0]?.payment_method?.type;
       if (firstChargeMethod === "card") return "04";
@@ -980,7 +1001,7 @@ function getPaymentFormForConekta(paymentMethodType: string, conektaOrder: any):
   return "03"; // Default fallback
 }
 
-async function awardExtraPoints(supabase: any, bookingId: string, subtotal: number, referenceId: string, referenceType: string, description: string) {
+async function awardExtraPoints(supabase: SupabaseClient, bookingId: string, subtotal: number, referenceId: string, referenceType: string, description: string) {
   try {
     const { data: booking } = await supabase.from("bookings").select("user_id").eq("id", bookingId).maybeSingle();
     if (!booking?.user_id || subtotal <= 0) return;
