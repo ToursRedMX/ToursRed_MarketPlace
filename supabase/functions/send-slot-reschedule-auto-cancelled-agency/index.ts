@@ -10,6 +10,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface AutoCancelTour {
+  id: string;
+  name: string;
+  destination: string | null;
+}
+
+interface AutoCancelAgency {
+  id: string;
+  name: string;
+  contact_email: string | null;
+}
+
+interface AutoCancelTraveler {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -68,7 +87,8 @@ Deno.serve(async (req: Request) => {
       throw new Error("Reserva no encontrada");
     }
 
-    const agencyEmail = (booking.agency as any)?.contact_email;
+    const agency = booking.agency as unknown as AutoCancelAgency | null;
+    const agencyEmail = agency?.contact_email;
     if (!agencyEmail) {
       throw new Error("Email de agencia no encontrado");
     }
@@ -86,9 +106,10 @@ Deno.serve(async (req: Request) => {
     const appUrl = platformSettingsData?.platform_url || "https://toursredmx.netlify.app";
 
     const totalRefund: number = refund_amount ?? 0;
-    const tourName = (booking.tour as any)?.name ?? "Tour";
-    const agencyName = (booking.agency as any)?.name ?? "Agencia";
-    const traveler = (booking.traveler as any);
+    const tour = booking.tour as unknown as AutoCancelTour | null;
+    const tourName = tour?.name ?? "Tour";
+    const agencyName = agency?.name ?? "Agencia";
+    const traveler = booking.traveler as unknown as AutoCancelTraveler | null;
     const travelerName = traveler
       ? `${traveler.first_name} ${traveler.last_name}`.trim()
       : "El viajero";
