@@ -4,6 +4,8 @@ import { format } from 'date-fns';
 import { formatCurrency } from '../utils/formatCurrency';
 import { crearFetchConCorrelacion } from './fetchConCorrelacion';
 import { mensajeDeError } from './errores';
+import { comoFilas } from './relacionesSupabase';
+import type { Booking } from '../types';
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -1243,9 +1245,15 @@ export const createBooking = async (bookingData: any) => {
   }
 };
 
+interface PaymentTransactionSlim {
+  booking_id: string;
+  payment_method_type: string | null;
+  created_at: string;
+}
+
 export const getUserBookings = async (userId: string) => {
   try {
-    const { data: bookings, error } = await supabase
+    const { data: bookingsData, error } = await supabase
       .from('bookings')
       .select(BOOKING_SELECT_FIELDS)
       .eq('user_id', userId)
@@ -1255,9 +1263,10 @@ export const getUserBookings = async (userId: string) => {
       .neq('status', 'cancellation_processing')
       .order('created_at', { ascending: false });
 
-    if (error || !bookings) {
-      return { data: bookings, error };
+    if (error || !bookingsData) {
+      return { data: bookingsData, error };
     }
+    const bookings = comoFilas<Booking>(bookingsData);
 
     // OPTIMIZED: Get all payment transactions in ONE query instead of N queries
     const bookingIds = bookings.map(b => b.id);
@@ -1273,8 +1282,8 @@ export const getUserBookings = async (userId: string) => {
     }
 
     // Group transactions by booking_id and get the most recent
-    const transactionsByBooking: Record<string, any> = {};
-    (allTransactions || []).forEach((tx: any) => {
+    const transactionsByBooking: Record<string, PaymentTransactionSlim> = {};
+    comoFilas<PaymentTransactionSlim>(allTransactions).forEach((tx) => {
       if (!transactionsByBooking[tx.booking_id] ||
           new Date(tx.created_at) > new Date(transactionsByBooking[tx.booking_id].created_at)) {
         transactionsByBooking[tx.booking_id] = tx;
@@ -1283,7 +1292,7 @@ export const getUserBookings = async (userId: string) => {
 
     // Map bookings with payment methods (no more N+1!)
     const bookingsWithPaymentMethod = bookings.map((booking) => {
-      let paymentMethod = (booking as any).payment_method || null;
+      let paymentMethod = booking.payment_method || null;
 
       // If no payment_method, use the most recent transaction
       if (!paymentMethod && transactionsByBooking[booking.id]) {
@@ -1320,7 +1329,7 @@ const BOOKING_SELECT_FIELDS = `
 
 export const getUserPastBookings = async (userId: string) => {
   try {
-    const { data: bookings, error } = await supabase
+    const { data: bookingsData, error } = await supabase
       .from('bookings')
       .select(BOOKING_SELECT_FIELDS)
       .eq('user_id', userId)
@@ -1328,9 +1337,10 @@ export const getUserPastBookings = async (userId: string) => {
       .order('created_at', { ascending: false })
       .limit(100);
 
-    if (error || !bookings) return { data: bookings, error };
+    if (error || !bookingsData) return { data: bookingsData, error };
+    const bookings = comoFilas<Booking>(bookingsData);
 
-    const bookingIds = bookings.map((b: any) => b.id);
+    const bookingIds = bookings.map((b) => b.id);
     const { data: allTransactions, error: errorTransacciones } = await supabase
       .from('payment_transactions')
       .select('booking_id, payment_method_type, created_at')
@@ -1342,15 +1352,15 @@ export const getUserPastBookings = async (userId: string) => {
       console.error('❌ Error leyendo payment_transactions para el metodo de pago:', errorTransacciones);
     }
 
-    const transactionsByBooking: Record<string, any> = {};
-    (allTransactions || []).forEach((tx: any) => {
+    const transactionsByBooking: Record<string, PaymentTransactionSlim> = {};
+    comoFilas<PaymentTransactionSlim>(allTransactions).forEach((tx) => {
       if (!transactionsByBooking[tx.booking_id] ||
           new Date(tx.created_at) > new Date(transactionsByBooking[tx.booking_id].created_at)) {
         transactionsByBooking[tx.booking_id] = tx;
       }
     });
 
-    const result = bookings.map((booking: any) => ({
+    const result = bookings.map((booking) => ({
       ...booking,
       payment_method: booking.payment_method || transactionsByBooking[booking.id]?.payment_method_type || null,
     }));
@@ -1362,7 +1372,7 @@ export const getUserPastBookings = async (userId: string) => {
 
 export const getUserCancelledBookings = async (userId: string) => {
   try {
-    const { data: bookings, error } = await supabase
+    const { data: bookingsData, error } = await supabase
       .from('bookings')
       .select(BOOKING_SELECT_FIELDS)
       .eq('user_id', userId)
@@ -1370,9 +1380,10 @@ export const getUserCancelledBookings = async (userId: string) => {
       .order('created_at', { ascending: false })
       .limit(100);
 
-    if (error || !bookings) return { data: bookings, error };
+    if (error || !bookingsData) return { data: bookingsData, error };
+    const bookings = comoFilas<Booking>(bookingsData);
 
-    const bookingIds = bookings.map((b: any) => b.id);
+    const bookingIds = bookings.map((b) => b.id);
     const { data: allTransactions, error: errorTransacciones } = await supabase
       .from('payment_transactions')
       .select('booking_id, payment_method_type, created_at')
@@ -1384,15 +1395,15 @@ export const getUserCancelledBookings = async (userId: string) => {
       console.error('❌ Error leyendo payment_transactions para el metodo de pago:', errorTransacciones);
     }
 
-    const transactionsByBooking: Record<string, any> = {};
-    (allTransactions || []).forEach((tx: any) => {
+    const transactionsByBooking: Record<string, PaymentTransactionSlim> = {};
+    comoFilas<PaymentTransactionSlim>(allTransactions).forEach((tx) => {
       if (!transactionsByBooking[tx.booking_id] ||
           new Date(tx.created_at) > new Date(transactionsByBooking[tx.booking_id].created_at)) {
         transactionsByBooking[tx.booking_id] = tx;
       }
     });
 
-    const result = bookings.map((booking: any) => ({
+    const result = bookings.map((booking) => ({
       ...booking,
       payment_method: booking.payment_method || transactionsByBooking[booking.id]?.payment_method_type || null,
     }));

@@ -440,7 +440,7 @@ export interface Booking {
   payment_intent_id?: string;
   payment_status?: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled';
   initial_payment_amount?: number;
-  payment_method?: string;
+  payment_method?: string | null;
   paid_at?: string;
   approval_status?: 'pending' | 'approved' | 'rejected';
   // Las tres son NULLABLE en la base y el codigo les escribe null.
@@ -558,6 +558,49 @@ export interface BookingOptionalService {
   membership_exemption_used?: number;
   payment_method?: string | null;
   paid_at?: string | null;
+}
+
+/** Un suplemento tal y como lo define el tour (el catalogo). */
+export interface TourSupplement {
+  id: string;
+  tour_id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  requires_approval: boolean;
+  is_cancellable: boolean;
+  max_capacity: number | null;
+  is_active: boolean;
+  display_order: number;
+}
+
+/** Lo que una reserva CONTRATA de un `TourSupplement`. */
+export interface BookingSupplement {
+  id: string;
+  booking_id: string;
+  tour_supplement_id: string;
+  quantity: number;
+  unit_price: number;
+  service_charge: number;
+  membership_exemption_used: number;
+  supplement_commission: number;
+  total_paid: number;
+  status: 'pending_approval' | 'approved' | 'rejected' | 'pending_payment' | 'paid' | 'cancelled';
+  payment_method?: string | null;
+  payment_intent_id?: string | null;
+  rejection_note?: string | null;
+  expires_at?: string | null;
+  requested_at: string;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  paid_at?: string | null;
+  approved_by?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: 'traveler' | 'agency' | 'system' | 'expiry' | 'tour_cancellation' | null;
+  refund_amount: number;
+  points_earned: number;
+  // Select parcial del catalogo: solo lo que las pantallas de reserva piden.
+  tour_supplements?: Pick<TourSupplement, 'name' | 'description' | 'price' | 'is_cancellable' | 'requires_approval'>;
 }
 
 /**
