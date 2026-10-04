@@ -354,7 +354,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const amountInCents = Math.round(finalAmount * 100);
-      const orderPayload: any = {
+      const orderPayload: Record<string, unknown> = {
         currency: "MXN",
         amount: amountInCents,
         customer_info: { name: user.email || "Agencia", email: user.email || "no-email@toursred.com" },
@@ -462,7 +462,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const paymentMethodMetadataFs: Record<string, any> = {
+      const paymentMethodMetadataFs: Record<string, unknown> = {
         openpay_method, openpay_charge_id: chargeOp.id, openpay_status: chargeOp.status,
       };
       if (openpay_method === "spei") {
