@@ -206,7 +206,7 @@ Deno.serve(async (req: Request) => {
           p_user_id: booking.user_id,
           p_amount: -cashUsed,
           p_type: "debit",
-          p_description: `Pago de reserva para ${(booking as any).tours?.name || "tour"}`,
+          p_description: `Pago de reserva para ${(booking.tours as unknown as { name?: string } | null)?.name || "tour"}`,
           p_reference_id: booking_id,
           p_reference_type: "booking",
           p_idempotency_key: `${booking_id}_charge_booking`,

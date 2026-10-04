@@ -75,7 +75,7 @@ Deno.serve(async (req: Request) => {
       const meta = u.user_metadata ?? {};
       const onboardingCompleted = meta.onboarding_completed;
       const isGoogleUser = u.app_metadata?.provider === "google" ||
-        (u.identities ?? []).some((i: any) => i.provider === "google");
+        (u.identities ?? []).some((i) => i.provider === "google");
 
       if (
         isGoogleUser &&

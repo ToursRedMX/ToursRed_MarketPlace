@@ -227,7 +227,7 @@ Deno.serve(async (req: Request) => {
       }).eq("id", topupId);
 
       // Return only what the frontend needs
-      const responseData: Record<string, any> = {
+      const responseData: Record<string, unknown> = {
         topup_id: topupId,
         order_id: orderId,
         amount: rounded,

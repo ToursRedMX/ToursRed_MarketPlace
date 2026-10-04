@@ -271,7 +271,7 @@ Deno.serve(async (req: Request) => {
 
     const validatedAmount = Math.round(serverAmount * 100) / 100;
 
-    let items: any[] = [];
+    let items: Record<string, unknown>[] = [];
     let successUrl = "";
     let cancelUrl = "";
 
