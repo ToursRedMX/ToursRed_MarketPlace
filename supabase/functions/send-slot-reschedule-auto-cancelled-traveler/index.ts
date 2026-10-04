@@ -10,6 +10,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface AutoCancelTravelerTour {
+  id: string;
+  name: string;
+  destination: string | null;
+}
+
+interface AutoCancelTravelerAgency {
+  id: string;
+  name: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -101,8 +114,10 @@ Deno.serve(async (req: Request) => {
     const appUrl = platformSettingsData?.platform_url || "https://toursredmx.netlify.app";
 
     const totalRefund: number = refund_amount ?? 0;
-    const tourName = (booking.tour as any)?.name ?? "Tour";
-    const agencyName = (booking.agency as any)?.name ?? "la agencia";
+    const tour = booking.tour as unknown as AutoCancelTravelerTour | null;
+    const agency = booking.agency as unknown as AutoCancelTravelerAgency | null;
+    const tourName = tour?.name ?? "Tour";
+    const agencyName = agency?.name ?? "la agencia";
 
     const formatDate = (d: string) =>
       new Date(d).toLocaleDateString("es-MX", {
