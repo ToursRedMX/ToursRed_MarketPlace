@@ -10,6 +10,26 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface NotificationTour {
+  name: string;
+  destination: string | null;
+  start_date: string;
+  end_date: string;
+  image_url: string | null;
+  agencies: { name: string; contact_email: string | null } | null;
+}
+
+interface NotificationUser {
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+}
+
+interface TourOptionalServiceInfo {
+  name: string;
+  description: string | null;
+}
+
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
   Sentry.init({
@@ -126,9 +146,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const tour = booking.tours as any;
-    const agency = tour?.agencies as any;
-    const user = booking.users as any;
+    const tour = booking.tours as unknown as NotificationTour | null;
+    const agency = tour?.agencies;
+    const user = booking.users as unknown as NotificationUser | null;
 
     const travelerName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || "Viajero";
     const travelerEmail = user?.email || "";
@@ -265,7 +285,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const serviceInfo = bos.tour_optional_services as any;
+      const serviceInfo = bos.tour_optional_services as unknown as TourOptionalServiceInfo;
       const serviceName = serviceInfo?.name || "Servicio opcional";
       const subtotal = Number(bos.subtotal || Number(bos.unit_price) * bos.quantity);
 
