@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '../../lib/supabase';
 import { TourSlotBlackout } from '../../types';
+import { mensajeDeError } from '../../lib/errores';
 
 interface AgencyBlackoutManagerProps {
   tourId: string;
@@ -69,8 +70,8 @@ const AgencyBlackoutManager: React.FC<AgencyBlackoutManagerProps> = ({ tourId, a
       await fetchBlackouts();
       setShowForm(false);
       setForm(emptyForm);
-    } catch (err: any) {
-      setError(err.message || 'Error al guardar el bloqueo.');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al guardar el bloqueo.');
     } finally {
       setIsSubmitting(false);
     }

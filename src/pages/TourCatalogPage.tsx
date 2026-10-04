@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { isCrawler } from '../utils/isCrawler';
 import { construirEventoDeBusqueda, textoDeBusqueda } from '../utils/registroDeBusqueda';
 import AvisameButton from '../components/AvisameButton';
+import { mensajeDeError } from '../lib/errores';
 
 const SITE_URL = (import.meta.env.VITE_APP_URL || 'https://toursredmx.netlify.app/').replace(/\/$/, '');
 
@@ -186,8 +187,8 @@ const TourCatalogPage: React.FC = () => {
           setFeaturedCount(0);
           setTotalCount(count ?? data?.length ?? 0);
         }
-      } catch (err: any) {
-        setError(err.message || 'Error al cargar los tours');
+      } catch (err) {
+        setError(mensajeDeError(err) || 'Error al cargar los tours');
         setTours([]); setTotalCount(0); setFeaturedSlotMapCatalog({}); setFeaturedCount(0);
       } finally {
         setResultadosDeBusqueda(searchParams.toString());

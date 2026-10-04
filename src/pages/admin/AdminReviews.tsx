@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Star, Search, Filter, Eye, EyeOff, MessageSquare, Trash2, Flag, Calendar, User, Building, MapPin, AlertTriangle, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
+import { mensajeDeError } from '../../lib/errores';
 
 interface AdminReview {
   id: string;
@@ -57,9 +58,9 @@ const AdminReviews: React.FC = () => {
       }
 
       setReviews(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando reseñas:', err);
-      setError(err.message || 'Error al cargar las reseñas');
+      setError(mensajeDeError(err) || 'Error al cargar las reseñas');
     } finally {
       setIsLoading(false);
     }
@@ -94,9 +95,9 @@ const AdminReviews: React.FC = () => {
       ));
 
       console.log(`✅ Visibilidad de reseña ${reviewId} actualizada a:`, !currentVisibility);
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error actualizando visibilidad:', err);
-      setError(err.message || 'Error al actualizar la visibilidad');
+      setError(mensajeDeError(err) || 'Error al actualizar la visibilidad');
     } finally {
       setIsUpdating(null);
     }
@@ -130,9 +131,9 @@ const AdminReviews: React.FC = () => {
       // Actualizar estado local
       setReviews(reviews.filter(r => r.id !== review.id));
       console.log('✅ Reseña eliminada correctamente');
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error eliminando reseña:', err);
-      setError(err.message || 'Error al eliminar la reseña');
+      setError(mensajeDeError(err) || 'Error al eliminar la reseña');
     } finally {
       setIsUpdating(null);
     }
@@ -180,9 +181,9 @@ const AdminReviews: React.FC = () => {
       setReplyText('');
       setIsReplying(null);
       console.log('✅ Respuesta agregada correctamente');
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error agregando respuesta:', err);
-      setError(err.message || 'Error al agregar la respuesta');
+      setError(mensajeDeError(err) || 'Error al agregar la respuesta');
     } finally {
       setIsUpdating(null);
     }

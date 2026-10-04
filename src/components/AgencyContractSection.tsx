@@ -4,6 +4,7 @@ import {
   AlertTriangle, ThumbsUp, ThumbsDown, RotateCcw, Eye,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { mensajeDeError } from '../lib/errores';
 
 interface AgencyDocument {
   id: string;
@@ -120,8 +121,8 @@ const AgencyContractSection: React.FC<Props> = ({
       await invoke({ agency_id: agencyId, action: 'approve', document_ids: [doc.id] });
       await load();
       onRefresh?.();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(mensajeDeError(e));
     } finally {
       setBusy(p => ({ ...p, [doc.id]: false }));
     }
@@ -142,8 +143,8 @@ const AgencyContractSection: React.FC<Props> = ({
       setRejectReason('');
       await load();
       onRefresh?.();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(mensajeDeError(e));
     } finally {
       setBusy(p => ({ ...p, [doc.id]: false }));
     }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Shield, ShieldAlert, ShieldCheck, KeyRound, Loader2, AlertTriangle, Info } from 'lucide-react';
+import { mensajeDeError } from '../lib/errores';
 
 export const SecurityTogglesSection: React.FC = () => {
   const [mfaAdmins, setMfaAdmins] = useState(false);
@@ -68,8 +69,8 @@ export const SecurityTogglesSection: React.FC = () => {
       if (updateError) throw updateError;
       setSuccess('Configuracion guardada');
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Error al guardar');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al guardar');
       if (field === 'mfa_required_for_admins') setMfaAdmins(!value);
       if (field === 'mfa_required_for_accountant') setMfaAccountant(!value);
       if (field === 'passkeys_enabled') setPasskeysEnabled(!value);

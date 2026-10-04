@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase, signOut } from '../../lib/supabase';
 import { Mail, ArrowLeft, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { mensajeDeError } from '../../lib/errores';
 
 const VerifyEmailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -166,9 +167,9 @@ const VerifyEmailPage: React.FC = () => {
         }
       }, 2000);
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error verifying code:', err);
-      setError(err.message || 'Error al verificar el código');
+      setError(mensajeDeError(err) || 'Error al verificar el código');
     } finally {
       setIsSubmitting(false);
     }
@@ -226,9 +227,9 @@ const VerifyEmailPage: React.FC = () => {
       setCode(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error resending code:', err);
-      setError(err.message || 'Error al reenviar el código');
+      setError(mensajeDeError(err) || 'Error al reenviar el código');
     } finally {
       setIsResending(false);
     }

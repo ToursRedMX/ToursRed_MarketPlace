@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { FrequentCompanion } from '../../types';
 import { Link } from 'react-router-dom';
+import { mensajeDeError } from '../../lib/errores';
 
 interface CompanionForm {
   nombre: string;
@@ -109,8 +110,8 @@ const TravelerCompanions: React.FC = () => {
       setForm({ ...emptyForm });
       await loadCompanions();
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Error al agregar el acompañante');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al agregar el acompañante');
     } finally {
       setIsSaving(false);
     }
@@ -156,8 +157,8 @@ const TravelerCompanions: React.FC = () => {
       setForm({ ...emptyForm });
       await loadCompanions();
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Error al actualizar el acompañante');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al actualizar el acompañante');
     } finally {
       setIsSaving(false);
     }
@@ -176,8 +177,8 @@ const TravelerCompanions: React.FC = () => {
       setDeleteConfirmId(null);
       await loadCompanions();
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Error al eliminar el acompañante');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al eliminar el acompañante');
     }
   };
 

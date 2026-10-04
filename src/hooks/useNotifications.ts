@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Notification } from '../types';
+import { mensajeDeError } from '../lib/errores';
 
 export function useNotifications() {
   const { user } = useAuth();
@@ -69,9 +70,9 @@ export function useNotifications() {
       } else {
         setNotifications(data || []);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error in fetchNotifications:', err);
-      setError(err.message || 'Error al cargar notificaciones');
+      setError(mensajeDeError(err) || 'Error al cargar notificaciones');
     } finally {
       setIsLoading(false);
     }

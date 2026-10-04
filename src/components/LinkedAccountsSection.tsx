@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link2, Link2Off, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { UserIdentity } from '@supabase/supabase-js';
+import { mensajeDeError } from '../lib/errores';
 
 // El tipo lo pone la libreria: `unlinkIdentity` exige un `UserIdentity`
 // completo —lleva `user_id` e `identity_id`, que la copia local no tenia— y
@@ -187,8 +188,8 @@ const LinkedAccountsSection: React.FC = () => {
         },
       });
       if (linkError) throw linkError;
-    } catch (err: any) {
-      setError(err.message || `Error al vincular cuenta`);
+    } catch (err) {
+      setError(mensajeDeError(err) || `Error al vincular cuenta`);
       setActionLoading(null);
     }
   };
@@ -206,8 +207,8 @@ const LinkedAccountsSection: React.FC = () => {
       if (unlinkError) throw unlinkError;
       setSuccess(`Cuenta de ${getProviderLabel(identity.provider)} desvinculada correctamente`);
       await loadIdentities();
-    } catch (err: any) {
-      setError(err.message || 'Error al desvincular la cuenta');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al desvincular la cuenta');
     } finally {
       setActionLoading(null);
     }

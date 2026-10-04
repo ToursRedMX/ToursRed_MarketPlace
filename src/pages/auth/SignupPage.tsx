@@ -8,6 +8,7 @@ import TurnstileWidget from '../../components/TurnstileWidget';
 import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
+import { mensajeDeError } from '../../lib/errores';
 
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -415,9 +416,9 @@ const SignupPage: React.FC = () => {
           navigate('/verify-email');
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error en registro:', err);
-      setError(err.message || 'Ocurrió un error durante el registro');
+      setError(mensajeDeError(err) || 'Ocurrió un error durante el registro');
     } finally {
       // El token de Turnstile es de un solo uso y Supabase lo manda a
       // siteverify ANTES de mirar las credenciales, asi que un intento fallido

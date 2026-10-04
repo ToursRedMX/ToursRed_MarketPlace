@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { etiquetaPlanMembresia } from '../lib/planMembresia';
 import { paymentLabel, processorLabel } from '../utils/paymentLabels';
+import { mensajeDeError } from '../lib/errores';
 
 // Mismas etiquetas y mismo orden que `BookingFlowStep4`, que es donde el
 // viajero vio este desglose por ultima vez antes de pagar: si aqui se ordenara
@@ -185,8 +186,8 @@ const BookingSuccessPage: React.FC = () => {
       }));
 
 
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar los detalles de la reserva');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cargar los detalles de la reserva');
     } finally {
       setIsLoading(false);
     }

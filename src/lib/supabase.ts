@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { formatCurrency } from '../utils/formatCurrency';
 import { crearFetchConCorrelacion } from './fetchConCorrelacion';
+import { mensajeDeError } from './errores';
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -275,9 +276,14 @@ export const signUp = async (
     }
 
     return { data, error: null, profileData: profile, isExistingUser };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en signUp:', error);
-    return { data: null, error, profileData: null, isExistingUser: false };
+    return {
+      data: null,
+      error: error instanceof Error ? error : { message: mensajeDeError(error) },
+      profileData: null,
+      isExistingUser: false,
+    };
   }
 };
 
@@ -333,9 +339,9 @@ export const signIn = async (email: string, password: string, captchaToken?: str
     }
 
     return { data, error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en signIn:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : { message: mensajeDeError(error) } };
   }
 };
 
@@ -344,9 +350,9 @@ export const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     return { error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en signOut:', error);
-    return { error };
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -384,9 +390,9 @@ export const createAgencyProfile = async (
       .single();
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en createAgencyProfile:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -425,9 +431,9 @@ export const updateAgencyStatus = async (agencyId: string, isActive: boolean) =>
       .single();
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en updateAgencyStatus:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -451,9 +457,9 @@ export const getAllAgencies = async () => {
       .order('created_at', { ascending: false });
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getAllAgencies:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -731,9 +737,9 @@ export const getTours = async (filters: any = {}) => {
     const { data, count, error } = await query;
 
     return { data: data ?? [], error, count: count ?? data?.length ?? 0 };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTours:', error);
-    return { data: null, error, count: 0 };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)), count: 0 };
   }
 };
 
@@ -789,8 +795,8 @@ export const getPopularTours = async (limit = 20) => {
     }
 
     return { data: capped, error: null };
-  } catch (error: any) {
-    return { data: [], error };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -846,8 +852,8 @@ export const getActiveFeaturedTours = async () => {
     }
 
     return { data: tours, slotMap, error: null };
-  } catch (error: any) {
-    return { data: [], slotMap: {}, error };
+  } catch (error) {
+    return { data: [], slotMap: {}, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -898,8 +904,8 @@ export const getNewTours = async (limit = 20) => {
     }
 
     return { data: capped, error: null };
-  } catch (error: any) {
-    return { data: [], error };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -911,8 +917,8 @@ export const getFeaturedPlans = async () => {
       .eq('is_active', true)
       .order('display_order');
     return { data: data ?? [], error };
-  } catch (error: any) {
-    return { data: [], error };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -935,8 +941,8 @@ export const getAgencyFeaturedSlots = async (agencyId: string) => {
         : slot.featured_tour_stats,
     }));
     return { data: normalized, error };
-  } catch (error: any) {
-    return { data: [], error };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -949,8 +955,8 @@ export const getAgencyFeaturedWaitlist = async (agencyId: string) => {
       .in('status', ['waiting', 'notified'])
       .order('created_at', { ascending: false });
     return { data: data ?? [], error };
-  } catch (error: any) {
-    return { data: [], error };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1013,8 +1019,8 @@ export const joinFeaturedWaitlist = async (tourId: string, planId: string, agenc
       .insert({ tour_id: tourId, agency_id: agencyId, plan_id: planId, position: nextPosition });
 
     return { error };
-  } catch (error: any) {
-    return { error };
+  } catch (error) {
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1030,9 +1036,9 @@ export const getTourById = async (id: string) => {
       .maybeSingle();
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTourById:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1048,9 +1054,9 @@ export const getTourBySlug = async (slug: string) => {
       .maybeSingle();
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTourBySlug:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1069,7 +1075,7 @@ export const resolveTourSlug = async (oldSlug: string): Promise<string | null> =
     }
 
     return null;
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en resolveTourSlug:', error);
     return null;
   }
@@ -1089,7 +1095,7 @@ export const checkSlugAvailable = async (slug: string, excludeTourId?: string): 
     }
 
     return data as boolean;
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en checkSlugAvailable:', error);
     return false;
   }
@@ -1122,9 +1128,9 @@ export const updateTourSlug = async (
     }
 
     return { success: false, slug: null, message: 'Respuesta vacía del servidor' };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en updateTourSlug:', error);
-    return { success: false, slug: null, message: error.message };
+    return { success: false, slug: null, message: mensajeDeError(error) };
   }
 };
 
@@ -1174,9 +1180,9 @@ export const createTour = async (tourData: any, destinations: string[], userId: 
     }
     
     return { data: tour, error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en createTour:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1190,9 +1196,9 @@ export const updateTour = async (tourId: string, tourData: any) => {
       .single();
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en updateTour:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1204,9 +1210,9 @@ export const deleteTour = async (tourId: string) => {
       .eq('id', tourId);
     
     return { error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en deleteTour:', error);
-    return { error };
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1231,9 +1237,9 @@ export const createBooking = async (bookingData: any) => {
     }
 
     return { data, error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en createBooking:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1291,9 +1297,9 @@ export const getUserBookings = async (userId: string) => {
     });
 
     return { data: bookingsWithPaymentMethod, error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getUserBookings:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1349,8 +1355,8 @@ export const getUserPastBookings = async (userId: string) => {
       payment_method: booking.payment_method || transactionsByBooking[booking.id]?.payment_method_type || null,
     }));
     return { data: result, error: null };
-  } catch (error: any) {
-    return { data: null, error };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1391,8 +1397,8 @@ export const getUserCancelledBookings = async (userId: string) => {
       payment_method: booking.payment_method || transactionsByBooking[booking.id]?.payment_method_type || null,
     }));
     return { data: result, error: null };
-  } catch (error: any) {
-    return { data: null, error };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1451,9 +1457,9 @@ export const getAgencyBookings = async (agencyId: string) => {
     });
 
     return { data: bookingsWithPaymentMethod, error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getAgencyBookings:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1612,9 +1618,9 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
       },
       error: null
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTourBookingReport:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1632,9 +1638,9 @@ export const getTourReviews = async (tourId: string) => {
       .order('created_at', { ascending: false });
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTourReviews:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1651,9 +1657,9 @@ export const getAllDestinations = async () => {
       .order('name', { ascending: true });
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getAllDestinations:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1667,9 +1673,9 @@ export const searchDestinations = async (query: string) => {
       .limit(5);
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en searchDestinations:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1690,9 +1696,9 @@ export const createDestination = async (destinationData: any) => {
     }
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en createDestination:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1713,9 +1719,9 @@ export const updateDestination = async (destinationId: string, destinationData: 
     }
     
     return { data: data[0], error: null };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en updateDestination:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1727,9 +1733,9 @@ export const deleteDestination = async (destinationId: string) => {
       .eq('id', destinationId);
     
     return { error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en deleteDestination:', error);
-    return { error };
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1745,9 +1751,9 @@ export const addDestinationImage = async (destinationId: string, imageData: any)
       .single();
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en addDestinationImage:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1759,9 +1765,9 @@ export const deleteDestinationImage = async (imageId: string) => {
       .eq('id', imageId);
     
     return { error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en deleteDestinationImage:', error);
-    return { error };
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1775,9 +1781,9 @@ export const getUserNotifications = async (limit = 10, offset = 0, includeRead =
     });
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getUserNotifications:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1788,9 +1794,9 @@ export const markNotificationAsRead = async (notificationId: string) => {
     });
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en markNotificationAsRead:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1799,9 +1805,9 @@ export const markAllNotificationsAsRead = async () => {
     const { data, error } = await supabase.rpc('mark_all_notifications_as_read');
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en markAllNotificationsAsRead:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1810,9 +1816,9 @@ export const getUnreadNotificationCount = async () => {
     const { data, error } = await supabase.rpc('get_unread_notifications_count');
     
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getUnreadNotificationCount:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1841,9 +1847,9 @@ export const getTourCategories = async (includeInactive: boolean = false) => {
 
     const { data, error } = await query;
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en getTourCategories:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1861,9 +1867,9 @@ export const createTourCategory = async (categoryData: {
       .single();
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en createTourCategory:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1886,9 +1892,9 @@ export const updateTourCategory = async (
       .single();
 
     return { data, error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en updateTourCategory:', error);
-    return { data: null, error };
+    return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -1925,9 +1931,9 @@ export const deleteTourCategory = async (id: string) => {
       .eq('id', id);
 
     return { error };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en deleteTourCategory:', error);
-    return { error };
+    return { error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
 
@@ -2019,11 +2025,11 @@ export const validateCancellationEligibility = async (bookingId: string) => {
       error: null,
       booking
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error en validateCancellationEligibility:', error);
     return {
       eligible: false,
-      error: error.message || 'Error al validar la elegibilidad de cancelación',
+      error: mensajeDeError(error) || 'Error al validar la elegibilidad de cancelación',
       booking: null
     };
   }

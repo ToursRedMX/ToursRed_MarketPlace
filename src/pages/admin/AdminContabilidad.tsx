@@ -5,6 +5,7 @@ import {
   ChevronUp, Upload, Building2, CreditCard, Play
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { mensajeDeError } from '../../lib/errores';
 
 interface SyncLogEntry {
   id: string;
@@ -150,8 +151,8 @@ const AdminContabilidad: React.FC = () => {
       });
       if (error) throw error;
       setHealthStatus(data);
-    } catch (err: any) {
-      setHealthStatus({ healthy: false, error: err.message });
+    } catch (err) {
+      setHealthStatus({ healthy: false, error: mensajeDeError(err) });
     } finally {
       setIsCheckingHealth(false);
     }
@@ -167,8 +168,8 @@ const AdminContabilidad: React.FC = () => {
       if (error) throw error;
       showMessage('success', `Reintento completado: ${data.succeeded} exitosos, ${data.failed} fallidos de ${data.retried} total`);
       await fetchData();
-    } catch (err: any) {
-      showMessage('error', `Error al reintentar: ${err.message}`);
+    } catch (err) {
+      showMessage('error', `Error al reintentar: ${mensajeDeError(err)}`);
     } finally {
       setIsRetrying(false);
     }
@@ -185,8 +186,8 @@ const AdminContabilidad: React.FC = () => {
       });
       showMessage('success', 'Reintento enviado');
       await fetchData();
-    } catch (err: any) {
-      showMessage('error', `Error: ${err.message}`);
+    } catch (err) {
+      showMessage('error', `Error: ${mensajeDeError(err)}`);
     }
   };
 
@@ -274,8 +275,8 @@ const AdminContabilidad: React.FC = () => {
         } else {
           succeeded++;
         }
-      } catch (err: any) {
-        errors.push({ id: rec.id, message: err?.message || String(err) });
+      } catch (err) {
+        errors.push({ id: rec.id, message: mensajeDeError(err) || String(err) });
         failed++;
       }
       setBulkProgress({ type, total: records.length, done: i + 1, succeeded, failed, running: i + 1 < records.length, errors: [...errors] });

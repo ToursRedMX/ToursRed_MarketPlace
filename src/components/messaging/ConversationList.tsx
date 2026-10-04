@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MessageCircle, Clock, Users, Search, Filter, Plus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { mensajeDeError } from '../../lib/errores';
 
 interface Conversation {
   conversation_id: string;
@@ -58,9 +59,9 @@ const ConversationList: React.FC<ConversationListProps> = ({
       }
 
       setConversations(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching conversations:', err);
-      setError(err.message || 'Error al cargar conversaciones');
+      setError(mensajeDeError(err) || 'Error al cargar conversaciones');
     } finally {
       setIsLoading(false);
     }

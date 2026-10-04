@@ -4,6 +4,7 @@ import {
   Shield, ShieldCheck, KeyRound, Loader2, AlertTriangle, Check, X, RefreshCw,
   Copy, Download, KeySquare,
 } from 'lucide-react';
+import { mensajeDeError } from '../lib/errores';
 
 interface MfaFactor {
   id: string;
@@ -152,10 +153,10 @@ export const MfaSettingsSection: React.FC = () => {
       setNewFactorId(data.id);
       setTotpSecret(data.totp.secret);
       setQrUrl(data.totp.qr_code);
-    } catch (err: any) {
+    } catch (err) {
       // Si aun asi choca con un duplicado, la limpieza fallo (sin red, sesion
       // expirada). El mensaje crudo de Auth no le dice nada al usuario.
-      const raw = err?.message || '';
+      const raw = mensajeDeError(err) || '';
       setError(
         /already exists/i.test(raw)
           ? 'Quedo una configuracion de MFA a medias que no se pudo limpiar. Recarga la pagina e intentalo de nuevo.'
@@ -223,12 +224,12 @@ export const MfaSettingsSection: React.FC = () => {
         setRecoveryCodes(genData.codes || null);
         setSavedCodesConfirmed(false);
         setCopiedCodes(false);
-      } catch (recErr: any) {
+      } catch (recErr) {
         setSuccess('Autenticacion de dos pasos activada correctamente');
-        setError(`No se pudieron generar codigos de recuperacion: ${recErr.message}. Puedes intentarlo de nuevo desde aqui.`);
+        setError(`No se pudieron generar codigos de recuperacion: ${mensajeDeError(recErr)}. Puedes intentarlo de nuevo desde aqui.`);
       }
-    } catch (err: any) {
-      setError(err.message || 'Codigo incorrecto');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Codigo incorrecto');
     }
   };
 
@@ -252,8 +253,8 @@ export const MfaSettingsSection: React.FC = () => {
       setRecoveryCodes(null);
       setRecoveryCodesRemaining(null);
       await loadFactors();
-    } catch (err: any) {
-      setError(err.message || 'Error al eliminar factor');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al eliminar factor');
     }
   };
 
@@ -322,8 +323,8 @@ export const MfaSettingsSection: React.FC = () => {
       setCopiedCodes(false);
       setRegenerateModalOpen(false);
       setRegenerateCode('');
-    } catch (err: any) {
-      setError(err.message || 'No se pudieron regenerar los codigos');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'No se pudieron regenerar los codigos');
     } finally {
       setRegenerating(false);
     }

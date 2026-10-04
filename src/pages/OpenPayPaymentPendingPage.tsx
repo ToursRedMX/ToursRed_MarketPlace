@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { Clock, Landmark, Banknote, Download, AlertCircle, CheckCircle, ArrowRight, Home, Loader2, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
+import { mensajeDeError } from '../lib/errores';
 
 interface PaymentTransactionMeta {
   openpay_method?: string;
@@ -113,8 +114,8 @@ const OpenPayPaymentPendingPage: React.FC = () => {
 
       // Fetch context-specific summary
       await fetchContextSummary(id, ctx, txData?.amount);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar la información');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cargar la información');
     } finally {
       setIsLoading(false);
     }
@@ -244,8 +245,8 @@ const OpenPayPaymentPendingPage: React.FC = () => {
           amount: txAmount || 0,
         });
       }
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar la información');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cargar la información');
     }
   };
 
@@ -293,8 +294,8 @@ const OpenPayPaymentPendingPage: React.FC = () => {
         tourName: `Tarjeta de Regalo ToursRed`,
         amount: effectiveAmount,
       });
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar la información');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cargar la información');
     }
   };
 

@@ -3,6 +3,7 @@ import { Users, Plus, UserCheck, UserX, CreditCard as Edit2, Search, Shield, Che
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useAgencyId } from '../../hooks/useAgencyId';
+import { mensajeDeError } from '../../lib/errores';
 
 interface StaffMember {
   id: string;
@@ -279,8 +280,8 @@ export default function AgencyStaff() {
       await fetchPendingInvitations();
       setSuccess('Invitacion enviada correctamente.');
       setTimeout(() => setSuccess(''), 4000);
-    } catch (e: any) {
-      setError(e.message || 'Error al enviar la invitacion.');
+    } catch (e) {
+      setError(mensajeDeError(e) || 'Error al enviar la invitacion.');
     } finally {
       setSendingInvitation(false);
     }
@@ -315,8 +316,8 @@ export default function AgencyStaff() {
 
       setSuccess('Invitacion reenviada correctamente.');
       setTimeout(() => setSuccess(''), 4000);
-    } catch (e: any) {
-      setError(e.message || 'Error al reenviar la invitacion.');
+    } catch (e) {
+      setError(mensajeDeError(e) || 'Error al reenviar la invitacion.');
     } finally {
       setResendingInvitationId(null);
     }
@@ -334,8 +335,8 @@ export default function AgencyStaff() {
       await fetchPendingInvitations();
       setSuccess('Invitacion cancelada.');
       setTimeout(() => setSuccess(''), 3000);
-    } catch (e: any) {
-      setError(e.message || 'Error al cancelar la invitacion.');
+    } catch (e) {
+      setError(mensajeDeError(e) || 'Error al cancelar la invitacion.');
     } finally {
       setCancellingInvitationId(null);
     }
@@ -412,8 +413,8 @@ export default function AgencyStaff() {
       setShowModal(false);
       await fetchStaff();
       setTimeout(() => setSuccess(''), 3000);
-    } catch (e: any) {
-      setError(e.message || 'Error al guardar.');
+    } catch (e) {
+      setError(mensajeDeError(e) || 'Error al guardar.');
     } finally {
       setSaving(false);
     }

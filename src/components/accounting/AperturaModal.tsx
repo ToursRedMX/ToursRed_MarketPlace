@@ -3,6 +3,7 @@ import {
   X, AlertCircle, CheckCircle, Plus, Trash2, BookOpen, Info
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { mensajeDeError } from '../../lib/errores';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -169,8 +170,8 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
 
       onSaved();
       onClose();
-    } catch (e: any) {
-      setError(e.message ?? 'Error al guardar la poliza de apertura.');
+    } catch (e) {
+      setError(mensajeDeError(e) ?? 'Error al guardar la poliza de apertura.');
     } finally {
       setSaving(false);
     }

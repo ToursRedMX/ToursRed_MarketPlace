@@ -3,6 +3,7 @@ import { X, Search, Users, MessageCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { comoFilas } from '../../lib/relacionesSupabase';
+import { mensajeDeError } from '../../lib/errores';
 
 interface User {
   id: string;
@@ -144,9 +145,9 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
 
         setBookings(comoFilas<Booking>(bookingsData));
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching data:', err);
-      setError(err.message || 'Error al cargar datos');
+      setError(mensajeDeError(err) || 'Error al cargar datos');
     } finally {
       setIsLoading(false);
     }
@@ -177,9 +178,9 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
       onConversationCreated(data);
       onClose();
       resetForm();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating conversation:', err);
-      setError(err.message || 'Error al crear conversación');
+      setError(mensajeDeError(err) || 'Error al crear conversación');
     } finally {
       setIsCreating(false);
     }

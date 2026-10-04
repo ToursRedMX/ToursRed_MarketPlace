@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Ticket, Plus, CreditCard as Edit2, Trash2, Eye, Percent, DollarSign, Calendar, Users, AlertCircle, CheckCircle, XCircle, Search, Map, Crown, Gift, ArrowUpDown, ArrowUp, ArrowDown, Building2, Target, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { mensajeDeError } from '../../lib/errores';
 
 interface DiscountCode {
   id: string;
@@ -213,9 +214,9 @@ export default function AdminDiscountCodes() {
       setShowModal(false);
       resetForm();
       fetchCodes();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving discount code:', err);
-      alert(err.message || 'Error al guardar el código de descuento');
+      alert(mensajeDeError(err) || 'Error al guardar el código de descuento');
     }
   };
 
@@ -257,7 +258,7 @@ export default function AdminDiscountCodes() {
 
       if (error) throw error;
       fetchCodes();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting discount code:', err);
       alert('Error al eliminar el código. Si el código ya ha sido usado, considera desactivarlo en lugar de eliminarlo.');
     }

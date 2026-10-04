@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Phone, ArrowLeft } from 'lucide-react';
+import { mensajeDeError } from '../../lib/errores';
 
 const ForgotPasswordPage: React.FC = () => {
   const navigate = useNavigate();
@@ -42,9 +43,9 @@ const ForgotPasswordPage: React.FC = () => {
           phoneNumber: phoneNumber.trim()
         }
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error:', err);
-      setError(err.message || 'Error al enviar código de recuperación');
+      setError(mensajeDeError(err) || 'Error al enviar código de recuperación');
     } finally {
       setIsLoading(false);
     }

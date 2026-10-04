@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { validarContrasena } from '../../lib/politicaContrasena';
+import { mensajeDeError } from '../../lib/errores';
 
 interface Executive {
   id: string;
@@ -136,8 +137,8 @@ export default function AdminEjecutivos() {
       setMessage({ type: 'success', text: editingExec ? 'Ejecutivo actualizado.' : 'Ejecutivo creado y credenciales enviadas.' });
       setShowModal(false);
       loadExecutives();
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al guardar.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al guardar.' });
     } finally { setIsSaving(false); }
   };
 
@@ -157,8 +158,8 @@ export default function AdminEjecutivos() {
       setMessage({ type: 'success', text: 'FacturAPI configurado y verificado correctamente.' });
       setFacturApiKey('');
       loadExecutives();
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al verificar con FacturAPI.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al verificar con FacturAPI.' });
     } finally { setIsVerifyingFacturapi(false); }
   };
 
@@ -191,8 +192,8 @@ export default function AdminEjecutivos() {
       setMessage({ type: 'success', text: `${selectedAgencies.length} agencia(s) reasignada(s) exitosamente.` });
       setReassignModal(null);
       loadExecutives();
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al reasignar.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al reasignar.' });
     } finally { setIsReassigning(false); }
   };
 

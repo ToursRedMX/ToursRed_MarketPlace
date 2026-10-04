@@ -7,6 +7,7 @@ import { validarRfcAgencia } from '../../lib/validarRfcAgencia';
 import AgencySignupFormBody, { AgencyFormData, defaultAgencyFormData } from './AgencySignupFormBody';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
+import { mensajeDeError } from '../../lib/errores';
 
 const FacebookIcon = (
   <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
@@ -169,8 +170,8 @@ const FacebookAgencySignupPage: React.FC = () => {
 
       await completeOnboarding();
       navigate('/agency/onboarding');
-    } catch (err: any) {
-      setError(err.message || 'Ocurrió un error al completar el registro');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Ocurrió un error al completar el registro');
     } finally {
       setIsLoading(false);
     }

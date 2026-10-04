@@ -6,6 +6,7 @@ import ChangePasswordSection from '../../components/ChangePasswordSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import { PasskeySettingsSection } from '../../components/PasskeySettingsSection';
 import { normalizarTelefono } from '../../lib/telefono';
+import { mensajeDeError } from '../../lib/errores';
 
 const AdminProfile: React.FC = () => {
   const { user } = useAuth();
@@ -51,8 +52,8 @@ const AdminProfile: React.FC = () => {
             updated_at: data.updated_at || ''
           });
         }
-      } catch (err: any) {
-        setError(err.message || 'Error al cargar el perfil');
+      } catch (err) {
+        setError(mensajeDeError(err) || 'Error al cargar el perfil');
       } finally {
         setIsLoading(false);
       }
@@ -93,8 +94,8 @@ const AdminProfile: React.FC = () => {
       setProfile((anterior) => ({ ...anterior, phone_number: telefono ?? '' }));
       setSuccess('Perfil actualizado correctamente');
       setIsEditing(false);
-    } catch (err: any) {
-      setError(err.message || 'Error al actualizar el perfil');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al actualizar el perfil');
     } finally {
       setIsLoading(false);
     }

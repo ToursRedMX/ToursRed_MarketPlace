@@ -3,6 +3,7 @@ import { Mail, Server, Save, Loader, CheckCircle, AlertCircle, DollarSign, Perce
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { SecurityTogglesSection } from '../../components/SecurityTogglesSection';
+import { mensajeDeError } from '../../lib/errores';
 
 interface EmailSettings {
   id: string;
@@ -261,8 +262,8 @@ const AdminSettings: React.FC = () => {
       setZohoGrantToken('');
       setMessage({ type: 'success', text: 'Zoho Books conectado exitosamente' });
       await checkZohoStatus();
-    } catch (err: any) {
-      setZohoConnectError(err.message);
+    } catch (err) {
+      setZohoConnectError(mensajeDeError(err));
     } finally {
       setIsConnectingZoho(false);
     }
@@ -293,8 +294,8 @@ const AdminSettings: React.FC = () => {
       await supabase.functions.invoke('zoho-oauth-connect', { body: { action: 'disconnect' } });
       setZohoStatus({ connected: false });
       setMessage({ type: 'success', text: 'Zoho Books desconectado' });
-    } catch (err: any) {
-      setMessage({ type: 'error', text: `Error: ${err.message}` });
+    } catch (err) {
+      setMessage({ type: 'error', text: `Error: ${mensajeDeError(err)}` });
     }
   };
 
@@ -332,8 +333,8 @@ const AdminSettings: React.FC = () => {
       if (heroInputRef.current) heroInputRef.current.value = '';
       setMessage({ type: 'success', text: 'Imagen de fondo actualizada correctamente' });
       setTimeout(() => setMessage({ type: null, text: '' }), 3000);
-    } catch (err: any) {
-      setMessage({ type: 'error', text: `Error al subir imagen: ${err.message}` });
+    } catch (err) {
+      setMessage({ type: 'error', text: `Error al subir imagen: ${mensajeDeError(err)}` });
     } finally {
       setIsUploadingHero(false);
     }
@@ -353,8 +354,8 @@ const AdminSettings: React.FC = () => {
       if (heroInputRef.current) heroInputRef.current.value = '';
       setMessage({ type: 'success', text: 'Imagen de fondo restaurada al original' });
       setTimeout(() => setMessage({ type: null, text: '' }), 3000);
-    } catch (err: any) {
-      setMessage({ type: 'error', text: `Error: ${err.message}` });
+    } catch (err) {
+      setMessage({ type: 'error', text: `Error: ${mensajeDeError(err)}` });
     }
   };
 
@@ -382,7 +383,7 @@ const AdminSettings: React.FC = () => {
       if (secretsResult.data && Array.isArray(secretsResult.data) && secretsResult.data.length > 0) {
         setPlatformSecrets(secretsResult.data[0]);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching settings:', error);
       setMessage({
         type: 'error',
@@ -528,7 +529,7 @@ const AdminSettings: React.FC = () => {
           setMessage({ type: null, text: '' });
         }, 3000);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving settings:', error);
       setMessage({
         type: 'error',

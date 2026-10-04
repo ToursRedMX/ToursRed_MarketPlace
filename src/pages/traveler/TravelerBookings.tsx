@@ -18,6 +18,7 @@ import { getMpDeviceId } from '../../utils/mercadopagoDevice';
 import PaymentProviderSelector from '../../components/PaymentProviderSelector';
 import { comoFilas } from '../../lib/relacionesSupabase';
 import { reembolsoPorMedio } from '../../utils/reembolsoPorMedio';
+import { mensajeDeError } from '../../lib/errores';
 
 const TravelerBookings: React.FC = () => {
   const { user } = useAuth();
@@ -501,9 +502,9 @@ const TravelerBookings: React.FC = () => {
         }
       }
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando reservas:', err);
-      setError(err.message || 'Error al cargar las reservas');
+      setError(mensajeDeError(err) || 'Error al cargar las reservas');
     } finally {
       setIsLoading(false);
     }
@@ -563,7 +564,7 @@ const TravelerBookings: React.FC = () => {
         }
       }
       setPastLoaded(true);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cargando reservas pasadas:', err);
     } finally {
       setIsLoadingPast(false);
@@ -597,7 +598,7 @@ const TravelerBookings: React.FC = () => {
         }
       }
       setCancelledLoaded(true);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cargando reservas canceladas:', err);
     } finally {
       setIsLoadingCancelled(false);
@@ -689,11 +690,11 @@ const TravelerBookings: React.FC = () => {
           setSlotRescheduleModal(prev => ({ ...prev, open: false }));
         }, 3000);
       }
-    } catch (err: any) {
+    } catch (err) {
       setSlotRescheduleModal(prev => ({
         ...prev,
         isProcessing: false,
-        error: err.message || 'Error al procesar la respuesta',
+        error: mensajeDeError(err) || 'Error al procesar la respuesta',
       }));
     }
   };
@@ -771,12 +772,12 @@ const TravelerBookings: React.FC = () => {
       } else {
         throw new Error(data?.error || 'Error al procesar la respuesta');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error responding to reschedule:', err);
       setRescheduleModal(prev => ({
         ...prev,
         isProcessing: false,
-        error: err.message || 'Error al procesar la respuesta',
+        error: mensajeDeError(err) || 'Error al procesar la respuesta',
       }));
     }
   };
@@ -947,10 +948,10 @@ const TravelerBookings: React.FC = () => {
         policy,
         isCalculating: false,
       }));
-    } catch (err: any) {
+    } catch (err) {
       setCancellationModal(prev => ({
         ...prev,
-        error: err.message || 'Error al calcular la política de cancelación',
+        error: mensajeDeError(err) || 'Error al calcular la política de cancelación',
         isCalculating: false,
       }));
     }
@@ -1017,11 +1018,11 @@ const TravelerBookings: React.FC = () => {
       setTimeout(() => {
         handleCloseCancellationModal();
       }, 3000);
-    } catch (err: any) {
+    } catch (err) {
       setCancellationModal(prev => ({
         ...prev,
         isCancelling: false,
-        error: err.message || 'Error al procesar la cancelación',
+        error: mensajeDeError(err) || 'Error al procesar la cancelación',
       }));
     }
   };
@@ -1132,8 +1133,8 @@ const TravelerBookings: React.FC = () => {
       if (extrasModal.open && extrasModal.booking?.id === bookingId) {
         await refreshExtrasModalBos(bookingId);
       }
-    } catch (err: any) {
-      alert(err.message || 'Error al cancelar el servicio opcional');
+    } catch (err) {
+      alert(mensajeDeError(err) || 'Error al cancelar el servicio opcional');
     } finally {
       setCancelingOptServiceId(null);
     }
@@ -1172,8 +1173,8 @@ const TravelerBookings: React.FC = () => {
           setBookingSupplements(prev => ({ ...prev, [supplementsModal.booking!.id]: updated.data! }));
         }
       }
-    } catch (err: any) {
-      alert(err.message || 'Error al cancelar el suplemento');
+    } catch (err) {
+      alert(mensajeDeError(err) || 'Error al cancelar el suplemento');
     } finally {
       setCancelingSupplementId(null);
     }
@@ -1232,10 +1233,10 @@ const TravelerBookings: React.FC = () => {
         installmentsPaid,
         isCalculating: false,
       }));
-    } catch (err: any) {
+    } catch (err) {
       setPartialCancellationModal(prev => ({
         ...prev,
-        error: err.message || 'Error al cargar los viajeros',
+        error: mensajeDeError(err) || 'Error al cargar los viajeros',
         isCalculating: false,
       }));
     }
@@ -1312,13 +1313,13 @@ const TravelerBookings: React.FC = () => {
         refundAmount: policy.refundAmountToTraveler,
         isCalculating: false,
       }));
-    } catch (err: any) {
+    } catch (err) {
       setPartialCancellationModal(prev => ({
         ...prev,
         policy: null,
         refundAmount: 0,
         isCalculating: false,
-        error: err.message || 'Error al calcular la política',
+        error: mensajeDeError(err) || 'Error al calcular la política',
       }));
     }
   };
@@ -1381,11 +1382,11 @@ const TravelerBookings: React.FC = () => {
       setTimeout(() => {
         handleClosePartialCancellationModal();
       }, 3000);
-    } catch (err: any) {
+    } catch (err) {
       setPartialCancellationModal(prev => ({
         ...prev,
         isCancelling: false,
-        error: err.message || 'Error al procesar la cancelación parcial',
+        error: mensajeDeError(err) || 'Error al procesar la cancelación parcial',
       }));
     }
   };
@@ -1444,9 +1445,9 @@ const TravelerBookings: React.FC = () => {
         conektaMethod: 'card',
         openpayMethod: 'card',
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error al abrir modal de pago:', err);
-      alert(`Error: ${err.message}`);
+      alert(`Error: ${mensajeDeError(err)}`);
     }
   };
 
@@ -1708,9 +1709,9 @@ const TravelerBookings: React.FC = () => {
           throw new Error('No se recibió URL de checkout');
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error al proceder al pago:', err);
-      alert(`Error al proceder al pago: ${err.message}`);
+      alert(`Error al proceder al pago: ${mensajeDeError(err)}`);
       setPaymentModal(prev => ({ ...prev, isProcessing: false }));
     }
   };
@@ -2036,8 +2037,8 @@ const TravelerBookings: React.FC = () => {
 
       setSupplementDirectPayModal(prev => ({ ...prev, open: false }));
       await fetchBookings();
-    } catch (err: any) {
-      setSupplementDirectPayModal(prev => ({ ...prev, isProcessing: false, error: err.message }));
+    } catch (err) {
+      setSupplementDirectPayModal(prev => ({ ...prev, isProcessing: false, error: mensajeDeError(err) }));
     }
   };
 
@@ -2260,8 +2261,8 @@ const TravelerBookings: React.FC = () => {
 
       setExtrasPaymentModal(prev => ({ ...prev, open: false }));
       await fetchBookings();
-    } catch (err: any) {
-      setExtrasPaymentModal(prev => ({ ...prev, isProcessing: false, error: err.message }));
+    } catch (err) {
+      setExtrasPaymentModal(prev => ({ ...prev, isProcessing: false, error: mensajeDeError(err) }));
     }
   };
 
@@ -2383,8 +2384,8 @@ const TravelerBookings: React.FC = () => {
 
       setSupplementPaymentModal(prev => ({ ...prev, open: false }));
       await fetchBookings();
-    } catch (err: any) {
-      setSupplementPaymentModal(prev => ({ ...prev, isProcessing: false, error: err.message }));
+    } catch (err) {
+      setSupplementPaymentModal(prev => ({ ...prev, isProcessing: false, error: mensajeDeError(err) }));
     }
   };
 

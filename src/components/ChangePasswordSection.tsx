@@ -5,6 +5,7 @@ import TurnstileWidget from './TurnstileWidget';
 import { useTurnstileEnabled } from '../hooks/useTurnstileEnabled';
 import { esContrasenaFiltrada } from '../lib/contrasenaFiltrada';
 import { validarContrasena } from '../lib/politicaContrasena';
+import { mensajeDeError } from '../lib/errores';
 
 const ChangePasswordSection: React.FC = () => {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -86,8 +87,8 @@ const ChangePasswordSection: React.FC = () => {
       });
 
       setTimeout(() => setSuccess(''), 5000);
-    } catch (err: any) {
-      setError(err.message || 'Error al cambiar la contraseña');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cambiar la contraseña');
     } finally {
       // El token de Turnstile es de un solo uso y Supabase lo manda a
       // siteverify ANTES de mirar las credenciales, asi que un intento fallido

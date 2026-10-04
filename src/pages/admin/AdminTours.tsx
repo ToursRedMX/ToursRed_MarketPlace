@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { mensajeDeError } from '../../lib/errores';
 
 interface TourRow {
   id: string;
@@ -107,8 +108,8 @@ const AdminTours: React.FC = () => {
 
       setTours((toursRes.data as unknown as TourRow[]) ?? []);
       setPlatform(settingsRes.data);
-    } catch (err: any) {
-      setError(err.message ?? 'Error al cargar los tours');
+    } catch (err) {
+      setError(mensajeDeError(err) ?? 'Error al cargar los tours');
     } finally {
       setIsLoading(false);
     }
@@ -184,8 +185,8 @@ const AdminTours: React.FC = () => {
       setSuccess('Comisión actualizada correctamente.');
       await fetchData();
       closeEdit();
-    } catch (err: any) {
-      setError(err.message ?? 'Error al guardar');
+    } catch (err) {
+      setError(mensajeDeError(err) ?? 'Error al guardar');
     } finally {
       setIsSaving(false);
     }

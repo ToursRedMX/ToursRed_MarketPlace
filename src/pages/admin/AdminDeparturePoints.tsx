@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Search, Plus, Edit2, Trash2, ExternalLink, Eye, AlertCircle, Check, X, Save } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { mensajeDeError } from '../../lib/errores';
 
 interface DeparturePoint {
   id: string;
@@ -62,9 +63,9 @@ const AdminDeparturePoints: React.FC = () => {
       if (fetchError) throw fetchError;
 
       setDeparturePoints(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching departure points:', err);
-      setError(err.message || 'Error al cargar los puntos de salida');
+      setError(mensajeDeError(err) || 'Error al cargar los puntos de salida');
     } finally {
       setIsLoading(false);
     }
@@ -115,7 +116,7 @@ const AdminDeparturePoints: React.FC = () => {
       }));
 
       setToursUsingPoint(processed);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching tours for point:', err);
       alert('Error al cargar los tours que usan este punto');
     }
@@ -199,9 +200,9 @@ const AdminDeparturePoints: React.FC = () => {
 
       handleCancelEdit();
       fetchDeparturePoints();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving departure point:', err);
-      setError(err.message || 'Error al guardar el punto de partida');
+      setError(mensajeDeError(err) || 'Error al guardar el punto de partida');
     }
   };
 
@@ -215,9 +216,9 @@ const AdminDeparturePoints: React.FC = () => {
       if (error) throw error;
 
       await fetchDeparturePoints();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error toggling point status:', err);
-      alert(err.message || 'Error al cambiar el estado del punto');
+      alert(mensajeDeError(err) || 'Error al cambiar el estado del punto');
     }
   };
 
@@ -240,9 +241,9 @@ const AdminDeparturePoints: React.FC = () => {
       if (error) throw error;
 
       await fetchDeparturePoints();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting point:', err);
-      alert(err.message || 'Error al eliminar el punto');
+      alert(mensajeDeError(err) || 'Error al eliminar el punto');
     }
   };
 

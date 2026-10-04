@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Gift, Search, Mail, RefreshCw, Check, Clock, Eye, EyeOff, Filter } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { mensajeDeError } from '../../lib/errores';
 
 interface GiftCard {
   id: string;
@@ -116,8 +117,8 @@ export default function AdminGiftCards() {
 
       setResendResult({ id: giftCardId, success: true, message: 'Correo reenviado exitosamente' });
       await fetchGiftCards();
-    } catch (err: any) {
-      setResendResult({ id: giftCardId, success: false, message: err.message || 'Error al reenviar correo' });
+    } catch (err) {
+      setResendResult({ id: giftCardId, success: false, message: mensajeDeError(err) || 'Error al reenviar correo' });
     } finally {
       setResendingId(null);
       setTimeout(() => setResendResult(null), 5000);

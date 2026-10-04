@@ -5,6 +5,7 @@ import { supabase, getUserNotifications, getUnreadNotificationCount, markNotific
 import { Notification } from '../types';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
+import { mensajeDeError } from '../lib/errores';
 
 const NotificationBell: React.FC = () => {
   const { user, isAdmin, isAgency, isLoading: authLoading } = useAuth();
@@ -89,9 +90,9 @@ const NotificationBell: React.FC = () => {
       } else {
         setNotifications(data || []);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error in fetchNotifications:', err);
-      setError(err.message || 'Error al cargar notificaciones');
+      setError(mensajeDeError(err) || 'Error al cargar notificaciones');
     } finally {
       setIsLoading(false);
     }

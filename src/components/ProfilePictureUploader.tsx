@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Camera, Loader2, X, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { mensajeDeError } from '../lib/errores';
 
 interface ProfilePictureUploaderProps {
   currentImage?: string;
@@ -57,9 +58,9 @@ const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({ onImage
       onImageChange(publicUrl);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error uploading image:', err);
-      setError(err.message || 'Error al subir la imagen');
+      setError(mensajeDeError(err) || 'Error al subir la imagen');
       setTimeout(() => setError(''), 5000);
     } finally {
       setIsUploading(false);

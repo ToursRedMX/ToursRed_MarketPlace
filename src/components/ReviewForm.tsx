@@ -3,6 +3,7 @@ import { Star } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFormPersistence } from '../hooks/useFormPersistence';
 import { usePreventUnload } from '../hooks/usePreventUnload';
+import { mensajeDeError } from '../lib/errores';
 
 interface ReviewFormProps {
   bookingId: string;
@@ -113,9 +114,9 @@ export default function ReviewForm({
 
       reviewFormPersistence.clearStorage();
       if (onSuccess) onSuccess();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error submitting review:', err);
-      setError(err.message || 'Error al enviar la reseña');
+      setError(mensajeDeError(err) || 'Error al enviar la reseña');
     } finally {
       setLoading(false);
     }

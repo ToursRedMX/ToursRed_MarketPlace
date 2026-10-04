@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { AgencyDiscountCode, AgencyTour } from '../../types';
+import { mensajeDeError } from '../../lib/errores';
 
 interface UsageRecord {
   id: string;
@@ -225,14 +226,14 @@ export default function AgencyDiscountCodes() {
       setShowModal(false);
       resetForm();
       fetchCodes();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving discount code:', err);
-      if (err.message.includes('duplicate key')) {
+      if (mensajeDeError(err).includes('duplicate key')) {
         alert('Este código ya existe. Por favor usa un código diferente.');
-      } else if (err.message.includes('Tour does not belong')) {
+      } else if (mensajeDeError(err).includes('Tour does not belong')) {
         alert('El tour seleccionado no pertenece a tu agencia');
       } else {
-        alert(err.message || 'Error al guardar el código de descuento');
+        alert(mensajeDeError(err) || 'Error al guardar el código de descuento');
       }
     }
   };
@@ -270,7 +271,7 @@ export default function AgencyDiscountCodes() {
       if (error) throw error;
       alert('Código eliminado exitosamente');
       fetchCodes();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting discount code:', err);
       alert('Error al eliminar el código. Si el código ya ha sido usado, considera desactivarlo en lugar de eliminarlo.');
     }

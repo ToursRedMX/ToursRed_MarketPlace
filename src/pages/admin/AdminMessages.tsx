@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MessageCircle, Users, Search, Filter, Eye, Archive, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import MessageThread from '../../components/messaging/MessageThread';
+import { mensajeDeError } from '../../lib/errores';
 
 interface AdminConversation {
   id: string;
@@ -48,9 +49,9 @@ const AdminMessages: React.FC = () => {
       }
 
       setConversations(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching admin conversations:', err);
-      setError(err.message || 'Error al cargar conversaciones');
+      setError(mensajeDeError(err) || 'Error al cargar conversaciones');
     } finally {
       setIsLoading(false);
     }
@@ -72,9 +73,9 @@ const AdminMessages: React.FC = () => {
           ? { ...conv, status: newStatus }
           : conv
       ));
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error updating conversation status:', err);
-      setError(err.message || 'Error al actualizar estado');
+      setError(mensajeDeError(err) || 'Error al actualizar estado');
     }
   };
 

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import RichTextEditor from '../../components/RichTextEditor';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
+import { mensajeDeError } from '../../lib/errores';
 
 interface NewsletterSubscriber {
   id: string;
@@ -154,8 +155,8 @@ const AdminNewsletter: React.FC = () => {
           setSendResult(null);
         }, 2500);
       }
-    } catch (err: any) {
-      setSendResult({ success: false, message: err.message || 'Error inesperado' });
+    } catch (err) {
+      setSendResult({ success: false, message: mensajeDeError(err) || 'Error inesperado' });
     } finally {
       setIsSending(false);
     }

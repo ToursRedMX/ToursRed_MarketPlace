@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import OpenPayTopupModal from '../../components/OpenPayTopupModal';
 import OpenPayTopupHistory from '../../components/OpenPayTopupHistory';
+import { mensajeDeError } from '../../lib/errores';
 
 interface WalletInfo {
   id: string;
@@ -230,9 +231,9 @@ const TravelerWallet: React.FC = () => {
       } else {
         setRedeemError(data?.error || 'Error al canjear la tarjeta');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error redeeming gift card:', err);
-      setRedeemError(err.message || 'Error al canjear la tarjeta');
+      setRedeemError(mensajeDeError(err) || 'Error al canjear la tarjeta');
     } finally {
       setIsRedeeming(false);
     }

@@ -8,6 +8,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { comoFilas } from '../../lib/relacionesSupabase';
+import { mensajeDeError } from '../../lib/errores';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -579,8 +580,8 @@ const AdminTourMetrics: React.FC = () => {
       }));
 
       setTours(rows);
-    } catch (err: any) {
-      setError(err.message ?? 'Error al cargar los datos');
+    } catch (err) {
+      setError(mensajeDeError(err) ?? 'Error al cargar los datos');
     } finally {
       setIsLoading(false);
     }
@@ -625,7 +626,7 @@ const AdminTourMetrics: React.FC = () => {
           slots: (slotsRes.data ?? []) as SlotDetail[],
         },
       }));
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error al cargar detalle del tour:', err);
     } finally {
       setLoadingDetailId(null);

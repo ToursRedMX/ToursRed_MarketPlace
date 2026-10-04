@@ -4,6 +4,7 @@ import { Headphones as HeadphonesIcon, CheckCircle, ArrowLeft, Loader, AlertTria
 import { supabase } from '../../lib/supabase';
 import { SupportCategory, SupportSubcategory } from '../../types';
 import SupportFileUpload, { UploadedFile } from '../../components/support/SupportFileUpload';
+import { mensajeDeError } from '../../lib/errores';
 
 interface FormData {
   nombre: string;
@@ -135,8 +136,8 @@ const SupportGeneralPage: React.FC = () => {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error ?? 'Error al crear el ticket');
       setFolio(result.folio);
-    } catch (err: any) {
-      setError(err.message ?? 'Ocurrio un error inesperado');
+    } catch (err) {
+      setError(mensajeDeError(err) ?? 'Ocurrio un error inesperado');
     } finally {
       setSubmitting(false);
     }

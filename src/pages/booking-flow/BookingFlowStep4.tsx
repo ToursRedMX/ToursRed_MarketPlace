@@ -17,6 +17,7 @@ import PaymentProviderSelector, {
   ConektaMethod,
   OpenpayMethod,
 } from '../../components/PaymentProviderSelector';
+import { mensajeDeError } from '../../lib/errores';
 
 const CATEGORIA_LABELS: Record<string, string> = {
   adulto: 'Adulto',
@@ -896,8 +897,8 @@ const BookingFlowStep4: React.FC = () => {
 
       resetFlow();
       navigate(`/booking-pending/${bookingId}`);
-    } catch (err: any) {
-      setCreateError(err.message || 'Error al procesar la reserva. Intenta de nuevo.');
+    } catch (err) {
+      setCreateError(mensajeDeError(err) || 'Error al procesar la reserva. Intenta de nuevo.');
     } finally {
       setIsCreating(false);
     }

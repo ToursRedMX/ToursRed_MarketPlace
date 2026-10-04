@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { mensajeDeError } from '../../lib/errores';
 
 interface Commission {
   id: string;
@@ -171,8 +172,8 @@ export default function AdminEjecutivosComisiones() {
       setPaymentRef('');
       setRejectionReason('');
       loadCommissions();
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al procesar la acción.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al procesar la acción.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -221,8 +222,8 @@ export default function AdminEjecutivosComisiones() {
       }
       setShowGenPanel(false);
       loadCommissions();
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al generar comisiones.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al generar comisiones.' });
     } finally {
       setIsGenerating(false);
     }

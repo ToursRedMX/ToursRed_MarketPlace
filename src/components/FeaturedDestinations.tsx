@@ -81,7 +81,7 @@ const FeaturedDestinations: React.FC = () => {
         console.log('✅ Destinos populares procesados:', processedDestinations);
         setDestinations(processedDestinations);
         
-      } catch (err: any) {
+      } catch (err) {
         console.error('❌ Error en fetchPopularDestinations:', err);
         setDestinations([]);
       } finally {

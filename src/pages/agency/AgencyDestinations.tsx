@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getAllDestinations, createDestination, updateDestination, addDestinationImage, deleteDestinationImage, deleteDestination } from '../../lib/supabase';
 import { Destination } from '../../types';
 import ImageUploader from '../../components/ImageUploader';
+import { mensajeDeError } from '../../lib/errores';
 
 const AgencyDestinations: React.FC = () => {
   const { user, isAdmin } = useAuth();
@@ -43,8 +44,8 @@ const AgencyDestinations: React.FC = () => {
       }
       
       setDestinations(data || []);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar destinos');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cargar destinos');
     } finally {
       setIsLoading(false);
     }
@@ -153,8 +154,8 @@ const AgencyDestinations: React.FC = () => {
 
       await fetchDestinations();
       handleCancel();
-    } catch (err: any) {
-      setError(err.message || 'Error al guardar destino');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al guardar destino');
     } finally {
       setIsSubmitting(false);
     }
@@ -179,8 +180,8 @@ const AgencyDestinations: React.FC = () => {
       await fetchDestinations();
       setNewImageUrl('');
       setNewImageCaption('');
-    } catch (err: any) {
-      setError(err.message || 'Error al agregar imagen');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al agregar imagen');
     } finally {
       setIsSubmitting(false);
     }
@@ -196,8 +197,8 @@ const AgencyDestinations: React.FC = () => {
       if (error) throw error;
 
       await fetchDestinations();
-    } catch (err: any) {
-      setError(err.message || 'Error al eliminar imagen');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al eliminar imagen');
     } finally {
       setIsSubmitting(false);
     }
@@ -224,9 +225,9 @@ const AgencyDestinations: React.FC = () => {
 
       await fetchDestinations();
       console.log('✅ Destino eliminado correctamente');
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error eliminando destino:', err);
-      setError(err.message || 'Error al eliminar el destino');
+      setError(mensajeDeError(err) || 'Error al eliminar el destino');
     } finally {
       setDeletingDestination(null);
     }

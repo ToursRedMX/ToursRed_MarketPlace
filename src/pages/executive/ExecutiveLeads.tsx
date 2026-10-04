@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Search, CreditCard as Edit2, ArrowRight, MessageSquare, X, CheckCircle, AlertCircle, Building2, Loader2, MailCheck, Send } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { mensajeDeError } from '../../lib/errores';
 
 type LeadStatus = 'prospecto' | 'contactado' | 'negociacion' | 'registrado' | 'aprobado' | 'perdido';
 
@@ -349,8 +350,8 @@ export default function ExecutiveLeads() {
           resetConvertForm();
         }, 300);
       }
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al guardar.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al guardar.' });
     } finally {
       setIsSaving(false);
     }
@@ -414,8 +415,8 @@ export default function ExecutiveLeads() {
       setShowConvertModal(null);
       resetConvertForm();
       loadLeads();
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al convertir el lead.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: mensajeDeError(e) || 'Error al convertir el lead.' });
     } finally {
       setIsConverting(false);
     }
@@ -481,8 +482,8 @@ export default function ExecutiveLeads() {
       setFixEmailLead(null);
       setFixEmailValue('');
       loadLeads();
-    } catch (err: any) {
-      setActionMessage(err.message || 'Error al corregir el correo');
+    } catch (err) {
+      setActionMessage(mensajeDeError(err) || 'Error al corregir el correo');
     } finally {
       setActionLoading(false);
     }
@@ -509,8 +510,8 @@ export default function ExecutiveLeads() {
         ? 'El servicio de correo confirmó el envío de las credenciales.'
         : 'La contraseña ya se actualizó, pero no se pudo confirmar el envío. No repitas la operación: generaría otra contraseña. Contacta a soporte para verificar el envío.');
       setResendLead(null);
-    } catch (err: any) {
-      setActionMessage(err.message || 'Error al reenviar credenciales');
+    } catch (err) {
+      setActionMessage(mensajeDeError(err) || 'Error al reenviar credenciales');
     } finally {
       setActionLoading(false);
     }

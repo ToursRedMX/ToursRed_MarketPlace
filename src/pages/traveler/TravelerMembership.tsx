@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { comoFilas } from '../../lib/relacionesSupabase';
+import { mensajeDeError } from '../../lib/errores';
 
 interface Membership {
   id: string;
@@ -141,8 +142,8 @@ export default function TravelerMembership() {
 
       setSuccessMessage(data.message);
       await fetchMembership();
-    } catch (err: any) {
-      setError(err.message || 'Error al procesar la solicitud');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al procesar la solicitud');
     } finally {
       setActionLoading(false);
     }

@@ -12,6 +12,7 @@ import { exportTourReportToExcel, exportTourReportToPDF } from '../../utils/repo
 import TourMassMessageModal from '../../components/TourMassMessageModal';
 import AgencyAgenda from './AgencyAgenda';
 import { useAgencyId } from '../../hooks/useAgencyId';
+import { mensajeDeError } from '../../lib/errores';
 
 const AgencyBookings: React.FC = () => {
   const { user } = useAuth();
@@ -200,9 +201,9 @@ const AgencyBookings: React.FC = () => {
         setAvailableTours(toursFiltered);
       }
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando reservas de agencia:', err);
-      setError(err.message || 'Error al cargar las reservas');
+      setError(mensajeDeError(err) || 'Error al cargar las reservas');
     } finally {
       setIsLoading(false);
     }
@@ -439,9 +440,9 @@ const AgencyBookings: React.FC = () => {
       }
 
       console.log(`✅ Reserva ${bookingId} ${action === 'approve' ? 'aprobada' : 'rechazada'}${result.auto_confirmed ? ' y confirmada automáticamente' : ''}`);
-    } catch (err: any) {
+    } catch (err) {
       console.error(`❌ Error ${action === 'approve' ? 'aprobando' : 'rechazando'} reserva:`, err);
-      setError(err.message || `Error al ${action === 'approve' ? 'aprobar' : 'rechazar'} la reserva`);
+      setError(mensajeDeError(err) || `Error al ${action === 'approve' ? 'aprobar' : 'rechazar'} la reserva`);
     }
   };
 
@@ -514,9 +515,9 @@ const AgencyBookings: React.FC = () => {
       updateBookingInAllArrays(bookingId, booking => ({ ...booking, status: newStatus as any }));
 
       console.log(`✅ Estado de reserva ${bookingId} actualizado a:`, newStatus);
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error actualizando estado de reserva:', err);
-      setError(err.message || 'Error al actualizar el estado de la reserva');
+      setError(mensajeDeError(err) || 'Error al actualizar el estado de la reserva');
     }
   };
 
@@ -588,15 +589,15 @@ const AgencyBookings: React.FC = () => {
             console.warn('⚠️ No se pudo enviar el email de notificación:', result);
           }
         }
-      } catch (emailError: any) {
+      } catch (emailError) {
         console.error('❌ Error enviando email de notificación:', emailError);
         // No lanzamos error aquí porque el No Show ya fue registrado
       }
 
       alert('El viajero ha sido marcado como No Show. Su contador ha sido actualizado y se le ha notificado por email.');
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error marcando No Show:', err);
-      setError(err.message || 'Error al marcar como No Show');
+      setError(mensajeDeError(err) || 'Error al marcar como No Show');
     }
   };
 
@@ -776,9 +777,9 @@ const AgencyBookings: React.FC = () => {
       handleCloseCancelBookingModal();
       if (resolvedAgencyId) fetchAgencyData(resolvedAgencyId);
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cancelando reserva:', err);
-      alert(err.message || 'Error al cancelar la reserva');
+      alert(mensajeDeError(err) || 'Error al cancelar la reserva');
       setCancelBookingModal(prev => ({ ...prev, isSubmitting: false }));
     }
   };
@@ -809,9 +810,9 @@ const AgencyBookings: React.FC = () => {
       }
 
       setReportData(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error generating report:', err);
-      alert(err.message || 'Error al generar el reporte');
+      alert(mensajeDeError(err) || 'Error al generar el reporte');
     } finally {
       setIsLoadingReport(false);
     }
@@ -858,8 +859,8 @@ const AgencyBookings: React.FC = () => {
         }
         return updated;
       });
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
+    } catch (err) {
+      alert(`Error: ${mensajeDeError(err)}`);
     } finally {
       setSupplementAction(null);
     }
@@ -890,8 +891,8 @@ const AgencyBookings: React.FC = () => {
         }
         return updated;
       });
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
+    } catch (err) {
+      alert(`Error: ${mensajeDeError(err)}`);
     } finally {
       setSupplementAction(null);
     }
@@ -2361,8 +2362,8 @@ const AgencyBookings: React.FC = () => {
                         a.download = json.filename;
                         a.click();
                         URL.revokeObjectURL(url);
-                      } catch (e: any) {
-                        alert('Error al descargar: ' + e.message);
+                      } catch (e) {
+                        alert('Error al descargar: ' + mensajeDeError(e));
                       }
                     }}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition"

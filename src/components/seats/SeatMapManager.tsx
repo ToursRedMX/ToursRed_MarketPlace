@@ -315,7 +315,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
       }
       setTimeout(() => setActionFeedback(null), 2500);
       await loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error desbloqueando asiento:', err);
     }
   };

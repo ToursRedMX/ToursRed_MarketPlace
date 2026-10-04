@@ -174,7 +174,7 @@ export default function AdminTravelers() {
       };
 
       setSummaryStats(stats);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cargando viajeros:', err);
       setError('Error al cargar los viajeros');
     } finally {
@@ -211,7 +211,7 @@ export default function AdminTravelers() {
         activeTravelers: !currentStatus ? prev.activeTravelers + 1 : prev.activeTravelers - 1,
         inactiveTravelers: !currentStatus ? prev.inactiveTravelers - 1 : prev.inactiveTravelers + 1,
       }));
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error actualizando estado del viajero:', err);
       alert('Error al actualizar el estado del viajero');
     }

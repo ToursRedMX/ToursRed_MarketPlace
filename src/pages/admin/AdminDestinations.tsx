@@ -4,6 +4,7 @@ import { getAllDestinations, createDestination, updateDestination, deleteDestina
 import { Destination } from '../../types';
 import { format } from 'date-fns';
 import ImageUploader from '../../components/ImageUploader';
+import { mensajeDeError } from '../../lib/errores';
 
 const AdminDestinations: React.FC = () => {
   const [destinations, setDestinations] = useState<Destination[]>([]);
@@ -51,9 +52,9 @@ const AdminDestinations: React.FC = () => {
       
       console.log('✅ Destinos cargados:', data);
       setDestinations(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error cargando destinos:', err);
-      setError(err.message || 'Error al cargar destinos');
+      setError(mensajeDeError(err) || 'Error al cargar destinos');
     } finally {
       setIsLoading(false);
     }
@@ -151,9 +152,9 @@ const AdminDestinations: React.FC = () => {
 
       await fetchDestinations();
       handleCancel();
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error guardando destino:', err);
-      setError(err.message || 'Error al guardar destino');
+      setError(mensajeDeError(err) || 'Error al guardar destino');
     } finally {
       setIsSubmitting(false);
     }
@@ -182,9 +183,9 @@ const AdminDestinations: React.FC = () => {
 
       await fetchDestinations();
       console.log('✅ Destino eliminado correctamente');
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error eliminando destino:', err);
-      setError(err.message || 'Error al eliminar el destino');
+      setError(mensajeDeError(err) || 'Error al eliminar el destino');
     } finally {
       setDeletingDestination(null);
     }
@@ -211,9 +212,9 @@ const AdminDestinations: React.FC = () => {
       ));
 
       console.log(`✅ Estado del destino actualizado a: ${!currentStatus}`);
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error actualizando estado:', err);
-      setError(err.message || 'Error al actualizar el estado del destino');
+      setError(mensajeDeError(err) || 'Error al actualizar el estado del destino');
     } finally {
       setIsSubmitting(false);
     }
@@ -237,8 +238,8 @@ const AdminDestinations: React.FC = () => {
       await fetchDestinations();
       setNewImageUrl('');
       setNewImageCaption('');
-    } catch (err: any) {
-      setError(err.message || 'Error al agregar imagen');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al agregar imagen');
     } finally {
       setIsSubmitting(false);
     }
@@ -254,8 +255,8 @@ const AdminDestinations: React.FC = () => {
       if (error) throw error;
 
       await fetchDestinations();
-    } catch (err: any) {
-      setError(err.message || 'Error al eliminar imagen');
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al eliminar imagen');
     } finally {
       setIsSubmitting(false);
     }

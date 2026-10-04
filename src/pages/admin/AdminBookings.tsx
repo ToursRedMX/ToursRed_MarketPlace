@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { paymentLabel } from '../../utils/paymentLabels';
 import { useAuth } from '../../context/AuthContext';
+import { mensajeDeError } from '../../lib/errores';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -821,8 +822,8 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void; onRefres
       a.download = json.filename;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      alert('Error al descargar: ' + e.message);
+    } catch (e) {
+      alert('Error al descargar: ' + mensajeDeError(e));
     } finally {
       setIsDownloadingXlsx(false);
     }
@@ -1509,9 +1510,9 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, onC
         } else {
           setError('Esta reserva está en proceso de cancelación pero no se encontró el registro de cancelación asociado. Contactar a soporte técnico.');
         }
-      } catch (e: any) {
+      } catch (e) {
         if (!cancelled) {
-          setError(e.message || 'Error al reanudar la cancelación en proceso');
+          setError(mensajeDeError(e) || 'Error al reanudar la cancelación en proceso');
         }
       } finally {
         if (!cancelled) setResumingCancellation(false);
@@ -1553,8 +1554,8 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, onC
         }
       }
       setLineStates(initialStates);
-    } catch (e: any) {
-      setError(e.message || 'Error al cargar líneas reembolsables');
+    } catch (e) {
+      setError(mensajeDeError(e) || 'Error al cargar líneas reembolsables');
     } finally {
       setLoadingLines(false);
     }
@@ -1594,9 +1595,9 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, onC
       }
 
       setLineStates(prev => ({ ...prev, [txId]: result.status === 'succeeded' ? 'succeeded' : 'processing' }));
-    } catch (e: any) {
+    } catch (e) {
       setLineStates(prev => ({ ...prev, [txId]: 'failed' }));
-      setLineErrors(prev => ({ ...prev, [txId]: e.message || 'Error' }));
+      setLineErrors(prev => ({ ...prev, [txId]: mensajeDeError(e) || 'Error' }));
     }
   };
 
@@ -1642,8 +1643,8 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, onC
       }
 
       onSuccess();
-    } catch (e: any) {
-      setError(e.message || 'Error al finalizar la cancelación');
+    } catch (e) {
+      setError(mensajeDeError(e) || 'Error al finalizar la cancelación');
     } finally {
       setFinalizing(false);
     }
@@ -1699,9 +1700,9 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, onC
 
       setLineStates(prev => ({ ...prev, [txId]: 'succeeded' }));
       setManualRefundTxId(null);
-    } catch (e: any) {
+    } catch (e) {
       setLineStates(prev => ({ ...prev, [txId]: 'failed' }));
-      setLineErrors(prev => ({ ...prev, [txId]: e.message || 'Error' }));
+      setLineErrors(prev => ({ ...prev, [txId]: mensajeDeError(e) || 'Error' }));
     }
   };
 
@@ -1783,8 +1784,8 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, onC
       } else {
         onSuccess();
       }
-    } catch (e: any) {
-      setError(e.message || 'Error al procesar la cancelación');
+    } catch (e) {
+      setError(mensajeDeError(e) || 'Error al procesar la cancelación');
       setConfirmStep(false);
     } finally {
       setSubmitting(false);
