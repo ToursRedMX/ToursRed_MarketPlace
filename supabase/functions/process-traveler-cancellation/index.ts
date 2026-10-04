@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.1
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
-import { politicaDelTour, salidaDelTour } from "../_shared/politicaCancelacion.ts";
+import { politicaDelTour, salidaDelTour, type TourConPolitica } from "../_shared/politicaCancelacion.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 
 async function cancelStampedCfds(
@@ -97,7 +97,7 @@ Deno.serve(async (req: Request) => {
         id, status, payment_status, deposit_amount, service_charge,
         user_id, tour_id, agency_id, booking_code, cancelled_at,
         is_no_show, approval_status, selected_date, selected_time,
-        travel_insurance_included, travel_insurance_cost,
+        travel_insurance_included, travel_insurance_cost, has_payment_plan,
         tours!bookings_tour_id_fkey(
           id, name, tour_type, start_date,
           cancellation_not_allowed,
@@ -116,19 +116,32 @@ Deno.serve(async (req: Request) => {
     // Eligibility checks
     if (booking.cancelled_at || booking.status === "cancelled") return err("Esta reserva ya fue cancelada");
     if (booking.status === "cancellation_processing") return err("Esta reserva ya tiene una cancelación en proceso");
-    if ((booking as any).is_no_show) return err("Esta reserva está marcada como No Show y no puede cancelarse");
-    if ((booking as any).approval_status === "rejected") return err("Esta reserva fue rechazada y no puede cancelarse");
+    const reserva = booking as unknown as {
+      is_no_show?: boolean | null;
+      approval_status?: string | null;
+      selected_date?: string | null;
+      selected_time?: string | null;
+      deposit_amount?: number | string | null;
+      service_charge?: number | string | null;
+      has_payment_plan?: boolean | null;
+      travel_insurance_included?: boolean | null;
+      travel_insurance_cost?: number | string | null;
+      agency_id?: string | null;
+      tour_id?: string | null;
+    };
+    if (reserva.is_no_show) return err("Esta reserva está marcada como No Show y no puede cancelarse");
+    if (reserva.approval_status === "rejected") return err("Esta reserva fue rechazada y no puede cancelarse");
     if (["pending", "confirmed"].includes(booking.status) === false) return err("Solo se pueden cancelar reservas pendientes o confirmadas");
 
-    const tour = (booking as any).tours as any;
+    const tour = (booking as unknown as { tours: TourConPolitica & { id: string; name: string } }).tours;
     if (!tour) return err("Información del tour no encontrada");
 
-    const isPending = (booking as any).approval_status === "pending";
+    const isPending = reserva.approval_status === "pending";
 
     // Fecha de salida: la misma regla que la cancelacion parcial
     // (_shared/politicaCancelacion.ts).
     const now = new Date();
-    const salida = salidaDelTour(tour, booking as any, now);
+    const salida = salidaDelTour(tour, reserva, now);
     if (!salida) return err("El tour no tiene fecha de inicio configurada");
     const departureDateTime = salida.salida;
     const tourStartDateForRecord = salida.fechaParaRegistro;
@@ -204,21 +217,21 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const originalDepositAmount = Number((booking as any).deposit_amount || 0);
-    let originalServiceCharge = Number((booking as any).service_charge || 0);
+    const originalDepositAmount = Number(reserva.deposit_amount || 0);
+    let originalServiceCharge = Number(reserva.service_charge || 0);
 
     // When has_payment_plan, installment 1 ("Anticipo") already represents the
     // deposit — adding deposit_amount on top would double-count it.
     let installmentsPaid = 0;
-    if ((booking as any).has_payment_plan) {
+    if (reserva.has_payment_plan) {
       const { data: installments } = await supabase
         .from("booking_payment_plan_installments")
         .select("installment_number, amount_paid")
         .eq("booking_id", booking_id)
         .in("status", ["paid", "partially_paid"]);
       for (const inst of (installments || [])) {
-        if ((inst as any).installment_number > 1) {
-          installmentsPaid += Number((inst as any).amount_paid || 0);
+        if (inst.installment_number > 1) {
+          installmentsPaid += Number(inst.amount_paid || 0);
         }
       }
 
@@ -229,7 +242,7 @@ Deno.serve(async (req: Request) => {
         .eq("booking_id", booking_id)
         .eq("status", "completed");
       for (const tx of (ppTransactions || [])) {
-        originalServiceCharge += Number((tx as any).service_charge || 0);
+        originalServiceCharge += Number(tx.service_charge || 0);
       }
     }
     const principalPaid = originalDepositAmount + installmentsPaid;
@@ -244,12 +257,13 @@ Deno.serve(async (req: Request) => {
     let optionalServicesRefundable = 0;
     let optionalServicesServiceCharge = 0;
     for (const bos of (optionalServicesData || [])) {
-      const serviceKind = (bos as any).service_kind;
+      const serviceKind = bos.service_kind;
+      const tourOptionalService = bos.tour_optional_services as unknown as { is_refundable?: boolean } | null;
       const isRefundable = serviceKind === 'pickup' || serviceKind === 'language'
         ? true
-        : (bos as any).tour_optional_services?.is_refundable !== false;
-      if (isRefundable) optionalServicesRefundable += Number((bos as any).subtotal || 0);
-      optionalServicesServiceCharge += Number((bos as any).service_charge || 0);
+        : tourOptionalService?.is_refundable !== false;
+      if (isRefundable) optionalServicesRefundable += Number(bos.subtotal || 0);
+      optionalServicesServiceCharge += Number(bos.service_charge || 0);
     }
 
     // Politica del tour: la misma regla que la cancelacion parcial
@@ -258,8 +272,8 @@ Deno.serve(async (req: Request) => {
     const { policyType, refundPct } = politicaDelTour(tour, hoursBeforeTour, isPending);
     const penaltyAmount = principalPaid * (1 - refundPct);
 
-    const insuranceRefund = (booking as any).travel_insurance_included
-      ? Number((booking as any).travel_insurance_cost || 0) * refundPct
+    const insuranceRefund = reserva.travel_insurance_included
+      ? Number(reserva.travel_insurance_cost || 0) * refundPct
       : 0;
 
     const principalRefund = principalPaid * refundPct;
@@ -400,8 +414,8 @@ Deno.serve(async (req: Request) => {
         .from("cancellation_penalty_records")
         .insert({
           booking_id: booking_id,
-          agency_id: (booking as any).agency_id,
-          tour_id: (booking as any).tour_id,
+          agency_id: reserva.agency_id,
+          tour_id: reserva.tour_id,
           cancellation_type: "full",
           cancellation_id: cancellationRecord.id,
           cancellation_policy_type: policyType,
