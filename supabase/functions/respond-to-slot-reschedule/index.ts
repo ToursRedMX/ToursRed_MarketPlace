@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
@@ -20,8 +20,19 @@ if (sentryDsn) {
   });
 }
 
+interface SlotRescheduleRequest {
+  id: string;
+  status: string;
+  response_deadline: string;
+  target_slot_id: string;
+  reason: string;
+  tour_id: string;
+  original_slot_id: string;
+  available_spots_in_target: number | null;
+}
+
 async function handleSeatAssignment(
-  adminClient: any,
+  adminClient: SupabaseClient,
   bookingId: string,
   targetSlotId: string,
   tourId: string,
@@ -39,7 +50,7 @@ async function handleSeatAssignment(
     .eq("slot_id", targetSlotId)
     .in("status", ["reservado_online", "bloqueado_agencia"]);
 
-  const occupiedNumbers = new Set((occupiedSeats || []).map((s: any) => s.seat_number));
+  const occupiedNumbers = new Set((occupiedSeats || []).map((s: { seat_number: number }) => s.seat_number));
   const availableOriginalSeats = originalSeats.filter((n) => !occupiedNumbers.has(n));
 
   if (availableOriginalSeats.length >= travelersCount) {
@@ -90,7 +101,7 @@ async function handleSeatAssignment(
 }
 
 async function checkAndFinalizeRequest(
-  adminClient: any,
+  adminClient: SupabaseClient,
   requestId: string,
   targetSlotId: string,
   originalSlotId: string,
@@ -104,7 +115,7 @@ async function checkAndFinalizeRequest(
 
   if (!allResponses) return;
 
-  const stillPending = allResponses.some((r: any) => r.response === "pending");
+  const stillPending = allResponses.some((r: { response: string }) => r.response === "pending");
   if (stillPending) return;
 
   const { data: targetSlot } = await adminClient
@@ -115,8 +126,8 @@ async function checkAndFinalizeRequest(
 
   if (!targetSlot) return;
 
-  const confirmedResponses = allResponses.filter((r: any) => r.confirmed_spot === true);
-  const confirmedBookingIds = confirmedResponses.map((r: any) => r.booking_id);
+  const confirmedResponses = allResponses.filter((r: { confirmed_spot: boolean | null }) => r.confirmed_spot === true);
+  const confirmedBookingIds = confirmedResponses.map((r: { booking_id: string }) => r.booking_id);
 
   if (confirmedBookingIds.length > 0) {
     await adminClient
@@ -133,7 +144,7 @@ async function checkAndFinalizeRequest(
       .in("id", confirmedBookingIds);
 
     const totalConfirmedTravelers = (confirmedTravelerCounts || []).reduce(
-      (sum: number, b: any) => sum + (b.travelers_count || 1),
+      (sum: number, b: { travelers_count: number | null }) => sum + (b.travelers_count || 1),
       0
     );
 
@@ -152,7 +163,7 @@ async function checkAndFinalizeRequest(
   }
 
   const noAvailabilityCount = allResponses.filter(
-    (r: any) => r.response === "accepted_no_availability" || r.response === "auto_accepted_no_availability"
+    (r: { response: string }) => r.response === "accepted_no_availability" || r.response === "auto_accepted_no_availability"
   ).length;
 
   await adminClient
@@ -286,7 +297,7 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        const rr = (existingResponse as any).slot_reschedule_requests;
+        const rr = (existingResponse as unknown as { slot_reschedule_requests: SlotRescheduleRequest }).slot_reschedule_requests;
         const now = new Date().toISOString();
 
         const { data: altSlot } = await adminClient
@@ -388,7 +399,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const rescheduleRequest = (rescheduleResponse as any).slot_reschedule_requests;
+    const rescheduleRequest = (rescheduleResponse as unknown as { slot_reschedule_requests: SlotRescheduleRequest }).slot_reschedule_requests;
 
     if (rescheduleRequest.status !== "pending_responses") {
       return new Response(JSON.stringify({ success: false, error: "Esta solicitud ya fue procesada" }), {
@@ -410,7 +421,7 @@ Deno.serve(async (req: Request) => {
       const availableInTarget: number | null = rescheduleRequest.available_spots_in_target;
       const travelersCount = booking.travelers_count || 1;
 
-      let alternativeSlots: any[] = [];
+      let alternativeSlots: Array<{ id: string; slot_date: string; departure_time: string; capacity: number; booked_count: number }> = [];
 
       if (availableInTarget !== null) {
         const { data: alreadyConfirmedData } = await adminClient.rpc("get_confirmed_spots_in_reschedule", {
