@@ -30,9 +30,20 @@
  * error de 2026.
  */
 
-/** Lo unico que estas funciones usan del cliente. */
+/**
+ * Lo unico que estas funciones usan del cliente.
+ *
+ * `any` aqui es deliberado: el query builder real de supabase-js tiene
+ * decenas de sobrecargas segun el generic `Database`, y reproducirlo a
+ * mano da "Type instantiation is excessively deep" en cuanto un llamador
+ * pasa su cliente real tipado (visto el 03-oct-2026 al intentarlo en
+ * `cobrosStripe.ts`). Ver la nota de arriba sobre por que el cliente
+ * entra como parametro estructural.
+ */
 export interface ClienteMinimo {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   from(tabla: string): any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rpc(nombre: string, args?: Record<string, unknown>): any;
 }
 

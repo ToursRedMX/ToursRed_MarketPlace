@@ -80,9 +80,18 @@
  * y `cobrosPaypal.ts`, y que ya dio un error de tipos real en `stripe-webhook`.
  */
 
-/** Tipo estructural minimo: lo unico que este modulo usa del cliente. */
+/**
+ * Tipo estructural minimo: lo unico que este modulo usa del cliente.
+ *
+ * `any` aqui es deliberado, no pereza: el tipo real que devuelve
+ * `.from()` es el query builder generico de supabase-js, con decenas de
+ * sobrecargas segun el generic `Database`. Intentar reproducirlo a mano
+ * (visto el 03-oct-2026) da "Type instantiation is excessively deep" en
+ * cuanto un llamador pasa su cliente real tipado — el mismo problema que
+ * esta nota ya describia para por que el cliente entra como parametro.
+ */
 export interface ClienteMinimo {
-  // deno-lint-ignore no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   from(tabla: string): any;
 }
 
