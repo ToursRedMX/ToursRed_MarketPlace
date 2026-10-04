@@ -80,8 +80,27 @@ function formatDateShort(dateStr: string | null | undefined): string {
   }
 }
 
+interface BookingTraveler {
+  nombre: string | null;
+  apellido: string | null;
+  fecha_nacimiento: string | null;
+  documento_tipo: string | null;
+  documento_numero: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  email: string | null;
+  categoria_viajero: string;
+  sexo: string | null;
+}
+
+interface TravelerConFallback extends BookingTraveler {
+  curp_fallback: string;
+  nombre_real: string | null;
+  apellido_real: string | null;
+}
+
 async function generateXlsxBase64(
-  travelers: any[],
+  travelers: TravelerConFallback[],
   bookingCode: string
 ): Promise<{ base64: string; filename: string }> {
   const headers = [
@@ -202,14 +221,14 @@ Deno.serve(async (req: Request) => {
       .eq("id", booking_id)
       .maybeSingle();
 
-    const userCurp = (bookingUser?.users as any)?.curp || "";
-    const userNombre = (bookingUser?.users as any)?.nombre || "";
-    const userApellidos = (bookingUser?.users as any)?.apellidos || "";
+    const userCurp = (bookingUser?.users as unknown as { curp?: string; nombre?: string; apellidos?: string } | null)?.curp || "";
+    const userNombre = (bookingUser?.users as unknown as { curp?: string; nombre?: string; apellidos?: string } | null)?.nombre || "";
+    const userApellidos = (bookingUser?.users as unknown as { curp?: string; nombre?: string; apellidos?: string } | null)?.apellidos || "";
 
     // Deduplicar: si hay dos registros con el mismo nombre, quedarse con el más completo
-    const dedupedTravelers = (bookingTravelers || []).reduce((acc: any[], t: any) => {
+    const dedupedTravelers = (bookingTravelers || []).reduce((acc: BookingTraveler[], t: BookingTraveler) => {
       const existing = acc.findIndex((x) => (x.nombre || "").trim().toLowerCase() === (t.nombre || "").trim().toLowerCase());
-      const score = (t: any) => (t.documento_numero ? 2 : 0) + (t.fecha_nacimiento ? 1 : 0) + (t.emergency_contact_name ? 1 : 0);
+      const score = (t: BookingTraveler) => (t.documento_numero ? 2 : 0) + (t.fecha_nacimiento ? 1 : 0) + (t.emergency_contact_name ? 1 : 0);
       if (existing === -1) {
         acc.push(t);
       } else if (score(t) > score(acc[existing])) {
@@ -424,7 +443,7 @@ Deno.serve(async (req: Request) => {
       booking_code
     );
 
-    const emailPayload: any = {
+    const emailPayload: Record<string, unknown> = {
       api_key: emailSettings.smtp_api_key,
       to: [recipientEmail],
       sender: emailSettings.contact_email,
