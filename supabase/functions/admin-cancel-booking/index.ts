@@ -171,8 +171,8 @@ Deno.serve(async (req: Request) => {
     if (booking.status === "cancellation_processing")
       return err("Esta reserva ya tiene una cancelación en proceso. Usa admin-finalize-cancellation para completarla.");
 
-    const tour = (booking as any).tours;
-    const agency = (booking as any).agencies;
+    const tour = booking.tours as unknown as { id: string; name: string; start_date?: string; end_date?: string } | null;
+    const agency = booking.agencies as unknown as { id: string; name: string; contact_email?: string } | null;
 
     // Fetch refundable optional services — two-bucket model
     // Each optional (pickup, language, traditional) has its own total_paid bucket.
@@ -191,6 +191,9 @@ Deno.serve(async (req: Request) => {
     // When has_payment_plan, installment 1 ("Anticipo") already represents the
     // deposit — adding deposit_amount on top would double-count it.
     let totalPaidByTraveler = Number(booking.deposit_amount || 0);
+    // Se calcula una vez aqui y se reusa mas abajo (antes se volvia a consultar
+    // booking_payment_plan_transactions tres veces mas, identico, para lo mismo).
+    let paymentPlanServiceCharge = 0;
 
     if (booking.has_payment_plan) {
       const { data: installments } = await supabase
@@ -200,7 +203,7 @@ Deno.serve(async (req: Request) => {
         .in("status", ["paid", "partially_paid"]);
 
       for (const inst of (installments || [])) {
-        if ((inst as any).installment_number > 1) {
+        if (inst.installment_number > 1) {
           totalPaidByTraveler += Number(inst.amount_paid || 0);
         }
       }
@@ -214,6 +217,7 @@ Deno.serve(async (req: Request) => {
 
       for (const tx of (ppTransactions || [])) {
         totalPaidByTraveler += Number(tx.service_charge || 0);
+        paymentPlanServiceCharge += Number(tx.service_charge || 0);
       }
     }
 
@@ -224,13 +228,13 @@ Deno.serve(async (req: Request) => {
     let optionalsRefundBucket = 0;
     for (const os of (optionalServices || [])) {
       // Admin cancellation: all optionals are refundable
-      optionalsRefundBucket += Number((os as any).total_paid || (os as any).subtotal || 0);
+      optionalsRefundBucket += Number(os.total_paid || os.subtotal || 0);
     }
     optionalsRefundBucket = Math.round(optionalsRefundBucket * 100) / 100;
 
     let optionalServicesServiceCharge = 0;
     for (const os of (optionalServices || [])) {
-      optionalServicesServiceCharge += Number((os as any).service_charge || 0);
+      optionalServicesServiceCharge += Number(os.service_charge || 0);
     }
 
     // Fetch refundable supplements (paid and cancellable)
@@ -242,8 +246,9 @@ Deno.serve(async (req: Request) => {
 
     let supplementsRefundable = 0;
     for (const supp of (supplements || [])) {
-      if ((supp as any).tour_supplements?.is_cancellable !== false) {
-        supplementsRefundable += Number((supp as any).total_paid || 0);
+      const tourSupplement = supp.tour_supplements as unknown as { is_cancellable?: boolean } | null;
+      if (tourSupplement?.is_cancellable !== false) {
+        supplementsRefundable += Number(supp.total_paid || 0);
       }
     }
 
@@ -356,18 +361,19 @@ Deno.serve(async (req: Request) => {
       try {
         const { data: paidSupplements } = await supabase
           .from("booking_supplements")
-          .select("id, tour_supplements(is_cancellable)")
+          .select("id, total_paid, tour_supplements(is_cancellable)")
           .eq("booking_id", booking_id)
           .eq("status", "paid");
 
         for (const supp of (paidSupplements || [])) {
-          if ((supp as any).tour_supplements?.is_cancellable !== false) {
+          const tourSupplement = supp.tour_supplements as unknown as { is_cancellable?: boolean } | null;
+          if (tourSupplement?.is_cancellable !== false) {
             await supabase.from("booking_supplements")
               .update({
                 status: "cancelled",
                 cancelled_at: new Date().toISOString(),
                 cancelled_by: "tour_cancellation",
-                refund_amount: (supp as any).total_paid || 0,
+                refund_amount: supp.total_paid || 0,
                 updated_at: new Date().toISOString(),
               })
               .eq("id", supp.id);
@@ -394,12 +400,7 @@ Deno.serve(async (req: Request) => {
         service_charge_refunded: Boolean(refund_service_charge),
         service_charge_refunded_amount: refund_service_charge
           ? (Number(booking.service_charge || 0) + (booking.has_payment_plan
-              ? (await supabase
-                  .from("booking_payment_plan_transactions")
-                  .select("service_charge")
-                  .eq("booking_id", booking_id)
-                  .eq("status", "completed")
-                  .then(({ data }: any) => (data || []).reduce((s: number, t: any) => s + Number(t.service_charge || 0), 0)))
+              ? paymentPlanServiceCharge
               : 0) + optionalServicesServiceCharge)
           : 0,
       })
@@ -423,12 +424,7 @@ Deno.serve(async (req: Request) => {
         cancellation_policy_type: "admin_cancelled",
         original_deposit_amount: Number(booking.deposit_amount || 0),
         original_service_charge: Number(booking.service_charge || 0) + optionalServicesServiceCharge + (booking.has_payment_plan
-          ? (await supabase
-              .from("booking_payment_plan_transactions")
-              .select("service_charge")
-              .eq("booking_id", booking_id)
-              .eq("status", "completed")
-              .then(({ data }: any) => (data || []).reduce((s: number, t: any) => s + Number(t.service_charge || 0), 0)))
+          ? paymentPlanServiceCharge
           : 0),
         total_principal_paid: totalPaidByTraveler,
         refund_amount_to_traveler: Number(refund_amount) || 0,
@@ -440,12 +436,7 @@ Deno.serve(async (req: Request) => {
         emails_sent: false,
         service_charge_refunded_amount: refund_service_charge
           ? (Number(booking.service_charge || 0) + (booking.has_payment_plan
-              ? (await supabase
-                  .from("booking_payment_plan_transactions")
-                  .select("service_charge")
-                  .eq("booking_id", booking_id)
-                  .eq("status", "completed")
-                  .then(({ data }: any) => (data || []).reduce((s: number, t: any) => s + Number(t.service_charge || 0), 0)))
+              ? paymentPlanServiceCharge
               : 0) + optionalServicesServiceCharge)
           : 0,
       })
