@@ -104,8 +104,22 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const booking = plan.bookings as any;
-    const tour = booking.tours as any;
+    const booking = plan.bookings as unknown as {
+      id: string;
+      user_id: string;
+      tour_id: string;
+      booking_code: string | null;
+      status: string;
+      tours: {
+        id: string;
+        name: string;
+        agency_id: string;
+        late_payment_penalty_pct: number | null;
+        late_payment_penalty_fixed: number | null;
+        late_payment_grace_days: number | null;
+      } | null;
+    };
+    const tour = booking.tours;
 
     if (booking.status === "cancellation_processing") {
       return new Response(JSON.stringify({ error: "La reserva está en proceso de cancelación" }), {
@@ -204,7 +218,7 @@ Deno.serve(async (req: Request) => {
 
       const txId = result.transaction_id as string;
       const pointsEarned = result.points_earned as number;
-      const returnedAllocations = (result.allocations as any[]) || [];
+      const returnedAllocations = (result.allocations as Array<{ installment_id: string; amount_allocated: number }>) || [];
 
       // Record in payment_transactions for refund tracking (processor payments only)
       if (provider === "stripe" && providerTransactionId) {
@@ -392,7 +406,7 @@ Deno.serve(async (req: Request) => {
       const stripe = new Stripe(stripeKey, { apiVersion: "2026-06-24.dahlia" });
       const origin = origenParaRedirigir(req);
 
-      const lineItems: any[] = [{
+      const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [{
         price_data: {
           currency: "mxn",
           product_data: {
@@ -631,7 +645,7 @@ Deno.serve(async (req: Request) => {
       const cancelUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking.id}&status=cancel&context=payment_plan_installment`;
 
       const amountInCents = Math.round(totalToPay * 100);
-      const orderPayload: any = {
+      const orderPayload: Record<string, unknown> = {
         currency: "MXN",
         amount: amountInCents,
         line_items: [{
@@ -680,7 +694,7 @@ Deno.serve(async (req: Request) => {
         try {
           const parsed = JSON.parse(errorBody);
           errorMsg = parsed?.details?.[0]?.message || parsed?.message || errorMsg;
-        } catch {}
+        } catch { /* cuerpo no-JSON, se queda el mensaje generico */ }
         return new Response(JSON.stringify({ error: errorMsg }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -796,7 +810,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const paymentMethodMetadataPp: Record<string, any> = {
+      const paymentMethodMetadataPp: Record<string, unknown> = {
         openpay_method, openpay_charge_id: chargeOp.id, openpay_status: chargeOp.status,
         effective_amount: String(effectiveAmount), net_service_charge: String(netServiceCharge),
         gross_service_charge: String(grossServiceCharge), membership_exemption_applied: String(exemptionApplied > 0),
