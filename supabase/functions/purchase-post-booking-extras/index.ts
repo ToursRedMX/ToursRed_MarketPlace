@@ -163,7 +163,7 @@ Deno.serve(async (req: Request) => {
           .select("quantity")
           .eq("tour_optional_service_id", tour_optional_service_id)
           .eq("is_cancelled", false);
-        const used = (usedData || []).reduce((s: number, r: any) => s + Number(r.quantity), 0);
+        const used = (usedData || []).reduce((s: number, r: { quantity: number }) => s + Number(r.quantity), 0);
         const available = service.max_capacity - used;
         if (quantity > available) {
           return new Response(JSON.stringify({
@@ -220,7 +220,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const pricePerDayPerTraveler = parseFloat(platformSettings?.travel_insurance_price_per_day_per_traveler ?? "79");
-      const tourData = booking.tours as any;
+      const tourData = booking.tours as unknown as { start_date: string; end_date: string } | null;
 
       const totalTravelers = Math.max(
         1,
@@ -739,7 +739,7 @@ Deno.serve(async (req: Request) => {
       const cancelUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking_id}&status=cancel&context=${extraChargeContext}`;
       const amountInCents = Math.round(totalToPay * 100);
 
-      const orderPayload: any = {
+      const orderPayload: Record<string, unknown> = {
         currency: "MXN",
         amount: amountInCents,
         customer_info: { name: conektaCustomerName, email: user.email || "no-email@toursred.com" },
@@ -779,7 +779,7 @@ Deno.serve(async (req: Request) => {
         const errorBody = await apiResponse.text();
         console.error("Conekta API error (post-booking extra):", errorBody);
         let errorMsg = "Error al crear orden de Conekta";
-        try { const parsed = JSON.parse(errorBody); errorMsg = parsed?.details?.[0]?.message || parsed?.message || errorMsg; } catch {}
+        try { const parsed = JSON.parse(errorBody); errorMsg = parsed?.details?.[0]?.message || parsed?.message || errorMsg; } catch { /* cuerpo no-JSON, se queda el mensaje generico */ }
         return new Response(JSON.stringify({ error: errorMsg }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -868,7 +868,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const paymentMethodMetadataOp: Record<string, any> = {
+      const paymentMethodMetadataOp: Record<string, unknown> = {
         openpay_method, openpay_charge_id: chargeOp.id, openpay_status: chargeOp.status,
       };
       if (openpay_method === "spei") {
