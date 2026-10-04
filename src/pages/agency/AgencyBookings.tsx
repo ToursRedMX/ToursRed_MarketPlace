@@ -3,8 +3,9 @@ import { Calendar, MapPin, Users, DollarSign, Clock, Eye, Mail, Phone, CheckCirc
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
 import { getAgencyBookings, getTourBookingReport, supabase, parseDateFromDB } from '../../lib/supabase';
+import type { TourBookingReport } from '../../lib/supabase';
 import PaymentPlanCalendar from '../../components/PaymentPlanCalendar';
-import { Booking } from '../../types';
+import { Booking, BookingTraveler, BookingSupplement, BookingOptionalService } from '../../types';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import ReviewForm from '../../components/ReviewForm';
@@ -13,6 +14,30 @@ import TourMassMessageModal from '../../components/TourMassMessageModal';
 import AgencyAgenda from './AgencyAgenda';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { mensajeDeError } from '../../lib/errores';
+
+interface AvailableTour {
+  id: string;
+  name: string;
+  destination: string;
+  start_date: string;
+  end_date: string;
+  tour_type: string;
+  bookingsCount: number;
+}
+
+interface SentMessage {
+  id: string;
+  subject: string;
+  message_body: string;
+  recipients_count: number;
+  success_count: number;
+  error_count: number;
+  status: string;
+  created_at: string;
+  slot_id: string | null;
+  tours: { name: string; destination: string } | null;
+  tour_slots: { slot_date: string; departure_time: string } | null;
+}
 
 const AgencyBookings: React.FC = () => {
   const { user } = useAuth();
@@ -27,7 +52,7 @@ const AgencyBookings: React.FC = () => {
   const [reviewModal, setReviewModal] = useState<{
     open: boolean;
     booking: Booking | null;
-    existingReview: any;
+    existingReview: { id: string; rating: number; comment: string } | null;
   }>({ open: false, booking: null, existingReview: null });
   const [contactModal, setContactModal] = useState<{
     open: boolean;
@@ -36,7 +61,7 @@ const AgencyBookings: React.FC = () => {
   const [travelersModal, setTravelersModal] = useState<{
     open: boolean;
     booking: Booking | null;
-    travelers: any[];
+    travelers: BookingTraveler[];
   }>({ open: false, booking: null, travelers: [] });
   const [cancelBookingModal, setCancelBookingModal] = useState<{
     open: boolean;
@@ -50,19 +75,19 @@ const AgencyBookings: React.FC = () => {
     preselectedTourId?: string | null;
     preselectedSlotId?: string | null;
   }>({ open: false });
-  const [sentMessages, setSentMessages] = useState<any[]>([]);
+  const [sentMessages, setSentMessages] = useState<SentMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [bookingOptionalServices, setBookingOptionalServices] = useState<Record<string, any[]>>({});
-  const [bookingSupplements, setBookingSupplements] = useState<Record<string, any[]>>({});
+  const [bookingOptionalServices, setBookingOptionalServices] = useState<Record<string, BookingOptionalService[]>>({});
+  const [bookingSupplements, setBookingSupplements] = useState<Record<string, BookingSupplement[]>>({});
   const [supplementAction, setSupplementAction] = useState<{
     type: 'approve' | 'reject';
     supplementId: string;
     isSubmitting: boolean;
     rejectionNote: string;
   } | null>(null);
-  const [availableTours, setAvailableTours] = useState<any[]>([]);
+  const [availableTours, setAvailableTours] = useState<AvailableTour[]>([]);
   const [selectedTourForReport, setSelectedTourForReport] = useState<string>('');
-  const [reportData, setReportData] = useState<any>(null);
+  const [reportData, setReportData] = useState<TourBookingReport | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
   const [agencyName, setAgencyName] = useState<string>('');
   const [bookingTab, setBookingTab] = useState<'activas' | 'pasadas' | 'canceladas'>('activas');
@@ -79,7 +104,7 @@ const AgencyBookings: React.FC = () => {
     }
   }, [resolvedAgencyId, agencyLoading]);
 
-  const isBookingActive = (booking: any): boolean => {
+  const isBookingActive = (booking: Booking): boolean => {
     if (booking.status === 'cancelled' || booking.status === 'cancellation_processing') return false;
     const dateStr = booking.selected_date || booking.tours?.end_date;
     if (!dateStr) return true;
@@ -121,15 +146,15 @@ const AgencyBookings: React.FC = () => {
       const allBookings = bookingsData || [];
       setBookings(allBookings);
 
-      const active = allBookings.filter((b: any) => isBookingActive(b));
-      const past = allBookings.filter((b: any) => b.status !== 'cancelled' && b.status !== 'cancellation_processing' && !isBookingActive(b));
-      const cancelled = allBookings.filter((b: any) => b.status === 'cancelled' || b.status === 'cancellation_processing');
+      const active = allBookings.filter((b) => isBookingActive(b));
+      const past = allBookings.filter((b) => b.status !== 'cancelled' && b.status !== 'cancellation_processing' && !isBookingActive(b));
+      const cancelled = allBookings.filter((b) => b.status === 'cancelled' || b.status === 'cancellation_processing');
       setActiveBookings(active);
       setPastBookings(past);
       setCancelledBookings(cancelled);
 
       if (allBookings.length > 0) {
-        const ids = allBookings.map((b: any) => b.id);
+        const ids = allBookings.map((b) => b.id);
         const { data: optSvcs, error: errorOpcionales } = await supabase
           .from('booking_optional_services')
           .select(`*, tour_optional_services(name, is_refundable)`)
@@ -140,7 +165,7 @@ const AgencyBookings: React.FC = () => {
         if (errorOpcionales) throw errorOpcionales;
 
         if (optSvcs) {
-          const grouped: Record<string, any[]> = {};
+          const grouped: Record<string, BookingOptionalService[]> = {};
           for (const bos of optSvcs) {
             if (!grouped[bos.booking_id]) grouped[bos.booking_id] = [];
             grouped[bos.booking_id].push(bos);
@@ -159,7 +184,7 @@ const AgencyBookings: React.FC = () => {
         if (errorSuplementos) throw errorSuplementos;
 
         if (suppData) {
-          const groupedSupp: Record<string, any[]> = {};
+          const groupedSupp: Record<string, BookingSupplement[]> = {};
           for (const bs of suppData) {
             if (!groupedSupp[bs.booking_id]) groupedSupp[bs.booking_id] = [];
             groupedSupp[bs.booking_id].push(bs);
@@ -225,8 +250,8 @@ const AgencyBookings: React.FC = () => {
 
   const canMarkAsNoShow = (booking: Booking) => {
     if (!booking.tours?.start_date) return false;
-    if ((booking as any).is_no_show) return false;
-    if ((booking as any).cancelled_at) return false;
+    if (booking.is_no_show) return false;
+    if (booking.cancelled_at) return false;
     if (booking.status !== 'confirmed') return false;
 
     try {
@@ -245,8 +270,8 @@ const AgencyBookings: React.FC = () => {
   const canMarkAsCompleted = (booking: Booking) => {
     if (!booking.tours?.start_date) return false;
     if (booking.status !== 'confirmed') return false;
-    if ((booking as any).is_no_show) return false;
-    if ((booking as any).cancelled_at) return false;
+    if (booking.is_no_show) return false;
+    if (booking.cancelled_at) return false;
 
     try {
       const tourStartDate = parseDateFromDB(booking.tours.start_date);
@@ -263,8 +288,8 @@ const AgencyBookings: React.FC = () => {
 
   const canReviewTraveler = (booking: Booking) => {
     if (booking.status !== 'completed') return false;
-    if ((booking as any).is_no_show) return false;
-    if ((booking as any).cancelled_at) return false;
+    if (booking.is_no_show) return false;
+    if (booking.cancelled_at) return false;
 
     return true;
   };
@@ -372,13 +397,13 @@ const AgencyBookings: React.FC = () => {
         throw new Error(result.error || `Error al ${action === 'approve' ? 'aprobar' : 'rechazar'} la reserva`);
       }
 
-      const approvalStatus = action === 'approve' ? 'approved' : 'rejected';
+      const approvalStatus: 'approved' | 'rejected' = action === 'approve' ? 'approved' : 'rejected';
       const now = new Date().toISOString();
 
       // Actualizar el estado local
       updateBookingInAllArrays(bookingId, booking => ({
         ...booking,
-        approval_status: approvalStatus as any,
+        approval_status: approvalStatus,
         approval_notes: notes || null,
         approved_at: action === 'approve' ? now : null,
         approved_by: user?.id,
@@ -484,7 +509,7 @@ const AgencyBookings: React.FC = () => {
     );
   };
 
-  const handleStatusUpdate = async (bookingId: string, newStatus: string) => {
+  const handleStatusUpdate = async (bookingId: string, newStatus: 'confirmed' | 'completed') => {
     try {
       if (newStatus === 'completed') {
         const booking = bookings.find(b => b.id === bookingId);
@@ -512,7 +537,7 @@ const AgencyBookings: React.FC = () => {
       }
 
       // Actualizar el estado local
-      updateBookingInAllArrays(bookingId, booking => ({ ...booking, status: newStatus as any }));
+      updateBookingInAllArrays(bookingId, booking => ({ ...booking, status: newStatus }));
 
       console.log(`✅ Estado de reserva ${bookingId} actualizado a:`, newStatus);
     } catch (err) {
@@ -823,7 +848,7 @@ const AgencyBookings: React.FC = () => {
       alert('Primero genera el reporte');
       return;
     }
-    void exportTourReportToExcel(reportData, agencyName);
+    void exportTourReportToExcel(reportData as unknown as Parameters<typeof exportTourReportToExcel>[0], agencyName);
   };
 
   const handleExportPDF = () => {
@@ -831,7 +856,7 @@ const AgencyBookings: React.FC = () => {
       alert('Primero genera el reporte');
       return;
     }
-    exportTourReportToPDF(reportData, agencyName);
+    exportTourReportToPDF(reportData as unknown as Parameters<typeof exportTourReportToPDF>[0], agencyName);
   };
 
   const handleApproveSupplementRequest = async (supplementId: string) => {
@@ -913,7 +938,7 @@ const AgencyBookings: React.FC = () => {
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (!error) setSentMessages(data || []);
+      if (!error) setSentMessages((data || []) as unknown as SentMessage[]);
     } catch (err) {
       console.error('Error loading sent messages:', err);
     } finally {
@@ -1142,7 +1167,7 @@ const AgencyBookings: React.FC = () => {
               <Filter className="h-4 w-4 text-gray-400" />
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
+                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled')}
                 className="border border-gray-300 rounded-md px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">Todos los estados</option>
@@ -1197,19 +1222,19 @@ const AgencyBookings: React.FC = () => {
                       {getStatusBadge(booking.status, booking.payment_status)}
                       {getPaymentStatusBadge(booking.payment_status)}
                       {getApprovalStatusBadge(booking.approval_status)}
-                      {(booking as any).is_no_show && (
+                      {booking.is_no_show && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                           <UserX className="h-3 w-3 mr-1" />
                           No Show
                         </span>
                       )}
-                      {(booking as any).checkin_status === 'full' && (
+                      {booking.checkin_status === 'full' && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           <QrCode className="h-3 w-3 mr-1" />
                           Check-in Completo
                         </span>
                       )}
-                      {(booking as any).checkin_status === 'partial' && (
+                      {booking.checkin_status === 'partial' && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
                           <QrCode className="h-3 w-3 mr-1" />
                           Check-in Parcial
@@ -1302,10 +1327,10 @@ const AgencyBookings: React.FC = () => {
                     </div>
                   </div>
 
-                  {(booking as any).has_partial_cancellations && (
+                  {booking.has_partial_cancellations && (
                     <div className="mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-medium">
                       <UserX className="h-3 w-3" />
-                      Cancelación parcial &mdash; {(booking as any).active_travelers_count ?? booking.travelers_count} de {booking.travelers_count} viajeros activos
+                      Cancelación parcial &mdash; {booking.active_travelers_count ?? booking.travelers_count} de {booking.travelers_count} viajeros activos
                     </div>
                   )}
 
@@ -1315,8 +1340,8 @@ const AgencyBookings: React.FC = () => {
                       <div>
                         <div className="text-sm text-gray-500">Viajeros</div>
                         <div className="font-medium">
-                          {(booking as any).has_partial_cancellations
-                            ? `${(booking as any).active_travelers_count ?? booking.travelers_count} activos`
+                          {booking.has_partial_cancellations
+                            ? `${booking.active_travelers_count ?? booking.travelers_count} activos`
                             : booking.travelers_count}
                         </div>
                       </div>
@@ -1340,14 +1365,14 @@ const AgencyBookings: React.FC = () => {
                       </div>
                     </div>
 
-                    {(booking as any).es_reserva_preventa && (
+                    {booking.es_reserva_preventa && (
                       <div className="flex items-center col-span-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                         <div className="w-4 h-4 mr-2 text-amber-500 flex-shrink-0">★</div>
                         <div className="flex-1">
                           <div className="text-xs font-semibold text-amber-800">Reserva de Preventa Exclusiva</div>
-                          {(booking as any).preventa_comision_descuento > 0 && (
+                          {(booking.preventa_comision_descuento ?? 0) > 0 && (
                             <div className="text-xs text-amber-700">
-                              Descuento en comisión aplicado: <strong>-${((booking as any).preventa_comision_descuento || 0).toFixed(2)}</strong>
+                              Descuento en comisión aplicado: <strong>-${(booking.preventa_comision_descuento || 0).toFixed(2)}</strong>
                               {' '}(10% sobre comisión base)
                             </div>
                           )}
@@ -1377,48 +1402,48 @@ const AgencyBookings: React.FC = () => {
                       <DollarSign className="h-4 w-4 text-gray-400 mr-2" />
                       <div>
                         <div className="text-sm text-gray-500">Método de Pago</div>
-                        <div className="font-medium">{(booking as any).payment_method || 'N/A'}</div>
+                        <div className="font-medium">{booking.payment_method || 'N/A'}</div>
                       </div>
                     </div>
                   </div>
 
-                  {(booking as any).paypal_transaction_id && (
+                  {booking.paypal_transaction_id && (
                     <div className="flex items-center bg-blue-50 border border-blue-100 rounded-lg px-4 py-2 mb-4">
                       <div className="flex-1">
                         <div className="text-xs text-blue-600 font-medium">ID de Transacción PayPal</div>
-                        <div className="font-mono text-sm tracking-wide text-blue-900">{(booking as any).paypal_transaction_id}</div>
+                        <div className="font-mono text-sm tracking-wide text-blue-900">{booking.paypal_transaction_id}</div>
                       </div>
                     </div>
                   )}
 
                   {/* Pickup & Language Info - Receptivo tours */}
-                  {((booking as any).pickup_type || (booking as any).selected_language) && (
+                  {(booking.pickup_type || booking.selected_language) && (
                     <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 mb-4">
                       <h4 className="text-sm font-semibold text-teal-800 mb-3 flex items-center gap-2">
                         <Car className="h-4 w-4" />
                         Detalles de Traslado e Idioma
                       </h4>
                       <div className="space-y-2">
-                        {(booking as any).pickup_type && (
+                        {booking.pickup_type && (
                           <div className="flex items-start gap-2">
                             <MapPin className="h-4 w-4 text-teal-600 mt-0.5 flex-shrink-0" />
                             <div>
                               <span className="text-xs text-teal-700 font-medium">Tipo de traslado: </span>
                               <span className="text-sm text-gray-800">
-                                {(booking as any).pickup_type === 'meeting_point'
+                                {booking.pickup_type === 'meeting_point'
                                   ? 'Se presenta en el punto de encuentro'
                                   : 'Solicita recogida en hotel'}
                               </span>
                             </div>
                           </div>
                         )}
-                        {(booking as any).pickup_type === 'pickup' && (booking as any).pickup_zone_name && (
+                        {booking.pickup_type === 'pickup' && booking.pickup_zone_name && (
                           <div className="flex items-start gap-2">
                             <Car className="h-4 w-4 text-teal-600 mt-0.5 flex-shrink-0" />
                             <div>
                               <span className="text-xs text-teal-700 font-medium">Zona / Hotel: </span>
-                              <span className="text-sm text-gray-800">{(booking as any).pickup_zone_name}</span>
-                              {(bookingOptionalServices[booking.id] || []).filter((bos: any) => bos.service_kind === 'pickup').map((bos: any) => (
+                              <span className="text-sm text-gray-800">{booking.pickup_zone_name}</span>
+                              {(bookingOptionalServices[booking.id] || []).filter((bos) => bos.service_kind === 'pickup').map((bos) => (
                                 <span key={bos.id} className="ml-2 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">
                                   +${bos.total_paid || bos.subtotal} {bos.quantity > 1 ? '/persona' : '/reserva'}
                                 </span>
@@ -1426,13 +1451,13 @@ const AgencyBookings: React.FC = () => {
                             </div>
                           </div>
                         )}
-                        {(booking as any).selected_language && (
+                        {booking.selected_language && (
                           <div className="flex items-start gap-2">
                             <Globe className="h-4 w-4 text-teal-600 mt-0.5 flex-shrink-0" />
                             <div>
                               <span className="text-xs text-teal-700 font-medium">Idioma seleccionado: </span>
-                              <span className="text-sm text-gray-800 capitalize">{(booking as any).selected_language}</span>
-                              {(bookingOptionalServices[booking.id] || []).filter((bos: any) => bos.service_kind === 'language').map((bos: any) => (
+                              <span className="text-sm text-gray-800 capitalize">{booking.selected_language}</span>
+                              {(bookingOptionalServices[booking.id] || []).filter((bos) => bos.service_kind === 'language').map((bos) => (
                                 <span key={bos.id} className="ml-2 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">
                                   +${bos.total_paid || bos.subtotal} {bos.quantity > 1 ? '/persona' : 'fijo'}
                                 </span>
@@ -1449,7 +1474,7 @@ const AgencyBookings: React.FC = () => {
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
                       <h4 className="text-sm font-semibold text-amber-800 mb-2">Servicios Adicionales Contratados</h4>
                       <div className="flex flex-col gap-y-1.5">
-                        {bookingOptionalServices[booking.id].map((bos: any) => (
+                        {bookingOptionalServices[booking.id].map((bos) => (
                           <div key={bos.id} className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
                               <span className={bos.is_cancelled ? 'line-through text-gray-400' : 'text-gray-800'}>
@@ -1479,7 +1504,7 @@ const AgencyBookings: React.FC = () => {
                         Suplementos Adicionales
                       </h4>
                       <div className="flex flex-col gap-y-3">
-                        {bookingSupplements[booking.id].map((bs: any) => {
+                        {bookingSupplements[booking.id].map((bs) => {
                           const statusConfig: Record<string, { label: string; color: string }> = {
                             pending_approval: { label: 'Pendiente aprobacion', color: 'bg-amber-100 text-amber-700' },
                             approved: { label: 'Aprobado — esperando pago', color: 'bg-blue-100 text-blue-700' },
@@ -1634,7 +1659,7 @@ const AgencyBookings: React.FC = () => {
                       </button>
                     )}
 
-                    {booking.status === 'confirmed' && !(booking as any).is_no_show && (
+                    {booking.status === 'confirmed' && !booking.is_no_show && (
                       <>
                         {canMarkAsCompleted(booking) && (
                           <button
@@ -1645,7 +1670,7 @@ const AgencyBookings: React.FC = () => {
                             Marcar Completada
                           </button>
                         )}
-                        {canMarkAsNoShow(booking) && !(booking as any).checkin_status && (
+                        {canMarkAsNoShow(booking) && !booking.checkin_status && (
                           <button
                             onClick={() => handleMarkNoShow(booking.id)}
                             className="btn bg-orange-600 text-white hover:bg-orange-700 flex items-center justify-center"
@@ -1655,7 +1680,7 @@ const AgencyBookings: React.FC = () => {
                             No Show
                           </button>
                         )}
-                        {canMarkAsNoShow(booking) && (booking as any).checkin_status && (
+                        {canMarkAsNoShow(booking) && booking.checkin_status && (
                           <div
                             className="btn bg-gray-200 text-gray-400 cursor-not-allowed flex items-center justify-center"
                             title="Esta reserva ya fue procesada vía QR de check-in"
@@ -1677,7 +1702,7 @@ const AgencyBookings: React.FC = () => {
                       </button>
                     )}
 
-                    {booking.status !== 'cancelled' && !booking.cancelled_at && ['confirmed', 'pending'].includes(booking.status) && booking.payment_status === 'succeeded' && !(booking as any).is_no_show && (
+                    {booking.status !== 'cancelled' && !booking.cancelled_at && ['confirmed', 'pending'].includes(booking.status) && booking.payment_status === 'succeeded' && !booking.is_no_show && (
                       <button
                         onClick={() => handleOpenCancelBookingModal(booking)}
                         className="btn bg-orange-600 text-white hover:bg-orange-700 flex items-center justify-center"
@@ -1689,39 +1714,39 @@ const AgencyBookings: React.FC = () => {
                   </div>
 
                   {/* Important Notes */}
-                  {(booking as any).cancelled_at && (
+                  {booking.cancelled_at && (
                     <div className="mt-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-md">
                       <div className="flex items-start gap-2">
                         <XCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
                         <div className="flex-1">
                           <p className="text-sm text-red-800 font-semibold mb-2">
-                            {(booking as any).cancelled_by_agency_at ? 'Reserva Cancelada por tu Agencia' : 'Reserva Cancelada por el Viajero'}
+                            {booking.cancelled_by_agency_at ? 'Reserva Cancelada por tu Agencia' : 'Reserva Cancelada por el Viajero'}
                           </p>
                           <div className="text-xs text-red-700 space-y-1">
                             <p>
-                              <strong>Cancelado el:</strong> {formatDate((booking as any).cancelled_at)}
+                              <strong>Cancelado el:</strong> {formatDate(booking.cancelled_at)}
                             </p>
-                            {(booking as any).cancelled_by_agency_at && (
+                            {booking.cancelled_by_agency_at && (
                               <p className="text-orange-800 font-semibold">
                                 ℹ️ Esta reserva fue cancelada por tu agencia. El viajero recibió un reembolso del 100% y no se pagará comisión.
                               </p>
                             )}
-                            {!(booking as any).cancelled_by_agency_at && (booking as any).cancellation_type && (
+                            {!booking.cancelled_by_agency_at && booking.cancellation_type && (
                               <p>
                                 <strong>Política aplicada:</strong> {
-                                  (booking as any).cancellation_type === '100_percent' ? 'Reembolso del 100%' :
-                                  (booking as any).cancellation_type === '50_percent' ? 'Reembolso del 50%' :
-                                  (booking as any).cancellation_type === 'no_refund' ? 'Sin reembolso' :
-                                  (booking as any).cancellation_type === 'no_show' ? 'Cancelación tardía (No Show)' :
-                                  (booking as any).cancellation_type === 'pending_approval' ? 'Reserva pendiente' :
-                                  (booking as any).cancellation_type === 'agency_cancellation' ? 'Cancelación por agencia' :
+                                  booking.cancellation_type === '100_percent' ? 'Reembolso del 100%' :
+                                  booking.cancellation_type === '50_percent' ? 'Reembolso del 50%' :
+                                  booking.cancellation_type === 'no_refund' ? 'Sin reembolso' :
+                                  booking.cancellation_type === 'no_show' ? 'Cancelación tardía (No Show)' :
+                                  booking.cancellation_type === 'pending_approval' ? 'Reserva pendiente' :
+                                  booking.cancellation_type === 'agency_cancellation' ? 'Cancelación por agencia' :
                                   'N/A'
                                 }
                               </p>
                             )}
-                            {(booking as any).cancellation_refund_amount !== null && (booking as any).cancellation_refund_amount !== undefined && (
+                            {booking.cancellation_refund_amount !== null && booking.cancellation_refund_amount !== undefined && (
                               <p>
-                                <strong>Reembolsado al viajero:</strong> ${formatCurrencyMXN(Number((booking as any).cancellation_refund_amount))}
+                                <strong>Reembolsado al viajero:</strong> ${formatCurrencyMXN(Number(booking.cancellation_refund_amount))}
                               </p>
                             )}
                           </div>
@@ -1730,7 +1755,7 @@ const AgencyBookings: React.FC = () => {
                     </div>
                   )}
 
-                  {(booking as any).is_no_show && (
+                  {booking.is_no_show && (
                     <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
                       <div className="flex items-start gap-2">
                         <UserX className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
@@ -1738,9 +1763,9 @@ const AgencyBookings: React.FC = () => {
                           <p className="text-sm text-orange-800">
                             <strong>No Show:</strong> El viajero no se presentó a este tour. El contador de No Show del viajero ha sido actualizado.
                           </p>
-                          {(booking as any).no_show_marked_at && (
+                          {booking.no_show_marked_at && (
                             <p className="text-xs text-orange-700 mt-1">
-                              Marcado el {formatDate((booking as any).no_show_marked_at)}
+                              Marcado el {formatDate(booking.no_show_marked_at)}
                             </p>
                           )}
                         </div>
@@ -1792,7 +1817,7 @@ const AgencyBookings: React.FC = () => {
                   )}
 
                   {/* Plan de Pagos (vista agencia, solo lectura) */}
-                  {(booking as any).has_payment_plan && (
+                  {booking.has_payment_plan && (
                     <div className="mt-4">
                       <PaymentPlanCalendar bookingId={booking.id} agencyView={true} />
                     </div>
@@ -1820,7 +1845,7 @@ const AgencyBookings: React.FC = () => {
                     </div>
                   )}
 
-                  {booking.status === 'confirmed' && !(booking as any).is_no_show && (
+                  {booking.status === 'confirmed' && !booking.is_no_show && (
                     <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
                       <p className="text-sm text-green-800">
                         <strong>Reserva confirmada:</strong> Coordina con el cliente el pago del saldo restante y los detalles del viaje.
@@ -1834,16 +1859,16 @@ const AgencyBookings: React.FC = () => {
                     </div>
                   )}
 
-                  {booking.status === 'completed' && !(booking as any).is_no_show && (
+                  {booking.status === 'completed' && !booking.is_no_show && (
                     <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
                       <p className="text-sm text-blue-800">
                         <strong>Tour completado exitosamente:</strong> Ahora puedes calificar al viajero para ayudar a otras agencias.
-                        {(booking as any).checkin_status === 'full' && (
+                        {booking.checkin_status === 'full' && (
                           <span className="block mt-1 flex items-center gap-1">
                             <QrCode className="h-3.5 w-3.5 inline" /> Check-in confirmado vía código QR.
                           </span>
                         )}
-                        {(booking as any).checkin_status === 'partial' && (
+                        {booking.checkin_status === 'partial' && (
                           <span className="block mt-1 flex items-center gap-1 text-amber-700">
                             <QrCode className="h-3.5 w-3.5 inline" /> Check-in parcial vía QR: algunos acompañantes no se presentaron.
                           </span>
@@ -1896,7 +1921,7 @@ const AgencyBookings: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {sentMessages.map((msg: any) => {
+              {sentMessages.map((msg) => {
                 const statusColors: Record<string, string> = {
                   completed: 'bg-green-100 text-green-700',
                   sending: 'bg-blue-100 text-blue-700',
@@ -2087,17 +2112,17 @@ const AgencyBookings: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {reportData.bookings.map((booking: any) => (
+                    {reportData.bookings.map((booking) => (
                       <tr key={booking.id} className="hover:bg-gray-50">
                         <td className="px-4 py-4">
-                          <div className="font-medium">{booking.users.first_name} {booking.users.last_name}</div>
-                          <div className="text-sm text-gray-500">{booking.users.email}</div>
-                          <div className="text-sm text-gray-500">{booking.users.phone_number || 'Sin teléfono'}</div>
+                          <div className="font-medium">{booking.users?.first_name} {booking.users?.last_name}</div>
+                          <div className="text-sm text-gray-500">{booking.users?.email}</div>
+                          <div className="text-sm text-gray-500">{booking.users?.phone_number || 'Sin teléfono'}</div>
                         </td>
                         <td className="px-4 py-4">
                           {booking.travelers.length > 0 ? (
                             <div className="flex flex-col gap-y-1">
-                              {booking.travelers.map((traveler: any) => (
+                              {booking.travelers.map((traveler) => (
                                 <div key={traveler.id} className="text-sm">
                                   <span className="font-medium">{traveler.nombre}</span>
                                   <span className="text-gray-500 ml-2">({getCategoryLabel(traveler.categoria_viajero)})</span>
@@ -2266,28 +2291,28 @@ const AgencyBookings: React.FC = () => {
               ) : (
                 <div className="space-y-4">
                   {travelersModal.travelers.map((traveler, index) => (
-                    <div key={traveler.id} className={`border rounded-lg p-4 transition-colors ${(traveler as any).is_cancelled ? 'border-red-200 bg-red-50 opacity-75' : 'border-gray-200 hover:border-primary-300'}`}>
+                    <div key={traveler.id} className={`border rounded-lg p-4 transition-colors ${traveler.is_cancelled ? 'border-red-200 bg-red-50 opacity-75' : 'border-gray-200 hover:border-primary-300'}`}>
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <h3 className={`font-semibold text-lg ${(traveler as any).is_cancelled ? 'line-through text-gray-400' : ''}`}>
+                          <h3 className={`font-semibold text-lg ${traveler.is_cancelled ? 'line-through text-gray-400' : ''}`}>
                             {getCategoryLabel(traveler.categoria_viajero)} {index + 1}
                           </h3>
-                          {(traveler as any).is_cancelled && (
+                          {traveler.is_cancelled && (
                             <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Cancelado</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          {Number((traveler as any).promo_discount_per_traveler) > 0 ? (
+                          {Number(traveler.promo_discount_per_traveler) > 0 ? (
                             <span className="flex items-center gap-1.5">
                               <span className="text-sm text-gray-400 line-through">
-                                {formatCurrencyMXN(Number(traveler.precio_aplicado) + Number((traveler as any).promo_discount_per_traveler))}
+                                {formatCurrencyMXN(Number(traveler.precio_aplicado) + Number(traveler.promo_discount_per_traveler))}
                               </span>
-                              <span className={`text-sm font-bold ${(traveler as any).is_cancelled ? 'text-gray-400 line-through' : 'text-emerald-600'}`}>
+                              <span className={`text-sm font-bold ${traveler.is_cancelled ? 'text-gray-400 line-through' : 'text-emerald-600'}`}>
                                 {formatCurrencyMXN(Number(traveler.precio_aplicado))}
                               </span>
                             </span>
                           ) : (
-                            <span className={`text-sm font-medium ${(traveler as any).is_cancelled ? 'text-gray-400 line-through' : 'text-gray-500'}`}>
+                            <span className={`text-sm font-medium ${traveler.is_cancelled ? 'text-gray-400 line-through' : 'text-gray-500'}`}>
                               {formatCurrencyMXN(Number(traveler.precio_aplicado))}
                             </span>
                           )}
@@ -2414,7 +2439,7 @@ const AgencyBookings: React.FC = () => {
                 reviewType="traveler"
                 onSuccess={handleReviewSuccess}
                 onCancel={handleCloseReviewModal}
-                existingReview={reviewModal.existingReview}
+                existingReview={reviewModal.existingReview ?? undefined}
               />
             </div>
           </div>
@@ -2488,7 +2513,7 @@ const AgencyBookings: React.FC = () => {
                 const optSvcs = bookingOptionalServices[cancelBookingModal.booking.id] || [];
                 const nonRefundable = optSvcs.filter(b => !b.tour_optional_services?.is_refundable && !b.is_cancelled);
                 if (nonRefundable.length === 0) return null;
-                const totalNonRefundable = nonRefundable.reduce((s: number, b: any) => s + Number(b.subtotal), 0);
+                const totalNonRefundable = nonRefundable.reduce((s: number, b) => s + Number(b.subtotal), 0);
                 return (
                   <div className="bg-orange-50 border-l-4 border-orange-500 p-4 mb-6">
                     <div className="flex gap-2">

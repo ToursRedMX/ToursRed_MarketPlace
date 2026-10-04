@@ -745,6 +745,18 @@ export const getTours = async (filters: any = {}) => {
   }
 };
 
+interface TourRecommendationRow {
+  agency_id: string;
+  agencies?: { id: string; name: string; rating: number; is_active: boolean } | null;
+  bookings?: { id: string; status: string }[];
+  [key: string]: unknown;
+}
+
+interface TourRecommendationScored extends TourRecommendationRow {
+  booking_count: number;
+  _score: number;
+}
+
 export const getPopularTours = async (limit = 20) => {
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -775,20 +787,20 @@ export const getPopularTours = async (limit = 20) => {
     if (error) return { data: [], error };
 
     // 70% confirmed bookings + 30% agency rating, max 3 per agency
-    const normalized = (data ?? [])
-      .filter((t: any) => t.agencies?.is_active !== false)
-      .map((t: any) => {
+    const normalized = (data as unknown as TourRecommendationRow[] ?? [])
+      .filter((t) => t.agencies?.is_active !== false)
+      .map((t) => {
         const confirmedBookings = Array.isArray(t.bookings)
-          ? t.bookings.filter((b: any) => b.status !== 'cancelled').length
+          ? t.bookings.filter((b) => b.status !== 'cancelled').length
           : 0;
         const agencyRating = t.agencies?.rating ?? 0;
-        return { ...t, booking_count: confirmedBookings, _score: confirmedBookings * 0.7 + agencyRating * 0.3 };
+        return { ...t, booking_count: confirmedBookings, _score: confirmedBookings * 0.7 + agencyRating * 0.3 } as TourRecommendationScored;
       })
-      .sort((a: any, b: any) => b._score - a._score);
+      .sort((a, b) => b._score - a._score);
 
     // Cap max 3 per agency
     const agencyCounts: Record<string, number> = {};
-    const capped: any[] = [];
+    const capped: TourRecommendationScored[] = [];
     for (const t of normalized) {
       const aid = t.agency_id;
       agencyCounts[aid] = (agencyCounts[aid] || 0) + 1;
@@ -1415,7 +1427,7 @@ export const getUserCancelledBookings = async (userId: string) => {
 
 export const getAgencyBookings = async (agencyId: string) => {
   try {
-    const { data: bookings, error } = await supabase
+    const { data: bookingsData, error } = await supabase
       .from('bookings')
       .select(`
         *,
@@ -1426,9 +1438,10 @@ export const getAgencyBookings = async (agencyId: string) => {
       .neq('status', 'draft')
       .order('created_at', { ascending: false });
 
-    if (error || !bookings) {
-      return { data: bookings, error };
+    if (error || !bookingsData) {
+      return { data: bookingsData, error };
     }
+    const bookings = comoFilas<Booking>(bookingsData);
 
     // OPTIMIZED: Get all payment transactions in ONE query instead of N queries
     const bookingIds = bookings.map(b => b.id);
@@ -1444,8 +1457,8 @@ export const getAgencyBookings = async (agencyId: string) => {
     }
 
     // Group transactions by booking_id and get the most recent
-    const transactionsByBooking: Record<string, any> = {};
-    (allTransactions || []).forEach((tx: any) => {
+    const transactionsByBooking: Record<string, PaymentTransactionSlim> = {};
+    comoFilas<PaymentTransactionSlim>(allTransactions).forEach((tx) => {
       if (!transactionsByBooking[tx.booking_id] ||
           new Date(tx.created_at) > new Date(transactionsByBooking[tx.booking_id].created_at)) {
         transactionsByBooking[tx.booking_id] = tx;
@@ -1454,7 +1467,7 @@ export const getAgencyBookings = async (agencyId: string) => {
 
     // Map bookings with payment methods (no more N+1!)
     const bookingsWithPaymentMethod = bookings.map((booking) => {
-      let paymentMethod = (booking as any).payment_method || null;
+      let paymentMethod = booking.payment_method || null;
 
       // If no payment_method, use the most recent transaction
       if (!paymentMethod && transactionsByBooking[booking.id]) {
@@ -1473,6 +1486,59 @@ export const getAgencyBookings = async (agencyId: string) => {
     return { data: null, error: error instanceof Error ? error : new Error(mensajeDeError(error)) };
   }
 };
+
+interface ReportBookingUser {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone_number: string | null;
+}
+
+interface ReportTraveler {
+  id: string;
+  booking_id: string;
+  categoria_viajero: string;
+  nombre: string;
+  precio_aplicado: number;
+}
+
+export interface TourBookingReportBooking {
+  id: string;
+  booking_code: string;
+  user_id: string;
+  deposit_amount: number;
+  total_price: number;
+  user_payment: number;
+  payment_method: string | null;
+  booking_date: string;
+  created_at: string;
+  status: string;
+  count_adultos: number;
+  count_ninos: number;
+  count_infantes: number;
+  count_adultos_mayores: number;
+  count_mascotas: number;
+  toursred_cash_used: number;
+  has_payment_plan?: boolean;
+  payment_plan_total?: number;
+  payment_plan_paid?: number;
+  users: ReportBookingUser | null;
+  travelers: ReportTraveler[];
+}
+
+export interface TourBookingReport {
+  tour: { id: string; name: string; destination: string; start_date: string; end_date: string };
+  bookings: TourBookingReportBooking[];
+  summary: {
+    totalBookings: number;
+    totalTravelers: number;
+    totalsByCategory: { adultos: number; ninos: number; infantes: number; adultos_mayores: number; mascotas: number };
+    totalDeposit: number;
+    totalRemaining: number;
+    totalRevenue: number;
+  };
+}
 
 export const getTourBookingReport = async (tourId: string, agencyId: string) => {
   try {
@@ -1506,6 +1572,9 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
         count_adultos_mayores,
         count_mascotas,
         toursred_cash_used,
+        has_payment_plan,
+        payment_plan_total,
+        payment_plan_paid,
         users:user_id(id, first_name, last_name, email, phone_number)
       `)
       .eq('tour_id', tourId)
@@ -1541,19 +1610,20 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
           { key: 'mascota', label: 'mascota', count: booking.count_mascotas || 0 },
         ];
 
-        const travelersFromCounts: any[] = [];
+        const travelersFromCounts: ReportTraveler[] = [];
         for (const cat of categoryMap) {
           if (cat.count <= 0) continue;
           const registered = (travelersRaw || []).filter(
-            (t: any) => t.categoria_viajero === cat.key
+            (t) => t.categoria_viajero === cat.key
           );
           for (let i = 0; i < cat.count; i++) {
             if (registered[i]) {
               travelersFromCounts.push(registered[i]);
             } else {
               // Viajero sin datos de acompañante registrado (ej. 2x1)
-              const firstName = (booking as any).users?.first_name || '';
-              const lastName = (booking as any).users?.last_name || '';
+              const bookingUser = booking.users as unknown as ReportBookingUser | null;
+              const firstName = bookingUser?.first_name || '';
+              const lastName = bookingUser?.last_name || '';
               travelersFromCounts.push({
                 id: `${booking.id}-${cat.key}-${i}`,
                 booking_id: booking.id,
@@ -1586,7 +1656,7 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
           ...booking,
           travelers: travelersFromCounts,
           payment_method: paymentMethod
-        };
+        } as unknown as TourBookingReportBooking;
       })
     );
 
@@ -1607,8 +1677,8 @@ export const getTourBookingReport = async (tourId: string, agencyId: string) => 
 
     const totalDeposit = bookingsWithTravelers.reduce((sum, b) => sum + Number(b.deposit_amount || 0), 0);
     const totalRemaining = bookingsWithTravelers.reduce((sum, b) => {
-      if ((b as any).has_payment_plan) {
-        return sum + (Number((b as any).payment_plan_total || 0) - Number((b as any).payment_plan_paid || 0));
+      if (b.has_payment_plan) {
+        return sum + (Number(b.payment_plan_total || 0) - Number(b.payment_plan_paid || 0));
       }
       return sum + (Number(b.total_price || 0) - Number(b.deposit_amount || 0));
     }, 0);

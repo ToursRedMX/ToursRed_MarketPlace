@@ -486,6 +486,12 @@ export interface Booking {
   paypal_transaction_id?: string | null;
   active_travelers_count?: number;
   previous_selected_seats?: number[] | null;
+  checkin_status?: 'full' | 'partial' | null;
+  cancelled_by_agency_at?: string | null;
+  cancellation_refund_amount?: number | null;
+  // Sin CHECK constraint: lo escriben varias funciones SQL con sus propias
+  // etiquetas de politica (100_percent, no_show, agency_cancellation, etc).
+  cancellation_type?: string | null;
   selected_time?: string;
   tour_slots?: TourSlot;
   pickup_type?: 'meeting_point' | 'pickup';
@@ -601,8 +607,9 @@ export interface BookingSupplement {
   cancelled_by?: 'traveler' | 'agency' | 'system' | 'expiry' | 'tour_cancellation' | null;
   refund_amount: number;
   points_earned: number;
-  // Select parcial del catalogo: solo lo que las pantallas de reserva piden.
-  tour_supplements?: Pick<TourSupplement, 'name' | 'description' | 'price' | 'is_cancellable' | 'requires_approval'>;
+  // Select parcial del catalogo: cada pantalla pide un subconjunto distinto
+  // de columnas, de ahi el `Partial` (ninguna esta garantizada presente).
+  tour_supplements?: Partial<Pick<TourSupplement, 'name' | 'description' | 'price' | 'is_cancellable' | 'requires_approval'>>;
 }
 
 /**
