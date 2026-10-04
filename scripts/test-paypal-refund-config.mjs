@@ -40,6 +40,7 @@ for (const test of scenarios) {
     }; return q;
   } };
   vm.runInNewContext(compiled, { exports: {}, Response, btoa, createClient: () => client,
+    mensajeDeError: (e) => String(e?.message ?? e),
     console: { error() {} }, EdgeRuntime: { waitUntil() {} },
     Deno: { serve(fn) { handler = fn; }, env: { get: key => ({ SUPABASE_SERVICE_ROLE_KEY: 'service', SUPABASE_URL: 'https://db.test', PAYPAL_CLIENT_ID: test.envId, PAYPAL_CLIENT_SECRET: test.envSecret })[key] } },
     async fetch(url, options) {

@@ -56,6 +56,7 @@ for (const test of cases) {
     },
   };
   vm.runInNewContext(handlerCode, { exports: {}, Response, console: quiet, ...helperContext.exports,
+    mensajeDeError: (e) => String(e?.message ?? e),
     Deno: { serve(fn) { handler = fn; }, env: { get: key => ({ SUPABASE_SERVICE_ROLE_KEY: test.missingKey ? undefined : 'service', SUPABASE_URL: 'https://db.test', SUPABASE_ANON_KEY: 'anon' })[key] } },
     createClient(url, key, options) {
       if (key === 'service') return serviceClient;
