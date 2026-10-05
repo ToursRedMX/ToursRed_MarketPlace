@@ -80,7 +80,7 @@ const compilar = (fuente) => ts.transpileModule(fuente, {
 
 const cuerpoDetermine = recortarBloque(
   authContext,
-  'const determineUserRole = async (authUser: any, forceRefresh: boolean = false)',
+  'const determineUserRole = async (authUser: User | null, forceRefresh: boolean = false)',
   '=> {',
 );
 const cuerpoCerrarSesion = recortarBloque(authContext, 'const cerrarSesionYRedirigir = async (destino: string)', '=> {');
