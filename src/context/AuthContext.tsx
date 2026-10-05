@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as Sentry from '@sentry/react';
 import { supabase, UserRole } from '../lib/supabase';
-import type { Session } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import {
   CLAVE_ULTIMO_LOGIN_REGISTRADO,
   debeRegistrarLogin,
@@ -150,6 +150,24 @@ export interface AgencyStaffInfo {
   permissions: AgencyStaffPermissions;
 }
 
+/** Fila que devuelve el RPC `get_staff_with_permissions`. */
+interface StaffPermissionsRpcRow {
+  staff_id: string;
+  agency_id: string;
+  agency_name: string;
+  title: string;
+  can_scan_checkin: boolean;
+  can_view_bookings: boolean;
+  can_view_tours: boolean;
+  can_edit_tours: boolean;
+  can_manage_tours: boolean;
+  can_view_financials: boolean;
+  can_view_reports: boolean;
+  can_manage_discount_codes: boolean;
+  can_view_messages: boolean;
+  can_manage_destinations: boolean;
+}
+
 export interface AccountantPermissions {
   canViewAccounting: boolean;
   canExportSatXml: boolean;
@@ -166,7 +184,7 @@ export interface AccountExecutiveInfo {
 }
 
 interface AuthContextType {
-  user: any | null;
+  user: User | null;
   userRole: UserRole | null;
   isLoading: boolean;
   isAdmin: boolean;
@@ -266,7 +284,7 @@ const cerrarSesionYRedirigir = async (destino: string) => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -333,7 +351,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase.rpc('get_staff_with_permissions', { p_user_id: userId });
       if (error || !data || data.length === 0) return [];
-      return data.map((row: any) => ({
+      return (data as StaffPermissionsRpcRow[]).map((row) => ({
         staffId: row.staff_id,
         agencyId: row.agency_id,
         agencyName: row.agency_name,
@@ -369,7 +387,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setNeedsTermsAcceptance(false);
   }, []);
 
-  const determineUserRole = async (authUser: any, forceRefresh: boolean = false): Promise<{ role: UserRole; emailVerified: boolean }> => {
+  const determineUserRole = async (authUser: User | null, forceRefresh: boolean = false): Promise<{ role: UserRole; emailVerified: boolean }> => {
     if (!authUser) return { role: UserRole.TRAVELER, emailVerified: false };
 
     // NO hay atajo por email. Hasta el 10-sep-2026 esta funcion empezaba con:
@@ -547,13 +565,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
-  const updateAuthState = async (authUser: any, forceRefresh: boolean = false) => {
+  const updateAuthState = async (authUser: User | null, forceRefresh: boolean = false) => {
     if (isUpdatingRef.current) return;
     isUpdatingRef.current = true;
     try {
       setUser(authUser);
 
-      Sentry.setUser({ id: authUser.id, email: authUser.email || undefined });
+      // `authUser` puede llegar null en la carga inicial sin sesion
+      // (`initializeAuth`); sin esta guarda, `authUser.id` tiraba TypeError en
+      // cada visita anonima -- el catch de abajo lo atrapaba y el resultado
+      // final era el mismo (se degrada a `else` con el estado de "sin
+      // sesion"), pero por una excepcion que no hacia falta lanzar.
+      if (authUser) {
+        Sentry.setUser({ id: authUser.id, email: authUser.email || undefined });
+      } else {
+        Sentry.setUser(null);
+      }
 
       if (authUser) {
         // Check if Google or Azure OAuth user hasn't completed onboarding yet
@@ -562,7 +589,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           authUser.app_metadata?.provider === 'azure' ||
           authUser.app_metadata?.provider === 'x' ||
           authUser.app_metadata?.provider === 'facebook' ||
-          (authUser.identities ?? []).some((i: any) => ['google', 'azure', 'x', 'facebook'].includes(i.provider));
+          (authUser.identities ?? []).some((i) => ['google', 'azure', 'x', 'facebook'].includes(i.provider));
         const metaOnboarding = authUser.user_metadata?.onboarding_completed;
 
         if (isOAuthProvider && (metaOnboarding === false || metaOnboarding === null || metaOnboarding === undefined)) {
@@ -913,7 +940,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Inactivity detection refs
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentRoleRef = useRef<UserRole | null>(null);
-  const currentUserRef = useRef<any>(null);
+  const currentUserRef = useRef<User | null>(null);
 
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);

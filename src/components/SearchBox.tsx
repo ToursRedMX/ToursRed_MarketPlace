@@ -49,7 +49,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
     if (agencies.length === 0 || agencyInitializedRef.current) return;
     const initialAgencyId = initialAgencyIdRef.current;
     if (initialAgencyId) {
-      const selectedAgency = agencies.find((a: any) => a.id === initialAgencyId);
+      const selectedAgency = agencies.find((a) => a.id === initialAgencyId);
       if (selectedAgency) {
         setSelectedAgencyName(selectedAgency.name);
         setAgencySearchText(selectedAgency.name);
@@ -60,14 +60,14 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
 
   const filteredAgencies = useMemo(() => {
     if (agencySearchText === '' || agencySearchText === selectedAgencyName) return agencies;
-    return agencies.filter((ag: any) =>
+    return agencies.filter((ag) =>
       ag.name.toLowerCase().includes(agencySearchText.toLowerCase())
     );
   }, [agencySearchText, agencies, selectedAgencyName]);
 
   const filteredDeparturePoints = useMemo(() => {
     if (departurePointSearchText === '') return departurePoints;
-    return departurePoints.filter((dp: any) =>
+    return departurePoints.filter((dp) =>
       dp.name.toLowerCase().includes(departurePointSearchText.toLowerCase()) ||
       (dp.city && dp.city.toLowerCase().includes(departurePointSearchText.toLowerCase()))
     );
@@ -96,7 +96,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
     }
   };
 
-  const handleAgencySelect = (selectedAgency: any) => {
+  const handleAgencySelect = (selectedAgency: (typeof agencies)[number]) => {
     setAgency(selectedAgency.id);
     setAgencySearchText(selectedAgency.name);
     setSelectedAgencyName(selectedAgency.name);
@@ -117,7 +117,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
     if (value === '') setDeparturePoint('');
   };
 
-  const handleDeparturePointSelect = (selectedPoint: any) => {
+  const handleDeparturePointSelect = (selectedPoint: (typeof departurePoints)[number]) => {
     setDeparturePoint(selectedPoint.name);
     setDeparturePointSearchText(selectedPoint.name);
     setShowDeparturePointDropdown(false);
@@ -363,7 +363,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
               className={inputWithIcon}
             >
               <option value="">Todas las Categorías</option>
-              {categories.map((cat: any) => (
+              {categories.map((cat) => (
                 <option key={cat.id} value={cat.slug}>{cat.name}</option>
               ))}
             </select>
@@ -391,7 +391,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
             )}
             {showAgencyDropdown && filteredAgencies.length > 0 && (
               <div className="absolute z-50 top-full mt-1 w-full bg-white border border-gray-200 shadow-xl max-h-52 rounded-xl overflow-auto">
-                {filteredAgencies.map((ag: any) => (
+                {filteredAgencies.map((ag) => (
                   <div
                     key={ag.id}
                     onClick={() => handleAgencySelect(ag)}
@@ -428,7 +428,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ initialFilters = {}, className = 
             )}
             {showDeparturePointDropdown && filteredDeparturePoints.length > 0 && (
               <div className="absolute z-50 top-full mt-1 w-full bg-white border border-gray-200 shadow-xl max-h-52 rounded-xl overflow-auto">
-                {filteredDeparturePoints.map((point: any) => (
+                {filteredDeparturePoints.map((point) => (
                   <div
                     key={point.id}
                     onClick={() => handleDeparturePointSelect(point)}
