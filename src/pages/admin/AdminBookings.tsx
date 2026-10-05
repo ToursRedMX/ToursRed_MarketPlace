@@ -176,6 +176,40 @@ interface BookingRow {
   }[] | null;
 }
 
+/** Forma que devuelve la Edge Function `get-refundable-lines`. */
+interface RefundableLine {
+  payment_transaction_id: string;
+  description: string;
+  amount: number;
+  currency: string;
+  payment_processor: string | null;
+  payment_method_type: string | null;
+  charge_context: string;
+  charge_reference_id: string | null;
+  points_earned: number;
+  points_earned_is_estimated: boolean;
+  refundable_to_original: boolean;
+  original_method_eligible: boolean;
+  existing_refund: {
+    payment_refund_id: string;
+    status: string;
+    requested_amount: number;
+    processor_refund_id: string | null;
+    failure_reason: string | null;
+  } | null;
+  created_at: string;
+}
+
+interface AdminCancellationData {
+  reason_for_traveler: string | null;
+  reason_for_agency: string | null;
+  refund_method: string | null;
+  refund_amount: number | null;
+  points_deducted: number | null;
+  cancelled_at: string | null;
+  receipt_file_path: string | null;
+}
+
 interface Stats {
   total: number;
   pagadas: number;
@@ -370,15 +404,39 @@ function AdminBookings() {
         supabase.from('commission_records').select('id, booking_id, agency_commission_rate, agency_commission_amount, service_charge_rate, service_charge_amount, gross_service_charge_amount, membership_exemption_total, preventa_comision_descuento, payment_plan_service_charges, payment_plan_membership_exemptions, optional_services_subtotal, optional_services_commission, optional_services_service_charge, optional_services_agency_net, supplements_subtotal, supplements_commission, supplements_service_charge, supplements_agency_net, platform_total_revenue, agency_net_amount, status, processed_at').in('booking_id', bookingIds),
         planBookingIds.length > 0
           ? supabase.from('booking_payment_plans').select('id, booking_id, mode, total_plan_amount, total_amount_paid, status').in('booking_id', planBookingIds)
+          // El ternario mezcla un query builder real de supabase-js con un
+          // Promise.resolve plano; Promise.all([...]) no les saca un tipo
+          // comun y colapsa `optSvcRes.data`/`supplementsRes.data` a `never`
+          // en los Record<string, typeof ...> de abajo. Mismo escape que
+          // _shared/cobrosStripe.ts para este tipo de "profundidad excesiva".
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : Promise.resolve({ data: [], error: null } as any),
         planBookingIds.length > 0
           ? supabase.from('booking_payment_plan_installments').select('id, plan_id, booking_id, installment_number, label, amount_due, amount_paid, due_date, status, paid_at').in('booking_id', planBookingIds).order('installment_number', { ascending: true })
+          // El ternario mezcla un query builder real de supabase-js con un
+          // Promise.resolve plano; Promise.all([...]) no les saca un tipo
+          // comun y colapsa `optSvcRes.data`/`supplementsRes.data` a `never`
+          // en los Record<string, typeof ...> de abajo. Mismo escape que
+          // _shared/cobrosStripe.ts para este tipo de "profundidad excesiva".
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : Promise.resolve({ data: [], error: null } as any),
         bookingIds.length > 0
           ? supabase.from('booking_optional_services').select('id, booking_id, quantity, unit_price, subtotal, service_charge, total_paid, agency_commission, membership_exemption_used, is_cancelled, paid_at, payment_method, tour_optional_services(name)').in('booking_id', bookingIds)
+          // El ternario mezcla un query builder real de supabase-js con un
+          // Promise.resolve plano; Promise.all([...]) no les saca un tipo
+          // comun y colapsa `optSvcRes.data`/`supplementsRes.data` a `never`
+          // en los Record<string, typeof ...> de abajo. Mismo escape que
+          // _shared/cobrosStripe.ts para este tipo de "profundidad excesiva".
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : Promise.resolve({ data: [], error: null } as any),
         bookingIds.length > 0
           ? supabase.from('booking_supplements').select('id, booking_id, quantity, unit_price, service_charge, membership_exemption_used, supplement_commission, total_paid, status, paid_at, payment_method, refund_amount, tour_supplements(name)').in('booking_id', bookingIds)
+          // El ternario mezcla un query builder real de supabase-js con un
+          // Promise.resolve plano; Promise.all([...]) no les saca un tipo
+          // comun y colapsa `optSvcRes.data`/`supplementsRes.data` a `never`
+          // en los Record<string, typeof ...> de abajo. Mismo escape que
+          // _shared/cobrosStripe.ts para este tipo de "profundidad excesiva".
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : Promise.resolve({ data: [], error: null } as any),
       ]);
 
@@ -404,7 +462,7 @@ function AdminBookings() {
         commMap[c.booking_id]!.push(c);
       }
 
-      const plansMap: Record<string, any> = {};
+      const plansMap: Record<string, NonNullable<BookingRow['payment_plan']>> = {};
       for (const p of (plansRes.data || [])) {
         plansMap[p.booking_id] = { ...p, installments: [] };
       }
@@ -762,7 +820,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void; onRefres
   const [showCancelModal, setShowCancelModal] = useState(false);
   const { permissions, isSuperAdmin } = useAuth();
   const canCancel = isSuperAdmin || permissions?.canCancelBookings;
-  const [adminCancellationData, setAdminCancellationData] = useState<any>(null);
+  const [adminCancellationData, setAdminCancellationData] = useState<AdminCancellationData | null>(null);
 
   // El tile "Total pagado" referenciaba selectedRealTotalPaid, un estado declarado
   // en AdminBookings (:279) y por lo tanto fuera del scope de ESTE componente:
@@ -1394,7 +1452,7 @@ const DetailModal: React.FC<{ booking: BookingRow; onClose: () => void; onRefres
 
 interface AdminCancelModalProps {
   booking: BookingRow;
-  adminCancellationData: any;
+  adminCancellationData: AdminCancellationData | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -1418,7 +1476,7 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, onC
   const [bookingCancelled, setBookingCancelled] = useState(false);
   const [cancellationId, setCancellationId] = useState<string | null>(null);
   const [adminCancellationId, setAdminCancellationId] = useState<string | null>(null);
-  const [refundLines, setRefundLines] = useState<any[]>([]);
+  const [refundLines, setRefundLines] = useState<RefundableLine[]>([]);
   const [loadingLines, setLoadingLines] = useState(false);
   const [lineStates, setLineStates] = useState<Record<string, 'pending' | 'processing' | 'succeeded' | 'failed'>>({});
   const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
@@ -1808,8 +1866,14 @@ const AdminCancelBookingModal: React.FC<AdminCancelModalProps> = ({ booking, onC
     setError(null);
   };
 
-  const serviceChargeAmount = Number(booking.service_charge || 0)
-    + (booking.payment_plan?.installments?.reduce((s: number, i: any) => s + Number(i.service_charge || 0), 0) || 0);
+  // El segundo sumando sumaba `i.service_charge` sobre las parcialidades del
+  // plan de pagos, pero esa columna no existe en `booking_payment_plan_installments`
+  // (vive en `booking_payment_plan_transactions`) ni en el tipo local de
+  // `BookingRow.payment_plan.installments`: siempre era `undefined`, asi que
+  // el termino sumaba 0 sin importar cuantas parcialidades hubiera. Quitado
+  // porque no aportaba nada, no porque se haya decidido de donde sacar el
+  // cargo por servicio real del plan de pagos -- sigue sin calcularse aqui.
+  const serviceChargeAmount = Number(booking.service_charge || 0);
   const suggestedAmount = totalPaidByTraveler + insuranceCost + optionalServicesRefundable + supplementsRefundable + (refundServiceCharge ? serviceChargeAmount : 0);
 
   return (

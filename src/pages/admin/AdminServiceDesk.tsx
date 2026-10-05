@@ -136,7 +136,7 @@ const AdminServiceDesk: React.FC = () => {
     return () => clearInterval(id);
   }, []);
 
-  const slaStatus = (ticket: any) => {
+  const slaStatus = (ticket: SupportTicket) => {
     const closed = ticket.status === 'resuelto' || ticket.status === 'cancelado' || ticket.status === 'duplicado';
     if (closed) return null;
     if (!ticket.sla_deadline) return null;
@@ -234,7 +234,7 @@ const AdminServiceDesk: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Estado</label>
-                <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value as any); setPage(0); }} className="input text-sm">
+                <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value as SupportTicketStatus | ''); setPage(0); }} className="input text-sm">
                   <option value="">Todos</option>
                   <option value="sin_atender">Sin Atender</option>
                   <option value="en_proceso">En Proceso</option>
@@ -246,7 +246,7 @@ const AdminServiceDesk: React.FC = () => {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Prioridad</label>
-                <select value={filterPriority} onChange={e => { setFilterPriority(e.target.value as any); setPage(0); }} className="input text-sm">
+                <select value={filterPriority} onChange={e => { setFilterPriority(e.target.value as SupportTicketPriority | ''); setPage(0); }} className="input text-sm">
                   <option value="">Todas</option>
                   <option value="baja">Baja</option>
                   <option value="media">Media</option>
@@ -256,7 +256,7 @@ const AdminServiceDesk: React.FC = () => {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
-                <select value={filterType} onChange={e => { setFilterType(e.target.value as any); setPage(0); }} className="input text-sm">
+                <select value={filterType} onChange={e => { setFilterType(e.target.value as SupportTicketType | ''); setPage(0); }} className="input text-sm">
                   <option value="">Todos</option>
                   <option value="traveler">Viajero</option>
                   <option value="agency">Agencia</option>
@@ -365,7 +365,7 @@ const AdminServiceDesk: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-gray-700">
-                          {(ticket.subcategory as any)?.nombre ?? '-'}
+                          {ticket.subcategory?.nombre ?? '-'}
                         </td>
                         <td className="px-4 py-3">
                           <TicketPriorityBadge priority={ticket.prioridad} />
@@ -380,15 +380,15 @@ const AdminServiceDesk: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-gray-600 text-xs">
-                          {(ticket.agente as any) ? (
+                          {ticket.agente ? (
                             <span className="flex items-center gap-1">
                               <User className="h-3 w-3" />
-                              {(ticket.agente as any).first_name}
+                              {ticket.agente.first_name}
                             </span>
-                          ) : (ticket.agencia as any) ? (
+                          ) : ticket.agencia ? (
                             <span className="flex items-center gap-1">
                               <Building2 className="h-3 w-3" />
-                              {(ticket.agencia as any).name}
+                              {ticket.agencia.name}
                             </span>
                           ) : (
                             <span className="text-gray-300">Sin asignar</span>
