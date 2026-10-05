@@ -203,31 +203,31 @@ const BookingPendingPage: React.FC = () => {
                     <span className="font-medium">{formatCurrencyMXN(booking.service_charge ?? 0)}</span>
                   </div>
 
-                  {(booking as any).membership_purchased && (
+                  {booking.membership_purchased && (
                     <div className="flex justify-between text-indigo-700">
-                      <span>Membresía ToursRed Plus ({etiquetaPlanMembresia((booking as any).membership_plan) ?? 'Mensual'}):</span>
-                      <span className="font-medium">+{formatCurrencyMXN(Number((booking as any).membership_cost) || 0)}</span>
+                      <span>Membresía ToursRed Plus ({etiquetaPlanMembresia(booking.membership_plan) ?? 'Mensual'}):</span>
+                      <span className="font-medium">+{formatCurrencyMXN(Number(booking.membership_cost) || 0)}</span>
                     </div>
                   )}
 
-                  {(booking as any).travel_insurance_cost > 0 && (
+                  {(booking.travel_insurance_cost ?? 0) > 0 && (
                     <div className="flex justify-between text-emerald-700">
                       <span>Seguro de Viaje:</span>
-                      <span className="font-medium">+{formatCurrencyMXN((booking as any).travel_insurance_cost)}</span>
+                      <span className="font-medium">+{formatCurrencyMXN(booking.travel_insurance_cost ?? 0)}</span>
                     </div>
                   )}
 
-                  {(booking as any).points_used > 0 && (
+                  {(booking.points_used ?? 0) > 0 && (
                     <div className="flex justify-between text-amber-700">
-                      <span>Puntos ToursRed ({(booking as any).points_used} pts):</span>
-                      <span className="font-medium">-{formatCurrencyMXN((booking as any).points_used / 100)}</span>
+                      <span>Puntos ToursRed ({booking.points_used} pts):</span>
+                      <span className="font-medium">-{formatCurrencyMXN((booking.points_used ?? 0) / 100)}</span>
                     </div>
                   )}
 
-                  {(booking as any).toursred_cash_used > 0 && (
+                  {(booking.toursred_cash_used ?? 0) > 0 && (
                     <div className="flex justify-between text-blue-700">
                       <span>ToursRed Cash:</span>
-                      <span className="font-medium">-{formatCurrencyMXN((booking as any).toursred_cash_used)}</span>
+                      <span className="font-medium">-{formatCurrencyMXN(booking.toursred_cash_used ?? 0)}</span>
                     </div>
                   )}
 
@@ -243,8 +243,8 @@ const BookingPendingPage: React.FC = () => {
                   <p className="text-sm text-yellow-800">
                     <strong>Sin cargo por ahora:</strong> No se realizará ningún cargo hasta que la agencia apruebe tu solicitud.
                     {(() => {
-                      const pointsValue = ((booking as any).points_used || 0) / 100;
-                      const cashUsed = (booking as any).toursred_cash_used || 0;
+                      const pointsValue = (booking.points_used || 0) / 100;
+                      const cashUsed = booking.toursred_cash_used || 0;
                       const totalCovered = pointsValue + cashUsed;
                       const totalToPay = booking.user_payment ?? 0;
                       return totalToPay > 0 && totalCovered >= totalToPay
@@ -292,8 +292,8 @@ const BookingPendingPage: React.FC = () => {
               </div>
               <div>
                 {(() => {
-                  const pointsValue = ((booking as any).points_used || 0) / 100;
-                  const cashUsed = (booking as any).toursred_cash_used || 0;
+                  const pointsValue = (booking.points_used || 0) / 100;
+                  const cashUsed = booking.toursred_cash_used || 0;
                   const totalCovered = pointsValue + cashUsed;
                   const totalToPay = booking.user_payment ?? 0;
                   const autoConfirm = totalToPay > 0 && totalCovered >= totalToPay;
@@ -348,8 +348,8 @@ const BookingPendingPage: React.FC = () => {
               </div>
               <div>
                 {(() => {
-                  const pointsValue = ((booking as any).points_used || 0) / 100;
-                  const cashUsed = (booking as any).toursred_cash_used || 0;
+                  const pointsValue = (booking.points_used || 0) / 100;
+                  const cashUsed = booking.toursred_cash_used || 0;
                   const totalCovered = pointsValue + cashUsed;
                   const totalToPay = booking.user_payment ?? 0;
                   const autoConfirm = totalToPay > 0 && totalCovered >= totalToPay;

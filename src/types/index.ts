@@ -523,6 +523,17 @@ export interface Booking {
   // codigo: si manana se agrega un procesador, el CHECK y esta linea tienen que
   // moverse juntos.
   payment_provider?: 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
+  // Mas columnas reales de `public.bookings` que faltaban aqui. Verificadas
+  // contra las migraciones que las agregaron (20260219, 20260604, 20260702).
+  promo_discount_amount?: number;
+  insurance_discount_amount?: number;
+  membership_purchased?: boolean;
+  membership_plan?: string | null;
+  membership_cost?: number;
+  promotion_id?: string | null;
+  conekta_method?: string | null;
+  bnpl_product_type?: string | null;
+  conekta_sub_charges?: unknown;
 }
 
 /**
