@@ -599,6 +599,7 @@ export interface BookingSupplement {
   rejection_note?: string | null;
   expires_at?: string | null;
   requested_at: string;
+  updated_at: string;
   approved_at?: string | null;
   rejected_at?: string | null;
   paid_at?: string | null;

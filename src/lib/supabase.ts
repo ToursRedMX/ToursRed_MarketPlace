@@ -2062,7 +2062,7 @@ export const deleteTourCategory = async (id: string) => {
 
 // Booking Cancellation Functions
 
-interface CancellationPolicy {
+export interface CancellationPolicy {
   policyType: '100_percent' | '50_percent' | 'no_refund' | 'no_show' | 'pending_approval';
   refundPercentage: number;
   daysBeforeTour: number;
