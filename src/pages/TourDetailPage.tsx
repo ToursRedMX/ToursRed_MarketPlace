@@ -6,6 +6,7 @@ import AgencyReviews from '../components/AgencyReviews';
 import ShareTourModal from '../components/ShareTourModal';
 import { Tour } from '../types';
 import { getTourById, getTourBySlug, resolveTourSlug, supabase, parseDateFromDB } from '../lib/supabase';
+import { comoFila } from '../lib/relacionesSupabase';
 import { isCrawler } from '../utils/isCrawler';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
@@ -141,7 +142,9 @@ const TourDetailPage: React.FC = () => {
             const pointsInfo: DeparturePointInfo[] = tourDeparturePoints
               .filter(tdp => tdp.departure_points)
               .map(tdp => ({
-                ...(tdp.departure_points as any),
+                // `departure_points` es a-uno (la FK sale de `tour_departure_points`),
+                // pero supabase-js lo infiere como arreglo. Ver relacionesSupabase.ts.
+                ...comoFila<Pick<DeparturePointInfo, 'id' | 'name' | 'city' | 'municipality' | 'google_maps_url'>>(tdp.departure_points),
                 display_order: tdp.display_order,
                 departure_time: tdp.departure_time || undefined,
                 special_instructions: tdp.special_instructions || undefined,
@@ -762,7 +765,7 @@ const TourDetailPage: React.FC = () => {
                       <>
                         <h3 className="text-lg font-semibold mt-6 mb-3 flex items-center">
                           <MapPin className="h-5 w-5 mr-2 text-primary-600" />
-                          {(tour as any).activity_type === 'experience'
+                          {tour.activity_type === 'experience'
                             ? 'Lugar de la Experiencia'
                             : tour.tour_type === 'receptivo'
                             ? 'Puntos de Encuentro'
@@ -779,11 +782,11 @@ const TourDetailPage: React.FC = () => {
                                 <p className="text-sm text-gray-600">{point.city}, {point.municipality}</p>
                                 {point.departure_time && (
                                   <p className="text-sm text-primary-700 font-medium mt-1">
-                                    {(tour as any).activity_type === 'experience' ? 'Hora de inicio:' : 'Hora de salida:'}{' '}
+                                    {tour.activity_type === 'experience' ? 'Hora de inicio:' : 'Hora de salida:'}{' '}
                                     {point.departure_time}
                                   </p>
                                 )}
-                                {(tour as any).activity_type === 'experience' && point.departure_time && (
+                                {tour.activity_type === 'experience' && point.departure_time && (
                                   <p className="text-xs text-violet-600 mt-1 flex items-center gap-1">
                                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
                                     Se recomienda llegar al menos 10 minutos antes de la hora de inicio.
@@ -809,7 +812,7 @@ const TourDetailPage: React.FC = () => {
                           ))}
                         </div>
                         <p className="text-sm text-gray-600 mt-3 italic">
-                          {(tour as any).activity_type === 'experience'
+                          {tour.activity_type === 'experience'
                             ? `La experiencia se realiza en ${departurePointsInfo.length === 1 ? 'este lugar' : 'estos lugares'}. Llega al menos 10 minutos antes de tu hora de inicio.`
                             : tour.tour_type === 'receptivo'
                             ? `El tour opera desde ${departurePointsInfo.length === 1 ? 'este punto de encuentro' : 'estos puntos de encuentro'}. Preséntate a tiempo.`
@@ -841,7 +844,7 @@ const TourDetailPage: React.FC = () => {
                           {Array.isArray(tour.pickup_zones) && tour.pickup_zones.length > 0 && (
                             <div className="flex flex-col gap-y-2">
                               <p className="text-sm font-medium text-gray-700">Zonas con costo adicional:</p>
-                              {tour.pickup_zones.map((zone: any, idx: number) => (
+                              {tour.pickup_zones.map((zone, idx: number) => (
                                 <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
                                   <span className="text-sm text-gray-800">{zone.name}</span>
                                   <span className="text-sm font-semibold text-gray-900">
@@ -866,7 +869,7 @@ const TourDetailPage: React.FC = () => {
                           Idiomas Disponibles
                         </h3>
                         <div className="flex flex-wrap gap-2">
-                          {tour.tour_languages.map((lang: any, idx: number) => (
+                          {tour.tour_languages.map((lang, idx: number) => (
                             <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
                               <span className="text-sm font-medium text-blue-800">{lang.language}</span>
                               {lang.extra_cost > 0 && (
@@ -884,46 +887,46 @@ const TourDetailPage: React.FC = () => {
                     )}
 
                     {/* Detalles de Experiencia */}
-                    {tour.tour_type === 'receptivo' && (tour as any).activity_type === 'experience' && (
+                    {tour.tour_type === 'receptivo' && tour.activity_type === 'experience' && (
                       <>
                         <h3 className="text-lg font-semibold mt-6 mb-3 flex items-center gap-2">
                           <Sparkles className="h-5 w-5 text-violet-600" />
                           Lo que Vivirás
                         </h3>
                         <div className="space-y-3">
-                          {(tour as any).unique_experience && (
+                          {tour.unique_experience && (
                             <p className="text-sm text-gray-700 bg-violet-50 border border-violet-200 rounded-lg p-4">
-                              {(tour as any).unique_experience}
+                              {tour.unique_experience}
                             </p>
                           )}
-                          {Array.isArray((tour as any).experience_environment) && (tour as any).experience_environment.length > 0 && (
+                          {Array.isArray(tour.experience_environment) && tour.experience_environment.length > 0 && (
                             <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Ambiente:</p>
                               <div className="flex flex-wrap gap-2">
-                                {(tour as any).experience_environment.map((env: string, idx: number) => (
+                                {tour.experience_environment.map((env: string, idx: number) => (
                                   <span key={idx} className="px-3 py-1 bg-violet-100 text-violet-700 rounded-full text-xs font-medium">{env}</span>
                                 ))}
                               </div>
                             </div>
                           )}
-                          {(tour as any).participation_level && (
+                          {tour.participation_level && (
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium text-gray-700">Participación:</span>
                               <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium capitalize">
-                                {(tour as any).participation_level}
+                                {tour.participation_level}
                               </span>
                             </div>
                           )}
-                          {(tour as any).local_host && (
+                          {tour.local_host && (
                             <div className="flex items-center gap-2 text-sm text-gray-700">
                               <span className="w-5 h-5 bg-violet-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">✓</span>
                               Dirigida por anfitrión local
                             </div>
                           )}
-                          {(tour as any).special_requirements && (
+                          {tour.special_requirements && (
                             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                               <p className="text-xs font-semibold text-amber-700 mb-1">Requisitos del participante:</p>
-                              <p className="text-sm text-amber-800">{(tour as any).special_requirements}</p>
+                              <p className="text-sm text-amber-800">{tour.special_requirements}</p>
                             </div>
                           )}
                         </div>
@@ -931,110 +934,110 @@ const TourDetailPage: React.FC = () => {
                     )}
 
                     {/* Detalles del Traslado */}
-                    {tour.tour_type === 'receptivo' && (tour as any).activity_type === 'transport' && (
+                    {tour.tour_type === 'receptivo' && tour.activity_type === 'transport' && (
                       <>
                         <h3 className="text-lg font-semibold mt-6 mb-3 flex items-center gap-2">
                           <Bus className="h-5 w-5 text-blue-600" />
                           Detalles del Traslado
                         </h3>
                         <div className="space-y-3">
-                          {(tour as any).transfer_type && (
+                          {tour.transfer_type && (
                             <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                               <Bus className="h-5 w-5 text-blue-600 flex-shrink-0" />
                               <div>
                                 <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Tipo de Traslado</p>
                                 <p className="text-sm font-medium text-blue-900 mt-0.5">
-                                  {(tour as any).transfer_type === 'aeropuerto_hotel' ? 'Aeropuerto → Hotel'
-                                    : (tour as any).transfer_type === 'hotel_aeropuerto' ? 'Hotel → Aeropuerto'
-                                    : (tour as any).transfer_type === 'hotel_hotel' ? 'Hotel → Hotel'
-                                    : (tour as any).transfer_type === 'punto_punto' ? 'Punto → Punto'
-                                    : (tour as any).transfer_type === 'excursion_retorno' ? 'Excursión con Retorno'
+                                  {tour.transfer_type === 'aeropuerto_hotel' ? 'Aeropuerto → Hotel'
+                                    : tour.transfer_type === 'hotel_aeropuerto' ? 'Hotel → Aeropuerto'
+                                    : tour.transfer_type === 'hotel_hotel' ? 'Hotel → Hotel'
+                                    : tour.transfer_type === 'punto_punto' ? 'Punto → Punto'
+                                    : tour.transfer_type === 'excursion_retorno' ? 'Excursión con Retorno'
                                     : 'Otro'}
                                 </p>
                               </div>
-                              {(tour as any).estimated_minutes && (
+                              {tour.estimated_minutes && (
                                 <div className="ml-auto text-right">
                                   <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Duración aprox.</p>
-                                  <p className="text-sm font-medium text-blue-900 mt-0.5">{(tour as any).estimated_minutes} min</p>
+                                  <p className="text-sm font-medium text-blue-900 mt-0.5">{tour.estimated_minutes} min</p>
                                 </div>
                               )}
                             </div>
                           )}
-                          {(tour as any).transport_service_info && (
-                            <p className="text-sm text-gray-700 whitespace-pre-line">{(tour as any).transport_service_info}</p>
+                          {tour.transport_service_info && (
+                            <p className="text-sm text-gray-700 whitespace-pre-line">{tour.transport_service_info}</p>
                           )}
                         </div>
                       </>
                     )}
 
                     {/* Detalles de la Entrada */}
-                    {tour.tour_type === 'receptivo' && (tour as any).activity_type === 'ticket' && (
+                    {tour.tour_type === 'receptivo' && tour.activity_type === 'ticket' && (
                       <>
                         <h3 className="text-lg font-semibold mt-6 mb-3 flex items-center gap-2">
                           <Tag className="h-5 w-5 text-orange-600" />
                           Detalles de la Entrada
                         </h3>
                         <div className="space-y-3">
-                          {(tour as any).ticket_type && (
+                          {tour.ticket_type && (
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium text-gray-700">Tipo:</span>
                               <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium capitalize">
-                                {(tour as any).ticket_type === 'parque_tematico' ? 'Parque Temático'
-                                  : (tour as any).ticket_type === 'museo' ? 'Museo / Galería'
-                                  : (tour as any).ticket_type === 'zona_arqueologica' ? 'Zona Arqueológica'
-                                  : (tour as any).ticket_type === 'show_evento' ? 'Show / Evento'
-                                  : (tour as any).ticket_type === 'atraccion_natural' ? 'Atracción Natural'
+                                {tour.ticket_type === 'parque_tematico' ? 'Parque Temático'
+                                  : tour.ticket_type === 'museo' ? 'Museo / Galería'
+                                  : tour.ticket_type === 'zona_arqueologica' ? 'Zona Arqueológica'
+                                  : tour.ticket_type === 'show_evento' ? 'Show / Evento'
+                                  : tour.ticket_type === 'atraccion_natural' ? 'Atracción Natural'
                                   : 'Otro'}
                               </span>
                             </div>
                           )}
-                          {(tour as any).ticket_validity_type && (
+                          {tour.ticket_validity_type && (
                             <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
                               <p className="text-xs font-semibold text-orange-700 mb-1">Vigencia</p>
                               <p className="text-sm text-orange-900">
-                                {(tour as any).ticket_validity_type === 'open' ? 'Entrada abierta (sin fecha fija)'
-                                  : (tour as any).ticket_validity_type === 'fixed_date' && (tour as any).ticket_valid_from
-                                    ? `Fecha específica: ${(tour as any).ticket_valid_from}`
-                                    : (tour as any).ticket_validity_type === 'date_range' && (tour as any).ticket_valid_from
-                                      ? `Válida del ${(tour as any).ticket_valid_from} al ${(tour as any).ticket_valid_to || '...'}`
+                                {tour.ticket_validity_type === 'open' ? 'Entrada abierta (sin fecha fija)'
+                                  : tour.ticket_validity_type === 'fixed_date' && tour.ticket_valid_from
+                                    ? `Fecha específica: ${tour.ticket_valid_from}`
+                                    : tour.ticket_validity_type === 'date_range' && tour.ticket_valid_from
+                                      ? `Válida del ${tour.ticket_valid_from} al ${tour.ticket_valid_to || '...'}`
                                       : '—'}
                               </p>
                             </div>
                           )}
-                          {((tour as any).ticket_redemption_method || (tour as any).ticket_delivery_method) && (
+                          {(tour.ticket_redemption_method || tour.ticket_delivery_method) && (
                             <div className="grid grid-cols-2 gap-3">
-                              {(tour as any).ticket_redemption_method && (
+                              {tour.ticket_redemption_method && (
                                 <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                                   <p className="text-xs font-semibold text-gray-600 mb-1">Método de canje</p>
                                   <p className="text-sm text-gray-800 capitalize">
-                                    {(tour as any).ticket_redemption_method === 'qr_codigo' ? 'Código QR'
-                                      : (tour as any).ticket_redemption_method === 'voucher_impreso' ? 'Voucher impreso'
-                                      : (tour as any).ticket_redemption_method === 'nombre_lista' ? 'Nombre en lista'
+                                    {tour.ticket_redemption_method === 'qr_codigo' ? 'Código QR'
+                                      : tour.ticket_redemption_method === 'voucher_impreso' ? 'Voucher impreso'
+                                      : tour.ticket_redemption_method === 'nombre_lista' ? 'Nombre en lista'
                                       : 'Boleto físico'}
                                   </p>
                                 </div>
                               )}
-                              {(tour as any).ticket_delivery_method && (
+                              {tour.ticket_delivery_method && (
                                 <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                                   <p className="text-xs font-semibold text-gray-600 mb-1">Entrega</p>
                                   <p className="text-sm text-gray-800">
-                                    {(tour as any).ticket_delivery_method === 'email' ? 'Correo electrónico'
-                                      : (tour as any).ticket_delivery_method === 'whatsapp' ? 'WhatsApp'
-                                      : (tour as any).ticket_delivery_method === 'punto_recogida' ? 'Punto de recogida'
+                                    {tour.ticket_delivery_method === 'email' ? 'Correo electrónico'
+                                      : tour.ticket_delivery_method === 'whatsapp' ? 'WhatsApp'
+                                      : tour.ticket_delivery_method === 'punto_recogida' ? 'Punto de recogida'
                                       : 'En taquilla'}
                                   </p>
                                 </div>
                               )}
                             </div>
                           )}
-                          {(tour as any).ticket_access_instructions && (
+                          {tour.ticket_access_instructions && (
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                               <p className="text-xs font-semibold text-blue-700 mb-1">Instrucciones de acceso</p>
-                              <p className="text-sm text-blue-900">{(tour as any).ticket_access_instructions}</p>
+                              <p className="text-sm text-blue-900">{tour.ticket_access_instructions}</p>
                             </div>
                           )}
-                          {(tour as any).ticket_service_info && (
-                            <p className="text-sm text-gray-700 whitespace-pre-line">{(tour as any).ticket_service_info}</p>
+                          {tour.ticket_service_info && (
+                            <p className="text-sm text-gray-700 whitespace-pre-line">{tour.ticket_service_info}</p>
                           )}
                         </div>
                       </>
@@ -1193,16 +1196,16 @@ const TourDetailPage: React.FC = () => {
                   </div>
                 )}
 
-                {tour.tour_type === 'receptivo' && (tour as any).activity_type && (tour as any).activity_type !== 'guided_tour' && (
+                {tour.tour_type === 'receptivo' && tour.activity_type && tour.activity_type !== 'guided_tour' && (
                   <div className="flex items-start">
-                    {(tour as any).activity_type === 'transport' && <Bus className="h-5 w-5 text-blue-600 mr-3 mt-0.5" />}
-                    {(tour as any).activity_type === 'experience' && <Sparkles className="h-5 w-5 text-violet-600 mr-3 mt-0.5" />}
-                    {(tour as any).activity_type === 'ticket' && <Tag className="h-5 w-5 text-orange-600 mr-3 mt-0.5" />}
+                    {tour.activity_type === 'transport' && <Bus className="h-5 w-5 text-blue-600 mr-3 mt-0.5" />}
+                    {tour.activity_type === 'experience' && <Sparkles className="h-5 w-5 text-violet-600 mr-3 mt-0.5" />}
+                    {tour.activity_type === 'ticket' && <Tag className="h-5 w-5 text-orange-600 mr-3 mt-0.5" />}
                     <div>
                       <h4 className="font-medium">Tipo de Actividad</h4>
                       <p className="text-gray-600">
-                        {(tour as any).activity_type === 'experience' ? 'Experiencia'
-                          : (tour as any).activity_type === 'transport' ? 'Traslado'
+                        {tour.activity_type === 'experience' ? 'Experiencia'
+                          : tour.activity_type === 'transport' ? 'Traslado'
                           : 'Entrada'}
                       </p>
                     </div>
