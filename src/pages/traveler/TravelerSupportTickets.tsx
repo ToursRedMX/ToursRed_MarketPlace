@@ -102,8 +102,8 @@ const TravelerSupportTickets: React.FC = () => {
 
   const filtered = tickets.filter(t =>
     !search || t.folio.includes(search.toUpperCase()) ||
-    (t.category as any)?.nombre?.toLowerCase().includes(search.toLowerCase()) ||
-    (t.subcategory as any)?.nombre?.toLowerCase().includes(search.toLowerCase())
+    t.category?.nombre?.toLowerCase().includes(search.toLowerCase()) ||
+    t.subcategory?.nombre?.toLowerCase().includes(search.toLowerCase())
   );
 
   const isClosed = (t: SupportTicket) =>
@@ -122,7 +122,7 @@ const TravelerSupportTickets: React.FC = () => {
 
   const slaRemaining = (ticket: SupportTicket) => {
     if (!ticket.subcategory) return null;
-    const sla = (ticket.subcategory as any).sla_horas ?? 24;
+    const sla = ticket.subcategory?.sla_horas ?? 24;
     const created = new Date(ticket.created_at).getTime();
     const deadline = created + sla * 3600 * 1000;
     const remaining = deadline - now;
@@ -197,7 +197,7 @@ const TravelerSupportTickets: React.FC = () => {
                       <TicketPriorityBadge priority={ticket.prioridad} />
                     </div>
                     <p className="text-sm font-medium text-gray-800 mb-1">
-                      {(ticket.subcategory as any)?.nombre ?? 'Sin subcategoria'}
+                      {ticket.subcategory?.nombre ?? 'Sin subcategoria'}
                     </p>
                     <p className="text-xs text-gray-500 truncate">{ticket.descripcion}</p>
                   </div>
@@ -234,7 +234,7 @@ const TravelerSupportTickets: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="text-xs text-gray-500 mb-1">
-                  {(selectedTicket.category as any)?.nombre} › {(selectedTicket.subcategory as any)?.nombre}
+                  {selectedTicket.category?.nombre} › {selectedTicket.subcategory?.nombre}
                 </p>
                 <p className="text-sm text-gray-800">{selectedTicket.descripcion}</p>
                 <p className="text-xs text-gray-400 mt-2">
