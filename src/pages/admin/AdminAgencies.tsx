@@ -54,6 +54,8 @@ interface Agency {
   booking_count?: number;
   total_revenue?: number;
   platform_commission?: number;
+  account_executive_id?: string | null;
+  _executive_name?: string | null;
 }
 
 const AdminAgencies: React.FC = () => {
@@ -136,6 +138,7 @@ const AdminAgencies: React.FC = () => {
           name,
           is_active,
           created_at,
+          updated_at,
           contact_phone,
           contact_email,
           website,
@@ -220,10 +223,15 @@ const AdminAgencies: React.FC = () => {
 
             console.log(`💰 ${agency.name} - Revenue: ${totalRevenue}, Commission: ${platformCommission}`);
 
+            // `users` es a-uno: la FK es agencies.user_id -> users. supabase-js
+            // lo infiere como arreglo; se normaliza aqui una sola vez porque el
+            // resto del archivo (busqueda, orden, render) lo trata como objeto.
+            const usersRow = comoFila<{ first_name?: string; last_name?: string; email: string; is_approved?: boolean } | null>(agency.users);
+
             return {
               ...agency,
-              // `users` es a-uno: la FK es agencies.user_id -> users.
-              is_approved: comoFila<{ is_approved?: boolean } | null>(agency.users)?.is_approved,
+              users: usersRow ?? undefined,
+              is_approved: usersRow?.is_approved,
               tour_count: tourCount || 0,
               booking_count: bookingCount || 0,
               total_revenue: totalRevenue,
@@ -233,6 +241,7 @@ const AdminAgencies: React.FC = () => {
             console.error('Error obteniendo estadísticas para agencia:', agency.id, err);
             return {
               ...agency,
+              users: comoFila<{ first_name?: string; last_name?: string; email: string; is_approved?: boolean } | null>(agency.users) ?? undefined,
               tour_count: 0,
               booking_count: 0,
               total_revenue: 0,
@@ -243,7 +252,7 @@ const AdminAgencies: React.FC = () => {
       );
 
       // Fetch executive names for assigned agencies
-      const execIds = [...new Set(agenciesWithStats.map((a: any) => a.account_executive_id).filter(Boolean))];
+      const execIds = [...new Set(agenciesWithStats.map((a) => a.account_executive_id).filter(Boolean))];
       const execNameMap: Record<string, string> = {};
       if (execIds.length > 0) {
         const { data: execs, error: errorEjecutivos } = await supabase
@@ -253,10 +262,10 @@ const AdminAgencies: React.FC = () => {
 
         // Solo afecta el nombre que se pinta en la columna del ejecutivo.
         if (errorEjecutivos) console.error('❌ Error leyendo los ejecutivos de cuenta:', errorEjecutivos);
-        (execs || []).forEach((e: any) => { execNameMap[e.id] = `${e.first_name} ${e.last_name}`; });
+        (execs || []).forEach((e) => { execNameMap[e.id] = `${e.first_name} ${e.last_name}`; });
       }
 
-      const agenciesWithExec = agenciesWithStats.map((a: any) => ({
+      const agenciesWithExec = agenciesWithStats.map((a) => ({
         ...a,
         _executive_name: a.account_executive_id ? (execNameMap[a.account_executive_id] || 'Ejecutivo') : null,
       }));
@@ -296,14 +305,14 @@ const AdminAgencies: React.FC = () => {
           // Resolver datos del ejecutivo si la agencia tiene uno asignado
           let executiveName = 'ToursRed';
           let executiveEmail = 'agencias@toursred.com.mx';
-          if ((agency as any).account_executive_id && (agency as any)._executive_name) {
-            executiveName = (agency as any)._executive_name;
+          if (agency.account_executive_id && agency._executive_name) {
+            executiveName = agency._executive_name;
             // Buscar email del ejecutivo
             try {
               const { data: execData, error: errorEmailEjecutivo } = await supabase
                 .from('account_executives')
                 .select('email')
-                .eq('id', (agency as any).account_executive_id)
+                .eq('id', agency.account_executive_id)
                 .maybeSingle();
               // Sin el correo, el ejecutivo no se entera de la aprobacion.
               if (errorEmailEjecutivo) console.error('❌ Error leyendo el correo del ejecutivo:', errorEmailEjecutivo);
@@ -650,8 +659,8 @@ const AdminAgencies: React.FC = () => {
     .sort((a, b) => {
       if (!sortColumn) return 0;
 
-      let aValue: any;
-      let bValue: any;
+      let aValue: string | number;
+      let bValue: string | number;
 
       switch (sortColumn) {
         case 'name':
@@ -1023,10 +1032,10 @@ const AdminAgencies: React.FC = () => {
                       {getApprovalBadge(agency.is_approved)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {(agency as any).account_executive_id ? (
+                      {agency.account_executive_id ? (
                         <div className="text-xs">
                           <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-1 rounded-full font-medium">
-                            {(agency as any)._executive_name || 'Asignado'}
+                            {agency._executive_name || 'Asignado'}
                           </span>
                         </div>
                       ) : (

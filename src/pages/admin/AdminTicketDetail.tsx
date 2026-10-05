@@ -142,13 +142,13 @@ const AdminTicketDetail: React.FC = () => {
     setError(null);
 
     const actorName = await getActorName();
-    const historyEvents: any[] = [];
+    const historyEvents = [];
     const updates: Partial<SupportTicket> = {};
 
     if (newStatus && newStatus !== ticket.status) {
       updates.status = newStatus;
       if (newStatus === 'resuelto' || newStatus === 'cancelado' || newStatus === 'duplicado') {
-        (updates as any).closed_at = new Date().toISOString();
+        updates.closed_at = new Date().toISOString();
       }
       historyEvents.push({
         ticket_id: ticket.id,
@@ -174,7 +174,7 @@ const AdminTicketDetail: React.FC = () => {
 
     const agentChanged = (newAgentId || null) !== ticket.agente_asignado_id;
     if (agentChanged) {
-      (updates as any).agente_asignado_id = newAgentId || null;
+      updates.agente_asignado_id = newAgentId || null;
       const agent = agents.find(a => a.id === newAgentId);
       const isReassign = !!ticket.agente_asignado_id;
       historyEvents.push({
@@ -190,7 +190,7 @@ const AdminTicketDetail: React.FC = () => {
 
     const agencyChanged = (newAgencyId || null) !== ticket.agencia_asignada_id;
     if (agencyChanged) {
-      (updates as any).agencia_asignada_id = newAgencyId || null;
+      updates.agencia_asignada_id = newAgencyId || null;
       const agency = agencies.find(a => a.id === newAgencyId);
       const isReassign = !!ticket.agencia_asignada_id;
       historyEvents.push({
@@ -206,7 +206,7 @@ const AdminTicketDetail: React.FC = () => {
 
     const relatedChanged = (relatedTicketId || null) !== ticket.ticket_relacionado_id;
     if (relatedChanged) {
-      (updates as any).ticket_relacionado_id = relatedTicketId || null;
+      updates.ticket_relacionado_id = relatedTicketId || null;
     }
 
     if (Object.keys(updates).length > 0) {
@@ -433,7 +433,7 @@ const AdminTicketDetail: React.FC = () => {
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="text-xs text-gray-500 mb-1">
-                    {(ticket.category as any)?.nombre} › {(ticket.subcategory as any)?.nombre}
+                    {ticket.category?.nombre} › {ticket.subcategory?.nombre}
                   </p>
                   <div className="flex items-center gap-3 text-sm text-gray-500">
                     <div className="flex items-center gap-1">
@@ -504,7 +504,7 @@ const AdminTicketDetail: React.FC = () => {
                         name="commentType"
                         value={opt.value}
                         checked={commentType === opt.value}
-                        onChange={() => setCommentType(opt.value as any)}
+                        onChange={() => setCommentType(opt.value as 'interno' | 'respuesta_usuario')}
                         className="text-primary-600"
                       />
                       <span className="flex items-center gap-1 text-sm text-gray-700">
@@ -621,10 +621,10 @@ const AdminTicketDetail: React.FC = () => {
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Ticket relacionado</p>
                 <Link
-                  to={`/admin/service-desk/tickets/${(ticket.ticket_relacionado as any).id}`}
+                  to={`/admin/service-desk/tickets/${ticket.ticket_relacionado?.id}`}
                   className="flex items-center gap-2 text-primary-600 hover:text-primary-700 text-sm font-mono"
                 >
-                  {(ticket.ticket_relacionado as any).folio}
+                  {ticket.ticket_relacionado?.folio}
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Link>
               </div>
@@ -648,7 +648,7 @@ const AdminTicketDetail: React.FC = () => {
               )}
               <div className="flex justify-between">
                 <span>SLA objetivo</span>
-                <span>{(ticket.subcategory as any)?.sla_horas ?? 24}h</span>
+                <span>{ticket.subcategory?.sla_horas ?? 24}h</span>
               </div>
             </div>
           </div>

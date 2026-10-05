@@ -5,10 +5,55 @@ import { TrendingUp, Download, FileText, CheckCircle, Clock, Eye, CreditCard, Fi
 import AgencyCfdiList from '../../components/AgencyCfdiList';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { format } from 'date-fns';
-import type { FinancialSummary, TourFinancialSummary } from '../../types';
+import type { FinancialSummary, TourFinancialSummary, Booking, CommissionRecord, BookingTraveler } from '../../types';
+import { comoFilas } from '../../lib/relacionesSupabase';
+
+/** `tour:tours!inner(...)` es a-uno, pero supabase-js lo infiere como arreglo. Ver relacionesSupabase.ts. */
+interface AgencyBookingRow extends Booking {
+  tour: { name: string; start_date: string; agency_id: string } | null;
+}
+
+/** `bookings!inner(...)` y, dentro, `tours!inner(...)` son a-uno en cadena. */
+interface CommissionRecordWithBooking extends CommissionRecord {
+  bookings: {
+    tour_id: string;
+    booking_date: string;
+    payment_status?: string;
+    status: string;
+    cancelled_at?: string | null;
+    user_payment?: number;
+    tours: { name: string; start_date: string } | null;
+  } | null;
+}
+
+interface ProcessedPayment {
+  payment_date: string;
+  payment_method: string;
+  total_amount: number;
+  records_count: number;
+  payment_receipt_url?: string | null;
+  payment_notes?: string | null;
+}
+
+interface PenaltyRecordRow {
+  id: string;
+  created_at: string;
+  cancellation_type: string;
+  cancellation_policy_type: string;
+  gross_penalty: number;
+  agency_net_amount: number;
+  status: 'pending' | 'processed';
+  processed_at?: string | null;
+  tours: { name: string; start_date: string } | null;
+}
 import jsPDF from 'jspdf';
-import { autoTable } from 'jspdf-autotable';
+import { autoTable, Table } from 'jspdf-autotable';
 import { downloadExcel } from '../../utils/excelExport';
+
+/** `jspdf-autotable` le agrega `lastAutoTable` a la instancia de jsPDF, pero no lo declara en sus tipos. */
+interface JsPDFWithAutoTable extends jsPDF {
+  lastAutoTable: Table;
+}
 
 const AgencyFinancials: React.FC = () => {
   const { agencyId: resolvedAgencyId } = useAgencyId();
@@ -23,8 +68,8 @@ const AgencyFinancials: React.FC = () => {
     total_lifetime: 0,
   });
   const [tourSummaries, setTourSummaries] = useState<TourFinancialSummary[]>([]);
-  const [processedPayments, setProcessedPayments] = useState<any[]>([]);
-  const [penaltyRecords, setPenaltyRecords] = useState<any[]>([]);
+  const [processedPayments, setProcessedPayments] = useState<ProcessedPayment[]>([]);
+  const [penaltyRecords, setPenaltyRecords] = useState<PenaltyRecordRow[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -70,9 +115,10 @@ const AgencyFinancials: React.FC = () => {
         query = query.eq('status', statusFilter);
       }
 
-      const { data: records, error } = await query;
+      const { data: rawRecords, error } = await query;
 
       if (error) throw error;
+      const records = comoFilas<CommissionRecordWithBooking>(rawRecords);
 
       // records SI se usa: alimenta los resumenes de abajo. Lo que sobraba era
       // guardarlo ademas en estado, porque commissionRecords no se leia en
@@ -88,7 +134,7 @@ const AgencyFinancials: React.FC = () => {
       // cree que no le descontaron nada.
       if (errorPenalizaciones) throw errorPenalizaciones;
 
-      setPenaltyRecords(penaltiesData || []);
+      setPenaltyRecords(comoFilas<PenaltyRecordRow>(penaltiesData));
 
       const pending = records?.filter(r => {
         if (r.status === 'voided' || r.status === 'disputed') return false;
@@ -169,7 +215,7 @@ const AgencyFinancials: React.FC = () => {
         new Date(b.tour_date).getTime() - new Date(a.tour_date).getTime()
       ));
 
-      const processedPaymentsMap = new Map<string, any>();
+      const processedPaymentsMap = new Map<string, ProcessedPayment>();
 
       records?.filter(r => {
         if (r.status === 'voided' || r.status === 'disputed') return false;
@@ -178,12 +224,12 @@ const AgencyFinancials: React.FC = () => {
         if (booking.payment_status !== 'succeeded') return false;
         return r.status === 'processed' && r.processed_at;
       }).forEach(record => {
-        const paymentDate = format(new Date(record.processed_at), 'yyyy-MM-dd');
+        const paymentDate = format(new Date(record.processed_at!), 'yyyy-MM-dd');
         const paymentMethod = record.payment_method || 'bank_transfer';
 
         if (!processedPaymentsMap.has(paymentDate)) {
           processedPaymentsMap.set(paymentDate, {
-            payment_date: record.processed_at,
+            payment_date: record.processed_at!,
             payment_method: paymentMethod,
             total_amount: 0,
             records_count: 0,
@@ -288,7 +334,7 @@ const AgencyFinancials: React.FC = () => {
         headStyles: { fillColor: [79, 70, 229] },
       });
 
-      let currentY = (doc as any).lastAutoTable.finalY + 15;
+      let currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY! + 15;
 
       doc.setFontSize(14);
       doc.text('Detalle por Tour', 20, currentY);
@@ -312,7 +358,7 @@ const AgencyFinancials: React.FC = () => {
         styles: { fontSize: 8 },
       });
 
-      currentY = (doc as any).lastAutoTable.finalY + 15;
+      currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY! + 15;
 
       if (processedPayments.length > 0) {
         doc.setFontSize(14);
@@ -369,9 +415,10 @@ const AgencyFinancials: React.FC = () => {
         bookingsQuery = bookingsQuery.lte('booking_date', endDate);
       }
 
-      const { data: bookings, error: bookingsError } = await bookingsQuery;
+      const { data: rawBookings, error: bookingsError } = await bookingsQuery;
 
       if (bookingsError) throw bookingsError;
+      const bookings = comoFilas<AgencyBookingRow>(rawBookings);
 
       const userIds = [...new Set(bookings?.map(b => b.user_id).filter(Boolean))];
       const usersMap = new Map();
@@ -389,7 +436,7 @@ const AgencyFinancials: React.FC = () => {
       }
 
       const bookingIds = bookings?.map(b => b.id) || [];
-      const travelersMap = new Map<string, any[]>();
+      const travelersMap = new Map<string, BookingTraveler[]>();
 
       if (bookingIds.length > 0) {
         const { data: travelersData, error: errorViajeros } = await supabase
@@ -420,7 +467,7 @@ const AgencyFinancials: React.FC = () => {
         commissionRecordsData?.map(cr => [cr.booking_id, cr]) || []
       );
 
-      const getBookingStatusLabel = (booking: any) => {
+      const getBookingStatusLabel = (booking: AgencyBookingRow) => {
         if (booking.cancelled_at || booking.status === 'cancelled') return 'Cancelada';
         if (booking.approval_status === 'rejected') return 'Rechazada';
         if (booking.approval_status === 'pending') return 'Pendiente Aprobación';
@@ -429,7 +476,7 @@ const AgencyFinancials: React.FC = () => {
         return booking.status || 'Desconocido';
       };
 
-      const getCommissionStatusLabel = (booking: any, commission: any) => {
+      const getCommissionStatusLabel = (booking: AgencyBookingRow, commission: CommissionRecord | undefined) => {
         if (booking.cancelled_at || booking.status === 'cancelled') return 'Cancelada';
         if (booking.approval_status === 'rejected') return 'Rechazada';
         if (booking.payment_status !== 'succeeded') return 'Sin Comisión';
@@ -536,7 +583,7 @@ const AgencyFinancials: React.FC = () => {
         }) || []),
       ];
 
-      const travelersSheet = [
+      const travelersSheet: (string | number)[][] = [
         ['DETALLE DE VIAJEROS POR RESERVA'],
         [''],
         [
@@ -553,7 +600,7 @@ const AgencyFinancials: React.FC = () => {
 
       bookings?.forEach(booking => {
         const travelers = travelersMap.get(booking.id) || [];
-        travelers.forEach((traveler: any) => {
+        travelers.forEach((traveler) => {
           travelersSheet.push([
             booking.booking_code || booking.id.slice(0, 8),
             booking.tour?.name || 'N/A',

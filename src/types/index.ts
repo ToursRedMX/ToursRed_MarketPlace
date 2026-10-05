@@ -523,6 +523,7 @@ export interface Booking {
   // codigo: si manana se agrega un procesador, el CHECK y esta linea tienen que
   // moverse juntos.
   payment_provider?: 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
+  membership_service_fee_saved?: number;
 }
 
 /**
@@ -728,9 +729,14 @@ export interface CommissionRecord {
   service_charge_amount: number;
   platform_total_revenue: number;
   agency_net_amount: number;
-  status: 'pending' | 'processed' | 'paid_out' | 'disputed';
+  // El CHECK real (`20260321050136`) agrega `voided` sobre el union original:
+  // una comision anulada al cancelarse la reserva que la genero.
+  status: 'pending' | 'processed' | 'paid_out' | 'disputed' | 'voided';
   processed_at?: string;
   created_at: string;
+  payment_method?: string | null;
+  payment_receipt_url?: string | null;
+  payment_notes?: string | null;
 }
 
 export interface Review {
@@ -1193,6 +1199,7 @@ export interface SupportTicket {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  sla_deadline?: string | null;
   category?: SupportCategory;
   subcategory?: SupportSubcategory;
   agente?: { id: string; first_name: string; last_name: string; email: string };

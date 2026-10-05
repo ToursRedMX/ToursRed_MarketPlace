@@ -50,8 +50,8 @@ const BookingFlowStep1: React.FC = () => {
 
   const tour = flow.tour;
   const isReceptivo = tour?.tour_type === 'receptivo';
-  const isPrivateTransfer = isReceptivo && (tour as any).activity_type === 'transport' && (tour as any).receptivo_modality === 'privado';
-  const isTransferCustomTime = isReceptivo && (tour as any).transfer_custom_time === true;
+  const isPrivateTransfer = isReceptivo && tour?.activity_type === 'transport' && tour?.receptivo_modality === 'privado';
+  const isTransferCustomTime = isReceptivo && tour?.transfer_custom_time === true;
   const hasRestrictions = isReceptivo && (tour?.restriction_pregnant || tour?.restriction_disability || tour?.restriction_physical);
 
   const [selectedDate, setSelectedDate] = useState<Date | null>(
@@ -161,7 +161,7 @@ const BookingFlowStep1: React.FC = () => {
     if (isReceptivo && isTransferCustomTime && !selectedDate) return false;
     if (isTransferCustomTime && !customTime) return false;
     if (availableSpots !== null && totalTravelers > availableSpots) return false;
-    if (isPrivateTransfer && (tour as any).private_vehicle_capacity && totalTravelers > (tour as any).private_vehicle_capacity) return false;
+    if (isPrivateTransfer && tour.private_vehicle_capacity && totalTravelers > tour.private_vehicle_capacity) return false;
     if (isValidatingAdvance) return false;
     return true;
   };
@@ -194,8 +194,8 @@ const BookingFlowStep1: React.FC = () => {
       return;
     }
 
-    if (isPrivateTransfer && (tour as any).private_vehicle_capacity && totalTravelers > (tour as any).private_vehicle_capacity) {
-      setError(`Este vehiculo tiene capacidad maxima de ${(tour as any).private_vehicle_capacity} pasajeros.`);
+    if (isPrivateTransfer && tour.private_vehicle_capacity && totalTravelers > tour.private_vehicle_capacity) {
+      setError(`Este vehiculo tiene capacidad maxima de ${tour.private_vehicle_capacity} pasajeros.`);
       return;
     }
 
@@ -421,9 +421,9 @@ const BookingFlowStep1: React.FC = () => {
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Numero de Viajeros
-            {isPrivateTransfer && (tour as any).private_vehicle_capacity && (
+            {isPrivateTransfer && tour.private_vehicle_capacity && (
               <span className="ml-2 text-xs font-normal text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">
-                Max. {(tour as any).private_vehicle_capacity} pasajeros por vehiculo
+                Max. {tour.private_vehicle_capacity} pasajeros por vehiculo
               </span>
             )}
           </label>
