@@ -171,7 +171,7 @@ const TourCatalogPage: React.FC = () => {
             if (matchingFeatured.length > 0) {
               const featuredIds = new Set(matchingFeatured.map((t) => t.id));
               const organic = (data || []).filter((t) => !featuredIds.has(t.id));
-              setTours([...matchingFeatured, ...organic]);
+              setTours([...matchingFeatured, ...organic] as unknown as Tour[]);
               setFeaturedSlotMapCatalog(featuredResult.slotMap);
               setFeaturedCount(matchingFeatured.length);
               setTotalCount((count ?? data?.length ?? 0) + matchingFeatured.length);

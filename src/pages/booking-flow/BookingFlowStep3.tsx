@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
-import { totalTravelerCount } from '../../types/booking-flow';
+import { totalTravelerCount, FlowOptionalService } from '../../types/booking-flow';
 import type { TourOptionalService } from '../../types';
 import SeatMapPicker from '../../components/seats/SeatMapPicker';
 
@@ -31,8 +31,8 @@ const BookingFlowStep3: React.FC = () => {
   // 28/32/33, que siempre lo tuvieron.
   const hasSeatMap = !!tour?.vehicle_map_type && !isPrivateTransfer;
   const hasRestrictions = isReceptivo && (tour.restriction_pregnant || tour.restriction_disability || tour.restriction_physical);
-  const tourLanguages: any[] = Array.isArray(tour?.tour_languages) ? tour.tour_languages : [];
-  const pickupZones: any[] = Array.isArray(tour?.pickup_zones) ? tour.pickup_zones : [];
+  const tourLanguages = Array.isArray(tour?.tour_languages) ? tour.tour_languages : [];
+  const pickupZones = Array.isArray(tour?.pickup_zones) ? tour.pickup_zones : [];
 
   const [optionalServices, setOptionalServices] = useState<TourOptionalService[]>([]);
   const [optionalServiceQuantities, setOptionalServiceQuantities] = useState<Record<string, number>>({});
@@ -60,7 +60,7 @@ const BookingFlowStep3: React.FC = () => {
   const holdIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const totalTravelers = totalTravelerCount(flow.travelerCounts);
-  const isInsuranceApplicable = insuranceEnabled && !['experience', 'transport', 'ticket'].includes((tour as any).activity_type as string) && !isForeignTraveler && !(tour as any).includes_insurance;
+  const isInsuranceApplicable = insuranceEnabled && !['experience', 'transport', 'ticket'].includes(tour?.activity_type ?? '') && !isForeignTraveler && !tour?.includes_insurance;
 
   const slotId = flow.selectedSlot?.id || null;
 
@@ -169,7 +169,7 @@ const BookingFlowStep3: React.FC = () => {
             setLoadError('No pudimos verificar la disponibilidad de los servicios adicionales. Recarga la pagina.');
           }
           if (capData) {
-            setServiceCapacities(capData.map((c: any) => ({
+            setServiceCapacities(capData.map((c: { service_id: string; remaining_capacity: number | null }) => ({
               serviceId: c.service_id,
               remaining: c.remaining_capacity,
             })));
@@ -320,7 +320,7 @@ const BookingFlowStep3: React.FC = () => {
     // Build optional services array for the flow state
     const extrasServiceChargeRate = serviceChargePct / 100;
     const extrasAgencyCommissionRate = optionalServiceCommissionPct / 100;
-    const allExtras: any[] = [];
+    const allExtras: FlowOptionalService[] = [];
 
     for (const svc of optionalServices) {
       const qty = optionalServiceQuantities[svc.id] || 0;
@@ -342,7 +342,7 @@ const BookingFlowStep3: React.FC = () => {
     }
 
     const selectedZoneData = flow.pickupType === 'pickup' && flow.pickupZoneName && flow.pickupZoneName !== 'free'
-      ? pickupZones.find((z: any) => z.name === flow.pickupZoneName)
+      ? pickupZones.find((z) => z.name === flow.pickupZoneName)
       : null;
 
     if (isReceptivo && flow.pickupType === 'pickup' && selectedZoneData) {
@@ -366,7 +366,7 @@ const BookingFlowStep3: React.FC = () => {
       }
     }
 
-    const selectedLanguageData = tourLanguages.find((l: any) => l.language === flow.selectedLanguage);
+    const selectedLanguageData = tourLanguages.find((l) => l.language === flow.selectedLanguage);
     if (isReceptivo && flow.selectedLanguage && selectedLanguageData && (selectedLanguageData.extra_cost || 0) > 0) {
       const langExtraCost = selectedLanguageData.cost_type === 'por_persona'
         ? (selectedLanguageData.extra_cost || 0) * totalTravelers
@@ -495,9 +495,9 @@ const BookingFlowStep3: React.FC = () => {
                   ? `Reservando para ${totalTravelers} pasajero${totalTravelers !== 1 ? 's' : ''} en vehiculo privado.`
                   : `Reservando ${totalTravelers} lugar${totalTravelers !== 1 ? 'es' : ''} para este tour.`}
               </p>
-              {isPrivateTransfer && (tour as any).private_vehicle_capacity && (
+              {isPrivateTransfer && tour.private_vehicle_capacity && (
                 <p className="text-xs text-teal-600 mt-1">
-                  Capacidad maxima: {(tour as any).private_vehicle_capacity} pasajeros
+                  Capacidad maxima: {tour.private_vehicle_capacity} pasajeros
                 </p>
               )}
             </div>
@@ -556,7 +556,7 @@ const BookingFlowStep3: React.FC = () => {
                       className="input text-sm"
                     >
                       <option value="free">{tour.pickup_free_zone ? `Sin costo (${tour.pickup_free_zone})` : 'Sin costo adicional'}</option>
-                      {pickupZones.map((zone: any, idx: number) => (
+                      {pickupZones.map((zone, idx: number) => (
                         <option key={idx} value={zone.name}>
                           {zone.name} — +{formatCurrencyMXN(zone.extra_cost ?? 0)} MXN {zone.cost_type === 'por_persona' ? '/ persona' : '/ reserva'}
                         </option>
@@ -582,7 +582,7 @@ const BookingFlowStep3: React.FC = () => {
               className="input text-sm"
             >
               <option value="">Idioma por defecto (sin costo extra)</option>
-              {tourLanguages.map((lang: any, idx: number) => (
+              {tourLanguages.map((lang, idx: number) => (
                 <option key={idx} value={lang.language}>
                   {lang.language}{lang.extra_cost > 0 ? ` — +${formatCurrencyMXN(lang.extra_cost ?? 0)} MXN ${lang.cost_type === 'por_persona' ? '/ persona' : 'fijo'}` : ' (sin costo extra)'}
                 </option>

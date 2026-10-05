@@ -42,7 +42,7 @@ const AdminSupportAgents: React.FC = () => {
     // permisos", que es lo contrario de lo que conviene creer.
     if (errorPermisos) console.error('AdminSupportAgents: no se pudieron leer los permisos', errorPermisos);
 
-    const existingUserIds = new Set((permsData ?? []).map((p: any) => p.user_id));
+    const existingUserIds = new Set((permsData ?? []).map((p) => p.user_id));
 
     const { data: admins, error: errorAdmins } = await supabase
       .from('users')
@@ -152,9 +152,9 @@ const AdminSupportAgents: React.FC = () => {
                   <tr key={agent.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-800">
-                        {(agent.user as any)?.first_name} {(agent.user as any)?.last_name}
+                        {agent.user?.first_name} {agent.user?.last_name}
                       </p>
-                      <p className="text-xs text-gray-400">{(agent.user as any)?.email}</p>
+                      <p className="text-xs text-gray-400">{agent.user?.email}</p>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[agent.rol_soporte]}`}>
@@ -242,9 +242,9 @@ const AdminSupportAgents: React.FC = () => {
               {modal.editing && (
                 <div className="bg-gray-50 rounded-lg p-3">
                   <p className="text-sm font-medium text-gray-800">
-                    {(modal.editing as any).user?.first_name} {(modal.editing as any).user?.last_name}
+                    {modal.editing?.user?.first_name} {modal.editing?.user?.last_name}
                   </p>
-                  <p className="text-xs text-gray-400">{(modal.editing as any).user?.email}</p>
+                  <p className="text-xs text-gray-400">{modal.editing?.user?.email}</p>
                 </div>
               )}
               <div>

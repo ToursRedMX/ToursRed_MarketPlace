@@ -59,7 +59,8 @@ interface TourLanguage {
   extra_cost: string;
   cost_type: 'por_persona' | 'fijo';
 }
-import { Tour, Destination, DeparturePoint, PaymentOption, PaymentPlanMode } from '../../types';
+import { Tour, Destination, DeparturePoint, PaymentOption, PaymentPlanMode, FeaturedPlan, FeaturedTourSlot, TourSlot } from '../../types';
+import { comoFilas } from '../../lib/relacionesSupabase';
 import { format } from 'date-fns';
 import ImageUploader from '../../components/ImageUploader';
 import TaxTreatmentFields from '../../components/agency/TaxTreatmentFields';
@@ -94,7 +95,7 @@ const AgencyTours: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<{ id: string; name: string }[]>([]);
   const [selectedDestinations, setSelectedDestinations] = useState<{id: string, name: string}[]>([]);
   const [allAvailableDestinations, setAllAvailableDestinations] = useState<Destination[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -169,8 +170,8 @@ const AgencyTours: React.FC = () => {
   const [featuredModal, setFeaturedModal] = useState<{
     open: boolean;
     tour: Tour | null;
-    plans: any[];
-    activeSlot: any | null;
+    plans: FeaturedPlan[];
+    activeSlot: FeaturedTourSlot | null;
     isLoading: boolean;
     isSubmitting: boolean;
     selectedPlanId: string;
@@ -217,8 +218,8 @@ const AgencyTours: React.FC = () => {
     open: boolean;
     tour: Tour | null;
     action: 'slot-cancel' | 'slot-reschedule' | 'full-cancel' | null;
-    slots: any[];
-    selectedSlot: any | null;
+    slots: TourSlot[];
+    selectedSlot: TourSlot | null;
     isLoadingSlots: boolean;
     isSubmitting: boolean;
     error: string;
@@ -789,25 +790,25 @@ const AgencyTours: React.FC = () => {
     setTourType(tour.tour_type || 'excursion');
     setReceptivoModality(tour.receptivo_modality || 'compartido');
     setActivityType((tour.activity_type as ActivityType) || 'guided_tour');
-    setTransferType((tour as any).transfer_type || '');
-    setTransferCustomTime((tour as any).transfer_custom_time || false);
-    setTransferPricingMode(((tour as any).transfer_pricing_mode as 'per_person' | 'per_vehicle') || 'per_person');
-    setPrivateVehicleCapacity((tour as any).private_vehicle_capacity?.toString() || '');
-    setTransportServiceInfo((tour as any).transport_service_info || '');
-    setEstimatedMinutes((tour as any).estimated_minutes?.toString() || '');
-    setExperienceEnvironment((tour as any).experience_environment || []);
-    setParticipationLevel((tour as any).participation_level || '');
-    setLocalHost((tour as any).local_host || false);
-    setUniqueExperience((tour as any).unique_experience || '');
-    setSpecialRequirements((tour as any).special_requirements || '');
-    setTicketType((tour as any).ticket_type || '');
-    setTicketValidityType(((tour as any).ticket_validity_type as 'open' | 'fixed_date' | 'date_range') || 'open');
-    setTicketValidFrom((tour as any).ticket_valid_from || '');
-    setTicketValidTo((tour as any).ticket_valid_to || '');
-    setTicketRedemptionMethod((tour as any).ticket_redemption_method || '');
-    setTicketDeliveryMethod((tour as any).ticket_delivery_method || '');
-    setTicketAccessInstructions((tour as any).ticket_access_instructions || '');
-    setTicketServiceInfo((tour as any).ticket_service_info || '');
+    setTransferType(tour.transfer_type || '');
+    setTransferCustomTime(tour.transfer_custom_time || false);
+    setTransferPricingMode((tour.transfer_pricing_mode as 'per_person' | 'per_vehicle') || 'per_person');
+    setPrivateVehicleCapacity(tour.private_vehicle_capacity?.toString() || '');
+    setTransportServiceInfo(tour.transport_service_info || '');
+    setEstimatedMinutes(tour.estimated_minutes?.toString() || '');
+    setExperienceEnvironment(tour.experience_environment || []);
+    setParticipationLevel(tour.participation_level || '');
+    setLocalHost(tour.local_host || false);
+    setUniqueExperience(tour.unique_experience || '');
+    setSpecialRequirements(tour.special_requirements || '');
+    setTicketType(tour.ticket_type || '');
+    setTicketValidityType((tour.ticket_validity_type as 'open' | 'fixed_date' | 'date_range') || 'open');
+    setTicketValidFrom(tour.ticket_valid_from || '');
+    setTicketValidTo(tour.ticket_valid_to || '');
+    setTicketRedemptionMethod(tour.ticket_redemption_method || '');
+    setTicketDeliveryMethod(tour.ticket_delivery_method || '');
+    setTicketAccessInstructions(tour.ticket_access_instructions || '');
+    setTicketServiceInfo(tour.ticket_service_info || '');
     setReceptivoTab('info');
     if (tour.tour_type === 'receptivo') {
       setReceptivoData({
@@ -858,21 +859,21 @@ const AgencyTours: React.FC = () => {
       admite_ninos: tour.admite_ninos !== undefined ? tour.admite_ninos : true,
       admite_adultos: tour.admite_adultos !== undefined ? tour.admite_adultos : true,
       admite_adultos_mayores: tour.admite_adultos_mayores !== undefined ? tour.admite_adultos_mayores : true,
-      vehicle_map_type: (tour as any).vehicle_map_type || null,
-      preventa_activa: (tour as any).preventa_activa || false,
-      preventa_inicio: (tour as any).preventa_inicio || '',
-      preventa_fin: (tour as any).preventa_fin || '',
-      preventa_precio_especial: (tour as any).preventa_precio_especial || false,
-      preventa_tipo_descuento: ((tour as any).preventa_tipo_descuento || 'porcentaje') as 'monto' | 'porcentaje',
-      preventa_descuento_valor: (tour as any).preventa_descuento_valor?.toString() || '',
-      payment_option: ((tour as any).payment_option || 'standard') as PaymentOption,
-      full_payment_days_before_departure: String((tour as any).full_payment_days_before_departure ?? 15),
-      payment_plan_mode: ((tour as any).payment_plan_mode || 'installments') as PaymentPlanMode,
-      late_payment_grace_days: String((tour as any).late_payment_grace_days ?? 5),
-      late_payment_penalty_pct: String((tour as any).late_payment_penalty_pct ?? 0),
-      late_payment_penalty_fixed: String((tour as any).late_payment_penalty_fixed ?? 0),
+      vehicle_map_type: tour.vehicle_map_type || null,
+      preventa_activa: tour.preventa_activa || false,
+      preventa_inicio: tour.preventa_inicio || '',
+      preventa_fin: tour.preventa_fin || '',
+      preventa_precio_especial: tour.preventa_precio_especial || false,
+      preventa_tipo_descuento: (tour.preventa_tipo_descuento || 'porcentaje') as 'monto' | 'porcentaje',
+      preventa_descuento_valor: tour.preventa_descuento_valor?.toString() || '',
+      payment_option: (tour.payment_option || 'standard') as PaymentOption,
+      full_payment_days_before_departure: String(tour.full_payment_days_before_departure ?? 15),
+      payment_plan_mode: (tour.payment_plan_mode || 'installments') as PaymentPlanMode,
+      late_payment_grace_days: String(tour.late_payment_grace_days ?? 5),
+      late_payment_penalty_pct: String(tour.late_payment_penalty_pct ?? 0),
+      late_payment_penalty_fixed: String(tour.late_payment_penalty_fixed ?? 0),
     });
-    setInstallmentDefs(((tour as any).installment_definitions || []).filter((_: any, i: number) => i > 0).map((d: any): InstallmentDefDraft => {
+    setInstallmentDefs((tour.installment_definitions || []).filter((_, i) => i > 0).map((d): InstallmentDefDraft => {
       const mode: VencimientoMode = d.specific_date ? 'fecha_especifica' : d.days_before_departure !== undefined ? 'dias_salida' : 'dias_reserva';
       return {
         label: d.label || '',
@@ -883,7 +884,7 @@ const AgencyTours: React.FC = () => {
         _vencimiento_mode: mode,
       };
     }));
-    setPaymentOptionsEnabled(((tour as any).payment_option || 'standard') !== 'standard');
+    setPaymentOptionsEnabled((tour.payment_option || 'standard') !== 'standard');
     setSelectedDestinations(selectedDest);
     setIncludes(tour.includes && tour.includes.length > 0 ? tour.includes : ['']);
     setExcludes(tour.excludes && tour.excludes.length > 0 ? tour.excludes : ['']);
@@ -940,7 +941,7 @@ const AgencyTours: React.FC = () => {
     setPickupFreeZone(tour.pickup_free_zone || '');
     setPickupZones(
       Array.isArray(tour.pickup_zones)
-        ? tour.pickup_zones.map((z: any) => ({
+        ? tour.pickup_zones.map((z) => ({
             name: z.name || '',
             extra_cost: z.extra_cost?.toString() || '',
             cost_type: z.cost_type || 'por_persona',
@@ -949,7 +950,7 @@ const AgencyTours: React.FC = () => {
     );
     setTourLanguages(
       Array.isArray(tour.tour_languages)
-        ? tour.tour_languages.map((l: any) => ({
+        ? tour.tour_languages.map((l) => ({
             language: l.language || '',
             extra_cost: l.extra_cost?.toString() || '',
             cost_type: l.cost_type || 'por_persona',
@@ -1002,7 +1003,7 @@ const AgencyTours: React.FC = () => {
       if (errorSuplementos) throw errorSuplementos;
 
       if (supplementsData) {
-        setSupplements(supplementsData.map((s: any) => ({
+        setSupplements(supplementsData.map((s) => ({
           id: s.id,
           name: s.name,
           description: s.description || '',
@@ -1111,7 +1112,7 @@ const AgencyTours: React.FC = () => {
       getAgencyFeaturedSlots(resolvedAgencyId),
     ]);
     const now = new Date();
-    const activeSlot = (slotsRes.data || []).find((s: any) =>
+    const activeSlot = comoFilas<FeaturedTourSlot>(slotsRes.data).find((s) =>
       s.tour_id === tour.id &&
       s.status === 'active' &&
       new Date(s.expires_at) > now
@@ -1195,7 +1196,7 @@ const AgencyTours: React.FC = () => {
       setFeaturedModal(prev => ({ ...prev, couponIsValidating: false, couponError: data?.error ?? 'Código inválido' }));
       return;
     }
-    const plan = featuredModal.plans.find((p: any) => p.id === featuredModal.selectedPlanId);
+    const plan = featuredModal.plans.find((p) => p.id === featuredModal.selectedPlanId);
     const base = plan?.price ?? 0;
     let discount = 0;
     if (data.discount_type === 'featured_percentage') {
@@ -1304,7 +1305,7 @@ const AgencyTours: React.FC = () => {
       // destino y nadie se entera hasta que no vende.
       if (errorDestinos) throw errorDestinos;
 
-      const destinationIds = (originalDestinations || []).map((d: any) => d.destination_id);
+      const destinationIds = (originalDestinations || []).map((d) => d.destination_id);
 
       // Crear el nuevo tour
       const { error } = await createTour(tourData, destinationIds, user.id);
@@ -1532,7 +1533,7 @@ const AgencyTours: React.FC = () => {
     }
   };
 
-  const handleSelectSlot = async (slot: any) => {
+  const handleSelectSlot = async (slot: TourSlot) => {
     setReceptivoActionsModal(prev => ({ ...prev, selectedSlot: slot, bookingsInSlot: 0, bookingsCountInSlot: 0 }));
 
     const { data: bookingsData, error: errorReservas } = await supabase
@@ -1709,7 +1710,15 @@ const AgencyTours: React.FC = () => {
         if (error) throw error;
         if (data && !data.success) throw new Error(data.error || 'Error al procesar reembolsos');
       } else {
-        const body: any = {
+        const body: {
+          slot_id: string;
+          tour_id: string;
+          reason: string;
+          resolution_type: 'new_slot' | 'expand_capacity';
+          target_slot_id?: string;
+          new_slot_date?: string;
+          new_slot_time?: string;
+        } = {
           slot_id: originalSlotId,
           tour_id: tourId,
           reason: reason,
@@ -1986,7 +1995,7 @@ const AgencyTours: React.FC = () => {
     setOptionalServices(optionalServices.filter((_, i) => i !== index));
   };
 
-  const updateOptionalService = (index: number, field: keyof OptionalService, value: any) => {
+  const updateOptionalService = <K extends keyof OptionalService>(index: number, field: K, value: OptionalService[K]) => {
     const updated = [...optionalServices];
     updated[index] = { ...updated[index], [field]: value };
     setOptionalServices(updated);
@@ -2010,7 +2019,7 @@ const AgencyTours: React.FC = () => {
     setSupplements(supplements.filter((_, i) => i !== index));
   };
 
-  const updateSupplement = (index: number, field: keyof TourSupplement, value: any) => {
+  const updateSupplement = <K extends keyof TourSupplement>(index: number, field: K, value: TourSupplement[K]) => {
     const updated = [...supplements];
     updated[index] = { ...updated[index], [field]: value };
     setSupplements(updated);
@@ -2244,7 +2253,7 @@ const AgencyTours: React.FC = () => {
       };
 
       let tourId: string;
-      let createdTour: any = null;
+      let createdTour: Tour | null = null;
 
       if (editingTour) {
         // Actualizar tour existente
@@ -2440,7 +2449,7 @@ const AgencyTours: React.FC = () => {
         // Falla del lado seguro: sin la lista existente no se borra nada.
         if (errorSuplementosActuales) console.error('No se pudieron leer los suplementos actuales:', errorSuplementosActuales);
 
-        const existingSupIds = new Set(existingSupplements?.map((s: any) => s.id) || []);
+        const existingSupIds = new Set(existingSupplements?.map((s) => s.id) || []);
         const incomingSupIds = new Set(validSupplements.filter(s => s.id).map(s => s.id!));
 
         const toDeleteSup = Array.from(existingSupIds).filter(id => !incomingSupIds.has(id));
@@ -2505,7 +2514,7 @@ const AgencyTours: React.FC = () => {
             if (errorHorariosActuales) console.error('No se pudieron leer los horarios actuales:', errorHorariosActuales);
 
             const toDelete = (currentSchedules || [])
-              .map((r: any) => r.id)
+              .map((r) => r.id)
               .filter((id: string) => !draftIds.includes(id));
 
             if (toDelete.length > 0) {
@@ -5375,7 +5384,7 @@ const AgencyTours: React.FC = () => {
                   <div className="flex border-b border-gray-100">
                     {(([
                       'info', 'horarios', 'bloqueos', 'calendario',
-                      ...((editingTour as any)?.vehicle_map_type ? ['asientos'] : [])
+                      ...(editingTour?.vehicle_map_type ? ['asientos'] : [])
                     ]) as ('info' | 'horarios' | 'bloqueos' | 'calendario' | 'asientos')[]).map(tab => {
                       const labels: Record<string, string> = {
                         info: 'Resumen',
@@ -5442,7 +5451,7 @@ const AgencyTours: React.FC = () => {
                         }}
                       />
                     )}
-                    {receptivoTab === 'asientos' && (editingTour as any)?.vehicle_map_type && (
+                    {receptivoTab === 'asientos' && editingTour?.vehicle_map_type && (
                       <div className="flex flex-col gap-y-3">
                         <p className="text-xs text-gray-500">Gestiona los asientos de este tour receptivo. Selecciona una fecha/slot especifico en el Calendario para ver la disponibilidad por salida, o ve el estado general aqui.</p>
                         <SeatMapManager
@@ -5459,7 +5468,7 @@ const AgencyTours: React.FC = () => {
               </div>
             )}
 
-            {tourType === 'excursion' && editingTour && (editingTour as any)?.vehicle_map_type && (
+            {tourType === 'excursion' && editingTour && editingTour?.vehicle_map_type && (
               <div className="bg-white rounded-xl shadow-xs border border-blue-100 overflow-hidden">
                 <div className="bg-blue-600 px-5 py-3 flex items-center gap-2">
                   <div className="bg-white/20 rounded-lg p-1.5">
@@ -6968,17 +6977,17 @@ const AgencyTours: React.FC = () => {
 
                   {/* Comisión efectiva */}
                   {(() => {
-                    const hasOverride = (tour as any).commission_rate_override != null;
-                    const expired = hasOverride && (tour as any).commission_override_expires_at != null
-                      ? new Date((tour as any).commission_override_expires_at) <= new Date()
+                    const hasOverride = tour.commission_rate_override != null;
+                    const expired = hasOverride && tour.commission_override_expires_at != null
+                      ? new Date(tour.commission_override_expires_at) <= new Date()
                       : false;
                     const overrideActive = hasOverride && !expired;
 
                     if (!overrideActive) return null;
 
-                    const rate = ((tour as any).commission_rate_override * 100).toFixed(1);
-                    const reason = (tour as any).commission_override_reason;
-                    const expiresAt = (tour as any).commission_override_expires_at;
+                    const rate = ((tour.commission_rate_override ?? 0) * 100).toFixed(1);
+                    const reason = tour.commission_override_reason;
+                    const expiresAt = tour.commission_override_expires_at;
 
                     return (
                       <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
@@ -7033,7 +7042,7 @@ const AgencyTours: React.FC = () => {
                           <Pencil className="h-4 w-4" />
                         </button>
                       )}
-                      {(tour as any).vehicle_map_type && (
+                      {tour.vehicle_map_type && (
                         <button
                           onClick={() => setSeatMapModal({ open: true, tour })}
                           className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -7190,9 +7199,9 @@ const AgencyTours: React.FC = () => {
                     </div>
                     {/* Plan summary */}
                     {(() => {
-                      const plan = featuredModal.plans.find((p: any) => p.id === featuredModal.selectedPlanId);
+                      const plan = featuredModal.plans.find((p) => p.id === featuredModal.selectedPlanId);
                       const finalPrice = featuredModal.couponApplied && featuredModal.couponDiscount > 0
-                        ? plan?.price - featuredModal.couponDiscount
+                        ? (plan?.price ?? 0) - featuredModal.couponDiscount
                         : plan?.price;
                       return plan ? (
                         <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-lg text-sm flex items-center justify-between">
@@ -7343,7 +7352,7 @@ const AgencyTours: React.FC = () => {
                         <p className="text-sm font-semibold text-gray-700">Elige un plan:</p>
                       </div>
                       <div className="flex flex-col gap-y-2 mb-4">
-                        {featuredModal.plans.map((plan: any) => (
+                        {featuredModal.plans.map((plan) => (
                           <label
                             key={plan.id}
                             className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${featuredModal.selectedPlanId === plan.id ? 'border-amber-400 bg-amber-50' : 'border-gray-100 hover:border-amber-200'}`}
@@ -7504,7 +7513,7 @@ const AgencyTours: React.FC = () => {
                 tourId={seatMapModal.tour.id}
                 agencyId={resolvedAgencyId}
                 slotId={null}
-                isReceptivo={(seatMapModal.tour as any).tour_type === 'receptivo'}
+                isReceptivo={seatMapModal.tour.tour_type === 'receptivo'}
               />
             </div>
           </div>

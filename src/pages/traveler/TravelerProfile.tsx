@@ -263,12 +263,12 @@ const TravelerProfile: React.FC = () => {
 
       let totalSpent = 0;
       if (spentResult.data && spentResult.data.length > 0) {
-        const paidIds = spentResult.data.map((b: any) => b.id);
+        const paidIds = spentResult.data.map((b) => b.id);
         const { data: batchResult, error: errorPagado } = await supabase.rpc('get_booking_total_paid_batch', { p_booking_ids: paidIds });
         // Sin esto, el "total gastado" del viajero sale en 0.
         if (errorPagado) throw errorPagado;
         if (batchResult) {
-          totalSpent = (batchResult as any[]).reduce((sum, row) => sum + (Number(row.total_paid) || 0), 0);
+          totalSpent = (batchResult as { total_paid: number }[]).reduce((sum, row) => sum + (Number(row.total_paid) || 0), 0);
         }
       }
 
@@ -350,7 +350,7 @@ const TravelerProfile: React.FC = () => {
         }
       }
 
-      const updateData: any = {
+      const updateData = {
         first_name: editForm.first_name?.trim() || null,
         last_name: editForm.apellido_paterno?.trim() || null,
         apellido_paterno: editForm.apellido_paterno?.trim() || null,
@@ -524,7 +524,7 @@ const TravelerProfile: React.FC = () => {
                     <ProfilePictureUploader
                       currentImage={profile.profile_picture_url}
                       onImageChange={handleProfilePictureChange}
-                      userId={user.id}
+                      userId={user!.id}
                     />
                   </div>
                 </div>

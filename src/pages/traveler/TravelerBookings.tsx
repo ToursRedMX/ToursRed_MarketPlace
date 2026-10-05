@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, MapPin, Users, DollarSign, Clock, Eye, AlertCircle, Star, X, CreditCard as Edit, UserCheck, XCircle, CalendarX, Check, Wallet, Lock, UserMinus, Car, Globe, Tag, Plus, AlertTriangle, ShoppingBag, Shield, Loader2 } from 'lucide-react';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import SeatReselectionModal from '../../components/SeatReselectionModal';
 import PaymentPlanCalendar from '../../components/PaymentPlanCalendar';
 import { useAuth } from '../../context/AuthContext';
-import { getUserBookings, getUserPastBookings, getUserCancelledBookings, parseDateFromDB, supabase, calculateCancellationPolicy } from '../../lib/supabase';
-import { Booking, PendingReschedule, BookingSupplement, TourSupplement, BookingOptionalService } from '../../types';
+import { getUserBookings, getUserPastBookings, getUserCancelledBookings, parseDateFromDB, supabase, calculateCancellationPolicy, CancellationPolicy } from '../../lib/supabase';
+import { Booking, PendingReschedule, BookingSupplement, TourSupplement, BookingOptionalService, BookingTraveler, TourOptionalService } from '../../types';
 import { format } from 'date-fns';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStepUp } from '../../context/StepUpContext';
@@ -53,6 +54,65 @@ interface SlotRescheduleInfo {
   };
 }
 
+/** Union duplicada en los tres modales de pago de extras/suplementos. */
+type ExtraPaymentMethod = 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
+
+/**
+ * `handlePayExistingSupplement`/`handleProcessDirectSupplementPayment` solo
+ * usan estos campos. Un `BookingSupplement` completo los cumple, igual que el
+ * literal de respaldo de `handleRequestSupplement` (409, solicitud ya
+ * existente) que no trae `booking_id`, `service_charge` ni el resto de
+ * columnas obligatorias de la fila real.
+ */
+type PayableSupplement = Pick<BookingSupplement, 'id' | 'unit_price' | 'quantity'> & {
+  status?: BookingSupplement['status'];
+  tour_supplements?: Partial<Pick<TourSupplement, 'name' | 'description' | 'price' | 'is_cancellable' | 'requires_approval'>>;
+};
+
+/** Select parcial de `tour_optional_services` para el modal de extras: no pide `is_refundable`. */
+type ExtrasOptionalService = Pick<TourOptionalService, 'id' | 'name' | 'description' | 'price_per_person' | 'max_capacity' | 'is_active' | 'display_order'>;
+
+/** `item` del modal de pago de extras: un `ExtrasOptionalService` real o el pseudo-item del seguro de viaje. */
+type ExtrasPaymentItem = {
+  id?: string;
+  name: string;
+  description?: string | null;
+  price_per_person?: number;
+  price?: number;
+};
+
+/** `tour_optional_services(is_refundable)` es a-uno (la FK sale de `booking_optional_services`), pero supabase-js lo infiere como arreglo. Ver `src/lib/relacionesSupabase.ts`. */
+interface BookingOptionalServiceRow {
+  id: string;
+  tour_optional_service_id: string;
+  quantity: number;
+  subtotal: number;
+  is_cancelled: boolean;
+  tour_optional_services: { is_refundable: boolean } | null;
+}
+
+/** `calculateCancellationPolicy` mas el reparto Cash/Points que calcula `handleOpenCancellationModal`. */
+type EnrichedCancellationPolicy = CancellationPolicy & {
+  pointsUsed: number;
+  cashRefund: number;
+  pointsRefund: number;
+};
+
+/**
+ * Preview de `process-partial-cancellation` (`result.policy`), DISTINTO de
+ * `CancellationPolicy`: lo calcula esa funcion de Edge, no
+ * `calculateCancellationPolicy`, y su forma es la suya propia.
+ */
+interface PartialCancellationPolicy {
+  policyType: '100_percent' | '50_percent' | 'no_refund' | 'no_show' | 'pending_approval';
+  daysBeforeTour: number;
+  refundAmountToTraveler: number;
+  refundMessage: string;
+  originalPartialAmount: number;
+  insuranceRefund: number;
+  pointsRefund?: number;
+}
+
 const TravelerBookings: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -67,7 +127,7 @@ const TravelerBookings: React.FC = () => {
   const [tourSupplements, setTourSupplements] = useState<Record<string, TourSupplement[]>>({});
   const [supplementPaymentModal, setSupplementPaymentModal] = useState<{
     open: boolean;
-    supplement: any | null;
+    supplement: TourSupplement | null;
     booking: Booking | null;
     quantity: number;
     availableCapacity: number;
@@ -76,7 +136,7 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
-    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
+    selectedMethod: ExtraPaymentMethod;
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
     openpayMethod: 'card' | 'spei' | 'cash';
     cashToUse: number;
@@ -104,14 +164,14 @@ const TravelerBookings: React.FC = () => {
   }>({ open: false, booking: null, activeTab: 'mis_suplementos', cancelQty: {} });
   const [supplementDirectPayModal, setSupplementDirectPayModal] = useState<{
     open: boolean;
-    bookingSupplement: any | null;
+    bookingSupplement: PayableSupplement | null;
     booking: Booking | null;
     isProcessing: boolean;
     error: string;
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
-    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
+    selectedMethod: ExtraPaymentMethod;
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
     openpayMethod: 'card' | 'spei' | 'cash';
   }>({
@@ -131,7 +191,7 @@ const TravelerBookings: React.FC = () => {
     open: boolean;
     booking: Booking | null;
     activeTab: 'servicios' | 'seguro';
-    tourOptionalServices: any[];
+    tourOptionalServices: ExtrasOptionalService[];
     existingBos: Record<string, { id: string; quantity: number; subtotal: number; is_cancelled: boolean; is_refundable: boolean }>;
     insuranceAlreadyBought: boolean;
     insuranceCost: number;
@@ -157,7 +217,7 @@ const TravelerBookings: React.FC = () => {
   const [extrasPaymentModal, setExtrasPaymentModal] = useState<{
     open: boolean;
     type: 'optional_service' | 'insurance' | null;
-    item: any | null;
+    item: ExtrasPaymentItem | null;
     quantity: number;
     booking: Booking | null;
     isProcessing: boolean;
@@ -165,7 +225,7 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
-    selectedMethod: 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
+    selectedMethod: ExtraPaymentMethod;
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
     openpayMethod: 'card' | 'spei' | 'cash';
   }>({
@@ -186,17 +246,17 @@ const TravelerBookings: React.FC = () => {
   const [reviewModal, setReviewModal] = useState<{
     open: boolean;
     booking: Booking | null;
-    existingReview: any;
+    existingReview: { id: string; rating: number; comment: string } | null;
   }>({ open: false, booking: null, existingReview: null });
   const [travelersModal, setTravelersModal] = useState<{
     open: boolean;
     booking: Booking | null;
-    travelers: any[];
+    travelers: BookingTraveler[];
   }>({ open: false, booking: null, travelers: [] });
   const [cancellationModal, setCancellationModal] = useState<{
     open: boolean;
     booking: Booking | null;
-    policy: any;
+    policy: EnrichedCancellationPolicy | null;
     isCalculating: boolean;
     isCancelling: boolean;
     cancellationReason: string;
@@ -217,9 +277,9 @@ const TravelerBookings: React.FC = () => {
   const [partialCancellationModal, setPartialCancellationModal] = useState<{
     open: boolean;
     booking: Booking | null;
-    travelers: { id: string; nombre: string; categoria_viajero: string; precio_aplicado: number }[];
+    travelers: { id: string; nombre: string; categoria_viajero: string; precio_aplicado: number; promo_discount_per_traveler?: number }[];
     selectedIds: Set<string>;
-    policy: any;
+    policy: PartialCancellationPolicy | null;
     isCalculating: boolean;
     isCancelling: boolean;
     cancellationReason: string;
@@ -287,7 +347,7 @@ const TravelerBookings: React.FC = () => {
   const [slotRescheduleModal, setSlotRescheduleModal] = useState<{
     open: boolean;
     booking: Booking | null;
-    slotRescheduleInfo: any | null;
+    slotRescheduleInfo: SlotRescheduleInfo | null;
     action: 'accept' | 'reject' | null;
     isProcessing: boolean;
     error: string;
@@ -404,7 +464,7 @@ const TravelerBookings: React.FC = () => {
       // `tours` y `agencies` son a-uno (las FK salen de `bookings`), pero
       // supabase-js las infiere como arreglos. Ver src/lib/relacionesSupabase.ts.
       for (const b of comoFilas<Booking>(data)) {
-        const refDate = (b as any).selected_date || (b as any).tours?.end_date;
+        const refDate = b.selected_date || b.tours?.end_date;
         if (refDate && refDate < today) {
           expiredList.push(b);
         } else {
@@ -612,7 +672,7 @@ const TravelerBookings: React.FC = () => {
       if (error) throw new Error(error.message);
       setCancelledBookings(data || []);
       if (data && data.length > 0) {
-        const cancelledIds = data.map((b: any) => b.id);
+        const cancelledIds = data.map((b) => b.id);
         // F-1: si falla, el total pagado de una reserva cancelada se queda en 0,
         // que es justo el numero que el viajero mira para saber cuanto le
         // tienen que reembolsar.
@@ -689,9 +749,8 @@ const TravelerBookings: React.FC = () => {
       });
 
       if (error) {
-        const context = (error as any).context;
-        if (context && typeof context.json === 'function') {
-          const body = await context.json().catch(() => null);
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => null);
           throw new Error(body?.error || error.message);
         }
         throw error;
@@ -702,7 +761,7 @@ const TravelerBookings: React.FC = () => {
       await fetchBookings();
 
       if (slotRescheduleModal.action === 'accept' && data?.needs_seat_reselection) {
-        const booking = slotRescheduleModal.booking as any;
+        const booking = slotRescheduleModal.booking!;
         const targetSlot = slotRescheduleModal.slotRescheduleInfo?.slot_reschedule_requests?.tour_slots;
         setTimeout(() => {
           setSlotRescheduleModal(prev => ({ ...prev, open: false }));
@@ -713,7 +772,7 @@ const TravelerBookings: React.FC = () => {
             slotId: slotRescheduleModal.slotRescheduleInfo?.slot_reschedule_requests?.target_slot_id || '',
             travelersCount: booking.travelers_count || 1,
             previousSeats: booking.selected_seats || [],
-            tourName: booking.tours?.name || booking.tour_name || '',
+            tourName: booking.tours?.name || '',
             newDate: targetSlot?.slot_date || data.new_date || '',
             newTime: targetSlot?.departure_time || data.new_time || '',
           });
@@ -1250,12 +1309,12 @@ const TravelerBookings: React.FC = () => {
       if (travelersRes.error) throw travelersRes.error;
 
       const installmentsPaid = (installmentsRes.data || []).reduce(
-        (sum: number, inst: any) => sum + Number(inst.amount_paid), 0
+        (sum, inst) => sum + Number(inst.amount_paid), 0
       );
 
       setPartialCancellationModal(prev => ({
         ...prev,
-        travelers: (travelersRes.data || []).map((t: any) => ({
+        travelers: (travelersRes.data || []).map((t) => ({
           id: t.id,
           nombre: t.nombre,
           categoria_viajero: t.categoria_viajero,
@@ -1795,7 +1854,7 @@ const TravelerBookings: React.FC = () => {
   // reservas (11 de Conekta y 5 de Openpay), asi que todas esas mostraban "N/A"
   // pese a tener payment_provider poblado. Ahora se resuelve con el modulo
   // compartido, que cae a payment_provider antes de rendirse.
-  const getPaymentMethodLabel = (booking: any): string =>
+  const getPaymentMethodLabel = (booking: Booking): string =>
     paymentLabel({
       paymentMethod: booking?.payment_method,
       paymentProvider: booking?.payment_provider,
@@ -1888,7 +1947,7 @@ const TravelerBookings: React.FC = () => {
     );
   };
 
-  const handleOpenSupplementRequest = async (booking: Booking, supplement: any) => {
+  const handleOpenSupplementRequest = async (booking: Booking, supplement: TourSupplement) => {
     // F-1: estas tres consultas ignoraban el error y caian a `?? 0`. El
     // resultado no era una pantalla vacia, era un NUMERO FALSO en una pantalla
     // de pago: saldo 0 con dinero en la billetera, o capacidad 0 —"agotado"—
@@ -1938,7 +1997,7 @@ const TravelerBookings: React.FC = () => {
     });
   };
 
-  const handlePayExistingSupplement = async (bs: any, booking: Booking) => {
+  const handlePayExistingSupplement = async (bs: PayableSupplement, booking: Booking) => {
     // F-1: mismo caso que arriba — saldo falso en una pantalla de pago.
     const { data: walletData, error: errorBilletera } = await supabase
       .from('toursred_cash_wallets')
@@ -2091,13 +2150,13 @@ const TravelerBookings: React.FC = () => {
       console.error('TravelerBookings: no se pudieron leer los servicios opcionales', errorOpcionales);
     }
 
-    for (const bos of bosData || []) {
+    for (const bos of comoFilas<BookingOptionalServiceRow>(bosData)) {
       newExistingBos[bos.tour_optional_service_id] = {
         id: bos.id,
         quantity: Number(bos.quantity) || 0,
         subtotal: Number(bos.subtotal) || 0,
         is_cancelled: bos.is_cancelled,
-        is_refundable: (bos as any).tour_optional_services?.is_refundable ?? false,
+        is_refundable: bos.tour_optional_services?.is_refundable ?? false,
       };
     }
     setExtrasModal(prev => ({ ...prev, existingBos: newExistingBos, cancelQty: {} }));
@@ -2120,13 +2179,13 @@ const TravelerBookings: React.FC = () => {
       ]);
 
       const existingBos: Record<string, { id: string; quantity: number; subtotal: number; is_cancelled: boolean; is_refundable: boolean }> = {};
-      for (const bos of bosRes.data || []) {
+      for (const bos of comoFilas<BookingOptionalServiceRow>(bosRes.data)) {
         existingBos[bos.tour_optional_service_id] = {
           id: bos.id,
           quantity: Number(bos.quantity) || 0,
           subtotal: Number(bos.subtotal) || 0,
           is_cancelled: bos.is_cancelled,
-          is_refundable: (bos as any).tour_optional_services?.is_refundable ?? false,
+          is_refundable: bos.tour_optional_services?.is_refundable ?? false,
         };
       }
       const hasActiveServices = Object.values(existingBos).some(b => !b.is_cancelled);
@@ -2187,7 +2246,7 @@ const TravelerBookings: React.FC = () => {
         insuranceDays: 1,
         insuranceConditionsAccepted: false,
         cancelQty: {},
-        activeTab: hasActiveServices || (optSvcsRes.data || []).some((s: any) => !existingBos[s.id]) ? 'servicios' : 'seguro',
+        activeTab: hasActiveServices || (optSvcsRes.data || []).some((s) => !existingBos[s.id]) ? 'servicios' : 'seguro',
       }));
     } catch {
       setExtrasModal(prev => ({ ...prev, isLoading: false }));
@@ -2196,7 +2255,7 @@ const TravelerBookings: React.FC = () => {
 
   const handleOpenExtrasPayment = async (
     type: 'optional_service' | 'insurance',
-    item: any,
+    item: ExtrasPaymentItem,
     booking: Booking
   ) => {
     const [walletRes, pointsRes] = await Promise.all([
@@ -2319,7 +2378,7 @@ const TravelerBookings: React.FC = () => {
       // 409 means an active request already exists — route to its payment flow
       if (res.status === 409 && data.existing_id &&
           (data.existing_status === 'pending_payment' || data.existing_status === 'approved')) {
-        const existingBs = (bookingSupplements[booking.id] || []).find((bs: any) => bs.id === data.existing_id)
+        const existingBs = (bookingSupplements[booking.id] || []).find((bs) => bs.id === data.existing_id)
           || { id: data.existing_id, status: data.existing_status, quantity, unit_price: supplement.price, tour_supplements: supplement };
         setSupplementPaymentModal(prev => ({ ...prev, open: false }));
         await handlePayExistingSupplement(existingBs, booking);
@@ -2650,7 +2709,7 @@ const TravelerBookings: React.FC = () => {
                             <div>
                               <span className="text-xs text-teal-700 font-medium">Zona / Hotel: </span>
                               <span className="text-sm text-gray-800">{booking.pickup_zone_name}</span>
-                              {(bookingOptionalServices[booking.id] || []).filter((bos: any) => bos.service_kind === 'pickup').map((bos: any) => (
+                              {(bookingOptionalServices[booking.id] || []).filter((bos) => bos.service_kind === 'pickup').map((bos) => (
                                 <span key={bos.id} className="ml-2 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">
                                   +${bos.total_paid || bos.subtotal} {bos.quantity > 1 ? '/persona' : '/reserva'}
                                 </span>
@@ -2664,7 +2723,7 @@ const TravelerBookings: React.FC = () => {
                             <div>
                               <span className="text-xs text-teal-700 font-medium">Idioma del tour: </span>
                               <span className="text-sm text-gray-800 capitalize">{booking.selected_language}</span>
-                              {(bookingOptionalServices[booking.id] || []).filter((bos: any) => bos.service_kind === 'language').map((bos: any) => (
+                              {(bookingOptionalServices[booking.id] || []).filter((bos) => bos.service_kind === 'language').map((bos) => (
                                 <span key={bos.id} className="ml-2 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">
                                   +${bos.total_paid || bos.subtotal} {bos.quantity > 1 ? '/persona' : 'fijo'}
                                 </span>
@@ -2683,7 +2742,7 @@ const TravelerBookings: React.FC = () => {
                         <span>Servicios Adicionales Contratados</span>
                       </h4>
                       <div className="flex flex-col gap-y-2">
-                        {bookingOptionalServices[booking.id].map((bos: any) => (
+                        {bookingOptionalServices[booking.id].map((bos) => (
                           <div key={bos.id} className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
                               <span className={bos.is_cancelled ? 'line-through text-gray-400' : 'text-gray-800'}>
@@ -2702,7 +2761,7 @@ const TravelerBookings: React.FC = () => {
                                 <span className={`font-medium ${bos.is_cancelled ? 'text-gray-400' : 'text-amber-700'}`}>
                                   {formatCurrencyMXN(Number(bos.subtotal))}
                                 </span>
-                                {bos.is_cancelled && bos.refund_amount > 0 && (
+                                {bos.is_cancelled && (bos.refund_amount ?? 0) > 0 && (
                                   <span className="block text-xs text-green-600">
                                     Reembolso: {formatCurrencyMXN(Number(bos.refund_amount))}
                                   </span>
@@ -2815,10 +2874,10 @@ const TravelerBookings: React.FC = () => {
                      ((bookingSupplements[booking.id] || []).length > 0 ||
                       (tourSupplements[booking.tour_id] || []).length > 0) && (() => {
                       const activeCount = (bookingSupplements[booking.id] || []).filter(
-                        (bs: any) => ['pending_approval', 'approved', 'pending_payment', 'paid'].includes(bs.status)
+                        (bs) => ['pending_approval', 'approved', 'pending_payment', 'paid'].includes(bs.status)
                       ).length;
                       const hasPendingPayment = (bookingSupplements[booking.id] || []).some(
-                        (bs: any) => bs.status === 'pending_payment' || bs.status === 'approved'
+                        (bs) => bs.status === 'pending_payment' || bs.status === 'approved'
                       );
                       return (
                         <button
@@ -3046,7 +3105,7 @@ const TravelerBookings: React.FC = () => {
 
                             <div className="flex gap-3">
                               <button
-                                onClick={() => handleOpenSlotRescheduleModal(booking as any, 'accept')}
+                                onClick={() => handleOpenSlotRescheduleModal(booking, 'accept')}
                                 disabled={!slotInfo}
                                 className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors text-sm"
                               >
@@ -3054,7 +3113,7 @@ const TravelerBookings: React.FC = () => {
                                 Acepto el nuevo horario
                               </button>
                               <button
-                                onClick={() => handleOpenSlotRescheduleModal(booking as any, 'reject')}
+                                onClick={() => handleOpenSlotRescheduleModal(booking, 'reject')}
                                 disabled={!slotInfo}
                                 className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors text-sm"
                               >
@@ -3084,17 +3143,16 @@ const TravelerBookings: React.FC = () => {
                           </p>
                           <button
                             onClick={() => {
-                              const b = booking as any;
                               setSeatReselectionModal({
                                 open: true,
-                                bookingId: b.id,
-                                tourId: b.tour_id,
-                                slotId: b.slot_id || '',
-                                travelersCount: b.travelers_count || 1,
-                                previousSeats: b.previous_selected_seats || [],
-                                tourName: b.tours?.name || b.tour_name || '',
-                                newDate: b.selected_date || '',
-                                newTime: b.selected_time || '',
+                                bookingId: booking.id,
+                                tourId: booking.tour_id,
+                                slotId: booking.slot_id || '',
+                                travelersCount: booking.travelers_count || 1,
+                                previousSeats: booking.previous_selected_seats || [],
+                                tourName: booking.tours?.name || '',
+                                newDate: booking.selected_date || '',
+                                newTime: booking.selected_time || '',
                               });
                             }}
                             className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
@@ -3257,7 +3315,7 @@ const TravelerBookings: React.FC = () => {
                     </div>
                     {(pastOptionalServices[booking.id] || []).length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-3">
-                        {pastOptionalServices[booking.id].map((bos: any) => !bos.is_cancelled && (
+                        {pastOptionalServices[booking.id].map((bos) => !bos.is_cancelled && (
                           <span key={bos.id} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
                             {bos.tour_optional_services?.name} ×{bos.quantity}
                           </span>
@@ -3370,7 +3428,7 @@ const TravelerBookings: React.FC = () => {
                 </button>
               </div>
 
-              {!!(travelersModal.booking as any).tours?.name_changes_not_allowed &&
+              {!!travelersModal.booking.tours?.name_changes_not_allowed &&
                 (travelersModal.booking.payment_status === 'succeeded' ||
                   travelersModal.booking.status === 'confirmed' ||
                   travelersModal.booking.status === 'completed') && (
@@ -3392,28 +3450,28 @@ const TravelerBookings: React.FC = () => {
               ) : (
                 <div className="space-y-4">
                   {travelersModal.travelers.map((traveler, index) => (
-                    <div key={traveler.id} className={`border rounded-lg p-4 transition-colors ${(traveler as any).is_cancelled ? 'border-red-200 bg-red-50 opacity-75' : 'border-gray-200 hover:border-primary-300'}`}>
+                    <div key={traveler.id} className={`border rounded-lg p-4 transition-colors ${traveler.is_cancelled ? 'border-red-200 bg-red-50 opacity-75' : 'border-gray-200 hover:border-primary-300'}`}>
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <h3 className={`font-semibold text-lg ${(traveler as any).is_cancelled ? 'line-through text-gray-400' : ''}`}>
+                          <h3 className={`font-semibold text-lg ${traveler.is_cancelled ? 'line-through text-gray-400' : ''}`}>
                             {getCategoryLabel(traveler.categoria_viajero)} {index + 1}
                           </h3>
-                          {(traveler as any).is_cancelled && (
+                          {traveler.is_cancelled && (
                             <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Cancelado</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          {Number((traveler as any).promo_discount_per_traveler) > 0 ? (
+                          {Number(traveler.promo_discount_per_traveler) > 0 ? (
                             <span className="flex items-center gap-1.5">
                               <span className="text-sm text-gray-400 line-through">
-                                {formatCurrencyMXN(Number(traveler.precio_aplicado) + Number((traveler as any).promo_discount_per_traveler))}
+                                {formatCurrencyMXN(Number(traveler.precio_aplicado) + Number(traveler.promo_discount_per_traveler))}
                               </span>
-                              <span className={`text-sm font-bold ${(traveler as any).is_cancelled ? 'text-gray-400 line-through' : 'text-emerald-600'}`}>
+                              <span className={`text-sm font-bold ${traveler.is_cancelled ? 'text-gray-400 line-through' : 'text-emerald-600'}`}>
                                 {formatCurrencyMXN(Number(traveler.precio_aplicado))}
                               </span>
                             </span>
                           ) : (
-                            <span className={`text-sm font-medium ${(traveler as any).is_cancelled ? 'text-gray-400 line-through' : 'text-gray-500'}`}>
+                            <span className={`text-sm font-medium ${traveler.is_cancelled ? 'text-gray-400 line-through' : 'text-gray-500'}`}>
                               {formatCurrencyMXN(Number(traveler.precio_aplicado))}
                             </span>
                           )}
@@ -3463,7 +3521,7 @@ const TravelerBookings: React.FC = () => {
                   const isPaid = travelersModal.booking.payment_status === 'succeeded' ||
                     travelersModal.booking.status === 'confirmed' ||
                     travelersModal.booking.status === 'completed';
-                  const nameChangesBlocked = !!(travelersModal.booking as any).tours?.name_changes_not_allowed && isPaid;
+                  const nameChangesBlocked = !!travelersModal.booking.tours?.name_changes_not_allowed && isPaid;
                   return nameChangesBlocked ? (
                     <div className="flex flex-col items-end gap-1">
                       <button
@@ -3521,7 +3579,7 @@ const TravelerBookings: React.FC = () => {
                 reviewType="agency"
                 onSuccess={handleReviewSuccess}
                 onCancel={handleCloseReviewModal}
-                existingReview={reviewModal.existingReview}
+                existingReview={reviewModal.existingReview ?? undefined}
               />
             </div>
           </div>
@@ -3691,15 +3749,15 @@ const TravelerBookings: React.FC = () => {
                           </div>
                         )}
 
-                        {(cancellationModal.policy as any).optionalServicesNonRefundable > 0 && (
+                        {(cancellationModal.policy.optionalServicesNonRefundable ?? 0) > 0 && (
                           <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
                             <p className="text-sm text-red-800 font-semibold mb-1">Servicios opcionales NO reembolsables:</p>
                             <p className="text-sm text-red-700">
-                              Tienes ${formatCurrencyMXN((cancellationModal.policy as any).optionalServicesNonRefundable as number)} en servicios adicionales marcados como no reembolsables. Al cancelar, este monto <strong>no se devolverá</strong>, ya que fue contratado con esa condición.
+                              Tienes ${formatCurrencyMXN(cancellationModal.policy.optionalServicesNonRefundable ?? 0)} en servicios adicionales marcados como no reembolsables. Al cancelar, este monto <strong>no se devolverá</strong>, ya que fue contratado con esa condición.
                             </p>
-                            {(cancellationModal.policy as any).optionalServicesRefundable > 0 && (
+                            {(cancellationModal.policy.optionalServicesRefundable ?? 0) > 0 && (
                               <p className="text-sm text-red-600 mt-1">
-                                Los servicios reembolsables (${formatCurrencyMXN((cancellationModal.policy as any).optionalServicesRefundable as number)}) sí se devuelven.
+                                Los servicios reembolsables (${formatCurrencyMXN(cancellationModal.policy.optionalServicesRefundable ?? 0)}) sí se devuelven.
                               </p>
                             )}
                           </div>
@@ -3801,14 +3859,14 @@ const TravelerBookings: React.FC = () => {
                   <p className="text-gray-600 mb-4">
                     Tu reserva ha sido cancelada exitosamente. Recibirás un correo electrónico con los detalles.
                   </p>
-                  {(cancellationModal.policy?.cashRefund ?? cancellationModal.policy?.refundAmountToTraveler) > 0 && (
+                  {(cancellationModal.policy?.cashRefund ?? cancellationModal.policy?.refundAmountToTraveler ?? 0) > 0 && (
                     <p className="text-sm text-gray-600">
-                      El reembolso de {formatCurrencyMXN(cancellationModal.policy.cashRefund ?? cancellationModal.policy.refundAmountToTraveler)} ha sido depositado en tu ToursRed Cash.
+                      El reembolso de {formatCurrencyMXN(cancellationModal.policy?.cashRefund ?? cancellationModal.policy?.refundAmountToTraveler ?? 0)} ha sido depositado en tu ToursRed Cash.
                     </p>
                   )}
                   {(cancellationModal.policy?.pointsRefund ?? 0) > 0 && (
                     <p className="text-sm text-gray-600">
-                      Y {cancellationModal.policy.pointsRefund.toLocaleString('es-MX')} puntos regresaron a tus ToursRed Points.
+                      Y {(cancellationModal.policy?.pointsRefund ?? 0).toLocaleString('es-MX')} puntos regresaron a tus ToursRed Points.
                     </p>
                   )}
                 </div>
@@ -3887,12 +3945,12 @@ const TravelerBookings: React.FC = () => {
                               <div className="text-right">
                                 {(() => {
                                   const b = partialCancellationModal.booking!;
-                                  const totalPrice = Number((b as any).total_price) || 0;
-                                  const depositAmount = Number((b as any).deposit_amount) || totalPrice;
+                                  const totalPrice = Number(b.total_price) || 0;
+                                  const depositAmount = Number(b.deposit_amount) || totalPrice;
                                   const totalPaid = depositAmount + (partialCancellationModal.installmentsPaid || 0);
                                   const ratio = totalPrice > 0 ? totalPaid / totalPrice : 1;
                                   const anticipo = Math.round(Number(traveler.precio_aplicado) * ratio * 100) / 100;
-                                  const hasPromo = Number((traveler as any).promo_discount_per_traveler) > 0;
+                                  const hasPromo = Number(traveler.promo_discount_per_traveler) > 0;
                                   return (
                                     <>
                                       <div className={`font-semibold text-sm ${hasPromo ? 'text-emerald-600' : 'text-gray-800'}`}>
@@ -4068,14 +4126,14 @@ const TravelerBookings: React.FC = () => {
                   </div>
                   <h3 className="text-xl font-bold text-green-600 mb-2">Cancelación Parcial Exitosa</h3>
                   <p className="text-gray-600 mb-2">Los viajeros han sido removidos de tu reserva.</p>
-                  {partialCancellationModal.policy?.refundAmountToTraveler > 0 && (
+                  {(partialCancellationModal.policy?.refundAmountToTraveler ?? 0) > 0 && (
                     <p className="text-sm text-gray-600">
-                      El reembolso de {formatCurrencyMXN(Number(partialCancellationModal.policy.refundAmountToTraveler))} ha sido acreditado en tu ToursRed Cash.
+                      El reembolso de {formatCurrencyMXN(partialCancellationModal.policy?.refundAmountToTraveler ?? 0)} ha sido acreditado en tu ToursRed Cash.
                     </p>
                   )}
-                  {Number(partialCancellationModal.policy?.pointsRefund || 0) > 0 && (
+                  {(partialCancellationModal.policy?.pointsRefund ?? 0) > 0 && (
                     <p className="text-sm text-gray-600">
-                      Y {Number(partialCancellationModal.policy.pointsRefund).toLocaleString('es-MX')} puntos regresaron a tus ToursRed Points.
+                      Y {(partialCancellationModal.policy?.pointsRefund ?? 0).toLocaleString('es-MX')} puntos regresaron a tus ToursRed Points.
                     </p>
                   )}
                 </div>
@@ -4148,7 +4206,7 @@ const TravelerBookings: React.FC = () => {
                     const discountAmount = paymentModal.booking?.discount_amount || 0;
                     const userPayment = paymentModal.booking?.user_payment || paymentModal.booking?.deposit_amount || 0;
                     const preDiscountAmount = userPayment + discountAmount;
-                    const discountCode = (paymentModal.booking as any)?.discount_codes;
+                    const discountCode = paymentModal.booking?.discount_codes;
 
                     return (
                       <>
@@ -4758,7 +4816,7 @@ const TravelerBookings: React.FC = () => {
                           name="sup_payment_method"
                           value={method.id}
                           checked={supplementPaymentModal.selectedMethod === method.id}
-                          onChange={() => setSupplementPaymentModal(prev => ({ ...prev, selectedMethod: method.id as any }))}
+                          onChange={() => setSupplementPaymentModal(prev => ({ ...prev, selectedMethod: method.id as ExtraPaymentMethod }))}
                           className="w-4 h-4 text-teal-600"
                         />
                         <span className="text-sm text-gray-700">{method.label}</span>
@@ -4873,9 +4931,9 @@ const TravelerBookings: React.FC = () => {
                     className={`flex-1 py-3 text-sm font-medium transition-colors ${supplementsModal.activeTab === 'mis_suplementos' ? 'border-b-2 border-teal-600 text-teal-700' : 'text-gray-500 hover:text-gray-700'}`}
                   >
                     Mis Suplementos
-                    {mySupplements.filter((bs: any) => !['rejected', 'cancelled'].includes(bs.status)).length > 0 && (
+                    {mySupplements.filter((bs) => !['rejected', 'cancelled'].includes(bs.status)).length > 0 && (
                       <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-teal-100 text-teal-700">
-                        {mySupplements.filter((bs: any) => !['rejected', 'cancelled'].includes(bs.status)).length}
+                        {mySupplements.filter((bs) => !['rejected', 'cancelled'].includes(bs.status)).length}
                       </span>
                     )}
                   </button>
@@ -4901,7 +4959,7 @@ const TravelerBookings: React.FC = () => {
                     {mySupplements.length === 0 ? (
                       <p className="text-sm text-gray-500 text-center py-6">No tienes suplementos solicitados para esta reserva.</p>
                     ) : (
-                      mySupplements.map((bs: any) => {
+                      mySupplements.map((bs) => {
                         const sc = SUPP_STATUS[bs.status] || { label: bs.status, color: 'bg-gray-100 text-gray-500' };
                         const expectedAmount = Number(bs.unit_price || 0) * Number(bs.quantity || 1);
                         const canPay = bs.status === 'pending_payment' || bs.status === 'approved';
@@ -5006,9 +5064,9 @@ const TravelerBookings: React.FC = () => {
                     ) : (
                       <>
                         <p className="text-xs text-gray-500">Extras que puedes agregar a tu reserva actual.</p>
-                        {available.map((ts: any) => {
+                        {available.map((ts) => {
                           const activeCount = mySupplements.filter(
-                            (bs: any) => bs.tour_supplement_id === ts.id && !['rejected', 'cancelled'].includes(bs.status)
+                            (bs) => bs.tour_supplement_id === ts.id && !['rejected', 'cancelled'].includes(bs.status)
                           ).length;
                           return (
                             <div key={ts.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
@@ -5097,7 +5155,7 @@ const TravelerBookings: React.FC = () => {
                           name="direct_sup_payment_method"
                           value={method.id}
                           checked={supplementDirectPayModal.selectedMethod === method.id}
-                          onChange={() => setSupplementDirectPayModal(prev => ({ ...prev, selectedMethod: method.id as any }))}
+                          onChange={() => setSupplementDirectPayModal(prev => ({ ...prev, selectedMethod: method.id as ExtraPaymentMethod }))}
                           className="w-4 h-4 text-teal-600"
                         />
                         <span className="text-sm text-gray-700">{method.label}</span>
@@ -5194,7 +5252,7 @@ const TravelerBookings: React.FC = () => {
               >
                 Servicios Opcionales
               </button>
-              {!isForeignTraveler && !(extrasModal.booking?.tours as any)?.includes_insurance && (
+              {!isForeignTraveler && !extrasModal.booking?.tours?.includes_insurance && (
                 <button
                   onClick={() => setExtrasModal(prev => ({ ...prev, activeTab: 'seguro' }))}
                   className={`flex-1 py-3 text-sm font-medium transition-colors ${extrasModal.activeTab === 'seguro' ? 'border-b-2 border-teal-600 text-teal-700' : 'text-gray-500 hover:text-gray-700'}`}
@@ -5217,7 +5275,7 @@ const TravelerBookings: React.FC = () => {
                       {extrasModal.tourOptionalServices.length === 0 ? (
                         <p className="text-sm text-gray-500 text-center py-8">No hay servicios opcionales disponibles para este tour.</p>
                       ) : (
-                        extrasModal.tourOptionalServices.map((svc: any) => {
+                        extrasModal.tourOptionalServices.map((svc) => {
                           const bosEntry = extrasModal.existingBos[svc.id];
                           const isCancelled = bosEntry?.is_cancelled === true || (bosEntry && bosEntry.quantity === 0);
                           const isActive = bosEntry && !isCancelled;
@@ -5300,7 +5358,7 @@ const TravelerBookings: React.FC = () => {
                           <p className="font-semibold text-gray-900">Seguro de viaje incluido</p>
                           <p className="text-sm text-gray-500 text-center">Ya tienes el seguro de asistencia en viaje para esta reserva.</p>
                         </div>
-                      ) : extrasModal.insurancePricePerDay > 0 && ['transport', 'experience', 'ticket'].includes((extrasModal.booking?.tours as any)?.activity_type) ? (
+                      ) : extrasModal.insurancePricePerDay > 0 && ['transport', 'experience', 'ticket'].includes(extrasModal.booking?.tours?.activity_type ?? '') ? (
                         /* Standalone insurance for non-guided activities */
                         <div className="space-y-4">
                           <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
@@ -5393,7 +5451,7 @@ const TravelerBookings: React.FC = () => {
                                 <p className="font-semibold text-gray-900">Seguro de asistencia en viaje</p>
                                 <p className="text-sm text-gray-600 mt-1">Protege tu viaje con cobertura de asistencia medica y cancelacion.</p>
                                 <p className="text-xl font-bold text-blue-700 mt-3">{formatCurrencyMXN(extrasModal.insuranceCost)}</p>
-                                <p className="text-xs text-gray-500">Total para {(extrasModal.booking as any)?.travelers_count || 1} viajero(s)</p>
+                                <p className="text-xs text-gray-500">Total para {extrasModal.booking?.travelers_count || 1} viajero(s)</p>
                               </div>
                             </div>
                           </div>
@@ -5484,7 +5542,7 @@ const TravelerBookings: React.FC = () => {
                           name="extras_payment_method"
                           value={method.id}
                           checked={extrasPaymentModal.selectedMethod === method.id}
-                          onChange={() => setExtrasPaymentModal(prev => ({ ...prev, selectedMethod: method.id as any }))}
+                          onChange={() => setExtrasPaymentModal(prev => ({ ...prev, selectedMethod: method.id as ExtraPaymentMethod }))}
                           className="w-4 h-4 text-teal-600"
                         />
                         <span className="text-sm text-gray-700">{method.label}</span>

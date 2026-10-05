@@ -4,6 +4,70 @@ import { DollarSign, Calendar, Clock, CheckCircle, AlertCircle, RefreshCw, Uploa
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { format } from 'date-fns';
 import { mensajeDeError } from '../../lib/errores';
+import { comoFilas } from '../../lib/relacionesSupabase';
+import type { CommissionRecord } from '../../types';
+
+/** `agencies` es a-uno (la FK sale de la tabla que consulta), pero supabase-js lo infiere como arreglo. Ver relacionesSupabase.ts. */
+interface CommissionRecordWithAgency extends CommissionRecord {
+  agencies: { id: string; name: string };
+}
+
+interface PenaltyRecordWithAgency {
+  id: string;
+  agency_id: string;
+  agency_net_amount: number;
+  platform_amount: number;
+  agencies: { id: string; name: string };
+}
+
+interface CommissionRecordWithAgencyAndTour extends CommissionRecord {
+  agencies: { id: string; name: string };
+  tours: { id: string; name: string };
+}
+
+type ManualPaymentMethod = 'bank_transfer' | 'check' | 'paypal' | 'mercadopago' | 'other';
+
+interface PenaltyRecordRow {
+  id: string;
+  agency_id: string;
+  created_at: string;
+  cancellation_type: string;
+  cancellation_policy_type: string;
+  gross_penalty: number;
+  agency_net_amount: number;
+  status: 'pending' | 'processed';
+  processed_at?: string | null;
+  agencies: { name: string } | null;
+  tours: { name: string } | null;
+}
+
+interface PenaltyDetailRow {
+  agency_net_amount: number;
+  agencies: { name: string } | null;
+}
+
+interface PenaltyDetails {
+  records: PenaltyDetailRow[];
+  total: number;
+  agencyName: string;
+}
+
+interface PaymentDetails {
+  records: CommissionRecordWithAgencyAndTour[];
+  penalties: PenaltyRecordWithAgency[];
+  totalAmount: number;
+  commissionTotal: number;
+  platformCommissionTotal: number;
+  platformCommissionFromBookings: number;
+  platformCommissionFromPenalties: number;
+  totalTourPrice: number;
+  penaltyTotal: number;
+  recordsCount: number;
+  penaltiesCount: number;
+  agencyName: string;
+  tourName: string;
+  isSlotPayment: boolean;
+}
 
 interface AgencyPayoutSummary {
   agency_id: string;
@@ -71,7 +135,7 @@ const AdminPayouts: React.FC = () => {
   const [agencySummaries, setAgencySummaries] = useState<AgencyPayoutSummary[]>([]);
   const [completedTours, setCompletedTours] = useState<CompletedTourData[]>([]);
   const [completedReceptivoSlots, setCompletedReceptivoSlots] = useState<CompletedReceptivoSlotData[]>([]);
-  const [penaltyRecords, setPenaltyRecords] = useState<any[]>([]);
+  const [penaltyRecords, setPenaltyRecords] = useState<PenaltyRecordRow[]>([]);
   const [tourFilter, setTourFilter] = useState<'pending' | 'processed' | 'all'>('pending');
   const [penaltyFilter, setPenaltyFilter] = useState<'pending' | 'processed' | 'all'>('pending');
   const [selectedAgency, setSelectedAgency] = useState<string | null>(null);
@@ -117,9 +181,12 @@ const AdminPayouts: React.FC = () => {
     // sin los descuentos, que es de mas.
     if (penaltiesRes.error) throw penaltiesRes.error;
 
+    const commissionRecords = comoFilas<CommissionRecordWithAgency>(commissionsRes.data);
+    const penaltyRecords = comoFilas<PenaltyRecordWithAgency>(penaltiesRes.data);
+
     const agencyIds = [...new Set([
-      ...(commissionsRes.data || []).map((r: any) => r.agency_id),
-      ...(penaltiesRes.data || []).map((r: any) => r.agency_id),
+      ...commissionRecords.map((r) => r.agency_id),
+      ...penaltyRecords.map((r) => r.agency_id),
     ])];
 
     const { data: payoutSchedules, error: errorCalendarios } = await supabase
@@ -151,7 +218,7 @@ const AdminPayouts: React.FC = () => {
       }
     };
 
-    commissionsRes.data?.forEach((record: any) => {
+    commissionRecords.forEach((record) => {
       ensureAgency(record.agency_id, record.agencies.name);
       const s = agencyMap.get(record.agency_id)!;
       s.total_pending_commissions += Number(record.agency_net_amount);
@@ -160,7 +227,7 @@ const AdminPayouts: React.FC = () => {
       s.total_pending += Number(record.agency_net_amount);
     });
 
-    penaltiesRes.data?.forEach((record: any) => {
+    penaltyRecords.forEach((record) => {
       ensureAgency(record.agency_id, record.agencies.name);
       const s = agencyMap.get(record.agency_id)!;
       s.total_pending_penalties += Number(record.agency_net_amount);
@@ -193,7 +260,7 @@ const AdminPayouts: React.FC = () => {
       .select(`*, agencies(name), tours(name, start_date), bookings(booking_code, user_id)`)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    setPenaltyRecords(data || []);
+    setPenaltyRecords(comoFilas<PenaltyRecordRow>(data));
   };
 
   const createCommissionRecords = async (tourId: string) => {
@@ -728,9 +795,9 @@ interface ProcessPaymentModalProps {
 const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClose, agencyId, tourId, slotId, onSuccess }) => {
   const formatCurrency = (amount: number) => formatCurrencyMXN(amount);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentDetails, setPaymentDetails] = useState<any>(null);
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'check' | 'paypal' | 'mercadopago' | 'other'>('bank_transfer');
+  const [paymentMethod, setPaymentMethod] = useState<ManualPaymentMethod>('bank_transfer');
   const [billNumber, setBillNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -750,7 +817,7 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
           // salta el filtro entero: el modal mostraria TODAS las comisiones
           // pendientes de la agencia en vez de las de esta salida.
           if (errorReservasSalida) throw errorReservasSalida;
-          const bookingIds = (slotBookings || []).map((b: any) => b.id);
+          const bookingIds = (slotBookings || []).map((b) => b.id);
           if (bookingIds.length > 0) {
             query = query.in('booking_id', bookingIds);
           }
@@ -760,14 +827,16 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
           query = query.eq('agency_id', agencyId);
         }
 
-        const { data, error } = await query;
+        const { data: rawData, error } = await query;
         if (error) throw error;
+        const data = comoFilas<CommissionRecordWithAgencyAndTour>(rawData);
 
         let penaltyQuery = supabase.from('cancellation_penalty_records').select('*, agencies!inner(id, name)').eq('status', 'pending');
         if (agencyId) penaltyQuery = penaltyQuery.eq('agency_id', agencyId);
-        const { data: penalties, error: errorPenalizaciones } = await penaltyQuery;
+        const { data: rawPenalties, error: errorPenalizaciones } = await penaltyQuery;
         // Sin penalizaciones el total sale sin descuentos: se le pagaria de mas.
         if (errorPenalizaciones) throw errorPenalizaciones;
+        const penalties = comoFilas<PenaltyRecordWithAgency>(rawPenalties);
 
         // Los sumandos vienen limpios de la BD (numeric con 2 decimales), pero
         // acumularlos con reduce() en coma flotante deja residuo: los 7 registros
@@ -838,8 +907,8 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
             },
             body: JSON.stringify({
               agency_id: agencyIdToNotify,
-              commission_ids: paymentDetails.records?.map((r: any) => r.id) || [],
-              penalty_ids: paymentDetails.penalties?.map((r: any) => r.id) || [],
+              commission_ids: paymentDetails.records?.map((r) => r.id) || [],
+              penalty_ids: paymentDetails.penalties?.map((r) => r.id) || [],
               total_amount: paymentDetails.totalAmount,
               net_amount: paymentDetails.totalAmount,
               platform_commission_amount: paymentDetails.platformCommissionTotal,
@@ -860,7 +929,7 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
           await supabase.functions.invoke('send-payout-confirmation', {
             body: {
               agency_id: agencyIdToNotify,
-              commission_ids: paymentDetails.records?.map((r: any) => r.id) || [],
+              commission_ids: paymentDetails.records?.map((r) => r.id) || [],
               total_amount: paymentDetails.totalAmount,
               payment_method: paymentMethod, payment_notes: notes, receipt_url: receiptUrl
             }
@@ -967,7 +1036,7 @@ const ProcessPaymentModal: React.FC<ProcessPaymentModalProps> = ({ isOpen, onClo
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Método de Pago</label>
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as ManualPaymentMethod)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <option value="bank_transfer">Transferencia Bancaria</option>
                 <option value="check">Cheque</option>
                 <option value="paypal">PayPal</option>
@@ -1051,8 +1120,8 @@ interface ProcessPenaltyModalProps {
 const ProcessPenaltyModal: React.FC<ProcessPenaltyModalProps> = ({ isOpen, penaltyIds, onClose, onSuccess }) => {
   const formatCurrency = (amount: number) => formatCurrencyMXN(amount);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [details, setDetails] = useState<any>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'check' | 'paypal' | 'mercadopago' | 'other'>('bank_transfer');
+  const [details, setDetails] = useState<PenaltyDetails | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<ManualPaymentMethod>('bank_transfer');
   const [notes, setNotes] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
@@ -1061,7 +1130,7 @@ const ProcessPenaltyModal: React.FC<ProcessPenaltyModalProps> = ({ isOpen, penal
   useEffect(() => {
     const load = async () => {
       if (!isOpen || penaltyIds.length === 0) return;
-      const { data, error } = await supabase.from('cancellation_penalty_records').select('*, agencies(name), tours(name)').in('id', penaltyIds);
+      const { data: rawData, error } = await supabase.from('cancellation_penalty_records').select('*, agencies(name), tours(name)').in('id', penaltyIds);
       // Sin registros el modal mostraria un total de 0 y dejaria confirmar un
       // pago vacio que igual marca las penalizaciones como procesadas.
       if (error) {
@@ -1069,8 +1138,9 @@ const ProcessPenaltyModal: React.FC<ProcessPenaltyModalProps> = ({ isOpen, penal
         setErrorMessage('No pudimos cargar el detalle de las penalizaciones. Cierra y vuelve a abrir.');
         return;
       }
-      const total = data?.reduce((s, r) => s + Number(r.agency_net_amount), 0) || 0;
-      setDetails({ records: data, total, agencyName: data?.[0]?.agencies?.name || '' });
+      const data = comoFilas<PenaltyDetailRow>(rawData);
+      const total = data.reduce((s, r) => s + Number(r.agency_net_amount), 0) || 0;
+      setDetails({ records: data, total, agencyName: data[0]?.agencies?.name || '' });
     };
     load();
   }, [isOpen, penaltyIds]);
@@ -1126,7 +1196,7 @@ const ProcessPenaltyModal: React.FC<ProcessPenaltyModalProps> = ({ isOpen, penal
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Método de Pago</label>
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as ManualPaymentMethod)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                 <option value="bank_transfer">Transferencia Bancaria</option>
                 <option value="check">Cheque</option>
                 <option value="paypal">PayPal</option>

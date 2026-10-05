@@ -4,6 +4,20 @@ import { Clock, Landmark, Banknote, Download, AlertCircle, CheckCircle, ArrowRig
 import { supabase } from '../lib/supabase';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { mensajeDeError } from '../lib/errores';
+import { comoFila } from '../lib/relacionesSupabase';
+
+/** Select parcial usado en todo este archivo para pintar el resumen. */
+interface SlimTour {
+  name: string;
+  destination: string;
+  image_url: string;
+}
+
+/** `tours`/`bookings` embebidos son a-uno (la FK sale de la tabla que consulta), pero supabase-js los infiere como arreglo. Ver relacionesSupabase.ts. */
+interface SlimBookingWithTour {
+  booking_code: string;
+  tours: SlimTour | null;
+}
 
 interface PaymentTransactionMeta {
   openpay_method?: string;
@@ -71,11 +85,12 @@ const OpenPayPaymentPendingPage: React.FC = () => {
         const meta = slot.pending_payment_metadata as PaymentTransactionMeta | null;
         if (meta) setTransaction(meta);
 
+        const slotTour = comoFila<SlimTour | null>(slot.tours);
         setSummary({
           title: 'Tour destacado activado correctamente',
-          tourName: (slot.tours as any)?.name || 'Tour destacado',
-          destination: (slot.tours as any)?.destination,
-          imageUrl: (slot.tours as any)?.image_url,
+          tourName: slotTour?.name || 'Tour destacado',
+          destination: slotTour?.destination,
+          imageUrl: slotTour?.image_url,
           amount: Number(slot.total_amount) || 0,
         });
         setTxAmount(Number(slot.total_amount) || 0);
@@ -141,13 +156,14 @@ const OpenPayPaymentPendingPage: React.FC = () => {
           ? (txAmount ?? 0)
           : (bookingData.user_payment ?? bookingData.deposit_amount ?? 0);
 
+        const bookingTour = comoFila<SlimTour | null>(bookingData.tours);
         setSummary({
           title: ctx === 'insurance'
             ? 'Seguro de viaje agregado correctamente'
             : 'Reserva creada correctamente',
-          tourName: (bookingData.tours as any)?.name || 'Tour',
-          destination: (bookingData.tours as any)?.destination,
-          imageUrl: (bookingData.tours as any)?.image_url,
+          tourName: bookingTour?.name || 'Tour',
+          destination: bookingTour?.destination,
+          imageUrl: bookingTour?.image_url,
           bookingCode: bookingData.booking_code,
           amount,
         });
@@ -166,16 +182,16 @@ const OpenPayPaymentPendingPage: React.FC = () => {
         if (suppError) throw suppError;
         if (!supp) throw new Error('Suplemento no encontrado');
 
-        const booking = (supp as any).bookings;
+        const booking = comoFila<SlimBookingWithTour | null>(supp.bookings);
         setSummary({
           title: 'Suplemento creado correctamente',
           tourName: booking?.tours?.name || 'Tour',
           destination: booking?.tours?.destination,
           imageUrl: booking?.tours?.image_url,
           bookingCode: booking?.booking_code,
-          amount: Number((supp as any).total_paid) || txAmount || 0,
+          amount: Number(supp.total_paid) || txAmount || 0,
         });
-        setTxAmount(Number((supp as any).total_paid) || txAmount || 0);
+        setTxAmount(Number(supp.total_paid) || txAmount || 0);
       } else if (ctx === 'optional_service') {
         const { data: os, error: osError } = await supabase
           .from('booking_optional_services')
@@ -190,16 +206,16 @@ const OpenPayPaymentPendingPage: React.FC = () => {
         if (osError) throw osError;
         if (!os) throw new Error('Servicio opcional no encontrado');
 
-        const booking = (os as any).bookings;
+        const booking = comoFila<SlimBookingWithTour | null>(os.bookings);
         setSummary({
           title: 'Servicio opcional agregado correctamente',
           tourName: booking?.tours?.name || 'Tour',
           destination: booking?.tours?.destination,
           imageUrl: booking?.tours?.image_url,
           bookingCode: booking?.booking_code,
-          amount: Number((os as any).total_paid) || txAmount || 0,
+          amount: Number(os.total_paid) || txAmount || 0,
         });
-        setTxAmount(Number((os as any).total_paid) || txAmount || 0);
+        setTxAmount(Number(os.total_paid) || txAmount || 0);
       } else if (ctx === 'payment_plan_installment') {
         const { data: plan, error: planError } = await supabase
           .from('booking_payment_plans')
@@ -213,7 +229,7 @@ const OpenPayPaymentPendingPage: React.FC = () => {
         if (planError) throw planError;
         if (!plan) throw new Error('Plan de pago no encontrado');
 
-        const booking = (plan as any).bookings;
+        const booking = comoFila<SlimBookingWithTour | null>(plan.bookings);
         setSummary({
           title: 'Abono registrado correctamente',
           tourName: booking?.tours?.name || 'Tour',

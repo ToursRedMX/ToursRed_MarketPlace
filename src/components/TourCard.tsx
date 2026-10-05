@@ -211,14 +211,14 @@ const TourCard: React.FC<TourCardProps> = ({
           </div>
           {tour.tour_type === 'receptivo' && (
             <span className={`absolute top-1.5 right-1.5 text-white text-[9px] font-bold px-1.5 py-0.5 rounded leading-none ${
-              (tour as any).activity_type === 'experience' ? 'bg-violet-600'
-              : (tour as any).activity_type === 'transport' ? 'bg-blue-600'
-              : (tour as any).activity_type === 'ticket' ? 'bg-orange-600'
+              tour.activity_type === 'experience' ? 'bg-violet-600'
+              : tour.activity_type === 'transport' ? 'bg-blue-600'
+              : tour.activity_type === 'ticket' ? 'bg-orange-600'
               : 'bg-teal-600'
             }`}>
-              {(tour as any).activity_type === 'experience' ? 'Exp.'
-                : (tour as any).activity_type === 'transport' ? 'Traslado'
-                : (tour as any).activity_type === 'ticket' ? 'Entrada'
+              {tour.activity_type === 'experience' ? 'Exp.'
+                : tour.activity_type === 'transport' ? 'Traslado'
+                : tour.activity_type === 'ticket' ? 'Entrada'
                 : 'Recep.'}
             </span>
           )}

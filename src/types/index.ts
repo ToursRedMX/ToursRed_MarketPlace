@@ -173,6 +173,20 @@ export interface BookingPaymentPlanTransaction {
   updated_at: string;
 }
 
+/** Elemento de la columna JSONB `tours.pickup_zones`. */
+export interface TourPickupZone {
+  name: string;
+  extra_cost: number;
+  cost_type: 'por_persona' | 'por_reserva';
+}
+
+/** Elemento de la columna JSONB `tours.tour_languages`. */
+export interface TourLanguageOption {
+  language: string;
+  extra_cost: number;
+  cost_type: 'por_persona' | 'fijo';
+}
+
 export interface Tour {
   id: string;
   agency_id: string;
@@ -238,8 +252,8 @@ export interface Tour {
   politica_bajo_minimo?: 'permite_espera' | 'exige_pago_minimo';
   pickup_available?: boolean;
   pickup_free_zone?: string;
-  pickup_zones?: any[];
-  tour_languages?: any[];
+  pickup_zones?: TourPickupZone[];
+  tour_languages?: TourLanguageOption[];
   restriction_pregnant?: boolean;
   restriction_disability?: boolean;
   restriction_physical?: boolean;
@@ -524,6 +538,17 @@ export interface Booking {
   // moverse juntos.
   payment_provider?: 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
   membership_service_fee_saved?: number;
+  // Mas columnas reales de `public.bookings` que faltaban aqui. Verificadas
+  // contra las migraciones que las agregaron (20260219, 20260604, 20260702).
+  promo_discount_amount?: number;
+  insurance_discount_amount?: number;
+  membership_purchased?: boolean;
+  membership_plan?: string | null;
+  membership_cost?: number;
+  promotion_id?: string | null;
+  conekta_method?: string | null;
+  bnpl_product_type?: string | null;
+  conekta_sub_charges?: unknown;
 }
 
 /**
@@ -600,6 +625,7 @@ export interface BookingSupplement {
   rejection_note?: string | null;
   expires_at?: string | null;
   requested_at: string;
+  updated_at: string;
   approved_at?: string | null;
   rejected_at?: string | null;
   paid_at?: string | null;
