@@ -192,11 +192,11 @@ const TravelersInfoPage: React.FC = () => {
     }
 
     let promoDiscountPct = 0;
-    if ((bookingData as any).promotion_id && Number((bookingData as any).promo_discount_amount) > 0) {
+    if (bookingData.promotion_id && Number(bookingData.promo_discount_amount) > 0) {
       const { data: promoData, error: errorPromo } = await supabase
         .from('tour_promotions')
         .select('promotion_type, group_discount_percentage')
-        .eq('id', (bookingData as any).promotion_id)
+        .eq('id', bookingData.promotion_id)
         .maybeSingle();
 
       // Sin la promocion, el descuento por viajero sale en 0 aunque la reserva
@@ -744,7 +744,7 @@ const TravelersInfoPage: React.FC = () => {
         return;
       }
 
-      const paymentProvider = (booking as any)?.payment_provider || 'stripe';
+      const paymentProvider = booking?.payment_provider || 'stripe';
 
       if (paymentProvider === 'mercadopago') {
         const mpResponse = await fetch(
@@ -820,9 +820,9 @@ const TravelersInfoPage: React.FC = () => {
             body: JSON.stringify({
               booking_id: bookingId,
               amount: amountToCharge,
-              payment_method_type: (booking as any)?.conekta_method || 'card',
-              bnpl_product_type: (booking as any)?.bnpl_product_type || undefined,
-              sub_charges: (booking as any)?.conekta_sub_charges || undefined,
+              payment_method_type: booking?.conekta_method || 'card',
+              bnpl_product_type: booking?.bnpl_product_type || undefined,
+              sub_charges: booking?.conekta_sub_charges || undefined,
               context: 'booking_deposit',
               description: `Depósito para ${tour?.name}`,
             }),
@@ -867,9 +867,9 @@ const TravelersInfoPage: React.FC = () => {
               bookingId: bookingId,
               customerEmail: user?.email,
               amount: (() => {
-                const addMembership = (booking as any)?.membership_purchased || false;
+                const addMembership = booking?.membership_purchased || false;
                 if (!addMembership) return amountToCharge;
-                const membershipCost = (booking as any)?.membership_cost || 0;
+                const membershipCost = booking?.membership_cost || 0;
                 return Math.max(0, Math.round((amountToCharge - membershipCost) * 100) / 100);
               })(),
               description: `Depósito para ${tour?.name}`,
@@ -877,8 +877,8 @@ const TravelersInfoPage: React.FC = () => {
               cancel_url: `${window.location.origin}/booking-cancel?booking_id=${bookingId}`,
               toursRedCashUsed: toursRedCashUsed,
               pointsUsed: pointsUsed,
-              addMembership: (booking as any)?.membership_purchased || false,
-              membershipPlan: (booking as any)?.membership_plan || 'monthly',
+              addMembership: booking?.membership_purchased || false,
+              membershipPlan: booking?.membership_plan || 'monthly',
               metadata: {
                 points_used: pointsUsed.toString(),
                 points_discount: pointsDiscountAmount.toString(),
@@ -943,7 +943,7 @@ const TravelersInfoPage: React.FC = () => {
   const isEditingExistingBooking = booking?.payment_status === 'succeeded' ||
     booking?.status === 'confirmed' ||
     booking?.status === 'completed';
-  const nameChangesBlocked = !!(tour as any)?.name_changes_not_allowed && isEditingExistingBooking;
+  const nameChangesBlocked = !!tour?.name_changes_not_allowed && isEditingExistingBooking;
 
   if (splitInstructions) {
     const cardCharges = splitInstructions.charges.filter(c => c.payment_method_type === 'card');
@@ -1201,7 +1201,7 @@ const TravelersInfoPage: React.FC = () => {
             </div>
           )}
 
-          {!nameChangesBlocked && (tour as any)?.name_changes_not_allowed && !isEditingExistingBooking && (
+          {!nameChangesBlocked && tour?.name_changes_not_allowed && !isEditingExistingBooking && (
             <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-6">
               <div className="flex items-start">
                 <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 mr-3 flex-shrink-0" />

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { CheckCircle, Calendar, MapPin, Users, DollarSign, ArrowRight, CreditCard, Mail, Wallet, Award, Ticket, Tag, Bus, ShieldCheck } from 'lucide-react';
 import { supabase, parseDateFromDB, trackFeaturedBooking } from '../lib/supabase';
-import { Booking, Tour } from '../types';
+import { Booking, Tour, BookingOptionalService } from '../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
@@ -28,7 +28,7 @@ const BookingSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [booking, setBooking] = useState<Booking | null>(null);
   const [tour, setTour] = useState<Tour | null>(null);
-  const [optionalServices, setOptionalServices] = useState<any[]>([]);
+  const [optionalServices, setOptionalServices] = useState<Pick<BookingOptionalService, 'id' | 'service_kind' | 'description' | 'subtotal' | 'total_paid' | 'service_charge' | 'is_cancelled'>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
@@ -359,13 +359,13 @@ const BookingSuccessPage: React.FC = () => {
                     </div>
                   )}
 
-                  {(booking as any).selected_seats && Array.isArray((booking as any).selected_seats) && (booking as any).selected_seats.length > 0 && (
+                  {booking.selected_seats && Array.isArray(booking.selected_seats) && booking.selected_seats.length > 0 && (
                     <div className="flex items-start">
                       <Bus className="h-5 w-5 text-blue-500 mr-3 mt-1" />
                       <div>
                         <div className="text-sm text-gray-500">Asientos Asignados</div>
                         <div className="flex flex-wrap gap-1.5 mt-1">
-                          {[...(booking as any).selected_seats].sort((a: number, b: number) => a - b).map((seat: number) => (
+                          {[...booking.selected_seats].sort((a: number, b: number) => a - b).map((seat: number) => (
                             <span key={seat} className="inline-flex items-center justify-center w-8 h-8 bg-blue-600 text-white text-sm font-bold rounded-lg">
                               {seat}
                             </span>
@@ -447,13 +447,13 @@ const BookingSuccessPage: React.FC = () => {
                     </div>
                   )}
 
-                  {Number((booking as any).promo_discount_amount) > 0 && (
+                  {Number(booking.promo_discount_amount) > 0 && (
                     <div className="flex justify-between bg-emerald-50 border border-emerald-200 rounded px-2 py-1.5 -mx-1">
                       <span className="text-emerald-700 font-medium flex items-center">
                         <Tag className="h-4 w-4 mr-1" />
                         Descuento Grupal:
                       </span>
-                      <span className="font-bold text-emerald-600">-{formatCurrencyMXN(Number((booking as any).promo_discount_amount))}</span>
+                      <span className="font-bold text-emerald-600">-{formatCurrencyMXN(Number(booking.promo_discount_amount))}</span>
                     </div>
                   )}
 
@@ -515,36 +515,36 @@ const BookingSuccessPage: React.FC = () => {
                     </div>
                   )}
 
-                  {(booking as any).membership_purchased && (
+                  {booking.membership_purchased && (
                     <div className="flex justify-between items-center bg-indigo-50 border border-indigo-200 rounded px-2 py-1.5 -mx-1">
                       <span className="text-indigo-700 font-medium flex items-center">
                         <Award className="h-4 w-4 mr-1" />
-                        Membresía ToursRed Plus ({etiquetaPlanMembresia((booking as any).membership_plan) ?? 'Mensual'}):
+                        Membresía ToursRed Plus ({etiquetaPlanMembresia(booking.membership_plan) ?? 'Mensual'}):
                       </span>
                       <span className="font-bold text-indigo-700">
-                        {formatCurrencyMXN(Number((booking as any).membership_cost) || 0)}
+                        {formatCurrencyMXN(Number(booking.membership_cost) || 0)}
                       </span>
                     </div>
                   )}
 
-                  {(booking as any).travel_insurance_included && Number((booking as any).travel_insurance_cost) > 0 && (
+                  {booking.travel_insurance_included && Number(booking.travel_insurance_cost) > 0 && (
                     <div className="flex justify-between items-center bg-blue-50 border border-blue-200 rounded px-2 py-1.5 -mx-1">
                       <span className="text-blue-700 font-medium flex items-center">
                         <ShieldCheck className="h-4 w-4 mr-1" />
-                        Seguro de viaje ({(booking as any).insurance_days || 0} {((booking as any).insurance_days || 0) === 1 ? 'día' : 'días'} × {booking.travelers_count} {booking.travelers_count === 1 ? 'viajero' : 'viajeros'}):
+                        Seguro de viaje ({booking.insurance_days || 0} {(booking.insurance_days || 0) === 1 ? 'día' : 'días'} × {booking.travelers_count} {booking.travelers_count === 1 ? 'viajero' : 'viajeros'}):
                       </span>
                       <span className="font-bold text-blue-700 flex items-center gap-2">
-                        {Number((booking as any).insurance_discount_amount) > 0 && (
+                        {Number(booking.insurance_discount_amount) > 0 && (
                           <span className="text-gray-400 line-through font-normal text-xs">
                             {formatCurrencyMXN(
-                              (Number((booking as any).travel_insurance_cost) || 0) +
-                              (Number((booking as any).insurance_discount_amount) || 0)
+                              (Number(booking.travel_insurance_cost) || 0) +
+                              (Number(booking.insurance_discount_amount) || 0)
                             )}
                           </span>
                         )}
-                        {Number((booking as any).travel_insurance_cost) === 0
+                        {Number(booking.travel_insurance_cost) === 0
                           ? <span className="text-green-600">GRATIS</span>
-                          : formatCurrencyMXN(Number((booking as any).travel_insurance_cost))}
+                          : formatCurrencyMXN(Number(booking.travel_insurance_cost))}
                       </span>
                     </div>
                   )}
