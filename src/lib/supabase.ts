@@ -4,8 +4,8 @@ import { format } from 'date-fns';
 import { formatCurrency } from '../utils/formatCurrency';
 import { crearFetchConCorrelacion } from './fetchConCorrelacion';
 import { mensajeDeError } from './errores';
-import { comoFilas } from './relacionesSupabase';
-import type { Booking } from '../types';
+import { comoFila, comoFilas } from './relacionesSupabase';
+import type { Booking, User as UserProfile, Tour } from '../types';
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -111,8 +111,14 @@ type AuthPayload = { user: User | null; session: Session | null };
 // asi que como discriminante no descarta nada y `if (error) throw` no estrecha.
 type AuthFailure = Error | { message: string; code?: string };
 
+interface SignUpProfileData {
+  curp?: string | null;
+  passport_number?: string | null;
+  [key: string]: unknown;
+}
+
 type SignUpResult =
-  | { data: AuthPayload; error: null; profileData: any; isExistingUser: boolean }
+  | { data: AuthPayload; error: null; profileData: UserProfile | { id: string; email: string }; isExistingUser: boolean }
   | { data: null; error: AuthFailure; profileData: null; isExistingUser: false };
 
 type SignInResult =
@@ -123,7 +129,7 @@ export const signUp = async (
   email: string,
   password: string,
   role: UserRole,
-  profileData: Record<string, any> = {},
+  profileData: SignUpProfileData = {},
   captchaToken?: string
 ): Promise<SignUpResult> => {
   try {
@@ -466,7 +472,26 @@ export const getAllAgencies = async () => {
 };
 
 // Tour functions
-export const getTours = async (filters: any = {}) => {
+export interface TourFilters {
+  destination?: string | null;
+  departurePoint?: string | null;
+  includeExpired?: boolean;
+  tourName?: string | null;
+  category?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  agency?: string | null;
+  minPrice?: string | null;
+  maxPrice?: string | null;
+  petFriendly?: string | null;
+  tourType?: string | null;
+  activityType?: string | null;
+  includeInactiveAgencies?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export const getTours = async (filters: TourFilters = {}) => {
   try {
     console.log('🔍 Obteniendo tours con filtros:', filters);
 
@@ -637,13 +662,20 @@ export const getTours = async (filters: any = {}) => {
 
       if (filters.limit) {
         const offset = filters.offset ?? 0;
+        // `query` encadena `.or/.ilike/.contains/.gte/.lte/.eq` (filtros) y
+        // despues `.order` (transform): postgrest-js cambia de tipo de
+        // builder en esa transicion, y `let query` se queda fijo en el tipo
+        // del PRIMER assignment, sin `.range`. Mismo escape que
+        // `_shared/cobrosStripe.ts` para "Type instantiation is excessively
+        // deep" al intentar seguirle el tipo real al query builder.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         query = (query as any).range(offset, offset + filters.limit - 1);
       }
 
       const { data, error } = await query;
 
       if (data && filters.includeInactiveAgencies !== true) {
-        const filteredData = data.filter((tour: any) => tour.agencies?.is_active !== false);
+        const filteredData = comoFilas<TourRecommendationRow>(data).filter((tour) => tour.agencies?.is_active !== false);
         return { data: filteredData, error, count: filteredData.length };
       }
 
@@ -733,6 +765,9 @@ export const getTours = async (filters: any = {}) => {
 
     if (filters.limit) {
       const offset = filters.offset ?? 0;
+      // Mismo escape que el bloque de arriba: `query` pierde `.range` al
+      // reasignarse tras `.order`, por como postgrest-js tipa la cadena.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       query = (query as any).range(offset, offset + filters.limit - 1);
     }
 
@@ -746,10 +781,17 @@ export const getTours = async (filters: any = {}) => {
 };
 
 interface TourRecommendationRow {
+  id: string;
   agency_id: string;
   agencies?: { id: string; name: string; rating: number; is_active: boolean } | null;
   bookings?: { id: string; status: string }[];
   [key: string]: unknown;
+}
+
+/** `tours` es a-uno en `featured_tour_slots` (la FK sale del slot), pero supabase-js lo infiere como arreglo. Ver relacionesSupabase.ts. */
+interface FeaturedSlotWithTour {
+  id: string;
+  tours: TourRecommendationRow | null;
 }
 
 interface TourRecommendationScored extends TourRecommendationRow {
@@ -856,10 +898,10 @@ export const getActiveFeaturedTours = async () => {
     if (error) return { data: [], slotMap: {}, error };
 
     const slotMap: Record<string, string> = {};
-    const tours: any[] = [];
+    const tours: (TourRecommendationRow & { _featured_slot_id: string })[] = [];
 
-    for (const slot of data ?? []) {
-      const tour = (slot as any).tours;
+    for (const slot of comoFilas<FeaturedSlotWithTour>(data)) {
+      const tour = slot.tours;
       if (!tour || tour.agencies?.is_active === false) continue;
       slotMap[tour.id] = slot.id;
       tours.push({ ...tour, _featured_slot_id: slot.id });
@@ -908,10 +950,10 @@ export const getNewTours = async (limit = 20) => {
     if (error) return { data: [], error };
 
     const agencyCounts: Record<string, number> = {};
-    const capped: any[] = [];
-    for (const t of data ?? []) {
-      if ((t as any).agencies?.is_active === false) continue;
-      const aid = (t as any).agency_id;
+    const capped: TourRecommendationRow[] = [];
+    for (const t of (data as unknown as TourRecommendationRow[] ?? [])) {
+      if (t.agencies?.is_active === false) continue;
+      const aid = t.agency_id;
       agencyCounts[aid] = (agencyCounts[aid] || 0) + 1;
       if (agencyCounts[aid] <= 3) capped.push(t);
       if (capped.length >= limit) break;
@@ -948,7 +990,7 @@ export const getAgencyFeaturedSlots = async (agencyId: string) => {
       `)
       .eq('agency_id', agencyId)
       .order('created_at', { ascending: false });
-    const normalized = (data ?? []).map((slot: any) => ({
+    const normalized = (data ?? []).map((slot: { featured_tour_stats: unknown; [key: string]: unknown }) => ({
       ...slot,
       featured_tour_stats: Array.isArray(slot.featured_tour_stats)
         ? (slot.featured_tour_stats[0] ?? null)
@@ -1027,7 +1069,7 @@ export const joinFeaturedWaitlist = async (tourId: string, planId: string, agenc
       return { error: new Error('No se pudo asignar tu lugar en la lista de espera. Intenta de nuevo.') };
     }
 
-    const nextPosition = ((last as any)?.position ?? 0) + 1;
+    const nextPosition = (last?.position ?? 0) + 1;
     const { error } = await supabase
       .from('featured_tour_waitlist')
       .insert({ tour_id: tourId, agency_id: agencyId, plan_id: planId, position: nextPosition });
@@ -1148,7 +1190,7 @@ export const updateTourSlug = async (
   }
 };
 
-export const createTour = async (tourData: any, destinations: string[], userId: string) => {
+export const createTour = async (tourData: Record<string, unknown>, destinations: string[], userId: string) => {
   try {
     console.log('🏞️ Creando tour con datos:', tourData);
     
@@ -1200,7 +1242,7 @@ export const createTour = async (tourData: any, destinations: string[], userId: 
   }
 };
 
-export const updateTour = async (tourId: string, tourData: any) => {
+export const updateTour = async (tourId: string, tourData: Record<string, unknown>) => {
   try {
     const { data, error } = await supabase
       .from('tours')
@@ -1231,7 +1273,7 @@ export const deleteTour = async (tourId: string) => {
 };
 
 // Booking functions
-export const createBooking = async (bookingData: any) => {
+export const createBooking = async (bookingData: { points_used?: number; [key: string]: unknown }) => {
   try {
     const { data, error } = await supabase
       .from('bookings')
@@ -1760,7 +1802,7 @@ export const searchDestinations = async (query: string) => {
   }
 };
 
-export const createDestination = async (destinationData: any) => {
+export const createDestination = async (destinationData: Record<string, unknown>) => {
   try {
     const { data, error } = await supabase
       .from('destinations')
@@ -1783,7 +1825,7 @@ export const createDestination = async (destinationData: any) => {
   }
 };
 
-export const updateDestination = async (destinationId: string, destinationData: any) => {
+export const updateDestination = async (destinationId: string, destinationData: Record<string, unknown>) => {
   try {
     const { data, error } = await supabase
       .from('destinations')
@@ -1820,7 +1862,7 @@ export const deleteDestination = async (destinationId: string) => {
   }
 };
 
-export const addDestinationImage = async (destinationId: string, imageData: any) => {
+export const addDestinationImage = async (destinationId: string, imageData: Record<string, unknown>) => {
   try {
     const { data, error } = await supabase
       .from('destination_images')
@@ -2089,7 +2131,7 @@ export const validateCancellationEligibility = async (bookingId: string) => {
       };
     }
 
-    const tourStartDate = parseDateFromDB((booking.tours as any).start_date);
+    const tourStartDate = parseDateFromDB(comoFila<Pick<Tour, 'id' | 'name' | 'start_date' | 'cancellation_not_allowed'>>(booking.tours).start_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -2116,6 +2158,12 @@ export const validateCancellationEligibility = async (bookingId: string) => {
   }
 };
 
+// `booking` llega de TravelerBookings.tsx con `tours:tour_id(...)` embebido:
+// a-uno por la FK, pero supabase-js lo infiere como arreglo (relacionesSupabase.ts).
+// Tipar el parametro exigiria normalizar `tours` con `comoFila` en el UNICO
+// llamador, que vive en otro PR abierto del mismo barrido (#343) -- se deja
+// anotado en vez de tocar ese archivo desde aqui.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const calculateCancellationPolicy = async (booking: any): Promise<CancellationPolicy> => {
   const tour = booking.tours;
   const isReceptivo = tour.tour_type === 'receptivo';
@@ -2142,8 +2190,8 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
     }
 
     for (const inst of (installments || [])) {
-      if ((inst as any).installment_number > 1) {
-        installmentsPaid += Number((inst as any).amount_paid || 0);
+      if (inst.installment_number > 1) {
+        installmentsPaid += Number(inst.amount_paid || 0);
       }
     }
 
@@ -2160,7 +2208,7 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
     }
 
     for (const tx of (ppTransactions || [])) {
-      originalServiceCharge += Number((tx as any).service_charge || 0);
+      originalServiceCharge += Number(tx.service_charge || 0);
     }
   }
   const principalPaid = originalDepositAmount + installmentsPaid;
@@ -2197,8 +2245,8 @@ export const calculateCancellationPolicy = async (booking: any): Promise<Cancell
   let optionalServicesNonRefundable = 0;
 
   if (optionalServicesData) {
-    for (const bos of optionalServicesData) {
-      const isRefundable = (bos as any).tour_optional_services?.is_refundable !== false;
+    for (const bos of comoFilas<{ subtotal: number; tour_optional_service_id: string; tour_optional_services: { is_refundable: boolean } | null }>(optionalServicesData)) {
+      const isRefundable = bos.tour_optional_services?.is_refundable !== false;
       if (isRefundable) {
         optionalServicesRefundable += Number(bos.subtotal || 0);
       } else {

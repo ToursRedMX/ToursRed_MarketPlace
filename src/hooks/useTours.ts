@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { getTours } from '../lib/supabase';
+import { getTours, TourFilters } from '../lib/supabase';
 
-export const useTours = (filters: any = {}) => {
+export const useTours = (filters: TourFilters = {}) => {
   return useQuery({
     queryKey: ['tours', filters],
     queryFn: async () => {
