@@ -173,6 +173,20 @@ export interface BookingPaymentPlanTransaction {
   updated_at: string;
 }
 
+/** Elemento de la columna JSONB `tours.pickup_zones`. */
+export interface TourPickupZone {
+  name: string;
+  extra_cost: number;
+  cost_type: 'por_persona' | 'por_reserva';
+}
+
+/** Elemento de la columna JSONB `tours.tour_languages`. */
+export interface TourLanguageOption {
+  language: string;
+  extra_cost: number;
+  cost_type: 'por_persona' | 'fijo';
+}
+
 export interface Tour {
   id: string;
   agency_id: string;
@@ -238,8 +252,8 @@ export interface Tour {
   politica_bajo_minimo?: 'permite_espera' | 'exige_pago_minimo';
   pickup_available?: boolean;
   pickup_free_zone?: string;
-  pickup_zones?: any[];
-  tour_languages?: any[];
+  pickup_zones?: TourPickupZone[];
+  tour_languages?: TourLanguageOption[];
   restriction_pregnant?: boolean;
   restriction_disability?: boolean;
   restriction_physical?: boolean;
