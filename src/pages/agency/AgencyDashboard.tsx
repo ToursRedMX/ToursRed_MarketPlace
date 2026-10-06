@@ -6,6 +6,21 @@ import { useAgencyId } from '../../hooks/useAgencyId';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
 import { supabase } from '../../lib/supabase';
 import { mensajeDeError } from '../../lib/errores';
+import { comoFilas } from '../../lib/relacionesSupabase';
+
+/** `tours`/`users` son a-uno (las FK salen de `bookings`), pero supabase-js los infiere como arreglo. Ver relacionesSupabase.ts. */
+interface AgencyBookingRow {
+  id: string;
+  status: string;
+  created_at: string;
+  total_price: number;
+  deposit_amount?: number | null;
+  payment_status?: string | null;
+  travelers_count: number;
+  tour_id: string;
+  tours: { name: string; destination: string } | null;
+  users: { first_name: string; last_name: string; email: string } | null;
+}
 
 interface DashboardStats {
   totalTours: number;
@@ -15,7 +30,7 @@ interface DashboardStats {
   totalTravelers: number;
   totalRevenue: number;
   pendingPayouts: number;
-  recentActivity: any[];
+  recentActivity: AgencyBookingRow[];
 }
 
 interface PreventaStats {
@@ -82,6 +97,8 @@ const AgencyDashboard: React.FC = () => {
             status,
             created_at,
             total_price,
+            deposit_amount,
+            payment_status,
             travelers_count,
             tour_id,
             tours(name, destination),
@@ -123,7 +140,7 @@ const AgencyDashboard: React.FC = () => {
       }
 
       const tours = toursResult.data || [];
-      const bookings = bookingsResult.data || [];
+      const bookings = comoFilas<AgencyBookingRow>(bookingsResult.data);
       const recentBookings = recentBookingsResult.data || [];
       const commissionRecords = commissionRecordsResult.data || [];
 
@@ -167,14 +184,14 @@ const AgencyDashboard: React.FC = () => {
 
       // Calcular preventas activas hoy
       const todayStr = new Date().toISOString().split('T')[0];
-      const toursEnPreventa = tours.filter((t: any) =>
+      const toursEnPreventa = tours.filter((t) =>
         t.preventa_activa &&
         t.preventa_inicio && t.preventa_inicio <= todayStr &&
         t.preventa_fin && t.preventa_fin >= todayStr
       );
 
       if (toursEnPreventa.length > 0) {
-        const tourIdsEnPreventa = toursEnPreventa.map((t: any) => t.id);
+        const tourIdsEnPreventa = toursEnPreventa.map((t) => t.id);
         const { data: preventaBookings, error: errorPreventa } = await supabase
           .from('bookings')
           .select('tour_id, preventa_comision_descuento')
@@ -193,7 +210,7 @@ const AgencyDashboard: React.FC = () => {
           statsMap[b.tour_id].ahorro += parseFloat(b.preventa_comision_descuento || 0);
         }
 
-        const pStats: PreventaStats[] = toursEnPreventa.map((t: any) => {
+        const pStats: PreventaStats[] = toursEnPreventa.map((t) => {
           const fin = new Date(t.preventa_fin + 'T23:59:59');
           const diasRestantes = Math.max(0, Math.ceil((fin.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
           const data = statsMap[t.id] || { count: 0, ahorro: 0 };

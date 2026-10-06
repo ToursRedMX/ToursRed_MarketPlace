@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, NavigateFunction } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 async function redirectForUser(
-  user: any,
-  navigate: (path: string, opts?: any) => void,
+  user: User,
+  navigate: NavigateFunction,
   alFallar: (mensaje: string) => void,
 ) {
   const isFacebookProvider =
     user.app_metadata?.provider === 'facebook' ||
-    (user.identities ?? []).some((i: any) => i.provider === 'facebook');
+    (user.identities ?? []).some((i) => i.provider === 'facebook');
 
   if (isFacebookProvider) {
     const onboardingCompleted = user.user_metadata?.onboarding_completed;

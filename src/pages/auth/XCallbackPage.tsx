@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, NavigateFunction } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 async function redirectForUser(
-  user: any,
-  navigate: (path: string, opts?: any) => void,
+  user: User,
+  navigate: NavigateFunction,
   alFallar: (mensaje: string) => void,
 ) {
   const isXProvider =
     user.app_metadata?.provider === 'x' ||
     user.app_metadata?.provider === 'twitter' ||
-    (user.identities ?? []).some((i: any) => i.provider === 'x' || i.provider === 'twitter');
+    (user.identities ?? []).some((i) => i.provider === 'x' || i.provider === 'twitter');
 
   if (isXProvider) {
     const onboardingCompleted = user.user_metadata?.onboarding_completed;

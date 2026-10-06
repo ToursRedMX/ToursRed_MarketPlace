@@ -67,7 +67,7 @@ export interface Destination {
   created_at: string;
   updated_at: string;
   destination_images?: DestinationImage[];
-  tour_destinations?: any[];
+  tour_destinations?: { tours?: unknown }[];
 }
 
 export interface DestinationImage {
@@ -720,7 +720,7 @@ export interface Notification {
   type: 'agency_documents_approved' | 'agency_documents_rejected' | 'booking_approved' | 'booking_cancelled' | 'booking_confirmed' | 'booking_pending_approval' | 'booking_rejected' | 'commission_earned' | 'message_received' | 'payment_plan_overdue' | 'payment_plan_overdue_critical' | 'payment_plan_paid' | 'payment_plan_reminder' | 'referral_bonus_earned' | 'referral_completed' | 'referral_signup' | 'support_ticket_created' | 'support_ticket_updated' | 'system_announcement' | 'tour_announcement' | 'tour_rescheduled' | 'tour_updated';
   title: string;
   message: string;
-  data?: any;
+  data?: Record<string, unknown>;
   is_read: boolean;
   created_at: string;
   updated_at: string;
@@ -738,7 +738,7 @@ export interface PaymentTransaction {
   payment_method_type?: string;
   stripe_fee?: number;
   net_amount: number;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -999,7 +999,7 @@ export interface FinancialTransaction {
   reconciliation_status: 'pending' | 'reconciled' | 'disputed';
   payment_status: 'pending' | 'scheduled' | 'paid';
   notes?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   bookings?: Booking;
@@ -1039,8 +1039,8 @@ export interface IntegrationConfig {
   sync_frequency?: 'hourly' | 'daily' | 'weekly' | 'manual';
   last_sync_at?: string;
   last_sync_status?: 'success' | 'failed' | 'in_progress';
-  error_log?: any;
-  config_data?: any;
+  error_log?: Record<string, unknown>;
+  config_data?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   agencies?: Agency;

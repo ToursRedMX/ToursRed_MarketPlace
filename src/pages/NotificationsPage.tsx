@@ -400,13 +400,13 @@ const NotificationsPage: React.FC = () => {
                 </button>
               </div>
 
-              {(detailNotification.data?.tour_name || detailNotification.data?.booking_code) && (
+              {Boolean(detailNotification.data?.tour_name || detailNotification.data?.booking_code) && (
                 <div className="mx-6 mt-5 bg-blue-50 rounded-xl px-4 py-3 flex flex-col gap-y-0.5">
-                  {detailNotification.data?.tour_name && (
-                    <p className="text-sm font-semibold text-blue-800">{detailNotification.data.tour_name as string}</p>
+                  {Boolean(detailNotification.data?.tour_name) && (
+                    <p className="text-sm font-semibold text-blue-800">{detailNotification.data?.tour_name as string}</p>
                   )}
-                  {detailNotification.data?.booking_code && (
-                    <p className="text-xs text-blue-600">Reserva #{detailNotification.data.booking_code as string}</p>
+                  {Boolean(detailNotification.data?.booking_code) && (
+                    <p className="text-xs text-blue-600">Reserva #{detailNotification.data?.booking_code as string}</p>
                   )}
                 </div>
               )}

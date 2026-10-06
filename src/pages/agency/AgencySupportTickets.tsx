@@ -115,7 +115,7 @@ const AgencySupportTickets: React.FC = () => {
   const filtered = tickets.filter(t =>
     !search ||
     t.folio.includes(search.toUpperCase()) ||
-    (t.category as any)?.nombre?.toLowerCase().includes(search.toLowerCase()) ||
+    t.category?.nombre?.toLowerCase().includes(search.toLowerCase()) ||
     t.solicitante_nombre.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -213,7 +213,7 @@ const AgencySupportTickets: React.FC = () => {
                       <p className="text-xs text-gray-500 mb-0.5">Solicitante: {ticket.solicitante_nombre}</p>
                     )}
                     <p className="text-sm font-medium text-gray-800 mb-1">
-                      {(ticket.subcategory as any)?.nombre ?? 'Sin subcategoria'}
+                      {ticket.subcategory?.nombre ?? 'Sin subcategoria'}
                     </p>
                     <p className="text-xs text-gray-500 truncate">{ticket.descripcion}</p>
                   </div>
@@ -247,7 +247,7 @@ const AgencySupportTickets: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="text-xs text-gray-500 mb-1">
-                  {(selectedTicket.category as any)?.nombre} › {(selectedTicket.subcategory as any)?.nombre}
+                  {selectedTicket.category?.nombre} › {selectedTicket.subcategory?.nombre}
                 </p>
                 <p className="text-sm text-gray-800">{selectedTicket.descripcion}</p>
                 <p className="text-xs text-gray-400 mt-2">

@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, NavigateFunction } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 async function redirectForUser(
-  user: any,
-  navigate: (path: string, opts?: any) => void,
+  user: User,
+  navigate: NavigateFunction,
   alFallar: (mensaje: string) => void,
 ) {
   const isLinkedinProvider =
     user.app_metadata?.provider === 'linkedin_oidc' ||
-    (user.identities ?? []).some((i: any) => i.provider === 'linkedin_oidc');
+    (user.identities ?? []).some((i) => i.provider === 'linkedin_oidc');
 
   if (isLinkedinProvider) {
     const onboardingCompleted = user.user_metadata?.onboarding_completed;

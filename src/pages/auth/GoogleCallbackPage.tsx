@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, NavigateFunction } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 async function redirectForUser(
-  user: any,
-  navigate: (path: string, opts?: any) => void,
+  user: User,
+  navigate: NavigateFunction,
   alFallar: (mensaje: string) => void,
 ) {
   const isGoogleProvider =
     user.app_metadata?.provider === 'google' ||
-    (user.identities ?? []).some((i: any) => i.provider === 'google');
+    (user.identities ?? []).some((i) => i.provider === 'google');
 
   if (isGoogleProvider) {
     const onboardingCompleted = user.user_metadata?.onboarding_completed;
