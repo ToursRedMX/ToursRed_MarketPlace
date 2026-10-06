@@ -69,10 +69,22 @@ env:
   #                      a 0 solos), asi que habia 749 problemas de HOLGURA.
   #                      Numero MEDIDO por CI en el job 37172647793 (PR #330)
   #                      sobre 6adfe80, no local.
-  BASELINE_ERRORS: 1363
+  #   06-oct  336/249    cierra el barrido de `no-explicit-any` en `src/`
+  #                      (PRs #343 a #353): 1144 -> 30, y los 30 que quedan son
+  #                      BookingForm.tsx, codigo muerto en pausa hasta las UAT
+  #                      (ver CLAUDE.md). La base llevaba desde el 03-oct sin
+  #                      bajar mientras el conteo real caia por estos mismos
+  #                      PRs, asi que habia 1114 problemas de HOLGURA -- peor
+  #                      que la de 749 que ya se habia cerrado una vez.
+  #                      react-hooks/* (297, la categoria mas grande hoy) no
+  #                      se tocaron: cambian comportamiento en runtime, no
+  #                      solo tipos, y quedan fuera de este barrido a proposito.
+  #                      Numero MEDIDO por CI en el job 112507236647 (PR #354)
+  #                      sobre a593e0e, no local.
+  BASELINE_ERRORS: 249
   BASELINE_WARNINGS: 87
-  BASELINE_TOTAL: 1450
-  BASELINE_FILES: 196
+  BASELINE_TOTAL: 336
+  BASELINE_FILES: 148
 
 jobs:
   lint:
