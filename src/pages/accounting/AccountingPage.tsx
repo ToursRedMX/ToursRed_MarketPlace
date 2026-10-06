@@ -8,6 +8,20 @@ import AperturaModal from '../../components/accounting/AperturaModal';
 import InsuranceSettlementModal from '../../components/accounting/InsuranceSettlementModal';
 import InsuranceCommissionModal from '../../components/accounting/InsuranceCommissionModal';
 import { mensajeDeError } from '../../lib/errores';
+import { comoFila } from '../../lib/relacionesSupabase';
+
+interface LedgerLineRow {
+  debit: number | null;
+  credit: number | null;
+  description: string;
+  accounting_entries: {
+    entry_number: string;
+    entry_date: string;
+    period_year: number;
+    period_month: number;
+    is_posted: boolean;
+  };
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -469,13 +483,16 @@ const AccountingPage: React.FC = () => {
       .eq('accounting_entries.is_posted', true)
       .order('accounting_entries(entry_date)', { ascending: true });
     if (error) anotarFallo(`el auxiliar de la cuenta ${accountCode}`, error);
-    const rows = (data ?? []).map((r: any) => ({
-      entry_date: r.accounting_entries.entry_date,
-      entry_number: r.accounting_entries.entry_number,
-      description: r.description,
-      debit: r.debit ?? 0,
-      credit: r.credit ?? 0,
-    }));
+    const rows = (data ?? []).map((row) => {
+      const r = comoFila<LedgerLineRow>(row);
+      return {
+        entry_date: r.accounting_entries.entry_date,
+        entry_number: r.accounting_entries.entry_number,
+        description: r.description,
+        debit: r.debit ?? 0,
+        credit: r.credit ?? 0,
+      };
+    });
     setLedgerLines(rows);
     setLoadingLedger(false);
   }, [year, month, anotarFallo]);

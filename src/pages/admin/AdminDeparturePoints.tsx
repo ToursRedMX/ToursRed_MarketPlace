@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, Search, Plus, Edit2, Trash2, ExternalLink, Eye, AlertCircle, Check, X, Save } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { mensajeDeError } from '../../lib/errores';
+import { comoFila } from '../../lib/relacionesSupabase';
 
 interface DeparturePoint {
   id: string;
@@ -20,6 +21,12 @@ interface ToursUsingPoint {
   tour_name: string;
   agency_name: string;
   display_order: number;
+}
+
+interface TourDeparturePointRow {
+  tour_id: string;
+  display_order: number;
+  tours: { name: string; agencies: { name: string } | null } | null;
 }
 
 const AdminDeparturePoints: React.FC = () => {
@@ -100,20 +107,21 @@ const AdminDeparturePoints: React.FC = () => {
         .select(`
           tour_id,
           display_order,
-          tours(name),
-          tours:tour_id(agency_id),
-          agencies(name)
+          tours(name, agencies(name))
         `)
         .eq('departure_point_id', pointId);
 
       if (error) throw error;
 
-      const processed = (data || []).map((item: any) => ({
-        tour_id: item.tour_id,
-        tour_name: item.tours?.name || 'Sin nombre',
-        agency_name: item.agencies?.name || 'Sin agencia',
-        display_order: item.display_order
-      }));
+      const processed = (data || []).map((row) => {
+        const item = comoFila<TourDeparturePointRow>(row);
+        return {
+          tour_id: item.tour_id,
+          tour_name: item.tours?.name || 'Sin nombre',
+          agency_name: item.tours?.agencies?.name || 'Sin agencia',
+          display_order: item.display_order
+        };
+      });
 
       setToursUsingPoint(processed);
     } catch (err) {

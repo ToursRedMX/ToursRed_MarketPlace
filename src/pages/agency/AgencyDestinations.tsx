@@ -111,7 +111,7 @@ const AgencyDestinations: React.FC = () => {
       if (editingDestination) {
         // Update existing destination
         // Solo enviar campos que no sean vacíos
-        const updateData: any = {
+        const updateData: Record<string, unknown> = {
           name: formData.name,
           is_active: true
         };
@@ -130,7 +130,7 @@ const AgencyDestinations: React.FC = () => {
       } else {
         // Create new destination
         // Only send non-empty fields
-        const createData: any = {
+        const createData: Record<string, unknown> = {
           name: formData.name.trim(),
           is_active: true
         };

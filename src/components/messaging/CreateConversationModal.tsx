@@ -285,7 +285,7 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
             </label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as any)}
+              onChange={(e) => setType(e.target.value as 'general' | 'booking' | 'support')}
               className="input"
             >
               <option value="general">General</option>

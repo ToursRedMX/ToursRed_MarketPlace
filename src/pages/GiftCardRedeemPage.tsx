@@ -6,6 +6,21 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { mensajeDeError } from '../lib/errores';
 
+interface GiftCardValidationResult {
+  valid: boolean;
+  amount: number;
+  currency: string;
+  expiresAt: string;
+}
+
+interface GiftCardRedemptionData {
+  success: boolean;
+  amount: number;
+  currency: string;
+  newBalance: number;
+  message: string;
+}
+
 export default function GiftCardRedeemPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -13,10 +28,10 @@ export default function GiftCardRedeemPage() {
   const [code, setCode] = useState(searchParams.get('code') || '');
   const [isValidating, setIsValidating] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
-  const [validationResult, setValidationResult] = useState<any>(null);
+  const [validationResult, setValidationResult] = useState<GiftCardValidationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [redemptionData, setRedemptionData] = useState<any>(null);
+  const [redemptionData, setRedemptionData] = useState<GiftCardRedemptionData | null>(null);
 
   useEffect(() => {
     if (searchParams.get('code')) {

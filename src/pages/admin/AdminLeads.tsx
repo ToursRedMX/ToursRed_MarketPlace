@@ -5,6 +5,11 @@ import { mensajeDeError } from '../../lib/errores';
 
 type LeadStatus = 'prospecto' | 'contactado' | 'negociacion' | 'registrado' | 'aprobado' | 'perdido';
 
+interface FollowUpEntry {
+  date: string;
+  note: string;
+}
+
 interface AgencyLead {
   id: string;
   executive_id: string;
@@ -20,7 +25,7 @@ interface AgencyLead {
   source: string;
   converted_agency_id: string | null;
   converted_at: string | null;
-  follow_up_log: any[];
+  follow_up_log: FollowUpEntry[];
   created_at: string;
   updated_at: string;
   converted_agency_onboarding_status?: string | null;

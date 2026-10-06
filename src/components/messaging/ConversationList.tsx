@@ -169,7 +169,7 @@ const ConversationList: React.FC<ConversationListProps> = ({
           <Filter className="h-4 w-4 text-gray-400" />
           <select
             value={filterType}
-            onChange={(e) => setFilterType(e.target.value as any)}
+            onChange={(e) => setFilterType(e.target.value as 'all' | 'booking' | 'general' | 'support')}
             className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           >
             <option value="all">Todas</option>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, Sparkles, ArrowRight, Loader2, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { comoFila } from '../../lib/relacionesSupabase';
 
 interface SlotInfo {
   tour_name: string;
@@ -9,6 +10,15 @@ interface SlotInfo {
   starts_at: string;
   expires_at: string;
   total_amount: number;
+}
+
+interface FeaturedSlotRow {
+  status: string;
+  total_amount: number;
+  starts_at: string;
+  expires_at: string;
+  tours: { name: string } | null;
+  featured_plans: { name: string } | null;
 }
 
 const FeaturedSlotSuccessPage: React.FC = () => {
@@ -87,13 +97,14 @@ const FeaturedSlotSuccessPage: React.FC = () => {
     // sin esto la pantalla se queda 20 segundos y termina sin explicacion.
     if (error) console.error('FeaturedSlotSuccessPage: no se pudo leer el slot destacado', error);
 
-    if (data?.status === 'active') {
+    const row = data ? comoFila<FeaturedSlotRow>(data) : null;
+    if (row?.status === 'active') {
       setSlot({
-        tour_name: (data.tours as any)?.name ?? 'Tour',
-        plan_name: (data.featured_plans as any)?.name ?? 'Plan',
-        starts_at: data.starts_at,
-        expires_at: data.expires_at,
-        total_amount: Number(data.total_amount),
+        tour_name: row.tours?.name ?? 'Tour',
+        plan_name: row.featured_plans?.name ?? 'Plan',
+        starts_at: row.starts_at,
+        expires_at: row.expires_at,
+        total_amount: Number(row.total_amount),
       });
       setLoading(false);
     } else if (attempts < 10) {

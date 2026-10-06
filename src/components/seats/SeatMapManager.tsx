@@ -2,6 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Lock, User, AlertCircle, Loader2, RefreshCw, X, Check, Calendar, Clock, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { SeatWithStatus, VehicleSeatLayout } from '../../types/seats';
+import { comoFilas } from '../../lib/relacionesSupabase';
+
+interface SlotSeatStatusRow {
+  seat_number: number;
+  status: string;
+  booking_id: string | null;
+  block_note: string | null;
+  blocked_by: string | null;
+  bookings: {
+    booking_code: string;
+    users: { first_name: string | null; last_name: string | null } | null;
+  } | null;
+}
 import { useAuth } from '../../context/AuthContext';
 
 interface SeatMapManagerProps {
@@ -152,7 +165,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
       const { data: statusData } = await query;
 
       const statusMap: Record<number, SeatWithStatus> = {};
-      (statusData || []).forEach((s: any) => {
+      comoFilas<SlotSeatStatusRow>(statusData).forEach((s) => {
         const travelerName = s.bookings?.users
           ? `${s.bookings.users.first_name || ''} ${s.bookings.users.last_name || ''}`.trim()
           : null;
@@ -240,7 +253,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
           return;
         }
 
-        const slotIds = (allSlots || []).map((s: any) => s.id);
+        const slotIds = (allSlots || []).map((s) => s.id);
         let blockedCount = 0;
         let blockedByReservation = false;
 
