@@ -3,7 +3,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Filter, MapPin, ChevronRight, ChevronLeft, X, SlidersHorizontal, Building2, Search } from 'lucide-react';
 import SearchBox from '../components/SearchBox';
 import TourCard from '../components/TourCard';
-import { Tour, SearchFilters } from '../types';
+import { Tour, SearchFilters, ActivityType } from '../types';
 import { getTours, getActiveFeaturedTours, supabase } from '../lib/supabase';
 import { useTourPromotionsBatch } from '../hooks/useSharedData';
 import Seo from '../components/Seo';
@@ -18,6 +18,32 @@ import { mensajeDeError } from '../lib/errores';
 const SITE_URL = (import.meta.env.VITE_APP_URL || 'https://toursredmx.netlify.app/').replace(/\/$/, '');
 
 const PAGE_SIZE = 20;
+
+/** Fila que devuelve el RPC `search_tours_by_departure_radius`. */
+interface GeoSearchTourRow {
+  tour_id: string;
+  tour_name: string;
+  tour_description: string;
+  tour_price: number;
+  tour_category: string | string[];
+  tour_destination: string;
+  tour_image_url: string;
+  tour_is_featured: boolean;
+  tour_start_date: string;
+  tour_end_date: string;
+  agency_id: string;
+  agency_name: string;
+  distance_meters: number;
+  nearest_departure_location: string | null;
+  nearest_departure_address: string | null;
+  all_departure_locations: string[] | null;
+}
+
+interface CategoryOption {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 const TourCatalogPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -36,9 +62,9 @@ const TourCatalogPage: React.FC = () => {
   const ultimaBusquedaRegistrada = useRef('');
   const { user, isLoading: autenticando } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [popularDestinations, setPopularDestinations] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [popularDeparturePoints, setPopularDeparturePoints] = useState<any[]>([]);
+  const [popularDestinations, setPopularDestinations] = useState<({ id: string; name: string; tour_count: number })[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [popularDeparturePoints, setPopularDeparturePoints] = useState<({ id: string; name: string; city: string; municipality: string; tour_count: number })[]>([]);
 
   const initialFilters: SearchFilters = useMemo(() => ({
     tourName: searchParams.get('tourName') || '',
@@ -56,7 +82,7 @@ const TourCatalogPage: React.FC = () => {
     radius: searchParams.get('radius') || '',
     locationName: searchParams.get('locationName') || '',
     tourType: (searchParams.get('tourType') as 'excursion' | 'receptivo' | undefined) || undefined,
-    activityType: (searchParams.get('activityType') as any) || undefined,
+    activityType: (searchParams.get('activityType') as ActivityType | 'all' | null) || undefined,
   }), [searchParams]);
 
   const hasGeoSearch = !!(initialFilters.lat && initialFilters.lng);
@@ -65,7 +91,7 @@ const TourCatalogPage: React.FC = () => {
     initialFilters.tourName, initialFilters.destination, initialFilters.category,
     initialFilters.startDate, initialFilters.endDate, initialFilters.agency,
     initialFilters.departurePoint, initialFilters.minPrice, initialFilters.maxPrice,
-    initialFilters.petFriendly, initialFilters.tourType, (initialFilters as any).activityType,
+    initialFilters.petFriendly, initialFilters.tourType, initialFilters.activityType,
   ].filter(Boolean).length, [initialFilters]);
 
   const activeFilterPills = useMemo(() => {
@@ -115,7 +141,7 @@ const TourCatalogPage: React.FC = () => {
             limit_results: 100,
           });
           if (error) throw new Error(error.message);
-          const transformedTours = data?.map((row: any) => ({
+          const transformedTours = (data as GeoSearchTourRow[] | null)?.map((row) => ({
             id: row.tour_id, name: row.tour_name, description: row.tour_description,
             price: row.tour_price, category: row.tour_category, destination: row.tour_destination,
             image_url: row.tour_image_url, is_featured: row.tour_is_featured,
@@ -126,7 +152,7 @@ const TourCatalogPage: React.FC = () => {
             nearest_departure_address: row.nearest_departure_address,
             all_departure_locations: row.all_departure_locations,
           })) || [];
-          setTours(transformedTours);
+          setTours(transformedTours as unknown as Tour[]);
           setTotalCount(transformedTours.length);
           setFeaturedSlotMapCatalog({});
           setFeaturedCount(0);
@@ -145,7 +171,7 @@ const TourCatalogPage: React.FC = () => {
               petFriendly: initialFilters.petFriendly || null,
               departurePoint: initialFilters.departurePoint || null,
               tourType: initialFilters.tourType || null,
-              activityType: (initialFilters as any).activityType || null,
+              activityType: initialFilters.activityType || null,
               limit: PAGE_SIZE,
               offset,
             }),
@@ -246,7 +272,7 @@ const TourCatalogPage: React.FC = () => {
         if (!destinations?.length) return;
         const { data: tourDestinations, error: errorConteoDestinos } = await supabase.from('tour_destinations').select('destination_id').in('destination_id', destinations.map(d => d.id));
         if (errorConteoDestinos) console.warn('TourCatalogPage: no se pudo contar los tours por destino', errorConteoDestinos);
-        const counts = (tourDestinations || []).reduce((acc: Record<string, number>, td: any) => { acc[td.destination_id] = (acc[td.destination_id] || 0) + 1; return acc; }, {});
+        const counts = (tourDestinations || []).reduce((acc: Record<string, number>, td) => { acc[td.destination_id] = (acc[td.destination_id] || 0) + 1; return acc; }, {});
         setPopularDestinations(
           destinations.map(d => ({ ...d, tour_count: counts[d.id] || 0 }))
             .filter(d => d.tour_count > 0).sort((a, b) => b.tour_count - a.tour_count).slice(0, 8)
@@ -266,7 +292,7 @@ const TourCatalogPage: React.FC = () => {
         if (!points?.length) return;
         const { data: tourPoints, error: errorConteoPuntos } = await supabase.from('tour_departure_points').select('departure_point_id').in('departure_point_id', points.map(p => p.id));
         if (errorConteoPuntos) console.warn('TourCatalogPage: no se pudo contar los tours por punto de salida', errorConteoPuntos);
-        const counts = (tourPoints || []).reduce((acc: Record<string, number>, tp: any) => { acc[tp.departure_point_id] = (acc[tp.departure_point_id] || 0) + 1; return acc; }, {});
+        const counts = (tourPoints || []).reduce((acc: Record<string, number>, tp) => { acc[tp.departure_point_id] = (acc[tp.departure_point_id] || 0) + 1; return acc; }, {});
         setPopularDeparturePoints(
           points.map(p => ({ ...p, tour_count: counts[p.id] || 0 }))
             .filter(p => p.tour_count > 0).sort((a, b) => b.tour_count - a.tour_count).slice(0, 6)
@@ -353,7 +379,7 @@ const TourCatalogPage: React.FC = () => {
               <a href="/tours" className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold border transition-all ${!initialFilters.category ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300 hover:text-primary-600'}`}>
                 Todos
               </a>
-              {categories.map((cat: any) => (
+              {categories.map((cat) => (
                 <a key={cat.id} href={`/tours?category=${cat.slug}`}
                   className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold border transition-all ${initialFilters.category === cat.slug ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300 hover:text-primary-600'}`}>
                   {cat.name}

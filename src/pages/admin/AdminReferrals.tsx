@@ -149,7 +149,7 @@ const AdminReferralsPage: React.FC = () => {
   };
 
   const filteredCodes = referralCodes.filter(code => {
-    const user = code.users as any;
+    const user = code.users;
     const userName = `${user?.first_name || ''} ${user?.last_name || ''}`.toLowerCase();
     const userEmail = (user?.email || '').toLowerCase();
     const search = searchTerm.toLowerCase();
@@ -298,7 +298,7 @@ const AdminReferralsPage: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredCodes.map((code) => {
-                  const user = code.users as any;
+                  const user = code.users;
                   const userName = user?.first_name && user?.last_name
                     ? `${user.first_name} ${user.last_name}`
                     : user?.email || 'Usuario';
@@ -449,8 +449,8 @@ const AdminReferralsPage: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredRelationships.map((rel) => {
-                  const referrer = rel.referrer as any;
-                  const referred = rel.referred as any;
+                  const referrer = rel.referrer;
+                  const referred = rel.referred;
                   const referrerName = referrer?.first_name && referrer?.last_name
                     ? `${referrer.first_name} ${referrer.last_name}`
                     : referrer?.email || 'Usuario';

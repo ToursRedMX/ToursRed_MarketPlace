@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, NavigateFunction } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import type { User, Session } from '@supabase/supabase-js';
 
 async function fetchAndStoreMsAvatar(providerToken: string): Promise<string | null> {
   try {
@@ -29,15 +30,15 @@ async function fetchAndStoreMsAvatar(providerToken: string): Promise<string | nu
 }
 
 async function redirectForUser(
-  user: any,
-  session: any,
-  navigate: (path: string, opts?: any) => void,
+  user: User,
+  session: Session | null,
+  navigate: NavigateFunction,
   setError: (msg: string) => void,
 ) {
   try {
     const isAzureProvider =
       user.app_metadata?.provider === 'azure' ||
-      (user.identities ?? []).some((i: any) => i.provider === 'azure');
+      (user.identities ?? []).some((i) => i.provider === 'azure');
 
     if (isAzureProvider) {
       const onboardingCompleted = user.user_metadata?.onboarding_completed;

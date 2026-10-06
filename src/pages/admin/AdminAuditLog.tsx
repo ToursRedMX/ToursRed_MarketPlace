@@ -163,7 +163,7 @@ const AdminAuditLog: React.FC = () => {
 
       const cols = ['created_at', 'severity', 'action', 'target_table', 'target_id', 'actor_email', 'actor_role', 'ip_masked', 'country', 'country_code', 'city', 'correlation_id', 'error_message'];
       const header = cols.join(',');
-      const rows = data.map((r: any) =>
+      const rows = (data as Record<string, unknown>[]).map((r) =>
         cols.map(c => JSON.stringify(r[c] ?? '')).join(',')
       );
       const csv = [header, ...rows].join('\n');
@@ -413,7 +413,7 @@ const AdminAuditLog: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-xs font-mono text-gray-600">
                           {canViewSensitive
-                            ? ((entry as any).ip_address ?? entry.ip_masked ?? '—')
+                            ? (entry.ip_address ?? entry.ip_masked ?? '—')
                             : (entry.ip_masked ?? '—')}
                         </td>
                         <td className="px-4 py-3">
@@ -455,10 +455,10 @@ const AdminAuditLog: React.FC = () => {
                                 {entry.correlation_id && <p className="text-gray-500">Correlation: <span className="font-mono text-gray-700">{entry.correlation_id}</span></p>}
                                 {entry.session_id && <p className="text-gray-500">Session: <span className="font-mono text-gray-700">{entry.session_id.slice(0, 16)}…</span></p>}
                               </div>
-                              {canViewSensitive && (entry as any).user_agent && (
+                              {canViewSensitive && entry.user_agent && (
                                 <div>
                                   <p className="font-semibold text-gray-700 mb-1">User Agent</p>
-                                  <p className="text-gray-600 break-all">{(entry as any).user_agent}</p>
+                                  <p className="text-gray-600 break-all">{entry.user_agent}</p>
                                 </div>
                               )}
                               {entry.error_message && (

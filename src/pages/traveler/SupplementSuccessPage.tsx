@@ -5,13 +5,33 @@ import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { comoFila } from '../../lib/relacionesSupabase';
+
+/** `tours`/`agencies`/`tour_supplements`/`bookings` son a-uno, pero supabase-js los infiere como arreglo. Ver relacionesSupabase.ts. */
+interface SupplementSuccessData {
+  id: string;
+  status: string;
+  quantity: number;
+  unit_price: number;
+  service_charge: number;
+  membership_exemption_used: number;
+  total_paid: number;
+  paid_at: string | null;
+  payment_method: string | null;
+  points_earned: number;
+  tour_supplements: { name: string; description: string | null } | null;
+  bookings: {
+    booking_code: string;
+    tours: { name: string; destination: string; image_url: string; agencies: { name: string } | null } | null;
+  } | null;
+}
 
 const MAX_POLL_ATTEMPTS = 12; // ~24 seconds
 const POLL_INTERVAL_MS = 2000;
 
 const SupplementSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const [supplement, setSupplement] = useState<any>(null);
+  const [supplement, setSupplement] = useState<SupplementSuccessData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -61,7 +81,7 @@ const SupplementSuccessPage: React.FC = () => {
       }
 
       if (data.status === 'paid') {
-        setSupplement(data);
+        setSupplement(comoFila<SupplementSuccessData>(data));
         setIsLoading(false);
         return;
       }
@@ -71,7 +91,7 @@ const SupplementSuccessPage: React.FC = () => {
         setTimeout(() => pollForPaidStatus(supplementId, attempt + 1), POLL_INTERVAL_MS);
       } else {
         // Show partial data anyway
-        setSupplement(data);
+        setSupplement(comoFila<SupplementSuccessData>(data));
         setIsLoading(false);
       }
     } catch {
@@ -101,10 +121,10 @@ const SupplementSuccessPage: React.FC = () => {
     );
   }
 
-  const tour = (supplement.bookings as any)?.tours;
+  const tour = supplement.bookings?.tours;
   const agency = tour?.agencies;
-  const booking = supplement.bookings as any;
-  const suppInfo = supplement.tour_supplements as any;
+  const booking = supplement.bookings;
+  const suppInfo = supplement.tour_supplements;
   const subtotal = Number(supplement.unit_price) * supplement.quantity;
   const serviceCharge = Number(supplement.service_charge ?? 0);
   const exemption = Number(supplement.membership_exemption_used ?? 0);
@@ -224,7 +244,7 @@ const SupplementSuccessPage: React.FC = () => {
             <div>
               <p className="text-gray-500 text-xs mb-0.5">Método de Pago</p>
               <p className="font-medium text-gray-800">
-                {methodLabel[supplement.payment_method] || supplement.payment_method || 'Tarjeta de Crédito/Débito'}
+                {(supplement.payment_method && methodLabel[supplement.payment_method]) || supplement.payment_method || 'Tarjeta de Crédito/Débito'}
               </p>
             </div>
             {supplement.paid_at && (

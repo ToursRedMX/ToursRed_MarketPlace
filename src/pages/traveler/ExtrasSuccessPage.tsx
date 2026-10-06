@@ -5,16 +5,49 @@ import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { comoFila } from '../../lib/relacionesSupabase';
 
 const MAX_POLL_ATTEMPTS = 12;
 const POLL_INTERVAL_MS = 2000;
+
+/** Relaciones a-uno embebidas (la FK sale de la tabla que consulta), inferidas como arreglo por supabase-js. Ver relacionesSupabase.ts. */
+interface TourSummaryForExtras {
+  name: string;
+  destination: string;
+  image_url: string;
+  agencies: { name: string } | null;
+}
+
+interface InsuranceBookingData {
+  id: string;
+  booking_code: string;
+  travel_insurance_included: boolean;
+  travel_insurance_cost: number;
+  travelers_count: number;
+  selected_date: string | null;
+  tours: TourSummaryForExtras | null;
+}
+
+interface OptionalServiceBosData {
+  id: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  created_at: string;
+  tour_optional_services: { name: string; description: string | null } | null;
+  bookings: {
+    booking_code: string;
+    travelers_count: number;
+    tours: TourSummaryForExtras | null;
+  } | null;
+}
 
 const ExtrasSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [bookingData, setBookingData] = useState<any>(null);
-  const [bosData, setBosData] = useState<any>(null);
+  const [bookingData, setBookingData] = useState<InsuranceBookingData | null>(null);
+  const [bosData, setBosData] = useState<OptionalServiceBosData | null>(null);
 
   const extraType = searchParams.get('type'); // 'insurance' | 'optional_service'
   const bookingId = searchParams.get('booking_id');
@@ -67,7 +100,7 @@ const ExtrasSuccessPage: React.FC = () => {
       if (!data) { setError('Reserva no encontrada'); setIsLoading(false); return; }
 
       if (data.travel_insurance_included) {
-        setBookingData(data);
+        setBookingData(comoFila<InsuranceBookingData>(data));
         setIsLoading(false);
         return;
       }
@@ -75,7 +108,7 @@ const ExtrasSuccessPage: React.FC = () => {
       if (attempt < MAX_POLL_ATTEMPTS) {
         setTimeout(() => pollInsurance(bId, attempt + 1), POLL_INTERVAL_MS);
       } else {
-        setBookingData(data);
+        setBookingData(comoFila<InsuranceBookingData>(data));
         setIsLoading(false);
       }
     } catch {
@@ -113,7 +146,7 @@ const ExtrasSuccessPage: React.FC = () => {
         return;
       }
 
-      setBosData(data);
+      setBosData(comoFila<OptionalServiceBosData>(data));
       setIsLoading(false);
     } catch {
       setError('Error al cargar los detalles del servicio');
@@ -244,10 +277,10 @@ const ExtrasSuccessPage: React.FC = () => {
 
   // ── Optional service success ──────────────────────────────────────────
   if (extraType === 'optional_service' && bosData) {
-    const tour = (bosData.bookings as any)?.tours;
+    const tour = bosData.bookings?.tours;
     const agency = tour?.agencies;
-    const booking = bosData.bookings as any;
-    const serviceInfo = bosData.tour_optional_services as any;
+    const booking = bosData.bookings;
+    const serviceInfo = bosData.tour_optional_services;
     const subtotal = Number(bosData.subtotal || Number(bosData.unit_price) * bosData.quantity);
 
     return (
