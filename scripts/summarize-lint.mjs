@@ -35,11 +35,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Base por regla, medida por CI el 03-oct-2026 sobre 6adfe80 (job
-// 37172647793, PR #330), con eslint 10 / typescript-eslint 8.68.0. Mover junto
-// con las BASELINE_* de lint.yml: si una baja, se actualizan las dos.
+// Base por regla, medida por CI el 06-oct-2026 sobre a593e0e (job
+// 112507236647, PR #354), con eslint 10 / typescript-eslint 8.68.0. Mover
+// junto con las BASELINE_* de lint.yml: si una baja, se actualizan las dos.
 const BASE = {
-  '@typescript-eslint/no-explicit-any': 1144,
+  '@typescript-eslint/no-explicit-any': 30,
   'react-hooks/set-state-in-effect': 107,
   'react-hooks/exhaustive-deps': 83,
   'react-hooks/immutability': 82,
@@ -54,14 +54,15 @@ const BASE = {
   // con el aviso de "reglas fuera de la base" ademas del delta, que es la
   // senal que queremos.
   //
-  // Reajustada el 03-oct-2026 contra la medicion de CI del PR #330 (el
-  // barrido de `no-explicit-any` en supabase/functions/, 461 -> 0). La
-  // anterior era del 11-sep y habia quedado floja: `no-explicit-any` decia
-  // 1615 cuando ya eran 1144, y cuatro reglas que habian llegado a 0 solas
-  // seguian apareciendo con numeros viejos (`no-unused-vars` 79,
-  // `no-useless-escape` 171, `no-useless-assignment` 17, `prefer-const` 2) —
-  // se retiran de la tabla porque entrarian con base 0 y cualquier aparicion
-  // ya se marca por "reglas fuera de la base".
+  // Reajustada el 06-oct-2026 contra la medicion de CI del PR #354 (el
+  // barrido de `no-explicit-any` en src/, 1144 -> 30). Los 30 que quedan son
+  // BookingForm.tsx, codigo muerto en pausa hasta las UAT (ver CLAUDE.md), no
+  // un residuo sin tocar. La base anterior era del 03-oct y habia quedado
+  // floja: `no-explicit-any` decia 1144 cuando ya eran 30 — 1114 problemas de
+  // HOLGURA, peor que la de 749 que ya se habia cerrado una vez el 03-oct.
+  // react-hooks/* no se tocaron: misma cifra exacta que el 03-oct en las
+  // nueve reglas de abajo, a proposito — cambian comportamiento en runtime,
+  // no solo tipos, y quedan fuera de este barrido.
   //
   // OJO CON LO QUE ESTA TABLA NO IMPIDE: el corte que BLOQUEA es el total de
   // errores, no la fila. Mientras estuvo floja se colaron en main dos subidas
@@ -74,10 +75,10 @@ const BASE = {
 // Corriendo local sin las env del workflow, se cae a la misma base para que
 // los deltas sigan teniendo sentido.
 const num = (name, fallback) => Number(process.env[name] ?? fallback);
-const BASELINE_ERRORS = num('BASELINE_ERRORS', 1363);
+const BASELINE_ERRORS = num('BASELINE_ERRORS', 249);
 const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 87);
-const BASELINE_TOTAL = num('BASELINE_TOTAL', 1450);
-const BASELINE_FILES = num('BASELINE_FILES', 196);
+const BASELINE_TOTAL = num('BASELINE_TOTAL', 336);
+const BASELINE_FILES = num('BASELINE_FILES', 148);
 
 const argv = process.argv.slice(2);
 const estricto = argv.includes('--strict');
@@ -150,7 +151,7 @@ if (lintedFiles === 0) {
   out.push('> **no es comparable con la base**: revisar `ignores` en `eslint.config.js`.');
   out.push('');
 }
-out.push('| | Ahora | Base 03-oct | Δ |');
+out.push('| | Ahora | Base 06-oct | Δ |');
 out.push('|---|---|---|---|');
 out.push(`| **Problemas** | **${total}** en ${files} archivos | ${BASELINE_TOTAL} en ${BASELINE_FILES} | ${delta(total, BASELINE_TOTAL)} |`);
 out.push(`| Errores | ${errors} | ${BASELINE_ERRORS} | ${delta(errors, BASELINE_ERRORS)} |`);
