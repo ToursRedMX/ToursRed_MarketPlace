@@ -6,6 +6,11 @@ import { mensajeDeError } from '../../lib/errores';
 
 type LeadStatus = 'prospecto' | 'contactado' | 'negociacion' | 'registrado' | 'aprobado' | 'perdido';
 
+interface FollowUpEntry {
+  date: string;
+  note: string;
+}
+
 interface AgencyLead {
   id: string;
   executive_id: string;
@@ -36,7 +41,7 @@ interface AgencyLead {
   source: string | null;
   converted_agency_id: string | null;
   converted_at: string | null;
-  follow_up_log: any[];
+  follow_up_log: FollowUpEntry[];
   created_at: string;
   updated_at: string;
   converted_agency_onboarding_status?: string | null;
@@ -116,7 +121,7 @@ export default function ExecutiveLeads() {
     setFieldStatus(prev => ({ ...prev, [field]: 'checking' }));
 
     try {
-      const params: any = field === 'email'
+      const params: { p_email: string | null; p_rfc: string | null; p_exclude_lead_id: string | null } = field === 'email'
         ? { p_email: trimmed, p_rfc: null, p_exclude_lead_id: excludeLeadId || null }
         : { p_email: null, p_rfc: trimmed.toUpperCase(), p_exclude_lead_id: excludeLeadId || null };
 
@@ -1075,7 +1080,7 @@ export default function ExecutiveLeads() {
                 {(showFollowUp.follow_up_log || []).length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-4">Sin notas previas</p>
                 ) : (
-                  [...(showFollowUp.follow_up_log || [])].reverse().map((entry: any, i: number) => (
+                  [...(showFollowUp.follow_up_log || [])].reverse().map((entry, i) => (
                     <div key={i} className="bg-gray-50 rounded-lg px-3 py-2">
                       <p className="text-xs text-gray-400">{new Date(entry.date).toLocaleString('es-MX')}</p>
                       <p className="text-sm text-gray-700 mt-0.5">{entry.note}</p>

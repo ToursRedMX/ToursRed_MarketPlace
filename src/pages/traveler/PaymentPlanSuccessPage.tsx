@@ -5,13 +5,49 @@ import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { comoFila } from '../../lib/relacionesSupabase';
 
 const MAX_POLL_ATTEMPTS = 12;
 const POLL_INTERVAL_MS = 2000;
 
+interface PaymentPlanTourInfo {
+  name: string;
+  destination: string;
+  image_url: string | null;
+  agencies: { name: string } | null;
+}
+
+interface PaymentPlanBookingInfo {
+  id: string;
+  booking_code: string;
+  total_price: number;
+  selected_date: string;
+  tours: PaymentPlanTourInfo;
+}
+
+interface PaymentPlanTransaction {
+  id: string;
+  amount: number;
+  service_charge: number | null;
+  payment_provider: string;
+  points_earned: number | null;
+  created_at: string;
+}
+
+interface PaymentPlanData {
+  id: string;
+  status: string;
+  total_plan_amount: number;
+  total_amount_paid: number;
+  pending_balance: number;
+  updated_at: string;
+  bookings: PaymentPlanBookingInfo;
+  lastTransaction?: PaymentPlanTransaction | null;
+}
+
 const PaymentPlanSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const [plan, setPlan] = useState<any>(null);
+  const [plan, setPlan] = useState<PaymentPlanData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -73,7 +109,7 @@ const PaymentPlanSuccessPage: React.FC = () => {
       const hasRecentPayment = recentTx.data && Date.now() - new Date(recentTx.data.created_at).getTime() < 5 * 60 * 1000;
 
       if (hasRecentPayment || attempt >= MAX_POLL_ATTEMPTS) {
-        setPlan({ ...data, lastTransaction: recentTx.data });
+        setPlan(comoFila<PaymentPlanData>({ ...data, lastTransaction: recentTx.data }));
         setIsLoading(false);
         return;
       }
@@ -109,9 +145,9 @@ const PaymentPlanSuccessPage: React.FC = () => {
     );
   }
 
-  const tour = (plan.bookings as any)?.tours;
+  const tour = plan.bookings?.tours;
   const agency = tour?.agencies;
-  const booking = plan.bookings as any;
+  const booking = plan.bookings;
   const isComplete = plan.status === 'completed';
   const lastTx = plan.lastTransaction;
 

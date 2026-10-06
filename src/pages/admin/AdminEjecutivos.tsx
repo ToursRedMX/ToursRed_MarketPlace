@@ -30,6 +30,13 @@ interface Executive {
   _paid_commissions?: number;
 }
 
+interface ExecutiveAgency {
+  id: string;
+  name: string;
+  is_approved: boolean;
+  registered_by_executive: boolean;
+}
+
 const EMPTY_FORM = { first_name: '', last_name: '', email: '', phone: '', notes: '', password: '' };
 
 export default function AdminEjecutivos() {
@@ -48,7 +55,7 @@ export default function AdminEjecutivos() {
   const [reassignModal, setReassignModal] = useState<Executive | null>(null);
   const [reassignTarget, setReassignTarget] = useState('');
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
-  const [executiveAgencies, setExecutiveAgencies] = useState<any[]>([]);
+  const [executiveAgencies, setExecutiveAgencies] = useState<ExecutiveAgency[]>([]);
   const [isReassigning, setIsReassigning] = useState(false);
 
   // FacturAPI admin config
@@ -78,11 +85,11 @@ export default function AdminEjecutivos() {
       ]);
 
       const agencyCount: Record<string, number> = {};
-      (agenciesRes.data || []).forEach((a: any) => { agencyCount[a.account_executive_id] = (agencyCount[a.account_executive_id] || 0) + 1; });
+      (agenciesRes.data || []).forEach((a) => { agencyCount[a.account_executive_id] = (agencyCount[a.account_executive_id] || 0) + 1; });
 
       const pendingComm: Record<string, number> = {};
       const paidComm: Record<string, number> = {};
-      (commissionsRes.data || []).forEach((c: any) => {
+      (commissionsRes.data || []).forEach((c) => {
         if (['pending', 'invoiced', 'approved'].includes(c.status)) pendingComm[c.executive_id] = (pendingComm[c.executive_id] || 0) + Number(c.amount);
         else if (c.status === 'paid') paidComm[c.executive_id] = (paidComm[c.executive_id] || 0) + Number(c.amount);
       });

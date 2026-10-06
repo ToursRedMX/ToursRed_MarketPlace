@@ -397,9 +397,9 @@ const TravelerInvoices: React.FC = () => {
             const isInstallment = inv.invoice_type === 'booking_installment';
             const hasInsurance = inv.invoice_type === 'booking' && booking?.travel_insurance_included && (booking?.travel_insurance_cost ?? 0) > 0;
             const insuranceCost = hasInsurance ? (booking?.travel_insurance_cost ?? 0) : 0;
-            const supplementName = (inv.booking_supplements as any)?.tour_supplements?.name;
-            const optionalServiceName = (inv.booking_optional_services as any)?.tour_optional_service?.name;
-            const installmentLabel = (inv.booking_payment_plan_installments as any)?.label;
+            const supplementName = inv.booking_supplements?.tour_supplements?.name;
+            const optionalServiceName = inv.booking_optional_services?.tour_optional_service?.name;
+            const installmentLabel = inv.booking_payment_plan_installments?.label;
 
             return (
               <div

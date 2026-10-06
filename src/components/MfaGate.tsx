@@ -13,7 +13,7 @@ export interface MfaGateProps {
 export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
   const { user, isAdmin, isAccountant, isSuperAdmin, isAccountExecutive } = useAuth();
   const [state, setState] = useState<GateState>('loading');
-  const [, setMfaFactors] = useState<any[]>([]);
+  const [, setMfaFactors] = useState<unknown[]>([]);
   const [qrUrl, setQrUrl] = useState<string>('');
   const [totpSecret, setTotpSecret] = useState<string>('');
   const [verifyCode, setVerifyCode] = useState('');
@@ -76,7 +76,7 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
         return;
       }
 
-      const totpFactors = (factors?.totp ?? []).filter((f: any) => f.status === 'verified');
+      const totpFactors = (factors?.totp ?? []).filter((f) => f.status === 'verified');
 
       if (totpFactors.length === 0) {
         setMfaFactors(factors?.totp ?? []);
@@ -179,7 +179,7 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
     try {
       const { data: factors, error: errorFactors } = await supabase.auth.mfa.listFactors();
       if (errorFactors) throw errorFactors;
-      const verifiedFactor = (factors?.totp ?? []).find((f: any) => f.status === 'verified');
+      const verifiedFactor = (factors?.totp ?? []).find((f) => f.status === 'verified');
       if (!verifiedFactor) {
         setState('needs_enrollment');
         return;
