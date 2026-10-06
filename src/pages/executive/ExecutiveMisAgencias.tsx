@@ -73,9 +73,9 @@ export default function ExecutiveMisAgencias() {
       const bookingCounts: Record<string, number> = {};
       const revenueMap: Record<string, number> = {};
 
-      (toursRes.data || []).forEach((t: any) => { tourCounts[t.agency_id] = (tourCounts[t.agency_id] || 0) + 1; });
-      (bookingsRes.data || []).forEach((b: any) => { bookingCounts[b.agency_id] = (bookingCounts[b.agency_id] || 0) + 1; });
-      (commissionsRes.data || []).forEach((c: any) => { revenueMap[c.agency_id] = (revenueMap[c.agency_id] || 0) + Number(c.platform_total_revenue || 0); });
+      (toursRes.data || []).forEach((t) => { tourCounts[t.agency_id] = (tourCounts[t.agency_id] || 0) + 1; });
+      (bookingsRes.data || []).forEach((b) => { bookingCounts[b.agency_id] = (bookingCounts[b.agency_id] || 0) + 1; });
+      (commissionsRes.data || []).forEach((c) => { revenueMap[c.agency_id] = (revenueMap[c.agency_id] || 0) + Number(c.platform_total_revenue || 0); });
 
       const enriched = agenciesData.map(a => ({
         ...a,

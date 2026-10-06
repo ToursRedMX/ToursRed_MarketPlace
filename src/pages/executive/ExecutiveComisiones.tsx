@@ -350,7 +350,7 @@ export default function ExecutiveComisiones() {
                 <div className="flex-1 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{TYPE_LABELS[c.commission_type] || c.commission_type}</p>
-                    <p className="text-xs text-gray-500">{(c.agencies as any)?.name}{c.period_month && ` — ${c.period_month}/${c.period_year}`}</p>
+                    <p className="text-xs text-gray-500">{c.agencies?.name}{c.period_month && ` — ${c.period_month}/${c.period_year}`}</p>
                   </div>
                   <p className="text-sm font-bold text-gray-900">{formatCurrencyMXN(c.amount)}</p>
                 </div>
@@ -415,7 +415,7 @@ export default function ExecutiveComisiones() {
                   return (
                     <tr key={comm.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3"><p className="text-sm text-gray-900">{TYPE_LABELS[comm.commission_type] || comm.commission_type}</p></td>
-                      <td className="px-4 py-3"><p className="text-sm text-gray-700">{(comm.agencies as any)?.name}</p></td>
+                      <td className="px-4 py-3"><p className="text-sm text-gray-700">{comm.agencies?.name}</p></td>
                       <td className="px-4 py-3"><p className="text-sm font-bold text-gray-900">{formatCurrencyMXN(comm.amount)}</p></td>
                       <td className="px-4 py-3"><p className="text-sm text-gray-500">{comm.period_month ? `${comm.period_month}/${comm.period_year}` : '—'}</p></td>
                       <td className="px-4 py-3">
@@ -507,7 +507,7 @@ export default function ExecutiveComisiones() {
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Comisiones a cobrar</p>
                   {(selectedIds.length > 0 ? commissions.filter(c => selectedIds.includes(c.id)) : [cfdiModal]).map(c => (
                     <div key={c.id} className="flex justify-between text-sm py-1">
-                      <span className="text-gray-700">{TYPE_LABELS[c.commission_type] || c.commission_type} — {(c.agencies as any)?.name}</span>
+                      <span className="text-gray-700">{TYPE_LABELS[c.commission_type] || c.commission_type} — {c.agencies?.name}</span>
                       <span className="font-semibold text-gray-900">{formatCurrencyMXN(c.amount)}</span>
                     </div>
                   ))}

@@ -14,6 +14,7 @@ import { totalTravelerCount } from '../../types/booking-flow';
 import { getMpDeviceId } from '../../utils/mercadopagoDevice';
 import PaymentProviderSelector, {
   PaymentProvider as Provider,
+  PaymentContext,
   ConektaMethod,
   OpenpayMethod,
 } from '../../components/PaymentProviderSelector';
@@ -234,7 +235,7 @@ const BookingFlowStep4: React.FC = () => {
 
   const insuranceDays = useMemo(() => {
     if (!tour || !flow.includeInsurance) return 0;
-    if (tour.tour_type === 'receptivo' && (tour as any).receptivo_modality === 'privado') return 1;
+    if (tour.tour_type === 'receptivo' && tour.receptivo_modality === 'privado') return 1;
     const start = tour.start_date ? new Date(tour.start_date + 'T12:00:00') : null;
     const end = tour.end_date ? new Date(tour.end_date + 'T12:00:00') : null;
     if (!start || !end) return 1;
@@ -584,7 +585,7 @@ const BookingFlowStep4: React.FC = () => {
       // que ya acepta approval_status en el payload y por default usa 'approved'.
       const isManualApproval = tour.booking_approval_type === 'manual';
 
-      const bookingData: Record<string, any> = {
+      const bookingData: Record<string, unknown> = {
         user_id: user.id,
         tour_id: tour.id,
         agency_id: tour.agency_id || tour.agencies?.id,
@@ -909,7 +910,7 @@ const BookingFlowStep4: React.FC = () => {
     navigate(`/reservar/${flow.tourSlug}/paso-3`);
   };
 
-  const paymentContext = flow.addMembership ? 'booking_with_membership' : 'booking';
+  const paymentContext: PaymentContext = flow.addMembership ? 'booking_with_membership' : 'booking';
 
   return (
     <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
@@ -1380,7 +1381,7 @@ const BookingFlowStep4: React.FC = () => {
         {!isWalletOnlyPayment ? (
           <div className="mb-6">
             <PaymentProviderSelector
-              context={paymentContext as any}
+              context={paymentContext}
               value={flow.paymentProvider as Provider}
               onChange={(p) => updateFlow({ paymentProvider: p })}
               amount={amountToPay}

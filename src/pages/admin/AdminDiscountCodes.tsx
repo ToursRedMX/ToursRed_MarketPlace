@@ -177,7 +177,7 @@ export default function AdminDiscountCodes() {
         ? (formData.discount_type === 'service_fee_full' || formData.discount_type === 'insurance_free' ? 100 : 1)
         : parseFloat(formData.discount_value);
 
-      const codeData: Record<string, any> = {
+      const codeData: Record<string, unknown> = {
         code: formData.code.toUpperCase(),
         description: formData.description,
         discount_type: formData.discount_type,
@@ -479,8 +479,8 @@ export default function AdminDiscountCodes() {
   });
 
   const sortedAndFilteredCodes = [...filteredCodes].sort((a, b) => {
-    let aValue: any;
-    let bValue: any;
+    let aValue: string | number;
+    let bValue: string | number;
 
     switch (sortColumn) {
       case 'code':

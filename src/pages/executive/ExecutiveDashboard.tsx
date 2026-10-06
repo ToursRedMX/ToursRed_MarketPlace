@@ -3,6 +3,7 @@ import { Users, TrendingUp, DollarSign, Clock, Target, CheckCircle, ChevronRight
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { comoFilas } from '../../lib/relacionesSupabase';
 
 interface DashboardStats {
   totalLeads: number;
@@ -34,6 +35,15 @@ interface CommissionItem {
   agencies: { name: string };
 }
 
+interface BonusRule {
+  id: string;
+  name: string;
+  description: string | null;
+  condition_type: 'agencies_approved_count' | 'revenue_generated' | 'bookings_generated';
+  threshold_value: number;
+  bonus_amount: number;
+}
+
 const COMMISSION_TYPE_LABELS: Record<string, string> = {
   approval: 'Aprobación de agencia',
   first_tour_and_booking: 'Primer tour y reserva',
@@ -62,7 +72,7 @@ export default function ExecutiveDashboard() {
   const [recentAgencies, setRecentAgencies] = useState<RecentAgency[]>([]);
   const [recentCommissions, setRecentCommissions] = useState<CommissionItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [bonusRules, setBonusRules] = useState<any[]>([]);
+  const [bonusRules, setBonusRules] = useState<BonusRule[]>([]);
 
   useEffect(() => {
     if (accountExecutiveInfo?.executiveId) {
@@ -141,7 +151,7 @@ export default function ExecutiveDashboard() {
       });
 
       setRecentAgencies(agencies as RecentAgency[]);
-      setRecentCommissions(commissions as any[]);
+      setRecentCommissions(comoFilas<CommissionItem>(commissions));
       setBonusRules(bonusRes.data || []);
     } finally {
       setIsLoading(false);
@@ -300,7 +310,7 @@ export default function ExecutiveDashboard() {
                     <p className="text-sm font-medium text-gray-900">
                       {COMMISSION_TYPE_LABELS[comm.commission_type] ?? comm.commission_type}
                     </p>
-                    <p className="text-xs text-gray-400">{(comm.agencies as any)?.name}</p>
+                    <p className="text-xs text-gray-400">{comm.agencies?.name}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-gray-900">{formatCurrencyMXN(comm.amount)}</p>

@@ -763,6 +763,7 @@ export interface CommissionRecord {
   payment_method?: string | null;
   payment_receipt_url?: string | null;
   payment_notes?: string | null;
+  preventa_comision_descuento?: number;
 }
 
 export interface Review {
