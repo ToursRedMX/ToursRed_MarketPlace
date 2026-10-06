@@ -130,7 +130,12 @@ const BookingFlowStep3: React.FC = () => {
           setLoadError('No pudimos cargar tu perfil. Recarga la pagina antes de continuar.');
         }
         setNoShowCount(userData?.no_show_count || 0);
-        setIsHighRisk((userData?.no_show_count || 0) > 3);
+        const highRisk = (userData?.no_show_count || 0) > 3;
+        setIsHighRisk(highRisk);
+        // Sube el flag al estado compartido: BookingFlowStep4 es quien calcula
+        // el anticipo que de verdad se cobra y necesita saber esto, no solo
+        // este paso (que lo usa para ocultar el banner de membresia de abajo).
+        updateFlow({ isHighRisk: highRisk });
         setIsForeignTraveler(userData?.is_foreign_traveler ?? false);
       } catch {
         // non-critical
@@ -139,7 +144,7 @@ const BookingFlowStep3: React.FC = () => {
       }
     };
     loadUserState();
-  }, [user, tour]);
+  }, [user, tour, updateFlow]);
 
   // Load optional services
   useEffect(() => {

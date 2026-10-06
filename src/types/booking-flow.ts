@@ -93,6 +93,17 @@ export interface BookingFlowState {
   membershipPlan: 'mensual' | 'anual' | null;
   membershipCost: number;
 
+  /**
+   * Viajero con mas de 3 no-shows. BookingFlowStep3 lo calcula desde
+   * users.no_show_count y lo sube aqui para que BookingFlowStep4 (donde se
+   * calcula el anticipo que de verdad se cobra) lo pueda leer sin repetir la
+   * consulta. Forzar el 100% vivia en BookingForm.tsx (codigo muerto) y
+   * create_booking_atomic nunca lo tuvo — create_booking_atomic ya lo aplica
+   * server-side independientemente de este campo; esto es solo para que el
+   * front muestre el mismo 100% antes de cobrar, no una fuente de verdad.
+   */
+  isHighRisk: boolean;
+
   includeInsurance: boolean;
   insuranceCost: number;
   insuranceDays: number | null;
@@ -161,6 +172,7 @@ export const INITIAL_FLOW_STATE: BookingFlowState = {
   addMembership: false,
   membershipPlan: null,
   membershipCost: 0,
+  isHighRisk: false,
   includeInsurance: false,
   insuranceCost: 0,
   insuranceDays: null,

@@ -69,6 +69,11 @@ const BookingFlowStep4: React.FC = () => {
   const [hasMembership, setHasMembership] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [pointsBalance, setPointsBalance] = useState(0);
+  // Portado de BookingForm.tsx: el checkbox de puntos se bloqueaba si el
+  // wallet no estaba activo Y la membresia tampoco (pointsWalletActive =
+  // is_active || membershipStillActive). Aqui no existia ningun chequeo —
+  // bastaba con tener saldo > 0 para gastar puntos con membresia vencida.
+  const [pointsWalletActive, setPointsWalletActive] = useState(false);
   const [useWallet, setUseWallet] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
   const [discountInput, setDiscountInput] = useState(flow.discountCode);
@@ -160,7 +165,7 @@ const BookingFlowStep4: React.FC = () => {
 
         const { data: pointsData, error: errPoints } = await supabase
           .from('toursred_points_wallets')
-          .select('balance')
+          .select('balance, is_active')
           .eq('user_id', user.id)
           .maybeSingle();
         if (errPoints) {
@@ -168,6 +173,7 @@ const BookingFlowStep4: React.FC = () => {
           setLoadError('No pudimos leer tus puntos. Si tienes saldo, ahora aparece en cero: recarga la pagina antes de pagar.');
         }
         setPointsBalance(pointsData?.balance || 0);
+        setPointsWalletActive(pointsData?.is_active || false);
       } catch (e) {
         // Antes este catch estaba vacio con un "// non-critical". No lo era:
         // se traga el fallo de las cinco lecturas de arriba, incluida la del
@@ -363,8 +369,8 @@ const BookingFlowStep4: React.FC = () => {
   // Step4 nunca muestren porcentajes distintos para el mismo tour, y se mantiene en
   // paridad con la seccion 8 de create_booking_atomic.
   const effectiveDepositPct = useMemo(
-    () => getEffectiveDepositPct(tour, flow.selectedDate),
-    [tour, flow.selectedDate]
+    () => getEffectiveDepositPct(tour, flow.selectedDate, flow.isHighRisk),
+    [tour, flow.selectedDate, flow.isHighRisk]
   );
 
   const tourPriceAfterDiscount = Math.max(0, precioTrasPromocion - discountAmount);
@@ -387,7 +393,11 @@ const BookingFlowStep4: React.FC = () => {
   // marcada, el punto de partida no puede quedarse atras (bug del 24-sep-2026,
   // ver bitacora).
   const maxPointsAllowed = Math.floor(netBeforeCharges * POINTS_PER_MXN * MAX_POINTS_COVERAGE);
-  const pointsApplied = usePoints
+  // pointsWalletActive || hasMembership: portado de BookingForm.tsx. Vuelve a
+  // comprobarse aqui (no solo al pintar el checkbox) por si usePoints quedo
+  // en true de una sesion anterior con la membresia todavia vigente.
+  const canUsePoints = pointsWalletActive || hasMembership;
+  const pointsApplied = usePoints && canUsePoints
     ? Math.min(pointsBalance, maxPointsAllowed)
     : 0;
   const pointsDiscount = pointsApplied / POINTS_PER_MXN;
@@ -432,7 +442,10 @@ const BookingFlowStep4: React.FC = () => {
 
   const grandTotal = Math.max(0, subtotalBeforeDiscount - pointsDiscount - walletDiscount);
 
-  const rawAmountToPay = flow.payNowMode === 'partial' && !isFullWalletPayment
+  // !flow.isHighRisk tambien aqui: un payNowMode='partial' que haya quedado
+  // de una sesion anterior (antes de que Step3 confirmara el riesgo) no debe
+  // dejar cobrar menos del 100% aunque el checkbox ya este oculto en pantalla.
+  const rawAmountToPay = flow.payNowMode === 'partial' && !isFullWalletPayment && !flow.isHighRisk
     ? Math.min(flow.partialPaymentAmount, Math.max(0, dueNow - pointsDiscount - walletDiscount))
     : Math.max(0, dueNow - pointsDiscount - walletDiscount);
 
@@ -568,7 +581,7 @@ const BookingFlowStep4: React.FC = () => {
       return;
     }
 
-    if (flow.payNowMode === 'partial' && (flow.partialPaymentAmount <= 0 || flow.partialPaymentAmount >= depositAmount - 10)) {
+    if (!flow.isHighRisk && flow.payNowMode === 'partial' && (flow.partialPaymentAmount <= 0 || flow.partialPaymentAmount >= depositAmount - 10)) {
       setCreateError('El monto del pago parcial debe ser menor al depósito total (dejando al menos $10 MXN de saldo).');
       return;
     }
@@ -1309,7 +1322,7 @@ const BookingFlowStep4: React.FC = () => {
         )}
 
         {/* Points toggle */}
-        {pointsBalance > 0 && (
+        {pointsBalance > 0 && canUsePoints && (
           <div className="mb-4">
             <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${usePoints ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`}>
               <input
@@ -1336,6 +1349,19 @@ const BookingFlowStep4: React.FC = () => {
                 </p>
               </div>
             </label>
+          </div>
+        )}
+
+        {/* Puntos con saldo pero wallet inactivo y sin membresia vigente:
+            portado de BookingForm.tsx (pointsWalletActive). El wallet se
+            desactiva cuando la membresia vence (trigger
+            sync_membership_with_points_wallet) — sin este aviso el saldo
+            simplemente desaparecia sin explicacion. */}
+        {pointsBalance > 0 && !canUsePoints && (
+          <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <p className="text-xs text-gray-500">
+              Tienes {pointsBalance.toLocaleString()} puntos ToursRed, pero no puedes usarlos: tu membresía no está vigente. Renuévala para volver a gastarlos.
+            </p>
           </div>
         )}
 
@@ -1401,8 +1427,22 @@ const BookingFlowStep4: React.FC = () => {
           </div>
         )}
 
+        {/* Viajero de alto riesgo (>3 no-shows): debe cubrir el 100% hoy, sin
+            dividir el pago entre metodos ni dejar saldo para despues — eso
+            es exactamente lo que permitiria sortear el 100% que ya fuerza
+            effectiveDepositPct arriba. Portado de BookingForm.tsx. */}
+        {flow.isHighRisk && (
+          <div className="mb-6 flex items-start gap-2 rounded-xl border-2 border-amber-400 bg-amber-50 p-4">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-900">
+              Por tu historial de inasistencias, esta reserva requiere el pago del{' '}
+              <strong>100% hoy</strong>, sin opcion de abonar o dividir el pago.
+            </p>
+          </div>
+        )}
+
         {/* Partial payment option */}
-        {dueNow > 500 && !isWalletOnlyPayment && (
+        {dueNow > 500 && !isWalletOnlyPayment && !flow.isHighRisk && (
           <div className="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input

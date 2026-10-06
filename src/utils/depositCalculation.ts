@@ -10,6 +10,7 @@ import type { InstallmentDefinition, Tour } from '../types';
  *
  * Debe mantenerse en paridad con create_booking_atomic (seccion 8), que es la
  * fuente de verdad del lado servidor:
+ *   - viajero de alto riesgo (>3 no-shows) -> 100%, sin importar el plan
  *   - full_upfront                -> 100%
  *   - payment_plan + installments -> suma de las parcialidades YA VENCIDAS,
  *                                    incluidas las de specific_date ya pasada
@@ -56,9 +57,14 @@ function installmentDueDate(
  */
 export function getEffectiveDepositPct(
   tour: DepositTourFields | null | undefined,
-  selectedDate?: string | null
+  selectedDate?: string | null,
+  isHighRisk?: boolean
 ): number {
   if (!tour) return DEFAULT_DEPOSIT_PCT;
+  // Portado de BookingForm.tsx: un viajero de alto riesgo paga el 100%
+  // siempre, incluso si el tour tiene plan de pagos. Gana sobre cualquier
+  // otra regla, igual que en create_booking_atomic (seccion 8).
+  if (isHighRisk) return 100;
   if (tour.payment_option === 'full_upfront') return 100;
 
   const genericPct = tour.deposit_percentage || DEFAULT_DEPOSIT_PCT;
@@ -92,8 +98,9 @@ export function getEffectiveDepositPct(
 export function getDepositAmount(
   grossTourPrice: number,
   tour: DepositTourFields | null | undefined,
-  selectedDate?: string | null
+  selectedDate?: string | null,
+  isHighRisk?: boolean
 ): number {
-  const pct = getEffectiveDepositPct(tour, selectedDate);
+  const pct = getEffectiveDepositPct(tour, selectedDate, isHighRisk);
   return Math.round(grossTourPrice * (pct / 100) * 100) / 100;
 }
