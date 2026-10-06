@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { AgencyDiscountCode, AgencyTour } from '../../types';
 import { mensajeDeError } from '../../lib/errores';
+import { comoFilas } from '../../lib/relacionesSupabase';
 
 interface UsageRecord {
   id: string;
@@ -12,6 +13,14 @@ interface UsageRecord {
   user_name: string;
   used_at: string;
   booking_id: string | null;
+}
+
+interface DiscountCodeUsageRow {
+  id: string;
+  user_id: string;
+  used_at: string;
+  booking_id: string | null;
+  users: { first_name: string | null; last_name: string | null; email: string } | null;
 }
 
 export default function AgencyDiscountCodes() {
@@ -121,7 +130,7 @@ export default function AgencyDiscountCodes() {
 
       if (error) throw error;
 
-      const records = (usageData || []).map((record: any) => ({
+      const records = comoFilas<DiscountCodeUsageRow>(usageData).map((record) => ({
         id: record.id,
         user_id: record.user_id,
         user_name: record.users

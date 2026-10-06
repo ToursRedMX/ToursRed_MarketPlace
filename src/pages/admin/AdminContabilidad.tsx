@@ -250,7 +250,7 @@ const AdminContabilidad: React.FC = () => {
     for (let i = 0; i < records.length; i++) {
       const rec = records[i];
       try {
-        let res: { data: any; error: any };
+        let res: { data: { error?: string } | null; error: { message?: string } | null };
         if (type === 'agencies') {
           res = await supabase.functions.invoke('sync-contact-to-accounting', {
             body: { contact_type: 'agency', contact_id: rec.id },

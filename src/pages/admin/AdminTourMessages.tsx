@@ -187,7 +187,7 @@ const AdminTourMessages: React.FC = () => {
           <div className="relative">
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as any)}
+              onChange={e => setStatusFilter(e.target.value as 'all' | 'completed' | 'failed' | 'sending' | 'pending')}
               className="border border-gray-300 rounded-lg px-3 py-2 pr-8 text-sm appearance-none focus:outline-hidden focus:ring-2 focus:ring-primary-500 bg-white"
             >
               <option value="all">Todos los estados</option>

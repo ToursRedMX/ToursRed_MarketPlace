@@ -12,6 +12,20 @@ interface OpenPayTopupModalProps {
   onSuccess: () => void;
 }
 
+interface OpenPayTopupData {
+  topup_id: string;
+  amount: number;
+  payment_method?: {
+    clabe?: string;
+    bank?: string;
+    name?: string;
+    agreement?: string;
+    qr_url?: string;
+    qr_image?: string;
+  };
+  spei_pdf_url?: string;
+}
+
 const SUGGESTED_AMOUNTS = [500, 1000, 2000, 5000];
 const MIN_AMOUNT = 500;
 const MAX_AMOUNT = 50000;
@@ -22,7 +36,7 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
   const [amount, setAmount] = useState<number>(1000);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  const [topupData, setTopupData] = useState<any>(null);
+  const [topupData, setTopupData] = useState<OpenPayTopupData | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const resetState = () => {
@@ -311,7 +325,7 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
                   <SpeiField
                     label="CLABE interbancaria"
                     value={topupData.payment_method.clabe}
-                    onCopy={() => handleCopy(topupData.payment_method.clabe, 'clabe')}
+                    onCopy={() => handleCopy(topupData.payment_method?.clabe ?? '', 'clabe')}
                     copied={copiedField === 'clabe'}
                     mono
                   />
@@ -320,7 +334,7 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
                   <SpeiField
                     label="Banco"
                     value={topupData.payment_method.bank}
-                    onCopy={() => handleCopy(topupData.payment_method.bank, 'bank')}
+                    onCopy={() => handleCopy(topupData.payment_method?.bank ?? '', 'bank')}
                     copied={copiedField === 'bank'}
                   />
                 )}
@@ -328,7 +342,7 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
                   <SpeiField
                     label="Referencia"
                     value={topupData.payment_method.name}
-                    onCopy={() => handleCopy(topupData.payment_method.name, 'reference')}
+                    onCopy={() => handleCopy(topupData.payment_method?.name ?? '', 'reference')}
                     copied={copiedField === 'reference'}
                     mono
                   />
@@ -337,7 +351,7 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
                   <SpeiField
                     label="Convenio"
                     value={topupData.payment_method.agreement}
-                    onCopy={() => handleCopy(topupData.payment_method.agreement, 'agreement')}
+                    onCopy={() => handleCopy(topupData.payment_method?.agreement ?? '', 'agreement')}
                     copied={copiedField === 'agreement'}
                     mono
                   />

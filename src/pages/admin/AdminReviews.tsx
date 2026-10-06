@@ -375,7 +375,7 @@ const AdminReviews: React.FC = () => {
               <Filter className="h-4 w-4 text-gray-400" />
               <select
                 value={ratingFilter}
-                onChange={(e) => setRatingFilter(e.target.value as any)}
+                onChange={(e) => setRatingFilter(e.target.value as 'all' | '1' | '2' | '3' | '4' | '5')}
                 className="border border-gray-300 rounded-md px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">Todas las calificaciones</option>
@@ -389,7 +389,7 @@ const AdminReviews: React.FC = () => {
             <div className="flex items-center gap-x-2">
               <select
                 value={visibilityFilter}
-                onChange={(e) => setVisibilityFilter(e.target.value as any)}
+                onChange={(e) => setVisibilityFilter(e.target.value as 'all' | 'visible' | 'hidden')}
                 className="border border-gray-300 rounded-md px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">Todas</option>

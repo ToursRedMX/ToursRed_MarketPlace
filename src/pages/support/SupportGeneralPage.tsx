@@ -60,7 +60,7 @@ const SupportGeneralPage: React.FC = () => {
 
       // Auto-detect APEL category by slug if no preselection
       if (!preselectedCategoryId && isApelacion) {
-        const apelCat = (cats ?? []).find((c: any) => c.slug === APEL_CATEGORY_SLUG);
+        const apelCat = (cats ?? []).find((c) => c.slug === APEL_CATEGORY_SLUG);
         if (apelCat) setForm(prev => ({ ...prev, category_id: apelCat.id }));
       }
     };

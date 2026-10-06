@@ -6,12 +6,24 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { mensajeDeError } from '../../lib/errores';
 
+interface OpenPayWebhookPayload {
+  id?: string;
+  amount?: number;
+  order_id?: string;
+  transaction?: {
+    id?: string;
+    amount?: number;
+    method?: string;
+    order_id?: string;
+  };
+}
+
 interface WebhookEvent {
   id: string;
   event_type: string;
   transaction_id: string | null;
   order_id: string | null;
-  raw_payload: any;
+  raw_payload: OpenPayWebhookPayload;
   processing_status: string;
   processing_result: string | null;
   processing_error: string | null;

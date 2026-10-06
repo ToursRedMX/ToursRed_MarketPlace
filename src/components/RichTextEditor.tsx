@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import { Node, mergeAttributes } from '@tiptap/core';
+import { Node, mergeAttributes, CommandProps } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -27,10 +27,10 @@ const ImageExtension = Node.create({
   },
   addCommands() {
     return {
-      setImage: (options: { src: string; alt?: string; title?: string }) => ({ commands }: any) => {
+      setImage: (options: { src: string; alt?: string; title?: string }) => ({ commands }: CommandProps) => {
         return commands.insertContent({ type: this.name, attrs: options });
       },
-    } as any;
+    };
   },
 });
 

@@ -6,6 +6,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { mensajeDeError } from '../../lib/errores';
+import { comoFilas } from '../../lib/relacionesSupabase';
 
 interface Commission {
   id: string;
@@ -84,7 +85,7 @@ export default function AdminEjecutivosComisiones() {
 
       // Una lista vacia aqui dice "no hay comisiones por pagar".
       if (error) throw error;
-      setCommissions((data as any[]) || []);
+      setCommissions(comoFilas<Commission>(data));
     } finally {
       setIsLoading(false);
     }

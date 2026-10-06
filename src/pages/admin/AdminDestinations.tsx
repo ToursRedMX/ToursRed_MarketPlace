@@ -123,7 +123,7 @@ const AdminDestinations: React.FC = () => {
         throw new Error('El nombre del destino es obligatorio');
       }
 
-      const destinationData: any = {
+      const destinationData: Record<string, unknown> = {
         name: formData.name.trim(),
         description: formData.description || null,
         country: formData.country || null,
@@ -394,7 +394,7 @@ const AdminDestinations: React.FC = () => {
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
               className="border border-gray-300 rounded-md px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="all">Todos los estados</option>

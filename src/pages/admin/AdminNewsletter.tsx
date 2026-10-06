@@ -253,7 +253,7 @@ const AdminNewsletter: React.FC = () => {
               </div>
               <select
                 value={filterStatus}
-                onChange={e => { setFilterStatus(e.target.value as any); setPage(0); }}
+                onChange={e => { setFilterStatus(e.target.value as 'all' | 'active' | 'inactive'); setPage(0); }}
                 className="input text-sm w-auto"
               >
                 <option value="all">Todos</option>

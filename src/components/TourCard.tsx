@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase, trackFeaturedImpression, trackFeaturedClick } from '../lib/supabase';
 import { formatCurrency } from '../utils/formatCurrency';
 
-interface TourPromo {
+export interface TourPromo {
   promotion_type: string;
   min_travelers: number;
   fixed_group_price: number | null;

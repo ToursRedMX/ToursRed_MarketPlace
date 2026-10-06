@@ -67,7 +67,7 @@ const PreventasSection: React.FC = () => {
         .limit(6);
 
       if (!error && data) {
-        const toursWithDays = data.map((t: any) => {
+        const toursWithDays = data.map((t) => {
           const fin = new Date(t.preventa_fin + 'T23:59:59');
           const diff = Math.ceil((fin.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
           return { ...t, dias_restantes: Math.max(0, diff) };

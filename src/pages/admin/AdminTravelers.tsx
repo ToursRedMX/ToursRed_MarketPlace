@@ -307,8 +307,8 @@ export default function AdminTravelers() {
     .sort((a, b) => {
       if (!sortColumn) return 0;
 
-      let aValue: any;
-      let bValue: any;
+      let aValue: string | number;
+      let bValue: string | number;
 
       switch (sortColumn) {
         case 'name':

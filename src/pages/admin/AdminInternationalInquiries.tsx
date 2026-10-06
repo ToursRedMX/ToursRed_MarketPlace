@@ -402,7 +402,7 @@ const AdminInternationalInquiries: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
                           value={inquiry.status}
-                          onChange={(e) => updateStatus(inquiry.id, e.target.value as any)}
+                          onChange={(e) => updateStatus(inquiry.id, e.target.value as 'pending' | 'contacted' | 'converted' | 'no_convertido')}
                           className={`text-xs font-medium rounded-full px-3 py-1 ${getStatusColor(inquiry.status)}`}
                         >
                           <option value="pending">Pendiente</option>

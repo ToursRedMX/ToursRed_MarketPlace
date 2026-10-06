@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import { autoTable } from 'jspdf-autotable';
+import { autoTable, RowInput } from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { formatCurrencyMXN } from './formatCurrency';
 import { downloadExcel } from './excelExport';
@@ -106,7 +106,7 @@ export const exportTourReportToExcel = async (reportData: TourReportData, agency
     ['Ingreso Total:', formatCurrency(reportData.summary.totalRevenue)],
   ];
 
-  const detailData: any[][] = [
+  const detailData: string[][] = [
     [
       'ID Reserva',
       'Cliente',
@@ -236,7 +236,7 @@ export const exportTourReportToPDF = (reportData: TourReportData, agencyName: st
   doc.setFont('helvetica', 'bold');
   doc.text('Detalle de Viajeros por Reserva', 15, 20);
 
-  const detailTableData: any[][] = [];
+  const detailTableData: RowInput[] = [];
 
   reportData.bookings.forEach((booking) => {
     const clientName = `${booking.users.first_name} ${booking.users.last_name}`;

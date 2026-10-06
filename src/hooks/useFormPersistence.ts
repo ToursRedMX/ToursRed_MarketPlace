@@ -6,13 +6,13 @@ interface FormPersistenceOptions {
 }
 
 interface StoredFormData {
-  data: any;
+  data: unknown;
   timestamp: number;
 }
 
 const CLEANUP_INTERVAL = 60 * 60 * 1000;
 
-export const useFormPersistence = <T extends Record<string, any>>(
+export const useFormPersistence = <T extends Record<string, unknown>>(
   formData: T,
   options: FormPersistenceOptions
 ) => {
@@ -97,7 +97,7 @@ export const useFormPersistence = <T extends Record<string, any>>(
       }
 
       console.log('✅ Formulario restaurado desde auto-guardado');
-      return parsed.data;
+      return parsed.data as T;
     } catch (error) {
       console.error('Error cargando formulario:', error);
       localStorage.removeItem(getStorageKey());

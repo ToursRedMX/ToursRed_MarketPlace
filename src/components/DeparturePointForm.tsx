@@ -13,6 +13,14 @@ interface DeparturePointFormProps {
   onSuccess: (newPoint: DeparturePoint) => void;
 }
 
+interface SimilarDeparturePoint {
+  id: string;
+  name: string;
+  city: string;
+  municipality: string;
+  google_maps_url: string | null;
+}
+
 const DeparturePointForm: React.FC<DeparturePointFormProps> = ({ onClose, onSuccess }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
@@ -23,7 +31,7 @@ const DeparturePointForm: React.FC<DeparturePointFormProps> = ({ onClose, onSucc
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [duplicates, setDuplicates] = useState<any[]>([]);
+  const [duplicates, setDuplicates] = useState<SimilarDeparturePoint[]>([]);
   const [confirmCreate, setConfirmCreate] = useState(false);
 
   const checkForDuplicates = async () => {
@@ -41,7 +49,7 @@ const DeparturePointForm: React.FC<DeparturePointFormProps> = ({ onClose, onSucc
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const similarPoints = data.filter((point: any) => {
+        const similarPoints = data.filter((point: SimilarDeparturePoint) => {
           const nameMatch = point.name.toLowerCase().includes(formData.name.toLowerCase()) ||
                            formData.name.toLowerCase().includes(point.name.toLowerCase());
           const cityMatch = point.city.toLowerCase() === formData.city.toLowerCase();

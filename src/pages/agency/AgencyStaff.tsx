@@ -5,6 +5,30 @@ import { useAuth } from '../../context/AuthContext';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { mensajeDeError } from '../../lib/errores';
 
+interface AgencyStaffRpcRow {
+  staff_id: string;
+  user_id: string;
+  title: string | null;
+  is_active: boolean;
+  linked_at: string;
+  unlinked_at: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+  profile_picture_url: string | null;
+  perm_id: string | null;
+  can_scan_checkin: boolean;
+  can_view_bookings: boolean;
+  can_view_tours: boolean;
+  can_edit_tours: boolean;
+  can_manage_tours: boolean;
+  can_view_financials: boolean;
+  can_view_reports: boolean;
+  can_manage_discount_codes: boolean;
+  can_view_messages: boolean;
+  can_manage_destinations: boolean;
+}
+
 interface StaffMember {
   id: string;
   user_id: string;
@@ -159,7 +183,7 @@ export default function AgencyStaff() {
       const { data, error: err } = await supabase
         .rpc('get_agency_staff_for_owner', { p_agency_id: agencyId });
       if (err) throw err;
-      setStaffList((data || []).map((r: any) => ({
+      setStaffList((data || []).map((r: AgencyStaffRpcRow) => ({
         id: r.staff_id,
         user_id: r.user_id,
         title: r.title,
@@ -561,7 +585,7 @@ export default function AgencyStaff() {
               <input type="text" placeholder="Buscar coordinador..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500" />
             </div>
-            <select value={filterActive} onChange={e => setFilterActive(e.target.value as any)}
+            <select value={filterActive} onChange={e => setFilterActive(e.target.value as 'all' | 'active' | 'inactive')}
               className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary-500 bg-white">
               <option value="all">Todos</option>
               <option value="active">Activos</option>

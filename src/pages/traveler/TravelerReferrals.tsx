@@ -623,7 +623,7 @@ const TravelerReferralsPage: React.FC = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {relationships.map((relationship) => {
-                    const referred = relationship.referred as any;
+                    const referred = relationship.referred;
                     const referredName = referred?.first_name && referred?.last_name
                       ? `${referred.first_name} ${referred.last_name}`
                       : referred?.email || 'Usuario';

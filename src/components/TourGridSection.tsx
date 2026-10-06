@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Compass, ChevronDown, ChevronUp } from 'lucide-react';
-import TourCard from './TourCard';
+import TourCard, { TourPromo } from './TourCard';
 import { Tour } from '../types';
 
 const COLS = 5;
@@ -11,7 +11,7 @@ interface TourGridSectionProps {
   subtitle?: string;
   tours: Tour[];
   isLoading?: boolean;
-  promotionsMap: Record<string, any>;
+  promotionsMap: Record<string, TourPromo>;
   bgClass?: string;
   /** Max rows to display initially and at full expansion (default: unlimited via existing behavior) */
   maxRows?: number;

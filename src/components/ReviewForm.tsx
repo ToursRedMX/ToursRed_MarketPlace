@@ -68,7 +68,7 @@ export default function ReviewForm({
 
       const table = reviewType === 'agency' ? 'agency_reviews' : 'traveler_reviews';
 
-      const reviewData: any = {
+      const reviewData: Record<string, unknown> = {
         booking_id: bookingId,
         rating,
         comment: comment.trim()

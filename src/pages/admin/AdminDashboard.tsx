@@ -4,6 +4,16 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { mensajeDeError } from '../../lib/errores';
+import { comoFilas } from '../../lib/relacionesSupabase';
+
+interface RecentActivityRow {
+  id: string;
+  created_at: string;
+  status: string;
+  users: { first_name: string; last_name: string; email: string } | null;
+  tours: { name: string } | null;
+  agencies: { name: string } | null;
+}
 
 interface DashboardStats {
   totalUsers: number;
@@ -13,7 +23,7 @@ interface DashboardStats {
   totalTours: number;
   totalBookings: number;
   totalDestinations: number;
-  recentActivity: any[];
+  recentActivity: RecentActivityRow[];
 }
 
 interface SecurityStats {
@@ -141,7 +151,7 @@ const AdminDashboard: React.FC = () => {
         totalTours: toursResult.count || 0,
         totalBookings: bookingsResult.count || 0,
         totalDestinations: destinationsResult.count || 0,
-        recentActivity: recentBookings || []
+        recentActivity: comoFilas<RecentActivityRow>(recentBookings)
       });
 
       console.log('✅ Estadísticas cargadas:', {
