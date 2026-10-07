@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Star, User, Calendar, MessageSquare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -21,29 +22,43 @@ interface AgencyReviewsProps {
   agencyName: string;
 }
 
+// La RPC devuelve filas sin tipar, asi que el parametro salia `any`
+// implicito. Se declara lo que este map consume de verdad, ni mas ni
+// menos: si manana la consulta trae un campo nuevo, se anade aqui.
+interface FilaResena {
+  id: string;
+  rating: number;
+  comment: string | null;
+  reply: string | null;
+  created_at: string;
+  traveler_first_name: string | null;
+  traveler_last_name: string | null;
+}
+
+interface ReviewPermission {
+  canReview: boolean;
+  hasReviewed: boolean;
+}
+
 export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsProps) {
   const { user } = useAuth();
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [averageRating, setAverageRating] = useState(0);
-  const [totalReviews, setTotalReviews] = useState(0);
+  const queryClient = useQueryClient();
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [canReview, setCanReview] = useState(false);
-  const [hasReviewed, setHasReviewed] = useState(false);
 
-  useEffect(() => {
-    fetchReviews();
-    if (user && user.role === 'traveler') {
-      checkCanReview();
-    }
-  }, [agencyId, user]);
+  const reviewsQueryKey = ['agency-reviews', agencyId] as const;
+  const permissionQueryKey = ['agency-review-permission', agencyId, user?.id] as const;
 
-  const fetchReviews = async () => {
-    try {
+  const {
+    data: reviews = [],
+    isLoading: loading,
+    isError: reviewsFailed,
+  } = useQuery({
+    queryKey: reviewsQueryKey,
+    queryFn: async (): Promise<Review[]> => {
       const { data, error } = await supabase
         .rpc('get_agency_reviews_with_users', { p_agency_id: agencyId });
 
@@ -52,22 +67,9 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
         throw error;
       }
 
-      const reviewsData = data || [];
+      const reviewsData = (data || []) as FilaResena[];
 
-      // La RPC devuelve filas sin tipar, asi que el parametro salia `any`
-      // implicito. Se declara lo que este map consume de verdad, ni mas ni
-      // menos: si manana la consulta trae un campo nuevo, se anade aqui.
-      interface FilaResena {
-        id: string;
-        rating: number;
-        comment: string | null;
-        reply: string | null;
-        created_at: string;
-        traveler_first_name: string | null;
-        traveler_last_name: string | null;
-      }
-
-      const reviewsWithTravelers = (reviewsData as FilaResena[]).map((review) => ({
+      return reviewsData.map((review) => ({
         id: review.id,
         rating: review.rating,
         comment: review.comment ?? '',
@@ -78,28 +80,20 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
           last_name: review.traveler_last_name || ''
         }
       }));
+    },
+  });
 
-      setReviews(reviewsWithTravelers);
-      setTotalReviews(reviewsWithTravelers.length);
+  const { totalReviews, averageRating } = useMemo(() => {
+    if (reviews.length === 0) return { totalReviews: 0, averageRating: 0 };
+    const avg = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
+    return { totalReviews: reviews.length, averageRating: avg };
+  }, [reviews]);
 
-      if (reviewsWithTravelers.length > 0) {
-        const avg = reviewsWithTravelers.reduce((sum, review) => sum + review.rating, 0) / reviewsWithTravelers.length;
-        setAverageRating(avg);
-      } else {
-        setAverageRating(0);
-      }
-    } catch (error) {
-      console.error('Error cargando reseñas:', error);
-      setError('Error al cargar las reseñas');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: permission = { canReview: false, hasReviewed: false } } = useQuery({
+    queryKey: permissionQueryKey,
+    queryFn: async (): Promise<ReviewPermission> => {
+      if (!user) return { canReview: false, hasReviewed: false };
 
-  const checkCanReview = async () => {
-    if (!user) return;
-
-    try {
       const { data: existingReview, error: errorResenaPrevia } = await supabase
         .from('agency_reviews')
         .select('id')
@@ -111,8 +105,7 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
       if (errorResenaPrevia) throw errorResenaPrevia;
 
       if (existingReview) {
-        setHasReviewed(true);
-        return;
+        return { canReview: false, hasReviewed: true };
       }
 
       const { data: completedBookings, error: errorReservas } = await supabase
@@ -125,11 +118,12 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
 
       if (errorReservas) throw errorReservas;
 
-      setCanReview((completedBookings || []).length > 0);
-    } catch (err) {
-      console.error('Error verificando permisos:', err);
-    }
-  };
+      return { canReview: (completedBookings || []).length > 0, hasReviewed: false };
+    },
+    enabled: !!user && user.role === 'traveler',
+  });
+
+  const { canReview, hasReviewed } = permission;
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,9 +180,8 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
       setComment('');
       setRating(5);
       setShowReviewForm(false);
-      setHasReviewed(true);
-      setCanReview(false);
-      fetchReviews();
+      queryClient.setQueryData<ReviewPermission>(permissionQueryKey, { canReview: false, hasReviewed: true });
+      queryClient.invalidateQueries({ queryKey: reviewsQueryKey });
     } catch (err) {
       setError(mensajeDeError(err) || 'Error al enviar reseña');
     } finally {
@@ -236,7 +229,7 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
     );
   }
 
-  if (error && reviews.length === 0) {
+  if (reviewsFailed && reviews.length === 0) {
     return (
       <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg">
         <p className="font-medium">Error al cargar las reseñas</p>
