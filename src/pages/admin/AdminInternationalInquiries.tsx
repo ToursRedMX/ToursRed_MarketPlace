@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { Search, Filter, X, Mail, Phone, Calendar, Users, MapPin, MessageSquare, ExternalLink, TrendingUp, Clock, CheckCircle, Hash } from 'lucide-react';
 import { format } from 'date-fns';
@@ -31,36 +32,50 @@ interface Stats {
   topDestinations: { destination: string; count: number }[];
 }
 
+const inquiriesQueryKey = ['admin-international-inquiries'] as const;
+
+function calcularStats(data: Inquiry[]): Stats {
+  const total = data.length;
+  const pending = data.filter(i => i.status === 'pending').length;
+  const contacted = data.filter(i => i.status === 'contacted').length;
+  const converted = data.filter(i => i.status === 'converted').length;
+  const noConvertido = data.filter(i => i.status === 'no_convertido').length;
+
+  const totalResolved = converted + noConvertido;
+  const conversionRate = totalResolved > 0 ? (converted / totalResolved) * 100 : 0;
+
+  const destinationCounts = data.reduce((acc, inquiry) => {
+    acc[inquiry.destination] = (acc[inquiry.destination] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const topDestinations = Object.entries(destinationCounts)
+    .map(([destination, count]) => ({ destination, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  return {
+    total,
+    pending,
+    contacted,
+    converted,
+    noConvertido,
+    conversionRate,
+    topDestinations
+  };
+}
+
 const AdminInternationalInquiries: React.FC = () => {
-  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
-  const [filteredInquiries, setFilteredInquiries] = useState<Inquiry[]>([]);
-  const [stats, setStats] = useState<Stats>({
-    total: 0,
-    pending: 0,
-    contacted: 0,
-    converted: 0,
-    noConvertido: 0,
-    conversionRate: 0,
-    topDestinations: []
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  useEffect(() => {
-    fetchInquiries();
-  }, []);
-
-  useEffect(() => {
-    filterInquiries();
-  }, [inquiries, searchTerm, statusFilter, sourceFilter]);
-
-  const fetchInquiries = async () => {
-    setIsLoading(true);
-    try {
+  const { data: inquiries = [], isLoading } = useQuery({
+    queryKey: inquiriesQueryKey,
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('international_tour_inquiries')
         .select('*')
@@ -68,47 +83,13 @@ const AdminInternationalInquiries: React.FC = () => {
 
       if (error) throw error;
 
-      setInquiries(data || []);
-      calculateStats(data || []);
-    } catch (error) {
-      console.error('Error fetching inquiries:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return data || [];
+    },
+  });
 
-  const calculateStats = (data: Inquiry[]) => {
-    const total = data.length;
-    const pending = data.filter(i => i.status === 'pending').length;
-    const contacted = data.filter(i => i.status === 'contacted').length;
-    const converted = data.filter(i => i.status === 'converted').length;
-    const noConvertido = data.filter(i => i.status === 'no_convertido').length;
+  const stats = useMemo(() => calcularStats(inquiries), [inquiries]);
 
-    const totalResolved = converted + noConvertido;
-    const conversionRate = totalResolved > 0 ? (converted / totalResolved) * 100 : 0;
-
-    const destinationCounts = data.reduce((acc, inquiry) => {
-      acc[inquiry.destination] = (acc[inquiry.destination] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const topDestinations = Object.entries(destinationCounts)
-      .map(([destination, count]) => ({ destination, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    setStats({
-      total,
-      pending,
-      contacted,
-      converted,
-      noConvertido,
-      conversionRate,
-      topDestinations
-    });
-  };
-
-  const filterInquiries = () => {
+  const filteredInquiries = useMemo(() => {
     let filtered = [...inquiries];
 
     if (searchTerm) {
@@ -128,8 +109,8 @@ const AdminInternationalInquiries: React.FC = () => {
       filtered = filtered.filter(inquiry => inquiry.source === sourceFilter);
     }
 
-    setFilteredInquiries(filtered);
-  };
+    return filtered;
+  }, [inquiries, searchTerm, statusFilter, sourceFilter]);
 
   const updateStatus = async (inquiryId: string, newStatus: 'pending' | 'contacted' | 'converted' | 'no_convertido') => {
     try {
@@ -140,8 +121,8 @@ const AdminInternationalInquiries: React.FC = () => {
 
       if (error) throw error;
 
-      setInquiries(prev =>
-        prev.map(inquiry =>
+      queryClient.setQueryData<Inquiry[]>(inquiriesQueryKey, (prev) =>
+        (prev ?? []).map(inquiry =>
           inquiry.id === inquiryId ? { ...inquiry, status: newStatus } : inquiry
         )
       );
@@ -149,10 +130,6 @@ const AdminInternationalInquiries: React.FC = () => {
       if (selectedInquiry?.id === inquiryId) {
         setSelectedInquiry(prev => prev ? { ...prev, status: newStatus } : null);
       }
-
-      calculateStats(inquiries.map(inquiry =>
-        inquiry.id === inquiryId ? { ...inquiry, status: newStatus } : inquiry
-      ));
     } catch (error) {
       console.error('Error updating status:', error);
       alert('Error al actualizar el estado');
