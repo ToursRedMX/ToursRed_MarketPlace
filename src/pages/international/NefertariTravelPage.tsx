@@ -54,10 +54,13 @@ const NefertariTravelPage: React.FC = () => {
     const savedData = formPersistence.loadFromStorage();
     if (savedData) {
       formPersistence.setIsRestoring(true);
+      // Restaurar un borrador de localStorage al montar: sincronizar con un
+      // recurso externo, caso legitimo de efecto que React documenta.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData(savedData);
       setTimeout(() => formPersistence.setIsRestoring(false), 100);
     }
-  }, []);
+  }, [formPersistence]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Edit, Trash2, Clock } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useFormPersistence } from '../../hooks/useFormPersistence';
@@ -26,6 +27,18 @@ interface Message {
   };
 }
 
+// Igual que en AgencyReviews: la RPC no trae tipos. El indice permite el
+// `...msg` de abajo sin tener que declarar la fila entera, que es larga y
+// aqui solo se leen los campos del remitente.
+interface FilaMensaje extends Message {
+  sender_first_name?: string | null;
+  sender_last_name?: string | null;
+  sender_email?: string | null;
+  sender_role?: string | null;
+  sender_profile_picture?: string | null;
+  agency_name?: string | null;
+}
+
 interface MessageThreadProps {
   conversationId: string;
   conversationTitle?: string;
@@ -36,9 +49,8 @@ const MessageThread: React.FC<MessageThreadProps> = ({
   conversationTitle
 }) => {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -57,45 +69,25 @@ const MessageThread: React.FC<MessageThreadProps> = ({
 
   usePreventUnload(newMessage.length > 0 || editContent.length > 0);
 
-  useEffect(() => {
-    if (conversationId) {
-      const savedData = newMessagePersistence.loadFromStorage();
-      if (savedData?.newMessage) {
-        newMessagePersistence.setIsRestoring(true);
-        setNewMessage(savedData.newMessage);
-        setTimeout(() => newMessagePersistence.setIsRestoring(false), 100);
-      }
-      fetchMessages();
-      markAsRead();
-    }
-  }, [conversationId]);
+  const messagesQueryKey = ['conversation-messages', conversationId] as const;
 
-  const fetchMessages = async () => {
-    try {
-      setIsLoading(true);
-      setError('');
-
+  // Antes useState+useEffect manual (react-hooks/set-state-in-effect). El
+  // fetch en si tambien resolvia un react-hooks/immutability: se llamaba
+  // desde un efecto declarado ANTES que la funcion en el archivo.
+  const {
+    data: messages = [],
+    isLoading,
+    error: queryError,
+    refetch: fetchMessages,
+  } = useQuery({
+    queryKey: messagesQueryKey,
+    queryFn: async () => {
       const { data: messagesData, error } = await supabase.rpc('get_conversation_messages', {
         p_conversation_id: conversationId
       });
 
       if (error) {
         throw new Error(error.message);
-      }
-
-      // Igual que en AgencyReviews: la RPC no trae tipos. El indice permite el
-      // `...msg` de abajo sin tener que declarar la fila entera, que es larga y
-      // aqui solo se leen los campos del remitente.
-      // Extiende `Message` en vez de llevar un indice a `unknown`: con el
-      // indice, el `...msg` de abajo producia `unknown` para cada campo y el
-      // objeto ya no encajaba en `Message[]`.
-      interface FilaMensaje extends Message {
-        sender_first_name?: string | null;
-        sender_last_name?: string | null;
-        sender_email?: string | null;
-        sender_role?: string | null;
-        sender_profile_picture?: string | null;
-        agency_name?: string | null;
       }
 
       const enrichedMessages = (messagesData as FilaMensaje[] | null)?.map((msg) => ({
@@ -110,16 +102,15 @@ const MessageThread: React.FC<MessageThreadProps> = ({
         }
       }));
 
-      setMessages(enrichedMessages || []);
-    } catch (err) {
-      console.error('Error fetching messages:', err);
-      setError(mensajeDeError(err) || 'Error al cargar mensajes');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return enrichedMessages || [];
+    },
+    enabled: !!conversationId,
+  });
 
-  const markAsRead = async () => {
+  // markAsRead se queda como funcion aparte (no es una query: no hay dato que
+  // mostrar, es un "avisar al servidor" de una sola via) pero en useCallback
+  // y ANTES del efecto que la llama -- mismo motivo que fetchMessages arriba.
+  const markAsRead = useCallback(async () => {
     try {
       await supabase.rpc('mark_conversation_read', {
         p_conversation_id: conversationId
@@ -127,7 +118,24 @@ const MessageThread: React.FC<MessageThreadProps> = ({
     } catch (err) {
       console.error('Error marking messages as read:', err);
     }
-  };
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (conversationId) {
+      const savedData = newMessagePersistence.loadFromStorage();
+      if (savedData?.newMessage) {
+        newMessagePersistence.setIsRestoring(true);
+        // Restaurar un borrador de localStorage al montar/cambiar de
+        // conversacion es sincronizar con un recurso externo -- no hay forma
+        // de calcularlo sin un efecto, que es justo el caso legitimo que
+        // React documenta para esta regla.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setNewMessage(savedData.newMessage);
+        setTimeout(() => newMessagePersistence.setIsRestoring(false), 100);
+      }
+      markAsRead();
+    }
+  }, [conversationId, newMessagePersistence, markAsRead]);
 
   const sendMessage = async () => {
     if (!newMessage.trim() || isSending) return;
@@ -174,11 +182,13 @@ const MessageThread: React.FC<MessageThreadProps> = ({
         throw new Error(error.message);
       }
 
-      setMessages(prev => prev.map(msg =>
-        msg.id === editingMessageId
-          ? { ...msg, content: editContent.trim(), is_edited: true, edited_at: new Date().toISOString() }
-          : msg
-      ));
+      queryClient.setQueryData<Message[]>(messagesQueryKey, (prev) =>
+        (prev ?? []).map(msg =>
+          msg.id === editingMessageId
+            ? { ...msg, content: editContent.trim(), is_edited: true, edited_at: new Date().toISOString() }
+            : msg
+        )
+      );
 
       editMessagePersistence.clearStorage();
       setEditingMessageId(null);
@@ -208,7 +218,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({
         throw new Error(error.message);
       }
 
-      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+      queryClient.setQueryData<Message[]>(messagesQueryKey, (prev) =>
+        (prev ?? []).filter(msg => msg.id !== messageId)
+      );
     } catch (err) {
       console.error('Error deleting message:', err);
       setError(mensajeDeError(err) || 'Error al eliminar mensaje');
@@ -301,9 +313,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({
 
       {/* Messages */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {error && (
+        {(error || queryError) && (
           <div className="bg-error-50 text-error-600 p-3 rounded-md text-sm">
-            {error}
+            {error || mensajeDeError(queryError) || 'Error al cargar mensajes'}
           </div>
         )}
 

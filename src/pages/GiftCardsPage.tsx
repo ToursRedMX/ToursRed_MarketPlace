@@ -86,7 +86,7 @@ export default function GiftCardsPage() {
     };
 
     loadInitialData();
-  }, [user]);
+  }, [user, giftCardFormPersistence]);
 
   useEffect(() => {
     supabase
