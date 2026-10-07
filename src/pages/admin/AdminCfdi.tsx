@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { FileText, Search, Download, XCircle, RefreshCw, CheckCircle, AlertCircle, Clock, ExternalLink, RotateCcw, Shield } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 
@@ -77,9 +78,6 @@ const MOTIVOS_CANCELACION = [
 ];
 
 const AdminCfdi: React.FC = () => {
-  const [invoices, setInvoices] = useState<CfdiInvoice[]>([]);
-  const [stats, setStats] = useState<CfdiStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -101,9 +99,15 @@ const AdminCfdi: React.FC = () => {
     }
   };
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
+  // Antes useState+useCallback+useEffect manual (react-hooks/set-state-in-effect).
+  // isFetching (no isLoading) a proposito: el boton "Actualizar" vaciaba la
+  // tabla entera en CADA refresco manual, no solo durante la carga inicial --
+  // isFetching reproduce ese mismo comportamiento; isLoading de react-query
+  // (=isPending&&isFetching) se quedaria en false en un refetch manual porque
+  // ya hay datos, y la tabla dejaria de vaciarse al dar clic en "Actualizar".
+  const { data, isFetching: isLoading, refetch: fetchData } = useQuery({
+    queryKey: ['admin-cfdi-invoices'],
+    queryFn: async () => {
       const [invoicesRes, statsRes] = await Promise.all([
         supabase
           .from('cfdi_invoices')
@@ -117,15 +121,14 @@ const AdminCfdi: React.FC = () => {
           .limit(200),
         supabase.rpc('get_cfdi_stats')
       ]);
-
-      if (invoicesRes.data) setInvoices(invoicesRes.data as CfdiInvoice[]);
-      if (statsRes.data && statsRes.data[0]) setStats(statsRes.data[0]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+      return {
+        invoices: (invoicesRes.data ?? []) as CfdiInvoice[],
+        stats: (statsRes.data?.[0] ?? null) as CfdiStats | null,
+      };
+    },
+  });
+  const invoices = data?.invoices ?? [];
+  const stats = data?.stats ?? null;
 
   const filtered = invoices.filter(inv => {
     const matchSearch = !search ||
@@ -138,6 +141,18 @@ const AdminCfdi: React.FC = () => {
     const matchType = typeFilter === 'all' || inv.invoice_type === typeFilter;
     return matchSearch && matchStatus && matchType;
   });
+
+  // Ancho real de la tabla, para que el scrollbar falso de arriba (el div de
+  // 1px en altura) mida lo mismo que la tabla real de abajo. Antes se leia
+  // tableInnerRef.current?.scrollWidth directo en el render (react-hooks/refs:
+  // un ref no es seguro de leer ahi, y de hecho ya iba un render atras del DOM
+  // real). Medirlo en un efecto, despues de pintar, es la forma correcta.
+  const [tableWidth, setTableWidth] = useState(800);
+  useEffect(() => {
+    if (tableInnerRef.current) {
+      setTableWidth(tableInnerRef.current.scrollWidth);
+    }
+  }, [filtered]);
 
   const handleRetryCfdi = async (cfdiId: string) => {
     setRetryingId(cfdiId);
@@ -193,7 +208,7 @@ const AdminCfdi: React.FC = () => {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={fetchData}
+              onClick={() => fetchData()}
               className="btn btn-outline"
               disabled={isLoading}
             >
@@ -285,7 +300,7 @@ const AdminCfdi: React.FC = () => {
                 style={{ scrollbarWidth: 'auto' }}
                 onScroll={() => syncScroll('top')}
               >
-                <div style={{ height: 1, minWidth: tableInnerRef.current?.scrollWidth ?? 800 }} />
+                <div style={{ height: 1, minWidth: tableWidth }} />
               </div>
               <div
                 ref={tableScrollRef}

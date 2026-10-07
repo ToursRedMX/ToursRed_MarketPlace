@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Send, Users, Calendar, ChevronDown, AlertCircle, CheckCircle, MessageSquare, Info, Mail, Bell, Layers } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
 interface TourOption {
@@ -63,10 +64,6 @@ const TourMassMessageModal: React.FC<TourMassMessageModalProps> = ({
   const [selectedTourId, setSelectedTourId] = useState<string>(preselectedTourId || '');
   const [scopeType, setScopeType] = useState<'all' | 'slot'>('all');
   const [selectedSlotId, setSelectedSlotId] = useState<string>(preselectedSlotId || '');
-  const [slots, setSlots] = useState<SlotOption[]>([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [recipientCount, setRecipientCount] = useState<number | null>(null);
-  const [loadingCount, setLoadingCount] = useState(false);
   const [sendChannel, setSendChannel] = useState<SendChannel>('both');
   const [subject, setSubject] = useState('');
   const [messageBody, setMessageBody] = useState('');
@@ -76,78 +73,43 @@ const TourMassMessageModal: React.FC<TourMassMessageModalProps> = ({
   const selectedTour = tours.find(t => t.id === selectedTourId) || null;
   const isReceptivo = selectedTour ? (!selectedTour.start_date && !selectedTour.end_date) || selectedTour.tour_type === 'receptivo' : false;
 
-  useEffect(() => {
-    if (!open) {
-      setStep('scope');
-      setSelectedTourId(preselectedTourId || '');
-      setScopeType('all');
-      setSelectedSlotId(preselectedSlotId || '');
-      setSlots([]);
-      setRecipientCount(null);
-      setSendChannel('both');
-      setSubject('');
-      setMessageBody('');
-      setIsSending(false);
-      setSendResult(null);
-    }
-  }, [open, preselectedTourId, preselectedSlotId]);
+  // El reset al cerrar que vivia aqui (useEffect viendo `open`) era codigo
+  // muerto: el unico consumidor (AgencyBookings.tsx) desmonta este componente
+  // por completo con `{massMessageModal.open && <TourMassMessageModal .../>}`,
+  // asi que nunca vuelve a renderizar con open=false -- cada apertura ya es un
+  // montaje fresco con useState en sus valores iniciales.
 
-  useEffect(() => {
-    if (selectedTourId && isReceptivo) {
-      loadSlots();
-    } else {
-      setSlots([]);
-      setSelectedSlotId('');
-    }
-  }, [selectedTourId, isReceptivo]);
-
-  useEffect(() => {
-    if (selectedTourId) {
-      loadRecipientCount(selectedTourId, scopeType, selectedSlotId);
-    } else {
-      setRecipientCount(null);
-    }
-  }, [selectedTourId, scopeType, selectedSlotId]);
-
-  const loadSlots = async () => {
-    if (!selectedTourId) return;
-    setLoadingSlots(true);
-    try {
+  // Dos cargas reales (red), antes useState+useEffect manual
+  // (react-hooks/set-state-in-effect). setSelectedSlotId('') al cambiar de
+  // tour ya se hace en el propio onChange del selector (abajo), no hace
+  // falta repetirlo aqui.
+  const { data: slots = [], isLoading: loadingSlots } = useQuery({
+    queryKey: ['tour-mass-message-slots', selectedTourId],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('tour_slots')
         .select('id, slot_date, departure_time, booked_count')
         .eq('tour_id', selectedTourId)
         .order('slot_date', { ascending: true });
+      if (error) throw error;
+      return (data ?? []).filter(s => (s.booked_count ?? 0) > 0) as SlotOption[];
+    },
+    enabled: !!selectedTourId && isReceptivo,
+  });
 
-      if (!error && data) {
-        setSlots(data.filter(s => (s.booked_count ?? 0) > 0));
-      }
-    } catch (err) {
-      console.error('Error loading slots:', err);
-    } finally {
-      setLoadingSlots(false);
-    }
-  };
-
-  const loadRecipientCount = async (tourId: string, scope: 'all' | 'slot', slotId: string) => {
-    if (!tourId) return;
-    setLoadingCount(true);
-    try {
-      const resolvedSlotId = scope === 'slot' && slotId ? slotId : null;
+  const { data: recipientCount = null, isLoading: loadingCount, refetch: refetchRecipientCount } = useQuery({
+    queryKey: ['tour-mass-message-recipients', selectedTourId, scopeType, selectedSlotId],
+    queryFn: async () => {
+      const resolvedSlotId = scopeType === 'slot' && selectedSlotId ? selectedSlotId : null;
       const { data, error } = await supabase.rpc('get_tour_confirmed_attendees', {
-        p_tour_id: tourId,
+        p_tour_id: selectedTourId,
         p_slot_id: resolvedSlotId,
       });
-
-      if (!error) {
-        setRecipientCount((data || []).length);
-      }
-    } catch (err) {
-      console.error('Error counting recipients:', err);
-    } finally {
-      setLoadingCount(false);
-    }
-  };
+      if (error) throw error;
+      return (data || []).length;
+    },
+    enabled: !!selectedTourId,
+  });
 
   const handleNextFromScope = () => {
     if (!selectedTourId) return;
@@ -159,7 +121,7 @@ const TourMassMessageModal: React.FC<TourMassMessageModalProps> = ({
     if (!messageBody.trim()) return;
     if ((sendChannel === 'email' || sendChannel === 'both') && !subject.trim()) return;
     setStep('confirm');
-    loadRecipientCount(selectedTourId, scopeType, selectedSlotId);
+    refetchRecipientCount();
   };
 
   const handleSend = async () => {
