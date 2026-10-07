@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, X, Check, CheckCheck, Clock, MessageSquare, Building2, HeadphonesIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, getUserNotifications, getUnreadNotificationCount, markNotificationAsRead, markAllNotificationsAsRead } from '../lib/supabase';
@@ -7,47 +8,92 @@ import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { mensajeDeError } from '../lib/errores';
 
+interface NotificationState {
+  notifications: Notification[];
+  unreadCount: number;
+  errorMessage: string | null;
+}
+
+const ESTADO_VACIO: NotificationState = { notifications: [], unreadCount: 0, errorMessage: null };
+
 const NotificationBell: React.FC = () => {
   const { user, isAdmin, isAgency, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const channelId = useMemo(() => `notification-bell-${Math.random().toString(36).slice(2)}`, []);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const queryClient = useQueryClient();
+  const [channelId] = useState(() => `notification-bell-${Math.random().toString(36).slice(2)}`);
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [detailNotification, setDetailNotification] = useState<Notification | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const notificationsQueryKey = ['notifications', user?.id] as const;
+
+  const { data: notificationState = ESTADO_VACIO, isLoading, refetch: fetchNotifications } = useQuery({
+    queryKey: notificationsQueryKey,
+    queryFn: async (): Promise<NotificationState> => {
+      try {
+        console.log('🔔 Cargando notificaciones...');
+        let errorMessage: string | null = null;
+        let unreadCount = 0;
+        let notifications: Notification[] = [];
+
+        // Get unread count
+        const { data: countData, error: countError } = await getUnreadNotificationCount();
+
+        if (countError) {
+          console.error('Error fetching unread count:', countError);
+          errorMessage = 'Error al obtener notificaciones no leídas';
+        } else {
+          unreadCount = countData || 0;
+        }
+
+        // Get recent notifications
+        const { data, error } = await getUserNotifications(10);
+
+        if (error) {
+          console.error('Error fetching notifications:', error);
+          errorMessage = 'Error al cargar notificaciones';
+        } else {
+          notifications = data || [];
+        }
+
+        return { notifications, unreadCount, errorMessage };
+      } catch (err) {
+        console.error('Error in fetchNotifications:', err);
+        return { notifications: [], unreadCount: 0, errorMessage: mensajeDeError(err) || 'Error al cargar notificaciones' };
+      }
+    },
+    enabled: !!user && !authLoading,
+  });
+
+  const { notifications, unreadCount, errorMessage: error } = notificationState;
+
   useEffect(() => {
-    if (user && !authLoading) {
-      fetchNotifications();
+    if (!user || authLoading) return;
 
-      const channel = supabase
-        .channel(channelId)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'notifications',
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            fetchNotifications();
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR') {
-            console.warn('Realtime notifications subscription error (non-critical)');
-          }
-        });
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('Realtime notifications subscription error (non-critical)');
+        }
+      });
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [user, authLoading, channelId]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, authLoading, channelId, queryClient]);
 
   useEffect(() => {
     // Close dropdown when clicking outside
@@ -63,53 +109,18 @@ const NotificationBell: React.FC = () => {
     };
   }, []);
 
-  const fetchNotifications = async () => {
-    if (!user) return;
-    
-    try {
-      console.log('🔔 Cargando notificaciones...');
-      setIsLoading(true);
-      setError(null);
-      
-      // Get unread count
-      const { data: countData, error: countError } = await getUnreadNotificationCount();
-      
-      if (countError) {
-        console.error('Error fetching unread count:', countError);
-        setError('Error al obtener notificaciones no leídas');
-      } else {
-        setUnreadCount(countData || 0);
-      }
-      
-      // Get recent notifications
-      const { data, error } = await getUserNotifications(10);
-      
-      if (error) {
-        console.error('Error fetching notifications:', error);
-        setError('Error al cargar notificaciones');
-      } else {
-        setNotifications(data || []);
-      }
-    } catch (err) {
-      console.error('Error in fetchNotifications:', err);
-      setError(mensajeDeError(err) || 'Error al cargar notificaciones');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const markAsRead = async (notificationId: string) => {
     try {
       const { error } = await markNotificationAsRead(notificationId);
-      
+
       if (error) {
         console.error('Error marking notification as read:', error);
       } else {
-        // Update local state
-        setNotifications(prev => 
-          prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
-        );
-        setUnreadCount(prev => Math.max(0, prev - 1));
+        queryClient.setQueryData<NotificationState>(notificationsQueryKey, (prev) => prev ? {
+          ...prev,
+          notifications: prev.notifications.map(n => n.id === notificationId ? { ...n, is_read: true } : n),
+          unreadCount: Math.max(0, prev.unreadCount - 1),
+        } : prev);
       }
     } catch (err) {
       console.error('Error in markAsRead:', err);
@@ -119,14 +130,16 @@ const NotificationBell: React.FC = () => {
   const markAllAsRead = async () => {
     try {
       const { error } = await markAllNotificationsAsRead();
-      
-      
+
+
       if (error) {
         console.error('Error marking all notifications as read:', error);
       } else {
-        // Update local state
-        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-        setUnreadCount(0);
+        queryClient.setQueryData<NotificationState>(notificationsQueryKey, (prev) => prev ? {
+          ...prev,
+          notifications: prev.notifications.map(n => ({ ...n, is_read: true })),
+          unreadCount: 0,
+        } : prev);
       }
     } catch (err) {
       console.error('Error in markAllAsRead:', err);
@@ -273,8 +286,8 @@ const NotificationBell: React.FC = () => {
               ) : error ? (
                 <div className="px-4 py-4 text-center text-red-600 text-sm">
                   <p>{error}</p>
-                  <button 
-                    onClick={fetchNotifications}
+                  <button
+                    onClick={() => fetchNotifications()}
                     className="mt-2 text-primary-600 hover:text-primary-800 text-xs underline"
                   >
                     Reintentar
