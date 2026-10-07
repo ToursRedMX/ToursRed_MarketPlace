@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { MapPin, Calendar, Users, Building, Star, Clock, Globe, MessageCircle, ChevronLeft, ChevronRight, CreditCard as Edit, Heart, ExternalLink, Share2, RefreshCw, Car, AlertTriangle, Sparkles, Tag, Bus } from 'lucide-react';
 import { Calendar as CalendarIcon, Clock as ClockIcon, Users as UsersIcon } from 'lucide-react';
@@ -187,15 +187,11 @@ const TourDetailPage: React.FC = () => {
     };
 
     fetchTour();
-  }, [slug, user, isAgency]);
+  }, [slug, user, isAgency, navigate]);
 
-  useEffect(() => {
-    if (user && tour) {
-      checkIfSaved();
-    }
-  }, [user, tour]);
-
-  const checkIfSaved = async () => {
+  // useCallback para poder listarla como dependencia del efecto de abajo
+  // sin que se dispare en cada render.
+  const checkIfSaved = useCallback(async () => {
     if (!user || !tour) return;
 
     // F-1: si falla, el tour aparece como NO guardado aunque lo este, y el
@@ -214,7 +210,16 @@ const TourDetailPage: React.FC = () => {
     }
 
     setIsSaved(!!data);
-  };
+  }, [user, tour]);
+
+  useEffect(() => {
+    if (user && tour) {
+      // Verificar contra el servidor si el usuario ya guardo este tour:
+      // sincroniza con un recurso externo, caso legitimo de efecto.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      checkIfSaved();
+    }
+  }, [user, tour, checkIfSaved]);
 
   const handleSaveToggle = async () => {
     if (!user) {
@@ -303,7 +308,7 @@ const TourDetailPage: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tour?.id]);
+  }, [tour]);
 
   const handleContactAgency = async () => {
     if (!user) {
