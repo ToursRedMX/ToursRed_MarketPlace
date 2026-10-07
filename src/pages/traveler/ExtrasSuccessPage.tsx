@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { CheckCircle, Shield, Tag, Calendar, CreditCard, ArrowRight, Loader } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -53,25 +53,7 @@ const ExtrasSuccessPage: React.FC = () => {
   const bookingId = searchParams.get('booking_id');
   const bosId = searchParams.get('bos_id');
 
-  useEffect(() => {
-    if (!extraType) {
-      setError('Tipo de extra no especificado');
-      setIsLoading(false);
-      return;
-    }
-    if (extraType === 'insurance') {
-      if (!bookingId) { setError('ID de reserva no encontrado'); setIsLoading(false); return; }
-      pollInsurance(bookingId, 0);
-    } else if (extraType === 'optional_service') {
-      if (!bosId) { setError('ID de servicio no encontrado'); setIsLoading(false); return; }
-      pollOptionalService(bosId, 0);
-    } else {
-      setError('Tipo de extra no válido');
-      setIsLoading(false);
-    }
-  }, []);
-
-  const pollInsurance = async (bId: string, attempt: number) => {
+  const pollInsurance = useCallback(async function poll(bId: string, attempt: number) {
     try {
       const { data, error: errorReserva } = await supabase
         .from('bookings')
@@ -89,7 +71,7 @@ const ExtrasSuccessPage: React.FC = () => {
       if (errorReserva) {
         console.error('ExtrasSuccessPage: no se pudo leer la reserva', errorReserva);
         if (attempt < MAX_POLL_ATTEMPTS) {
-          setTimeout(() => pollInsurance(bId, attempt + 1), POLL_INTERVAL_MS);
+          setTimeout(() => poll(bId, attempt + 1), POLL_INTERVAL_MS);
         } else {
           setError('No pudimos confirmar tu pago en este momento. Si el cargo se hizo, lo veras en tus reservas en unos minutos y te llegara el correo de confirmacion.');
           setIsLoading(false);
@@ -106,7 +88,7 @@ const ExtrasSuccessPage: React.FC = () => {
       }
 
       if (attempt < MAX_POLL_ATTEMPTS) {
-        setTimeout(() => pollInsurance(bId, attempt + 1), POLL_INTERVAL_MS);
+        setTimeout(() => poll(bId, attempt + 1), POLL_INTERVAL_MS);
       } else {
         setBookingData(comoFila<InsuranceBookingData>(data));
         setIsLoading(false);
@@ -115,9 +97,9 @@ const ExtrasSuccessPage: React.FC = () => {
       setError('Error al cargar los detalles del seguro');
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const pollOptionalService = async (bos: string, attempt: number) => {
+  const pollOptionalService = useCallback(async function poll(bos: string, attempt: number) {
     try {
       const { data, error: errorServicio } = await supabase
         .from('booking_optional_services')
@@ -138,7 +120,7 @@ const ExtrasSuccessPage: React.FC = () => {
 
       if (errorServicio || !data) {
         if (attempt < MAX_POLL_ATTEMPTS) {
-          setTimeout(() => pollOptionalService(bos, attempt + 1), POLL_INTERVAL_MS);
+          setTimeout(() => poll(bos, attempt + 1), POLL_INTERVAL_MS);
         } else {
           setError(errorServicio ? 'No pudimos confirmar tu pago en este momento. Si el cargo se hizo, lo veras en tus reservas en unos minutos y te llegara el correo de confirmacion.' : 'Servicio no encontrado');
           setIsLoading(false);
@@ -152,7 +134,25 @@ const ExtrasSuccessPage: React.FC = () => {
       setError('Error al cargar los detalles del servicio');
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!extraType) {
+      setError('Tipo de extra no especificado');
+      setIsLoading(false);
+      return;
+    }
+    if (extraType === 'insurance') {
+      if (!bookingId) { setError('ID de reserva no encontrado'); setIsLoading(false); return; }
+      pollInsurance(bookingId, 0);
+    } else if (extraType === 'optional_service') {
+      if (!bosId) { setError('ID de servicio no encontrado'); setIsLoading(false); return; }
+      pollOptionalService(bosId, 0);
+    } else {
+      setError('Tipo de extra no válido');
+      setIsLoading(false);
+    }
+  }, [extraType, bookingId, bosId, pollInsurance, pollOptionalService]);
 
   if (isLoading) {
     return (
