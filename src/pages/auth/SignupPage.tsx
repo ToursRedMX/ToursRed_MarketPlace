@@ -13,12 +13,19 @@ import { mensajeDeError } from '../../lib/errores';
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const searchParams = new URLSearchParams(location.search);
+  const redirectUrl = searchParams.get('redirect');
+  const refCode = searchParams.get('ref');
+  const invitationToken = searchParams.get('invitation_token');
+  const invitationEmail = searchParams.get('email');
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCode, setReferralCode] = useState(() => refCode ? refCode.toUpperCase() : '');
   const [isValidatingReferral, setIsValidatingReferral] = useState(false);
   const [referralValidation, setReferralValidation] = useState<{
     valid: boolean;
@@ -31,12 +38,6 @@ const SignupPage: React.FC = () => {
   const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const { turnstileEnabled } = useTurnstileEnabled();
   const [activeTermsVersion, setActiveTermsVersion] = useState<{ version_number: number; published_at: string } | null>(null);
-
-  const searchParams = new URLSearchParams(location.search);
-  const redirectUrl = searchParams.get('redirect');
-  const refCode = searchParams.get('ref');
-  const invitationToken = searchParams.get('invitation_token');
-  const invitationEmail = searchParams.get('email');
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -60,15 +61,13 @@ const SignupPage: React.FC = () => {
     country: 'México'
   });
 
-  // Track if the user has manually edited the CURP field
-  const curpManuallyEdited = useRef(false);
+  // Track if the user has manually edited the CURP field. Es estado (no
+  // ref) porque se lee en el JSX del render (lineas ~611/616, el aviso de
+  // "prellenado"): un ref ahi violaba react-hooks/refs -leer ref.current
+  // durante el render no es seguro para el compilador de React, aunque hoy
+  // funcione bajo el reconciliador clasico.
+  const [curpManuallyEdited, setCurpManuallyEdited] = useState(false);
   const lastAutofillPrefix = useRef('');
-
-  useEffect(() => {
-    if (refCode) {
-      setReferralCode(refCode.toUpperCase());
-    }
-  }, [refCode]);
 
   useEffect(() => {
     supabase.rpc('get_active_terms', { p_type: 'traveler' }).then(({ data }) => {
@@ -79,7 +78,7 @@ const SignupPage: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === 'curp') {
-      curpManuallyEdited.current = true;
+      setCurpManuallyEdited(true);
     }
     setFormData(prev => ({
       ...prev,
@@ -90,10 +89,9 @@ const SignupPage: React.FC = () => {
   // Auto-fill CURP prefix when enough data is available (only for national travelers)
   useEffect(() => {
     if (isForeignTraveler) return;
-    if (curpManuallyEdited.current) return;
-    const { firstName, apellidoPaterno, apellidoMaterno, dateOfBirth, sexo } = formData;
-    if (!firstName || !apellidoPaterno || !dateOfBirth || !sexo) return;
-    const prefix = calcularPrefijoCurp(firstName, apellidoPaterno, apellidoMaterno, dateOfBirth, sexo);
+    if (curpManuallyEdited) return;
+    if (!formData.firstName || !formData.apellidoPaterno || !formData.dateOfBirth || !formData.sexo) return;
+    const prefix = calcularPrefijoCurp(formData.firstName, formData.apellidoPaterno, formData.apellidoMaterno, formData.dateOfBirth, formData.sexo);
     if (prefix && prefix !== lastAutofillPrefix.current) {
       lastAutofillPrefix.current = prefix;
       setFormData(prev => ({
@@ -101,7 +99,7 @@ const SignupPage: React.FC = () => {
         curp: prefix
       }));
     }
-  }, [formData.firstName, formData.apellidoPaterno, formData.apellidoMaterno, formData.dateOfBirth, formData.sexo, isForeignTraveler]);
+  }, [formData.firstName, formData.apellidoPaterno, formData.apellidoMaterno, formData.dateOfBirth, formData.sexo, isForeignTraveler, curpManuallyEdited]);
 
   const validateReferralCode = async (code: string) => {
     if (!code || code.trim().length === 0) {
@@ -608,12 +606,12 @@ const SignupPage: React.FC = () => {
                     required
                     className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm uppercase"
                   />
-                  {!curpManuallyEdited.current && formData.curp.length > 0 && formData.curp.length < 18 && (
+                  {!curpManuallyEdited && formData.curp.length > 0 && formData.curp.length < 18 && (
                     <p className="mt-1 text-xs text-blue-600">
                       Prellenado con tus datos. Completa o corrige los caracteres restantes.
                     </p>
                   )}
-                  {formData.curp.length < 18 && (curpManuallyEdited.current || formData.curp.length === 0) && (
+                  {formData.curp.length < 18 && (curpManuallyEdited || formData.curp.length === 0) && (
                     <p className="mt-1 text-xs text-gray-500">18 caracteres alfanuméricos</p>
                   )}
                   {curpAvailability.isChecking && (

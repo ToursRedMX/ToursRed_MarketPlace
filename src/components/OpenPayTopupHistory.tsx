@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Building2, QrCode, Clock, CheckCircle2, XCircle, RefreshCw, AlertCircle,
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { supabase } from '../lib/supabase';
@@ -28,37 +29,38 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   failed: { label: 'Fallida', color: 'text-red-600 bg-red-100', icon: <AlertCircle className="h-4 w-4" /> },
 };
 
+// Modulo, no dentro del componente: asi no hace falta listarlos como
+// dependencia del efecto de polling de abajo (react-hooks/exhaustive-deps).
+const POLL_INTERVAL = 25000;
+const POLL_TIMEOUT = 30 * 60 * 1000;
+
+const topupsQueryKey = (userId: string | undefined) => ['openpay-topups', userId] as const;
+
 const OpenPayTopupHistory: React.FC = () => {
   const { user } = useAuth();
-  const [topups, setTopups] = useState<TopupRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [checkingId, setCheckingId] = useState<string | null>(null);
 
-  const loadTopups = useCallback(async () => {
-    if (!user) return;
-    setIsLoading(true);
-    try {
+  // Antes era un useState + useCallback + useEffect manual (setState directo
+  // en el efecto, react-hooks/set-state-in-effect). useQuery es la forma
+  // correcta de sincronizar con el servidor: mismo resultado, sin la regla.
+  const { data: topups = [], isLoading } = useQuery({
+    queryKey: topupsQueryKey(user?.id),
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('openpay_wallet_topups')
         .select('id, amount, currency, payment_method_type, status, created_at, credited_at, error_message')
-        .eq('user_id', user.id)
+        .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
         .limit(20);
 
       if (error) throw error;
-      setTopups(data || []);
-    } catch (err) {
-      console.error('Error loading topups:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user]);
+      return (data || []) as TopupRecord[];
+    },
+    enabled: !!user,
+  });
 
-  useEffect(() => {
-    loadTopups();
-  }, [loadTopups]);
-
-  const checkStatus = async (topupId: string, silent: boolean) => {
+  const checkStatus = useCallback(async (topupId: string, silent: boolean) => {
     if (!silent) setCheckingId(topupId);
     try {
       const session = await supabase.auth.getSession();
@@ -78,19 +80,17 @@ const OpenPayTopupHistory: React.FC = () => {
 
       const data = await response.json();
       if (data.status === 'completed') {
-        await loadTopups();
+        queryClient.invalidateQueries({ queryKey: topupsQueryKey(user?.id) });
       }
     } catch {
       // silent
     } finally {
       if (!silent) setCheckingId(null);
     }
-  };
+  }, [queryClient, user]);
 
   const handleCheckStatus = (topupId: string) => checkStatus(topupId, false);
 
-  const POLL_INTERVAL = 25000;
-  const POLL_TIMEOUT = 30 * 60 * 1000;
   const pollStartRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -120,7 +120,7 @@ const OpenPayTopupHistory: React.FC = () => {
     }, POLL_INTERVAL);
 
     return () => clearInterval(interval);
-  }, [topups]);
+  }, [topups, checkStatus]);
 
   if (isLoading) {
     return (
