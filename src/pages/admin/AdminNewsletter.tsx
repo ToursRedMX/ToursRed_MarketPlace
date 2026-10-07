@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Mail, Users, UserMinus, UserCheck, Send, Search, RefreshCw, CheckCheck, Clock, AlertCircle, ChevronDown, ChevronUp, X, Tag } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
@@ -31,17 +32,10 @@ interface NewsletterBroadcast {
 const PAGE_SIZE = 20;
 
 const AdminNewsletter: React.FC = () => {
-  const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
-  const [activeCount, setActiveCount] = useState(0);
-  const [inactiveCount, setInactiveCount] = useState(0);
 
-  const [broadcasts, setBroadcasts] = useState<NewsletterBroadcast[]>([]);
-  const [loadingBroadcasts, setLoadingBroadcasts] = useState(true);
   const [expandedBroadcast, setExpandedBroadcast] = useState<string | null>(null);
 
   const [showSendModal, setShowSendModal] = useState(false);
@@ -50,65 +44,71 @@ const AdminNewsletter: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: boolean; message: string; counts?: { recipients: number; success: number; errors: number } } | null>(null);
 
+  const { data: counts = { active: 0, inactive: 0 }, refetch: fetchCounts } = useQuery({
+    queryKey: ['newsletter-counts'],
+    queryFn: async () => {
+      const { count: active, error: errorActivos } = await supabase
+        .from('newsletter_subscriptions')
+        .select('id', { count: 'exact', head: true })
+        .eq('active', true);
+      const { count: inactive, error: errorInactivos } = await supabase
+        .from('newsletter_subscriptions')
+        .select('id', { count: 'exact', head: true })
+        .eq('active', false);
+
+      // Cero suscriptores por un error de lectura se ve igual que cero de
+      // verdad, y de ahi sale la decision de mandar o no una campaña. Se
+      // lanza en vez de devolver 0 para que react-query conserve el ultimo
+      // conteo bueno en vez de pisarlo.
+      if (errorActivos || errorInactivos) {
+        console.error('AdminNewsletter: no se pudieron contar los suscriptores', errorActivos ?? errorInactivos);
+        throw errorActivos ?? errorInactivos;
+      }
+
+      return { active: active ?? 0, inactive: inactive ?? 0 };
+    },
+  });
+  const { active: activeCount, inactive: inactiveCount } = counts;
+
+  const {
+    data: subscribersData = { subscribers: [] as NewsletterSubscriber[], total: 0 },
+    isLoading: loading,
+    refetch: fetchSubscribers,
+  } = useQuery({
+    queryKey: ['newsletter-subscribers', page, search, filterStatus],
+    queryFn: async (): Promise<{ subscribers: NewsletterSubscriber[]; total: number }> => {
+      let query = supabase
+        .from('newsletter_subscriptions')
+        .select('*', { count: 'exact' })
+        .order('subscribed_at', { ascending: false })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+      if (filterStatus === 'active') query = query.eq('active', true);
+      if (filterStatus === 'inactive') query = query.eq('active', false);
+      if (search) query = query.or(`email.ilike.%${search}%,name.ilike.%${search}%`);
+
+      const { data, count } = await query;
+      return { subscribers: data ?? [], total: count ?? 0 };
+    },
+  });
+  const { subscribers, total } = subscribersData;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const fetchCounts = useCallback(async () => {
-    const { count: active, error: errorActivos } = await supabase
-      .from('newsletter_subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('active', true);
-    const { count: inactive, error: errorInactivos } = await supabase
-      .from('newsletter_subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('active', false);
+  const { data: broadcasts = [], isLoading: loadingBroadcasts, refetch: fetchBroadcasts } = useQuery({
+    queryKey: ['newsletter-broadcasts'],
+    queryFn: async (): Promise<NewsletterBroadcast[]> => {
+      const { data, error } = await supabase
+        .from('newsletter_broadcasts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(30);
 
-    // Cero suscriptores por un error de lectura se ve igual que cero de
-    // verdad, y de ahi sale la decision de mandar o no una campaña.
-    if (errorActivos || errorInactivos) {
-      console.error('AdminNewsletter: no se pudieron contar los suscriptores', errorActivos ?? errorInactivos);
-      return;
-    }
+      // Un historial vacio se lee como "nunca se ha enviado nada".
+      if (error) console.error('AdminNewsletter: no se pudo leer el historial de campañas', error);
 
-    setActiveCount(active ?? 0);
-    setInactiveCount(inactive ?? 0);
-  }, []);
-
-  const fetchSubscribers = useCallback(async () => {
-    setLoading(true);
-    let query = supabase
-      .from('newsletter_subscriptions')
-      .select('*', { count: 'exact' })
-      .order('subscribed_at', { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-    if (filterStatus === 'active') query = query.eq('active', true);
-    if (filterStatus === 'inactive') query = query.eq('active', false);
-    if (search) query = query.or(`email.ilike.%${search}%,name.ilike.%${search}%`);
-
-    const { data, count } = await query;
-    setSubscribers(data ?? []);
-    setTotal(count ?? 0);
-    setLoading(false);
-  }, [page, search, filterStatus]);
-
-  const fetchBroadcasts = useCallback(async () => {
-    setLoadingBroadcasts(true);
-    const { data, error } = await supabase
-      .from('newsletter_broadcasts')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(30);
-
-    // Un historial vacio se lee como "nunca se ha enviado nada".
-    if (error) console.error('AdminNewsletter: no se pudo leer el historial de campañas', error);
-
-    setBroadcasts(data ?? []);
-    setLoadingBroadcasts(false);
-  }, []);
-
-  useEffect(() => { fetchCounts(); }, [fetchCounts]);
-  useEffect(() => { fetchSubscribers(); }, [fetchSubscribers]);
-  useEffect(() => { fetchBroadcasts(); }, [fetchBroadcasts]);
+      return data ?? [];
+    },
+  });
 
   const handleSend = async () => {
     if (!sendSubject.trim() || !sendMessage.trim()) return;
@@ -260,7 +260,7 @@ const AdminNewsletter: React.FC = () => {
                 <option value="active">Activos</option>
                 <option value="inactive">Dados de baja</option>
               </select>
-              <button onClick={fetchSubscribers} className="btn btn-secondary">
+              <button onClick={() => fetchSubscribers()} className="btn btn-secondary">
                 <RefreshCw className="h-4 w-4" />
               </button>
             </div>
