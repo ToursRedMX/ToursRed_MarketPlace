@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { X, Search, Users, MessageCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { comoFilas } from '../../lib/relacionesSupabase';
 import { mensajeDeError } from '../../lib/errores';
 
@@ -49,37 +50,16 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
   const [selectedTourId, setSelectedTourId] = useState(preselectedTourId || '');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>(preselectedUserId ? [preselectedUserId] : []);
   const [searchTerm, setSearchTerm] = useState('');
-  const [users, setUsers] = useState<User[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [tours, setTours] = useState<Tour[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchData();
-    }
-  }, [isOpen, user]);
-
-  useEffect(() => {
-    if (preselectedBookingId) {
-      setSelectedBookingId(preselectedBookingId);
-      setType('booking');
-    }
-    if (preselectedTourId) {
-      setSelectedTourId(preselectedTourId);
-    }
-    if (preselectedUserId) {
-      setSelectedUserIds([preselectedUserId]);
-    }
-  }, [preselectedBookingId, preselectedTourId, preselectedUserId]);
-
-  const fetchData = async () => {
-    try {
-      setIsLoading(true);
-      setError('');
-
+  const {
+    data: modalData = { users: [] as User[], bookings: [] as Booking[], tours: [] as Tour[] },
+    isLoading,
+    error: fetchErrorObj,
+  } = useQuery({
+    queryKey: ['create-conversation-data', user?.id, isAgency, isTraveler],
+    queryFn: async () => {
       // Fetch users (excluding current user)
       const { data: usersData, error: usersError } = await supabase
         .from('users')
@@ -90,7 +70,8 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
         throw new Error(usersError.message);
       }
 
-      setUsers(usersData || []);
+      let bookings: Booking[] = [];
+      let tours: Tour[] = [];
 
       // Fetch bookings if user is agency or traveler
       if (isAgency) {
@@ -118,7 +99,7 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
 
           if (errorReservas) throw errorReservas;
 
-          setBookings(comoFilas<Booking>(bookingsData));
+          bookings = comoFilas<Booking>(bookingsData);
         }
 
         // Get agency's tours
@@ -129,7 +110,7 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
 
         if (errorTours) throw errorTours;
 
-        setTours(toursData || []);
+        tours = toursData || [];
       } else if (isTraveler) {
         // Get user's bookings
         const { data: bookingsData, error: errorReservasViajero } = await supabase
@@ -143,15 +124,32 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
 
         if (errorReservasViajero) throw errorReservasViajero;
 
-        setBookings(comoFilas<Booking>(bookingsData));
+        bookings = comoFilas<Booking>(bookingsData);
       }
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError(mensajeDeError(err) || 'Error al cargar datos');
-    } finally {
-      setIsLoading(false);
+
+      return { users: usersData || [], bookings, tours };
+    },
+    enabled: isOpen && !!user,
+  });
+
+  const { users, bookings, tours } = modalData;
+  const fetchError = fetchErrorObj ? (mensajeDeError(fetchErrorObj) || 'Error al cargar datos') : null;
+
+  // Sincroniza con las preselecciones que llegan por props (el modal queda
+  // montado entre aperturas, asi que no basta con un estado inicial).
+  useEffect(() => {
+    if (preselectedBookingId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedBookingId(preselectedBookingId);
+      setType('booking');
     }
-  };
+    if (preselectedTourId) {
+      setSelectedTourId(preselectedTourId);
+    }
+    if (preselectedUserId) {
+      setSelectedUserIds([preselectedUserId]);
+    }
+  }, [preselectedBookingId, preselectedTourId, preselectedUserId]);
 
   const createConversation = async () => {
     if (!title.trim() || selectedUserIds.length === 0) {
@@ -256,9 +254,9 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
           </button>
         </div>
 
-        {error && (
+        {(error || fetchError) && (
           <div className="mb-4 bg-error-50 text-error-600 p-3 rounded-md text-sm">
-            {error}
+            {error || fetchError}
           </div>
         )}
 
