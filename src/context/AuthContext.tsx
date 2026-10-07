@@ -1076,6 +1076,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
       authListener?.subscription.unsubscribe();
     };
+    // updateAuthState no esta memoizada a proposito: incluirla reiniciaria
+    // la suscripcion de auth en cada render. Memoizarla de verdad exige
+    // revisar las dependencias de una funcion de ~400 lineas que decide
+    // roles/permisos -- fuera de alcance de este lote de lint.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep role + user refs in sync for inactivity timer
@@ -1112,6 +1117,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isUpdatingRef.current = false;
       await updateAuthState(freshUser, true);
     }
+    // updateAuthState no esta memoizada a proposito -- ver nota en el efecto de inicializacion.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refreshAuthState = useCallback(async () => {
@@ -1126,6 +1133,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isUpdatingRef.current = false;
       await updateAuthState(freshUser, true);
     }
+    // updateAuthState no esta memoizada a proposito -- ver nota en el efecto de inicializacion.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const contextValue = useMemo(() => ({
