@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { Award, TrendingUp, TrendingDown, Clock, ArrowUp, ArrowDown, AlertCircle, HelpCircle, Crown } from 'lucide-react';
@@ -28,111 +29,91 @@ interface PointsTransaction {
 
 const TravelerPointsPage: React.FC = () => {
   const { user } = useAuth();
-  const [wallet, setWallet] = useState<PointsWallet | null>(null);
-  const [hasMembership, setHasMembership] = useState(false);
-  const [transactions, setTransactions] = useState<PointsTransaction[]>([]);
-  const [isLoadingWallet, setIsLoadingWallet] = useState(true);
-  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
   const [filter, setFilter] = useState<'all' | 'earned' | 'redeemed' | 'expired'>('all');
 
-  useEffect(() => {
-    const loadWallet = async () => {
-      if (!user) return;
+  const { data: walletQueryData, isPending: isLoadingWallet } = useQuery({
+    queryKey: ['traveler-points-wallet', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      if (!user) return { wallet: null as PointsWallet | null, hasMembership: false };
 
-      try {
-        const { data: membershipData, error: errorMembresia } = await supabase
-          .from('memberships')
-          .select('status')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .maybeSingle();
+      const { data: membershipData, error: errorMembresia } = await supabase
+        .from('memberships')
+        .select('status')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
 
-        // Falla cerrado (queda sin membresia, que muestra menos beneficios),
-        // pero sin rastro el viajero no entiende por que.
-        if (errorMembresia) console.error('TravelerPoints: no se pudo leer la membresia', errorMembresia);
+      // Falla cerrado (queda sin membresia, que muestra menos beneficios),
+      // pero sin rastro el viajero no entiende por que.
+      if (errorMembresia) console.error('TravelerPoints: no se pudo leer la membresia', errorMembresia);
 
-        setHasMembership(!!membershipData);
+      const { data, error } = await supabase
+        .from('toursred_points_wallets')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-        const { data, error } = await supabase
-          .from('toursred_points_wallets')
-          .select('*')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (error) {
-          console.error('Error loading wallet:', error);
-        } else if (data) {
-          setWallet(data);
-        }
-      } catch (err) {
-        console.error('Error:', err);
-      } finally {
-        setIsLoadingWallet(false);
+      if (error) {
+        console.error('Error loading wallet:', error);
+        return { wallet: null as PointsWallet | null, hasMembership: !!membershipData };
       }
-    };
 
-    loadWallet();
-  }, [user?.id]);
+      return { wallet: (data ?? null) as PointsWallet | null, hasMembership: !!membershipData };
+    },
+  });
+  const wallet = walletQueryData?.wallet ?? null;
+  const hasMembership = walletQueryData?.hasMembership ?? false;
 
-  useEffect(() => {
-    const loadTransactions = async () => {
-      if (!user) return;
+  const { data: transactionsQueryData, isPending: isLoadingTransactions } = useQuery({
+    queryKey: ['traveler-points-transactions', user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<PointsTransaction[]> => {
+      if (!user) return [];
 
-      try {
-        const { data: txData, error: txError } = await supabase
-          .from('toursred_points_transactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(100);
+      const { data: txData, error: txError } = await supabase
+        .from('toursred_points_transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-        if (txError) {
-          console.error('Error loading transactions:', txError);
-          return;
-        }
-
-        if (!txData) {
-          setTransactions([]);
-          return;
-        }
-
-        const bookingIds = txData
-          .filter(tx => tx.reference_type === 'booking' && tx.reference_id)
-          .map(tx => tx.reference_id);
-
-        let bookingCodes: Record<string, string> = {};
-
-        if (bookingIds.length > 0) {
-          const { data: bookingsData, error: bookingsError } = await supabase
-            .from('bookings')
-            .select('id, booking_code')
-            .in('id', bookingIds);
-
-          if (!bookingsError && bookingsData) {
-            bookingCodes = bookingsData.reduce((acc, booking) => {
-              acc[booking.id] = booking.booking_code;
-              return acc;
-            }, {} as Record<string, string>);
-          }
-        }
-
-        const formattedData = txData.map(tx => ({
-          ...tx,
-          booking_code: tx.reference_type === 'booking' && tx.reference_id
-            ? bookingCodes[tx.reference_id] || null
-            : null
-        }));
-
-        setTransactions(formattedData);
-      } catch (err) {
-        console.error('Error:', err);
-      } finally {
-        setIsLoadingTransactions(false);
+      if (txError) {
+        console.error('Error loading transactions:', txError);
+        return [];
       }
-    };
 
-    loadTransactions();
-  }, [user?.id]);
+      if (!txData) return [];
+
+      const bookingIds = txData
+        .filter(tx => tx.reference_type === 'booking' && tx.reference_id)
+        .map(tx => tx.reference_id);
+
+      let bookingCodes: Record<string, string> = {};
+
+      if (bookingIds.length > 0) {
+        const { data: bookingsData, error: bookingsError } = await supabase
+          .from('bookings')
+          .select('id, booking_code')
+          .in('id', bookingIds);
+
+        if (!bookingsError && bookingsData) {
+          bookingCodes = bookingsData.reduce((acc, booking) => {
+            acc[booking.id] = booking.booking_code;
+            return acc;
+          }, {} as Record<string, string>);
+        }
+      }
+
+      return txData.map(tx => ({
+        ...tx,
+        booking_code: tx.reference_type === 'booking' && tx.reference_id
+          ? bookingCodes[tx.reference_id] || null
+          : null
+      }));
+    },
+  });
+  const transactions = transactionsQueryData ?? [];
 
   const getTransactionIcon = (type: string) => {
     switch (type) {

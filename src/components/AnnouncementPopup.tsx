@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Megaphone, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -19,12 +19,12 @@ const AnnouncementPopup: React.FC = () => {
   const [data, setData] = useState<AnnouncementData | null>(null);
   const [visible, setVisible] = useState(false);
 
-  const isDismissed = (activatedAt: string | null): boolean => {
+  const isDismissed = useCallback((activatedAt: string | null): boolean => {
     if (!activatedAt) return false;
     return localStorage.getItem(STORAGE_KEY_PREFIX + activatedAt) === '1';
-  };
+  }, []);
 
-  const evaluateVisibility = (d: AnnouncementData) => {
+  const evaluateVisibility = useCallback((d: AnnouncementData) => {
     if (!d.announcement_active) {
       setVisible(false);
       return;
@@ -34,7 +34,7 @@ const AnnouncementPopup: React.FC = () => {
       return;
     }
     setVisible(true);
-  };
+  }, [isDismissed]);
 
   useEffect(() => {
     const load = async () => {
@@ -75,7 +75,7 @@ const AnnouncementPopup: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [evaluateVisibility]);
 
   const handleDismiss = () => {
     if (data?.announcement_activated_at) {

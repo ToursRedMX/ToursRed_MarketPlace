@@ -422,6 +422,12 @@ const AgencyTours: React.FC = () => {
     fetchAgencyTours();
     fetchAllDestinations();
     fetchCategories();
+    // fetchAgencyTours/fetchCategories no se memoizan: son funciones grandes
+    // (fetchAgencyTours sola hace 2+ consultas y se llama desde ~10 puntos
+    // mas abajo) y envolverlas en useCallback en este archivo de 7500+
+    // lineas es una migracion de arquitectura aparte, mismo criterio que
+    // fetchAgencyData en AgencyBookings.tsx.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, resolvedAgencyId]);
 
   // Restaurar borrador al cargar

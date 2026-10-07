@@ -48,8 +48,14 @@ export default function GiftCardSuccessPage() {
   const provider = searchParams.get('provider');
   const sessionId = searchParams.get('session_id');
 
-  const fetchGiftCard = useCallback(async (): Promise<boolean> => {
-    if (!giftCardId) return false;
+  // Devuelve emailSent junto con isPaid (no solo isPaid) para que checkStatus
+  // decida con el dato recien leido, no con el estado `giftCard` de React: una
+  // lectura de `giftCard?.email_sent` justo despues de `setGiftCard(data)`
+  // seguia viendo el valor de ANTES del fetch (el setState es asincrono), asi
+  // que `sendEmailBackup` se disparaba en CADA paso del sondeo sin importar lo
+  // que el webhook ya hubiera mandado.
+  const fetchGiftCard = useCallback(async (): Promise<{ isPaid: boolean; emailSent: boolean }> => {
+    if (!giftCardId) return { isPaid: false, emailSent: false };
 
     const { data, error: fetchError } = await supabase
       .from('gift_cards')
@@ -59,11 +65,13 @@ export default function GiftCardSuccessPage() {
 
     if (!fetchError && data) {
       setGiftCard(data);
-      return data.payment_status === 'paid';
+      return { isPaid: data.payment_status === 'paid', emailSent: data.email_sent };
     }
 
     // Sin fila: o es un invitado sin cuenta (RLS) o la tarjeta no existe.
-    // get-gift-card-status distingue los dos casos sin exponer el codigo.
+    // get-gift-card-status distingue los dos casos sin exponer el codigo, y
+    // tampoco expone email_sent -- se trata como "no sabemos", y el cooldown
+    // de 429 en sendEmailBackup evita que el reenvio moleste si ya se mando.
     const { data: estado, error: errorInvocacion } = await supabase.functions.invoke('get-gift-card-status', {
       body: { gift_card_id: giftCardId },
     });
@@ -71,14 +79,14 @@ export default function GiftCardSuccessPage() {
     // Se sigue sondeando, pero que quede rastro de por que no avanza.
     if (errorInvocacion) console.error('GiftCardSuccessPage: fallo get-gift-card-status', errorInvocacion);
 
-    if (!estado || estado.error || !estado.payment_status) return false;
+    if (!estado || estado.error || !estado.payment_status) return { isPaid: false, emailSent: false };
 
     setPublicStatus({
       amount: Number(estado.amount) || 0,
       currency: estado.currency || 'MXN',
       payment_status: estado.payment_status,
     });
-    return estado.payment_status === 'paid';
+    return { isPaid: estado.payment_status === 'paid', emailSent: false };
   }, [giftCardId]);
 
   const sendEmailBackup = useCallback(async () => {
@@ -119,8 +127,8 @@ export default function GiftCardSuccessPage() {
       }
 
       if (giftCardId && (provider === 'mercadopago' || provider === 'paypal')) {
-        const isPaid = await fetchGiftCard();
-        if (isPaid && !giftCard?.email_sent) {
+        const { isPaid, emailSent } = await fetchGiftCard();
+        if (isPaid && !emailSent) {
           await sendEmailBackup();
         }
         setIsProcessing(false);
@@ -130,9 +138,9 @@ export default function GiftCardSuccessPage() {
       if (sessionId) {
         for (let i = 0; i < 10; i++) {
           if (giftCardId) {
-            const isPaid = await fetchGiftCard();
+            const { isPaid, emailSent } = await fetchGiftCard();
             if (isPaid) {
-              if (!giftCard?.email_sent) {
+              if (!emailSent) {
                 await sendEmailBackup();
               }
               setIsProcessing(false);

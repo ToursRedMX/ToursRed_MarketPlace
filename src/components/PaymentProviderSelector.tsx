@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CreditCard, Lock, Info, AlertTriangle, Wallet, Banknote, Landmark } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { preloadMpDeviceId } from '../utils/mercadopagoDevice';
@@ -140,31 +140,38 @@ export default function PaymentProviderSelector({
 
   const stripeAvailable = config ? isStripeAvailableForContext(context, config) : true;
 
-  const availableProviders: PaymentProvider[] = [];
+  // useMemo (no un array literal recalculado en cada render) para que la
+  // referencia solo cambie cuando cambian sus insumos reales -- si no, el
+  // efecto de abajo se dispararia en CADA render con una referencia nueva.
+  const availableProviders: PaymentProvider[] = useMemo(() => {
+    const providers: PaymentProvider[] = [];
 
-  if (stripeAvailable) {
-    availableProviders.push('stripe');
-  }
+    if (stripeAvailable) {
+      providers.push('stripe');
+    }
 
-  // ToursRed Cash is only available in payment plan context (internal wallet)
-  if (isPaymentPlanContext) {
-    availableProviders.push('toursred_cash' as PaymentProvider);
-  }
+    // ToursRed Cash is only available in payment plan context (internal wallet)
+    if (isPaymentPlanContext) {
+      providers.push('toursred_cash');
+    }
 
-  if (!isMembershipContext) {
-    if (config?.mercadopago_enabled && config.mercadopago_public_key) {
-      availableProviders.push('mercadopago');
+    if (!isMembershipContext) {
+      if (config?.mercadopago_enabled && config.mercadopago_public_key) {
+        providers.push('mercadopago');
+      }
+      if (config?.paypal_enabled && config.paypal_client_id) {
+        providers.push('paypal');
+      }
+      if (config?.conekta_enabled) {
+        providers.push('conekta');
+      }
+      if (config?.openpay_enabled) {
+        providers.push('openpay');
+      }
     }
-    if (config?.paypal_enabled && config.paypal_client_id) {
-      availableProviders.push('paypal');
-    }
-    if (config?.conekta_enabled) {
-      availableProviders.push('conekta');
-    }
-    if (config?.openpay_enabled) {
-      availableProviders.push('openpay');
-    }
-  }
+
+    return providers;
+  }, [stripeAvailable, isPaymentPlanContext, isMembershipContext, config]);
 
   // If current selection is no longer available, switch to first available
   useEffect(() => {
@@ -176,7 +183,7 @@ export default function PaymentProviderSelector({
     if (availableProviders.length > 0 && !availableProviders.includes(value)) {
       onChange(availableProviders[0]);
     }
-  }, [config, isMembershipContext, value]);
+  }, [config, isMembershipContext, value, availableProviders, onChange]);
 
   const bnplAvailable = amount >= BNPL_MIN_AMOUNT && amount <= BNPL_MAX_AMOUNT;
 
