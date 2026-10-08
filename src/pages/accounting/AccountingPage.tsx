@@ -573,42 +573,55 @@ const AccountingPage: React.FC = () => {
     else { showToast('Comisión marcada como recibida'); loadInsuranceData(); }
   };
 
+  // Las 7 loadX son queries/RPC encadenados con sus propios useState (misma
+  // arquitectura que fetchAgencyData en AgencyBookings.tsx), con 26 sitios de
+  // uso en este archivo -- migrarlas a react-query aqui es un refactor de
+  // arquitectura aparte, no algo para hacer de paso en un barrido de lint.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadAccounts();
   }, [loadAccounts]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeTab === 'entries') loadEntries();
   }, [activeTab, loadEntries]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeTab === 'manual') loadManualEntries();
   }, [activeTab, loadManualEntries]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (['overview', 'balance_sheet', 'income'].includes(activeTab)) loadReports();
   }, [activeTab, loadReports]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeTab === 'catalog') loadAccountBalances();
   }, [activeTab, loadAccountBalances]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeTab === 'overview') loadGcSummary();
   }, [activeTab, loadGcSummary]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeTab === 'libro_diario') loadEntries();
   }, [activeTab, loadEntries]);
 
   useEffect(() => {
     if (activeTab === 'libro_mayor') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadAccountBalances();
       loadReports();
     }
   }, [activeTab, loadAccountBalances, loadReports]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeTab === 'seguros') loadInsuranceData();
   }, [activeTab, loadInsuranceData]);
 

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   FilePlus2, FileText, FileX, CreditCard, Search, Plus, Trash2,
   ChevronDown, ChevronUp, Download, ExternalLink, XCircle, CheckCircle,
@@ -591,48 +592,52 @@ const AdminCfdiManual: React.FC = () => {
   const [importePagado, setImportePagado] = useState(0);
 
   // Datos de apoyo
-  const [recipients, setRecipients] = useState<ManualRecipient[]>([]);
-  const [accounts, setAccounts] = useState<AccountOption[]>([]);
-  const [history, setHistory] = useState<CfdiManualRecord[]>([]);
-
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [saveRecipientName, setSaveRecipientName] = useState('');
   const [showSaveRecipient, setShowSaveRecipient] = useState(false);
   const [cancelModal, setCancelModal] = useState<{ id: string; uuid: string } | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [ppdShowDropdown, setPpdShowDropdown] = useState(false);
 
-  const fetchSupportData = useCallback(async () => {
-    const [recipientsRes, accountsRes, historyRes] = await Promise.all([
-      supabase.from('manual_cfdi_recipients').select('*').eq('is_active', true).order('name'),
-      supabase.from('chart_of_accounts')
-        .select('code, name, account_type')
-        .in('account_type', ['ingreso', 'gasto', 'activo', 'pasivo'])
-        .eq('is_active', true)
-        .in('level', [3, 4])
-        .order('code'),
-      supabase.from('cfdi_invoices')
-        .select('id, cfdi_type, receptor_rfc, receptor_razon_social, subtotal, iva_amount, total, status, uuid_fiscal, folio, serie, source_notes, accounting_account_code, created_at, stamped_at, error_message')
-        .eq('is_manual', true)
-        .order('created_at', { ascending: false })
-        .limit(100),
-    ]);
+  const { data: supportData, isPending: isLoadingHistory, refetch: fetchSupportData } = useQuery({
+    queryKey: ['admin-cfdi-manual-support-data'],
+    queryFn: async () => {
+      const [recipientsRes, accountsRes, historyRes] = await Promise.all([
+        supabase.from('manual_cfdi_recipients').select('*').eq('is_active', true).order('name'),
+        supabase.from('chart_of_accounts')
+          .select('code, name, account_type')
+          .in('account_type', ['ingreso', 'gasto', 'activo', 'pasivo'])
+          .eq('is_active', true)
+          .in('level', [3, 4])
+          .order('code'),
+        supabase.from('cfdi_invoices')
+          .select('id, cfdi_type, receptor_rfc, receptor_razon_social, subtotal, iva_amount, total, status, uuid_fiscal, folio, serie, source_notes, accounting_account_code, created_at, stamped_at, error_message')
+          .eq('is_manual', true)
+          .order('created_at', { ascending: false })
+          .limit(100),
+      ]);
 
-    if (recipientsRes.data) setRecipients(recipientsRes.data as ManualRecipient[]);
-    if (accountsRes.data) setAccounts(accountsRes.data as AccountOption[]);
-    if (historyRes.data) setHistory(historyRes.data as CfdiManualRecord[]);
-    setIsLoadingHistory(false);
-  }, []);
-
-  useEffect(() => { fetchSupportData(); }, [fetchSupportData]);
+      return {
+        recipients: (recipientsRes.data ?? []) as ManualRecipient[],
+        accounts: (accountsRes.data ?? []) as AccountOption[],
+        history: (historyRes.data ?? []) as CfdiManualRecord[],
+      };
+    },
+  });
+  const recipients = supportData?.recipients ?? [];
+  const accounts = supportData?.accounts ?? [];
+  const history = supportData?.history ?? [];
 
   // Buscar facturas PPD al escribir RFC
   useEffect(() => {
-    if (cfdiType !== 'P' || ppdSearch.length < 3) { setPpdList([]); return; }
+    if (cfdiType !== 'P' || ppdSearch.length < 3) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPpdList([]);
+      return;
+    }
     const load = async () => {
       const { data, error } = await supabase
         .from('cfdi_invoices')
@@ -1122,7 +1127,7 @@ const AdminCfdiManual: React.FC = () => {
                 <div className="font-bold text-blue-700">{formatCurrencyMXN(kpiTotal)}</div>
                 <div className="text-xs text-gray-400">Total timbrado</div>
               </div>
-              <button onClick={fetchSupportData} className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100">
+              <button onClick={() => fetchSupportData()} className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100">
                 <RefreshCw size={15} />
               </button>
             </div>
