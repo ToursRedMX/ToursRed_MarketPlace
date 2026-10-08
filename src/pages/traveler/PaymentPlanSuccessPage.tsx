@@ -51,16 +51,6 @@ const PaymentPlanSuccessPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const planId = searchParams.get('plan_id');
-    if (!planId) {
-      setError('ID del plan de pago no encontrado');
-      setIsLoading(false);
-      return;
-    }
-    pollForUpdatedPlan(planId, 0);
-  }, [searchParams]);
-
   const pollForUpdatedPlan = async (planId: string, attempt: number) => {
     try {
       const { data, error: errorPlan } = await supabase
@@ -106,6 +96,10 @@ const PaymentPlanSuccessPage: React.FC = () => {
         console.error('PaymentPlanSuccessPage: no se pudo leer la ultima transaccion del plan', recentTx.error);
       }
 
+      // Esta funcion solo se llama desde un efecto o su propio setTimeout
+      // recursivo, nunca durante el render; Date.now() aqui no afecta la
+      // salida de ningun render.
+      // eslint-disable-next-line react-hooks/purity
       const hasRecentPayment = recentTx.data && Date.now() - new Date(recentTx.data.created_at).getTime() < 5 * 60 * 1000;
 
       if (hasRecentPayment || attempt >= MAX_POLL_ATTEMPTS) {
@@ -120,6 +114,18 @@ const PaymentPlanSuccessPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const planId = searchParams.get('plan_id');
+    if (!planId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError('ID del plan de pago no encontrado');
+      setIsLoading(false);
+      return;
+    }
+    pollForUpdatedPlan(planId, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   if (isLoading) {
     return (

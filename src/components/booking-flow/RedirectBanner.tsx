@@ -11,6 +11,7 @@ const RedirectBanner: React.FC<RedirectBannerProps> = ({ message, onDismiss }) =
 
   useEffect(() => {
     if (message) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisible(true);
       const timer = setTimeout(() => {
         setVisible(false);

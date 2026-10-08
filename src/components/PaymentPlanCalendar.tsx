@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Calendar, CreditCard, CheckCircle, Clock, AlertCircle, AlertTriangle, ChevronDown, ChevronUp, Loader2, DollarSign, Receipt } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -6,7 +7,7 @@ import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { BookingPaymentPlan, InstallmentStatus } from '../types';
-import PaymentProviderSelector, { type PaymentProvider, type ConektaMethod } from './PaymentProviderSelector';
+import PaymentProviderSelector, { type PaymentProvider, type ConektaMethod } from './PaymentProviderSelector';
 import { comoFila } from '../lib/relacionesSupabase';
 
 interface PaymentPlanCalendarProps {
@@ -35,8 +36,6 @@ const PLAN_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, agencyView = false, onPaymentSuccess, adjustedTotal }) => {
   const { user } = useAuth();
-  const [plan, setPlan] = useState<BookingPaymentPlan | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
   const [payingInstallmentId, setPayingInstallmentId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState('');
@@ -46,34 +45,35 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
   const [paymentError, setPaymentError] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState('');
 
-  const fetchPlan = async () => {
-    const { data, error } = await supabase
-      .from('booking_payment_plans')
-      .select(`
-        id, booking_id, mode, total_plan_amount, total_amount_paid, pending_balance, status, paid_100_pct_at_booking,
-        booking_payment_plan_installments(
-          id, installment_number, label, amount_due, amount_paid, due_date, status, penalty_applied, cfdi_invoice_id, paid_at
-        )
-      `)
-      .eq('booking_id', bookingId)
-      .maybeSingle();
+  const { data: plan, isPending: isLoading, refetch: fetchPlan } = useQuery({
+    queryKey: ['payment-plan', bookingId],
+    queryFn: async (): Promise<BookingPaymentPlan | null> => {
+      const { data, error } = await supabase
+        .from('booking_payment_plans')
+        .select(`
+          id, booking_id, mode, total_plan_amount, total_amount_paid, pending_balance, status, paid_100_pct_at_booking,
+          booking_payment_plan_installments(
+            id, installment_number, label, amount_due, amount_paid, due_date, status, penalty_applied, cfdi_invoice_id, paid_at
+          )
+        `)
+        .eq('booking_id', bookingId)
+        .maybeSingle();
 
-    // Sin plan, el viajero no ve sus parcialidades ni sus fechas de pago y
-    // parece que no tiene ninguna programada.
-    if (error) console.error('PaymentPlanCalendar: no se pudo leer el plan de pagos', error);
+      // Sin plan, el viajero no ve sus parcialidades ni sus fechas de pago y
+      // parece que no tiene ninguna programada.
+      if (error) {
+        console.error('PaymentPlanCalendar: no se pudo leer el plan de pagos', error);
+        return null;
+      }
 
-    if (data) {
+      if (!data) return null;
+
       const sortedInstallments = [...(data.booking_payment_plan_installments || [])].sort(
         (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
       );
-      setPlan(comoFila<BookingPaymentPlan>({ ...data, installments: sortedInstallments }));
-    }
-    setIsLoading(false);
-  };
-
-  useEffect(() => {
-    fetchPlan();
-  }, [bookingId]);
+      return comoFila<BookingPaymentPlan>({ ...data, installments: sortedInstallments });
+    },
+  });
 
   const handlePay = async () => {
     if (!plan || !user) return;

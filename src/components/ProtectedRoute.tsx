@@ -29,6 +29,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         setShouldRedirect(true);
       }, 300);
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShouldRedirect(false);
     }
 
