@@ -25,11 +25,11 @@ RPC de servicio: `queue_booking_sms`, `queue_booking_sms_batch`, `prepare_sms_no
 
 Las cuatro migraciones se aplicaron a una copia de esquema real, con sus triggers, dentro de PostgreSQL Docker sin red. 32 pruebas de fundamento + 10 del motor + 19 de OTP + 21 de reservas = **82 pruebas SQL**. Otros **23 casos Deno y 7 de UI**; los **62 scripts** del workflow existente pasaron. El SQL de health se corrigió tras detectar una referencia ambigua mediante ejecución real y se volvió a probar.
 
-Los casos de reservas comprueban confirmación independiente del correo, pago repetido, concurrencia, snapshot, cancelación, reprogramación, opt-out, cambio de número, datos incompletos, expiración, DST, medias horas, silencio nocturno, métricas privadas, RLS por contexto, límites de ejecución y retención. La comparación antes/después incluye bookings, comisiones, transacciones, payouts, CFDI, asientos, balances y wallets.
+Los casos de reservas comprueban confirmación independiente del correo, pago repetido, concurrencia, snapshot, cancelación, reprogramación, opt-out, cambio de número, datos incompletos, expiración, DST, medias horas, silencio nocturno, métricas privadas, RLS por contexto, límites de ejecución y retención. La comparación antes/después incluye bookings, comisiones, transacciones, payouts, CFDI, asientos y wallets.
 
 Se inyectó una excepción real en la función de cola: el pago/reserva conservó estado exitoso, apareció alerta y el reconciliador encoló luego el mensaje. Se restauró la función en `finally`. Se mantienen además las pruebas de mutación de fases anteriores.
 
-Typecheck frontend, Deno del árbol Edge, guardias de autorización/dependencias y build: pasan. Lint completo conserva deuda previa; dos marcas BOM desplazadas por imports se corrigieron. Componentes/funciones nuevos pasan lint dirigido. La consulta generada de migraciones debe actualizarse en cada PR (`generar-consulta-huerfanas.mjs`); no equivale a ejecutar esa consulta remotamente.
+Typecheck frontend, Deno del árbol Edge, guardias de autorización/dependencias y build: pasan. Lint completo conserva 131 errores y 44 avisos previos; dos marcas BOM desplazadas por imports se corrigieron en Fase 3. Componentes/funciones nuevos pasan lint dirigido. La consulta generada de migraciones se actualizó en cada PR (`generar-consulta-huerfanas.mjs`); no equivale a ejecutar esa consulta remotamente.
 
 ## Preparación y rollback, todavía no ejecutados
 

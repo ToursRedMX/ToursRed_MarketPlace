@@ -7,7 +7,7 @@ Implementación en PRs draft encadenados. Nada aplicado remotamente, desplegado 
 | 1: datos/configuración | [359](https://github.com/ToursRedMX/ToursRed_MarketPlace/pull/359) | `20261008045859_sms_otp_foundation.sql` |
 | 2: motor/proveedores | [360](https://github.com/ToursRedMX/ToursRed_MarketPlace/pull/360) | `20261008052810_sms_delivery_engine.sql` |
 | 3: OTP/permisos/UI | [361](https://github.com/ToursRedMX/ToursRed_MarketPlace/pull/361) | `20261008054539_phone_otp_enforcement.sql` |
-| 4: reservas/métricas | Rama `codex/sms-otp-fase-4` | `20261008061340_sms_booking_notifications.sql` |
+| 4: reservas/métricas | [362](https://github.com/ToursRedMX/ToursRed_MarketPlace/pull/362) | `20261008061340_sms_booking_notifications.sql` |
 
 Cada fase tiene alcance, dependencias, pruebas, riesgos y rollback en [plan técnico](plan-sms-otp-modular.md) y en `sms-fase-N-validacion.md`. Deben revisarse secuencialmente; no activar obligatoriedad hasta validar la integración de las cuatro fases.
 
@@ -26,6 +26,8 @@ Cada fase tiene alcance, dependencias, pruebas, riesgos y rollback en [plan téc
 | 59–62: rollback/existentes | Global apagado/encendido, todos los contextos, conservación y vuelta atrás sin borrar datos | Ejercicio administrativo en staging |
 
 Resultado: **82 pruebas SQL, 23 Deno, 7 UI y 62 scripts de regresión existentes pasan localmente**. Typecheck, guardias y build pasan. Lint global conserva deuda heredada; no se ocultó con una nueva baseline. No se presentan simulaciones como prueba de posesión o entrega real.
+
+El lint global final midió **131 errores y 44 avisos**, igual que el corte local previo de esta tarea. Los checks CI de lint/typecheck/fiscal/search_path pasan. La guardia remota de desfase de #359 detecta seis versiones aplicadas de **RoutesRed**, ausentes de este `main`: `20261008022319`, `20261008022519`, `20261008055332`, `20261008060342`, `20261008060845`, `20261008061116`. Se verificaron sus nombres en el ledger mediante SELECT; no se modificó ese trabajo ajeno. La migración SMS de Fase 1 aparece pendiente, como exige la autorización vigente. Las previews/smoke de PRs encadenados siguen dependiendo de que Netlify publique una preview; no se desactivaron checks ni se desplegó para obtener un verde.
 
 Las Edge nuevas son `request-phone-otp`, `verify-phone-otp`, `process-notification-outbox`, `sms-webhook-labsmobile`, `queue-booking-reminders`, `monitor-sms-health`. Datos operativos privados viven en `messaging_private`; credenciales exclusivamente en secretos. El SMS de reservas sale de un evento de negocio idempotente, no del éxito del correo ni de cada webhook de pago.
 
