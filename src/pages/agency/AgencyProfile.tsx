@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Building, Mail, Phone, Globe, Star, CreditCard as Edit, Save, X, User, Calendar, MapPin, FileText, Landmark, Hash, Shield, Link2, Building2, CheckCircle, AlertCircle, Download, Briefcase } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -90,6 +90,13 @@ const formularioDesdeLaAgencia = (agencia: AgencyProfile) => ({
 const AgencyProfile: React.FC = () => {
   const { user } = useAuth();
   const { agencyId: resolvedAgencyId } = useAgencyId();
+  // Antes era `let` redeclarada en el cuerpo del componente: cada render
+  // reiniciaba la variable a null, asi que handleSlugChange nunca lograba
+  // cancelar el timeout anterior (cada tecleo dispara un re-render via
+  // setEditForm) y el debounce no debounceaba -- disparaba una consulta por
+  // cada tecla, con la carrera de que una respuesta vieja llegara despues y
+  // pisara el estado "disponible/tomado" correcto.
+  const slugDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [agency, setAgency] = useState<AgencyProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -130,12 +137,6 @@ const AgencyProfile: React.FC = () => {
   const [contractInfo, setContractInfo] = useState<{ folio: string; storagePath: string } | null>(null);
   const [downloadingContract, setDownloadingContract] = useState(false);
   const [executive, setExecutive] = useState<{ first_name: string; last_name: string; email: string; phone?: string } | null>(null);
-
-  useEffect(() => {
-    if (resolvedAgencyId) {
-      fetchAgencyProfile(resolvedAgencyId);
-    }
-  }, [resolvedAgencyId]);
 
   const fetchAgencyProfile = async (currentAgencyId: string) => {
     try {
@@ -224,6 +225,15 @@ const AgencyProfile: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // fetchAgencyProfile tambien sincroniza el formulario de edicion
+  // (setEditForm), no solo datos de lectura.
+  useEffect(() => {
+    if (resolvedAgencyId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchAgencyProfile(resolvedAgencyId);
+    }
+  }, [resolvedAgencyId]);
 
   const handleDownloadContract = async () => {
     if (!contractInfo) return;
@@ -375,7 +385,6 @@ const AgencyProfile: React.FC = () => {
   };
 
   const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-  let slugDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   const handleSlugChange = (raw: string) => {
     const value = raw.toLowerCase().replace(/\s/g, '-');
@@ -393,8 +402,8 @@ const AgencyProfile: React.FC = () => {
 
     setSlugStatus('checking');
 
-    if (slugDebounceTimer) clearTimeout(slugDebounceTimer);
-    slugDebounceTimer = setTimeout(async () => {
+    if (slugDebounceTimer.current) clearTimeout(slugDebounceTimer.current);
+    slugDebounceTimer.current = setTimeout(async () => {
       try {
         const { data, error } = await supabase
           .from('agencies')

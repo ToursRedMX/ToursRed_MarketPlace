@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Star, MapPin, Globe, Phone, Mail, Building, Calendar, Award } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -21,24 +22,12 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const AgencyPublicProfile: React.FC = () => {
   const { agencyId } = useParams<{ agencyId: string }>();
   const navigate = useNavigate();
-  const [agency, setAgency] = useState<Agency | null>(null);
-  const [tours, setTours] = useState<Tour[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'tours' | 'reviews'>('tours');
-  const [reviewCount, setReviewCount] = useState(0);
 
-  useEffect(() => {
-    if (agencyId) {
-      fetchAgencyData();
-    }
-  }, [agencyId]);
-
-  const fetchAgencyData = async () => {
-    try {
-      setIsLoading(true);
-      setError('');
-
+  const { data: profileData, isPending: isLoading, error: queryError } = useQuery({
+    queryKey: ['agency-public-profile', agencyId],
+    enabled: !!agencyId,
+    queryFn: async () => {
       const isUUID = UUID_REGEX.test(agencyId!);
 
       const query = supabase
@@ -52,17 +41,14 @@ const AgencyPublicProfile: React.FC = () => {
 
       if (agencyError) throw agencyError;
       if (!agencyData) {
-        setError('Agencia no encontrada');
-        return;
+        throw new Error('Agencia no encontrada');
       }
 
       // If accessed by UUID and has a custom slug, redirect to the slug URL
       if (isUUID && agencyData.custom_slug) {
         navigate(`/agencies/${agencyData.custom_slug}`, { replace: true });
-        return;
+        return { agency: null, tours: [] as Tour[], reviewCount: 0 };
       }
-
-      setAgency(agencyData);
 
       const { data: toursData, error: toursError } = await supabase
         .from('tours')
@@ -71,7 +57,6 @@ const AgencyPublicProfile: React.FC = () => {
         .order('created_at', { ascending: false });
 
       if (toursError) throw toursError;
-      setTours(toursData || []);
 
       const { count, error: errorResenas } = await supabase
         .from('agency_reviews')
@@ -81,14 +66,19 @@ const AgencyPublicProfile: React.FC = () => {
       // "0 reseñas" en el perfil publico de una agencia que si tiene.
       if (errorResenas) console.error('AgencyPublicProfile: no se pudieron contar las reseñas', errorResenas);
 
-      setReviewCount(count || 0);
-    } catch (err) {
-      console.error('Error cargando datos de agencia:', err);
-      setError(mensajeDeError(err) || 'Error al cargar la información de la agencia');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return {
+        agency: agencyData as Agency,
+        tours: (toursData || []) as Tour[],
+        reviewCount: count || 0,
+      };
+    },
+  });
+  const agency = profileData?.agency ?? null;
+  const tours = profileData?.tours ?? [];
+  const reviewCount = profileData?.reviewCount ?? 0;
+  const error = queryError
+    ? (mensajeDeError(queryError) || 'Error al cargar la información de la agencia')
+    : '';
 
   if (isLoading) {
     return (
