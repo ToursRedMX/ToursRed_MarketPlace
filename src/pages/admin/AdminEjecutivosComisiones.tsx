@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   DollarSign, CheckCircle, XCircle, Eye, Download,
   AlertCircle, X, Search, FileText, Play, Calendar
@@ -49,8 +50,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 type StatusFilter = 'all' | 'invoiced' | 'approved' | 'paid' | 'pending' | 'rejected';
 
 export default function AdminEjecutivosComisiones() {
-  const [commissions, setCommissions] = useState<Commission[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('invoiced');
   const [searchQuery, setSearchQuery] = useState('');
   const [selected, setSelected] = useState<Commission | null>(null);
@@ -67,9 +66,9 @@ export default function AdminEjecutivosComisiones() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showGenPanel, setShowGenPanel] = useState(false);
 
-  const loadCommissions = useCallback(async () => {
-    setIsLoading(true);
-    try {
+  const { data: commissionsData, isPending: isLoading, refetch: loadCommissions } = useQuery({
+    queryKey: ['admin-executive-commissions'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('executive_commissions')
         .select(`
@@ -85,13 +84,10 @@ export default function AdminEjecutivosComisiones() {
 
       // Una lista vacia aqui dice "no hay comisiones por pagar".
       if (error) throw error;
-      setCommissions(comoFilas<Commission>(data));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { loadCommissions(); }, [loadCommissions]);
+      return comoFilas<Commission>(data);
+    },
+  });
+  const commissions = commissionsData ?? [];
 
   const filteredCommissions = commissions.filter(c => {
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;

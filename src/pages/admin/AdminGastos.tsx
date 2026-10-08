@@ -294,7 +294,13 @@ const AdminGastos: React.FC = () => {
     setCargando(false);
   }, [periodo]);
 
-  useEffect(() => { void cargar(); }, [cargar]);
+  // cargar() es una query financiera grande (6 consultas paralelas) con 14
+  // sitios de uso -- migrarla a react-query aqui es un refactor de
+  // arquitectura aparte, mismo criterio que AccountingPage.tsx.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void cargar();
+  }, [cargar]);
 
   // ---------------------------------------------------------------------
   // El total en pesos: se propone, no se impone.
