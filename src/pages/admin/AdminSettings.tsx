@@ -225,11 +225,6 @@ const AdminSettings: React.FC = () => {
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const toggleSecret = (key: string) => setShowSecrets(prev => ({ ...prev, [key]: !prev[key] }));
 
-  useEffect(() => {
-    fetchSettings();
-    checkZohoStatus();
-  }, []);
-
   const checkZohoStatus = async () => {
     setIsCheckingZoho(true);
     try {
@@ -393,6 +388,14 @@ const AdminSettings: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // fetchSettings sincroniza campos de edicion del formulario (settings,
+  // platformSettings, platformSecrets), no solo datos de lectura.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchSettings();
+    checkZohoStatus();
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

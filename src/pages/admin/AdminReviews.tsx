@@ -39,10 +39,6 @@ const AdminReviews: React.FC = () => {
   const [replyText, setReplyText] = useState('');
   const [isReplying, setIsReplying] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchReviews();
-  }, []);
-
   const fetchReviews = async () => {
     try {
       setIsLoading(true);
@@ -65,6 +61,13 @@ const AdminReviews: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // No se migra a useQuery: reviews se muta localmente con
+  // setReviews(reviews.map/filter(...)) tras ocultar/eliminar/responder.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchReviews();
+  }, []);
 
   const handleToggleVisibility = async (reviewId: string, currentVisibility: boolean, reviewType: 'tour' | 'agency' | 'traveler') => {
     try {
