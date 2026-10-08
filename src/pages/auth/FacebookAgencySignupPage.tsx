@@ -9,6 +9,7 @@ import { AgencyFormData, defaultAgencyFormData } from './agencyFormData';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
 import { mensajeDeError } from '../../lib/errores';
+import { OAuthContactVerificationPage } from '../../components/OAuthContactVerification';
 
 const FacebookIcon = (
   <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
@@ -25,9 +26,12 @@ const FacebookAgencySignupPage: React.FC = () => {
   const preFirstName = meta.given_name || fullName.split(' ')[0] || '';
   const preLastName  = meta.family_name || fullName.split(' ').slice(1).join(' ') || '';
   const preEmail     = user?.email || meta.email || '';
+  // Si el proveedor no devuelve correo, la agencia lo captura y lo verificamos con código.
+  const emailFromProvider = Boolean(preEmail);
   const avatarUrl    = meta.avatar_url || meta.picture || '';
 
   const [isLoading, setIsLoading] = useState(false);
+  const [created, setCreated] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -66,6 +70,7 @@ const FacebookAgencySignupPage: React.FC = () => {
 
     if (!apellidoPaterno.trim()) { setError('El apellido paterno es obligatorio'); setIsLoading(false); return; }
     if (!sexo) { setError('El sexo es obligatorio'); setIsLoading(false); return; }
+    if (!emailFromProvider && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) { setError('Captura un correo electrónico válido'); setIsLoading(false); return; }
     if (password !== confirmPassword) { setError('Las contraseñas no coinciden'); setIsLoading(false); return; }
 
     const errorContrasena = validarContrasena(password);
@@ -112,7 +117,7 @@ const FacebookAgencySignupPage: React.FC = () => {
         p_sexo:                        sexo || null,
         p_curp:                        formData.curp.trim() || null,
         p_phone_number:                formData.phoneNumber.trim() || null,
-        p_email:                       formData.email,
+        p_email:                       emailFromProvider ? formData.email : formData.email.trim().toLowerCase(),
         p_profile_picture_url:         avatarUrl || null,
         p_agency_name:                 agencyName.trim(),
         p_rfc:                         rfc.trim(),
@@ -170,13 +175,17 @@ const FacebookAgencySignupPage: React.FC = () => {
       } catch { /* best-effort */ }
 
       await completeOnboarding();
-      navigate('/agency/onboarding');
+      setCreated(true);
     } catch (err) {
       setError(mensajeDeError(err) || 'Ocurrió un error al completar el registro');
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (created && user) {
+    return <OAuthContactVerificationPage userId={user.id} email={formData.email} phone={formData.phoneNumber} audience="agency" redirectTo="/agency/onboarding" />;
+  }
 
   return (
     <AgencySignupFormBody
@@ -193,7 +202,7 @@ const FacebookAgencySignupPage: React.FC = () => {
       showConfirmPassword={showConfirmPassword}
       setShowConfirmPassword={setShowConfirmPassword}
       curpAvailability={curpAvailability}
-      emailReadOnly
+      emailReadOnly={emailFromProvider}
       oauthProviderLabel="Facebook"
       oauthProviderIcon={FacebookIcon}
     />

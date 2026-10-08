@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
 import { mensajeDeError } from '../../lib/errores';
+import OAuthContactVerification from '../../components/OAuthContactVerification';
 
 const MicrosoftIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg viewBox="0 0 23 23" className={className} aria-hidden="true">
@@ -26,9 +27,13 @@ const AzureTravelerSignupPage: React.FC = () => {
   const azureFirstName = meta.given_name || azureFullName.split(' ')[0] || '';
   const azureLastName = meta.family_name || azureFullName.split(' ').slice(1).join(' ') || '';
   const azureEmail: string = user?.email || meta.email || '';
+  // Si el proveedor no devuelve correo (X y a veces Facebook/Microsoft) el viajero lo captura
+  // y lo verificamos con código; si lo devuelve, ya viene verificado.
+  const emailFromProvider = Boolean(azureEmail);
   const msAvatarUrl: string = meta.ms_avatar_url || '';
 
   const [isLoading, setIsLoading] = useState(false);
+  const [created, setCreated] = useState(false);
   const [error, setError] = useState('');
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -148,6 +153,11 @@ const AzureTravelerSignupPage: React.FC = () => {
       setIsLoading(false);
       return;
     }
+    if (!emailFromProvider && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setError('Captura un correo electrónico válido');
+      setIsLoading(false);
+      return;
+    }
     if (!isForeignTraveler && (!curp.trim() || curp.length !== 18)) {
       setError('La CURP debe tener 18 caracteres');
       setIsLoading(false);
@@ -164,7 +174,7 @@ const AzureTravelerSignupPage: React.FC = () => {
 
       const { error: insertError } = await supabase.from('users').insert({
         id: user.id,
-        email: email,
+        email: emailFromProvider ? email : email.trim().toLowerCase(),
         role: UserRole.TRAVELER,
         first_name: firstName,
         last_name: apellidoPaterno,
@@ -184,7 +194,7 @@ const AzureTravelerSignupPage: React.FC = () => {
         state: state || null,
         postal_code: postalCode || null,
         country: country || 'México',
-        email_verified: true,
+        email_verified: emailFromProvider,
         onboarding_completed: true,
         profile_picture_url: msAvatarUrl || null,
       });
@@ -244,7 +254,7 @@ const AzureTravelerSignupPage: React.FC = () => {
       }
 
       await completeOnboarding();
-      navigate('/traveler/dashboard');
+      setCreated(true);
     } catch (err) {
       setError(mensajeDeError(err) || 'Ocurrió un error al completar el registro');
     } finally {
@@ -270,6 +280,10 @@ const AzureTravelerSignupPage: React.FC = () => {
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
 
+          {created && user ? (
+            <OAuthContactVerification userId={user.id} email={formData.email} phone={formData.phoneNumber} audience="traveler" redirectTo="/traveler/dashboard" />
+          ) : (
+          <>
           <div className="mb-6 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
             <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
             <p className="text-xs text-blue-700">Tus datos de Microsoft han sido pre-llenados. Puedes editarlos si lo deseas.</p>
@@ -353,8 +367,12 @@ const AzureTravelerSignupPage: React.FC = () => {
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700">Correo electrónico</label>
-              <input name="email" type="email" value={formData.email} onChange={handleInputChange} required className={`mt-1 ${inputClass} bg-gray-50`} readOnly />
-              <p className="mt-1 text-xs text-gray-400">Email verificado por Microsoft</p>
+              <input name="email" type="email" value={formData.email} onChange={handleInputChange} required autoComplete="email" className={`mt-1 ${inputClass} ${emailFromProvider ? 'bg-gray-50' : ''}`} readOnly={emailFromProvider} />
+              {emailFromProvider ? (
+                <p className="mt-1 text-xs text-gray-400">Email verificado por Microsoft</p>
+              ) : (
+                <p className="mt-1 text-xs text-amber-600">Microsoft no compartió tu correo. Captúralo: te enviaremos un código para verificarlo.</p>
+              )}
             </div>
 
             {/* Celular */}
@@ -476,6 +494,8 @@ const AzureTravelerSignupPage: React.FC = () => {
               {isLoading ? 'Completando registro...' : 'Crear cuenta de Viajero'}
             </button>
           </form>
+          </>
+          )}
         </div>
       </div>
     </div>
