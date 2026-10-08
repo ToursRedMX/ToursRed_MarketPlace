@@ -1818,4 +1818,4 @@ const AdminAgencies: React.FC = () => {
   );
 };
 
-export default AdminAgencies;
+export default AdminAgencies;
