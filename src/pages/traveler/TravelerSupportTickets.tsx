@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, TicketCheck, Search, RefreshCw, Eye, MessageCircle, Clock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -20,7 +20,25 @@ const TravelerSupportTickets: React.FC = () => {
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
 
-  const fetchTickets = async () => {
+  const openTicket = useCallback(async (ticket: SupportTicket) => {
+    setSelectedTicket(ticket);
+    const [commentsRes, historyRes] = await Promise.all([
+      supabase.from('support_ticket_comments')
+        .select('*')
+        .eq('ticket_id', ticket.id)
+        .eq('tipo', 'respuesta_usuario')
+        .order('created_at'),
+      supabase.from('support_ticket_history')
+        .select('*')
+        .eq('ticket_id', ticket.id)
+        .order('created_at'),
+    ]);
+    setComments(commentsRes.data ?? []);
+    setHistory(historyRes.data ?? []);
+    setNewComment('');
+  }, []);
+
+  const fetchTickets = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     const { data, error } = await supabase
@@ -45,27 +63,12 @@ const TravelerSupportTickets: React.FC = () => {
       const target = list.find(t => t.id === ticketParam);
       if (target) openTicket(target);
     }
-  };
+  }, [user, searchParams, openTicket]);
 
-  useEffect(() => { fetchTickets(); }, [user]);
-
-  const openTicket = async (ticket: SupportTicket) => {
-    setSelectedTicket(ticket);
-    const [commentsRes, historyRes] = await Promise.all([
-      supabase.from('support_ticket_comments')
-        .select('*')
-        .eq('ticket_id', ticket.id)
-        .eq('tipo', 'respuesta_usuario')
-        .order('created_at'),
-      supabase.from('support_ticket_history')
-        .select('*')
-        .eq('ticket_id', ticket.id)
-        .order('created_at'),
-    ]);
-    setComments(commentsRes.data ?? []);
-    setHistory(historyRes.data ?? []);
-    setNewComment('');
-  };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchTickets();
+  }, [fetchTickets]);
 
   const submitComment = async () => {
     if (!selectedTicket || !newComment.trim() || !user) return;

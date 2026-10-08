@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, Mail, Calendar, Save, CreditCard as Edit, X, MapPin, CreditCard, Globe, Phone, Wallet, FileText, Shield, Monitor, Smartphone, Tablet, CheckCircle, XCircle, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
@@ -209,13 +209,7 @@ const TravelerProfile: React.FC = () => {
     emergency_contact_phone: ''
   });
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchProfile();
-    }
-  }, [user?.id]);
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     if (!user?.id) return;
 
     try {
@@ -316,7 +310,14 @@ const TravelerProfile: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchProfile();
+    }
+  }, [user, fetchProfile]);
 
   const handleSave = async () => {
     if (!user?.id) return;

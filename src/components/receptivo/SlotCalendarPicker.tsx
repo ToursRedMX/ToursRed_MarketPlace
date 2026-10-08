@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, endOfDay, eachDayOfInterval, isSameMonth, isSameDay, isToday, isPast, addMonths, subMonths, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -20,14 +21,12 @@ interface DateAvailability {
 
 const SlotCalendarPicker: React.FC<SlotCalendarPickerProps> = ({ tour, selectedDate, onDateSelect }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [availability, setAvailability] = useState<Map<string, DateAvailability>>(new Map());
-  const [isLoading, setIsLoading] = useState(false);
 
-  const fetchAvailability = useCallback(async (month: Date) => {
-    setIsLoading(true);
-    try {
-      const start = format(startOfMonth(month), 'yyyy-MM-dd');
-      const end = format(endOfMonth(month), 'yyyy-MM-dd');
+  const { data: availabilityData, isFetching: isLoading } = useQuery({
+    queryKey: ['slot-calendar-availability', tour.id, format(currentMonth, 'yyyy-MM')],
+    queryFn: async (): Promise<Map<string, DateAvailability>> => {
+      const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+      const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
 
       const { data, error } = await supabase.rpc('get_tour_slots_by_range', {
         p_tour_id: tour.id,
@@ -35,7 +34,10 @@ const SlotCalendarPicker: React.FC<SlotCalendarPickerProps> = ({ tour, selectedD
         p_end_date: end,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching slot availability:', error);
+        return new Map();
+      }
 
       const map = new Map<string, DateAvailability>();
       (data as TourSlot[] || []).forEach((slot) => {
@@ -58,17 +60,10 @@ const SlotCalendarPicker: React.FC<SlotCalendarPickerProps> = ({ tour, selectedD
         }
       });
 
-      setAvailability(map);
-    } catch (err) {
-      console.error('Error fetching slot availability:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [tour.id]);
-
-  useEffect(() => {
-    fetchAvailability(currentMonth);
-  }, [currentMonth, fetchAvailability]);
+      return map;
+    },
+  });
+  const availability = availabilityData ?? new Map<string, DateAvailability>();
 
   const days = eachDayOfInterval({
     start: startOfMonth(currentMonth),

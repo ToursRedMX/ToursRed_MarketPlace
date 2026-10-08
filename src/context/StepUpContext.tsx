@@ -191,6 +191,9 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 };
 
+// El hook vive aqui porque esta acoplado al Context de este mismo archivo;
+// separarlo en otro archivo solo por Fast Refresh no aporta nada.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useStepUp = (): StepUpContextValue => {
   const ctx = useContext(StepUpContext);
   if (!ctx) throw new Error('useStepUp debe usarse dentro de un StepUpProvider');

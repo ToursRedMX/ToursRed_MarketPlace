@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FileText, Download, ExternalLink, CheckCircle, AlertCircle, Clock, XCircle, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
@@ -58,7 +58,7 @@ const TravelerCfdiList: React.FC<Props> = ({ userId }) => {
   // no podia distinguirlo de que la consulta no hubiera funcionado.
   const [error, setError] = useState('');
 
-  const fetchInvoices = async () => {
+  const fetchInvoices = useCallback(async () => {
     setIsLoading(true);
     try {
       const { data, error: errFacturas } = await supabase
@@ -85,9 +85,12 @@ const TravelerCfdiList: React.FC<Props> = ({ userId }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userId]);
 
-  useEffect(() => { fetchInvoices(); }, [userId]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchInvoices();
+  }, [fetchInvoices]);
 
   if (isLoading) {
     return (

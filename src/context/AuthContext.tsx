@@ -259,6 +259,9 @@ const AuthContext = createContext<AuthContextType>({
   refreshAuthState: async () => {},
 });
 
+// El hook vive aqui porque esta acoplado al Context de este mismo archivo;
+// separarlo en otro archivo solo por Fast Refresh no aporta nada.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
 
 const ROLE_CACHE_TTL = 5 * 60 * 1000;
@@ -840,7 +843,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const isValid = staff.some(s => s.agencyId === prev);
                 if (!isValid) {
                   const firstId = staff[0].agencyId;
-                  try { localStorage.setItem('active_agency_id', firstId); } catch {}
+                  try { localStorage.setItem('active_agency_id', firstId); } catch { /* localStorage no disponible */ }
                   return firstId;
                 }
                 return prev;

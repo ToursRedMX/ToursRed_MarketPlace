@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Tag, Plus, CreditCard as Edit2, Trash2, ToggleLeft, ToggleRight, AlertCircle, Check, X, Calendar, Users, Loader2, Info, Percent } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -76,11 +76,7 @@ const TourPromotionsManager: React.FC<TourPromotionsManagerProps> = ({ tourId, a
 
   const today = new Date().toISOString().split('T')[0];
 
-  useEffect(() => {
-    loadPromotions();
-  }, [tourId]);
-
-  const loadPromotions = async () => {
+  const loadPromotions = useCallback(async () => {
     setIsLoading(true);
     const { data, error } = await supabase
       .from('tour_promotions')
@@ -92,7 +88,12 @@ const TourPromotionsManager: React.FC<TourPromotionsManagerProps> = ({ tourId, a
       setPromotions(data);
     }
     setIsLoading(false);
-  };
+  }, [tourId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadPromotions();
+  }, [loadPromotions]);
 
   const getGroupConfig = (type: '2x1' | '3x2' | 'grupo_precio_fijo' | 'nxprecio') => {
     if (type === '2x1') return { group_size: 2, pay_count: 1, min_travelers: 2 };

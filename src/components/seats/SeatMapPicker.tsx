@@ -287,6 +287,7 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
   }, [tourId, slotId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
 

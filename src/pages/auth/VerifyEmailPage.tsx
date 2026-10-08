@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase, signOut } from '../../lib/supabase';
@@ -20,16 +20,7 @@ const VerifyEmailPage: React.FC = () => {
   const searchParams = new URLSearchParams(location.search);
   const redirectUrl = searchParams.get('redirect');
 
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
-    checkVerificationStatus();
-  }, [user, navigate]);
-
-  const checkVerificationStatus = async () => {
+  const checkVerificationStatus = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -58,7 +49,16 @@ const VerifyEmailPage: React.FC = () => {
     } catch (err) {
       console.error('Error checking verification status:', err);
     }
-  };
+  }, [user, redirectUrl, navigate]);
+
+  useEffect(() => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    checkVerificationStatus();
+  }, [user, navigate, checkVerificationStatus]);
 
   const handleChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;

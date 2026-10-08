@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, MapPin, Heart, Clock, CheckCircle, Crown, Sparkles, Wallet, Award, Gift, Copy, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
@@ -75,13 +75,7 @@ const TravelerDashboard: React.FC = () => {
   const [referralStats, setReferralStats] = useState<{completed: number; max: number; points: number}>({completed: 0, max: 10, points: 0});
   const [copySuccess, setCopySuccess] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      loadDashboardData();
-    }
-  }, [user?.id]);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     if (!user) return;
 
     setIsLoading(true);
@@ -240,7 +234,14 @@ const TravelerDashboard: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadDashboardData();
+    }
+  }, [user, loadDashboardData]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

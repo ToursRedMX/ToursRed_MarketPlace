@@ -6,7 +6,7 @@ import TourCard from '../components/TourCard';
 import { Tour, SearchFilters, ActivityType } from '../types';
 import { getTours, getActiveFeaturedTours, supabase } from '../lib/supabase';
 import { useTourPromotionsBatch } from '../hooks/useSharedData';
-import Seo from '../components/Seo';
+import Seo from '../components/Seo';
 import { comoFilas } from '../lib/relacionesSupabase';
 import { canUseAnalytics, getSessionId } from '../lib/cookieManager';
 import { useAuth } from '../context/AuthContext';
@@ -122,7 +122,10 @@ const TourCatalogPage: React.FC = () => {
 
   const clearAllFilters = useCallback(() => navigate('/tours'), [navigate]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchParams]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentPage(1);
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchTours = async () => {
@@ -222,6 +225,10 @@ const TourCatalogPage: React.FC = () => {
       }
     };
     fetchTours();
+    // initialFilters, hasGeoSearch y activeFilterCount se derivan todos de
+    // searchParams (useMemo arriba); listarlos aqui dispararia el efecto dos
+    // veces por el mismo cambio real.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, currentPage]);
 
   // Bitacora de busquedas (public.search_events): que busco el viajero y
@@ -277,7 +284,9 @@ const TourCatalogPage: React.FC = () => {
           destinations.map(d => ({ ...d, tour_count: counts[d.id] || 0 }))
             .filter(d => d.tour_count > 0).sort((a, b) => b.tour_count - a.tour_count).slice(0, 8)
         );
-      } catch {}
+      } catch {
+        // Adorno: si falla, el carrusel simplemente no se pinta.
+      }
     };
     fetchPopularDestinations();
   }, []);
@@ -297,7 +306,9 @@ const TourCatalogPage: React.FC = () => {
           points.map(p => ({ ...p, tour_count: counts[p.id] || 0 }))
             .filter(p => p.tour_count > 0).sort((a, b) => b.tour_count - a.tour_count).slice(0, 6)
         );
-      } catch {}
+      } catch {
+        // Adorno: si falla, el carrusel simplemente no se pinta.
+      }
     };
     fetchPopularDeparturePoints();
   }, []);

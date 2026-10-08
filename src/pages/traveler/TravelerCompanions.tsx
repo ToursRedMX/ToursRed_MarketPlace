@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Users, Plus, CreditCard as Edit, Trash2, Save, X, AlertCircle, Search, UserPlus, Shield, Phone } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -43,11 +43,7 @@ const TravelerCompanions: React.FC = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    if (user) loadCompanions();
-  }, [user?.id]);
-
-  const loadCompanions = async () => {
+  const loadCompanions = useCallback(async () => {
     if (!user) return;
     setIsLoading(true);
     try {
@@ -64,7 +60,14 @@ const TravelerCompanions: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadCompanions();
+    }
+  }, [user, loadCompanions]);
 
   const validateForm = (): string | null => {
     if (!form.nombre.trim()) return 'El nombre es obligatorio';
