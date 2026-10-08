@@ -61,12 +61,6 @@ const AgencyDashboard: React.FC = () => {
   const [agencyId, setAgencyId] = useState<string | null>(null);
   const [preventaStats, setPreventaStats] = useState<PreventaStats[]>([]);
 
-  useEffect(() => {
-    if (hookAgencyId) {
-      fetchAgencyData(hookAgencyId);
-    }
-  }, [hookAgencyId]);
-
   const fetchAgencyData = async (resolvedAgencyId: string) => {
     try {
       setIsLoading(true);
@@ -236,6 +230,17 @@ const AgencyDashboard: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // fetchAgencyData es una query grande (4 consultas paralelas + una extra
+  // condicional) para el dashboard financiero de la agencia -- migrarla a
+  // react-query aqui es un refactor de arquitectura aparte, mismo criterio
+  // que AccountingPage.tsx.
+  useEffect(() => {
+    if (hookAgencyId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchAgencyData(hookAgencyId);
+    }
+  }, [hookAgencyId]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

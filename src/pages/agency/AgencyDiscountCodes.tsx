@@ -58,13 +58,6 @@ export default function AgencyDiscountCodes() {
   });
 
 
-  useEffect(() => {
-    if (agencyId) {
-      fetchCodes();
-      fetchAgencyTours();
-    }
-  }, [agencyId]);
-
   const fetchAgencyTours = async () => {
     if (!agencyId) return;
 
@@ -109,6 +102,15 @@ export default function AgencyDiscountCodes() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (agencyId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchCodes();
+      fetchAgencyTours();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agencyId]);
 
   const fetchCodeDetails = async (codeId: string) => {
     try {

@@ -76,12 +76,6 @@ const AgencyFinancials: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
 
 
-  useEffect(() => {
-    if (agencyId) {
-      fetchFinancialData();
-    }
-  }, [agencyId, startDate, endDate, statusFilter]);
-
   const fetchFinancialData = async () => {
     if (!agencyId) return;
 
@@ -254,6 +248,17 @@ const AgencyFinancials: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // fetchFinancialData es una query financiera grande -- migrarla a
+  // react-query aqui es un refactor de arquitectura aparte, mismo criterio
+  // que AccountingPage.tsx.
+  useEffect(() => {
+    if (agencyId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchFinancialData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agencyId, startDate, endDate, statusFilter]);
 
   const formatCurrency = (amount: number) => formatCurrencyMXN(amount);
 
