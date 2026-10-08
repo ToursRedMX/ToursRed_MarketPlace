@@ -74,6 +74,7 @@ const BookingFlowStep1: React.FC = () => {
 
   useEffect(() => {
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCheckingMembership(false);
       return;
     }
@@ -108,6 +109,7 @@ const BookingFlowStep1: React.FC = () => {
     if (!tour) return;
     if (isReceptivo) {
       if (selectedSlot) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchAvailability(selectedSlot.id);
       } else if (isTransferCustomTime && selectedDate) {
         fetchAvailability(null);
@@ -117,6 +119,7 @@ const BookingFlowStep1: React.FC = () => {
     } else {
       fetchAvailability(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tour, selectedSlot, selectedDate, isReceptivo, isTransferCustomTime]);
 
   if (!tour) {

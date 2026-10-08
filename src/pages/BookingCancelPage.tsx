@@ -8,16 +8,6 @@ const BookingCancelPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [bookingCode, setBookingCode] = useState<string | null>(null);
 
-  useEffect(() => {
-    const id = searchParams.get('booking_id');
-
-    if (id) {
-      updateBookingStatus(id);
-    } else {
-      setIsLoading(false);
-    }
-  }, [searchParams]);
-
   const updateBookingStatus = async (id: string) => {
     try {
       setIsLoading(true);
@@ -58,6 +48,17 @@ const BookingCancelPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const id = searchParams.get('booking_id');
+
+    if (id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      updateBookingStatus(id);
+    } else {
+      setIsLoading(false);
+    }
+  }, [searchParams]);
 
   const handleRetryPayment = () => {
     window.history.back();

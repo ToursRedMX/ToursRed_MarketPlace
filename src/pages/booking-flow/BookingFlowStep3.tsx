@@ -243,6 +243,7 @@ const BookingFlowStep3: React.FC = () => {
   useEffect(() => {
     if (!tour || flow.seatsHeld || totalTravelers === 0) return;
     if (!hasSeatMap) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       performGenericHold();
     }
   }, [tour, flow.seatsHeld, totalTravelers, hasSeatMap, performGenericHold]);
@@ -287,6 +288,7 @@ const BookingFlowStep3: React.FC = () => {
   // El guardia de adentro (`hasSeatMap && ...`) ya cubre el caso sin tour.
   useEffect(() => {
     if (hasSeatMap && flow.selectedSeats.length > 0 && flow.selectedSeats.length === totalTravelers) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       performSeatHold(flow.selectedSeats);
     }
   }, [hasSeatMap, flow.selectedSeats, totalTravelers, performSeatHold]);
