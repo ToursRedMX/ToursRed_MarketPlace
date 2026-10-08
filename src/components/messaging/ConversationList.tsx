@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { MessageCircle, Clock, Users, Search, Filter, Plus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -35,37 +36,24 @@ const ConversationList: React.FC<ConversationListProps> = ({
   onCreateConversation
 }) => {
   const { user } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'booking' | 'general' | 'support'>('all');
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchConversations();
-    }
-  }, [user]);
-
-  const fetchConversations = async () => {
-    try {
-      setIsLoading(true);
-      setError('');
-
+  const { data: conversationsData, isPending: isLoading, error: queryError } = useQuery({
+    queryKey: ['user-conversations', user?.id],
+    enabled: !!user?.id,
+    queryFn: async (): Promise<Conversation[]> => {
       const { data, error } = await supabase.rpc('get_user_conversations');
 
       if (error) {
         throw new Error(error.message);
       }
 
-      setConversations(data || []);
-    } catch (err) {
-      console.error('Error fetching conversations:', err);
-      setError(mensajeDeError(err) || 'Error al cargar conversaciones');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return data || [];
+    },
+  });
+  const conversations = conversationsData ?? [];
+  const error = queryError ? (mensajeDeError(queryError) || 'Error al cargar conversaciones') : '';
 
   const filteredConversations = conversations.filter(conv => {
     const matchesSearch = 

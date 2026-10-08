@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { X, Download, ExternalLink, Loader2, AlertCircle, FileText, Building2, User, Receipt, Shield } from 'lucide-react';
 import { mensajeDeError } from '../lib/errores';
 
@@ -459,9 +460,6 @@ interface Props {
 }
 
 export default function CfdiViewerModal({ xmlUrl, onClose }: Props) {
-  const [cfdi, setCfdi] = useState<CfdiData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [showFullSello, setShowFullSello] = useState(false);
   const [showFullSelloSAT, setShowFullSelloSAT] = useState(false);
@@ -472,29 +470,25 @@ export default function CfdiViewerModal({ xmlUrl, onClose }: Props) {
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const loadXml = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
+  // isFetching (no isLoading de react-query) a proposito: el boton de abajo
+  // debe seguir mostrando el estado "cargando" en cada reintento manual.
+  const { data: cfdi, isFetching: isLoading, error: queryError, refetch: loadXml } = useQuery({
+    queryKey: ['cfdi-xml', xmlUrl],
+    queryFn: async (): Promise<CfdiData> => {
       const res = await fetch(xmlUrl);
       if (!res.ok) throw new Error(`No se pudo obtener el archivo XML (${res.status})`);
       const text = await res.text();
-      const data = parseCfdiXmlFull(text);
-      setCfdi(data);
-    } catch (e) {
-      setError(mensajeDeError(e) || 'Error al cargar el CFDI.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [xmlUrl]);
-
-  useEffect(() => { loadXml(); }, [loadXml]);
+      return parseCfdiXmlFull(text);
+    },
+  });
+  const error = queryError ? (mensajeDeError(queryError) || 'Error al cargar el CFDI.') : null;
 
   useEffect(() => {
     if (!cfdi?.uuid) return;
     const url = buildSatQrUrl(cfdi);
     const offscreen = document.createElement('canvas');
     renderQrToCanvas(offscreen, url);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setQrDataUrl(offscreen.toDataURL('image/png'));
   }, [cfdi]);
 
@@ -575,7 +569,7 @@ export default function CfdiViewerModal({ xmlUrl, onClose }: Props) {
               <p className="text-sm font-medium text-gray-700">No se pudo cargar el CFDI</p>
               <p className="text-xs text-gray-400 text-center max-w-xs">{error}</p>
               <button
-                onClick={loadXml}
+                onClick={() => loadXml()}
                 className="text-xs text-blue-600 underline mt-1"
               >
                 Reintentar

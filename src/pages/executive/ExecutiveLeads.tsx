@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, CreditCard as Edit2, ArrowRight, MessageSquare, X, CheckCircle, AlertCircle, Building2, Loader2, MailCheck, Send } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -87,8 +88,6 @@ const EMPTY_LEAD: Omit<AgencyLead, 'id' | 'executive_id' | 'converted_agency_id'
 
 export default function ExecutiveLeads() {
   const { accountExecutiveInfo } = useAuth();
-  const [leads, setLeads] = useState<AgencyLead[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
@@ -184,14 +183,14 @@ export default function ExecutiveLeads() {
   const [actionMessage, setActionMessage] = useState('');
   const [newNote, setNewNote] = useState('');
 
-  const loadLeads = useCallback(async () => {
-    if (!accountExecutiveInfo?.executiveId) return;
-    setIsLoading(true);
-    try {
+  const { data: leadsData, isPending: isLoading, refetch: loadLeads } = useQuery({
+    queryKey: ['executive-leads', accountExecutiveInfo?.executiveId],
+    enabled: !!accountExecutiveInfo?.executiveId,
+    queryFn: async (): Promise<AgencyLead[]> => {
       const { data, error: errorLeads } = await supabase
         .from('agency_leads')
         .select('*')
-        .eq('executive_id', accountExecutiveInfo.executiveId)
+        .eq('executive_id', accountExecutiveInfo!.executiveId)
         .order('created_at', { ascending: false });
 
       // "No tienes prospectos" es justo lo contrario de lo que un panel de
@@ -208,21 +207,16 @@ export default function ExecutiveLeads() {
         if (errorAgencias) throw errorAgencias;
 
         const agencyMap = new Map((agenciesData || []).map(a => [a.id, a]));
-        const enriched = (data || []).map(l => ({
+        return (data || []).map(l => ({
           ...l,
           converted_agency_onboarding_status: l.converted_agency_id ? agencyMap.get(l.converted_agency_id)?.onboarding_status || null : null,
           converted_agency_name: l.converted_agency_id ? agencyMap.get(l.converted_agency_id)?.name || null : null,
         }));
-        setLeads(enriched);
-      } else {
-        setLeads(data || []);
       }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [accountExecutiveInfo?.executiveId]);
-
-  useEffect(() => { loadLeads(); }, [loadLeads]);
+      return data || [];
+    },
+  });
+  const leads = leadsData ?? [];
 
   const openCreate = () => {
     setEditingLead(null);

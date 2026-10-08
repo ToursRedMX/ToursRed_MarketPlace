@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   DollarSign, Upload, CheckCircle, AlertCircle, X,
   FileText, Download, ShieldCheck, ShieldAlert, Loader2, ExternalLink,
@@ -109,8 +110,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 
 export default function ExecutiveComisiones() {
   const { accountExecutiveInfo } = useAuth();
-  const [commissions, setCommissions] = useState<Commission[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [cfdiModal, setCfdiModal] = useState<Commission | null>(null);
   const [cfdiModalMode, setCfdiModalMode] = useState<'generate' | 'upload'>('generate');
@@ -125,24 +124,23 @@ export default function ExecutiveComisiones() {
   const [validation, setValidation] = useState<ValidationResult>({ status: 'idle', parsed: null, errors: [], warnings: [] });
   const [cfdiViewerUrl, setCfdiViewerUrl] = useState<string | null>(null);
 
-  const loadCommissions = useCallback(async () => {
-    if (!accountExecutiveInfo?.executiveId) return;
-    setIsLoading(true);
-    try {
+  const { data: commissionsData, isPending: isLoading, refetch: loadCommissions } = useQuery({
+    queryKey: ['executive-commissions', accountExecutiveInfo?.executiveId],
+    enabled: !!accountExecutiveInfo?.executiveId,
+    queryFn: async (): Promise<Commission[]> => {
       const { data, error } = await supabase
         .from('executive_commissions')
         .select('*, agencies(name)')
-        .eq('executive_id', accountExecutiveInfo.executiveId)
+        .eq('executive_id', accountExecutiveInfo!.executiveId)
         .order('created_at', { ascending: false });
 
       // Una lista vacia le dice al ejecutivo que no le deben nada.
       if (error) console.error('ExecutiveComisiones: no se pudieron leer las comisiones', error);
 
-      setCommissions((data || []) as Commission[]);
-    } finally { setIsLoading(false); }
-  }, [accountExecutiveInfo?.executiveId]);
-
-  useEffect(() => { loadCommissions(); }, [loadCommissions]);
+      return (data || []) as Commission[];
+    },
+  });
+  const commissions = commissionsData ?? [];
 
   useEffect(() => {
     const loadExecInfo = async () => {
