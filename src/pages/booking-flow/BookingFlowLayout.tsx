@@ -11,6 +11,7 @@ import BookingFlowStep1 from './BookingFlowStep1';
 import BookingFlowStep2 from './BookingFlowStep2';
 import BookingFlowStep3 from './BookingFlowStep3';
 import BookingFlowStep4 from './BookingFlowStep4';
+import { PhoneVerificationGate } from '../../components/PhoneVerificationGate';
 
 const FlowContent: React.FC = () => {
   const { flow, clearRedirectMessage, goToStep } = useBookingFlow();
@@ -162,9 +163,9 @@ const BookingFlowLayout: React.FC = () => {
   }
 
   return (
-    <BookingFlowProvider tourSlug={resolvedSlug} initialTour={tour} key={resolvedSlug}>
+    <PhoneVerificationGate context="traveler"><BookingFlowProvider tourSlug={resolvedSlug} initialTour={tour} key={resolvedSlug}>
       <FlowContent />
-    </BookingFlowProvider>
+    </BookingFlowProvider></PhoneVerificationGate>
   );
 };
 

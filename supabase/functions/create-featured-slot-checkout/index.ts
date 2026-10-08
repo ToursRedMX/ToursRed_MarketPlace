@@ -1,3 +1,4 @@
+import { requireUser as requirePhoneUser } from "../_shared/auth.ts";
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import Stripe from "npm:stripe@22.3.0";
@@ -43,6 +44,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const phoneAuth = await requirePhoneUser(req, { recurso: "create-featured-slot-checkout", cors: corsHeaders, phoneContext: "agency" });
+    if (!phoneAuth.ok) return phoneAuth.response;
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!

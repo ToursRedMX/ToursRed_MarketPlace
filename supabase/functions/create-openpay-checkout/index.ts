@@ -1,3 +1,4 @@
+import { requireUser as requirePhoneUser } from "../_shared/auth.ts";
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import {
@@ -51,6 +52,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const phoneAuth = await requirePhoneUser(req, { recurso: "create-openpay-checkout", cors: corsHeaders, phoneContext: "traveler" });
+    if (!phoneAuth.ok) return phoneAuth.response;
+
     if (!isConfigured()) {
       return new Response(
         JSON.stringify({ error: "OpenPay no está configurado. Contacta al administrador." }),

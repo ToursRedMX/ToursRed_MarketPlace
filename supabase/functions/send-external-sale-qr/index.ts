@@ -11,7 +11,7 @@ type Prepared=ExternalEmail&{id:string;actor_id:string;email:string;token:string
 Deno.serve(async(req:Request)=>{
  if(req.method==="OPTIONS") return new Response(null,{headers:cors});
  if(req.method!=="POST") return json({error:"Método no permitido"},405);
- const guard=await requireUser(req,{recurso:"send-external-sale-qr",cors});
+ const guard=await requireUser(req,{recurso:"send-external-sale-qr",cors,phoneContext:"agency"});
  if(!guard.ok) return guard.response;
  if(!guard.llamador.userId) return json({error:"Se requiere una persona autorizada"},403);
  const url=Deno.env.get("SUPABASE_URL")!;

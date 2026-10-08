@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { phoneGate, type PhoneContext } from './mensajeria/phoneGate.ts';
 
 /**
  * Guards de autorizacion compartidos para Edge Functions.
@@ -108,6 +109,8 @@ export type ResultadoAuth =
   | { ok: false; response: Response };
 
 interface OpcionesBase {
+  /** Context set by the endpoint, never from request JSON. */
+  phoneContext?: PhoneContext;
   /** Etiqueta para el log de intentos denegados. Se lee en produccion. */
   recurso: string;
   /** Headers CORS de la funcion, si no son los de por defecto. */
@@ -193,7 +196,7 @@ export function requireServiceRole(req: Request, { recurso, cors }: OpcionesBase
  */
 export async function requireUser(
   req: Request,
-  { recurso, cors }: OpcionesBase,
+  { recurso, cors, phoneContext }: OpcionesBase,
 ): Promise<ResultadoAuth> {
   if (llamadaInterna(req)) {
     return { ok: true, llamador: { esServiceRole: true, esAdmin: true, userId: null } };
@@ -212,6 +215,8 @@ export async function requireUser(
     return { ok: false, response: json({ error: "No autenticado" }, 401, cors) };
   }
 
+  const phone = await phoneGate(admin, user.id, recurso, phoneContext);
+  if (phone !== 'allowed') return { ok: false, response: json({ error: phone === 'pending' ? 'Verifica tu telefono para continuar' : 'No se pudo validar el acceso', code: phone === 'pending' ? 'PHONE_VERIFICATION_REQUIRED' : 'PHONE_POLICY_UNAVAILABLE' }, phone === 'pending' ? 403 : 503, cors) };
   const esAdmin = await tieneRolAdmin(admin, user.id);
   return { ok: true, llamador: { esServiceRole: false, esAdmin, userId: user.id } };
 }
@@ -221,7 +226,7 @@ export async function requireAdmin(
   req: Request,
   { recurso, cors }: OpcionesBase,
 ): Promise<ResultadoAuth> {
-  const previo = await requireUser(req, { recurso, cors });
+  const previo = await requireUser(req, { recurso, cors, phoneContext: 'administrative' });
   if (!previo.ok) return previo;
 
   if (!previo.llamador.esAdmin) {

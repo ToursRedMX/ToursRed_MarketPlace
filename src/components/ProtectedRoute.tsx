@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../lib/supabase';
 import TermsAcceptanceGate from './TermsAcceptanceGate';
+import { PhoneVerificationGate } from './PhoneVerificationGate';
 import { supabase as supabaseClient } from '../lib/supabase';
 
 interface ProtectedRouteProps {
@@ -108,7 +109,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
       );
     }
 
-    return <>{children}</>;
+    return <PhoneVerificationGate context={location.pathname.startsWith('/agency') ? 'agency' : location.pathname.startsWith('/traveler') ? 'traveler' : 'account'}>{children}</PhoneVerificationGate>;
   }
 
   // Allow agency staff (traveler role with active staff vinculacion) to access agency routes
@@ -131,7 +132,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
       );
     }
 
-    return <>{children}</>;
+    return <PhoneVerificationGate context="agency">{children}</PhoneVerificationGate>;
   }
 
   // Redirect to the appropriate dashboard based on role
