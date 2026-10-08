@@ -1,3 +1,4 @@
+import { requireUser as requirePhoneUser } from "../_shared/auth.ts";
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
@@ -17,6 +18,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const phoneAuth = await requirePhoneUser(req, { recurso: "confirm-booking-wallet-payment", cors: corsHeaders, phoneContext: "traveler" });
+    if (!phoneAuth.ok) return phoneAuth.response;
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

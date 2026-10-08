@@ -1,3 +1,4 @@
+import { requireUser as requirePhoneUser } from "../_shared/auth.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
@@ -24,6 +25,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const phoneAuth = await requirePhoneUser(req, { recurso: "get-gift-card-status", cors: corsHeaders, phoneContext: "traveler" });
+    if (!phoneAuth.ok) return phoneAuth.response;
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,

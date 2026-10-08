@@ -254,3 +254,9 @@ verify_jwt = false # Authenticated inside the handler; service key or scoped cal
 
 [functions.process-notification-outbox]
 verify_jwt = false # Authenticated inside the handler; service key or scoped callback signature.
+
+[functions.request-phone-otp]
+verify_jwt = false
+
+[functions.verify-phone-otp]
+verify_jwt = false

@@ -33,6 +33,7 @@ import AzureOnboardingPage from './pages/auth/AzureOnboardingPage';
 import AzureTravelerSignupPage from './pages/auth/AzureTravelerSignupPage';
 import AzureAgencySignupPage from './pages/auth/AzureAgencySignupPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
+import VerifyPhonePage from './pages/auth/VerifyPhonePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import TravelerDashboard from './pages/traveler/TravelerDashboard';
@@ -167,7 +168,7 @@ const PROTECTED_PREFIXES = [
   '/supplement-success', '/payment-plan-success', '/extras-success', '/notifications',
   '/gift-card/redeem', '/gift-card/success', '/payment-return', '/booking-checkin',
   '/soporte/viajero', '/soporte/agencia', '/unsubscribe', '/avisos/baja',
-  '/reservar',
+  '/reservar', '/verificar-telefono',
 ];
 
 const ProtectedRouteSeo: React.FC = () => {
@@ -240,6 +241,7 @@ const App: React.FC = () => {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/agency-signup" element={<AgencySignupPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/verificar-telefono" element={<VerifyPhonePage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/auth/google-callback" element={<GoogleCallbackPage />} />

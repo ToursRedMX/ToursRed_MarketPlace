@@ -183,7 +183,13 @@ export interface AccountExecutiveInfo {
   isActive: boolean;
 }
 
+import { usePhoneVerification, type PhoneVerificationStatus } from '../hooks/usePhoneVerification';
+
 interface AuthContextType {
+  phoneVerification: PhoneVerificationStatus | null;
+  phoneVerificationLoading: boolean;
+  phoneVerificationError: boolean;
+  refreshPhoneVerification: () => Promise<void>;
   user: User | null;
   userRole: UserRole | null;
   isLoading: boolean;
@@ -217,6 +223,10 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType>({
+  phoneVerification: null,
+  phoneVerificationLoading: true,
+  phoneVerificationError: false,
+  refreshPhoneVerification: async () => {},
   user: null,
   userRole: null,
   isLoading: true,
@@ -285,6 +295,8 @@ const cerrarSesionYRedirigir = async (destino: string) => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const { data: phoneVerification, isPending: phoneVerificationLoading, isError: phoneVerificationError, refetch: refetchPhone } = usePhoneVerification(user?.id);
+  const refreshPhoneVerification = useCallback(async () => { await refetchPhone(); }, [refetchPhone]);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -589,7 +601,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           authUser.app_metadata?.provider === 'azure' ||
           authUser.app_metadata?.provider === 'x' ||
           authUser.app_metadata?.provider === 'facebook' ||
-          (authUser.identities ?? []).some((i) => ['google', 'azure', 'x', 'facebook'].includes(i.provider));
+          authUser.app_metadata?.provider === 'linkedin_oidc' ||
+          (authUser.identities ?? []).some((i) => ['google', 'azure', 'x', 'facebook', 'linkedin_oidc'].includes(i.provider));
         const metaOnboarding = authUser.user_metadata?.onboarding_completed;
 
         if (isOAuthProvider && (metaOnboarding === false || metaOnboarding === null || metaOnboarding === undefined)) {
@@ -1138,6 +1151,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const contextValue = useMemo(() => ({
+    phoneVerification: phoneVerification ?? null,
+    phoneVerificationLoading,
+    phoneVerificationError,
+    refreshPhoneVerification,
     user,
     userRole,
     isLoading,
@@ -1168,7 +1185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signInWithLinkedIn,
     completeOnboarding,
     refreshAuthState,
-  }), [user, userRole, isLoading, isAdmin, isAgency, isTraveler, isAccountant, isAccountExecutive, isEmailVerified, isSuperAdmin, isOnboardingPending, mustChangePassword, permissions, accountantPermissions, accountExecutiveInfo, isAgencyStaff, staffInfo, allStaffInfo, activeAgencyId, switchActiveAgency, isAgencyApproved, needsTermsAcceptance, markTermsAccepted, signInWithGoogle, signInWithAzure, signInWithTwitter, signInWithFacebook, signInWithLinkedIn, completeOnboarding, refreshAuthState]);
+  }), [phoneVerification, phoneVerificationLoading, phoneVerificationError, refreshPhoneVerification, user, userRole, isLoading, isAdmin, isAgency, isTraveler, isAccountant, isAccountExecutive, isEmailVerified, isSuperAdmin, isOnboardingPending, mustChangePassword, permissions, accountantPermissions, accountExecutiveInfo, isAgencyStaff, staffInfo, allStaffInfo, activeAgencyId, switchActiveAgency, isAgencyApproved, needsTermsAcceptance, markTermsAccepted, signInWithGoogle, signInWithAzure, signInWithTwitter, signInWithFacebook, signInWithLinkedIn, completeOnboarding, refreshAuthState]);
 
   return (
     <AuthContext.Provider value={contextValue}>

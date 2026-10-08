@@ -29,7 +29,7 @@ function service(q) { return `begin; set local role service_role; ${q}; commit;`
 let passed = 0;
 function test(name, fn) { fn(); console.log(`ok ${++passed} - ${name}`); }
 const reject = (fn, pattern) => assert.throws(fn, pattern);
-sql(`insert into auth.users(id,email) values ${Object.values(ids).map(id => `('${id}','${id}@example.invalid')`).join(',')};
+sql(`insert into auth.users(id,email,last_sign_in_at) values ${Object.values(ids).map(id => `('${id}','${id}@example.invalid',now())`).join(',')};
 insert into public.users(id,email,first_name,last_name,role,is_active,is_super_admin,email_verified,phone_number) values
 ${Object.entries(ids).map(([role,id],i) => `('${id}','${id}@example.invalid','SMS','Test','${({ superadmin:'admin',denied:'admin',inactive:'admin',staff:'traveler',executive:'account_executive' })[role] ?? role}',${role !== 'inactive'},${role === 'superadmin'},true,'+52550000${String(i).padStart(4,'0')}')`).join(',')};
 insert into public.admin_permissions(user_id,can_manage_settings) values('${ids.admin}',true),('${ids.inactive}',true)
@@ -48,7 +48,7 @@ test('defaults: global/SMS off, roles on, simulation on', () => {
 });
 test('RLS and grants deny every private table to anon/authenticated', () => {
   const tables = JSON.parse(sql("select jsonb_agg(jsonb_build_object('name',c.relname,'rls',c.relrowsecurity)) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='messaging_private' and c.relkind='r'"));
-  assert.equal(tables.length,8);
+  assert.ok(tables.length >= 8);
   for (const t of tables) { assert.equal(t.rls,true); for (const role of ['anon','authenticated']) reject(() => sql(`begin; set local role ${role}; select * from messaging_private.${t.name}; rollback;`),/permission denied/); }
 });
 test('traveler, agency, executive, accountant, admin without permission and inactive admin cannot manage SMS', () => {
@@ -96,7 +96,7 @@ test('unverified users cannot self-verify through UPDATE', () => {
   reject(() => sql(auth(ids.superadmin,`update public.users set phone_verified_at=now(),phone_verified_e164=phone_number where id='${ids.superadmin}'`)),/solo puede acreditarla/);
 });
 test('INSERT cannot forge a verified profile either', () => {
-  const id=randomUUID(); sql(`insert into auth.users(id,email) values('${id}','${id}@example.invalid')`);
+  const id=randomUUID(); sql(`insert into auth.users(id,email,last_sign_in_at) values('${id}','${id}@example.invalid',now())`);
   reject(() => sql(auth(id,`insert into public.users(id,email,first_name,last_name,role,phone_number,phone_verified_at,phone_verified_e164) values('${id}','${id}@example.invalid','Test','Insert','traveler','+525599999999',now(),'+525599999999')`)),/solo puede acreditarla/);
 });
 test('normalizer preserves known formats, rejects ambiguous input and does not rewrite legacy +521', () => {

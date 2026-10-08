@@ -1,3 +1,4 @@
+import { requireUser as requirePhoneUser } from "../_shared/auth.ts";
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
@@ -27,6 +28,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const phoneAuth = await requirePhoneUser(req, { recurso: "process-slot-reschedule-request", cors: corsHeaders, phoneContext: "agency" });
+    if (!phoneAuth.ok) return phoneAuth.response;
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ success: false, error: "No autorizado" }), {
