@@ -92,7 +92,7 @@ Evento idempotente `reserva_confirmada:{booking_id}`, independiente del correo y
 
 Recordatorio por versión/fecha de salida, 18:00 local configurable, zona IANA del destino validada, ventana horaria explícita, cancelación/reprogramación revalidadas antes de enviar. No usar programación propietaria de LabsMobile. Si faltan fecha/hora/zona, omitir con diagnóstico operativo en vez de inventar datos. Plantillas calculan septetos GSM-7 (incluida extensión) y unidades UTF-16/segmentos Unicode; límites 160/153 y 70/67 según transporte. Enlaces a rutas realmente existentes bajo URL base configurada.
 
-Retención: purgar desafíos terminales tras 24 h de expiración; eliminar contenido identificable de cola e intentos terminales tras 30 días con cascada de eventos. Las métricas agregadas se implementan antes de programar la purga periódica. No purgar estados desconocidos sin reconciliación o resolución explícita. Claves HMAC de límites vencen con sus ventanas. Fase 1 prepara la rutina; no programa crons.
+Retención final de Fase 4: purgar desafíos terminales tras 24 h de expiración, conservando intentos de OTP sin vínculo al desafío para las métricas mensuales. Cola, intentos y eventos tienen un horizonte operativo de 90 días, incluidos resultados desconocidos: no se reenvían al vencer ese horizonte. Se eliminan teléfonos y relaciones directas; se conserva la identidad mínima de idempotencia. Eventos OTP se purgan a 90 días y límites vencidos a 32 días. La ampliación respecto de los 30 días propuestos evita truncar las métricas de un mes de 31 días. Instalar la programación de purga es un paso de despliegue autorizado, no una acción automática de las migraciones.
 
 ## Fases, aceptación y rollback
 

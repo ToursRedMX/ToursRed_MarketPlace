@@ -15,13 +15,13 @@ Deno.serve(async req => {
   try {
     const runtime = await cargarRuntime(client);
     if (!runtime.settings.sms_habilitado || !runtime.processor_ready) return Response.json({ processed: 0, disabled: true }, { headers: cors });
-    const { data: jobs, error } = await client.rpc('claim_sms_notifications', { p_limit: 20 });
+    await client.rpc('record_sms_health', { p_worker: true });
+    const { data: jobs, error } = await client.rpc('claim_sms_notifications', { p_limit: 5 });
     if (error) throw error;
     let processed = 0;
     for (const job of jobs ?? []) {
       try {
-        // Fase 4 provides the business snapshot RPC. Until then, no message can
-        // leave the queue: missing preparation is a safe, observable failure.
+        // Authoritative business state is read again immediately before dispatch.
         const { data: snapshot, error: preparationError } = await client.rpc('prepare_sms_notification', { p_id: job.id, p_lease: job.lease_token });
         if (preparationError) throw new Error('preparacion_no_disponible');
         if (!snapshot?.allowed) {
@@ -29,7 +29,7 @@ Deno.serve(async req => {
           continue;
         }
         const text = job.category === 'reserva_confirmada' ? plantillaConfirmacion(snapshot.folio, runtime.platform_url)
-          : plantillaRecordatorio(snapshot.tour, snapshot.meeting_point, snapshot.folio);
+          : plantillaRecordatorio(snapshot.tour, snapshot.meeting_point, snapshot.folio, snapshot.departure_time);
         const result = await enviarPersistido(client, await cargarRuntime(client), { outboxId: job.id, lease: job.lease_token }, job.category as Categoria, snapshot.destination, text);
         if (result.estado === 'fallido' && (result.clase === 'rechazo_confirmado' || result.codigo === 'limite_consumo')) {
           const { data: deferred, error: deferError } = await client.rpc('defer_sms_notification', { p_id: job.id, p_lease: job.lease_token });

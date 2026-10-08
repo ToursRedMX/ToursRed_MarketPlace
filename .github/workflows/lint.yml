@@ -120,6 +120,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verificacion telefonica por contexto en la interfaz
+        run: node scripts/test-phone-gate-ui.mjs
+
       - name: Verify external QR privacy
         run: node scripts/test-external-qr-privacy.mjs
 

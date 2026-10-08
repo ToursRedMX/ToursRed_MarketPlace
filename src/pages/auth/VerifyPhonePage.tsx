@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import TurnstileWidget from '../../components/TurnstileWidget';
 import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
+import { SmsPreferences } from '../../components/SmsPreferences';
 
 const messages: Record<string,string> = {
   OTP_INVALID:'El código no es válido. Revisa los seis dígitos.',OTP_EXPIRED:'El código venció. Solicita uno nuevo.',OTP_COOLDOWN:'Espera 60 segundos antes de solicitar otro código.',
@@ -63,6 +64,7 @@ export default function VerifyPhonePage(){
    <button className="rounded bg-primary-600 px-4 py-2 text-white disabled:opacity-50" disabled={busy||code.length!==6||expiry===0||simulation}>Verificar teléfono</button></form>}
   {error&&<p role="alert" className="my-4 text-red-700">{error}</p>}{message&&<p role="status" className="my-4 text-green-700">{message}</p>}
   <details className="mt-6"><summary>Ya no tengo acceso a mi número</summary><p className="my-2">Vuelve a iniciar sesión con correo/contraseña o tu proveedor habitual para confirmar tu acceso. Después registra y verifica el nuevo teléfono. No necesitas recibir un SMS en el número anterior.</p><p>Si tampoco tienes acceso a tu correo o autenticación de dos pasos, contacta a soporte. No podemos acreditar un número por sus últimos dígitos.</p><button type="button" className="underline" onClick={async()=>{await supabase.auth.signOut();navigate('/login?redirect=%2Fverificar-telefono');}}>Cerrar sesión e identificarme otra vez</button></details>
+  <SmsPreferences />
   <div className="mt-6 flex gap-4"><Link className="underline" to="/contact">Contactar a soporte</Link><Link className="underline" to="/profile">Volver a mi perfil</Link></div>
  </main>;
 }
