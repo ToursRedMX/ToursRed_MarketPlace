@@ -44,7 +44,13 @@ const AgencyBlackoutManager: React.FC<AgencyBlackoutManagerProps> = ({ tourId, a
     }
   };
 
-  useEffect(() => { fetchBlackouts(); }, [tourId]);
+  // No se migra a useQuery: error se comparte con la validacion del
+  // formulario de creacion/eliminacion, que reusa el mismo setter.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchBlackouts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourId]);
 
   const handleSubmit = async () => {
     if (!form.blackout_start || !form.blackout_end) {

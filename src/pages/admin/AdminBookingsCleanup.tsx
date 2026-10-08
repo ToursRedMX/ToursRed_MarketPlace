@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Trash2, RefreshCw, AlertTriangle, CheckSquare, Square, Calendar, User, Building2, ShoppingBag, Clock, FileText, ChevronDown, ChevronUp, CheckCircle, Banknote } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
@@ -54,8 +55,6 @@ const SortIcon = ({ field, sortField, sortDir }: { field: SortField; sortField: 
     : <ChevronDown className="h-3 w-3 text-gray-300" />;
 
 const AdminBookingsCleanup: React.FC = () => {
-  const [bookings, setBookings] = useState<GarbageBooking[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [threshold, setThreshold] = useState(7);
   const [sortField, setSortField] = useState<SortField>('created_at');
@@ -63,50 +62,56 @@ const AdminBookingsCleanup: React.FC = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const [lastCleanup, setLastCleanup] = useState<{ count: number; at: string } | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [logs, setLogs] = useState<{ id: string; deleted_count: number; deleted_at: string; criteria: string }[]>([]);
   const [showLogs, setShowLogs] = useState(false);
 
-  const fetchBookings = useCallback(async () => {
-    setLoading(true);
+  // isFetching (no isLoading de react-query) a proposito: el boton
+  // "Actualizar" debe seguir mostrando el spinner en CADA refresco manual,
+  // igual que el setLoading(true) de antes. threshold va en el queryKey, asi
+  // que cambiar el umbral ya recarga solo, sin necesidad del useEffect que
+  // habia antes (dependia de que fetchBookings cambiara de identidad).
+  const { data: gbData, isFetching: loading, refetch: refetchBookings } = useQuery({
+    queryKey: ['garbage-bookings', threshold],
+    queryFn: async (): Promise<GarbageBooking[]> => {
+      const { data, error } = await supabase
+        .rpc('get_garbage_bookings', { threshold_days: threshold });
+
+      if (error) {
+        console.error('Error fetching garbage bookings:', error);
+        return [];
+      }
+
+      return data ?? [];
+    },
+  });
+  const bookings = gbData ?? [];
+
+  const fetchBookings = () => {
     setSelected(new Set());
+    return refetchBookings();
+  };
 
-    const { data, error } = await supabase
-      .rpc('get_garbage_bookings', { threshold_days: threshold });
+  const { data: logsData, refetch: fetchLogs } = useQuery({
+    queryKey: ['booking-cleanup-logs'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('booking_cleanup_logs')
+        .select('id, deleted_count, deleted_at, criteria')
+        .order('deleted_at', { ascending: false })
+        .limit(10);
 
-    if (error) {
-      console.error('Error fetching garbage bookings:', error);
-      setBookings([]);
-      setLoading(false);
-      return;
-    }
+      // Sin historial parece que nunca se ha corrido una limpieza, lo que
+      // invita a correr otra.
+      if (error) {
+        console.error('AdminBookingsCleanup: no se pudo leer el historial', error);
+        return [];
+      }
 
-    setBookings(data ?? []);
-    setLoading(false);
-  }, [threshold]);
-
-  const fetchLogs = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('booking_cleanup_logs')
-      .select('id, deleted_count, deleted_at, criteria')
-      .order('deleted_at', { ascending: false })
-      .limit(10);
-
-    // Sin historial parece que nunca se ha corrido una limpieza, lo que
-    // invita a correr otra.
-    if (error) console.error('AdminBookingsCleanup: no se pudo leer el historial', error);
-
-    if (data) {
-      setLogs(data);
-      if (data.length > 0) setLastCleanup({ count: data[0].deleted_count, at: data[0].deleted_at });
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchBookings();
-    fetchLogs();
-  }, [fetchBookings, fetchLogs]);
+      return data ?? [];
+    },
+  });
+  const logs = logsData ?? [];
+  const lastCleanup = logs.length > 0 ? { count: logs[0].deleted_count, at: logs[0].deleted_at } : null;
 
   // ─── Sort ──────────────────────────────────────────────────────────────────
 
@@ -309,7 +314,7 @@ const AdminBookingsCleanup: React.FC = () => {
                 {THRESHOLD_OPTIONS.map(d => (
                   <button
                     key={d}
-                    onClick={() => setThreshold(d)}
+                    onClick={() => { setThreshold(d); setSelected(new Set()); }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                       threshold === d
                         ? 'bg-gray-900 text-white'
@@ -330,7 +335,7 @@ const AdminBookingsCleanup: React.FC = () => {
                 </span>
               )}
               <button
-                onClick={fetchBookings}
+                onClick={() => fetchBookings()}
                 disabled={loading}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
               >

@@ -505,7 +505,14 @@ function AdminBookings() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // load() es una sola query compleja (8 consultas paralelas + computo de
+  // stats) sin otros sitios de uso -- migrarla a react-query aqui es un
+  // refactor de arquitectura aparte para una pantalla financiera central,
+  // no algo para hacer de paso en un barrido de lint.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
   // ── Filter + sort ────────────────────────────────────────────────────────────
 

@@ -86,7 +86,12 @@ export default function AdminEjecutivosConfig() {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  // loadData tambien sincroniza los campos de edicion (amountApproval, etc.),
+  // no solo datos de lectura -- no es un candidato simple de useQuery.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData();
+  }, []);
 
   const saveSettings = async () => {
     const pct = parseFloat(revenuePct);

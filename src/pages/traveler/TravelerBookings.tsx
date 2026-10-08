@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, MapPin, Users, DollarSign, Clock, Eye, AlertCircle, Star, X, CreditCard as Edit, UserCheck, XCircle, CalendarX, Check, Wallet, Lock, UserMinus, Car, Globe, Tag, Plus, AlertTriangle, ShoppingBag, Shield, Loader2 } from 'lucide-react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import SeatReselectionModal from '../../components/SeatReselectionModal';
@@ -398,52 +398,10 @@ const TravelerBookings: React.FC = () => {
 
   usePreventUnload(cancellationModal.open && cancellationModal.cancellationReason.length > 0);
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchBookings();
-      supabase
-        .from('users')
-        .select('is_foreign_traveler')
-        .eq('id', user.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data) setIsForeignTraveler(data.is_foreign_traveler ?? false);
-        });
-    }
-  }, [user?.id]);
-
-  useEffect(() => {
-    const action = searchParams.get('action');
-    const bookingId = searchParams.get('booking');
-
-    if (action && bookingId && !isLoading && bookings.length > 0) {
-      const booking = bookings.find(b => b.id === bookingId);
-
-      if (booking && booking.has_pending_reschedule && pendingReschedules[bookingId]) {
-        if (action === 'accept' || action === 'reject') {
-          handleOpenRescheduleModal(booking, action);
-          setSearchParams({});
-        }
-      }
-    }
-  }, [searchParams, bookings, isLoading, pendingReschedules]);
-
-  useEffect(() => {
-    const bookingId = searchParams.get('booking');
-    const action = searchParams.get('action');
-    if (bookingId && !action && !isLoading && bookings.length > 0) {
-      setHighlightedBookingId(bookingId);
-      setTimeout(() => {
-        const el = document.getElementById(`booking-${bookingId}`);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 100);
-      setTimeout(() => setHighlightedBookingId(null), 3000);
-    }
-  }, [searchParams, bookings, isLoading]);
-
-  const fetchBookings = async () => {
+  // useCallback para que el efecto de abajo pueda listarla como dependencia
+  // sin dispararse en cada render (react-hooks/exhaustive-deps). Solo cierra
+  // sobre user?.id y setters estables -- no hace falta nada mas en los deps.
+  const fetchBookings = useCallback(async () => {
     if (!user?.id) return;
 
     try {
@@ -601,7 +559,74 @@ const TravelerBookings: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchBookings();
+      supabase
+        .from('users')
+        .select('is_foreign_traveler')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setIsForeignTraveler(data.is_foreign_traveler ?? false);
+        });
+    }
+  }, [user?.id, fetchBookings]);
+
+  // useCallback para poder listarla como dependencia del efecto de
+  // accept/reject por URL sin que se dispare en cada render.
+  const handleOpenRescheduleModal = useCallback((booking: Booking, action: 'accept' | 'reject') => {
+    const rescheduleInfo = pendingReschedules[booking.id];
+
+    if (!rescheduleInfo) {
+      alert('No se encontró información del reagendamiento');
+      return;
+    }
+
+    setRescheduleModal({
+      open: true,
+      booking,
+      rescheduleInfo,
+      isLoading: false,
+      isProcessing: false,
+      error: '',
+      success: false,
+      action,
+    });
+  }, [pendingReschedules]);
+
+  useEffect(() => {
+    const action = searchParams.get('action');
+    const bookingId = searchParams.get('booking');
+
+    if (action && bookingId && !isLoading && bookings.length > 0) {
+      const booking = bookings.find(b => b.id === bookingId);
+
+      if (booking && booking.has_pending_reschedule && pendingReschedules[bookingId]) {
+        if (action === 'accept' || action === 'reject') {
+          handleOpenRescheduleModal(booking, action);
+          setSearchParams({});
+        }
+      }
+    }
+  }, [searchParams, bookings, isLoading, pendingReschedules, handleOpenRescheduleModal, setSearchParams]);
+
+  useEffect(() => {
+    const bookingId = searchParams.get('booking');
+    const action = searchParams.get('action');
+    if (bookingId && !action && !isLoading && bookings.length > 0) {
+      setHighlightedBookingId(bookingId);
+      setTimeout(() => {
+        const el = document.getElementById(`booking-${bookingId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      setTimeout(() => setHighlightedBookingId(null), 3000);
+    }
+  }, [searchParams, bookings, isLoading]);
 
   const fetchPastBookings = async () => {
     if (!user?.id || pastLoaded || isLoadingPast) return;
@@ -789,26 +814,6 @@ const TravelerBookings: React.FC = () => {
         error: mensajeDeError(err) || 'Error al procesar la respuesta',
       }));
     }
-  };
-
-  const handleOpenRescheduleModal = (booking: Booking, action: 'accept' | 'reject') => {
-    const rescheduleInfo = pendingReschedules[booking.id];
-
-    if (!rescheduleInfo) {
-      alert('No se encontró información del reagendamiento');
-      return;
-    }
-
-    setRescheduleModal({
-      open: true,
-      booking,
-      rescheduleInfo,
-      isLoading: false,
-      isProcessing: false,
-      error: '',
-      success: false,
-      action,
-    });
   };
 
   const handleCloseRescheduleModal = () => {

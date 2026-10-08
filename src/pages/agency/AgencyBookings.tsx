@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, MapPin, Users, DollarSign, Clock, Eye, Mail, Phone, CheckCircle, XCircle, AlertCircle, Search, Filter, Star, X, User, MessageSquare, UserCheck, UserX, FileSpreadsheet, FileText, Download, QrCode, Car, Globe, Send, Tag } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, formatCurrencyMXN } from '../../utils/formatCurrency';
+import { useQuery } from '@tanstack/react-query';
 import { getAgencyBookings, getTourBookingReport, supabase, parseDateFromDB } from '../../lib/supabase';
 import type { TourBookingReport } from '../../lib/supabase';
 import PaymentPlanCalendar from '../../components/PaymentPlanCalendar';
@@ -75,8 +76,7 @@ const AgencyBookings: React.FC = () => {
     preselectedTourId?: string | null;
     preselectedSlotId?: string | null;
   }>({ open: false });
-  const [sentMessages, setSentMessages] = useState<SentMessage[]>([]);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+
   const [bookingOptionalServices, setBookingOptionalServices] = useState<Record<string, BookingOptionalService[]>>({});
   const [bookingSupplements, setBookingSupplements] = useState<Record<string, BookingSupplement[]>>({});
   const [supplementAction, setSupplementAction] = useState<{
@@ -95,15 +95,6 @@ const AgencyBookings: React.FC = () => {
   const [pastBookings, setPastBookings] = useState<Booking[]>([]);
   const [cancelledBookings, setCancelledBookings] = useState<Booking[]>([]);
 
-  useEffect(() => {
-    if (!agencyLoading && resolvedAgencyId) {
-      fetchAgencyData(resolvedAgencyId);
-    } else if (!agencyLoading && !resolvedAgencyId) {
-      setError('No se encontró perfil de agencia para este usuario');
-      setIsLoading(false);
-    }
-  }, [resolvedAgencyId, agencyLoading]);
-
   const isBookingActive = (booking: Booking): boolean => {
     if (booking.status === 'cancelled' || booking.status === 'cancellation_processing') return false;
     const dateStr = booking.selected_date || booking.tours?.end_date;
@@ -119,7 +110,14 @@ const AgencyBookings: React.FC = () => {
     }
   };
 
-  const fetchAgencyData = async (currentAgencyId: string) => {
+  // useCallback con [] (no cierra sobre nada que cambie entre renders: solo
+  // setters estables e isBookingActive, que no depende de props/estado) para
+  // que el efecto de abajo pueda listarla como dependencia sin dispararse en
+  // cada render. Antes se llamaba desde un efecto declarado ANTES que esta
+  // funcion en el archivo (react-hooks/immutability: "accessed before
+  // declaration"), aunque en runtime no fallaba por el orden de ejecucion de
+  // React -- igual es fragil, asi que se reordeno.
+  const fetchAgencyData = useCallback(async (currentAgencyId: string) => {
     try {
       setIsLoading(true);
       setError('');
@@ -232,7 +230,24 @@ const AgencyBookings: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // fetchAgencyData hace 8+ consultas encadenadas (reservas, opcionales,
+  // suplementos, tours con conteo por tour) y escribe en 8 estados distintos
+  // referenciados en ~48 sitios de este archivo -- convertirla a useQuery es
+  // una migracion de arquitectura aparte (mismo criterio que AccountingPage.tsx,
+  // ver sesion de react-hooks/*), no algo para resolver de paso aqui. Cargar al
+  // resolverse resolvedAgencyId SI es el uso correcto de un efecto: sincroniza
+  // con un recurso externo (la sesion/perfil de agencia) resolviendose.
+  useEffect(() => {
+    if (!agencyLoading && resolvedAgencyId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchAgencyData(resolvedAgencyId);
+    } else if (!agencyLoading && !resolvedAgencyId) {
+      setError('No se encontró perfil de agencia para este usuario');
+      setIsLoading(false);
+    }
+  }, [resolvedAgencyId, agencyLoading, fetchAgencyData]);
 
   // Helper function to format dates consistently
   const formatDate = (dateString: string) => {
@@ -923,10 +938,10 @@ const AgencyBookings: React.FC = () => {
     }
   };
 
-  const fetchSentMessages = async () => {
-    if (!agencyId) return;
-    setIsLoadingMessages(true);
-    try {
+  // Antes useState+useEffect manual (react-hooks/set-state-in-effect).
+  const { data: sentMessages = [], isLoading: isLoadingMessages } = useQuery({
+    queryKey: ['agency-sent-messages', agencyId],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('agency_tour_messages')
         .select(`
@@ -937,20 +952,11 @@ const AgencyBookings: React.FC = () => {
         .eq('agency_id', agencyId)
         .order('created_at', { ascending: false })
         .limit(50);
-
-      if (!error) setSentMessages((data || []) as unknown as SentMessage[]);
-    } catch (err) {
-      console.error('Error loading sent messages:', err);
-    } finally {
-      setIsLoadingMessages(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'messages' && agencyId) {
-      fetchSentMessages();
-    }
-  }, [activeTab, agencyId]);
+      if (error) throw error;
+      return (data || []) as unknown as SentMessage[];
+    },
+    enabled: activeTab === 'messages' && !!agencyId,
+  });
 
   // Filtrar reservas según sub-tab activo
   const currentTabBookings =

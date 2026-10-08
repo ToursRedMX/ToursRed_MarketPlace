@@ -51,11 +51,6 @@ const AdminDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetchDashboardStats();
-    if (canViewAudit) fetchSecurityStats();
-  }, [canViewAudit]);
-
   const fetchSecurityStats = async () => {
     try {
       const todayStart = new Date();
@@ -170,6 +165,12 @@ const AdminDashboard: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchDashboardStats();
+    if (canViewAudit) fetchSecurityStats();
+  }, [canViewAudit]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

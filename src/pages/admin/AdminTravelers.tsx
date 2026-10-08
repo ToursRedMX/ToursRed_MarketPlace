@@ -92,10 +92,6 @@ export default function AdminTravelers() {
   const [historySort, setHistorySort] = useState<string>('created_at');
   const [historySortDir, setHistorySortDir] = useState<'asc' | 'desc'>('desc');
 
-  useEffect(() => {
-    loadTravelersAndStats();
-  }, []);
-
   const loadTravelersAndStats = async () => {
     try {
       setLoading(true);
@@ -181,6 +177,13 @@ export default function AdminTravelers() {
       setLoading(false);
     }
   };
+
+  // No se migra a useQuery: travelers/summaryStats se mutan localmente tras
+  // activar/desactivar un viajero, para una respuesta optimista.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadTravelersAndStats();
+  }, []);
 
   const toggleActiveStatus = async (travelerId: string, currentStatus: boolean) => {
     try {

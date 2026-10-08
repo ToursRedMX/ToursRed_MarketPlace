@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { MapPin, Search, Plus, Edit2, Trash2, ExternalLink, Eye, AlertCircle, Check, X, Save } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { mensajeDeError } from '../../lib/errores';
@@ -30,11 +31,8 @@ interface TourDeparturePointRow {
 }
 
 const AdminDeparturePoints: React.FC = () => {
-  const [departurePoints, setDeparturePoints] = useState<DeparturePoint[]>([]);
-  const [filteredPoints, setFilteredPoints] = useState<DeparturePoint[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
-  const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [viewingPointId, setViewingPointId] = useState<string | null>(null);
@@ -49,36 +47,31 @@ const AdminDeparturePoints: React.FC = () => {
     is_active: true
   });
 
-  useEffect(() => {
-    fetchDeparturePoints();
-  }, []);
+  const departurePointsQueryKey = ['admin-departure-points'] as const;
 
-  useEffect(() => {
-    filterPoints();
-  }, [searchQuery, filterStatus, departurePoints]);
-
-  const fetchDeparturePoints = async () => {
-    setIsLoading(true);
-    setError('');
-
-    try {
+  const {
+    data: departurePoints = [],
+    isLoading,
+    error: fetchErrorObj,
+    refetch: fetchDeparturePoints,
+  } = useQuery({
+    queryKey: departurePointsQueryKey,
+    queryFn: async (): Promise<DeparturePoint[]> => {
       const { data, error: fetchError } = await supabase
         .from('departure_points')
         .select('*')
         .order('usage_count', { ascending: false });
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('Error fetching departure points:', fetchError);
+        throw fetchError;
+      }
 
-      setDeparturePoints(data || []);
-    } catch (err) {
-      console.error('Error fetching departure points:', err);
-      setError(mensajeDeError(err) || 'Error al cargar los puntos de salida');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return data || [];
+    },
+  });
 
-  const filterPoints = () => {
+  const filteredPoints = useMemo(() => {
     let filtered = [...departurePoints];
 
     if (searchQuery) {
@@ -96,8 +89,8 @@ const AdminDeparturePoints: React.FC = () => {
       );
     }
 
-    setFilteredPoints(filtered);
-  };
+    return filtered;
+  }, [departurePoints, searchQuery, filterStatus]);
 
   const handleViewTours = async (pointId: string) => {
     setViewingPointId(pointId);
@@ -303,10 +296,10 @@ const AdminDeparturePoints: React.FC = () => {
         </button>
       </div>
 
-      {error && (
+      {(error || fetchErrorObj) && (
         <div className="mb-6 bg-error-50 border border-error-200 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-error-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-error-800">{error}</p>
+          <p className="text-sm text-error-800">{error || mensajeDeError(fetchErrorObj) || 'Error al cargar los puntos de salida'}</p>
         </div>
       )}
 

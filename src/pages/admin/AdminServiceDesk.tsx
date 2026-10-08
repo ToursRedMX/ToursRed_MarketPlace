@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { TicketCheck, Search, RefreshCw, Filter, Eye, ChevronDown, ChevronUp, Tag, Headphones as HeadphonesIcon, Clock, User, Building2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -34,10 +35,7 @@ const SortIcon = ({ col, sortCol, sortDir }: { col: SortColumn; sortCol: SortCol
 
 const AdminServiceDesk: React.FC = () => {
   const navigate = useNavigate();
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<SupportTicketStatus | ''>('');
   const [filterPriority, setFilterPriority] = useState<SupportTicketPriority | ''>('');
@@ -64,48 +62,48 @@ const AdminServiceDesk: React.FC = () => {
       .then(r => setAgentes(r.data ?? []));
   }, []);
 
-  const fetchTickets = useCallback(async () => {
-    setLoading(true);
-    const dbSortCol = SORT_COL_MAP[sortCol] ?? sortCol;
+  const { data: ticketsData, isFetching: loading, refetch: fetchTickets } = useQuery({
+    queryKey: ['admin-service-desk-tickets', page, search, filterStatus, filterPriority, filterType, filterCategory, filterSubcategory, filterAgente, sortCol, sortDir],
+    queryFn: async (): Promise<{ tickets: SupportTicket[]; total: number }> => {
+      const dbSortCol = SORT_COL_MAP[sortCol] ?? sortCol;
 
-    let query = supabase
-      .from('support_tickets')
-      .select(`
-        *,
-        category:support_categories(id, nombre),
-        subcategory:support_subcategories(id, nombre, sla_horas),
-        agente:users!support_tickets_agente_asignado_id_fkey(id, first_name, last_name),
-        agencia:agencies!support_tickets_agencia_asignada_id_fkey(id, name)
-      `, { count: 'exact' })
-      .order(dbSortCol, {
-        ascending: sortDir === 'asc',
-        nullsFirst: sortCol === 'agente_asignado_id' ? sortDir === 'asc' : undefined,
-      })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      let query = supabase
+        .from('support_tickets')
+        .select(`
+          *,
+          category:support_categories(id, nombre),
+          subcategory:support_subcategories(id, nombre, sla_horas),
+          agente:users!support_tickets_agente_asignado_id_fkey(id, first_name, last_name),
+          agencia:agencies!support_tickets_agencia_asignada_id_fkey(id, name)
+        `, { count: 'exact' })
+        .order(dbSortCol, {
+          ascending: sortDir === 'asc',
+          nullsFirst: sortCol === 'agente_asignado_id' ? sortDir === 'asc' : undefined,
+        })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
-    if (filterStatus) query = query.eq('status', filterStatus);
-    if (filterPriority) query = query.eq('prioridad', filterPriority);
-    if (filterType) query = query.eq('tipo', filterType);
-    if (filterCategory) query = query.eq('category_id', filterCategory);
-    if (filterSubcategory) query = query.eq('subcategory_id', filterSubcategory);
-    if (filterAgente === 'unassigned') {
-      query = query.is('agente_asignado_id', null);
-    } else if (filterAgente) {
-      query = query.eq('agente_asignado_id', filterAgente);
-    }
-    if (search) {
-      query = query.or(
-        `folio.ilike.%${search}%,solicitante_nombre.ilike.%${search}%,solicitante_email.ilike.%${search}%,descripcion.ilike.%${search}%`
-      );
-    }
+      if (filterStatus) query = query.eq('status', filterStatus);
+      if (filterPriority) query = query.eq('prioridad', filterPriority);
+      if (filterType) query = query.eq('tipo', filterType);
+      if (filterCategory) query = query.eq('category_id', filterCategory);
+      if (filterSubcategory) query = query.eq('subcategory_id', filterSubcategory);
+      if (filterAgente === 'unassigned') {
+        query = query.is('agente_asignado_id', null);
+      } else if (filterAgente) {
+        query = query.eq('agente_asignado_id', filterAgente);
+      }
+      if (search) {
+        query = query.or(
+          `folio.ilike.%${search}%,solicitante_nombre.ilike.%${search}%,solicitante_email.ilike.%${search}%,descripcion.ilike.%${search}%`
+        );
+      }
 
-    const { data, count } = await query;
-    setTickets(data ?? []);
-    setTotal(count ?? 0);
-    setLoading(false);
-  }, [page, search, filterStatus, filterPriority, filterType, filterCategory, filterSubcategory, filterAgente, sortCol, sortDir]);
-
-  useEffect(() => { fetchTickets(); }, [fetchTickets]);
+      const { data, count } = await query;
+      return { tickets: data ?? [], total: count ?? 0 };
+    },
+  });
+  const tickets = ticketsData?.tickets ?? [];
+  const total = ticketsData?.total ?? 0;
 
   const handleSort = (col: SortColumn) => {
     if (sortCol === col) {
@@ -223,7 +221,7 @@ const AdminServiceDesk: React.FC = () => {
             )}
             {showFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
-          <button onClick={fetchTickets} className="btn btn-secondary">
+          <button onClick={() => fetchTickets()} className="btn btn-secondary">
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>

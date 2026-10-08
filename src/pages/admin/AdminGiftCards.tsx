@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Gift, Search, Mail, RefreshCw, Check, Clock, Eye, EyeOff, Filter } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
@@ -31,78 +32,67 @@ type FilterStatus = 'all' | 'active' | 'redeemed' | 'pending_payment';
 type FilterPayment = 'all' | 'paid' | 'pending';
 
 export default function AdminGiftCards() {
-  const [giftCards, setGiftCards] = useState<GiftCard[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterPayment, setFilterPayment] = useState<FilterPayment>('all');
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [resendResult, setResendResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
   const [showCodes, setShowCodes] = useState<Record<string, boolean>>({});
-  const [stats, setStats] = useState({ total: 0, active: 0, redeemed: 0, totalAmount: 0, pending: 0 });
 
-  const fetchGiftCards = useCallback(async () => {
-    setIsLoading(true);
-    const query = supabase
-      .from('gift_cards')
-      .select(`
-        id, code, amount, currency, status, payment_status,
-        purchaser_email, purchaser_name, recipient_email, recipient_name,
-        personal_message, purchased_at, expires_at, redeemed_by, redeemed_at,
-        email_sent, email_sent_at, payment_provider, discount_amount
-      `)
-      .order('created_at', { ascending: false });
+  const { data: giftCardsData, isPending: isLoading, refetch: fetchGiftCards } = useQuery({
+    queryKey: ['admin-gift-cards'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('gift_cards')
+        .select(`
+          id, code, amount, currency, status, payment_status,
+          purchaser_email, purchaser_name, recipient_email, recipient_name,
+          personal_message, purchased_at, expires_at, redeemed_by, redeemed_at,
+          email_sent, email_sent_at, payment_provider, discount_amount
+        `)
+        .order('created_at', { ascending: false });
 
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error fetching gift cards:', error);
-      setIsLoading(false);
-      return;
-    }
-
-    let cards: GiftCard[] = data || [];
-
-    // Fetch redeemed_by user emails
-    const redeemedIds = cards.filter(c => c.redeemed_by).map(c => c.redeemed_by as string);
-    if (redeemedIds.length > 0) {
-      const { data: users, error: errorUsuarios } = await supabase
-        .from('users')
-        .select('id, email')
-        .in('id', redeemedIds);
-
-      // Solo completa el correo de quien canjeo la tarjeta.
-      if (errorUsuarios) console.error('AdminGiftCards: no se pudieron leer los correos de canje', errorUsuarios);
-
-      if (users) {
-        const userMap = new Map(users.map(u => [u.id, u.email]));
-        cards = cards.map(c => ({
-          ...c,
-          redeemed_by_email: c.redeemed_by ? userMap.get(c.redeemed_by) || null : null,
-        }));
+      if (error) {
+        console.error('Error fetching gift cards:', error);
+        return [] as GiftCard[];
       }
-    }
 
-    setGiftCards(cards);
+      let cards: GiftCard[] = data || [];
 
-    const totalAmount = cards
+      // Fetch redeemed_by user emails
+      const redeemedIds = cards.filter(c => c.redeemed_by).map(c => c.redeemed_by as string);
+      if (redeemedIds.length > 0) {
+        const { data: users, error: errorUsuarios } = await supabase
+          .from('users')
+          .select('id, email')
+          .in('id', redeemedIds);
+
+        // Solo completa el correo de quien canjeo la tarjeta.
+        if (errorUsuarios) console.error('AdminGiftCards: no se pudieron leer los correos de canje', errorUsuarios);
+
+        if (users) {
+          const userMap = new Map(users.map(u => [u.id, u.email]));
+          cards = cards.map(c => ({
+            ...c,
+            redeemed_by_email: c.redeemed_by ? userMap.get(c.redeemed_by) || null : null,
+          }));
+        }
+      }
+
+      return cards;
+    },
+  });
+  const giftCards = giftCardsData ?? [];
+
+  const stats = {
+    total: giftCards.length,
+    active: giftCards.filter(c => c.status === 'active' && c.payment_status === 'paid').length,
+    redeemed: giftCards.filter(c => c.status === 'redeemed').length,
+    totalAmount: giftCards
       .filter(c => c.payment_status === 'paid')
-      .reduce((sum, c) => sum + Number(c.amount), 0);
-
-    setStats({
-      total: cards.length,
-      active: cards.filter(c => c.status === 'active' && c.payment_status === 'paid').length,
-      redeemed: cards.filter(c => c.status === 'redeemed').length,
-      totalAmount,
-      pending: cards.filter(c => c.payment_status !== 'paid').length,
-    });
-
-    setIsLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetchGiftCards();
-  }, [fetchGiftCards]);
+      .reduce((sum, c) => sum + Number(c.amount), 0),
+    pending: giftCards.filter(c => c.payment_status !== 'paid').length,
+  };
 
   const handleResendEmail = async (giftCardId: string) => {
     setResendingId(giftCardId);

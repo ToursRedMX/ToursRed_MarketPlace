@@ -96,7 +96,12 @@ const AgencyContractSection: React.FC<Props> = ({
     setSignedUrls(urls);
   }, [agencyId]);
 
-  useEffect(() => { load(); }, [load]);
+  // No se migra a useQuery: error se comparte con aprobar/rechazar
+  // documentos, que reusan el mismo setter.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
   const invoke = async (payload: object) => {
     const { data: { session } } = await supabase.auth.getSession();

@@ -28,10 +28,6 @@ const AdminCategories: React.FC = () => {
     display_order: 0
   });
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
   const fetchCategories = async () => {
     try {
       setIsLoading(true);
@@ -50,6 +46,11 @@ const AdminCategories: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchCategories();
+  }, []);
 
   const handleCreate = () => {
     setIsCreating(true);

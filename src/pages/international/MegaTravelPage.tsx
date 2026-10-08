@@ -72,25 +72,21 @@ const MegaTravelPage: React.FC = () => {
     const savedData = megaTravelFormPersistence.loadFromStorage();
     if (savedData) {
       megaTravelFormPersistence.setIsRestoring(true);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restaura un borrador guardado en localStorage, no deriva de props/state
       setFormData(savedData);
       setTimeout(() => megaTravelFormPersistence.setIsRestoring(false), 100);
     }
-  }, []);
-
-  useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
-      destination: activeDestination.label
-    }));
-  }, [activeDestination.label]);
-
-  useEffect(() => {
-    setIframeLoading(true);
-    setIframeError(false);
-  }, [activeTab]);
+  }, [megaTravelFormPersistence]);
 
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
+    const newDestination = destinations.find(d => d.id === tabId) || destinations[0];
+    setFormData(prev => ({
+      ...prev,
+      destination: newDestination.label
+    }));
+    setIframeLoading(true);
+    setIframeError(false);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { Clock, Landmark, Banknote, Download, AlertCircle, CheckCircle, ArrowRight, Home, Loader2, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -56,87 +56,7 @@ const OpenPayPaymentPendingPage: React.FC = () => {
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (!bookingId) {
-      setError('ID no encontrado');
-      setIsLoading(false);
-      return;
-    }
-    fetchData(bookingId, context);
-  }, [bookingId, context]);
-
-  const fetchData = async (id: string, ctx: string) => {
-    try {
-      // For featured_slot, metadata lives on featured_tour_slots, not payment_transactions
-      if (ctx === 'featured_slot') {
-        const { data: slot, error: slotError } = await supabase
-          .from('featured_tour_slots')
-          .select(`
-            id, total_amount, pending_payment_metadata,
-            tours ( name, destination, image_url ),
-            featured_plans ( name )
-          `)
-          .eq('id', id)
-          .maybeSingle();
-
-        if (slotError) throw slotError;
-        if (!slot) throw new Error('Slot no encontrado');
-
-        const meta = slot.pending_payment_metadata as PaymentTransactionMeta | null;
-        if (meta) setTransaction(meta);
-
-        const slotTour = comoFila<SlimTour | null>(slot.tours);
-        setSummary({
-          title: 'Tour destacado activado correctamente',
-          tourName: slotTour?.name || 'Tour destacado',
-          destination: slotTour?.destination,
-          imageUrl: slotTour?.image_url,
-          amount: Number(slot.total_amount) || 0,
-        });
-        setTxAmount(Number(slot.total_amount) || 0);
-        setTxStatus(meta?.openpay_status || 'pending');
-        setIsLoading(false);
-        return;
-      }
-
-      // gift_card context: use server function to bypass RLS for anonymous users
-      if (ctx === 'gift_card') {
-        await fetchGiftCardSummary(id);
-        return;
-      }
-
-      // All other contexts: query payment_transactions by charge_reference_id + charge_context
-      const { data: txData, error: txError } = await supabase
-        .from('payment_transactions')
-        .select('metadata, status, amount, payment_processor')
-        .eq('charge_reference_id', id)
-        .eq('charge_context', ctx)
-        .eq('payment_processor', 'openpay')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (txError) throw txError;
-      if (txData?.metadata) {
-        setTransaction(txData.metadata as PaymentTransactionMeta);
-      }
-      if (txData?.status) {
-        setTxStatus(txData.status);
-      }
-      if (txData?.amount) {
-        setTxAmount(Number(txData.amount));
-      }
-
-      // Fetch context-specific summary
-      await fetchContextSummary(id, ctx, txData?.amount);
-    } catch (err) {
-      setError(mensajeDeError(err) || 'Error al cargar la información');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchContextSummary = async (id: string, ctx: string, txAmount: number | undefined) => {
+  const fetchContextSummary = useCallback(async (id: string, ctx: string, txAmount: number | undefined) => {
     try {
       if (ctx === 'booking_deposit' || ctx === 'insurance') {
         const { data: bookingData, error: bookingError } = await supabase
@@ -264,9 +184,9 @@ const OpenPayPaymentPendingPage: React.FC = () => {
     } catch (err) {
       setError(mensajeDeError(err) || 'Error al cargar la información');
     }
-  };
+  }, []);
 
-  const fetchGiftCardSummary = async (id: string) => {
+  const fetchGiftCardSummary = useCallback(async (id: string) => {
     try {
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-gift-card-status`;
       const response = await fetch(apiUrl, {
@@ -313,7 +233,93 @@ const OpenPayPaymentPendingPage: React.FC = () => {
     } catch (err) {
       setError(mensajeDeError(err) || 'Error al cargar la información');
     }
-  };
+  }, []);
+
+  const fetchData = useCallback(async (id: string, ctx: string) => {
+    try {
+      // For featured_slot, metadata lives on featured_tour_slots, not payment_transactions
+      if (ctx === 'featured_slot') {
+        const { data: slot, error: slotError } = await supabase
+          .from('featured_tour_slots')
+          .select(`
+            id, total_amount, pending_payment_metadata,
+            tours ( name, destination, image_url ),
+            featured_plans ( name )
+          `)
+          .eq('id', id)
+          .maybeSingle();
+
+        if (slotError) throw slotError;
+        if (!slot) throw new Error('Slot no encontrado');
+
+        const meta = slot.pending_payment_metadata as PaymentTransactionMeta | null;
+        if (meta) setTransaction(meta);
+
+        const slotTour = comoFila<SlimTour | null>(slot.tours);
+        setSummary({
+          title: 'Tour destacado activado correctamente',
+          tourName: slotTour?.name || 'Tour destacado',
+          destination: slotTour?.destination,
+          imageUrl: slotTour?.image_url,
+          amount: Number(slot.total_amount) || 0,
+        });
+        setTxAmount(Number(slot.total_amount) || 0);
+        setTxStatus(meta?.openpay_status || 'pending');
+        setIsLoading(false);
+        return;
+      }
+
+      // gift_card context: use server function to bypass RLS for anonymous users
+      if (ctx === 'gift_card') {
+        await fetchGiftCardSummary(id);
+        return;
+      }
+
+      // All other contexts: query payment_transactions by charge_reference_id + charge_context
+      const { data: txData, error: txError } = await supabase
+        .from('payment_transactions')
+        .select('metadata, status, amount, payment_processor')
+        .eq('charge_reference_id', id)
+        .eq('charge_context', ctx)
+        .eq('payment_processor', 'openpay')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (txError) throw txError;
+      if (txData?.metadata) {
+        setTransaction(txData.metadata as PaymentTransactionMeta);
+      }
+      if (txData?.status) {
+        setTxStatus(txData.status);
+      }
+      if (txData?.amount) {
+        setTxAmount(Number(txData.amount));
+      }
+
+      // Fetch context-specific summary
+      await fetchContextSummary(id, ctx, txData?.amount);
+    } catch (err) {
+      setError(mensajeDeError(err) || 'Error al cargar la información');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchGiftCardSummary, fetchContextSummary]);
+
+  useEffect(() => {
+    if (!bookingId) {
+      // fetchData/fetchContextSummary/fetchGiftCardSummary escriben 5 estados
+      // (summary, transaction, txStatus, txAmount, error) desde ramas
+      // profundas segun el contexto del pago; modelarlo como react-query
+      // exigiria que esas funciones devuelvan datos en vez de llamar setState
+      // directo. Fuera de alcance de este lote.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError('ID no encontrado');
+      setIsLoading(false);
+      return;
+    }
+    fetchData(bookingId, context);
+  }, [bookingId, context, fetchData]);
 
   const openPdf = () => {
     const pdfUrl = isSpei ? transaction?.spei_pdf_url : transaction?.cash_pdf_url;

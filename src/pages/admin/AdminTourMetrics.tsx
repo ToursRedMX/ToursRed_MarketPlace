@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart2, Search, ChevronDown, Users,
   Calendar, Building2, MapPin, Clock, TrendingUp, RefreshCw,
@@ -6,7 +7,7 @@ import {
   Shield
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { comoFilas } from '../../lib/relacionesSupabase';
 import { mensajeDeError } from '../../lib/errores';
 
@@ -497,9 +498,6 @@ const TourRow: React.FC<{
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const AdminTourMetrics: React.FC = () => {
-  const [tours, setTours] = useState<TourMetricRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'excursion' | 'receptivo'>('all');
   const [activeTab, setActiveTab] = useState<'active' | 'past'>('active');
@@ -507,10 +505,9 @@ const AdminTourMetrics: React.FC = () => {
   const [details, setDetails] = useState<Record<string, TourDetail>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
 
-  const fetchTours = useCallback(async () => {
-    setIsLoading(true);
-    setError('');
-    try {
+  const { data: toursData_, isPending: isLoading, error: queryError, refetch: fetchTours } = useQuery({
+    queryKey: ['admin-tour-metrics'],
+    queryFn: async (): Promise<TourMetricRow[]> => {
       // 1. Fetch all tours with agency join
       const { data: toursData, error: toursErr } = await supabase
         .from('tours')
@@ -526,7 +523,7 @@ const AdminTourMetrics: React.FC = () => {
         agencies: { id: string; name: string } | null;
       }>(toursData);
 
-      if (rawTours.length === 0) { setTours([]); return; }
+      if (rawTours.length === 0) return [];
 
       // 2. Fetch booking aggregates for all tours at once
       const { data: bookingsAgg, error: bookingsErr } = await supabase
@@ -565,7 +562,7 @@ const AdminTourMetrics: React.FC = () => {
         }
       }
 
-      const rows: TourMetricRow[] = rawTours.map(t => ({
+      return rawTours.map(t => ({
         ...t,
         bookings_total: agg[t.id]?.total ?? 0,
         bookings_confirmed: agg[t.id]?.confirmed ?? 0,
@@ -578,14 +575,10 @@ const AdminTourMetrics: React.FC = () => {
         commission_total: agg[t.id]?.commission ?? 0,
         insurance_total: agg[t.id]?.insurance ?? 0,
       }));
-
-      setTours(rows);
-    } catch (err) {
-      setError(mensajeDeError(err) ?? 'Error al cargar los datos');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+  });
+  const tours = toursData_ ?? [];
+  const error = queryError ? (mensajeDeError(queryError) ?? 'Error al cargar los datos') : '';
 
   const fetchDetail = useCallback(async (tourId: string, tourType: string) => {
     if (details[tourId]) return;
@@ -632,10 +625,6 @@ const AdminTourMetrics: React.FC = () => {
       setLoadingDetailId(null);
     }
   }, [details]);
-
-  useEffect(() => {
-    fetchTours();
-  }, [fetchTours]);
 
   const handleToggle = (tour: TourMetricRow) => {
     if (expandedId === tour.id) {
@@ -686,7 +675,7 @@ const AdminTourMetrics: React.FC = () => {
             <p className="text-sm text-gray-500 mt-1">Analisis completo de reservas, viajeros e ingresos</p>
           </div>
           <button
-            onClick={fetchTours}
+            onClick={() => fetchTours()}
             disabled={isLoading}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
@@ -813,4 +802,4 @@ const AdminTourMetrics: React.FC = () => {
   );
 };
 
-export default AdminTourMetrics;
+export default AdminTourMetrics;

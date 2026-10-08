@@ -141,7 +141,11 @@ const AdminFeaturedTours: React.FC = () => {
     setPlansLoading(false);
   }, []);
 
+  // No se migra a useQuery: slots/waitlist/plans se mutan localmente con
+  // setX(prev => ...) tras acciones (cancelar, notificar, actualizar plan)
+  // para una respuesta optimista, no solo se leen.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSlots();
     loadWaitlist();
     loadPlans();

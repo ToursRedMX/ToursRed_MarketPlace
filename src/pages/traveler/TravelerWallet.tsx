@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Wallet, TrendingUp, TrendingDown, Calendar, DollarSign, Gift, RefreshCw, Award, AlertCircle, ArrowUpCircle, ArrowDownCircle, Check, X, ArrowLeft, Plus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
@@ -33,9 +34,6 @@ interface Transaction {
 
 const TravelerWallet: React.FC = () => {
   const { user } = useAuth();
-  const [wallet, setWallet] = useState<WalletInfo | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
   const [showRedeemModal, setShowRedeemModal] = useState(false);
   const [giftCardCode, setGiftCardCode] = useState('');
@@ -44,25 +42,25 @@ const TravelerWallet: React.FC = () => {
   const [redeemSuccess, setRedeemSuccess] = useState(false);
   const [showTopupModal, setShowTopupModal] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      loadWalletData();
-    }
-  }, [user?.id]);
+  // isFetching (no isLoading) a proposito: cada recarga (topup, canje de
+  // tarjeta) debe volver a mostrar la pantalla completa de "Cargando", igual
+  // que hacia el setIsLoading(true) manual al inicio de cada llamada.
+  const { data: walletQueryData, isFetching: isLoading, refetch: loadWalletData } = useQuery({
+    queryKey: ['traveler-wallet', user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<{ wallet: WalletInfo | null; transactions: Transaction[] }> => {
+      if (!user) return { wallet: null, transactions: [] };
 
-  const loadWalletData = async () => {
-    if (!user) return;
-
-    setIsLoading(true);
-    try {
       const { data: walletData, error: walletError } = await supabase
         .from('toursred_cash_wallets')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (walletError) throw walletError;
-      setWallet(walletData);
+      if (walletError) {
+        console.error('Error loading wallet data:', walletError);
+        return { wallet: null, transactions: [] as Transaction[] };
+      }
 
       if (walletData) {
         const { data: transactionsData, error: transactionsError } = await supabase
@@ -71,7 +69,10 @@ const TravelerWallet: React.FC = () => {
           .eq('wallet_id', walletData.id)
           .order('created_at', { ascending: false });
 
-        if (transactionsError) throw transactionsError;
+        if (transactionsError) {
+          console.error('Error loading wallet data:', transactionsError);
+          return { wallet: walletData, transactions: [] as Transaction[] };
+        }
 
         const transactionsWithBookingCodes = await Promise.all(
           (transactionsData || []).map(async (transaction) => {
@@ -171,14 +172,14 @@ const TravelerWallet: React.FC = () => {
           })
         );
 
-        setTransactions(transactionsWithBookingCodes);
+        return { wallet: walletData, transactions: transactionsWithBookingCodes };
       }
-    } catch (error) {
-      console.error('Error loading wallet data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
+      return { wallet: walletData, transactions: [] as Transaction[] };
+    },
+  });
+  const wallet = walletQueryData?.wallet ?? null;
+  const transactions = walletQueryData?.transactions ?? [];
 
   const formatCodeInput = (value: string) => {
     const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');

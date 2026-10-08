@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Crown, Calendar, DollarSign, AlertCircle, CheckCircle, XCircle, Clock, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -30,24 +31,20 @@ interface Stats {
 }
 
 export default function AdminMemberships() {
-  const [memberships, setMemberships] = useState<Membership[]>([]);
-  const [stats, setStats] = useState<Stats>({ total: 0, active: 0, cancelled: 0, mrr: 0 });
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'cancelled' | 'past_due'>('all');
 
-  useEffect(() => {
-    fetchAll();
-  }, [filter]);
-
-  const fetchAll = async () => {
-    setLoading(true);
-    try {
+  const { data: membershipsData, isPending: loading, refetch: fetchAll } = useQuery({
+    queryKey: ['admin-memberships', filter],
+    queryFn: async (): Promise<{ memberships: Membership[]; stats: Stats }> => {
       // Fetch stats over all memberships (independent of filter)
       const { data: allData, error: allError } = await supabase
         .from('memberships')
         .select('status, plan_type, cancel_at_period_end, renewal_amount');
 
-      if (allError) throw allError;
+      if (allError) {
+        console.error('Error fetching memberships:', allError);
+        return { memberships: [], stats: { total: 0, active: 0, cancelled: 0, mrr: 0 } };
+      }
 
       const all = allData || [];
       const mrr = all
@@ -57,12 +54,12 @@ export default function AdminMemberships() {
           return sum + (m.plan_type === 'monthly' ? amount : amount / 12);
         }, 0);
 
-      setStats({
+      const stats: Stats = {
         total: all.length,
         active: all.filter(m => m.status === 'active').length,
         cancelled: all.filter(m => m.status === 'cancelled' || m.status === 'expired').length,
         mrr,
-      });
+      };
 
       // Fetch filtered list for the table
       let query = supabase
@@ -81,14 +78,16 @@ export default function AdminMemberships() {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
-      setMemberships(data || []);
-    } catch (err) {
-      console.error('Error fetching memberships:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (error) {
+        console.error('Error fetching memberships:', error);
+        return { memberships: [], stats };
+      }
+
+      return { memberships: data || [], stats };
+    },
+  });
+  const memberships = membershipsData?.memberships ?? [];
+  const stats = membershipsData?.stats ?? { total: 0, active: 0, cancelled: 0, mrr: 0 };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-MX', {
@@ -152,7 +151,7 @@ export default function AdminMemberships() {
             <p className="text-gray-600 mt-1">Administra y monitorea las suscripciones premium</p>
           </div>
           <button
-            onClick={fetchAll}
+            onClick={() => fetchAll()}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <RefreshCw className="h-4 w-4" />

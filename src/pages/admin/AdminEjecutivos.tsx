@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Users, Plus, CreditCard as Edit2, UserCheck, UserX, DollarSign,
   Search, X, CheckCircle, AlertCircle, Eye, EyeOff,
@@ -43,8 +44,6 @@ export default function AdminEjecutivos() {
   const { isSuperAdmin, permissions } = useAuth();
   const canManage = isSuperAdmin || permissions?.canManageExecutives;
 
-  const [executives, setExecutives] = useState<Executive[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingExec, setEditingExec] = useState<Executive | null>(null);
@@ -64,9 +63,9 @@ export default function AdminEjecutivos() {
   const [showAdminApiKey, setShowAdminApiKey] = useState(false);
   const [isVerifyingFacturapi, setIsVerifyingFacturapi] = useState(false);
 
-  const loadExecutives = useCallback(async () => {
-    setIsLoading(true);
-    try {
+  const { data: executivesData, isPending: isLoading, refetch: loadExecutives } = useQuery({
+    queryKey: ['admin-executives'],
+    queryFn: async (): Promise<Executive[]> => {
       const { data: execs, error: errorEjecutivos } = await supabase
         .from('account_executives_safe')
         .select('id, user_id, first_name, last_name, email, phone, is_active, notes, hired_at, terminated_at, created_at, facturapi_configured, facturapi_organization_id, facturapi_configured_at')
@@ -76,7 +75,7 @@ export default function AdminEjecutivos() {
       // ejecutivos de cuenta".
       if (errorEjecutivos) throw errorEjecutivos;
 
-      if (!execs) { setExecutives([]); return; }
+      if (!execs) return [];
 
       const execIds = execs.map(e => e.id);
       const [agenciesRes, commissionsRes] = await Promise.all([
@@ -94,11 +93,10 @@ export default function AdminEjecutivos() {
         else if (c.status === 'paid') paidComm[c.executive_id] = (paidComm[c.executive_id] || 0) + Number(c.amount);
       });
 
-      setExecutives(execs.map(e => ({ ...e, _agencies_count: agencyCount[e.id] || 0, _pending_commissions: pendingComm[e.id] || 0, _paid_commissions: paidComm[e.id] || 0 })));
-    } finally { setIsLoading(false); }
-  }, []);
-
-  useEffect(() => { loadExecutives(); }, [loadExecutives]);
+      return execs.map(e => ({ ...e, _agencies_count: agencyCount[e.id] || 0, _pending_commissions: pendingComm[e.id] || 0, _paid_commissions: paidComm[e.id] || 0 }));
+    },
+  });
+  const executives = executivesData ?? [];
 
   const openCreate = () => {
     setEditingExec(null);

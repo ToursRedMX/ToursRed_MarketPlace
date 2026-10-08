@@ -81,7 +81,7 @@ export const BookingFlowProvider: React.FC<{
     estadoInicialDelFlujo(loadFromStorage(tourSlug), tourSlug, initialTour),
   );
 
-  const sessionIdRef = useRef<string>(getSessionId());
+  const [sessionId] = useState<string>(() => getSessionId());
   const tourSlugRef = useRef<string>(tourSlug);
 
   // Para detectar cambios de viajeros o de fecha que afectan a los asientos
@@ -136,25 +136,25 @@ export const BookingFlowProvider: React.FC<{
   const releaseHolds = useCallback(async () => {
     try {
       await supabase.rpc('release_seat_holds', {
-        p_session_id: sessionIdRef.current,
+        p_session_id: sessionId,
       });
     } catch {
       // best-effort
     }
-  }, []);
+  }, [sessionId]);
 
   // Release holds when the provider unmounts (user leaves the flow)
   useEffect(() => {
     return () => {
       try {
         supabase.rpc('release_seat_holds', {
-          p_session_id: sessionIdRef.current,
+          p_session_id: sessionId,
         });
       } catch {
         // best-effort
       }
     };
-  }, []);
+  }, [sessionId]);
 
   useEffect(() => {
     const currentCount = totalTravelerCount(flow.travelerCounts);
@@ -170,7 +170,7 @@ export const BookingFlowProvider: React.FC<{
           'Cambiaste la fecha de tu tour. Los asientos que tenias apartados ya no aplican — selecciona asientos para la nueva fecha.',
       }));
       supabase.rpc('release_seat_holds', {
-        p_session_id: sessionIdRef.current,
+        p_session_id: sessionId,
         p_slot_id: prevSlotIdRef.current,
       });
     }
@@ -185,7 +185,7 @@ export const BookingFlowProvider: React.FC<{
       }));
       if (excessSeats.length > 0) {
         supabase.rpc('release_seat_holds', {
-          p_session_id: sessionIdRef.current,
+          p_session_id: sessionId,
           p_seat_numbers: excessSeats,
         });
       }
@@ -201,13 +201,13 @@ export const BookingFlowProvider: React.FC<{
 
     prevTravelerCountRef.current = currentCount;
     prevSlotIdRef.current = currentSlotId;
-  }, [flow.travelerCounts, flow.selectedSlot, flow.selectedSeats, flow.seatsHeld, flow.step]);
+  }, [flow.travelerCounts, flow.selectedSlot, flow.selectedSeats, flow.seatsHeld, flow.step, sessionId]);
 
   return (
     <BookingFlowContext.Provider
       value={{
         flow,
-        sessionId: sessionIdRef.current,
+        sessionId,
         setTour,
         updateFlow,
         goToStep,

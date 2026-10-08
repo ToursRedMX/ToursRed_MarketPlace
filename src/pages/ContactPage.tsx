@@ -32,10 +32,13 @@ const ContactPage: React.FC = () => {
     const savedData = contactFormPersistence.loadFromStorage();
     if (savedData) {
       contactFormPersistence.setIsRestoring(true);
+      // Restaurar un borrador de localStorage al montar: sincronizar con un
+      // recurso externo, caso legitimo de efecto que React documenta.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData(savedData);
       setTimeout(() => contactFormPersistence.setIsRestoring(false), 100);
     }
-  }, []);
+  }, [contactFormPersistence]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target;

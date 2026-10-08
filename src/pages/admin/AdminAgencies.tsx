@@ -3,7 +3,7 @@ import { Building, Eye, EyeOff, Mail, Phone, Globe, Calendar, Search, Filter, Ch
 import { updateAgencyStatus, supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { tasaEfectivaAgencia } from '../../utils/comisionAgencia';
-import AgencyContractSection from '../../components/AgencyContractSection';
+import AgencyContractSection from '../../components/AgencyContractSection';
 import { comoFila } from '../../lib/relacionesSupabase';
 import { mensajeDeError } from '../../lib/errores';
 
@@ -114,14 +114,6 @@ const AdminAgencies: React.FC = () => {
   } | null>(null);
   const [isResigning, setIsResigning] = useState(false);
   const [platformDefaultCommission, setPlatformDefaultCommission] = useState<number>(15);
-
-  useEffect(() => {
-    fetchAgencies();
-    supabase.from('platform_settings').select('agency_commission_percentage').limit(1).maybeSingle()
-      .then(({ data }) => {
-        if (data?.agency_commission_percentage != null) setPlatformDefaultCommission(data.agency_commission_percentage);
-      });
-  }, []);
 
   const fetchAgencies = async () => {
     try {
@@ -278,6 +270,15 @@ const AdminAgencies: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchAgencies();
+    supabase.from('platform_settings').select('agency_commission_percentage').limit(1).maybeSingle()
+      .then(({ data }) => {
+        if (data?.agency_commission_percentage != null) setPlatformDefaultCommission(data.agency_commission_percentage);
+      });
+  }, []);
 
   const handleApprovalToggle = async (userId: string, currentApproval: boolean) => {
     try {
@@ -1817,4 +1818,4 @@ const AdminAgencies: React.FC = () => {
   );
 };
 
-export default AdminAgencies;
+export default AdminAgencies;

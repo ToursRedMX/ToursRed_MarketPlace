@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Headphones as HeadphonesIcon, ArrowLeft, Plus, CreditCard as Edit2, X, Save, Search, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -21,9 +22,6 @@ const ROLE_BADGE: Record<SupportAgentRole, string> = {
 interface AdminUser { id: string; first_name: string; last_name: string; email: string; }
 
 const AdminSupportAgents: React.FC = () => {
-  const [agents, setAgents] = useState<(SupportAgentPermission & { user?: AdminUser })[]>([]);
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<{ open: boolean; editing: SupportAgentPermission | null }>({ open: false, editing: null });
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedRole, setSelectedRole] = useState<SupportAgentRole>('agente');
@@ -31,33 +29,36 @@ const AdminSupportAgents: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    const { data: permsData, error: errorPermisos } = await supabase
-      .from('support_agent_permissions')
-      .select(`*, user:users!support_agent_permissions_user_id_fkey(id, first_name, last_name, email)`)
-      .order('created_at', { ascending: false });
+  const { data: agentsData, isPending: loading, refetch: load } = useQuery({
+    queryKey: ['admin-support-agents'],
+    queryFn: async (): Promise<{ agents: (SupportAgentPermission & { user?: AdminUser })[]; adminUsers: AdminUser[] }> => {
+      const { data: permsData, error: errorPermisos } = await supabase
+        .from('support_agent_permissions')
+        .select(`*, user:users!support_agent_permissions_user_id_fkey(id, first_name, last_name, email)`)
+        .order('created_at', { ascending: false });
 
-    // Una lista vacia aqui se lee como "no hay agentes de soporte con
-    // permisos", que es lo contrario de lo que conviene creer.
-    if (errorPermisos) console.error('AdminSupportAgents: no se pudieron leer los permisos', errorPermisos);
+      // Una lista vacia aqui se lee como "no hay agentes de soporte con
+      // permisos", que es lo contrario de lo que conviene creer.
+      if (errorPermisos) console.error('AdminSupportAgents: no se pudieron leer los permisos', errorPermisos);
 
-    const existingUserIds = new Set((permsData ?? []).map((p) => p.user_id));
+      const existingUserIds = new Set((permsData ?? []).map((p) => p.user_id));
 
-    const { data: admins, error: errorAdmins } = await supabase
-      .from('users')
-      .select('id, first_name, last_name, email')
-      .eq('role', 'admin')
-      .order('first_name');
+      const { data: admins, error: errorAdmins } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email')
+        .eq('role', 'admin')
+        .order('first_name');
 
-    if (errorAdmins) console.error('AdminSupportAgents: no se pudieron leer los admins', errorAdmins);
+      if (errorAdmins) console.error('AdminSupportAgents: no se pudieron leer los admins', errorAdmins);
 
-    setAgents(permsData ?? []);
-    setAdminUsers((admins ?? []).filter(u => !existingUserIds.has(u.id)));
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
+      return {
+        agents: permsData ?? [],
+        adminUsers: (admins ?? []).filter(u => !existingUserIds.has(u.id)),
+      };
+    },
+  });
+  const agents = agentsData?.agents ?? [];
+  const adminUsers = agentsData?.adminUsers ?? [];
 
   const openModal = (agent?: SupportAgentPermission) => {
     setModal({ open: true, editing: agent ?? null });

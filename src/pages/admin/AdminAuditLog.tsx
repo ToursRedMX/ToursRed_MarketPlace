@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Shield, Search, Download, ChevronDown, ChevronUp, X, Filter, RefreshCw, Eye, AlertTriangle, MapPin } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -82,10 +83,7 @@ const AdminAuditLog: React.FC = () => {
   const canViewSensitive = isSuperAdmin || permissions?.canViewAuditSensitiveData;
   const canExport = isSuperAdmin || permissions?.canExportAuditLog;
 
-  const [entries, setEntries] = useState<AuditEntry[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [filters, setFilters] = useState({
@@ -99,9 +97,12 @@ const AdminAuditLog: React.FC = () => {
   });
   const [appliedFilters, setAppliedFilters] = useState(filters);
 
-  const fetchEntries = useCallback(async () => {
-    setIsLoading(true);
-    try {
+  // isFetching (no isLoading de react-query) a proposito: el boton
+  // "Actualizar" debe seguir mostrando el spinner de carga completo en CADA
+  // refresco manual, igual que el setIsLoading(true) de antes.
+  const { data: entriesData, isFetching: isLoading, refetch: fetchEntries } = useQuery({
+    queryKey: ['admin-audit-log', page, appliedFilters, canViewSensitive],
+    queryFn: async () => {
       const rpc = canViewSensitive ? 'get_audit_logs_sensitive' : 'get_audit_logs';
       const params: Record<string, unknown> = {
         p_limit: PAGE_SIZE,
@@ -116,18 +117,16 @@ const AdminAuditLog: React.FC = () => {
       if (appliedFilters.severity) params.p_severity = appliedFilters.severity;
 
       const { data, error } = await supabase.rpc(rpc, params);
-      if (error) throw error;
+      if (error) {
+        console.error('Error cargando audit log:', error);
+        return { rows: [] as (AuditEntry & { total_count: number })[], total: 0 };
+      }
       const rows = (data as (AuditEntry & { total_count: number })[]) || [];
-      setEntries(rows);
-      setTotal(rows.length > 0 ? Number(rows[0].total_count) : 0);
-    } catch (err) {
-      console.error('Error cargando audit log:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [page, appliedFilters, canViewSensitive]);
-
-  useEffect(() => { fetchEntries(); }, [fetchEntries]);
+      return { rows, total: rows.length > 0 ? Number(rows[0].total_count) : 0 };
+    },
+  });
+  const entries = entriesData?.rows ?? [];
+  const total = entriesData?.total ?? 0;
 
   const applyFilters = () => {
     setPage(0);
@@ -210,7 +209,7 @@ const AdminAuditLog: React.FC = () => {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={fetchEntries}
+              onClick={() => fetchEntries()}
               className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
             >
               <RefreshCw className="w-4 h-4" />

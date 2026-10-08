@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, AlertCircle, CheckCircle, ChevronDown, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { mensajeDeError } from '../../lib/errores';
@@ -94,24 +94,28 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
 
   const selectedParent = parentOptions.find(a => a.code === parentCode);
 
-  // Auto-suggest code when parent changes
-  useEffect(() => {
-    if (isEdit || codeManuallyEdited || !parentCode) return;
-    const suggested = suggestNextCode(parentCode, allAccounts);
-    setCode(suggested);
-  }, [parentCode, allAccounts, isEdit, codeManuallyEdited]);
+  // Derivaciones puras (sin red): antes tres efectos separados que miraban
+  // parentCode/accountType y hacian setState (react-hooks/set-state-in-effect).
+  // Se mueven al propio manejador que cambia el campo disparador -- mismo
+  // criterio que el CURP de SignupPage.tsx en esta misma sesion.
+  const handleSelectParent = (newParentCode: string) => {
+    setParentCode(newParentCode);
+    setParentSearch('');
+    setShowParentDropdown(false);
+    if (isEdit || !newParentCode) return;
+    if (!codeManuallyEdited) {
+      setCode(suggestNextCode(newParentCode, allAccounts));
+    }
+    const parent = allAccounts.find(a => a.code === newParentCode);
+    if (parent && !satGroup) {
+      setSatGroup(parent.sat_group_code);
+    }
+  };
 
-  // Auto-suggest sat_group from parent
-  useEffect(() => {
-    if (!parentCode || isEdit) return;
-    const parent = allAccounts.find(a => a.code === parentCode);
-    if (parent && !satGroup) setSatGroup(parent.sat_group_code);
-  }, [parentCode, allAccounts, isEdit]);
-
-  // Auto-set nature when type changes (only if user hasn't touched it manually or it's new)
-  useEffect(() => {
-    if (!isEdit) setNature(DEFAULT_NATURE[accountType] ?? 'deudora');
-  }, [accountType, isEdit]);
+  const handleAccountTypeChange = (newType: string) => {
+    setAccountType(newType);
+    if (!isEdit) setNature(DEFAULT_NATURE[newType] ?? 'deudora');
+  };
 
   // Si el codigo ya existe. Se CALCULA, no se guarda.
   //
@@ -229,7 +233,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
                   <div className="max-h-48 overflow-y-auto">
                     <button
                       type="button"
-                      onClick={() => { setParentCode(''); setParentSearch(''); setShowParentDropdown(false); }}
+                      onClick={() => handleSelectParent('')}
                       className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-gray-50 border-b border-gray-50"
                     >
                       Sin cuenta padre
@@ -238,7 +242,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
                       <button
                         key={a.id}
                         type="button"
-                        onClick={() => { setParentCode(a.code); setParentSearch(''); setShowParentDropdown(false); }}
+                        onClick={() => handleSelectParent(a.code)}
                         className="w-full text-left px-3 py-2 text-xs hover:bg-sky-50 flex items-center gap-2"
                       >
                         <span className="font-mono font-semibold text-sky-700 w-16 flex-shrink-0">{a.code}</span>
@@ -298,7 +302,7 @@ const AccountCatalogModal: React.FC<Props> = ({ account, allAccounts, onClose, o
               </label>
               <select
                 value={accountType}
-                onChange={e => setAccountType(e.target.value)}
+                onChange={e => handleAccountTypeChange(e.target.value)}
                 className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-hidden focus:border-sky-400 focus:ring-1 focus:ring-sky-100 bg-white"
               >
                 {ACCOUNT_TYPES.map(t => (

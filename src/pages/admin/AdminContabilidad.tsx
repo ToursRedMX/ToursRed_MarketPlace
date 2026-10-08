@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   BookOpen, RefreshCw, AlertCircle, CheckCircle, Clock, SkipForward, Search,
   RotateCcw, TrendingUp, Users, FileText, DollarSign, Loader, ChevronDown,
@@ -88,9 +89,6 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 };
 
 const AdminContabilidad: React.FC = () => {
-  const [logs, setLogs] = useState<SyncLogEntry[]>([]);
-  const [stats, setStats] = useState<SyncStats[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [healthStatus, setHealthStatus] = useState<{ healthy: boolean; provider?: string; error?: string } | null>(null);
@@ -98,16 +96,13 @@ const AdminContabilidad: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const [currentProvider, setCurrentProvider] = useState<string>('none');
-  const [syncEnabled, setSyncEnabled] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [bulkProgress, setBulkProgress] = useState<BulkSyncProgress | null>(null);
   const [showBulkPanel, setShowBulkPanel] = useState(false);
-  const [travelersWithRfcCount, setTravelersWithRfcCount] = useState<number | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
+  const { data: accountingData, isPending: isLoading, refetch: fetchData } = useQuery({
+    queryKey: ['admin-contabilidad-sync-data'],
+    queryFn: async () => {
       const [logsResult, statsResult, settingsResult, travelersRfcResult] = await Promise.all([
         supabase
           .from('accounting_sync_log')
@@ -119,23 +114,20 @@ const AdminContabilidad: React.FC = () => {
         supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'traveler').not('rfc', 'is', null),
       ]);
 
-      if (logsResult.data) setLogs(logsResult.data);
-      if (statsResult.data) setStats(statsResult.data);
-      if (settingsResult.data) {
-        setCurrentProvider(settingsResult.data.accounting_provider || 'none');
-        setSyncEnabled(settingsResult.data.accounting_sync_enabled || false);
-      }
-      setTravelersWithRfcCount(travelersRfcResult.count ?? 0);
-    } catch (err) {
-      console.error('Error fetching accounting data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+      return {
+        logs: (logsResult.data ?? []) as SyncLogEntry[],
+        stats: (statsResult.data ?? []) as SyncStats[],
+        currentProvider: settingsResult.data?.accounting_provider || 'none',
+        syncEnabled: settingsResult.data?.accounting_sync_enabled || false,
+        travelersWithRfcCount: travelersRfcResult.count ?? 0,
+      };
+    },
+  });
+  const logs = accountingData?.logs ?? [];
+  const stats = accountingData?.stats ?? [];
+  const currentProvider = accountingData?.currentProvider ?? 'none';
+  const syncEnabled = accountingData?.syncEnabled ?? false;
+  const travelersWithRfcCount = accountingData?.travelersWithRfcCount ?? null;
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
@@ -343,7 +335,7 @@ const AdminContabilidad: React.FC = () => {
             Verificar Conexion
           </button>
           <button
-            onClick={fetchData}
+            onClick={() => fetchData()}
             disabled={isLoading}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm"
           >

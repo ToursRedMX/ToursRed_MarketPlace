@@ -83,11 +83,6 @@ export default function AdminDiscountCodes() {
     tour_id: '' as string,
   });
 
-  useEffect(() => {
-    fetchCodes();
-    fetchAgencies();
-  }, []);
-
   const fetchCodes = async () => {
     setLoading(true);
     try {
@@ -119,6 +114,12 @@ export default function AdminDiscountCodes() {
       console.error('Error fetching agencies:', err);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchCodes();
+    fetchAgencies();
+  }, []);
 
   const fetchAgencyTours = async (agencyId: string) => {
     if (!agencyId) {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 
 interface FormPersistenceOptions {
   key: string;
@@ -144,11 +144,18 @@ export const useFormPersistence = <T extends Record<string, unknown>>(
     };
   }, [formData, saveToStorage]);
 
-  return {
+  // setIsRestoring y el objeto de retorno van memoizados: antes el objeto
+  // (y el metodo) eran literales nuevos en cada render, asi que ningun
+  // consumidor podia listar este hook como dependencia de un efecto o
+  // useCallback sin que se disparara en cada render (react-hooks/exhaustive-deps
+  // lo pide, pero hacerlo sin esto era peor que no hacerlo).
+  const setIsRestoring = useCallback((value: boolean) => {
+    isRestoringRef.current = value;
+  }, []);
+
+  return useMemo(() => ({
     loadFromStorage,
     clearStorage,
-    setIsRestoring: (value: boolean) => {
-      isRestoringRef.current = value;
-    },
-  };
+    setIsRestoring,
+  }), [loadFromStorage, clearStorage, setIsRestoring]);
 };

@@ -33,10 +33,6 @@ const AdminDestinations: React.FC = () => {
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newImageCaption, setNewImageCaption] = useState('');
 
-  useEffect(() => {
-    fetchDestinations();
-  }, []);
-
   const fetchDestinations = async () => {
     try {
       setIsLoading(true);
@@ -59,6 +55,11 @@ const AdminDestinations: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchDestinations();
+  }, []);
 
   const resetForm = () => {
     setFormData({

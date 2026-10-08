@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Tag, Plus, ChevronDown, ChevronRight, CreditCard as Edit2, Trash2, ToggleLeft, ToggleRight, X, Save, AlertCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -31,10 +32,7 @@ const INITIAL_SUB: SubcategoryForm = {
 };
 
 const AdminSupportCategories: React.FC = () => {
-  const [categories, setCategories] = useState<SupportCategory[]>([]);
-  const [subcategories, setSubcategories] = useState<SupportSubcategory[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
 
   // Category modal
   const [catModal, setCatModal] = useState<{ open: boolean; editing: SupportCategory | null }>({ open: false, editing: null });
@@ -47,23 +45,23 @@ const AdminSupportCategories: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    const [catsRes, subsRes] = await Promise.all([
-      supabase.from('support_categories').select('*').order('nombre'),
-      supabase.from('support_subcategories').select('*').order('nombre'),
-    ]);
-    setCategories(catsRes.data ?? []);
-    setSubcategories(subsRes.data ?? []);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
+  const { data: categoriesData, isPending: loading, refetch: load } = useQuery({
+    queryKey: ['admin-support-categories'],
+    queryFn: async (): Promise<{ categories: SupportCategory[]; subcategories: SupportSubcategory[] }> => {
+      const [catsRes, subsRes] = await Promise.all([
+        supabase.from('support_categories').select('*').order('nombre'),
+        supabase.from('support_subcategories').select('*').order('nombre'),
+      ]);
+      return { categories: catsRes.data ?? [], subcategories: subsRes.data ?? [] };
+    },
+  });
+  const categories = categoriesData?.categories ?? [];
+  const subcategories = categoriesData?.subcategories ?? [];
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };

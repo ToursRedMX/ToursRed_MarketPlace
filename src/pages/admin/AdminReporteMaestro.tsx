@@ -182,7 +182,10 @@ const AdminReporteMaestro: React.FC = () => {
     }
   }, [filtros.desde, filtros.hasta]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    cargar();
+  }, [cargar]);
 
   const filtradas = useMemo(() => filas.filter((f) => {
     if (filtros.naturaleza !== 'todas' && f.naturaleza !== filtros.naturaleza) return false;
