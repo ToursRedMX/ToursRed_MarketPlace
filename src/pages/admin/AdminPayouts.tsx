@@ -148,10 +148,6 @@ const AdminPayouts: React.FC = () => {
   const [creationMessage, setCreationMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchPayoutData();
-  }, [view]);
-
   const fetchPayoutData = async () => {
     try {
       setIsLoading(true);
@@ -262,6 +258,16 @@ const AdminPayouts: React.FC = () => {
     if (error) throw error;
     setPenaltyRecords(comoFilas<PenaltyRecordRow>(data));
   };
+
+  // fetchPayoutData despacha a fetchAgencyView/fetchTourView/
+  // fetchReceptivoSlotsView/fetchPenaltiesView, cada una con sus propias
+  // consultas financieras -- migrar a react-query aqui es un refactor de
+  // arquitectura aparte, mismo criterio que AccountingPage.tsx.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchPayoutData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   const createCommissionRecords = async (tourId: string) => {
     setIsCreatingCommissions(true);

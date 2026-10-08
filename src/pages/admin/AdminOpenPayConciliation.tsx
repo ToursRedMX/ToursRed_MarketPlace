@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, Check, X, Search, Building2, QrCode, ArrowUpCircle, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
@@ -49,9 +50,6 @@ type Tab = 'pending' | 'all-topups' | 'all-webhooks';
 
 const AdminOpenPayConciliation: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('pending');
-  const [webhookEvents, setWebhookEvents] = useState<WebhookEvent[]>([]);
-  const [topups, setTopups] = useState<TopupRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedEvent, setSelectedEvent] = useState<WebhookEvent | null>(null);
@@ -60,53 +58,52 @@ const AdminOpenPayConciliation: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [actionResult, setActionResult] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      if (activeTab === 'pending') {
-        const { data, error } = await supabase
-          .from('openpay_webhook_events')
-          .select('*')
-          .in('processing_status', ['no_reconocido', 'requiere_conciliacion_manual', 'error'])
-          .order('received_at', { ascending: false })
-          .limit(100);
-        if (error) throw error;
-        setWebhookEvents(data || []);
-      } else if (activeTab === 'all-webhooks') {
-        let query = supabase
-          .from('openpay_webhook_events')
-          .select('*')
-          .order('received_at', { ascending: false })
-          .limit(100);
-        if (statusFilter !== 'all') {
-          query = query.eq('processing_status', statusFilter);
+  const { data: conciliationData, isPending: isLoading, refetch: loadData } = useQuery({
+    queryKey: ['admin-openpay-conciliation', activeTab, statusFilter],
+    queryFn: async (): Promise<{ webhookEvents: WebhookEvent[]; topups: TopupRecord[] }> => {
+      try {
+        if (activeTab === 'pending') {
+          const { data, error } = await supabase
+            .from('openpay_webhook_events')
+            .select('*')
+            .in('processing_status', ['no_reconocido', 'requiere_conciliacion_manual', 'error'])
+            .order('received_at', { ascending: false })
+            .limit(100);
+          if (error) throw error;
+          return { webhookEvents: data || [], topups: [] };
+        } else if (activeTab === 'all-webhooks') {
+          let query = supabase
+            .from('openpay_webhook_events')
+            .select('*')
+            .order('received_at', { ascending: false })
+            .limit(100);
+          if (statusFilter !== 'all') {
+            query = query.eq('processing_status', statusFilter);
+          }
+          const { data, error } = await query;
+          if (error) throw error;
+          return { webhookEvents: data || [], topups: [] };
+        } else {
+          let query = supabase
+            .from('openpay_wallet_topups')
+            .select('*, users:first_name,last_name,email')
+            .order('created_at', { ascending: false })
+            .limit(100);
+          if (statusFilter !== 'all') {
+            query = query.eq('status', statusFilter);
+          }
+          const { data, error } = await query;
+          if (error) throw error;
+          return { webhookEvents: [], topups: data || [] };
         }
-        const { data, error } = await query;
-        if (error) throw error;
-        setWebhookEvents(data || []);
-      } else if (activeTab === 'all-topups') {
-        let query = supabase
-          .from('openpay_wallet_topups')
-          .select('*, users:first_name,last_name,email')
-          .order('created_at', { ascending: false })
-          .limit(100);
-        if (statusFilter !== 'all') {
-          query = query.eq('status', statusFilter);
-        }
-        const { data, error } = await query;
-        if (error) throw error;
-        setTopups(data || []);
+      } catch (err) {
+        console.error('Error loading conciliation data:', err);
+        return { webhookEvents: [], topups: [] };
       }
-    } catch (err) {
-      console.error('Error loading conciliation data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeTab, statusFilter]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+    },
+  });
+  const webhookEvents = conciliationData?.webhookEvents ?? [];
+  const topups = conciliationData?.topups ?? [];
 
   const handleManualCredit = async (topupId: string) => {
     setIsProcessing(true);
@@ -538,7 +535,7 @@ const AdminOpenPayConciliation: React.FC = () => {
           </select>
         )}
         <button
-          onClick={loadData}
+          onClick={() => loadData()}
           className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
         >
           <RefreshCw className="h-4 w-4" />

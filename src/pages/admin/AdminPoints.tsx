@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Award, Search, Filter, TrendingUp, TrendingDown, Users, Plus, Minus, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -30,9 +31,6 @@ interface PointsStats {
 }
 
 const AdminPoints: React.FC = () => {
-  const [wallets, setWallets] = useState<PointsWallet[]>([]);
-  const [stats, setStats] = useState<PointsStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [showAdjustModal, setShowAdjustModal] = useState(false);
@@ -42,13 +40,9 @@ const AdminPoints: React.FC = () => {
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, [statusFilter]);
-
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
+  const { data: pointsData, isPending: isLoading, refetch: loadData } = useQuery({
+    queryKey: ['admin-points', statusFilter],
+    queryFn: async (): Promise<{ wallets: PointsWallet[]; stats: PointsStats | null }> => {
       let query = supabase
         .from('toursred_points_wallets')
         .select(`
@@ -65,32 +59,34 @@ const AdminPoints: React.FC = () => {
 
       const { data: walletsData, error: walletsError } = await query;
 
-      if (walletsError) throw walletsError;
-      setWallets(walletsData || []);
+      if (walletsError) {
+        console.error('Error loading data:', walletsError);
+        return { wallets: [], stats: null };
+      }
 
       const { data: statsData, error: statsError } = await supabase
         .from('toursred_points_wallets')
         .select('balance, total_earned, total_used, total_expired, is_active');
 
-      if (statsError) throw statsError;
-
-      if (statsData) {
-        const calculatedStats: PointsStats = {
-          totalWallets: statsData.length,
-          activeWallets: statsData.filter(w => w.is_active).length,
-          totalPointsInCirculation: statsData.reduce((sum, w) => sum + (w.balance || 0), 0),
-          totalPointsEarned: statsData.reduce((sum, w) => sum + (w.total_earned || 0), 0),
-          totalPointsUsed: statsData.reduce((sum, w) => sum + (w.total_used || 0), 0),
-          totalPointsExpired: statsData.reduce((sum, w) => sum + (w.total_expired || 0), 0),
-        };
-        setStats(calculatedStats);
+      if (statsError) {
+        console.error('Error loading data:', statsError);
+        return { wallets: walletsData || [], stats: null };
       }
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
+      const stats: PointsStats = {
+        totalWallets: statsData.length,
+        activeWallets: statsData.filter(w => w.is_active).length,
+        totalPointsInCirculation: statsData.reduce((sum, w) => sum + (w.balance || 0), 0),
+        totalPointsEarned: statsData.reduce((sum, w) => sum + (w.total_earned || 0), 0),
+        totalPointsUsed: statsData.reduce((sum, w) => sum + (w.total_used || 0), 0),
+        totalPointsExpired: statsData.reduce((sum, w) => sum + (w.total_expired || 0), 0),
+      };
+
+      return { wallets: walletsData || [], stats };
+    },
+  });
+  const wallets = pointsData?.wallets ?? [];
+  const stats = pointsData?.stats ?? null;
 
   const filteredWallets = wallets.filter(wallet => {
     const fullName = `${wallet.users.first_name || ''} ${wallet.users.last_name || ''}`.trim();
