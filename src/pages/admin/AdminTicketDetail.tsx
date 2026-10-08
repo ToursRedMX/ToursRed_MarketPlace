@@ -89,11 +89,17 @@ const AdminTicketDetail: React.FC = () => {
     setLoading(false);
   };
 
+  // fetchTicket tambien sincroniza los campos de edicion (newStatus,
+  // newPriority, etc.), no solo datos de lectura -- no se envuelve en
+  // useCallback porque admite el parametro `silent` para los refrescos tras
+  // una accion (fetchTicket(true), sin volver a mostrar el spinner completo).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTicket();
     supabase.from('users').select('id, first_name, last_name, email').eq('role', 'admin').then(r => setAgents(r.data ?? []));
     supabase.from('agencies').select('id, name').eq('is_active', true).order('name').then(r => setAgencies(r.data ?? []));
     supabase.from('support_tickets').select('id, folio').order('folio').then(r => setAllTickets(r.data ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const getActorName = async () => {

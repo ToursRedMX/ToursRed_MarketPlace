@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { MapPin, Building2, Calendar, DollarSign, Percent, CreditCard as Edit2, X, Save, Info, Search, Filter, ChevronDown, CheckCircle, AlertCircle, Clock, Tag } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -59,11 +60,11 @@ const sourceBadgeClass: Record<RateSource, string> = {
 };
 
 const AdminTours: React.FC = () => {
-  const [tours, setTours] = useState<TourRow[]>([]);
-  const [platform, setPlatform] = useState<PlatformSettings | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // Errores de validacion/guardado del modal de edicion -- separado del
+  // error de carga (loadError, derivado de la query), que solo se pinta en
+  // la tabla antes de que se abra cualquier modal.
+  const [error, setError] = useState('');
 
   // Filtros
   const [search, setSearch] = useState('');
@@ -79,14 +80,9 @@ const AdminTours: React.FC = () => {
   const [overrideReason, setOverrideReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
+  const { data: toursPageData, isPending: isLoading, error: queryError, refetch: fetchData } = useQuery({
+    queryKey: ['admin-tours'],
+    queryFn: async (): Promise<{ tours: TourRow[]; platform: PlatformSettings | null }> => {
       const [toursRes, settingsRes] = await Promise.all([
         supabase
           .from('tours')
@@ -106,14 +102,15 @@ const AdminTours: React.FC = () => {
       if (toursRes.error) throw toursRes.error;
       if (settingsRes.error) throw settingsRes.error;
 
-      setTours((toursRes.data as unknown as TourRow[]) ?? []);
-      setPlatform(settingsRes.data);
-    } catch (err) {
-      setError(mensajeDeError(err) ?? 'Error al cargar los tours');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return {
+        tours: (toursRes.data as unknown as TourRow[]) ?? [],
+        platform: settingsRes.data,
+      };
+    },
+  });
+  const tours = toursPageData?.tours ?? [];
+  const platform = toursPageData?.platform ?? null;
+  const loadError = queryError ? (mensajeDeError(queryError) ?? 'Error al cargar los tours') : '';
 
   const openEdit = (tour: TourRow) => {
     setEditingTour(tour);
@@ -319,10 +316,10 @@ const AdminTours: React.FC = () => {
           <div className="flex items-center justify-center py-16">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
           </div>
-        ) : error ? (
+        ) : loadError ? (
           <div className="flex items-center gap-2 m-6 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            {error}
+            {loadError}
           </div>
         ) : filteredTours.length === 0 ? (
           <div className="text-center py-16 text-slate-400 text-sm">

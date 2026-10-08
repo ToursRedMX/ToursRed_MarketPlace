@@ -90,9 +90,6 @@ const PERMISOS_EN_CERO: AdminPermissions = {
 
 const AdminUsers: React.FC = () => {
   const { isSuperAdmin } = useAuth();
-  const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingPermissions, setEditingPermissions] = useState<string | null>(null);
 
@@ -128,10 +125,13 @@ const AdminUsers: React.FC = () => {
 
   const [tempPermissions, setTempPermissions] = useState<AdminPermissions>(PERMISOS_EN_CERO);
 
-  useEffect(() => {
-    loadStaffUsers();
-  }, []);
+  const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // No se migra a useQuery: loading/error se comparten con las acciones de
+  // abajo (crear, actualizar permisos, activar/desactivar, eliminar), que
+  // reusan estos mismos setters para su propio estado "en curso"/error.
   const loadStaffUsers = async () => {
     try {
       setLoading(true);
@@ -206,6 +206,11 @@ const AdminUsers: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadStaffUsers();
+  }, []);
 
   const handleCreateUser = async () => {
     if (!newUser.email || !newUser.password || !newUser.nombre || !newUser.apellido) {

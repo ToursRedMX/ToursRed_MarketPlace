@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Send, Search, Filter, Eye, X, Users, Calendar, CheckCircle, AlertCircle, Clock, ChevronDown } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { comoFilas } from '../../lib/relacionesSupabase';
 import { mensajeDeError } from '../../lib/errores';
 
@@ -50,23 +51,15 @@ interface MessageRecipient {
 }
 
 const AdminTourMessages: React.FC = () => {
-  const [messages, setMessages] = useState<TourMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'failed' | 'sending' | 'pending'>('all');
   const [selectedMessage, setSelectedMessage] = useState<TourMessage | null>(null);
   const [recipients, setRecipients] = useState<MessageRecipient[]>([]);
   const [loadingRecipients, setLoadingRecipients] = useState(false);
 
-  useEffect(() => {
-    fetchMessages();
-  }, []);
-
-  const fetchMessages = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
+  const { data: messagesData, isPending: isLoading, error: queryError } = useQuery({
+    queryKey: ['admin-tour-messages'],
+    queryFn: async (): Promise<TourMessage[]> => {
       const { data, error: err } = await supabase
         .from('agency_tour_messages')
         .select(`
@@ -80,13 +73,11 @@ const AdminTourMessages: React.FC = () => {
         .limit(200);
 
       if (err) throw new Error(err.message);
-      setMessages(comoFilas<TourMessage>(data));
-    } catch (e) {
-      setError(mensajeDeError(e) || 'Error al cargar mensajes');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return comoFilas<TourMessage>(data);
+    },
+  });
+  const messages = messagesData ?? [];
+  const error = queryError ? (mensajeDeError(queryError) || 'Error al cargar mensajes') : '';
 
   const fetchRecipients = async (messageId: string) => {
     setLoadingRecipients(true);
