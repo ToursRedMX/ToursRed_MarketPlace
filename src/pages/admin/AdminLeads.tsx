@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Search, X, CheckCircle, Building2, MailCheck, Send, Loader2, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { mensajeDeError } from '../../lib/errores';
@@ -48,12 +49,9 @@ const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bg: stri
 };
 
 export default function AdminLeads() {
-  const [leads, setLeads] = useState<AgencyLead[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [execFilter, setExecFilter] = useState<string>('all');
-  const [executives, setExecutives] = useState<{ id: string; name: string }[]>([]);
   const [fixEmailLead, setFixEmailLead] = useState<AgencyLead | null>(null);
   const [resendLead, setResendLead] = useState<AgencyLead | null>(null);
   const [fixEmailValue, setFixEmailValue] = useState('');
@@ -62,9 +60,9 @@ export default function AdminLeads() {
   const [showFollowUp, setShowFollowUp] = useState<AgencyLead | null>(null);
   const [newNote, setNewNote] = useState('');
 
-  const loadLeads = useCallback(async () => {
-    setIsLoading(true);
-    try {
+  const { data: leadsData, isPending: isLoading, refetch: loadLeads } = useQuery({
+    queryKey: ['admin-leads'],
+    queryFn: async (): Promise<{ leads: AgencyLead[]; executives: { id: string; name: string }[] }> => {
       const { data, error: errorLeads } = await supabase
         .from('agency_leads')
         .select('*')
@@ -82,7 +80,7 @@ export default function AdminLeads() {
       if (errorEjecutivos) throw errorEjecutivos;
 
       const execMap = new Map((execs || []).map(e => [e.id, `${e.first_name} ${e.last_name || ''}`.trim()]));
-      setExecutives((execs || []).map(e => ({ id: e.id, name: `${e.first_name} ${e.last_name || ''}`.trim() })));
+      const executives = (execs || []).map(e => ({ id: e.id, name: `${e.first_name} ${e.last_name || ''}`.trim() }));
 
       const convertedIds = (data || []).filter(l => l.converted_agency_id).map(l => l.converted_agency_id);
       let agencyMap = new Map<string, { onboarding_status: string; name: string }>();
@@ -96,19 +94,18 @@ export default function AdminLeads() {
         agencyMap = new Map((agenciesData || []).map(a => [a.id, { onboarding_status: a.onboarding_status, name: a.name }]));
       }
 
-      const enriched = (data || []).map(l => ({
+      const leads = (data || []).map(l => ({
         ...l,
         converted_agency_onboarding_status: l.converted_agency_id ? agencyMap.get(l.converted_agency_id)?.onboarding_status || null : null,
         converted_agency_name: l.converted_agency_id ? agencyMap.get(l.converted_agency_id)?.name || null : null,
         executive_name: execMap.get(l.executive_id) || null,
       }));
-      setLeads(enriched);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
-  useEffect(() => { loadLeads(); }, [loadLeads]);
+      return { leads, executives };
+    },
+  });
+  const leads = leadsData?.leads ?? [];
+  const executives = leadsData?.executives ?? [];
 
   const openFixEmail = (lead: AgencyLead) => {
     setFixEmailLead(lead);

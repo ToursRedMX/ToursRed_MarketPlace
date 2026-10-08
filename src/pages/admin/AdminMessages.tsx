@@ -30,10 +30,6 @@ const AdminMessages: React.FC = () => {
   const [filterType, setFilterType] = useState<'all' | 'booking' | 'general' | 'support'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'closed' | 'archived'>('all');
 
-  useEffect(() => {
-    fetchConversations();
-  }, []);
-
   const fetchConversations = async () => {
     try {
       setIsLoading(true);
@@ -56,6 +52,11 @@ const AdminMessages: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchConversations();
+  }, []);
 
   const updateConversationStatus = async (conversationId: string, newStatus: string) => {
     try {
