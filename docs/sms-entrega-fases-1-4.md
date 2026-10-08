@@ -1,5 +1,17 @@
 # Entrega local SMS/OTP — 8 octubre 2026
 
+## Actualización: aplicación remota autorizada, 8 octubre 2026
+
+Axel autorizó aplicar las cuatro migraciones y mergear los PRs. Las versiones `20261008045859`, `20261008052810`, `20261008054539` y `20261008061340` ya se aplicaron mediante CLI desde sus archivos commiteados, con dry-run previo por fase y comprobación posterior del ledger y objetos remotos. Los PRs #359, #360 y #361 están integrados; este PR #362 completa la secuencia al pasar sus checks requeridos.
+
+Para desbloquear el CLI se recuperaron seis migraciones ya existentes de RoutesRed mediante el procedimiento de reconciliación de CLAUDE.md: sus cuerpos coinciden en MD5 y bytes con el ledger. No se reaplicaron ni se modificó su lógica. La guardia de desfase pasó después de recuperar los archivos.
+
+Verificación remota final: SMS apagado, simulación encendida, obligatoriedad apagada, `processor_ready=false`, `otp_enforcement_ready=false`, cero tareas cron SMS, cero mensajes en cola y cero intentos. Las tablas privadas tienen RLS y carecen de SELECT para anon/authenticated. El control telefónico permite los contextos viajero/agencia con la obligatoriedad apagada.
+
+No se desplegaron Edge Functions, configuraron secretos, activaron tareas ni enviaron SMS. Sigue pendiente el despliegue autorizado de funciones, la configuración del proveedor y las pruebas de integración antes de activar el servicio. Twilio sigue en Fase 5. El registro de entrega local siguiente conserva la evidencia y limitaciones de la implementación anterior a esta autorización.
+
+## Registro de la entrega local previa
+
 Implementación en PRs draft encadenados. Nada aplicado remotamente, desplegado manualmente, activado ni mergeado. Sin SMS reales. La rama paralela de Claude no fue modificada.
 
 | Fase | PR | Migración |
