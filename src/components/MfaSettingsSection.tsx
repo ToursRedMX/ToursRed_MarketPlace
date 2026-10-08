@@ -89,6 +89,7 @@ export const MfaSettingsSection: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadFactors();
     Promise.resolve(supabase.from('users').select('is_super_admin').maybeSingle().then(({ data }) => {
       setIsSuperAdmin(data?.is_super_admin ?? false);
@@ -98,6 +99,7 @@ export const MfaSettingsSection: React.FC = () => {
   useEffect(() => {
     const verified = factors.filter((f) => f.status === 'verified');
     if (verified.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadRecoveryCodesRemaining();
     } else {
       setRecoveryCodesRemaining(null);

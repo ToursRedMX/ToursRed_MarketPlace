@@ -17,6 +17,7 @@ const MessagingPage: React.FC = () => {
     const newConversationUserId = searchParams.get('newConversation');
 
     if (conversationFromUrl) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedConversationId(conversationFromUrl);
     } else if (newConversationUserId) {
       setPreselectedUserId(newConversationUserId);

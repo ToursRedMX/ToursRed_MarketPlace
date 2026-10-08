@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link2, Link2Off, CheckCircle, AlertCircle, Loader } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import type { UserIdentity } from '@supabase/supabase-js';
 import { mensajeDeError } from '../lib/errores';
 
@@ -163,7 +163,10 @@ const LinkedAccountsSection: React.FC = () => {
     }
   }, []);
 
+  // No se migra a useQuery: error se comparte con vincular/desvincular
+  // cuentas, que reusan el mismo setter.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadIdentities();
   }, [loadIdentities]);
 

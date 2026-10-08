@@ -16,12 +16,6 @@ const NotificationsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [detailNotification, setDetailNotification] = useState<Notification | null>(null);
 
-  useEffect(() => {
-    if (user) {
-      fetchNotifications();
-    }
-  }, [user]);
-
   const fetchNotifications = async () => {
     try {
       setIsLoading(true);
@@ -44,6 +38,15 @@ const NotificationsPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // No se migra a useQuery: notifications se muta localmente con
+  // setNotifications(prev => ...) tras marcar como leida/eliminar.
+  useEffect(() => {
+    if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchNotifications();
+    }
+  }, [user]);
 
   const markAsRead = async (notificationId: string) => {
     try {

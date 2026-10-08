@@ -1,5 +1,5 @@
 import { Crown } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
 interface MembershipBadgeProps {
@@ -9,26 +9,19 @@ interface MembershipBadgeProps {
 }
 
 export default function MembershipBadge({ userId, size = 'md', showLabel = true }: MembershipBadgeProps) {
-  const [hasActiveMembership, setHasActiveMembership] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    checkMembership();
-  }, [userId]);
-
-  const checkMembership = async () => {
-    try {
+  const { data: hasActiveMembership, isPending: loading } = useQuery({
+    queryKey: ['has-active-membership', userId],
+    queryFn: async (): Promise<boolean> => {
       const { data, error } = await supabase
         .rpc('has_active_membership', { p_user_id: userId });
 
-      if (error) throw error;
-      setHasActiveMembership(data || false);
-    } catch (err) {
-      console.error('Error checking membership:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (error) {
+        console.error('Error checking membership:', error);
+        return false;
+      }
+      return data || false;
+    },
+  });
 
   if (loading || !hasActiveMembership) {
     return null;
