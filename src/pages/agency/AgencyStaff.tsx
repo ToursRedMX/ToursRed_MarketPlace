@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Users, Plus, UserCheck, UserX, CreditCard as Edit2, Search, Shield, ChevronDown, ChevronUp, AlertCircle, CheckCircle, X, Loader2, Eye, Pencil, Settings, Mail, Clock, Send, Ban } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -146,9 +147,6 @@ export default function AgencyStaff() {
   // y nadie mas le escribia: costaba un render de mas y retrasaba la primera
   // carga en un ciclo. Es un alias, no estado.
   const agencyId = resolvedAgencyId;
-  const [staffList, setStaffList] = useState<StaffMember[]>([]);
-  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [expandedStaff, setExpandedStaff] = useState<string | null>(null);
@@ -169,21 +167,17 @@ export default function AgencyStaff() {
   const [cancellingInvitationId, setCancellingInvitationId] = useState<string | null>(null);
   const [resendingInvitationId, setResendingInvitationId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (agencyId) {
-      fetchStaff();
-      fetchPendingInvitations();
-    }
-  }, [agencyId]);
-
-  const fetchStaff = async () => {
-    if (!agencyId) return;
-    setLoading(true);
-    try {
+  const { data: staffList_, isPending: loadingStaff, refetch: fetchStaff } = useQuery({
+    queryKey: ['agency-staff', agencyId],
+    enabled: !!agencyId,
+    queryFn: async (): Promise<StaffMember[]> => {
       const { data, error: err } = await supabase
         .rpc('get_agency_staff_for_owner', { p_agency_id: agencyId });
-      if (err) throw err;
-      setStaffList((data || []).map((r: AgencyStaffRpcRow) => ({
+      if (err) {
+        console.error(err);
+        return [];
+      }
+      return (data || []).map((r: AgencyStaffRpcRow) => ({
         id: r.staff_id,
         user_id: r.user_id,
         title: r.title,
@@ -209,30 +203,35 @@ export default function AgencyStaff() {
           can_view_messages: r.can_view_messages,
           can_manage_destinations: r.can_manage_destinations,
         } : null,
-      })));
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+      }));
+    },
+  });
+  const staffList = staffList_ ?? [];
+  const loading = loadingStaff;
 
-  const fetchPendingInvitations = async () => {
-    if (!agencyId) return;
-    const { data, error } = await supabase
-      .from('agency_staff_invitations')
-      .select('id, invited_email, title, permissions, expires_at, created_at')
-      .eq('agency_id', agencyId)
-      .eq('status', 'pending')
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false });
+  const { data: pendingInvitations_, refetch: fetchPendingInvitations } = useQuery({
+    queryKey: ['agency-staff-pending-invitations', agencyId],
+    enabled: !!agencyId,
+    queryFn: async (): Promise<PendingInvitation[]> => {
+      const { data, error } = await supabase
+        .from('agency_staff_invitations')
+        .select('id, invited_email, title, permissions, expires_at, created_at')
+        .eq('agency_id', agencyId)
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
 
-    // Sin invitaciones pendientes a la vista, la agencia vuelve a invitar a
-    // alguien que ya tenia invitacion.
-    if (error) console.error('AgencyStaff: no se pudieron leer las invitaciones pendientes', error);
+      // Sin invitaciones pendientes a la vista, la agencia vuelve a invitar a
+      // alguien que ya tenia invitacion.
+      if (error) {
+        console.error('AgencyStaff: no se pudieron leer las invitaciones pendientes', error);
+        return [];
+      }
 
-    setPendingInvitations(data || []);
-  };
+      return data || [];
+    },
+  });
+  const pendingInvitations = pendingInvitations_ ?? [];
 
   const handleSearchUser = async () => {
     if (!emailSearch.trim()) return;
