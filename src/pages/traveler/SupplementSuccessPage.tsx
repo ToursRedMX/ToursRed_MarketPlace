@@ -35,16 +35,6 @@ const SupplementSuccessPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const supplementId = searchParams.get('supplement_id');
-    if (!supplementId) {
-      setError('ID de suplemento no encontrado');
-      setIsLoading(false);
-      return;
-    }
-    pollForPaidStatus(supplementId, 0);
-  }, [searchParams]);
-
   const pollForPaidStatus = async (supplementId: string, attempt: number) => {
     try {
       const { data, error: errorSuplemento } = await supabase
@@ -99,6 +89,18 @@ const SupplementSuccessPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const supplementId = searchParams.get('supplement_id');
+    if (!supplementId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError('ID de suplemento no encontrado');
+      setIsLoading(false);
+      return;
+    }
+    pollForPaidStatus(supplementId, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   if (isLoading) {
     return (

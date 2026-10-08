@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Plus, Building2, QrCode, Copy, Check, AlertCircle, Loader2, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { supabase } from '../lib/supabase';
@@ -183,17 +183,20 @@ const OpenPayTopupModal: React.FC<OpenPayTopupModalProps> = ({ isOpen, onClose, 
   const handleCheckStatus = () => checkStatus(false);
 
   const isWaitingForPayment = step === 'spei-instructions' || step === 'codi-qr';
-  const topupIdRef = useRef(topupData?.topup_id);
-  topupIdRef.current = topupData?.topup_id;
 
+  // Antes guardaba topupData?.topup_id en un ref asignado durante el render
+  // (react-hooks/refs: un ref no es seguro de escribir ahi). Innecesario: el
+  // efecto ya se reinicia cuando topup_id cambia (esta en las dependencias),
+  // asi que el intervalo de abajo siempre corre con el topup_id vigente.
   useEffect(() => {
     if (!isOpen || !isWaitingForPayment || !topupData?.topup_id) return;
 
     const interval = setInterval(() => {
-      if (topupIdRef.current) checkStatus(true);
+      checkStatus(true);
     }, 6000);
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, isWaitingForPayment, topupData?.topup_id]);
 
   const effectiveAmount = getEffectiveAmount();

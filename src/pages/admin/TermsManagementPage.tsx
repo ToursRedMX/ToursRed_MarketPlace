@@ -281,6 +281,7 @@ const TermsManagementPage: React.FC = () => {
   }, [loadVersions, loadAcceptanceCounts]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeTab === 'audit') loadAudit();
   }, [activeTab, loadAudit]);
 

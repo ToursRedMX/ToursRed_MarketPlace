@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Building2, CheckCircle, Clock, AlertCircle, X, Eye, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -36,14 +37,12 @@ const ONBOARDING_LABELS: Record<string, { label: string; color: string }> = {
 export default function ExecutiveMisAgencias() {
   const { accountExecutiveInfo } = useAuth();
   const navigate = useNavigate();
-  const [agencies, setAgencies] = useState<Agency[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const loadAgencies = useCallback(async () => {
-    if (!accountExecutiveInfo?.executiveId) return;
-    setIsLoading(true);
-    try {
+  const { data: agenciesData_, isPending: isLoading } = useQuery({
+    queryKey: ['executive-mis-agencias', accountExecutiveInfo?.executiveId],
+    enabled: !!accountExecutiveInfo?.executiveId,
+    queryFn: async (): Promise<Agency[]> => {
       const { data: agenciesData, error: errorAgencias } = await supabase
         .from('agencies')
         .select(`
@@ -52,14 +51,14 @@ export default function ExecutiveMisAgencias() {
           approval_period_start, first_tour_published_at, first_paid_booking_at,
           onboarding_status, created_at
         `)
-        .eq('account_executive_id', accountExecutiveInfo.executiveId)
+        .eq('account_executive_id', accountExecutiveInfo!.executiveId)
         .order('created_at', { ascending: false });
 
       // "No tienes agencias asignadas" es lo peor que le puedes decir a un
       // ejecutivo cuyo sueldo depende de esa cartera.
       if (errorAgencias) throw errorAgencias;
 
-      if (!agenciesData) { setAgencies([]); return; }
+      if (!agenciesData) return [];
 
       const agencyIds = agenciesData.map(a => a.id);
 
@@ -77,20 +76,15 @@ export default function ExecutiveMisAgencias() {
       (bookingsRes.data || []).forEach((b) => { bookingCounts[b.agency_id] = (bookingCounts[b.agency_id] || 0) + 1; });
       (commissionsRes.data || []).forEach((c) => { revenueMap[c.agency_id] = (revenueMap[c.agency_id] || 0) + Number(c.platform_total_revenue || 0); });
 
-      const enriched = agenciesData.map(a => ({
+      return agenciesData.map(a => ({
         ...a,
         _tours_count: tourCounts[a.id] || 0,
         _bookings_count: bookingCounts[a.id] || 0,
         _platform_revenue: revenueMap[a.id] || 0,
       }));
-
-      setAgencies(enriched);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [accountExecutiveInfo?.executiveId]);
-
-  useEffect(() => { loadAgencies(); }, [loadAgencies]);
+    },
+  });
+  const agencies = agenciesData_ ?? [];
 
   const getDaysRemainingInPeriod = (approvalDate: string) => {
     const start = new Date(approvalDate);

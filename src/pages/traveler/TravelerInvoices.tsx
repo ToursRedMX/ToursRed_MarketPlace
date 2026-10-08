@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FileText, Download, ExternalLink, CheckCircle, AlertCircle, Clock, XCircle, RefreshCw, Receipt, Star, Shield, Wallet, Package } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -41,11 +41,11 @@ interface CfdiInvoice {
   created_at: string;
   booking_id: string | null;
   membership_id: string | null;
-  // Las cuatro son FK opcionales —una factura cuelga de UNA cosa: una reserva,
-  // un suplemento, un servicio o una parcialidad— y los `select` de este
-  // archivo no siempre las piden. Declararlas obligatorias hacia que
-  // `comoFactura(inv)` fallara en los cinco sitios: para TypeScript el
-  // objeto de la consulta no se parecia lo bastante al tipo.
+  // Las cuatro son FK opcionales —una factura cuelga de UNA cosa: una reserva,
+  // un suplemento, un servicio o una parcialidad— y los `select` de este
+  // archivo no siempre las piden. Declararlas obligatorias hacia que
+  // `comoFactura(inv)` fallara en los cinco sitios: para TypeScript el
+  // objeto de la consulta no se parecia lo bastante al tipo.
   checkin_charge_id?: string | null;
   booking_supplement_id?: string | null;
   booking_optional_service_id?: string | null;
@@ -98,7 +98,7 @@ const TravelerInvoices: React.FC = () => {
   // un problema de soporte, no una molestia. Ahora, si algo falla, se dice.
   const [cargaIncompleta, setCargaIncompleta] = useState(false);
 
-  const fetchInvoices = async () => {
+  const fetchInvoices = useCallback(async () => {
     if (!user) return;
     const userId = user.id;
     setIsLoading(true);
@@ -297,9 +297,12 @@ const TravelerInvoices: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
 
-  useEffect(() => { fetchInvoices(); }, [user?.id]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchInvoices();
+  }, [fetchInvoices]);
 
   const filtered = filter === 'all' ? invoices : invoices.filter(i => i.status === filter);
 

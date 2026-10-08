@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   Sparkles, Eye, MousePointerClick, ShoppingBag, TrendingUp,
@@ -312,22 +313,18 @@ const HistoryRow: React.FC<{ slot: FeaturedSlot; isExpanded: boolean; onToggle: 
 
 const AgencyFeaturedTours: React.FC = () => {
   const { agencyId } = useAgencyId();
-  const [slots, setSlots] = useState<FeaturedSlot[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    if (!agencyId) return;
-    loadSlots();
-  }, [agencyId]);
-
-  const loadSlots = async () => {
-    if (!agencyId) return;
-    setIsLoading(true);
-    const { data } = await getAgencyFeaturedSlots(agencyId);
-    setSlots((data as FeaturedSlot[]) ?? []);
-    setIsLoading(false);
-  };
+  const { data: slotsData, isFetching: isLoading, refetch: loadSlots } = useQuery({
+    queryKey: ['agency-featured-slots', agencyId],
+    enabled: !!agencyId,
+    queryFn: async (): Promise<FeaturedSlot[]> => {
+      if (!agencyId) return [];
+      const { data } = await getAgencyFeaturedSlots(agencyId);
+      return (data as FeaturedSlot[]) ?? [];
+    },
+  });
+  const slots = slotsData ?? [];
 
   const activeSlots = slots.filter(s => s.status === 'active');
   const historySlots = slots.filter(s => s.status !== 'active' && s.status !== 'pending_payment');
@@ -359,7 +356,7 @@ const AgencyFeaturedTours: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={loadSlots}
+              onClick={() => loadSlots()}
               disabled={isLoading}
               className="inline-flex items-center gap-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium px-3 py-2.5 rounded-xl text-sm transition-colors"
               title="Actualizar estadísticas"

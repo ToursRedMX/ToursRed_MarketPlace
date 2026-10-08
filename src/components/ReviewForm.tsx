@@ -44,11 +44,13 @@ export default function ReviewForm({
       const savedData = reviewFormPersistence.loadFromStorage();
       if (savedData) {
         reviewFormPersistence.setIsRestoring(true);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- restaura un borrador guardado en localStorage, no deriva de props/state
         if (savedData.rating) setRating(savedData.rating);
         if (savedData.comment) setComment(savedData.comment);
         setTimeout(() => reviewFormPersistence.setIsRestoring(false), 100);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

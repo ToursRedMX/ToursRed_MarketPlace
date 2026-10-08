@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Crown, Check, ArrowLeft, Tag, X, Shield, CreditCard, Calendar, Zap, Sparkles, Loader2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -28,57 +29,55 @@ export default function MembershipCheckout() {
   const [validating, setValidating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasMembership, setHasMembership] = useState(false);
-  const [checkingMembership, setCheckingMembership] = useState(true);
-  const [stripeMembershipsEnabled, setStripeMembershipsEnabled] = useState<boolean | null>(null);
-  const [errorVerificacion, setErrorVerificacion] = useState('');
-
-  useEffect(() => {
-    checkExistingMembership();
-    checkStripeEnabled();
-  }, [user?.id]);
-
-  const checkExistingMembership = async () => {
-    if (!user) return;
-    try {
+  const { data: hasMembership_, isPending: checkingMembership, error: membershipQueryError } = useQuery({
+    queryKey: ['membership-checkout-existing', user?.id],
+    enabled: !!user?.id,
+    queryFn: async (): Promise<boolean> => {
       const { data, error } = await supabase
         .from('memberships')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', user!.id)
         .eq('status', 'active')
         .maybeSingle();
 
       // Si no podemos comprobar si ya tiene membresia, dejarlo pasar significa
       // cobrarle una segunda. Preferimos pedirle que lo intente de nuevo.
-      if (error) throw error;
+      if (error) {
+        console.error('MembershipCheckout: no se pudo comprobar la membresia activa', error);
+        throw error;
+      }
 
-      if (data) setHasMembership(true);
-    } catch (err) {
-      console.error('MembershipCheckout: no se pudo comprobar la membresia activa', err);
-      setErrorVerificacion('No pudimos comprobar si ya tienes una membresia activa. Intenta de nuevo en unos segundos para no arriesgar un cobro duplicado.');
-    } finally {
-      setCheckingMembership(false);
-    }
-  };
+      return !!data;
+    },
+  });
+  const hasMembership = hasMembership_ ?? false;
 
-  const checkStripeEnabled = async () => {
-    const { data, error } = await supabase
-      .from('platform_settings')
-      .select('stripe_memberships_enabled')
-      .maybeSingle();
+  const { data: stripeMembershipsEnabled_, error: stripeQueryError } = useQuery({
+    queryKey: ['membership-checkout-stripe-enabled'],
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('stripe_memberships_enabled')
+        .maybeSingle();
 
-    // El `?? true` daba por habilitado el cobro cuando no se podia leer el
-    // interruptor. Si esta apagado a proposito, el viajero llegaria hasta la
-    // pasarela para que ahi truene.
-    if (error) {
-      console.error('MembershipCheckout: no se pudo leer stripe_memberships_enabled', error);
-      setErrorVerificacion('No pudimos verificar la disponibilidad del pago de membresias. Intenta de nuevo en unos segundos.');
-      setStripeMembershipsEnabled(false);
-      return;
-    }
+      // El `?? true` daba por habilitado el cobro cuando no se podia leer el
+      // interruptor. Si esta apagado a proposito, el viajero llegaria hasta la
+      // pasarela para que ahi truene.
+      if (error) {
+        console.error('MembershipCheckout: no se pudo leer stripe_memberships_enabled', error);
+        throw error;
+      }
 
-    setStripeMembershipsEnabled(data?.stripe_memberships_enabled ?? true);
-  };
+      return data?.stripe_memberships_enabled ?? true;
+    },
+  });
+  const stripeMembershipsEnabled = stripeQueryError ? false : (stripeMembershipsEnabled_ ?? null);
+
+  const errorVerificacion = membershipQueryError
+    ? 'No pudimos comprobar si ya tienes una membresia activa. Intenta de nuevo en unos segundos para no arriesgar un cobro duplicado.'
+    : stripeQueryError
+    ? 'No pudimos verificar la disponibilidad del pago de membresias. Intenta de nuevo en unos segundos.'
+    : '';
 
   if (!planType || !['monthly', 'annual'].includes(planType)) {
     navigate('/traveler/membership', { replace: true });

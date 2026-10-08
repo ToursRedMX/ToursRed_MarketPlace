@@ -74,12 +74,6 @@ export default function ExecutiveDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [bonusRules, setBonusRules] = useState<BonusRule[]>([]);
 
-  useEffect(() => {
-    if (accountExecutiveInfo?.executiveId) {
-      loadDashboard();
-    }
-  }, [accountExecutiveInfo?.executiveId]);
-
   const loadDashboard = async () => {
     if (!accountExecutiveInfo?.executiveId) return;
     setIsLoading(true);
@@ -157,6 +151,17 @@ export default function ExecutiveDashboard() {
       setIsLoading(false);
     }
   };
+
+  // loadDashboard es una query financiera grande (4+ consultas paralelas)
+  // para el panel del ejecutivo -- migrarla a react-query aqui es un
+  // refactor de arquitectura aparte, mismo criterio que AccountingPage.tsx.
+  useEffect(() => {
+    if (accountExecutiveInfo?.executiveId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadDashboard();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountExecutiveInfo?.executiveId]);
 
   const getMonthsRemaining = (approvalDate: string) => {
     const start = new Date(approvalDate);

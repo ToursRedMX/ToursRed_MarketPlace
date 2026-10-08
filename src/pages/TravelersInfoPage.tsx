@@ -64,64 +64,6 @@ const TravelersInfoPage: React.FC = () => {
     emergency_contact_phone?: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (!bookingId) {
-      navigate('/');
-      return;
-    }
-    loadBookingData();
-  }, [bookingId]);
-
-  // Esta pagina no usa PaymentProviderSelector: el proveedor viene fijado en la
-  // reserva. Se precarga solo si es MercadoPago.
-  useEffect(() => {
-    if ((booking as { payment_provider?: string } | null)?.payment_provider === 'mercadopago') {
-      preloadMpDeviceId();
-    }
-  }, [booking]);
-
-  const loadBookingData = async () => {
-    try {
-      setIsLoading(true);
-
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .select(`
-          *,
-          tours (*)
-        `)
-        .eq('id', bookingId)
-        .maybeSingle();
-
-      if (bookingError || !bookingData) {
-        throw new Error('No se pudo cargar la reserva');
-      }
-
-      if (bookingData.user_id !== user?.id) {
-        throw new Error('No tienes permiso para ver esta reserva');
-      }
-
-      setBooking(bookingData);
-      setTour(bookingData.tours);
-
-      await loadFrequentCompanions();
-
-      const existingTravelers = await loadExistingTravelers();
-
-      if (existingTravelers.length > 0) {
-        setTravelers(existingTravelers);
-      } else {
-        await initializeTravelerForms(bookingData);
-      }
-
-    } catch (err) {
-      console.error('Error loading booking:', err);
-      setError(mensajeDeError(err) || 'Error al cargar la reserva');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const loadFrequentCompanions = async () => {
     const { data, error } = await supabase
       .from('frequent_companions')
@@ -160,6 +102,24 @@ const TravelersInfoPage: React.FC = () => {
       emergency_contact_name: t.emergency_contact_name || '',
       emergency_contact_phone: t.emergency_contact_phone || '',
     }));
+  };
+
+  const createEmptyTraveler = (categoria: 'adulto' | 'nino' | 'infante' | 'adulto_mayor' | 'mascota', precio: number, promoDiscount = 0): TravelerFormData => {
+    return {
+      categoria_viajero: categoria,
+      nombre: '',
+      apellido: '',
+      email: user?.email || '',
+      telefono: '',
+      fecha_nacimiento: '',
+      precio_aplicado: precio,
+      promo_discount_per_traveler: promoDiscount,
+      saveAsFrequentCompanion: false,
+      documento_tipo: undefined,
+      documento_numero: '',
+      emergency_contact_name: '',
+      emergency_contact_phone: '',
+    };
   };
 
   const initializeTravelerForms = async (bookingData: Booking) => {
@@ -261,23 +221,65 @@ const TravelersInfoPage: React.FC = () => {
     setTravelers(travelersList);
   };
 
-  const createEmptyTraveler = (categoria: 'adulto' | 'nino' | 'infante' | 'adulto_mayor' | 'mascota', precio: number, promoDiscount = 0): TravelerFormData => {
-    return {
-      categoria_viajero: categoria,
-      nombre: '',
-      apellido: '',
-      email: user?.email || '',
-      telefono: '',
-      fecha_nacimiento: '',
-      precio_aplicado: precio,
-      promo_discount_per_traveler: promoDiscount,
-      saveAsFrequentCompanion: false,
-      documento_tipo: undefined,
-      documento_numero: '',
-      emergency_contact_name: '',
-      emergency_contact_phone: '',
-    };
+  const loadBookingData = async () => {
+    try {
+      setIsLoading(true);
+
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .select(`
+          *,
+          tours (*)
+        `)
+        .eq('id', bookingId)
+        .maybeSingle();
+
+      if (bookingError || !bookingData) {
+        throw new Error('No se pudo cargar la reserva');
+      }
+
+      if (bookingData.user_id !== user?.id) {
+        throw new Error('No tienes permiso para ver esta reserva');
+      }
+
+      setBooking(bookingData);
+      setTour(bookingData.tours);
+
+      await loadFrequentCompanions();
+
+      const existingTravelers = await loadExistingTravelers();
+
+      if (existingTravelers.length > 0) {
+        setTravelers(existingTravelers);
+      } else {
+        await initializeTravelerForms(bookingData);
+      }
+
+    } catch (err) {
+      console.error('Error loading booking:', err);
+      setError(mensajeDeError(err) || 'Error al cargar la reserva');
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  useEffect(() => {
+    if (!bookingId) {
+      navigate('/');
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadBookingData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId]);
+
+  // Esta pagina no usa PaymentProviderSelector: el proveedor viene fijado en la
+  // reserva. Se precarga solo si es MercadoPago.
+  useEffect(() => {
+    if ((booking as { payment_provider?: string } | null)?.payment_provider === 'mercadopago') {
+      preloadMpDeviceId();
+    }
+  }, [booking]);
 
   const getCategoryLabel = (categoria: string): string => {
     const labels: Record<string, string> = {

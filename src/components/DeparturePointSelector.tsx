@@ -54,28 +54,6 @@ const DeparturePointSelector: React.FC<DeparturePointSelectorProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (searchQuery.length < 2) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    debounceRef.current = setTimeout(async () => {
-      await searchDeparturePoints(searchQuery);
-    }, 300);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [searchQuery]);
-
   const searchDeparturePoints = async (query: string) => {
     setIsSearching(true);
     try {
@@ -97,6 +75,29 @@ const DeparturePointSelector: React.FC<DeparturePointSelectorProps> = ({
       setIsSearching(false);
     }
   };
+
+  useEffect(() => {
+    if (searchQuery.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      await searchDeparturePoints(searchQuery);
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [searchQuery]);
 
   const handleSelectPoint = (point: DeparturePoint) => {
     if (selectedPoints.length >= maxPoints) {

@@ -80,13 +80,7 @@ const TourCard: React.FC<TourCardProps> = ({
     return 'bg-orange-100 text-orange-800 border-orange-300';
   };
 
-  useEffect(() => {
-    if (user) {
-      checkIfSaved();
-    }
-  }, [user, tour.id]);
-
-  const checkIfSaved = async () => {
+  const checkIfSaved = useCallback(async () => {
     if (!user) return;
 
     const { data, error } = await supabase
@@ -102,7 +96,14 @@ const TourCard: React.FC<TourCardProps> = ({
     if (error) console.error('[TourCard] no se pudo leer si el tour esta guardado:', error);
 
     setIsSaved(!!data);
-  };
+  }, [user, tour.id]);
+
+  useEffect(() => {
+    if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      checkIfSaved();
+    }
+  }, [user, checkIfSaved]);
 
   const handleSaveToggle = async (e: React.MouseEvent) => {
     e.preventDefault();

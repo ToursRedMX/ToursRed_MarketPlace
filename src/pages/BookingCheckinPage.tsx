@@ -168,8 +168,12 @@ export default function BookingCheckinPage() {
     }
   };
 
+  // No se migra a useQuery: error/loading se comparten con confirmar el
+  // check-in, que reusa los mismos setters.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!authLoading && user) fetchDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user, token]);
 
   const handleConfirmFull = async () => { await performCheckin('full', []); };

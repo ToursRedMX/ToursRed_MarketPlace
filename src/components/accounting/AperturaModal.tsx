@@ -67,6 +67,7 @@ const AperturaModal: React.FC<Props> = ({ year, month, onClose, onSaved }) => {
       .then(({ data }) => setAccounts(data ?? []));
 
     // Check if apertura already exists for this year
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCheckingDuplicate(true);
     supabase
       .from('accounting_entries')

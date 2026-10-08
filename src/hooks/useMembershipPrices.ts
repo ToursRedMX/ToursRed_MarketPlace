@@ -20,10 +20,6 @@ export function useMembershipPrices() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchPrices();
-  }, []);
-
   const fetchPrices = async () => {
     try {
       setLoading(true);
@@ -79,6 +75,11 @@ export function useMembershipPrices() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchPrices();
+  }, []);
 
   return { prices, loading, error, refetch: fetchPrices };
 }

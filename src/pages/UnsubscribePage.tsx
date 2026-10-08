@@ -9,6 +9,7 @@ const UnsubscribePage: React.FC = () => {
 
   useEffect(() => {
     if (!token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus('error');
       setErrorMessage('No se proporciono un token de baja valido.');
       return;

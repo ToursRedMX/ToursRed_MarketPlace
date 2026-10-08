@@ -56,7 +56,19 @@ const AgencyOnboardingPage: React.FC = () => {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchAgency(); }, [fetchAgency]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchAgency();
+  }, [fetchAgency]);
+
+  // Antes se asignaba window.location.href directo en el cuerpo del
+  // componente (fuera de un efecto): una redireccion es un efecto
+  // secundario, no algo valido durante el render.
+  useEffect(() => {
+    if (agency?.onboarding_status === 'active') {
+      window.location.href = '/agency/dashboard';
+    }
+  }, [agency?.onboarding_status]);
 
   // Reload when onboarding_status changes (e.g. after doc approval)
   useEffect(() => {
@@ -91,7 +103,6 @@ const AgencyOnboardingPage: React.FC = () => {
   const { onboarding_status } = agency;
 
   if (onboarding_status === 'active') {
-    window.location.href = '/agency/dashboard';
     return null;
   }
 

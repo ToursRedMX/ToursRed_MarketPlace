@@ -28,10 +28,6 @@ const AgencyDestinations: React.FC = () => {
   const [newImageCaption, setNewImageCaption] = useState('');
   const [deletingDestination, setDeletingDestination] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchDestinations();
-  }, []);
-
   const fetchDestinations = async () => {
     try {
       setIsLoading(true);
@@ -50,6 +46,13 @@ const AgencyDestinations: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // No se migra a useQuery: error se comparte con crear/editar/eliminar
+  // destinos e imagenes, que reusan el mismo setter.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchDestinations();
+  }, []);
 
   const resetForm = () => {
     setFormData({

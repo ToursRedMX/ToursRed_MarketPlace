@@ -15,15 +15,6 @@ const BookingPendingPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (bookingId) {
-      fetchBookingDetails(bookingId);
-    } else {
-      setError('ID de reserva no encontrado');
-      setIsLoading(false);
-    }
-  }, [bookingId]);
-
   const fetchBookingDetails = async (bookingId: string) => {
     try {
       setIsLoading(true);
@@ -63,6 +54,16 @@ const BookingPendingPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (bookingId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchBookingDetails(bookingId);
+    } else {
+      setError('ID de reserva no encontrado');
+      setIsLoading(false);
+    }
+  }, [bookingId]);
 
   // Helper function to format dates consistently
   const formatDate = (dateString: string) => {

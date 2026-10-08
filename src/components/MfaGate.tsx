@@ -119,7 +119,10 @@ export const MfaGate: React.FC<MfaGateProps> = ({ children }) => {
     }
   }, [user, isAdmin, isAccountant, isSuperAdmin, isAccountExecutive]);
 
+  // No se migra a useQuery: error se comparte con todo el flujo de
+  // MFA (enrolar, verificar, recuperacion), que reusa el mismo setter.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     checkMfaStatus();
   }, [checkMfaStatus]);
 

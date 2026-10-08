@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Loader2, Zap } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -6,6 +7,8 @@ import { supabase } from '../../lib/supabase';
 import { TourSlot } from '../../types';
 import SlotDetailPanel from './SlotDetailPanel';
 import { mensajeDeError } from '../../lib/errores';
+
+const SIN_SLOTS = new Map<string, TourSlot[]>();
 
 interface AgencySlotCalendarProps {
   tourId: string;
@@ -15,42 +18,37 @@ interface AgencySlotCalendarProps {
 
 const AgencySlotCalendar: React.FC<AgencySlotCalendarProps> = ({ tourId, agencyId, onGenerateSlots }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [daySlots, setDaySlots] = useState<Map<string, TourSlot[]>>(new Map());
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [genStart, setGenStart] = useState('');
   const [genEnd, setGenEnd] = useState('');
 
-  const fetchSlots = useCallback(async (month: Date) => {
-    setIsLoading(true);
-    try {
-      const start = format(startOfMonth(month), 'yyyy-MM-dd');
-      const end = format(endOfMonth(month), 'yyyy-MM-dd');
+  const { data: daySlotsData, isFetching: isLoading, refetch: refetchSlots } = useQuery({
+    queryKey: ['agency-slot-calendar', tourId, format(currentMonth, 'yyyy-MM')],
+    queryFn: async (): Promise<Map<string, TourSlot[]>> => {
+      const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+      const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
       const { data, error } = await supabase.rpc('get_tour_slots_by_range', {
         p_tour_id: tourId,
         p_start_date: start,
         p_end_date: end,
       });
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching slots:', error);
+        return new Map();
+      }
       const map = new Map<string, TourSlot[]>();
       (data as TourSlot[] || []).forEach(slot => {
         const key = slot.slot_date;
         if (!map.has(key)) map.set(key, []);
         map.get(key)!.push(slot);
       });
-      setDaySlots(map);
-    } catch (err) {
-      console.error('Error fetching slots:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [tourId]);
-
-  useEffect(() => {
-    fetchSlots(currentMonth);
-  }, [currentMonth, fetchSlots]);
+      return map;
+    },
+  });
+  const daySlots = daySlotsData ?? SIN_SLOTS;
+  const fetchSlots = () => refetchSlots();
 
   const days = eachDayOfInterval({
     start: startOfMonth(currentMonth),
@@ -74,7 +72,7 @@ const AgencySlotCalendar: React.FC<AgencySlotCalendarProps> = ({ tourId, agencyI
     setIsGenerating(true);
     try {
       await onGenerateSlots(genStart, genEnd);
-      await fetchSlots(currentMonth);
+      await fetchSlots();
       setShowGenerateModal(false);
     } catch (err) {
       alert(`Error al generar slots: ${mensajeDeError(err) || 'Error desconocido'}`);
@@ -221,7 +219,7 @@ const AgencySlotCalendar: React.FC<AgencySlotCalendarProps> = ({ tourId, agencyI
           dateKey={selectedDay}
           slots={selectedSlots}
           onClose={() => setSelectedDay(null)}
-          onRefresh={() => fetchSlots(currentMonth)}
+          onRefresh={() => fetchSlots()}
         />
       )}
     </div>

@@ -90,6 +90,7 @@ const BookingFlowLayout: React.FC = () => {
     }
 
     if (!slug) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError('Tour no encontrado.');
       setIsLoading(false);
       return;

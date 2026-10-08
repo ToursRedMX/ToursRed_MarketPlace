@@ -33,12 +33,6 @@ export default function GiftCardRedeemPage() {
   const [success, setSuccess] = useState(false);
   const [redemptionData, setRedemptionData] = useState<GiftCardRedemptionData | null>(null);
 
-  useEffect(() => {
-    if (searchParams.get('code')) {
-      handleValidate();
-    }
-  }, []);
-
   const formatCodeInput = (value: string) => {
     const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     const chunks = [];
@@ -86,6 +80,16 @@ export default function GiftCardRedeemPage() {
       setIsValidating(false);
     }
   };
+
+  // No se migra a useQuery: error se comparte con la validacion manual del
+  // formulario y con handleRedeem.
+  useEffect(() => {
+    if (searchParams.get('code')) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      handleValidate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleRedeem = async () => {
     if (!user) {

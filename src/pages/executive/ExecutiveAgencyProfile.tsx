@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, Mail, Phone, Globe, MapPin, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -46,15 +46,10 @@ const ONBOARDING_LABELS: Record<string, { label: string; color: string }> = {
 export default function ExecutiveAgencyProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [agency, setAgency] = useState<AgencyDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const loadAgency = useCallback(async () => {
-    if (!id) return;
-    setIsLoading(true);
-    setError('');
-    try {
+  const { data: agency, isPending: isLoading, error: queryError, refetch: loadAgency } = useQuery({
+    queryKey: ['executive-agency-profile', id],
+    enabled: !!id,
+    queryFn: async (): Promise<AgencyDetail> => {
       const { data, error: fetchError } = await supabase
         .from('agencies')
         .select(`
@@ -69,18 +64,12 @@ export default function ExecutiveAgencyProfile() {
 
       if (fetchError) throw fetchError;
       if (!data) {
-        setError('Agencia no encontrada.');
-        return;
+        throw new Error('Agencia no encontrada.');
       }
-      setAgency(data);
-    } catch (err) {
-      setError(mensajeDeError(err) || 'Error al cargar los datos de la agencia.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => { loadAgency(); }, [loadAgency]);
+      return data;
+    },
+  });
+  const error = queryError ? (mensajeDeError(queryError) || 'Error al cargar los datos de la agencia.') : '';
 
   if (isLoading) {
     return (

@@ -49,7 +49,13 @@ const AgencyScheduleManager: React.FC<AgencyScheduleManagerProps> = ({ tourId, a
     }
   };
 
-  useEffect(() => { fetchSchedules(); }, [tourId]);
+  // No se migra a useQuery: error se comparte con la validacion del
+  // formulario de creacion/edicion/eliminacion, que reusa el mismo setter.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchSchedules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourId]);
 
   const handleSubmit = async () => {
     if (!form.departure_time) {

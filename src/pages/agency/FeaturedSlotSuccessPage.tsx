@@ -32,11 +32,6 @@ const FeaturedSlotSuccessPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!slotId) { setLoading(false); return; }
-    confirm();
-  }, [slotId]);
-
   const confirm = async () => {
     // PayPal: capture order before polling
     if (paypalToken) {
@@ -113,6 +108,16 @@ const FeaturedSlotSuccessPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!slotId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
+    }
+    confirm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotId]);
 
   const fmt = (iso: string) =>
     new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });

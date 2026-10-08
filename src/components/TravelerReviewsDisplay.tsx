@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Star, Building } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { comoFilas } from '../lib/relacionesSupabase';
 
 interface TravelerReview {
@@ -28,11 +28,7 @@ export default function TravelerReviewsDisplay({ travelerId }: TravelerReviewsDi
   const [loading, setLoading] = useState(true);
   const [averageRating, setAverageRating] = useState(0);
 
-  useEffect(() => {
-    fetchReviews();
-  }, [travelerId]);
-
-  const fetchReviews = async () => {
+  const fetchReviews = useCallback(async () => {
     try {
       console.log('🔍 [TravelerReviews] Fetching reviews for traveler:', travelerId);
 
@@ -75,7 +71,12 @@ export default function TravelerReviewsDisplay({ travelerId }: TravelerReviewsDi
     } finally {
       setLoading(false);
     }
-  };
+  }, [travelerId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchReviews();
+  }, [fetchReviews]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-MX', {

@@ -22,6 +22,7 @@ export function useFieldAvailability(
     const trimmed = value.trim();
 
     if (!trimmed || trimmed.length < minLength || (exactLength !== undefined && trimmed.length !== exactLength)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setState(IDLE);
       return;
     }

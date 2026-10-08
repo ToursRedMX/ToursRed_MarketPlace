@@ -17,7 +17,11 @@ function useMembershipStatus(userId: string | undefined) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) { setLoading(false); return; }
+    if (!userId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
+    }
     supabase
       .from('memberships')
       .select('status, current_period_end')

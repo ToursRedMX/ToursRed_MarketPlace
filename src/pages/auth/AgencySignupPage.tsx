@@ -5,10 +5,8 @@ import { UserRole } from '../../lib/supabase';
 import { useFieldAvailability } from '../../hooks/useFieldAvailability';
 import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
 import { validarRfcAgencia } from '../../lib/validarRfcAgencia';
-import AgencySignupFormBody, {
-  AgencyFormData,
-  defaultAgencyFormData,
-} from './AgencySignupFormBody';
+import AgencySignupFormBody from './AgencySignupFormBody';
+import { AgencyFormData, defaultAgencyFormData } from './agencyFormData';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
 import { mensajeDeError } from '../../lib/errores';

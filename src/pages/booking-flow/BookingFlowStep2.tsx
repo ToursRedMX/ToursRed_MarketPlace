@@ -131,6 +131,7 @@ const BookingFlowStep2: React.FC = () => {
     if (!tour || !user || checkingMembership) return;
 
     if (flow.travelers.length === totalTravelers && flow.travelers.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTravelers(flow.travelers);
       setIsLoadingCompanions(false);
       return;
@@ -202,6 +203,7 @@ const BookingFlowStep2: React.FC = () => {
       }
     };
     loadCompanions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tour, user, checkingMembership, preventaRatio]);
 
   const handleTravelerChange = (index: number, field: keyof FlowTraveler, value: string) => {

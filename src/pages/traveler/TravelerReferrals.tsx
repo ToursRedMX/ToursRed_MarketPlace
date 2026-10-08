@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Copy, Share2, Users, Gift, TrendingUp, CheckCircle, Clock, AlertCircle, Award, Crown, ExternalLink, HelpCircle, Pencil, X, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -22,11 +22,7 @@ const TravelerReferralsPage: React.FC = () => {
   const [isCheckingCode, setIsCheckingCode] = useState(false);
   const [codeAvailable, setCodeAvailable] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    loadReferralData();
-  }, [user?.id]);
-
-  const loadReferralData = async () => {
+  const loadReferralData = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -114,7 +110,12 @@ const TravelerReferralsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadReferralData();
+  }, [loadReferralData]);
 
   const handleCopyCode = () => {
     if (referralCode) {

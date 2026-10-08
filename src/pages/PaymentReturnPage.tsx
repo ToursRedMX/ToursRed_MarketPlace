@@ -34,12 +34,6 @@ export default function PaymentReturnPage() {
   // MercadoPago sends collection_status on return (approved, null, rejected, etc.)
   const mpCollectionStatus = searchParams.get('collection_status');
 
-  useEffect(() => {
-    if (hasRunRef.current) return;
-    hasRunRef.current = true;
-    handleReturn();
-  }, []);
-
   const handleReturn = async () => {
     // MercadoPago collection_status takes priority for MP payments
     if (mpCollectionStatus) {
@@ -501,6 +495,13 @@ export default function PaymentReturnPage() {
     setStatus('error');
     setMessage('Parametros de retorno invalidos.');
   };
+
+  useEffect(() => {
+    if (hasRunRef.current) return;
+    hasRunRef.current = true;
+    handleReturn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleGoToBookings = () => navigate('/traveler/bookings');
   const handleGoHome = () => navigate('/');

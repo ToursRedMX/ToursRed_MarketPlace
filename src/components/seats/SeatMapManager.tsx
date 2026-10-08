@@ -100,7 +100,10 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
     }
   }, [tourId, isReceptivo]);
 
+  // No se migra a useQuery: error se comparte entre loadSlots/loadData y
+  // las acciones de bloqueo/desbloqueo de abajo, que reusan el mismo setter.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSlots();
   }, [loadSlots]);
 
@@ -204,6 +207,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
   }, [tourId, activeSlotId, isReceptivo, selectedSlotId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
 

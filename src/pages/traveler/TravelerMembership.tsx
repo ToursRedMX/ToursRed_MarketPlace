@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Crown, Check, Zap, Shield, Sparkles, AlertCircle, ArrowLeft, MapPin, DollarSign } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
-import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { formatCurrencyMXN } from '../../utils/formatCurrency';
 import { comoFilas } from '../../lib/relacionesSupabase';
 import { mensajeDeError } from '../../lib/errores';
 
@@ -46,38 +46,7 @@ export default function TravelerMembership() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const { prices, loading: pricesLoading } = useMembershipPrices();
 
-  useEffect(() => {
-    if (searchParams.get('success') === 'true') {
-      setSuccessMessage('¡Suscripción exitosa! Tu membresía ToursRed+ está siendo activada.');
-    }
-    fetchMembership();
-  }, [searchParams]);
-
-  const fetchMembership = async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('memberships')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (error) throw error;
-      setMembership(data);
-
-      if (data) {
-        await fetchBookingsWithBenefit(data.service_fee_exemption_reset_date);
-      }
-    } catch (err) {
-      console.error('Error fetching membership:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchBookingsWithBenefit = async (resetDate: string) => {
+  const fetchBookingsWithBenefit = useCallback(async (resetDate: string) => {
     if (!user) return;
 
     try {
@@ -110,7 +79,39 @@ export default function TravelerMembership() {
     } catch (err) {
       console.error('Error fetching bookings with benefit:', err);
     }
-  };
+  }, [user]);
+
+  const fetchMembership = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('memberships')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (error) throw error;
+      setMembership(data);
+
+      if (data) {
+        await fetchBookingsWithBenefit(data.service_fee_exemption_reset_date);
+      }
+    } catch (err) {
+      console.error('Error fetching membership:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, fetchBookingsWithBenefit]);
+
+  useEffect(() => {
+    if (searchParams.get('success') === 'true') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSuccessMessage('¡Suscripción exitosa! Tu membresía ToursRed+ está siendo activada.');
+    }
+    fetchMembership();
+  }, [searchParams, fetchMembership]);
 
   const handleSubscribe = (planType: 'monthly' | 'annual') => {
     navigate(`/traveler/membership/checkout?plan=${planType}`);

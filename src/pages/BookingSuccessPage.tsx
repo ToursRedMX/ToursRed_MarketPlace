@@ -68,27 +68,6 @@ const BookingSuccessPage: React.FC = () => {
   }, [booking]);
   const { isLoading: authLoading } = useAuth();
 
-  useEffect(() => {
-    // Esperar a que la autenticación termine antes de cargar la reserva
-    if (authLoading) {
-      console.log('⏳ Esperando a que termine la autenticación...');
-      return;
-    }
-
-    const bookingId = searchParams.get('booking_id');
-    if (bookingId) {
-      fetchBookingDetails(bookingId);
-      const featuredSlotId = sessionStorage.getItem('featuredReferral');
-      if (featuredSlotId) {
-        trackFeaturedBooking(featuredSlotId);
-        sessionStorage.removeItem('featuredReferral');
-      }
-    } else {
-      setError('ID de reserva no encontrado');
-      setIsLoading(false);
-    }
-  }, [searchParams, authLoading]);
-
   const fetchBookingDetails = async (bookingId: string) => {
     try {
       setIsLoading(true);
@@ -192,6 +171,28 @@ const BookingSuccessPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Esperar a que la autenticación termine antes de cargar la reserva
+    if (authLoading) {
+      console.log('⏳ Esperando a que termine la autenticación...');
+      return;
+    }
+
+    const bookingId = searchParams.get('booking_id');
+    if (bookingId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchBookingDetails(bookingId);
+      const featuredSlotId = sessionStorage.getItem('featuredReferral');
+      if (featuredSlotId) {
+        trackFeaturedBooking(featuredSlotId);
+        sessionStorage.removeItem('featuredReferral');
+      }
+    } else {
+      setError('ID de reserva no encontrado');
+      setIsLoading(false);
+    }
+  }, [searchParams, authLoading]);
 
   // Helper function to format dates consistently
   const formatDate = (dateString: string | null | undefined) => {

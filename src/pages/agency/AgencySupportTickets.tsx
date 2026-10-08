@@ -25,6 +25,24 @@ const AgencySupportTickets: React.FC = () => {
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
 
+  const openTicket = async (ticket: SupportTicket) => {
+    setSelectedTicket(ticket);
+    const [commentsRes, historyRes] = await Promise.all([
+      supabase.from('support_ticket_comments')
+        .select('*')
+        .eq('ticket_id', ticket.id)
+        .eq('tipo', 'respuesta_usuario')
+        .order('created_at'),
+      supabase.from('support_ticket_history')
+        .select('*')
+        .eq('ticket_id', ticket.id)
+        .order('created_at'),
+    ]);
+    setComments(commentsRes.data ?? []);
+    setHistory(historyRes.data ?? []);
+    setNewComment('');
+  };
+
   const fetchTickets = async () => {
     if (!user) return;
     setLoading(true);
@@ -56,25 +74,14 @@ const AgencySupportTickets: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchTickets(); }, [user, tab, agencyId]);
-
-  const openTicket = async (ticket: SupportTicket) => {
-    setSelectedTicket(ticket);
-    const [commentsRes, historyRes] = await Promise.all([
-      supabase.from('support_ticket_comments')
-        .select('*')
-        .eq('ticket_id', ticket.id)
-        .eq('tipo', 'respuesta_usuario')
-        .order('created_at'),
-      supabase.from('support_ticket_history')
-        .select('*')
-        .eq('ticket_id', ticket.id)
-        .order('created_at'),
-    ]);
-    setComments(commentsRes.data ?? []);
-    setHistory(historyRes.data ?? []);
-    setNewComment('');
-  };
+  // No se migra a useQuery: fetchTickets llama a openTicket al final (para
+  // abrir un ticket desde ?ticket= en la URL), que muta selectedTicket/
+  // comments/history -- estado compartido con los handlers de abajo.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchTickets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, tab, agencyId]);
 
   const submitComment = async () => {
     if (!selectedTicket || !newComment.trim() || !user) return;

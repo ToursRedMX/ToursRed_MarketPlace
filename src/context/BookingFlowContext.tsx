@@ -21,6 +21,9 @@ interface BookingFlowContextType {
 
 const BookingFlowContext = createContext<BookingFlowContextType | null>(null);
 
+// El hook vive aqui porque esta acoplado al Context de este mismo archivo;
+// separarlo en otro archivo solo por Fast Refresh no aporta nada.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useBookingFlow = () => {
   const ctx = useContext(BookingFlowContext);
   if (!ctx) throw new Error('useBookingFlow must be used within BookingFlowProvider');
