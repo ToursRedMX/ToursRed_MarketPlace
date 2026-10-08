@@ -26,6 +26,7 @@ export function plantillaConfirmacion(folio: string, base: string): string {
   if (segmentosSms(text).segments > 1) throw new Error('plantilla_demasiado_larga');
   return text;
 }
-export function plantillaRecordatorio(tour: string, punto: string, folio: string): string {
-  return `ToursRed: manana tienes ${clean(tour, 35)}. Llega 10 min antes a ${clean(punto, 35)}. Reserva ${clean(folio, 20)}.`;
+export function plantillaRecordatorio(tour: string, punto: string, folio: string, hora = ''): string {
+  const time = /^\d{2}:\d{2}/.test(hora) ? ` ${hora.slice(0,5)}` : '';
+  return `ToursRed: manana ${clean(tour, 35)}${time}. Encuentro: ${clean(punto, 35)}. Reserva ${clean(folio, 20)}.`;
 }

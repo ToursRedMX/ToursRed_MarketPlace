@@ -260,3 +260,9 @@ verify_jwt = false
 
 [functions.verify-phone-otp]
 verify_jwt = false
+
+[functions.queue-booking-reminders]
+verify_jwt = false
+
+[functions.monitor-sms-health]
+verify_jwt = false

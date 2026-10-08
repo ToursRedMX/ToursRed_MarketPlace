@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+import * as jsx from 'react/jsx-runtime';
+const source=readFileSync('src/components/PhoneVerificationGate.tsx','utf8');
+const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+let state;
+const scope={exports:{},require(name){if(name==='react/jsx-runtime')return jsx;if(name.includes('AuthContext'))return{useAuth:()=>state};if(name==='react-router-dom')return{Link:'a',Navigate:'redirect',useLocation:()=>({pathname:'/agency/bookings',search:'?tour=one'})};throw Error(name);}};
+vm.runInNewContext(compiled,scope);
+const render=context=>scope.exports.PhoneVerificationGate({context,children:'protected-content'});
+const policy=pending=>({pending,required:pending,verified:false,sms_enabled:true,simulation:false});
+const base={userRole:'traveler',phoneVerificationLoading:false,phoneVerificationError:false,refreshPhoneVerification:async()=>{},phoneVerification:{traveler:policy(false),agency:policy(false),verified_at:null}};
+let passed=0;function test(name,fn){state={...base};fn();console.log(`ok ${++passed} - ${name}`);}
+test('global off keeps protected content visible',()=>assert.notEqual(render('account').type,'redirect'));
+test('traveler obligation redirects with safe return path',()=>{state.phoneVerification={traveler:policy(true),agency:policy(false)};const r=render('traveler');assert.equal(r.type,'redirect');assert.equal(r.props.to,'/verificar-telefono?redirect=%2Fagency%2Fbookings%3Ftour%3Done');});
+test('staff traveler role uses agency context',()=>{state.phoneVerification={traveler:policy(false),agency:policy(true)};assert.equal(render('agency').type,'redirect');});
+test('administrative context stays exempt while operating as traveler is gated',()=>{state.userRole='admin';state.phoneVerification={traveler:policy(true),agency:policy(true)};assert.notEqual(render('account').type,'redirect');assert.equal(render('traveler').type,'redirect');});
+test('policy loading withholds operational children',()=>{state.phoneVerificationLoading=true;assert.equal(render('traveler').props.role,'status');});
+test('policy read error withholds operational children',()=>{state.phoneVerificationError=true;assert.equal(render('traveler').type,'div');assert.equal(render('traveler').props.children[0].props.role,'alert');});
+test('dynamic deactivation removes redirection without changing verified data',()=>{state.phoneVerification={traveler:policy(true),agency:policy(true)};assert.equal(render('traveler').type,'redirect');state.phoneVerification={traveler:policy(false),agency:policy(false)};assert.notEqual(render('traveler').type,'redirect');});
+console.log(`${passed} UI gate scenarios passed without remote auth or messages.`);

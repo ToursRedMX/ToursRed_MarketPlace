@@ -189,7 +189,7 @@ test('SMS settings changes are covered by existing audit trigger', () => {
   assert.equal(sql("select exists(select 1 from public.audit_logs where target_table='platform_settings' and new_values ? 'sms_config_version')"),'t');
 });
 test('retention removes PII but preserves idempotency tombstones', () => {
-  sql(`update messaging_private.notification_outbox set status='entregado',updated_at=now()-interval '31 days' where id='${outbox}'`);
+  sql(`update messaging_private.notification_outbox set status='entregado',updated_at=now()-interval '91 days' where id='${outbox}'`);
   sql(service('select public.purge_sms_private_data()'));
   assert.equal(sql(`select destination_e164 is null and user_id is null from messaging_private.notification_outbox where id='${outbox}'`),'t');
   assert.equal(sql(service(enqueue())),outbox);

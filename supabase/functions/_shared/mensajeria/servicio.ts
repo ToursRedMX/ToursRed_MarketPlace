@@ -5,6 +5,7 @@ import { labsmobile } from './proveedores/labsmobile.ts';
 import { mock } from './proveedores/mock.ts';
 import { hmac, nuevaCorrelacion } from './seguridad.ts';
 import { segmentosSms } from './plantillas.ts';
+import { normalizarTelefonoSms } from './telefono.ts';
 
 export interface RuntimeSms {
   settings: RoutingSettings & { sms_paises_permitidos: string[]; sms_hora_recordatorio_local: number; sms_umbral_saldo_creditos: number };
@@ -21,6 +22,9 @@ export interface ReferenciaSms { outboxId?: string; verificationId?: string; lea
 export async function enviarPersistido(client: SupabaseClient, runtime: RuntimeSms, reference: ReferenciaSms,
   category: Categoria, destination: string, text: string): Promise<ResultadoEnvio> {
   if (!runtime.processor_ready) return { estado: 'fallido', clase: 'permanente', codigo: 'motor_no_disponible' };
+  let country: string;
+  try { country = normalizarTelefonoSms(destination, 'MX', runtime.settings.sms_paises_permitidos).country; }
+  catch { return { estado: 'fallido', clase: 'permanente', codigo: 'destino_no_permitido' }; }
   if (!runtime.settings.sms_modo_prueba && Deno.env.get('SMS_ALLOW_REAL_SENDS') !== 'true') return { estado: 'fallido', clase: 'permanente', codigo: 'envios_reales_no_autorizados' };
   const webhookSecret = Deno.env.get('SMS_WEBHOOK_SECRET') ?? '';
   if (webhookSecret.length < 32) return { estado: 'fallido', clase: 'permanente', codigo: 'webhook_no_configurado' };
@@ -36,6 +40,11 @@ export async function enviarPersistido(client: SupabaseClient, runtime: RuntimeS
     if (!start?.allowed) return { estado: 'fallido', clase: 'permanente', codigo: String(start?.code ?? 'intento_no_autorizado') };
     // Config may have changed since runtime was read; DB snapshot wins.
     const simulated = start.simulation === true;
+    const { error: countryError } = await client.rpc('record_sms_country', { p_outbox: reference.outboxId ?? null, p_attempt: start.attempt_id, p_country: country });
+    if (countryError) {
+      await client.rpc('finish_sms_attempt', { p_attempt: start.attempt_id, p_state: 'fallido', p_class: 'permanente', p_code: 'pais_no_registrado' });
+      return { estado: 'fallido', clase: 'permanente', codigo: 'pais_no_registrado' };
+    }
     if (!simulated && Deno.env.get('SMS_ALLOW_REAL_SENDS') !== 'true') {
       await client.rpc('finish_sms_attempt', { p_attempt: start.attempt_id, p_state: 'fallido', p_class: 'permanente', p_code: 'envios_reales_no_autorizados' });
       return { estado: 'fallido', clase: 'permanente', codigo: 'envios_reales_no_autorizados' };
