@@ -248,3 +248,9 @@ verify_jwt = false
 # ADEMAS de la validacion de rol admin dentro del codigo (29-ago).
 [functions."test-openpay-3ds-charge"]
 verify_jwt = true
+
+[functions.sms-webhook-labsmobile]
+verify_jwt = false # Authenticated inside the handler; service key or scoped callback signature.
+
+[functions.process-notification-outbox]
+verify_jwt = false # Authenticated inside the handler; service key or scoped callback signature.
