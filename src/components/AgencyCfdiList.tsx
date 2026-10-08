@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { FileText, Download, ExternalLink, CheckCircle, AlertCircle, Clock, XCircle, RefreshCw, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
@@ -56,13 +57,13 @@ interface Props {
 }
 
 const AgencyCfdiList: React.FC<Props> = ({ agencyId }) => {
-  const [invoices, setInvoices] = useState<CfdiInvoice[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
 
-  const fetchInvoices = async () => {
-    setIsLoading(true);
-    try {
+  // isFetching (no isLoading de react-query) a proposito: el boton de abajo
+  // debe seguir mostrando el estado "cargando" en cada refresco manual.
+  const { data: invoicesData, isFetching: isLoading, refetch: fetchInvoices } = useQuery({
+    queryKey: ['agency-cfdi-list', agencyId],
+    queryFn: async (): Promise<CfdiInvoice[]> => {
       const { data, error } = await supabase
         .from('cfdi_invoices')
         .select(`
@@ -75,15 +76,15 @@ const AgencyCfdiList: React.FC<Props> = ({ agencyId }) => {
         .limit(100);
 
       // Sin facturas, la agencia cree que no le han timbrado ninguna.
-      if (error) console.error('AgencyCfdiList: no se pudieron leer los CFDI', error);
+      if (error) {
+        console.error('AgencyCfdiList: no se pudieron leer los CFDI', error);
+        return [];
+      }
 
-      if (data) setInvoices(data as CfdiInvoice[]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchInvoices(); }, [agencyId]);
+      return (data ?? []) as CfdiInvoice[];
+    },
+  });
+  const invoices = invoicesData ?? [];
 
   const filtered = filter === 'all' ? invoices : invoices.filter(i => i.status === filter);
   const stamped = invoices.filter(i => i.status === 'stamped');
@@ -96,7 +97,7 @@ const AgencyCfdiList: React.FC<Props> = ({ agencyId }) => {
           <FileText className="h-5 w-5 text-primary-600" />
           Mis Facturas CFDI
         </h2>
-        <button onClick={fetchInvoices} className="btn btn-outline btn-sm" disabled={isLoading}>
+        <button onClick={() => fetchInvoices()} className="btn btn-outline btn-sm" disabled={isLoading}>
           <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isLoading ? 'animate-spin' : ''}`} />
           Actualizar
         </button>
