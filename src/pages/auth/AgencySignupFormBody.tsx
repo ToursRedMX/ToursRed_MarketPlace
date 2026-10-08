@@ -243,6 +243,9 @@ const AgencySignupFormBody: React.FC<Props> = ({
                   {emailReadOnly && (
                     <p className="mt-1 text-xs text-gray-400">Email verificado por {oauthProviderLabel}</p>
                   )}
+                  {!emailReadOnly && oauthProviderLabel && (
+                    <p className="mt-1 text-xs text-amber-600">{oauthProviderLabel} no compartió tu correo. Captúralo: te enviaremos un código para verificarlo.</p>
+                  )}
                   {!emailReadOnly && emailAvailability?.isChecking && (
                     <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
                       <Loader className="h-3 w-3 animate-spin" /> Verificando correo...

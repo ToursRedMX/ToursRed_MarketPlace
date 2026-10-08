@@ -169,6 +169,30 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Registro con Facebook sin correo: la cuenta de auth no tiene email, y sin él
+    // el correo ya verificado no serviría para iniciar sesión ni para recuperar
+    // la contraseña. Se asocia aquí, antes de marcarlo verificado, porque el email
+    // de auth es único: si otra cuenta ya lo tiene, falla y no queda verificado.
+    if (!user.email && userData.email) {
+      const { error: authEmailError } = await supabase.auth.admin.updateUserById(user.id, {
+        email: userData.email,
+        email_confirm: true,
+      });
+      if (authEmailError) {
+        console.error("Error asociando el correo a la cuenta de auth:", authEmailError);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Este correo ya está asociado a otra cuenta. Usa un correo distinto o inicia sesión con esa cuenta.",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 409,
+          }
+        );
+      }
+    }
+
     // Código correcto - marcar como verificado y limpiar campos
     const { error: updateError } = await supabase
       .from("users")
