@@ -1,3 +1,4 @@
+import { SmsSettingsSection } from '../../components/SmsSettingsSection';
 import React, { useState, useEffect, useRef } from 'react';
 import { Mail, Server, Save, Loader, CheckCircle, AlertCircle, DollarSign, Percent, CreditCard, Crown, Gift, Award, Users, Globe, FileText, Shield, BookOpen, Link, Unlink, RefreshCw, ExternalLink, Tag, Image, Upload, RotateCcw, X, Wrench, Megaphone, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -2828,6 +2829,7 @@ const AdminSettings: React.FC = () => {
         </div>
 
         {/* ── Seguridad: MFA y Passkeys ─────────────────────────── */}
+        <SmsSettingsSection />
         <SecurityTogglesSection />
 
         <div className="flex justify-end">
