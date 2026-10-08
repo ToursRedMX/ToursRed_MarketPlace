@@ -29,10 +29,6 @@ const AdminReferralsPage: React.FC = () => {
   const [editingLimits, setEditingLimits] = useState<{[key: string]: number}>({});
   const [savingLimits, setSavingLimits] = useState<{[key: string]: boolean}>({});
 
-  useEffect(() => {
-    loadReferralData();
-  }, []);
-
   const loadReferralData = async () => {
     try {
       setIsLoading(true);
@@ -98,6 +94,14 @@ const AdminReferralsPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // No se migra a useQuery: referralCodes se muta localmente con
+  // setReferralCodes(prev => ...) tras editar un limite, para una respuesta
+  // optimista.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadReferralData();
+  }, []);
 
   const handleUpdateLimit = async (codeId: string, newLimit: number) => {
     setSavingLimits(prev => ({ ...prev, [codeId]: true }));

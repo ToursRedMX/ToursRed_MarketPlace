@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Filter, Search, TrendingUp, TrendingDown, Wallet, Landmark,
   BarChart2, Download, RefreshCw, Calendar, Tag, AlertCircle, Info,
@@ -106,14 +107,16 @@ const money = (n: number) => formatCurrencyMXN(n);
 const fecha = (d: string) => {
   try { return format(parseISO(d), 'dd/MM/yyyy'); } catch { return d; }
 };
+// Referencia estable: `filasData ?? []` crearia un arreglo nuevo en cada
+// render mientras filasData sea undefined (loading), lo que invalidaba los
+// useMemo que dependen de `filas`.
+const SIN_FILAS: MovimientoFila[] = [];
+
 const hoy = () => format(new Date(), 'yyyy-MM-dd');
 const primeroDelMes = () =>
   format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd');
 
 const AdminReporteMaestro: React.FC = () => {
-  const [filas, setFilas] = useState<MovimientoFila[]>([]);
-  const [cargando, setCargando] = useState(false);
-  const [error, setError] = useState('');
   const [filtros, setFiltros] = useState<Filtros>({
     desde: primeroDelMes(),
     hasta: hoy(),
@@ -122,24 +125,24 @@ const AdminReporteMaestro: React.FC = () => {
     busqueda: '',
   });
 
-  // Contador de peticiones. Sin el, dos cargas encimadas se pisan: la que
-  // termina al final gana, aunque sea la vieja. Eso produjo una pantalla con
-  // 185 filas Y el banner de error al mismo tiempo, que es exactamente lo que
-  // un reporte financiero no debe hacer -- deja al lector sin saber si lo que
-  // ve es bueno.
-  const peticionActual = React.useRef(0);
-
-  const cargar = useCallback(async () => {
+  // react-query descarta solo el resultado de una peticion vieja cuando la
+  // queryKey cambia antes de que resuelva -- antes esto se hacia a mano con
+  // un contador de turno; dos cargas encimadas se pisaban (la que terminaba
+  // al final ganaba, aunque fuera la vieja), y eso produjo una pantalla con
+  // 185 filas Y el banner de error al mismo tiempo.
+  const {
+    data: filasData,
+    isFetching: cargando,
+    error: errorConsulta,
+    refetch: cargar,
+  } = useQuery({
+    queryKey: ['admin-reporte-maestro', filtros.desde, filtros.hasta],
     // Un `<input type="date">` pasa por '' mientras se edita, y PostgREST
     // responde 400 a `fecha=gte.` sin valor. No es un error que valga la pena
     // ensenar: es un estado intermedio de la escritura.
-    if (!filtros.desde || !filtros.hasta) return;
-
-    const miTurno = ++peticionActual.current;
-    setCargando(true);
-    setError('');
-    try {
-      const { data, error: errorConsulta } = await supabase
+    enabled: !!filtros.desde && !!filtros.hasta,
+    queryFn: async (): Promise<MovimientoFila[]> => {
+      const { data, error } = await supabase
         .from('vista_movimientos_financieros')
         .select('*')
         .gte('fecha', filtros.desde)
@@ -149,40 +152,31 @@ const AdminReporteMaestro: React.FC = () => {
       // Si esto falla en silencio la pantalla se ve completa con cero
       // movimientos, que es indistinguible de un periodo sin actividad. Un
       // reporte financiero vacio por error es peor que no mostrar reporte.
-      if (errorConsulta) throw errorConsulta;
-      if (miTurno !== peticionActual.current) return;  // llego tarde: la ignoramos
+      if (error) throw error;
 
-      setFilas(
-        (data ?? []).map((f: Record<string, unknown>) => ({
-          fecha: String(f.fecha),
-          categoria: String(f.categoria),
-          naturaleza: f.naturaleza === 'egreso' ? 'egreso' : 'ingreso',
-          descripcion: String(f.descripcion ?? ''),
-          referencia: String(f.referencia ?? ''),
-          entidad: (f.entidad as string) ?? null,
-          metodo: (f.metodo as string) ?? null,
-          caja: Number(f.caja ?? 0),
-          pasivo: Number(f.pasivo ?? 0),
-          ingreso: Number(f.ingreso ?? 0),
-          traspaso: Number(f.traspaso ?? 0),
-          origen_tabla: String(f.origen_tabla ?? ''),
-          origen_id: String(f.origen_id ?? ''),
-        })),
-      );
-    } catch (e) {
-      if (miTurno !== peticionActual.current) return;
-      setError(
-        e instanceof Error
-          ? `No se pudo cargar el reporte: ${e.message}`
-          : 'No se pudo cargar el reporte.',
-      );
-      setFilas([]);
-    } finally {
-      if (miTurno === peticionActual.current) setCargando(false);
-    }
-  }, [filtros.desde, filtros.hasta]);
-
-  useEffect(() => { cargar(); }, [cargar]);
+      return (data ?? []).map((f: Record<string, unknown>) => ({
+        fecha: String(f.fecha),
+        categoria: String(f.categoria),
+        naturaleza: f.naturaleza === 'egreso' ? 'egreso' : 'ingreso',
+        descripcion: String(f.descripcion ?? ''),
+        referencia: String(f.referencia ?? ''),
+        entidad: (f.entidad as string) ?? null,
+        metodo: (f.metodo as string) ?? null,
+        caja: Number(f.caja ?? 0),
+        pasivo: Number(f.pasivo ?? 0),
+        ingreso: Number(f.ingreso ?? 0),
+        traspaso: Number(f.traspaso ?? 0),
+        origen_tabla: String(f.origen_tabla ?? ''),
+        origen_id: String(f.origen_id ?? ''),
+      }));
+    },
+  });
+  const filas = filasData ?? SIN_FILAS;
+  const error = errorConsulta
+    ? (errorConsulta instanceof Error
+      ? `No se pudo cargar el reporte: ${errorConsulta.message}`
+      : 'No se pudo cargar el reporte.')
+    : '';
 
   const filtradas = useMemo(() => filas.filter((f) => {
     if (filtros.naturaleza !== 'todas' && f.naturaleza !== filtros.naturaleza) return false;
@@ -397,7 +391,7 @@ const AdminReporteMaestro: React.FC = () => {
           <span className="text-sm font-medium text-gray-700">
             {filtradas.length} {filtradas.length === 1 ? 'movimiento' : 'movimientos'}
           </span>
-          <button onClick={cargar} disabled={cargando}
+          <button onClick={() => cargar()} disabled={cargando}
             className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50">
             <RefreshCw size={13} className={cargando ? 'animate-spin' : ''} />
             Actualizar

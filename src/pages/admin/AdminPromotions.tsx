@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Tag, Search, ToggleLeft, ToggleRight, AlertCircle, Check, Calendar, Users, Building, X, Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { supabase } from '../../lib/supabase';
@@ -28,8 +29,6 @@ type StatusFilter = 'all' | 'active' | 'inactive' | 'expired' | 'scheduled';
 type TypeFilter = 'all' | '2x1' | '3x2' | 'grupo_precio_fijo' | 'nxprecio';
 
 const AdminPromotions: React.FC = () => {
-  const [promotions, setPromotions] = useState<TourPromotion[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -38,26 +37,27 @@ const AdminPromotions: React.FC = () => {
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
 
-  useEffect(() => {
-    loadPromotions();
-  }, []);
+  const { data: promotionsData, isPending: isLoading, refetch: loadPromotions } = useQuery({
+    queryKey: ['admin-promotions'],
+    queryFn: async (): Promise<TourPromotion[]> => {
+      const { data, error } = await supabase
+        .from('tour_promotions')
+        .select(`
+          *,
+          tours(name, destination),
+          agencies(name)
+        `)
+        .order('created_at', { ascending: false });
 
-  const loadPromotions = async () => {
-    setIsLoading(true);
-    const { data, error } = await supabase
-      .from('tour_promotions')
-      .select(`
-        *,
-        tours(name, destination),
-        agencies(name)
-      `)
-      .order('created_at', { ascending: false });
+      if (error) {
+        console.error('Error loading promotions:', error);
+        return [];
+      }
 
-    if (!error && data) {
-      setPromotions(data);
-    }
-    setIsLoading(false);
-  };
+      return data;
+    },
+  });
+  const promotions = promotionsData ?? [];
 
   const getPromotionStatus = (promo: TourPromotion): 'active' | 'inactive' | 'expired' | 'scheduled' => {
     const now = new Date();
