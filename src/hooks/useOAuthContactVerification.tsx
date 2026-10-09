@@ -50,6 +50,8 @@ export function useOAuthContactVerification({ user, audience = 'traveler', email
 
   const policy = useQuery({
     queryKey: ['oauth-phone-policy', audience],
+    staleTime: 0,
+    refetchInterval: 5000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('platform_settings')

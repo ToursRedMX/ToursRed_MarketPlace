@@ -1,5 +1,5 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.117.2';
-import type { Categoria, Proveedor, ResultadoEnvio, RoutingSettings } from './tipos.ts';
+import type { CanalOtp, Categoria, Proveedor, ResultadoEnvio, RoutingSettings } from './tipos.ts';
 import { enrutar } from './enrutador.ts';
 import { labsmobile } from './proveedores/labsmobile.ts';
 import { mock } from './proveedores/mock.ts';
@@ -22,7 +22,7 @@ export async function cargarRuntime(client: SupabaseClient): Promise<RuntimeSms>
 }
 export interface ReferenciaSms { outboxId?: string; verificationId?: string; lease?: string }
 export async function enviarPersistido(client: SupabaseClient, runtime: RuntimeSms, reference: ReferenciaSms,
-  category: Categoria, destination: string, text: string): Promise<ResultadoEnvio> {
+  category: Categoria, destination: string, text: string, channel: CanalOtp = 'sms', otpCode?: string): Promise<ResultadoEnvio> {
   if (!runtime.processor_ready) return { estado: 'fallido', clase: 'permanente', codigo: 'motor_no_disponible' };
   let country: string;
   try { country = normalizarTelefonoSms(destination, 'MX', runtime.settings.sms_paises_permitidos).country; }
@@ -55,11 +55,11 @@ export async function enviarPersistido(client: SupabaseClient, runtime: RuntimeS
     const adapter = provider === 'mock' ? mock : provider === 'labsmobile'
       ? labsmobile(Deno.env.get('LABSMOBILE_USER') ?? '', Deno.env.get('LABSMOBILE_TOKEN') ?? '', Deno.env.get('LABSMOBILE_SENDER') ?? 'ToursRed') : provider === 'twilio' ? twilio(twilioConfig()) : null;
     const result: ResultadoEnvio = adapter ? await adapter.enviar({ destino: destination, texto: text, correlacion: correlation, categoria: category,
-      simulacion: simulated, urlEstados: callback.toString() }) : { estado: 'fallido', clase: 'permanente', codigo: 'adaptador_no_implementado' };
+      simulacion: simulated, urlEstados: callback.toString(), canal: channel, codigoOtp: otpCode }) : { estado: 'fallido', clase: 'permanente', codigo: 'adaptador_no_implementado' };
     const { error } = await client.rpc('finish_sms_attempt', { p_attempt: start.attempt_id, p_state: result.estado,
       p_provider_id: 'idProveedor' in result ? result.idProveedor : null,
       p_class: 'clase' in result ? result.clase : null, p_code: 'codigo' in result ? result.codigo : null });
     // Never fallback when persisting a response failed: durable state is unknown.
     return error ? { estado: 'resultado_desconocido', codigo: 'persistencia_resultado_desconocido' } : result;
-  });
+  }, channel);
 }
