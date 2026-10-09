@@ -87,21 +87,33 @@ export function twilio(config: TwilioConfig, transport: typeof fetch = fetch): P
       } catch { return { estado: 'resultado_desconocido', codigo: 'twilio_transporte_ambiguo' }; }
     },
     async comprobar() {
-      if (!senderValid) return false;
+      // Diagnostico temporal: por que twilio_ready sale false. No imprime
+      // accountSid/authToken, solo el paso que fallo.
+      if (!senderValid) { console.error('twilio.comprobar: senderValid=false (formato de MessagingServiceSid o From invalido)'); return false; }
       const account = await get(base + '.json');
-      if (account?.sid !== config.accountSid || account.status !== 'active') return false;
+      if (account?.sid !== config.accountSid || account.status !== 'active') {
+        console.error('twilio.comprobar: cuenta no valida', { sid_coincide: account?.sid === config.accountSid, status: account?.status ?? 'sin_respuesta' });
+        return false;
+      }
       if (config.messagingServiceSid) {
         const service = await get(`https://messaging.twilio.com/v1/Services/${config.messagingServiceSid}`);
-        if (service?.sid !== config.messagingServiceSid || service.account_sid !== config.accountSid) return false;
+        if (service?.sid !== config.messagingServiceSid || service.account_sid !== config.accountSid) {
+          console.error('twilio.comprobar: messaging service no valido', { sid_coincide: service?.sid === config.messagingServiceSid, account_coincide: service?.account_sid === config.accountSid, respuesta: service ?? 'sin_respuesta' });
+          return false;
+        }
         const pool = await get(`https://messaging.twilio.com/v1/Services/${config.messagingServiceSid}/PhoneNumbers?PageSize=100`);
-        return Array.isArray(pool?.phone_numbers) && pool.phone_numbers.some((p: unknown) => {
+        const listo = Array.isArray(pool?.phone_numbers) && pool.phone_numbers.some((p: unknown) => {
           const item = record(p); return Array.isArray(item.capabilities) && item.capabilities.includes('SMS');
         });
+        if (!listo) console.error('twilio.comprobar: sender pool sin numero con capacidad SMS', { cantidad: Array.isArray(pool?.phone_numbers) ? pool.phone_numbers.length : 'sin_respuesta' });
+        return listo;
       }
       const result = await get(`${base}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(config.from!)}&PageSize=1`);
-      return Array.isArray(result?.incoming_phone_numbers) && result.incoming_phone_numbers.some((p: unknown) => {
+      const listo = Array.isArray(result?.incoming_phone_numbers) && result.incoming_phone_numbers.some((p: unknown) => {
         const item = record(p); return item.account_sid === config.accountSid && item.phone_number === config.from && record(item.capabilities).sms === true;
       });
+      if (!listo) console.error('twilio.comprobar: numero From no encontrado o sin capacidad SMS', { cantidad: Array.isArray(result?.incoming_phone_numbers) ? result.incoming_phone_numbers.length : 'sin_respuesta' });
+      return listo;
     },
     async saldoMonetario() {
       const data = await get(base + '/Balance.json');
