@@ -43,6 +43,18 @@ if (archivos.length === 0) {
 }
 
 const sql = fs.readFileSync(SQL, 'utf8');
+
+// Un merge mal resuelto puede dejar marcadores de conflicto commiteados: el
+// regex del blob (sin ancla de inicio de linea) toma el PRIMER `select`, que
+// puede estar atrapado dentro de un bloque `<<<<<<<` con 4 copias muertas
+// detras — el archivo queda roto como SQL aunque este chequeo diga "al dia".
+// Paso el 09-oct-2026 en 3 merges seguidos sin que nada lo cazara.
+if (/^<<<<<<<|^=======$|^>>>>>>>/m.test(sql)) {
+  console.error('ERROR: ' + SQL + ' tiene marcadores de conflicto de git sin resolver (<<<<<<<, >>>>>>>).');
+  console.error('El archivo no es SQL valido aunque el blob de abajo siga pareciendo correcto.');
+  process.exit(2);
+}
+
 const blob = (sql.match(/select '([0-9,]+)'::text as blob/) || [])[1];
 if (!blob) {
   console.error('ERROR: no se hallo el blob de versiones en ' + SQL + '.');
