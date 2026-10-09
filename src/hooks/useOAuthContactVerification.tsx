@@ -8,16 +8,21 @@ import PhoneOtpVerify from '../components/PhoneOtpVerify';
 
 interface Options {
   user: User | null;
+  /** Qué política de celular aplica: la de viajeros o la de agencias. */
+  audience?: 'traveler' | 'agency';
+  emailLabel?: string;
+  phoneLabel?: string;
   providerLabel: string;
   emailFromProvider: boolean;
   email: string;
   onEmailChange: (value: string) => void;
   phone: string;
   onPhoneChange: (value: string) => void;
-  inputClass: string;
+  inputClass?: string;
 }
 
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const INPUT_CLASS = 'appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm';
 
 /**
  * Los dos campos verificables de los registros sociales de VIAJERO: correo y celular.
@@ -33,7 +38,7 @@ const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * Ambos códigos necesitan una fila en `users`, así que se crea (a medias) en el primer
  * clic. Ver `guardarPerfilViajero`.
  */
-export function useOAuthContactVerification({ user, providerLabel, emailFromProvider, email, onEmailChange, phone, onPhoneChange, inputClass }: Options) {
+export function useOAuthContactVerification({ user, audience = 'traveler', emailLabel = 'Correo electrónico', phoneLabel = 'Número de celular', providerLabel, emailFromProvider, email, onEmailChange, phone, onPhoneChange, inputClass = INPUT_CLASS }: Options) {
   const [emailVerified, setEmailVerified] = useState(false);
   const [emailStep, setEmailStep] = useState<'idle' | 'code'>('idle');
   const [emailBusy, setEmailBusy] = useState(false);
@@ -44,14 +49,15 @@ export function useOAuthContactVerification({ user, providerLabel, emailFromProv
   const profile = useRef<Promise<void> | null>(null);
 
   const policy = useQuery({
-    queryKey: ['oauth-phone-policy'],
+    queryKey: ['oauth-phone-policy', audience],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('platform_settings')
-        .select('phone_verification_required, phone_verification_travelers_required')
+        .select('phone_verification_required, phone_verification_travelers_required, phone_verification_agencies_required')
         .single();
       if (error) throw error;
-      return Boolean(data.phone_verification_required && data.phone_verification_travelers_required);
+      const rolExigido = audience === 'agency' ? data.phone_verification_agencies_required : data.phone_verification_travelers_required;
+      return Boolean(data.phone_verification_required && rolExigido);
     },
     retry: 1,
   });
@@ -147,7 +153,7 @@ export function useOAuthContactVerification({ user, providerLabel, emailFromProv
 
   const emailField = (
     <div>
-      <label className="block text-sm font-medium text-gray-700">Correo electrónico</label>
+      <label className="block text-sm font-medium text-gray-700">{emailLabel}</label>
       {emailFromProvider ? (
         <>
           <input name="email" type="email" value={email} readOnly className={`mt-1 ${inputClass} bg-gray-50`} />
@@ -193,7 +199,7 @@ export function useOAuthContactVerification({ user, providerLabel, emailFromProv
 
   const phoneField = (
     <div>
-      <label className="block text-sm font-medium text-gray-700">Número de celular</label>
+      <label className="block text-sm font-medium text-gray-700">{phoneLabel}</label>
       <div className="mt-1 flex gap-2">
         <input
           name="phoneNumber" type="tel" value={phone}

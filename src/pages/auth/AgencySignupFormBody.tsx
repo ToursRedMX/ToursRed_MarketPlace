@@ -30,6 +30,12 @@ interface Props {
   oauthProviderLabel?: string | null;
   /** Ícono SVG del proveedor OAuth */
   oauthProviderIcon?: React.ReactNode;
+  /** Campo de correo ya armado (con su verificación). Solo lo usan los registros sociales. */
+  emailSlot?: React.ReactNode;
+  /** Campo de teléfono ya armado (con su verificación). Solo lo usan los registros sociales. */
+  phoneSlot?: React.ReactNode;
+  /** false mientras falte verificar el correo o el teléfono: "Crear cuenta" queda deshabilitado. */
+  contactReady?: boolean;
   submitLabel?: string;
   turnstileToken?: string;
   onTurnstileToken?: (token: string) => void;
@@ -62,6 +68,9 @@ const AgencySignupFormBody: React.FC<Props> = ({
   emailReadOnly = false,
   oauthProviderLabel = null,
   oauthProviderIcon = null,
+  emailSlot,
+  phoneSlot,
+  contactReady = true,
   submitLabel,
   turnstileToken,
   onTurnstileToken,
@@ -232,6 +241,7 @@ const AgencySignupFormBody: React.FC<Props> = ({
                   />
                 </div>
 
+                {emailSlot ?? (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Correo electrónico *</label>
                   <input
@@ -242,9 +252,6 @@ const AgencySignupFormBody: React.FC<Props> = ({
                   />
                   {emailReadOnly && (
                     <p className="mt-1 text-xs text-gray-400">Email verificado por {oauthProviderLabel}</p>
-                  )}
-                  {!emailReadOnly && oauthProviderLabel && (
-                    <p className="mt-1 text-xs text-amber-600">{oauthProviderLabel} no compartió tu correo. Captúralo: te enviaremos un código para verificarlo.</p>
                   )}
                   {!emailReadOnly && emailAvailability?.isChecking && (
                     <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
@@ -263,7 +270,9 @@ const AgencySignupFormBody: React.FC<Props> = ({
                     </p>
                   )}
                 </div>
+                )}
 
+                {phoneSlot ?? (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Teléfono *</label>
                   <input
@@ -273,6 +282,7 @@ const AgencySignupFormBody: React.FC<Props> = ({
                     className={`mt-1 ${inputClass}`}
                   />
                 </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Sitio Web o Facebook *</label>
@@ -619,11 +629,12 @@ const AgencySignupFormBody: React.FC<Props> = ({
             {/* ── Submit ───────────────────────────────────────────────── */}
             <button
               type="submit"
-              disabled={isLoading || !termsAccepted || identifierUnavailable || (!!onTurnstileToken && !turnstileToken)}
+              disabled={isLoading || !termsAccepted || !contactReady || identifierUnavailable || (!!onTurnstileToken && !turnstileToken)}
               className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Procesando...' : label}
             </button>
+            {!contactReady && <p className="text-center text-xs text-gray-500">Verifica tu correo y tu teléfono para poder crear tu cuenta.</p>}
           </form>
 
           {/* ── Link viajero (solo email/pwd) ────────────────────────── */}
