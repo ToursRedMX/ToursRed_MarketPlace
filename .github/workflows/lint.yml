@@ -706,6 +706,20 @@ jobs:
           PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS tax_parity;" -c "CREATE DATABASE tax_parity;"
           node scripts/test-tax-snapshot-sql.mjs
 
+      # issue_phone_challenge pedia sesion reciente tambien para poner el PRIMER
+      # telefono (NULL IS DISTINCT FROM cualquier numero), y el registro social
+      # fallaba con "para cambiar el telefono..." sin telefono que cambiar. La
+      # prueba corre la version vieja (reproduce el error) y luego la migracion.
+      - name: Verify issue_phone_challenge allows the first phone without re-auth
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: otp_primer_telefono
+        run: |
+          PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS otp_primer_telefono;" -c "CREATE DATABASE otp_primer_telefono;"
+          node scripts/test-otp-primer-telefono-sql.mjs
+
       # Misma categoria que el paso de arriba: una regla escrita dos veces. El
       # enmascarado de IP vive en `public.enmascarar_ip` —de donde
       # `insert_audit_log` deriva el `ip_masked` de la bitacora— y en
