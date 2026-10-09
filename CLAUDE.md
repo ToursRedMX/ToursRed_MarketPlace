@@ -70,14 +70,18 @@ Y después, **confirma contra la base** —columna, función, y que el ledger re
 - **Lanzamiento objetivo: 23 de noviembre de 2026.** Antes quedan las UAT y el DRP.
 - **PCI: el SAQ es A**, determinado el 10-sep-2026 — los cinco procesadores usan checkout alojado, ningún dato de tarjeta pasa por el sitio. Los 5 AOC están y la documentación también. **SAQ A NO libra de los escaneos ASV:** PCI DSS v4 añadió el Requisito 11.3.2 a esa modalidad, **cada 90 días**, con reescaneo aprobatorio; no existe modalidad semestral. El ASV va en la lista de actividades PREVIAS a producción, no ahora. **Las pruebas de intrusión (11.4) sí están exentas en SAQ A**, así que el pentest interno es buena práctica y no cumplimiento — no lo presentes como si cerrara 11.4, el QSA lo va a notar.
 
-## Lo que está abierto hoy (06-oct-2026)
+## Lo que está abierto hoy (09-oct-2026)
 
-Actualizado tras cerrar el barrido de `no-explicit-any` en `src/` (PRs #343 a
-#353, 1144 → 30) y volver a comparar `BookingForm.tsx` contra el flujo de 4
-pasos función por función — la comparación anterior (entrada 36/#236) se
-había dado por buena y no lo estaba del todo: salieron 2 reglas reales más,
-ya cerradas (ver abajo). Lo de antes de hoy (DRP, `audit_errors`,
-`snapshot_booking_tax`, centralizar el desglose) sigue igual, sin tocar.
+Actualizado tras confirmar dos pendientes del 06-oct y encontrar uno nuevo
+cruzando contra la base (no releyendo código): la deuda de `react-hooks/*`
+que el 06-oct dominaba la lista **ya se cerró** en algún punto de los días
+siguientes (no se investigó en qué PR exacto; falta una entrada de bitácora
+para ese tramo del 04 al 09-oct), y el sistema de SMS de confirmación de
+reserva + recordatorio de un día antes —que parecía "lo siguiente a
+construir"— **ya estaba construido y con su cron activo en producción**
+desde la migración `20261008061340`, solo que bloqueado por un hueco de
+datos. Lo de antes de hoy que sigue sin tocar: DRP, `audit_errors`,
+`snapshot_booking_tax`, centralizar el desglose.
 
 - **DRP del escenario compuesto.** Sigue sin escribirse el plan para un admin que pierde **correo y TOTP a la vez** — hoy la única puerta es el Dashboard de Supabase, fuera de la app, y hay un solo super_admin. (La entrada 44 cerró el autoservicio de códigos de recuperación, que cubre el caso común de dispositivo perdido con sesión viva; este caso compuesto es distinto y no se ha tocado.)
 - **Borrar `src/components/BookingForm.tsx` — EN PAUSA por decisión de Axel, no solo pendiente de confirmación.** La comparación función por función del 06-oct (fork dedicado, lectura completa de los 6 archivos del flujo nuevo contra las 3366 líneas del viejo) encontró 2 reglas de negocio reales que faltaban en el flujo de 4 pasos — y que YA se cerraron, en `create_booking_atomic` y en `BookingFlowStep3`/`BookingFlowStep4` (PR #354, migración `20261006202917`, aplicada y verificada contra la base):
@@ -87,7 +91,10 @@ ya cerradas (ver abajo). Lo de antes de hoy (DRP, `audit_errors`,
 - **`audit_errors` ya se revisó (03-oct-2026, entrada 47).** De 40 filas, dos patrones ya estaban cerrados y uno se autocuró por un cron existente. Queda un residuo real sin acción por decisión de Axel: 3 CFDI `stamped` con `email_sent=false` (reservas de prueba suyas) — nada hoy reintenta ese caso, así que si se repite con dinero real hace falta un camino de reenvío.
 - **`snapshot_booking_tax` se sigue tragando sus errores.** El `EXCEPTION WHEN OTHERS` pone los seis campos fiscales en NULL y deja pasar la reserva; el CFDI sale gravado al 16% sin que nada falle. Deja rastro en `audit_errors` y el cron `check_missing_tax_snapshots` avisa después. **No se toca a propósito:** hacerlo fallar duro bloquearía reservas ante cualquier error transitorio, y eso es decisión de negocio.
 - **Centralizar el desglose de costos de reserva** (~4–6 días). Hoy duplicado en ~4 lugares.
-- **Deuda de eslint: 336 problemas** (249 errores, 87 avisos) en 148 archivos, medido por CI el 06-oct-2026 (job 112507236647, PR #354) — bajando desde los 1918 del 03-oct. **`no-explicit-any` quedó en 30, todos en `BookingForm.tsx`** (código muerto, ver arriba): el barrido de `src/` cerró. **Lo que domina hoy es `react-hooks/*` (298, el 89% del total)** — `set-state-in-effect` (107), `exhaustive-deps` (83), `immutability` (82), `refs` (21) y el resto — sin tocar todavía: a diferencia de `no-explicit-any`, son hallazgos del React Compiler sobre comportamiento real en runtime (renders en cascada, dependencias faltantes, mutaciones), no solo de tipos, y requieren más cuidado por archivo. **El corte que bloquea es el TOTAL, no la fila**, así que un PR que añada un `set-state-in-effect` y borre dos `any` pasa en verde — bloquear por regla solo en las `react-hooks/*` está anotado en la entrada 23, sin implementar.
+- **SMS de confirmación de reserva + recordatorio un día antes: YA ESTÁN en producción, no son trabajo pendiente.** Migración `20261008061340` (commit `a6682b4`), cron activo (`sms-outbox`, `sms-scheduler`, `sms-health`, `sms-retention`, verificados `active=true` en `cron.job` el 09-oct-2026). Un trigger encola el SMS de confirmación solo; `queue_booking_sms_batch()` corre cada 15 min para el recordatorio. **Prueba manual de Axel (noche del 08-oct) confirmada contra la base:** OTP por SMS 3/3 entregado; OTP por WhatsApp verificó bien de punta a punta, pero el estado de entrega que reporta Twilio para WhatsApp quedó `resultado_desconocido` sin resolver — no bloquea el login, sí la métrica de salud de ese canal, sin investigar todavía.
+  **Hueco real que SÍ bloqueaba el recordatorio para cualquier tour (no solo los de prueba), cerrado el 09-oct-2026 con migración `20261009163001`:** las 7 `destinations` tenían `time_zone` en NULL — `booking_sms_snapshot()` no puede calcular `departure_at` sin zona horaria, para ningún tour, sea de fecha fija (excursión) o con slots (receptivo); la lógica que distingue ambos tipos ya era correcta, el bloqueo era puramente de datos. Backfill a `America/Mexico_City` o `America/Mazatlan` según el municipio real de cada destino, más `NOT NULL`+`DEFAULT` para que un destino nuevo fuera del formulario de `AdminDestinations` no vuelva a quedar sin zona.
+  **WhatsApp para confirmación/recordatorio NO existe — sigue limitado a OTP por diseño** (`_shared/mensajeria/enrutador.ts` línea 16). Extenderlo es trabajo nuevo: el enrutador, más un `whatsapp_proveedor_*` para esas categorías en `platform_settings` (hoy solo existe `whatsapp_proveedor_otp`).
+- **Deuda de eslint: CERRADA fuera del archivo muerto.** Medido el 09-oct-2026 con `npm run lint` real (no el baseline del CI, que sigue citando 336 de PR #354): **38 problemas totales, y los 38 están en `BookingForm.tsx`** (30 `no-explicit-any` + 8 `react-hooks/*`) — cero en el resto de `src/`. El bloque de `react-hooks/*` que dominaba la lista el 06-oct (298 problemas) se cerró en algún punto antes del 09-oct; no se identificó el PR exacto. **Pendiente real, no de código:** el baseline de `lint.yml` (`BASELINE_TOTAL=336`) tiene ~298 problemas de holgura sin ratchear — no bloquea hoy pero esconde una regresión de ese tamaño si volviera a aparecer.
 - **Tipos del front: CERO, y la guardia exige cero.** `scripts/front-check/baseline.txt` sigue vacío, así que cualquier error de tipos nuevo en `src/` bloquea. Cerrado desde el 11-sep (entrada 22); se deja aquí solo para que no se asuma como pendiente.
 
 ### Decidido, no pendiente (no lo resucites)
