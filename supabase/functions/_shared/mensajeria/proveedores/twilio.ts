@@ -29,7 +29,7 @@ export function clasificarTwilio(status: number, value: unknown, simulated: bool
     // Even an immediate terminal response has an identity: reconcile it, never fallback.
     return { estado: simulated ? 'simulado' : 'aceptado', idProveedor: data.sid };
   }
-  if (status >= 400 && status < 500) {
+  if (status >= 400 && status < 500 && status !== 408) {
     const code = Number(data.code);
     // Only explicit API refusals. Opt-out, geo restrictions, fraud and content
     // failures MUST NOT be bypassed with another provider (including HTTP 403).

@@ -45,7 +45,7 @@ Deno.test('permanent errors, opt-out and fraud restrictions never trigger fallba
   assert.equal(permiteFallback(clasificarTwilio(429,{code:20429},false)),true);
 });
 Deno.test('5xx, malformed success and transport timeout stay unknown',async()=>{
-  for(const [status,body] of [[500,{code:20500}],[201,{}],[201,{sid,status:'invented'}],[200,'bad']])assert.equal(clasificarTwilio(Number(status),body,false).estado,'resultado_desconocido');
+  for(const [status,body] of [[408,{}],[500,{code:20500}],[201,{}],[201,{sid,status:'invented'}],[200,'bad']])assert.equal(clasificarTwilio(Number(status),body,false).estado,'resultado_desconocido');
   const transport:typeof fetch=async()=>{throw new DOMException('timeout','TimeoutError');};
   const result=await twilio(config,transport).enviar(message);assert.equal(result.estado,'resultado_desconocido');assert.equal(permiteFallback(result),false);
 });
