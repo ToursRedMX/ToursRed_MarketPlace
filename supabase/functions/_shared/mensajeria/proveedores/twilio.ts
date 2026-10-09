@@ -11,6 +11,16 @@ export interface TwilioConfig {
   testAccountSid?: string;
   testAuthToken?: string;
 }
+export interface WhatsAppReadiness {
+  ready: boolean;
+  failed_checks: string[];
+  checks: Record<string, boolean>;
+  requests: { stage: string; http_status: number | null; twilio_code?: number; failure?: string }[];
+  approval_status: string;
+  approval_category: string;
+  sender_status: string;
+  sender_count: number;
+}
 export const messageSidValid = (sid: unknown): sid is string => typeof sid === 'string' && /^SM[0-9a-fA-F]{32}$/.test(sid);
 const accountValid = (sid: string) => /^AC[0-9a-fA-F]{32}$/.test(sid);
 const phoneValid = (phone: string) => /^\+[1-9]\d{7,14}$/.test(phone);
@@ -45,18 +55,62 @@ export function clasificarTwilio(status: number, value: unknown, simulated: bool
 export function twilio(config: TwilioConfig, transport: typeof fetch = fetch): ProveedorSms & {
   comprobar(): Promise<boolean>;
   comprobarWhatsApp(): Promise<boolean>;
+  diagnosticarWhatsApp(): Promise<WhatsAppReadiness>;
   consultar(sid: string): Promise<TwilioMessage | null>;
   saldoMonetario(): Promise<{ amount: number; currency: string } | null>;
 } {
   const base = `https://api.twilio.com/2010-04-01/Accounts/${config.accountSid}`;
   const credentialsValid = accountValid(config.accountSid) && /^[0-9a-fA-F]{32}$/.test(config.authToken);
   const senderValid = config.messagingServiceSid ? serviceValid(config.messagingServiceSid) : phoneValid(config.from ?? '');
-  async function get(url: string): Promise<Record<string, unknown> | null> {
+  async function get(url: string, diagnostic?: { stage: string; requests: WhatsAppReadiness['requests'] }): Promise<Record<string, unknown> | null> {
     if (!credentialsValid) return null;
     try {
       const response = await transport(url, { headers: { Authorization: `Basic ${btoa(config.accountSid + ':' + config.authToken)}` }, redirect: 'error', signal: AbortSignal.timeout(10000) });
-      return response.ok ? record(await response.json()) : null;
-    } catch { return null; }
+      const body = record(await response.json());
+      if (diagnostic) diagnostic.requests.push({ stage: diagnostic.stage, http_status: response.status,
+        ...(!response.ok && Number.isSafeInteger(body.code) ? { twilio_code: Number(body.code) } : {}) });
+      return response.ok ? body : null;
+    } catch (error) {
+      if (diagnostic) diagnostic.requests.push({ stage: diagnostic.stage, http_status: null,
+        failure: error instanceof SyntaxError ? 'invalid_json' : error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name) ? 'timeout' : 'transport_error' });
+      return null;
+    }
+  }
+  async function diagnosticarWhatsApp(): Promise<WhatsAppReadiness> {
+    const checks: Record<string, boolean> = {
+      account_sid_format: accountValid(config.accountSid), auth_token_format: /^[0-9a-fA-F]{32}$/.test(config.authToken),
+      whatsapp_from_present: Boolean(config.whatsappFrom), whatsapp_from_format: /^whatsapp:\+[1-9]\d{7,14}$/.test(config.whatsappFrom ?? ''),
+      content_sid_present: Boolean(config.whatsappContentSid), content_sid_format: /^HX[0-9a-fA-F]{32}$/.test(config.whatsappContentSid ?? ''),
+    };
+    const report: WhatsAppReadiness = { ready: false, failed_checks: [], checks, requests: [], approval_status: 'not_checked', approval_category: 'not_checked', sender_status: 'not_checked', sender_count: 0 };
+    if (Object.values(checks).every(Boolean)) {
+      const read = (url: string, stage: string) => get(url, { stage, requests: report.requests });
+      const approval = await read(`https://content.twilio.com/v1/Content/${config.whatsappContentSid}/ApprovalRequests`, 'template_approval');
+      const content = await read(`https://content.twilio.com/v1/Content/${config.whatsappContentSid}`, 'template_content');
+      const account = await read(base + '.json', 'account');
+      const senders = await read('https://messaging.twilio.com/v2/Channels/Senders?Channel=whatsapp&PageSize=1000', 'senders');
+      const items = Array.isArray(senders?.senders) ? senders.senders.map(record) : [];
+      const matching = items.filter(sender => sender.sender_id === config.whatsappFrom);
+      report.sender_count = items.length;
+      // Only allowlisted provider metadata. Never log URLs, IDs, numbers, tokens,
+      // full responses, template text, or exception messages.
+      const safeValue = (value: unknown, allowed: string[]) => typeof value === 'string' && allowed.includes(value) ? value : value == null ? 'missing' : 'unrecognized';
+      report.approval_status = safeValue(record(approval?.whatsapp).status, ['approved', 'pending', 'received', 'rejected', 'paused', 'disabled']);
+      report.approval_category = safeValue(record(approval?.whatsapp).category, ['AUTHENTICATION', 'UTILITY', 'MARKETING', 'authentication', 'utility', 'marketing']);
+      report.sender_status = safeValue(matching[0]?.status, ['ONLINE', 'OFFLINE', 'CREATING', 'PENDING_VERIFICATION', 'VERIFYING', 'ONLINE:UPDATING', 'TWILIO_REVIEW', 'DRAFT', 'STUBBED', 'online', 'offline']);
+      Object.assign(checks, {
+        approval_response: approval !== null, content_response: content !== null, account_response: account !== null, senders_response: senders !== null,
+        sender_found: matching.length > 0, sender_online: matching.some(sender => sender.status === 'ONLINE'),
+        account_matches: account?.sid === config.accountSid, account_active: account?.status === 'active',
+        approval_account_matches: approval?.account_sid === config.accountSid, content_account_matches: content?.account_sid === config.accountSid,
+        template_approved: record(approval?.whatsapp).status === 'approved', template_authentication_category: record(approval?.whatsapp).category === 'AUTHENTICATION',
+        template_authentication_type: Object.hasOwn(record(content?.types), 'whatsapp/authentication'),
+      });
+    }
+    report.failed_checks = Object.keys(checks).filter(key => !checks[key]);
+    report.ready = report.failed_checks.length === 0;
+    if (!report.ready) console.error('twilio.whatsapp.readiness', report);
+    return report;
   }
   return {
     nombre: 'twilio',
@@ -135,19 +189,9 @@ export function twilio(config: TwilioConfig, transport: typeof fetch = fetch): P
       return listo;
     },
     async comprobarWhatsApp() {
-      if (!credentialsValid || !/^whatsapp:\+[1-9]\d{7,14}$/.test(config.whatsappFrom ?? '') || !/^HX[0-9a-fA-F]{32}$/.test(config.whatsappContentSid ?? '')) return false;
-      const approval = await get(`https://content.twilio.com/v1/Content/${config.whatsappContentSid}/ApprovalRequests`);
-      const content = await get(`https://content.twilio.com/v1/Content/${config.whatsappContentSid}`);
-      const account = await get(base + '.json');
-      const senders = await get('https://messaging.twilio.com/v2/Channels/Senders?Channel=whatsapp&PageSize=1000');
-      const senderReady = Array.isArray(senders?.senders) && senders.senders.some((value: unknown) => {
-        const sender = record(value); return sender.sender_id === config.whatsappFrom && sender.status === 'ONLINE';
-      });
-      return senderReady && account?.sid === config.accountSid && account.status === 'active'
-        && approval?.account_sid === config.accountSid && content?.account_sid === config.accountSid
-        && record(approval?.whatsapp).status === 'approved' && record(approval?.whatsapp).category === 'AUTHENTICATION'
-        && Object.hasOwn(record(content?.types), 'whatsapp/authentication');
+      return (await diagnosticarWhatsApp()).ready;
     },
+    diagnosticarWhatsApp,
     async saldoMonetario() {
       const data = await get(base + '/Balance.json');
       if (data?.account_sid !== config.accountSid || typeof data.balance !== 'string' || !/^-?\d+(\.\d+)?$/.test(data.balance)

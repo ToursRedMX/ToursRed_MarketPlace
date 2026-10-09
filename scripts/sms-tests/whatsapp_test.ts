@@ -58,3 +58,18 @@ Deno.test('WhatsApp readiness requires authentication approval and an online own
   online = false;
   assert.equal(await adapter.comprobarWhatsApp(), false);
 });
+Deno.test('WhatsApp diagnostics name invalid variables without transport or secret values', async () => {
+  let calls = 0;
+  const report = await twilio({ ...config, whatsappFrom: '+15005550006' }, async () => { calls++; throw Error('unused'); }).diagnosticarWhatsApp();
+  assert.deepEqual(report.failed_checks, ['whatsapp_from_format']);
+  assert.equal(calls, 0);
+  const serialized = JSON.stringify(report);
+  for (const secret of [config.accountSid, config.authToken, config.whatsappContentSid, '+15005550006']) assert.equal(serialized.includes(secret), false);
+});
+Deno.test('WhatsApp diagnostics retain HTTP stage and numeric error but discard payload', async () => {
+  const report = await twilio(config, async () => Response.json({ code: 20404, message: config.authToken, account_sid: config.accountSid, body: 'private' }, { status: 404 })).diagnosticarWhatsApp();
+  assert.deepEqual(report.requests.map(r => [r.stage, r.http_status, r.twilio_code]), [['template_approval',404,20404],['template_content',404,20404],['account',404,20404],['senders',404,20404]]);
+  assert.equal(report.checks.approval_response, false);
+  const serialized = JSON.stringify(report);
+  for (const secret of [config.accountSid, config.authToken, config.whatsappContentSid, 'private']) assert.equal(serialized.includes(secret), false);
+});
