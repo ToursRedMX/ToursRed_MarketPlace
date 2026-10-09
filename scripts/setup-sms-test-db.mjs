@@ -21,5 +21,5 @@ docker(['exec',container,'createdb','-U','supabase_admin','-T','template0',db]);
 const sql=q=>docker(['exec','-i',container,'psql','-X','-q','-1','-U','supabase_admin','-d',db,'-v','ON_ERROR_STOP=1'],q);
 sql('CREATE SCHEMA extensions; CREATE EXTENSION pgcrypto SCHEMA extensions; CREATE EXTENSION pg_trgm SCHEMA extensions; CREATE EXTENSION unaccent SCHEMA extensions; CREATE EXTENSION "uuid-ossp" SCHEMA extensions; CREATE EXTENSION pg_net SCHEMA extensions; CREATE EXTENSION supabase_vault; CREATE EXTENSION postgis SCHEMA extensions;');
 sql(content);
-for(const file of readdirSync('supabase/migrations').filter(f=>/sms_otp_foundation|sms_delivery_engine|phone_otp_enforcement|sms_booking_notifications/.test(f)).sort()) sql(readFileSync('supabase/migrations/'+file,'utf8'));
+for(const file of readdirSync('supabase/migrations').filter(f=>/sms_otp_foundation|sms_delivery_engine|phone_otp_enforcement|sms_booking_notifications|agency_onboarding_email_verified_only_if_provider|sms_twilio_provider/.test(f)).sort()) sql(readFileSync('supabase/migrations/'+file,'utf8'));
 console.log('Restored real schema and SMS migration locally, all original triggers active.');
