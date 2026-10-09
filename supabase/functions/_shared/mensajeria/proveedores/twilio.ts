@@ -6,6 +6,8 @@ export interface TwilioConfig {
   authToken: string;
   messagingServiceSid?: string;
   from?: string;
+  whatsappFrom?: string;
+  whatsappContentSid?: string;
   testAccountSid?: string;
   testAuthToken?: string;
 }
@@ -19,6 +21,7 @@ export function estadoTwilio(status: unknown): 'aceptado' | 'enviado' | 'entrega
   if (['accepted', 'scheduled', 'queued', 'sending'].includes(String(status))) return 'aceptado';
   if (status === 'sent') return 'enviado';
   if (status === 'delivered') return 'entregado';
+  if (status === 'read') return 'entregado';
   if (['failed', 'undelivered', 'canceled'].includes(String(status))) return 'fallido';
   return null;
 }
@@ -41,6 +44,7 @@ export function clasificarTwilio(status: number, value: unknown, simulated: bool
 
 export function twilio(config: TwilioConfig, transport: typeof fetch = fetch): ProveedorSms & {
   comprobar(): Promise<boolean>;
+  comprobarWhatsApp(): Promise<boolean>;
   consultar(sid: string): Promise<TwilioMessage | null>;
   saldoMonetario(): Promise<{ amount: number; currency: string } | null>;
 } {
@@ -60,6 +64,21 @@ export function twilio(config: TwilioConfig, transport: typeof fetch = fetch): P
       if (!phoneValid(message.destino) || !message.texto || segmentosSms(message.texto).segments > 3) return { estado: 'fallido', clase: 'permanente', codigo: 'mensaje_invalido' };
       let account = config.accountSid, token = config.authToken;
       const body = new URLSearchParams({ To: message.destino, Body: message.texto });
+      if (message.canal === 'whatsapp') {
+        if (message.categoria !== 'otp' || !/^\d{6}$/.test(message.codigoOtp ?? '')) return { estado: 'fallido', clase: 'permanente', codigo: 'otp_whatsapp_invalido' };
+        // Test credentials do not support WhatsApp; simulation stays local.
+        if (message.simulacion) return { estado: 'simulado', idProveedor: `mock-whatsapp-${message.correlacion}` };
+        if (!credentialsValid || !/^whatsapp:\+[1-9]\d{7,14}$/.test(config.whatsappFrom ?? '') || !/^HX[0-9a-fA-F]{32}$/.test(config.whatsappContentSid ?? '')) return { estado: 'fallido', clase: 'permanente', codigo: 'twilio_whatsapp_config_invalida' };
+        try { if (new URL(message.urlEstados).protocol !== 'https:') throw Error(); }
+        catch { return { estado: 'fallido', clase: 'permanente', codigo: 'callback_invalido' }; }
+        body.delete('Body');
+        body.set('To', 'whatsapp:' + message.destino);
+        body.set('From', config.whatsappFrom!);
+        body.set('ContentSid', config.whatsappContentSid!);
+        body.set('ContentVariables', JSON.stringify({ '1': message.codigoOtp }));
+        body.set('StatusCallback', message.urlEstados);
+        body.set('ValidityPeriod', '600');
+      } else
       if (message.simulacion) {
         // Never use live credentials as a test fallback. Without a separate test
         // pair simulation is entirely local and cannot contact any provider.
@@ -115,6 +134,20 @@ export function twilio(config: TwilioConfig, transport: typeof fetch = fetch): P
       if (!listo) console.error('twilio.comprobar: numero From no encontrado o sin capacidad SMS', { cantidad: Array.isArray(result?.incoming_phone_numbers) ? result.incoming_phone_numbers.length : 'sin_respuesta' });
       return listo;
     },
+    async comprobarWhatsApp() {
+      if (!credentialsValid || !/^whatsapp:\+[1-9]\d{7,14}$/.test(config.whatsappFrom ?? '') || !/^HX[0-9a-fA-F]{32}$/.test(config.whatsappContentSid ?? '')) return false;
+      const approval = await get(`https://content.twilio.com/v1/Content/${config.whatsappContentSid}/ApprovalRequests`);
+      const content = await get(`https://content.twilio.com/v1/Content/${config.whatsappContentSid}`);
+      const account = await get(base + '.json');
+      const senders = await get('https://messaging.twilio.com/v2/Channels/Senders?Channel=whatsapp&PageSize=1000');
+      const senderReady = Array.isArray(senders?.senders) && senders.senders.some((value: unknown) => {
+        const sender = record(value); return sender.sender_id === config.whatsappFrom && sender.status === 'ONLINE';
+      });
+      return senderReady && account?.sid === config.accountSid && account.status === 'active'
+        && approval?.account_sid === config.accountSid && content?.account_sid === config.accountSid
+        && record(approval?.whatsapp).status === 'approved' && record(approval?.whatsapp).category === 'AUTHENTICATION'
+        && Object.hasOwn(record(content?.types), 'whatsapp/authentication');
+    },
     async saldoMonetario() {
       const data = await get(base + '/Balance.json');
       if (data?.account_sid !== config.accountSid || typeof data.balance !== 'string' || !/^-?\d+(\.\d+)?$/.test(data.balance)
@@ -125,7 +158,7 @@ export function twilio(config: TwilioConfig, transport: typeof fetch = fetch): P
     async consultar(sid: string) {
       if (!messageSidValid(sid)) return null;
       const data = await get(`${base}/Messages/${sid}.json`);
-      if (!data || data.sid !== sid || data.account_sid !== config.accountSid || typeof data.to !== 'string' || !phoneValid(data.to)) return null;
+      if (!data || data.sid !== sid || data.account_sid !== config.accountSid || typeof data.to !== 'string' || !/^(whatsapp:)?\+[1-9]\d{7,14}$/.test(data.to)) return null;
       const state = estadoTwilio(data.status); if (!state) return null;
       const price = typeof data.price === 'string' && /^-?\d+(\.\d{1,6})?$/.test(data.price) ? Math.abs(Number(data.price)) : null;
       const unit = typeof data.price_unit === 'string' && /^[a-zA-Z]{3}$/.test(data.price_unit) ? data.price_unit.toUpperCase() : null;

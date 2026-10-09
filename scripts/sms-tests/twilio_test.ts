@@ -53,7 +53,7 @@ Deno.test('all provider delivery states have conservative mappings',()=>{
   for(const state of ['accepted','scheduled','queued','sending'])assert.equal(estadoTwilio(state),'aceptado');
   assert.equal(estadoTwilio('sent'),'enviado');assert.equal(estadoTwilio('delivered'),'entregado');
   for(const state of ['failed','undelivered','canceled'])assert.equal(estadoTwilio(state),'fallido');
-  assert.equal(estadoTwilio('read'),null);
+  assert.equal(estadoTwilio('read'),'entregado');
   assert.equal(permiteFallback(clasificarTwilio(201,{sid,status:'failed'},false)),false);
 });
 Deno.test('SDK signature validation binds public URL, query and every POST field',()=>{

@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 
 export const phoneOtpMessages: Record<string, string> = {
+  OTP_CHANNEL_INVALID: 'Selecciona SMS o WhatsApp para recibir el código.',
   OTP_INVALID: 'El código no es válido. Revisa los seis dígitos.',
   OTP_EXPIRED: 'El código venció. Solicita uno nuevo.',
   OTP_COOLDOWN: 'Espera 60 segundos antes de solicitar otro código.',

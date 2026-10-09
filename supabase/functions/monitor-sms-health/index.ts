@@ -24,6 +24,9 @@ Deno.serve(async req=>{
   if(twilioHealth.error)throw twilioHealth.error;
   const capability=await client.rpc('refresh_sms_provider_capability',{p_provider:'twilio',p_ready:twilioReady});
   if(capability.error)throw capability.error;
+  const whatsappReady=await twilioAdapter.comprobarWhatsApp();
+  const whatsappCapability=await client.rpc('refresh_whatsapp_provider_capability',{p_provider:'twilio',p_ready:whatsappReady});
+  if(whatsappCapability.error)throw whatsappCapability.error;
   const reconciled=await reconciliarTwilio(client,twilioAdapter.consultar);
   const operational=await client.rpc('record_sms_health');if(operational.error)throw operational.error;
   const mockResult=await client.rpc('refresh_sms_provider_capability',{p_provider:'mock',p_ready:true});if(mockResult.error)throw mockResult.error;
@@ -32,7 +35,7 @@ Deno.serve(async req=>{
   const processor=Deno.env.get('SMS_PROCESSOR_CERTIFIED')==='true';
   const otp=processor&&Deno.env.get('PHONE_OTP_ENFORCEMENT_CERTIFIED')==='true'&&(Deno.env.get('PHONE_OTP_PEPPER')?.length??0)>=32&&(Deno.env.get('SMS_WEBHOOK_SECRET')?.length??0)>=32&&Deno.env.get('SMS_ALLOW_REAL_SENDS')==='true';
   const cert=await client.rpc('certify_sms_runtime',{p_processor:processor,p_otp:otp});if(cert.error)throw cert.error;
-  return Response.json({ok:true,balance_available:balance!=null,twilio_ready:twilioReady,reconciled,processor_certified:processor,otp_certified:otp},{headers:cors});
+  return Response.json({ok:true,balance_available:balance!=null,twilio_ready:twilioReady,whatsapp_ready:whatsappReady,reconciled,processor_certified:processor,otp_certified:otp},{headers:cors});
  }catch(e){
   // Preserve SQL diagnostics without dumping provider payloads or personal data.
   const code=e&&typeof e==='object'&&'code' in e&&typeof e.code==='string'&&/^[A-Z0-9]{5}$/.test(e.code)?e.code:'monitor_failure';

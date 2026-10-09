@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-export interface PhonePolicy { required: boolean; verified: boolean; pending: boolean; sms_enabled: boolean; simulation: boolean }
+export interface PhonePolicy { required: boolean; verified: boolean; pending: boolean; sms_enabled: boolean; whatsapp_enabled: boolean; simulation: boolean }
 export interface PhoneVerificationStatus { traveler: PhonePolicy; agency: PhonePolicy; verified_at: string | null; phone_suffix: string | null }
 export function usePhoneVerification(userId: string | undefined) {
   const query = useQuery({

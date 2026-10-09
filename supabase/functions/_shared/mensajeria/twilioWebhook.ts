@@ -6,8 +6,9 @@ export function verifyTwilioSignature(token: string, signature: string, publicUr
   if (!/^[0-9a-fA-F]{32}$/.test(token) || !signature) return false;
   try { return validateRequest(token, signature, publicUrl, params); } catch { return false; }
 }
-export function parseTwilioCallback(params: Record<string, string>, accountSid: string) {
+export function parseTwilioCallback(params: Record<string, string>, accountSid: string, allowWhatsApp = false) {
   const state = estadoTwilio(params.MessageStatus);
-  if (params.AccountSid !== accountSid || !messageSidValid(params.MessageSid) || !/^\+[1-9]\d{7,14}$/.test(params.To ?? '') || !state) return null;
+  const destination = allowWhatsApp ? /^(whatsapp:)?\+[1-9]\d{7,14}$/ : /^\+[1-9]\d{7,14}$/;
+  if (params.AccountSid !== accountSid || !messageSidValid(params.MessageSid) || !destination.test(params.To ?? '') || !state) return null;
   return { sid: params.MessageSid, destination: params.To, state, code: /^\d+$/.test(params.ErrorCode ?? '') ? `twilio_${params.ErrorCode}` : null };
 }

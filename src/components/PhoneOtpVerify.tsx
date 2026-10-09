@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Smartphone } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { useOtpChannels, otpChannelLabel, type OtpChannel } from '../hooks/useOtpChannels';
 import { invokePhoneOtp } from '../lib/phoneOtp';
 import TurnstileWidget from './TurnstileWidget';
 import { useTurnstileEnabled } from '../hooks/useTurnstileEnabled';
@@ -12,14 +11,13 @@ interface Props {
   /** Teléfono controlado por el formulario padre. Con `showPhoneInput={false}` se usa este valor. */
   phone?: string;
   showPhoneInput?: boolean;
-  /** Se ejecuta antes de pedir el SMS (por ejemplo, para crear el perfil sin el que no hay OTP). */
+  /** Prepara el perfil antes de solicitar el OTP. */
   beforeRequest?: () => Promise<void>;
   /** Avisa al padre que ya se pidió un código, para que deje de editar el número. */
   onRequested?: () => void;
 }
 
-// Misma verificación por SMS (Labs Mobile) que /verificar-telefono, pero dentro
-// del registro: el número ya viene capturado y solo falta enviar y validar el OTP.
+// Compartido entre el registro y /verificar-telefono.
 const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified, phone: controlledPhone, showPhoneInput = true, beforeRequest, onRequested }) => {
   const [typedPhone, setPhone] = useState(initialPhone);
   const phone = controlledPhone ?? typedPhone;
@@ -36,15 +34,9 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified, phone: cont
   const [captcha, setCaptcha] = useState('');
   const [captchaKey, setCaptchaKey] = useState(0);
   const { turnstileEnabled, loading: captchaLoading } = useTurnstileEnabled();
-
-  const countries = useQuery({
-    queryKey: ['sms-supported-countries'],
-    queryFn: async () => {
-      const { data, error: err } = await supabase.from('platform_settings').select('sms_paises_permitidos').single();
-      if (err) throw err;
-      return data.sms_paises_permitidos as string[];
-    },
-  });
+  const channels = useOtpChannels();
+  const [preferredChannel, setChannel] = useState<OtpChannel>('sms');
+  const channel = channels.data?.channels.includes(preferredChannel) ? preferredChannel : channels.data?.channels[0];
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -59,8 +51,9 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified, phone: cont
     setError('');
     setMessage('');
     try {
+      if (!channel) throw new Error('No hay canales de verificación habilitados.');
       await beforeRequest?.();
-      const data = await invokePhoneOtp('request-phone-otp', { phone, country, turnstile_token: captcha });
+      const data = await invokePhoneOtp('request-phone-otp', { phone, country, channel, turnstile_token: captcha });
       onRequested?.();
       setChallenge(data.challenge_id);
       setSuffix(data.phone_suffix);
@@ -70,10 +63,10 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified, phone: cont
       setCode('');
       setMessage(
         data.simulated
-          ? 'Solicitud simulada: no se enviará un SMS real ni se verificará el teléfono.'
+          ? 'Solicitud simulada: no se enviará un mensaje real ni se verificará el teléfono.'
           : data.delivery === 'resultado_desconocido'
             ? 'La entrega está pendiente de confirmar. Espera antes de solicitar otro código.'
-            : 'Código enviado por SMS. Revisa tus mensajes.',
+            : `Código enviado por ${otpChannelLabel(channel)}. Revisa tus mensajes.`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo enviar el código.');
@@ -98,19 +91,30 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified, phone: cont
   };
 
   const inputClass = 'block w-full px-3 py-2 border border-gray-300 rounded-md sm:text-sm';
+  if (channels.isPending) return <p role="status">Cargando opciones de verificación…</p>;
+  if (channels.isError) return <p role="alert">No se pudieron cargar las opciones. <button type="button" className="underline" onClick={() => void channels.refetch()}>Reintentar</button></p>;
+  if (!channel) return <p className="text-sm text-gray-600">La verificación por SMS y WhatsApp está deshabilitada.</p>;
 
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-2">
         <Smartphone className="h-5 w-5 text-primary-600 mt-0.5 flex-shrink-0" />
-        <p className="text-sm text-gray-700">Verifica tu celular: te enviaremos un código por SMS.</p>
+        <p className="text-sm text-gray-700">Verifica tu celular: te enviaremos un código por {otpChannelLabel(channel)}.</p>
       </div>
 
       {/* Sin <form>: vive dentro del formulario de registro y uno anidado lo enviaría completo. */}
       <div className="space-y-3">
+        {channels.data.channels.length > 1 && (
+          <fieldset disabled={busy} className="flex gap-4">
+            <legend className="text-sm text-gray-700 mb-2">¿Cómo quieres recibir el código?</legend>
+            {channels.data.channels.map(value => <label key={value} className="flex items-center gap-2 text-sm">
+              <input type="radio" name="otp-channel" value={value} checked={channel === value} onChange={() => setChannel(value)} />{otpChannelLabel(value)}
+            </label>)}
+          </fieldset>
+        )}
         <div className="grid grid-cols-3 gap-2">
           <select aria-label="País" value={country} onChange={e => setCountry(e.target.value)} disabled={busy} className={inputClass}>
-            {(countries.data ?? ['MX']).map(c => <option key={c} value={c}>{c}</option>)}
+            {channels.data.countries.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           {showPhoneInput && (
             <input
@@ -130,10 +134,10 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified, phone: cont
         <button
           type="button"
           onClick={() => void request()}
-          disabled={busy || !phone.trim() || cooldown > 0 || countries.isError || countries.isPending || captchaLoading || (turnstileEnabled && !captcha)}
+          disabled={busy || !phone.trim() || cooldown > 0 || captchaLoading || (turnstileEnabled && !captcha)}
           className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {cooldown > 0 ? `Reenviar en ${cooldown} s` : challenge ? 'Enviar otro código' : 'Validar y enviar SMS'}
+          {cooldown > 0 ? `Reenviar en ${cooldown} s` : `Enviar código por ${otpChannelLabel(channel)}`}
         </button>
       </div>
 
@@ -150,7 +154,7 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified, phone: cont
             onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (code.length === 6 && !busy && expiry > 0 && !simulation) void verify(); } }}
             placeholder="Código de 6 dígitos"
-            aria-label="Código SMS"
+            aria-label="Código de verificación"
             disabled={busy}
             className={`${inputClass} tracking-widest`}
           />

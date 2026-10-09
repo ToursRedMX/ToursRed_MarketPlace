@@ -15,7 +15,7 @@ Deno.serve(async req => {
     const url = new URL('/functions/v1/sms-webhook-twilio', Deno.env.get('SUPABASE_URL'));
     url.search = incoming.search;
     if (!verifyTwilioSignature(Deno.env.get('TWILIO_AUTH_TOKEN') ?? '', req.headers.get('X-Twilio-Signature') ?? '', url.toString(), params)) return new Response('unauthorized', { status: 401, headers: cors });
-    const event = parseTwilioCallback(params, Deno.env.get('TWILIO_ACCOUNT_SID') ?? '');
+    const event = parseTwilioCallback(params, Deno.env.get('TWILIO_ACCOUNT_SID') ?? '', true);
     const correlation = url.searchParams.get('correlation') ?? '';
     if (!event || !/^[a-f0-9]{20}$/.test(correlation)) return new Response('invalid', { status: 400, headers: cors });
     const client = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } });
