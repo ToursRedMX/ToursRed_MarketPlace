@@ -125,4 +125,6 @@ Cada fase entrega PR, diff, pruebas, riesgos y estado real. Ninguna autorizació
 
 ## Pendientes explícitos
 
+Fase 5 implementada para revisión en `codex/sms-otp-fase-5`: ver [alcance, migración, pruebas y rollout de Twilio](sms-fase-5-validacion.md). El adaptador y la firma están probados localmente; su entrega real y activación siguen pendientes. No se incorpora distribución porcentual.
+
 Credenciales y comportamiento real en México, cobertura internacional validada, proveedor fallback funcional, recuperación sin correo/MFA, privacidad de comunicaciones y zonas IANA de destinos deben resolverse antes de activar su funcionalidad. Los defectos previos de OTP de correo/contrato no se corrigen dentro de la Fase 1. No se presenta Twilio ni WhatsApp como integrados.
