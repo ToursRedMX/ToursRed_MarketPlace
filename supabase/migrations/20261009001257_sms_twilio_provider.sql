@@ -79,7 +79,7 @@ alter table messaging_private.provider_health
   add column balance_amount numeric,
   add column balance_unit text check(balance_unit='credits' or balance_unit ~ '^[A-Z]{3}$'),
   add constraint provider_health_balance_pair check((balance_amount is null)=(balance_unit is null));
-update messaging_private.provider_health set balance_amount=balance_credits,balance_unit=case when balance_credits is not null then 'credits' end;
+update messaging_private.provider_health set balance_amount=balance_credits,balance_unit=case when balance_credits is not null then 'credits' end where balance_credits is not null;
 
 create function public.record_sms_provider_health(p_provider text,p_available boolean,p_balance numeric default null,p_unit text default null)
 returns void language plpgsql security definer set search_path='' as $$
@@ -125,7 +125,7 @@ declare s public.platform_settings; failures integer; unknowns integer; consumed
 begin
  select * into strict s from public.platform_settings;
  if p_balance_ok then perform public.record_sms_provider_health('labsmobile',true,p_credits,'credits'); end if;
- if p_worker then update messaging_private.runtime_capabilities set last_worker_at=now(); end if;
+ if p_worker then update messaging_private.runtime_capabilities set last_worker_at=now() where singleton; end if;
  if not p_worker then
   perform messaging_private.alert('provider_unavailable',s.sms_habilitado and exists(
     select 1 from messaging_private.provider_capabilities p left join messaging_private.provider_health h using(provider)
