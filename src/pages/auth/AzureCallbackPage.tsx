@@ -45,13 +45,14 @@ async function redirectForUser(
       if (!onboardingCompleted) {
         const { data: existingProfile, error: profileError } = await supabase
           .from('users')
-          .select('id, role')
+          .select('id, role, onboarding_completed')
           .eq('id', user.id)
           .maybeSingle();
 
         if (profileError) throw profileError;
 
-        if (existingProfile) {
+        // `onboarding_completed === false`: registro social a medias, se retoma en el alta.
+        if (existingProfile && existingProfile.onboarding_completed !== false) {
           const role = existingProfile.role;
           if (role === 'admin') navigate('/admin/dashboard', { replace: true });
           else if (role === 'agency') navigate('/agency/dashboard', { replace: true });

@@ -777,6 +777,11 @@ jobs:
       - name: El codigo de verificacion de correo se genera en el servidor
         run: node scripts/test-codigo-verificacion-servidor.mjs
 
+      # Registro social sin correo (X, a veces Facebook/Microsoft): el correo que escribe la
+      # persona se asocia a la cuenta de auth ANTES de marcarlo verificado, y uno ajeno falla.
+      - name: El correo pendiente de un registro social se asocia antes de verificarse
+        run: node scripts/test-correo-pendiente-oauth.mjs
+
       # Pendiente 3 de la entrada 33: 6 caracteres sin exigir nada mas, igual
       # en 6 lugares (y dos mas ya habian subido a 8 por su cuenta, cada una
       # con su propia copia). Centralizado en politicaContrasena.ts; minimo

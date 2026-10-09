@@ -42,7 +42,8 @@ const EmailCodeVerify: React.FC<Props> = ({ userId, email, onVerified }) => {
     setError('');
     setMessage('');
     try {
-      await callEmailFunction('send-verification-email', { userId });
+      // `email` solo lo usa el servidor cuando la cuenta social no trae correo (X, a veces Facebook/Microsoft).
+      await callEmailFunction('send-verification-email', { userId, email });
       setCooldown(60);
       setMessage(`Te enviamos un código de 6 dígitos a ${email}.`);
     } catch (e) {
@@ -58,8 +59,7 @@ const EmailCodeVerify: React.FC<Props> = ({ userId, email, onVerified }) => {
     void send();
   }, [send]);
 
-  const verify = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const verify = async () => {
     setBusy(true);
     setError('');
     try {
@@ -80,7 +80,9 @@ const EmailCodeVerify: React.FC<Props> = ({ userId, email, onVerified }) => {
   }
 
   return (
-    <form onSubmit={verify} className="space-y-3">
+    // No es un <form>: este componente vive dentro del formulario de registro y un <form>
+    // anidado haría que "Verificar" enviara el formulario completo.
+    <div className="space-y-3">
       <div className="flex items-start gap-2">
         <Mail className="h-5 w-5 text-primary-600 mt-0.5 flex-shrink-0" />
         <p className="text-sm text-gray-700">Verifica tu correo <strong>{email}</strong> con el código que te enviamos.</p>
@@ -91,6 +93,7 @@ const EmailCodeVerify: React.FC<Props> = ({ userId, email, onVerified }) => {
         maxLength={6}
         value={code}
         onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (code.length === 6 && !busy) void verify(); } }}
         placeholder="Código de 6 dígitos"
         aria-label="Código de verificación del correo"
         disabled={busy}
@@ -99,14 +102,14 @@ const EmailCodeVerify: React.FC<Props> = ({ userId, email, onVerified }) => {
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {message && !error && <p role="status" className="text-sm text-green-700">{message}</p>}
       <div className="flex items-center gap-3">
-        <button type="submit" disabled={busy || code.length !== 6} className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <button type="button" onClick={() => void verify()} disabled={busy || code.length !== 6} className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
           Verificar correo
         </button>
         <button type="button" onClick={() => void send()} disabled={busy || cooldown > 0} className="text-sm text-primary-600 underline disabled:opacity-50 disabled:no-underline">
           {cooldown > 0 ? `Reenviar en ${cooldown} s` : 'Reenviar código'}
         </button>
       </div>
-    </form>
+    </div>
   );
 };
 

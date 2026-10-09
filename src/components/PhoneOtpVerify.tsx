@@ -9,12 +9,20 @@ import { useTurnstileEnabled } from '../hooks/useTurnstileEnabled';
 interface Props {
   initialPhone: string;
   onVerified: () => void;
+  /** Teléfono controlado por el formulario padre. Con `showPhoneInput={false}` se usa este valor. */
+  phone?: string;
+  showPhoneInput?: boolean;
+  /** Se ejecuta antes de pedir el SMS (por ejemplo, para crear el perfil sin el que no hay OTP). */
+  beforeRequest?: () => Promise<void>;
+  /** Avisa al padre que ya se pidió un código, para que deje de editar el número. */
+  onRequested?: () => void;
 }
 
 // Misma verificación por SMS (Labs Mobile) que /verificar-telefono, pero dentro
 // del registro: el número ya viene capturado y solo falta enviar y validar el OTP.
-const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified }) => {
-  const [phone, setPhone] = useState(initialPhone);
+const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified, phone: controlledPhone, showPhoneInput = true, beforeRequest, onRequested }) => {
+  const [typedPhone, setPhone] = useState(initialPhone);
+  const phone = controlledPhone ?? typedPhone;
   const [country, setCountry] = useState('MX');
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState('');
@@ -46,13 +54,14 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified }) => {
     return () => clearInterval(t);
   }, []);
 
-  const request = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const request = async () => {
     setBusy(true);
     setError('');
     setMessage('');
     try {
+      await beforeRequest?.();
       const data = await invokePhoneOtp('request-phone-otp', { phone, country, turnstile_token: captcha });
+      onRequested?.();
       setChallenge(data.challenge_id);
       setSuffix(data.phone_suffix);
       setCooldown(60);
@@ -75,8 +84,7 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified }) => {
     }
   };
 
-  const verify = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const verify = async () => {
     setBusy(true);
     setError('');
     try {
@@ -98,35 +106,39 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified }) => {
         <p className="text-sm text-gray-700">Verifica tu celular: te enviaremos un código por SMS.</p>
       </div>
 
-      <form onSubmit={request} className="space-y-3">
+      {/* Sin <form>: vive dentro del formulario de registro y uno anidado lo enviaría completo. */}
+      <div className="space-y-3">
         <div className="grid grid-cols-3 gap-2">
           <select aria-label="País" value={country} onChange={e => setCountry(e.target.value)} disabled={busy} className={inputClass}>
             {(countries.data ?? ['MX']).map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <input
-            type="tel"
-            autoComplete="tel"
-            aria-label="Teléfono con código de país"
-            value={phone}
-            onChange={e => setPhone(e.target.value)}
-            maxLength={40}
-            required
-            disabled={busy}
-            className={`${inputClass} col-span-2`}
-          />
+          {showPhoneInput && (
+            <input
+              type="tel"
+              autoComplete="tel"
+              aria-label="Teléfono con código de país"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              maxLength={40}
+              required
+              disabled={busy}
+              className={`${inputClass} col-span-2`}
+            />
+          )}
         </div>
         {turnstileEnabled && <TurnstileWidget key={captchaKey} onToken={setCaptcha} />}
         <button
-          type="submit"
-          disabled={busy || cooldown > 0 || countries.isError || countries.isPending || captchaLoading || (turnstileEnabled && !captcha)}
+          type="button"
+          onClick={() => void request()}
+          disabled={busy || !phone.trim() || cooldown > 0 || countries.isError || countries.isPending || captchaLoading || (turnstileEnabled && !captcha)}
           className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {cooldown > 0 ? `Reenviar en ${cooldown} s` : challenge ? 'Enviar otro código' : 'Validar y enviar SMS'}
         </button>
-      </form>
+      </div>
 
       {challenge && (
-        <form onSubmit={verify} className="space-y-3">
+        <div className="space-y-3">
           <p className="text-sm text-gray-700">
             Código para el teléfono terminado en {suffix}. {expiry > 0 ? `Vence en ${Math.ceil(expiry / 60)} min.` : 'El código venció.'}
           </p>
@@ -136,19 +148,21 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified }) => {
             maxLength={6}
             value={code}
             onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (code.length === 6 && !busy && expiry > 0 && !simulation) void verify(); } }}
             placeholder="Código de 6 dígitos"
             aria-label="Código SMS"
             disabled={busy}
             className={`${inputClass} tracking-widest`}
           />
           <button
-            type="submit"
+            type="button"
+            onClick={() => void verify()}
             disabled={busy || code.length !== 6 || expiry === 0 || simulation}
             className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             Verificar teléfono
           </button>
-        </form>
+        </div>
       )}
 
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}

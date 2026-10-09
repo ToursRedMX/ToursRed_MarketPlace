@@ -9,7 +9,7 @@ import { AgencyFormData, defaultAgencyFormData } from './agencyFormData';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
 import { mensajeDeError } from '../../lib/errores';
-import { OAuthContactVerificationPage } from '../../components/OAuthContactVerification';
+import { useOAuthContactVerification } from '../../hooks/useOAuthContactVerification';
 
 const XIcon = (
   <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true" fill="currentColor">
@@ -26,12 +26,11 @@ const XAgencySignupPage: React.FC = () => {
   const preFirstName = meta.given_name || fullName.split(' ')[0] || '';
   const preLastName  = meta.family_name || fullName.split(' ').slice(1).join(' ') || '';
   const preEmail     = user?.email || meta.email || '';
-  // Si el proveedor no devuelve correo, la agencia lo captura y lo verificamos con código.
+  // Si el proveedor no devuelve correo, la agencia lo captura y lo verifica con código dentro del formulario.
   const emailFromProvider = Boolean(preEmail);
   const avatarUrl    = meta.avatar_url || meta.picture || '';
 
   const [isLoading, setIsLoading] = useState(false);
-  const [created, setCreated] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -60,8 +59,23 @@ const XAgencySignupPage: React.FC = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const contact = useOAuthContactVerification({
+    user,
+    audience: 'agency',
+    emailLabel: 'Correo electrónico *',
+    phoneLabel: 'Teléfono *',
+    providerLabel: 'X (Twitter)',
+    emailFromProvider,
+    email: formData.email,
+    onEmailChange: value => handleChange('email', value),
+    phone: formData.phoneNumber,
+    onPhoneChange: value => handleChange('phoneNumber', value),
+  });
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // Seguro: el botón ya está deshabilitado, pero un envío por teclado no debe saltarse la verificación.
+    if (!contact.ready) { setError('Verifica tu correo y tu teléfono para continuar'); return; }
     setIsLoading(true);
     setError('');
 
@@ -70,7 +84,6 @@ const XAgencySignupPage: React.FC = () => {
 
     if (!apellidoPaterno.trim()) { setError('El apellido paterno es obligatorio'); setIsLoading(false); return; }
     if (!sexo) { setError('El sexo es obligatorio'); setIsLoading(false); return; }
-    if (!emailFromProvider && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) { setError('Captura un correo electrónico válido'); setIsLoading(false); return; }
     if (password !== confirmPassword) { setError('Las contraseñas no coinciden'); setIsLoading(false); return; }
 
     const errorContrasena = validarContrasena(password);
@@ -142,6 +155,15 @@ const XAgencySignupPage: React.FC = () => {
       });
       if (onboardingError) throw new Error(onboardingError.message);
 
+      // El perfil a medias nace como 'traveler' (el cliente no puede crear otro rol) y la función de la base
+      // lo pasa a 'agency'. Si esa migración no está aplicada la agencia se crea con el rol equivocado;
+      // mejor decirlo aquí que dejar una cuenta incoherente en silencio.
+      const { data: perfilFinal, error: errorPerfilFinal } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
+      if (errorPerfilFinal) console.error('No se pudo comprobar el rol tras crear la agencia', errorPerfilFinal);
+      if (perfilFinal && perfilFinal.role !== UserRole.AGENCY) {
+        throw new Error('Tu agencia se creó, pero tu cuenta quedó con un rol incorrecto. Contacta a soporte antes de continuar.');
+      }
+
       await supabase.from('user_auth_providers').upsert(
         { user_id: user.id, provider: 'x', provider_user_id: user.id },
         { onConflict: 'user_id,provider' }
@@ -175,17 +197,13 @@ const XAgencySignupPage: React.FC = () => {
       } catch { /* best-effort */ }
 
       await completeOnboarding();
-      setCreated(true);
+      navigate('/agency/onboarding');
     } catch (err) {
       setError(mensajeDeError(err) || 'Ocurrió un error al completar el registro');
     } finally {
       setIsLoading(false);
     }
   };
-
-  if (created && user) {
-    return <OAuthContactVerificationPage userId={user.id} email={formData.email} phone={formData.phoneNumber} audience="agency" redirectTo="/agency/onboarding" />;
-  }
 
   return (
     <AgencySignupFormBody
@@ -202,7 +220,10 @@ const XAgencySignupPage: React.FC = () => {
       showConfirmPassword={showConfirmPassword}
       setShowConfirmPassword={setShowConfirmPassword}
       curpAvailability={curpAvailability}
-      emailReadOnly={emailFromProvider}
+      emailReadOnly
+      emailSlot={contact.emailField}
+      phoneSlot={contact.phoneField}
+      contactReady={contact.ready}
       oauthProviderLabel="X (Twitter)"
       oauthProviderIcon={XIcon}
     />

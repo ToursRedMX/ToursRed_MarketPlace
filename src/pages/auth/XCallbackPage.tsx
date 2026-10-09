@@ -18,7 +18,7 @@ async function redirectForUser(
     if (!onboardingCompleted) {
       const { data: existingProfile, error: errorPerfil } = await supabase
         .from('users')
-        .select('id, role, profile_picture_url')
+        .select('id, role, profile_picture_url, onboarding_completed')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -31,7 +31,8 @@ async function redirectForUser(
         return;
       }
 
-      if (existingProfile) {
+      // `onboarding_completed === false`: registro social a medias, se retoma en el alta.
+      if (existingProfile && existingProfile.onboarding_completed !== false) {
         // User linked X to an existing account — save avatar if not set yet
         if (!existingProfile.profile_picture_url) {
           const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture;

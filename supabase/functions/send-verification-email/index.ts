@@ -57,7 +57,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { userId, userName } = await req.json();
+    const { userId, userName, email: requestedEmail } = await req.json();
 
     if (!userId) {
       return new Response(
@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: userData, error: userDataError } = await supabase
       .from("users")
-      .select("email, first_name, last_name")
+      .select("email, first_name, last_name, verification_code_expires_at")
       .eq("id", userId)
       .single();
 
@@ -93,6 +93,60 @@ Deno.serve(async (req: Request) => {
           status: 404,
         }
       );
+    }
+
+    // Registro social SIN correo (X, a veces Facebook/Microsoft): la cuenta de auth no
+    // tiene email y el trigger sync_user_email deja users.email en NULL, así que el
+    // correo que escribió la persona no puede vivir en `users` hasta verificarse. Se
+    // guarda en app_metadata (solo el servidor escribe ahí) y el código va a ese
+    // correo. verify-email-code lo asocia a la cuenta cuando el código coincide.
+    let targetEmail: string = user.email || userData.email || "";
+    if (!targetEmail) {
+      const candidate = String(requestedEmail ?? user.app_metadata?.pending_contact_email ?? "")
+        .trim()
+        .toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Captura un correo electrónico válido." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        );
+      }
+
+      // Sin esto cualquiera con sesión podría pedir códigos sin límite a cualquier
+      // dirección. El código vive 24 h, así que su emisión es expires_at - 24 h.
+      if (userData.verification_code_expires_at) {
+        const enviadoEn = new Date(userData.verification_code_expires_at).getTime() - 24 * 60 * 60 * 1000;
+        if (Date.now() - enviadoEn < 60_000) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Espera un minuto antes de pedir otro código." }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 429 }
+          );
+        }
+      }
+
+      // Aviso temprano si el correo ya es de otra cuenta. Si la consulta falla no se
+      // bloquea: verify-email-code vuelve a comprobarlo al asociar el correo.
+      const { data: disponible, error: errorDisponible } = await supabase.rpc("check_email_available", { p_email: candidate });
+      if (!errorDisponible && disponible === false) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Este correo ya tiene una cuenta. Usa otro correo o inicia sesión con esa cuenta." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 409 }
+        );
+      }
+
+      if (user.app_metadata?.pending_contact_email !== candidate) {
+        const { error: metaError } = await supabase.auth.admin.updateUserById(user.id, {
+          app_metadata: { ...user.app_metadata, pending_contact_email: candidate },
+        });
+        if (metaError) {
+          console.error("Error guardando el correo pendiente:", metaError);
+          return new Response(
+            JSON.stringify({ success: false, error: "No se pudo preparar la verificación del correo" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+          );
+        }
+      }
+      targetEmail = candidate;
     }
 
     // El codigo se genera y se guarda aqui, nunca en el navegador: quien lo
@@ -160,7 +214,7 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({
         sender: fromEmail,
-        to: [userData.email],
+        to: [targetEmail],
         subject: "Bienvenido - Verifica tu correo electrónico",
         html_body: `
           <!DOCTYPE html>

@@ -6,7 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
 import { mensajeDeError } from '../../lib/errores';
-import OAuthContactVerification from '../../components/OAuthContactVerification';
+import { useOAuthContactVerification } from '../../hooks/useOAuthContactVerification';
+import { guardarPerfilViajero } from '../../lib/perfilViajero';
 
 const MicrosoftIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg viewBox="0 0 23 23" className={className} aria-hidden="true">
@@ -27,13 +28,12 @@ const AzureTravelerSignupPage: React.FC = () => {
   const azureFirstName = meta.given_name || azureFullName.split(' ')[0] || '';
   const azureLastName = meta.family_name || azureFullName.split(' ').slice(1).join(' ') || '';
   const azureEmail: string = user?.email || meta.email || '';
-  // Si el proveedor no devuelve correo (X y a veces Facebook/Microsoft) el viajero lo captura
-  // y lo verificamos con código; si lo devuelve, ya viene verificado.
+  // Si el proveedor no devuelve correo (X y a veces Facebook/Microsoft) se captura y se verifica
+  // con código dentro del formulario; si lo devuelve, ya viene verificado.
   const emailFromProvider = Boolean(azureEmail);
   const msAvatarUrl: string = meta.ms_avatar_url || '';
 
   const [isLoading, setIsLoading] = useState(false);
-  const [created, setCreated] = useState(false);
   const [error, setError] = useState('');
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -120,6 +120,8 @@ const AzureTravelerSignupPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Seguro: el botón ya está deshabilitado, pero un envío por teclado no debe saltarse la verificación.
+    if (!contact.ready) { setError('Verifica tu correo y tu celular para continuar'); return; }
     setIsLoading(true);
     setError('');
 
@@ -153,11 +155,6 @@ const AzureTravelerSignupPage: React.FC = () => {
       setIsLoading(false);
       return;
     }
-    if (!emailFromProvider && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      setError('Captura un correo electrónico válido');
-      setIsLoading(false);
-      return;
-    }
     if (!isForeignTraveler && (!curp.trim() || curp.length !== 18)) {
       setError('La CURP debe tener 18 caracteres');
       setIsLoading(false);
@@ -172,9 +169,9 @@ const AzureTravelerSignupPage: React.FC = () => {
     try {
       if (!user) throw new Error('Sesión no encontrada');
 
-      const { error: insertError } = await supabase.from('users').insert({
+      const { error: insertError } = await guardarPerfilViajero(contact.phoneVerified, {
         id: user.id,
-        email: emailFromProvider ? email : email.trim().toLowerCase(),
+        email: email,
         role: UserRole.TRAVELER,
         first_name: firstName,
         last_name: apellidoPaterno,
@@ -254,7 +251,7 @@ const AzureTravelerSignupPage: React.FC = () => {
       }
 
       await completeOnboarding();
-      setCreated(true);
+      navigate('/traveler/dashboard');
     } catch (err) {
       setError(mensajeDeError(err) || 'Ocurrió un error al completar el registro');
     } finally {
@@ -263,6 +260,17 @@ const AzureTravelerSignupPage: React.FC = () => {
   };
 
   const inputClass = "appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm";
+
+  const contact = useOAuthContactVerification({
+    user,
+    providerLabel: 'Microsoft',
+    emailFromProvider,
+    email: formData.email,
+    onEmailChange: value => setFormData(prev => ({ ...prev, email: value })),
+    phone: formData.phoneNumber,
+    onPhoneChange: value => setFormData(prev => ({ ...prev, phoneNumber: value })),
+    inputClass,
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -280,10 +288,6 @@ const AzureTravelerSignupPage: React.FC = () => {
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
 
-          {created && user ? (
-            <OAuthContactVerification userId={user.id} email={formData.email} phone={formData.phoneNumber} audience="traveler" redirectTo="/traveler/dashboard" />
-          ) : (
-          <>
           <div className="mb-6 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
             <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
             <p className="text-xs text-blue-700">Tus datos de Microsoft han sido pre-llenados. Puedes editarlos si lo deseas.</p>
@@ -365,21 +369,10 @@ const AzureTravelerSignupPage: React.FC = () => {
             )}
 
             {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Correo electrónico</label>
-              <input name="email" type="email" value={formData.email} onChange={handleInputChange} required autoComplete="email" className={`mt-1 ${inputClass} ${emailFromProvider ? 'bg-gray-50' : ''}`} readOnly={emailFromProvider} />
-              {emailFromProvider ? (
-                <p className="mt-1 text-xs text-gray-400">Email verificado por Microsoft</p>
-              ) : (
-                <p className="mt-1 text-xs text-amber-600">Microsoft no compartió tu correo. Captúralo: te enviaremos un código para verificarlo.</p>
-              )}
-            </div>
+            {contact.emailField}
 
             {/* Celular */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Número de celular</label>
-              <input name="phoneNumber" type="tel" value={formData.phoneNumber} onChange={handleInputChange} placeholder="+52 55 1234 5678" required className={`mt-1 ${inputClass}`} />
-            </div>
+            {contact.phoneField}
 
             {/* Domicilio */}
             <div className="border-t border-gray-200 pt-4 flex flex-col gap-y-3">
@@ -488,14 +481,13 @@ const AzureTravelerSignupPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isLoading || !termsAccepted}
+              disabled={isLoading || !termsAccepted || !contact.ready}
               className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Completando registro...' : 'Crear cuenta de Viajero'}
             </button>
+            {!contact.ready && <p className="text-center text-xs text-gray-500">Verifica tu correo y tu celular para poder crear tu cuenta.</p>}
           </form>
-          </>
-          )}
         </div>
       </div>
     </div>

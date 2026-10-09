@@ -36,7 +36,8 @@ function makeFrom(test, state) {
       },
       async single() {
         if (test.userNotFound) return { data: null, error: {} };
-        return { data: { email: 'persona@example.com', first_name: 'Persona', last_name: 'Prueba' }, error: null };
+        const email = test.userEmail === undefined ? 'persona@example.com' : test.userEmail;
+        return { data: { email, first_name: 'Persona', last_name: 'Prueba', verification_code_expires_at: test.expiresAt ?? null }, error: null };
       },
     };
     // `.update(...).eq(...)` se resuelve como thenable, sin pasar por `.single()`.
@@ -47,7 +48,7 @@ function makeFrom(test, state) {
 
 async function run(test) {
   let handler;
-  const state = { savedCode: null, updateCalls: 0, emailSent: null };
+  const state = { savedCode: null, updateCalls: 0, emailSent: null, emailTo: null, metaCalls: [], rpcCalls: [] };
 
   const context = vm.createContext({
     exports: {},
@@ -71,15 +72,27 @@ async function run(test) {
         auth: {
           async getUser(token) {
             if (test.noUser) return { data: { user: null }, error: {} };
-            return { data: { user: { id: token === 'other' ? 'other-user' : 'caller' } }, error: null };
+            return { data: { user: { id: token === 'other' ? 'other-user' : 'caller', app_metadata: test.appMetadata ?? {} } }, error: null };
           },
+          admin: {
+            async updateUserById(id, attrs) {
+              state.metaCalls.push({ id, attrs });
+              return { error: test.metaFails ? { message: 'fallo' } : null };
+            },
+          },
+        },
+        async rpc(name, args) {
+          state.rpcCalls.push({ name, args });
+          if (test.availabilityErrors) return { data: null, error: { message: 'no disponible' } };
+          return { data: test.emailAvailable ?? true, error: null };
         },
         from: makeFrom(test, state),
       };
     },
-    async fetch(url) {
+    async fetch(url, init) {
       assert.equal(url, 'https://api.smtp2go.com/v3/email/send');
       state.emailSent = state.savedCode;
+      state.emailTo = JSON.parse(init.body).to;
       return new Response(JSON.stringify({ data: {} }));
     },
   });
@@ -140,6 +153,99 @@ let cases = 0;
   assert.equal(response.status, 500);
   assert.equal(updateCalls, 1);
   assert.equal(emailSent, null, 'no debe enviar correo si el UPDATE fallo');
+  cases++;
+}
+
+// --- Cuenta social SIN correo (X, a veces Facebook/Microsoft) ---------------------------
+// El trigger sync_user_email deja users.email en NULL, asi que el correo que escribio la
+// persona viaja en el cuerpo y se guarda en app_metadata (solo el servidor escribe ahi).
+{
+  const { response, savedCode, emailTo, metaCalls } = await run({ userEmail: null, extraBody: { email: '  Nuevo@Ejemplo.COM ' } });
+  assert.equal(response.status, 200);
+  assert.deepEqual(emailTo, ['nuevo@ejemplo.com'], 'el codigo va al correo capturado, normalizado');
+  assert.match(savedCode, /^\d{6}$/);
+  assert.equal(metaCalls.length, 1);
+  assert.equal(metaCalls[0].attrs.app_metadata.pending_contact_email, 'nuevo@ejemplo.com');
+  cases++;
+}
+
+// Sin correo en el cuerpo y sin uno pendiente, no hay a donde mandar nada.
+{
+  const { response, updateCalls, emailTo } = await run({ userEmail: null });
+  assert.equal(response.status, 400);
+  assert.equal(updateCalls, 0);
+  assert.equal(emailTo, null);
+  cases++;
+}
+
+// Un correo mal formado no genera codigo ni toca app_metadata.
+{
+  const { response, updateCalls, metaCalls } = await run({ userEmail: null, extraBody: { email: 'no-es-un-correo' } });
+  assert.equal(response.status, 400);
+  assert.equal(updateCalls, 0);
+  assert.equal(metaCalls.length, 0);
+  cases++;
+}
+
+// Reenvio: el correo pendiente ya esta en app_metadata y no hace falta mandarlo otra vez.
+{
+  const { response, emailTo, metaCalls } = await run({ userEmail: null, appMetadata: { pending_contact_email: 'guardado@ejemplo.com' } });
+  assert.equal(response.status, 200);
+  assert.deepEqual(emailTo, ['guardado@ejemplo.com']);
+  assert.equal(metaCalls.length, 0, 'no reescribe app_metadata si no cambio');
+  cases++;
+}
+
+// Sin limite, cualquier sesion podria pedir codigos sin parar a cualquier direccion.
+{
+  const hace10s = new Date(Date.now() + 24 * 3600 * 1000 - 10_000).toISOString();
+  const { response, updateCalls, emailTo } = await run({ userEmail: null, extraBody: { email: 'a@b.co' }, expiresAt: hace10s });
+  assert.equal(response.status, 429);
+  assert.equal(updateCalls, 0);
+  assert.equal(emailTo, null);
+  cases++;
+}
+{
+  const hace2min = new Date(Date.now() + 24 * 3600 * 1000 - 120_000).toISOString();
+  const { response } = await run({ userEmail: null, extraBody: { email: 'a@b.co' }, expiresAt: hace2min });
+  assert.equal(response.status, 200, 'pasado el minuto se puede reenviar');
+  cases++;
+}
+
+// Un correo que ya es de otra cuenta no recibe codigo, ni queda guardado como pendiente.
+{
+  const { response, updateCalls, emailTo, metaCalls } = await run({ userEmail: null, extraBody: { email: 'ocupado@ejemplo.com' }, emailAvailable: false });
+  assert.equal(response.status, 409);
+  assert.equal(updateCalls, 0);
+  assert.equal(emailTo, null);
+  assert.equal(metaCalls.length, 0);
+  cases++;
+}
+
+// Si la consulta de disponibilidad falla no se bloquea el alta (verify-email-code la repite).
+{
+  const { response } = await run({ userEmail: null, extraBody: { email: 'a@b.co' }, availabilityErrors: true });
+  assert.equal(response.status, 200);
+  cases++;
+}
+
+// Si no se puede guardar el correo pendiente, no se manda un codigo que luego no se sabe a quien asociar.
+{
+  const { response, updateCalls, emailTo } = await run({ userEmail: null, extraBody: { email: 'a@b.co' }, metaFails: true });
+  assert.equal(response.status, 500);
+  assert.equal(updateCalls, 0);
+  assert.equal(emailTo, null);
+  cases++;
+}
+
+// SEGURIDAD: quien YA tiene correo (registro con correo y contrasena) no puede desviar el
+// codigo a otra direccion mandando `email` en el cuerpo, ni tocar app_metadata.
+{
+  const { response, emailTo, metaCalls, rpcCalls } = await run({ extraBody: { email: 'atacante@ejemplo.com' } });
+  assert.equal(response.status, 200);
+  assert.deepEqual(emailTo, ['persona@example.com']);
+  assert.equal(metaCalls.length, 0);
+  assert.equal(rpcCalls.length, 0);
   cases++;
 }
 

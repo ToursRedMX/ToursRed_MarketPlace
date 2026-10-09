@@ -6,7 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import { esContrasenaFiltrada } from '../../lib/contrasenaFiltrada';
 import { validarContrasena } from '../../lib/politicaContrasena';
 import { mensajeDeError } from '../../lib/errores';
-import OAuthContactVerification from '../../components/OAuthContactVerification';
+import { useOAuthContactVerification } from '../../hooks/useOAuthContactVerification';
+import { guardarPerfilViajero } from '../../lib/perfilViajero';
 
 const LinkedInTravelerSignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -17,13 +18,12 @@ const LinkedInTravelerSignupPage: React.FC = () => {
   const firstName = meta.given_name || fullName.split(' ')[0] || '';
   const lastName = meta.family_name || fullName.split(' ').slice(1).join(' ') || '';
   const email: string = user?.email || meta.email || '';
-  // Si el proveedor no devuelve correo (X y a veces Facebook/Microsoft) el viajero lo captura
-  // y lo verificamos con código; si lo devuelve, ya viene verificado.
+  // Si el proveedor no devuelve correo (X y a veces Facebook/Microsoft) se captura y se verifica
+  // con código dentro del formulario; si lo devuelve, ya viene verificado.
   const emailFromProvider = Boolean(email);
   const avatarUrl: string = meta.avatar_url || meta.picture || '';
 
   const [isLoading, setIsLoading] = useState(false);
-  const [created, setCreated] = useState(false);
   const [error, setError] = useState('');
   const [isForeignTraveler, setIsForeignTraveler] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -110,6 +110,8 @@ const LinkedInTravelerSignupPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Seguro: el botón ya está deshabilitado, pero un envío por teclado no debe saltarse la verificación.
+    if (!contact.ready) { setError('Verifica tu correo y tu celular para continuar'); return; }
     setIsLoading(true);
     setError('');
 
@@ -122,16 +124,15 @@ const LinkedInTravelerSignupPage: React.FC = () => {
     if (!apellidoPaterno.trim()) { setError('El apellido paterno es requerido'); setIsLoading(false); return; }
     if (!sexo) { setError('El sexo es requerido'); setIsLoading(false); return; }
     if (!phoneNumber.trim()) { setError('El número de celular es requerido'); setIsLoading(false); return; }
-    if (!emailFromProvider && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) { setError('Captura un correo electrónico válido'); setIsLoading(false); return; }
     if (!isForeignTraveler && (!curp.trim() || curp.length !== 18)) { setError('La CURP debe tener 18 caracteres'); setIsLoading(false); return; }
     if (isForeignTraveler && !passportNumber.trim()) { setError('El número de pasaporte es requerido'); setIsLoading(false); return; }
 
     try {
       if (!user) throw new Error('Sesión no encontrada');
 
-      const { error: insertError } = await supabase.from('users').insert({
+      const { error: insertError } = await guardarPerfilViajero(contact.phoneVerified, {
         id: user.id,
-        email: emailFromProvider ? em : em.trim().toLowerCase(),
+        email: em,
         role: UserRole.TRAVELER,
         first_name: fn,
         last_name: apellidoPaterno,
@@ -208,7 +209,7 @@ const LinkedInTravelerSignupPage: React.FC = () => {
       }
 
       await completeOnboarding();
-      setCreated(true);
+      navigate('/traveler/dashboard');
     } catch (err) {
       setError(mensajeDeError(err) || 'Ocurrió un error al completar el registro');
     } finally {
@@ -217,6 +218,17 @@ const LinkedInTravelerSignupPage: React.FC = () => {
   };
 
   const inputClass = "appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 sm:text-sm";
+
+  const contact = useOAuthContactVerification({
+    user,
+    providerLabel: 'LinkedIn',
+    emailFromProvider,
+    email: formData.email,
+    onEmailChange: value => setFormData(prev => ({ ...prev, email: value })),
+    phone: formData.phoneNumber,
+    onPhoneChange: value => setFormData(prev => ({ ...prev, phoneNumber: value })),
+    inputClass,
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -234,10 +246,6 @@ const LinkedInTravelerSignupPage: React.FC = () => {
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
 
-          {created && user ? (
-            <OAuthContactVerification userId={user.id} email={formData.email} phone={formData.phoneNumber} audience="traveler" redirectTo="/traveler/dashboard" />
-          ) : (
-          <>
           <div className="mb-6 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
             <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
             <p className="text-xs text-blue-700">Tus datos de LinkedIn han sido pre-llenados. Puedes editarlos si lo deseas.</p>
@@ -278,15 +286,7 @@ const LinkedInTravelerSignupPage: React.FC = () => {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Correo electrónico</label>
-              <input name="email" type="email" value={formData.email} onChange={handleInputChange} required autoComplete="email" className={`mt-1 ${inputClass} ${emailFromProvider ? 'bg-gray-50' : ''}`} readOnly={emailFromProvider} />
-              {emailFromProvider ? (
-                <p className="mt-1 text-xs text-gray-400">Email verificado por LinkedIn</p>
-              ) : (
-                <p className="mt-1 text-xs text-amber-600">LinkedIn no compartió tu correo. Captúralo: te enviaremos un código para verificarlo.</p>
-              )}
-            </div>
+            {contact.emailField}
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Código de Referido <span className="text-gray-400 font-normal">(Opcional)</span></label>
@@ -338,10 +338,7 @@ const LinkedInTravelerSignupPage: React.FC = () => {
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Número de celular</label>
-              <input name="phoneNumber" type="tel" value={formData.phoneNumber} onChange={handleInputChange} placeholder="+52 55 1234 5678" required className={`mt-1 ${inputClass}`} />
-            </div>
+            {contact.phoneField}
 
             <div className="border-t border-gray-200 pt-4 flex flex-col gap-y-3">
               <h3 className="text-sm font-medium text-gray-900">Domicilio</h3>
@@ -428,14 +425,13 @@ const LinkedInTravelerSignupPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isLoading || !termsAccepted}
+              disabled={isLoading || !termsAccepted || !contact.ready}
               className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Completando registro...' : 'Crear cuenta de Viajero'}
             </button>
+            {!contact.ready && <p className="text-center text-xs text-gray-500">Verifica tu correo y tu celular para poder crear tu cuenta.</p>}
           </form>
-          </>
-          )}
         </div>
       </div>
     </div>
