@@ -612,7 +612,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Check if profile exists in users table
           const { data: existingProfile, error: errorPerfilExistente } = await supabase
             .from('users')
-            .select('id, role')
+            .select('id, role, onboarding_completed')
             .eq('id', authUser.id)
             .maybeSingle();
 
@@ -623,7 +623,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error('AuthContext: no se pudo leer el perfil OAuth existente', errorPerfilExistente);
           }
 
-          if (!existingProfile) {
+          // `onboarding_completed === false` es un registro social a medias: el perfil se crea al
+          // pedir el código de correo o de celular, antes de enviar el formulario. Sigue siendo
+          // un usuario nuevo (hoy ningún usuario real tiene `false`; `null` cuenta como registrado).
+          if (!existingProfile || existingProfile.onboarding_completed === false) {
             // New OAuth user — needs onboarding; OAuth providers always verify email
             setIsEmailVerified(true);
             setIsOnboardingPending(true);

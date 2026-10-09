@@ -169,14 +169,25 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Registro con Facebook sin correo: la cuenta de auth no tiene email, y sin él
-    // el correo ya verificado no serviría para iniciar sesión ni para recuperar
-    // la contraseña. Se asocia aquí, antes de marcarlo verificado, porque el email
-    // de auth es único: si otra cuenta ya lo tiene, falla y no queda verificado.
-    if (!user.email && userData.email) {
+    // Registro social sin correo: la cuenta de auth no tiene email, y sin él el correo
+    // ya verificado no serviría para iniciar sesión ni para recuperar la contraseña.
+    // El correo que escribió la persona espera en app_metadata (lo puso
+    // send-verification-email). Se asocia aquí, ANTES de marcarlo verificado, porque
+    // el email de auth es único: si otra cuenta ya lo tiene, falla y no queda verificado.
+    // El trigger sync_user_email copia ese email a users al actualizar la fila.
+    const correoPendiente: string | undefined = user.app_metadata?.pending_contact_email;
+    if (!user.email) {
+      const correoPorAsociar = correoPendiente || userData.email;
+      if (!correoPorAsociar) {
+        return new Response(
+          JSON.stringify({ success: false, error: "No hay un correo por verificar. Solicita un nuevo código." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        );
+      }
       const { error: authEmailError } = await supabase.auth.admin.updateUserById(user.id, {
-        email: userData.email,
+        email: correoPorAsociar,
         email_confirm: true,
+        app_metadata: { ...user.app_metadata, pending_contact_email: null },
       });
       if (authEmailError) {
         console.error("Error asociando el correo a la cuenta de auth:", authEmailError);
