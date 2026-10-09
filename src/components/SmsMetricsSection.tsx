@@ -8,7 +8,7 @@ interface Metrics {
   attempts: { provider: string; status: string; country_code: string; is_simulated: boolean; total: number; segments: number; fallback: number; retries: number; known_cost: number | null; cost_unit: string | null }[];
   otp: { requested: number; verified: number; simulated: number; invalid: number };
   consumption: { scope: string; window_start: string; segments: number }[];
-  health: { provider: string; balance_credits: number | null; balance_checked_at: string | null; last_worker_at: string | null }[];
+  health: { provider: string; available?: boolean; balance_amount?: number | null; balance_unit?: string | null; balance_credits: number | null; balance_checked_at: string | null; last_worker_at: string | null }[];
   alerts: { code: string; last_seen_at: string; occurrences: number }[];
 }
 
@@ -114,7 +114,7 @@ export function SmsMetricsSection() {
       </p>
       {m.health.map(h => (
         <p key={h.provider} className="mt-1 text-xs text-gray-500">
-          {h.provider}: {h.balance_credits == null ? 'saldo no disponible' : `${h.balance_credits} créditos`} {h.balance_checked_at && `· consultado ${new Date(h.balance_checked_at).toLocaleString()}`}.
+          {h.provider}: {h.available === true ? 'configuración validada' : 'configuración sin validar'} · {h.balance_amount == null ? 'saldo no disponible' : `${h.balance_amount} ${h.balance_unit === 'credits' ? 'créditos' : h.balance_unit ?? ''}`}  {h.balance_checked_at && `· consultado ${new Date(h.balance_checked_at).toLocaleString()}`}.
         </p>
       ))}
     </section>

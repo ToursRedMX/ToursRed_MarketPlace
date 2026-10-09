@@ -3,6 +3,8 @@ import type { Categoria, Proveedor, ResultadoEnvio, RoutingSettings } from './ti
 import { enrutar } from './enrutador.ts';
 import { labsmobile } from './proveedores/labsmobile.ts';
 import { mock } from './proveedores/mock.ts';
+import { twilio } from './proveedores/twilio.ts';
+import { twilioConfig } from './twilioConfig.ts';
 import { hmac, nuevaCorrelacion } from './seguridad.ts';
 import { segmentosSms } from './plantillas.ts';
 import { normalizarTelefonoSms } from './telefono.ts';
@@ -30,8 +32,9 @@ export async function enviarPersistido(client: SupabaseClient, runtime: RuntimeS
   if (webhookSecret.length < 32) return { estado: 'fallido', clase: 'permanente', codigo: 'webhook_no_configurado' };
   return enrutar(runtime.settings, category, async (provider: Proveedor, reason) => {
     const correlation = nuevaCorrelacion();
-    const callback = new URL('/functions/v1/sms-webhook-labsmobile', Deno.env.get('SUPABASE_URL'));
-    callback.searchParams.set('signature', await hmac(webhookSecret, 'labsmobile-callback:' + correlation));
+    const callback = new URL(provider === 'twilio' ? '/functions/v1/sms-webhook-twilio' : '/functions/v1/sms-webhook-labsmobile', Deno.env.get('SUPABASE_URL'));
+    if (provider === 'twilio') callback.searchParams.set('correlation', correlation);
+    else callback.searchParams.set('signature', await hmac(webhookSecret, 'labsmobile-callback:' + correlation));
     const { data: start, error: startError } = await client.rpc('begin_sms_attempt', {
       p_outbox: reference.outboxId ?? null, p_verification: reference.verificationId ?? null, p_lease: reference.lease ?? null,
       p_provider: provider, p_correlation: correlation, p_reason: reason, p_segments: segmentosSms(text).segments,
@@ -50,7 +53,7 @@ export async function enviarPersistido(client: SupabaseClient, runtime: RuntimeS
       return { estado: 'fallido', clase: 'permanente', codigo: 'envios_reales_no_autorizados' };
     }
     const adapter = provider === 'mock' ? mock : provider === 'labsmobile'
-      ? labsmobile(Deno.env.get('LABSMOBILE_USER') ?? '', Deno.env.get('LABSMOBILE_TOKEN') ?? '', Deno.env.get('LABSMOBILE_SENDER') ?? 'ToursRed') : null;
+      ? labsmobile(Deno.env.get('LABSMOBILE_USER') ?? '', Deno.env.get('LABSMOBILE_TOKEN') ?? '', Deno.env.get('LABSMOBILE_SENDER') ?? 'ToursRed') : provider === 'twilio' ? twilio(twilioConfig()) : null;
     const result: ResultadoEnvio = adapter ? await adapter.enviar({ destino: destination, texto: text, correlacion: correlation, categoria: category,
       simulacion: simulated, urlEstados: callback.toString() }) : { estado: 'fallido', clase: 'permanente', codigo: 'adaptador_no_implementado' };
     const { error } = await client.rpc('finish_sms_attempt', { p_attempt: start.attempt_id, p_state: result.estado,

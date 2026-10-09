@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import { spawnSync, spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+const container='toursred-external-tests';
+assert.equal(spawnSync('docker',['inspect',container,'--format','{{json .NetworkSettings.Networks}}'],{encoding:'utf8'}).stdout.trim(),'{}','Real triggers require a container without network');
+const args=['exec','-i',container,'psql','-X','-qAt','-U','supabase_admin','-d','sms_phase1_full','-v','ON_ERROR_STOP=1'];
+function sql(q){const r=spawnSync('docker',args,{input:q,encoding:'utf8'});if(r.status!==0)throw Error(r.stderr);return r.stdout.trim().split('\n').filter(Boolean).at(-1)??'';}
+function parallel(q){return new Promise((resolve,reject)=>{const p=spawn('docker',args);let out='',err='';p.stdout.on('data',d=>out+=d);p.stderr.on('data',d=>err+=d);p.on('close',c=>c?reject(Error(err)):resolve(out.trim()));p.stdin.end(q);});}
+let passed=0;function test(name,fn){fn();console.log(`ok ${++passed} - ${name}`);}
+const quote=x=>x==null?'null':"'"+String(x).replaceAll("'","''")+"'";
+const user=sql("select id from public.users where role='traveler' limit 1");
+assert.match(user,/^[0-9a-f-]{36}$/,'Run foundation DB fixture first');
+const phone='+525512345678';
+const newSid=()=> 'SM'+randomUUID().replaceAll('-','');
+const ids=[];
+sql("update public.platform_settings set phone_verification_required=false,sms_habilitado=true,sms_modo_prueba=false,sms_proveedor_transaccional='twilio',sms_proveedor_otp='twilio',sms_proveedor_recordatorios='twilio',sms_fallback_habilitado=true,sms_proveedor_respaldo='labsmobile',sms_limite_diario=1000,sms_limite_mensual=10000; update messaging_private.runtime_capabilities set processor_ready=true; select public.refresh_sms_provider_capability('twilio',true);select public.refresh_sms_provider_capability('labsmobile',true);");
+function attempt(simulated=false){
+  sql(`update public.platform_settings set sms_modo_prueba=${simulated};delete from messaging_private.rate_limit_buckets where scope='provider_second';`);
+  const id=sql(`select public.enqueue_sms_notification('${user}',null,'${phone}','MX','reserva_confirmada','${randomUUID()}',now(),now()+interval '1 hour')`), lease=randomUUID();ids.push(id);
+  sql(`update messaging_private.notification_outbox set status='procesando',lease_token='${lease}',lease_until=now()+interval '2 minutes' where id='${id}'`);
+  const correlation=randomUUID().replaceAll('-','').slice(0,20);
+  const a=JSON.parse(sql(`select public.begin_sms_attempt('${id}',null,'${lease}','twilio','${correlation}','principal',1)`));assert.equal(a.allowed,true);
+  return {id,lease,correlation,attemptId:a.attempt_id,sid:newSid()};
+}
+const callbackSQL=(a,state='entregado',sid=a.sid,dest=phone,cost=null,unit=null)=>`select public.record_twilio_status('${a.correlation}','${sid}',${quote(dest)},'${state}',null,${cost??'null'},${quote(unit)})`;
+const callback=(...a)=>sql(callbackSQL(...a));
+const status=a=>sql(`select status from messaging_private.notification_attempts where id='${a.attemptId}'`);
+const finish=(a,state='aceptado',sid=a.sid)=>sql(`select public.finish_sms_attempt('${a.attemptId}','${state}',${quote(sid)},${state==='fallido'?"'rechazo_confirmado'":'null'},null)`);
+const financial=()=>sql("select jsonb_object_agg(t,n)::text from (select 'payments' t,count(*) n from public.payment_transactions union all select 'bookings',count(*) from public.bookings union all select 'entries',count(*) from public.accounting_entries) x");
+const financialBefore=financial();
+
+test('Twilio can be certified without activating verification',()=>{assert.equal(sql("select adapter_ready and configured_until>now() from messaging_private.provider_capabilities where provider='twilio'"),'t');assert.equal(sql('select phone_verification_required from public.platform_settings'),'f');});
+test('callback before HTTP response binds SID and preserves delivery',()=>{const a=attempt();assert.equal(callback(a),'t');finish(a);assert.equal(status(a),'entregado');assert.equal(sql(`select provider_message_id from messaging_private.notification_attempts where id='${a.attemptId}'`),a.sid);});
+test('duplicate callbacks create one event',()=>{const a=attempt();callback(a);callback(a);assert.equal(sql(`select count(*) from messaging_private.notification_events where attempt_id='${a.attemptId}'`),'1');});
+test('old queued/sent events cannot downgrade delivered',()=>{const a=attempt();callback(a);callback(a,'aceptado');callback(a,'enviado');assert.equal(status(a),'entregado');});
+test('different recipient or SID cannot hijack an attempt',()=>{const a=attempt();assert.equal(callback(a,'entregado',a.sid,'+15555555555'),'f');finish(a);assert.equal(callback(a,'entregado',newSid()),'f');assert.throws(()=>finish(a,'aceptado',newSid()),/SID incompatible/);assert.equal(status(a),'aceptado');});
+test('the same real Twilio SID cannot belong to two attempts',()=>{const a=attempt(),b=attempt();finish(a);assert.throws(()=>finish(b,'aceptado',a.sid),/duplicate key/);});
+test('simulation cannot be upgraded by signed callback or HTTP completion',()=>{const a=attempt(true);assert.equal(callback(a),'f');assert.throws(()=>finish(a),/Simulacion/);finish(a,'simulado','mock-twilio-'+a.correlation);assert.equal(status(a),'simulado');});
+test('unknown outcome can reconcile without generating a new attempt',()=>{const a=attempt();finish(a,'resultado_desconocido');assert.equal(callback(a),'t');assert.equal(status(a),'entregado');assert.equal(sql(`select count(*) from messaging_private.notification_attempts where outbox_id='${a.id}'`),'1');});
+test('async failed is terminal and never enables provider fallback',()=>{const a=attempt();finish(a);callback(a,'fallido');assert.equal(sql(`select failure_class from messaging_private.notification_attempts where id='${a.attemptId}'`),'permanente');const r=JSON.parse(sql(`select public.begin_sms_attempt('${a.id}',null,'${a.lease}','labsmobile','${randomUUID().replaceAll('-','').slice(0,20)}','fallback_confirmado',1)`));assert.equal(r.allowed,false);});
+test('old primary callback cannot overwrite an accepted fallback',()=>{const a=attempt();finish(a,'fallido',null);const corr=randomUUID().replaceAll('-','').slice(0,20);const b=JSON.parse(sql(`select public.begin_sms_attempt('${a.id}',null,'${a.lease}','labsmobile','${corr}','fallback_confirmado',1)`));assert.equal(b.allowed,true);sql(`select public.finish_sms_attempt('${b.attempt_id}','aceptado','lab-test');select public.finish_sms_notification('${a.id}','${a.lease}','aceptado')`);assert.equal(callback(a),'f');assert.equal(sql(`select status from messaging_private.notification_outbox where id='${a.id}'`),'aceptado');});
+test('cost can arrive after duplicate terminal callback without duplicate event',()=>{const a=attempt();callback(a);callback(a,'entregado',a.sid,phone,0.12,'USD');assert.equal(sql(`select cost::text||':'||cost_unit from messaging_private.notification_attempts where id='${a.attemptId}'`),'0.120000:USD');assert.equal(sql(`select count(*) from messaging_private.notification_events where attempt_id='${a.attemptId}'`),'1');});
+test('invalid cost/currency and events are rejected',()=>{const a=attempt();assert.throws(()=>callback(a,'entregado',a.sid,phone,-1,'USD'),/Costo invalido/);assert.throws(()=>callback(a,'entregado',a.sid,phone,1,'credits'),/Costo invalido/);assert.throws(()=>callback(a,'inventado'),/Evento invalido/);});
+test('cancelled logical message stays cancelled after late callback',()=>{const a=attempt();finish(a);sql(`update messaging_private.notification_outbox set status='cancelado',lease_token=null,lease_until=null where id='${a.id}'`);callback(a);assert.equal(sql(`select status from messaging_private.notification_outbox where id='${a.id}'`),'cancelado');});
+test('monetary balances are separate from LabsMobile credits',()=>{sql("select public.record_sms_provider_health('twilio',true,12.50,'USD');select public.record_sms_provider_health('labsmobile',true,200,'credits')");assert.equal(sql("select balance_credits is null and balance_amount=12.50 and balance_unit='USD' from messaging_private.provider_health where provider='twilio'"),'t');assert.equal(sql("select balance_credits=200 from messaging_private.provider_health where provider='labsmobile'"),'t');});
+test('Twilio-only configuration does not alert about unconfigured LabsMobile',()=>{sql("update public.platform_settings set sms_fallback_habilitado=false;select public.record_sms_provider_health('labsmobile',false);select public.record_sms_health()");assert.equal(sql("select active from messaging_private.notification_alerts where code='provider_unavailable'"),'f');sql("select public.record_sms_provider_health('twilio',false);select public.record_sms_health()");assert.equal(sql("select active from messaging_private.notification_alerts where code='provider_unavailable'"),'t');});
+test('Twilio RPCs and private data are inaccessible to browser roles',()=>{for(const name of ['record_twilio_status','claim_twilio_reconciliation','record_sms_provider_health'])assert.equal(sql(`select bool_or(has_function_privilege('authenticated',oid,'execute') or has_function_privilege('anon',oid,'execute')) from pg_proc where proname='${name}'`),'f');assert.throws(()=>sql("set role authenticated;select public.record_sms_provider_health('twilio',true)"),/permission denied/);assert.throws(()=>sql('set role anon;select * from messaging_private.notification_attempts'),/permission denied/);});
+
+// Two real concurrent PostgreSQL transactions must not claim the same API read.
+sql('update messaging_private.notification_attempts set reconciliation_count=24');
+const reconcile=attempt();finish(reconcile);sql(`update messaging_private.notification_attempts set created_at=now()-interval '2 minutes',reconciliation_count=0 where id='${reconcile.attemptId}'`);
+const claims=await Promise.all([parallel('begin;select count(*) from public.claim_twilio_reconciliation(5);select pg_sleep(0.2);commit;'),parallel('select count(*) from public.claim_twilio_reconciliation(5)')]);
+assert.equal(claims.reduce((sum,x)=>sum+Number(x.trim()),0),1);console.log(`ok ${++passed} - concurrent reconciliation claims reserve one read`);
+test('reconciliation never queues another message and respects cooldown',()=>{assert.equal(sql('select count(*) from public.claim_twilio_reconciliation(5)'),'0');assert.equal(sql(`select count(*) from messaging_private.notification_attempts where outbox_id='${reconcile.id}'`),'1');});
+test('financial tables unchanged by provider events and costs',()=>assert.equal(financial(),financialBefore));
+test('monitor RPCs work under the real API safeupdate restriction',()=>{sql("LOAD 'safeupdate';set role service_role;select public.record_sms_health(null,false,true);select public.record_sms_provider_health('twilio',false);select public.refresh_sms_provider_capability('twilio',false);select public.certify_sms_runtime(false,false)");});
+sql(`delete from messaging_private.notification_outbox where id in (${ids.map(quote).join(',')}); update public.platform_settings set sms_habilitado=false,sms_modo_prueba=true,sms_proveedor_otp='labsmobile',sms_proveedor_transaccional='labsmobile',sms_proveedor_recordatorios='labsmobile',sms_fallback_habilitado=false,sms_proveedor_respaldo=null,sms_limite_diario=100,sms_limite_mensual=1000; update messaging_private.runtime_capabilities set processor_ready=false,otp_enforcement_ready=false;update messaging_private.provider_capabilities set adapter_ready=false,configured_until=null;`);
+console.log(`${passed} Twilio DB tests passed on real schema with original triggers, without network.`);
