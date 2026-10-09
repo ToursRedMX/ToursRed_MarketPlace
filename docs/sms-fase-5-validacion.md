@@ -1,6 +1,6 @@
 # Fase 5: Twilio para OTP y SMS transaccional
 
-Implementación sobre `c01de4c`, conservando los cambios de OAuth y el rediseño administrativo de #363. Rama `codex/sms-otp-fase-5`. Sin aplicación remota, despliegue, cambios de secretos, activación ni envíos reales.
+Implementación sobre `c01de4c`, conservando los cambios de OAuth y el rediseño administrativo de #363 e integrando el arreglo de safeupdate de #364. Rama `codex/sms-otp-fase-5`. Sin aplicación remota, despliegue, cambios de secretos, activación ni envíos reales.
 
 ## Alcance
 
@@ -45,7 +45,7 @@ Se reutilizan `PHONE_OTP_PEPPER`, `SMS_WEBHOOK_SECRET` y los interruptores técn
 ## Pruebas y criterios de aceptación
 
 - 37 pruebas Deno sin permiso de red/entorno: 23 anteriores y 14 Twilio. REST, remitente, modo test, firma, manipulación de URL/cuerpo/cuenta, rechazo/timeout, fallback, diagnóstico, saldo, consulta y costo.
-- 19 pruebas SQL nuevas en Docker sin red, sobre esquema real restaurado con triggers: SID y destinatario, carrera callback/HTTP, duplicados, orden, simulación, fallback anterior, cancelación, costos, permisos, cuota de consultas concurrentes y aislamiento financiero.
+- 20 pruebas SQL nuevas en Docker sin red, sobre esquema real restaurado con triggers: SID y destinatario, carrera callback/HTTP, duplicados, orden, simulación, fallback anterior, cancelación, costos, permisos, cuota de consultas concurrentes y aislamiento financiero. Incluye el monitor bajo `LOAD 'safeupdate'` y rol service_role, reproduciendo la configuración real del rol authenticator remoto.
 - Las 82 pruebas SQL anteriores también pasan con la nueva migración.
 - Mutación real del validador a `return true`: falla la prueba de firma manipulada; restaurado, toda la suite pasa.
 - Typecheck de frontend, Deno check de Edge Functions, guards, dependencias, subrutas y build pasan. También pasan 7 escenarios del guard UI y los 63 scripts Node de la guardia CI de lint. El lint global reporta 34 errores y 4 avisos heredados; cero hallazgos en archivos modificados. Build conserva el aviso previo de chunks grandes.

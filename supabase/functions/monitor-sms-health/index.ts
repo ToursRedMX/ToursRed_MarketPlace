@@ -33,5 +33,10 @@ Deno.serve(async req=>{
   const otp=processor&&Deno.env.get('PHONE_OTP_ENFORCEMENT_CERTIFIED')==='true'&&(Deno.env.get('PHONE_OTP_PEPPER')?.length??0)>=32&&(Deno.env.get('SMS_WEBHOOK_SECRET')?.length??0)>=32&&Deno.env.get('SMS_ALLOW_REAL_SENDS')==='true';
   const cert=await client.rpc('certify_sms_runtime',{p_processor:processor,p_otp:otp});if(cert.error)throw cert.error;
   return Response.json({ok:true,balance_available:balance!=null,twilio_ready:twilioReady,reconciled,processor_certified:processor,otp_certified:otp},{headers:cors});
- }catch(e){console.error('monitor-sms-health:',e instanceof Error?e.message:JSON.stringify(e));return Response.json({error:'monitor_no_disponible'},{status:503,headers:cors});}
+ }catch(e){
+  // Preserve SQL diagnostics without dumping provider payloads or personal data.
+  const code=e&&typeof e==='object'&&'code' in e&&typeof e.code==='string'&&/^[A-Z0-9]{5}$/.test(e.code)?e.code:'monitor_failure';
+  console.error('monitor-sms-health:',code);
+  return Response.json({error:'monitor_no_disponible'},{status:503,headers:cors});
+ }
 });
