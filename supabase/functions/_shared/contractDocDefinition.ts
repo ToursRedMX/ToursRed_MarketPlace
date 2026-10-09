@@ -427,7 +427,7 @@ function anexoB(a: AnexoBData) {
           row("Dirección IP de origen", a.ipAceptacion),
           row("Navegador / dispositivo", a.userAgentAceptacion),
           row("Código OTP", a.otpEstatus),
-          row("Hash SHA-256 del documento aceptado", a.hashDocumento ?? "El hash de integridad de este documento está disponible en el registro digital de la plataforma")
+          row("Hash SHA-256 del documento aceptado", a.hashDocumento ?? "El hash de integridad de este documento está disponible en el registro digital de la plataforma", !a.hashDocumento)
         ]
       },
       layout: {
