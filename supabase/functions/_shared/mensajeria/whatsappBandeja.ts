@@ -1,10 +1,11 @@
 // Logica pura de la bandeja de WhatsApp entrante. Sin red ni base de datos: lo
 // que vive aqui se prueba con `scripts/test-whatsapp-bandeja.mjs`.
 //
-// NO reutiliza `messageSidValid` / `clasificarTwilio` de proveedores/twilio.ts a
-// proposito: esos exigen que el SID empiece con SM, y Twilio responde `MM...` a
-// los mensajes de WhatsApp (medido el 09-oct-2026 en el log de Twilio). Aceptar
-// los dos prefijos AQUI no toca ese camino; el arreglo del OTP es otra tarea.
+// Twilio responde `MM...` a los mensajes de WhatsApp (medido el 09-oct-2026 en el
+// log de Twilio). `messageSidValid` de proveedores/twilio.ts ya acepta SM|MM desde
+// el PR #376; esta bandeja conserva su propio validador y su propio clasificador
+// de envio porque su contrato es distinto (estados `leido`, y un 429 o 5xx es
+// ambiguo, no fallido) y asi no depende de los cambios del camino del OTP.
 
 export const BUCKET_MEDIA = 'whatsapp-media';
 export const MAX_BYTES_MEDIA = 16 * 1024 * 1024;

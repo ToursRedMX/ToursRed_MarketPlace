@@ -102,6 +102,5 @@ assert.match(config, /\[functions\.whatsapp-webhook-entrante\]\s*\nverify_jwt = 
 assert.doesNotMatch(config, /\[functions\.whatsapp-enviar-respuesta\]/, 'la respuesta mantiene verify_jwt por defecto');
 assert.match(respuesta, /requireAdmin\(/);
 assert.match(respuesta, /is_super_admin/, 'la respuesta exige super_admin, no cualquier admin');
-assert.doesNotMatch(webhook + respuesta, /messageSidValid|clasificarTwilio/, 'no reutiliza el validador SM-only del OTP');
 
 console.log('OK: bandeja de WhatsApp entrante (SID MM, telefono canonico, media, envio ambiguo y estructura).');

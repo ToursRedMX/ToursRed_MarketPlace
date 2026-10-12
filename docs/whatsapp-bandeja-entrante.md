@@ -34,5 +34,5 @@ Panel admin (`/admin/whatsapp-entrantes`, menú Comunicaciones, **solo super_adm
 - `scripts/check-edge-subpaths.mjs` y los tipos de las Edge Functions necesitan `deno`, que no está en el contenedor: no corrieron aquí.
 - **Retención:** los mensajes y adjuntos son datos personales sin política de borrado. Falta decidir cuánto tiempo se guardan antes de producción.
 - **Webhook de estado de salientes:** un callback que llegue antes de que se guarde el `twilio_sid` se ignora; los siguientes (`delivered`, `read`) lo alcanzan.
-- **El arreglo `SM|MM` del OTP sigue pendiente y es independiente de esto:** esta bandeja valida su propio SID (`whatsappBandeja.ts`) y no toca `proveedores/twilio.ts`.
+- **SID `MM`:** el arreglo del OTP ya está en `main` (#376). Esta bandeja conserva su propio validador y clasificador de envío (`whatsappBandeja.ts`) y no toca `proveedores/twilio.ts`.
 - Los adjuntos pendientes que fallen no se reintentan solos (queda `url_origen` en la fila para un reintento futuro).
