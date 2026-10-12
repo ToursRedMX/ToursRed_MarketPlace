@@ -6,7 +6,7 @@ Panel admin (`/admin/whatsapp-entrantes`, menú Comunicaciones, **solo super_adm
 
 | Pieza | Qué hace |
 |---|---|
-| `supabase/migrations/20261012230000_whatsapp_bandeja_entrante.sql` | Tablas `whatsapp_contactos`, `whatsapp_mensajes`, `whatsapp_adjuntos`, `whatsapp_plantillas`; bucket privado `whatsapp-media`; RLS solo super_admin; RPC; Realtime |
+| `supabase/migrations/20261012215514_whatsapp_bandeja_entrante.sql` | Tablas `whatsapp_contactos`, `whatsapp_mensajes`, `whatsapp_adjuntos`, `whatsapp_plantillas`; bucket privado `whatsapp-media`; RLS solo super_admin; RPC; Realtime |
 | `supabase/functions/whatsapp-webhook-entrante` | Recibe los mensajes entrantes **y** los callbacks de estado (`?evento=estado`). `verify_jwt = false`, valida la firma de Twilio |
 | `supabase/functions/whatsapp-enviar-respuesta` | Responde desde el panel. Requiere sesión de super_admin (`verify_jwt` por defecto) |
 | `src/pages/admin/AdminWhatsAppEntrantes.tsx` | La pantalla |
@@ -22,7 +22,7 @@ Panel admin (`/admin/whatsapp-entrantes`, menú Comunicaciones, **solo super_adm
 
 ## Puesta en marcha (en este orden)
 
-1. **Aplicar la migración con la versión del archivo**, desde una rama que lo tenga (CLAUDE.md, regla 1 y trampa de `db push`): `Test-Path supabase\migrations\20261012230000_whatsapp_bandeja_entrante.sql` → `supabase db push` debe **listarla**, no decir «up to date». Confirmar después contra la base (tablas, bucket y que el ledger registró esa versión).
+1. **Aplicar la migración con la versión del archivo**, desde una rama que lo tenga (CLAUDE.md, regla 1 y trampa de `db push`): `Test-Path supabase\migrations\20261012215514_whatsapp_bandeja_entrante.sql` → `supabase db push` debe **listarla**, no decir «up to date». Confirmar después contra la base (tablas, bucket y que el ledger registró esa versión).
 2. **Desplegar las dos funciones.** Antes, cruzar `verify_jwt` contra la API: `whatsapp-webhook-entrante` = `false`, `whatsapp-enviar-respuesta` = `true`. Después, mandar un `OPTIONS` a cada una.
 3. **Twilio:** apuntar "When a message comes in" a `https://<proyecto>.supabase.co/functions/v1/whatsapp-webhook-entrante`. Los inbound de la consola traían un Messaging Service (`MG…`): **revisar primero ahí (Messaging → Services → Integration → Incoming Messages)** y en el sender (Edit Sender → Endpoint configuration); si el servicio tiene su propio webhook, manda sobre el del sender.
 4. Variables de entorno: usa las que ya existen (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`). `TWILIO_WHATSAPP_FROM` debe ser exactamente el `To` que Twilio manda en los entrantes (`whatsapp:+15554759009`); si no coincide, el webhook los rechaza con 400.

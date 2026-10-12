@@ -1,11 +1,11 @@
--- Prueba de comportamiento de la migracion 20261012230000_whatsapp_bandeja_entrante.sql
+-- Prueba de comportamiento de la migracion 20261012215514_whatsapp_bandeja_entrante.sql
 --
 -- Cubre: telefono canonico (el "1" de moviles MX), deduplicacion de reintentos de
 -- Twilio, enlace con `users`, bloqueo (no guarda, solo cuenta), ventana de 24 h,
 -- plantillas fuera de ventana, estados que solo avanzan y permisos por rol (RLS).
 --
 -- COMO CORRERLA: contra una base DESECHABLE, nunca contra la de Supabase.
---   psql -d <base_desechable> -v ON_ERROR_STOP=1 -f supabase/migrations/20261012230000_whatsapp_bandeja_entrante.sql
+--   psql -d <base_desechable> -v ON_ERROR_STOP=1 -f supabase/migrations/20261012215514_whatsapp_bandeja_entrante.sql
 --   psql -d <base_desechable> -f scripts/test-whatsapp-bandeja.sql
 -- La base necesita los roles anon/authenticated/service_role con los privilegios por
 -- defecto de Supabase sobre `public`, `public.users(id, is_super_admin,

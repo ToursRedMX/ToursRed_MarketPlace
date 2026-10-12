@@ -11,7 +11,7 @@ export const BUCKET_MEDIA = 'whatsapp-media';
 export const MAX_BYTES_MEDIA = 16 * 1024 * 1024;
 export const MAX_ADJUNTOS = 10;
 
-// Debe coincidir con `allowed_mime_types` del bucket (migracion 20261012230000).
+// Debe coincidir con `allowed_mime_types` del bucket (migracion 20261012215514).
 // SVG y HTML quedan fuera: el contenido lo manda cualquiera y se abre en el panel.
 export const MIME_PERMITIDOS: Record<string, string> = {
   'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
