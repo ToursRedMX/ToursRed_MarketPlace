@@ -270,3 +270,8 @@ verify_jwt = false
 # Twilio signs the exact public URL and all POST parameters; validated in handler.
 [functions.sms-webhook-twilio]
 verify_jwt = false
+
+# Twilio no manda JWT: la autenticidad es la firma X-Twilio-Signature (validada en
+# el handler). Recibe mensajes entrantes de WhatsApp y callbacks de estado.
+[functions.whatsapp-webhook-entrante]
+verify_jwt = false

@@ -71,6 +71,7 @@ import AdminUsers from './pages/admin/AdminUsers';
 import AdminTravelers from './pages/admin/AdminTravelers';
 import AdminReviews from './pages/admin/AdminReviews';
 import AdminMessages from './pages/admin/AdminMessages';
+import AdminWhatsAppEntrantes from './pages/admin/AdminWhatsAppEntrantes';
 import AdminDestinations from './pages/admin/AdminDestinations';
 import AdminDeparturePoints from './pages/admin/AdminDeparturePoints';
 import AdminCategories from './pages/admin/AdminCategories';
@@ -567,6 +568,14 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
                 <AdminMessages />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/whatsapp-entrantes"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <AdminWhatsAppEntrantes />
               </ProtectedRoute>
             }
           />

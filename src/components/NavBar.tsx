@@ -249,6 +249,8 @@ const NavBar: React.FC = () => {
     const comunicacionesItems: AdminMenuItem[] = [];
     if (isSuperAdmin || permissions?.canManageMessages)
       comunicacionesItems.push({ to: '/admin/messages', label: 'Mensajes', icon: <MessageSquare className="h-4 w-4" /> });
+    if (isSuperAdmin)
+      comunicacionesItems.push({ to: '/admin/whatsapp-entrantes', label: 'Mensajes Entrantes de WhatsApp', icon: <MessageCircle className="h-4 w-4" /> });
     comunicacionesItems.push({ to: '/admin/tour-messages', label: 'Mensajes de Agencias', icon: <Megaphone className="h-4 w-4" /> });
     comunicacionesItems.push({ to: '/admin/broadcast-messages', label: 'Mensajes Masivos', icon: <Send className="h-4 w-4" /> });
     comunicacionesItems.push({ to: '/admin/newsletter', label: 'Newsletter', icon: <Mail className="h-4 w-4" /> });
