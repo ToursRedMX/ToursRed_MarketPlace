@@ -101,6 +101,28 @@ assert.ok(webhook.indexOf('verifyTwilioSignature(') < webhook.indexOf('whatsapp_
 assert.match(config, /\[functions\.whatsapp-webhook-entrante\]\s*\nverify_jwt = false/, 'el webhook declara verify_jwt = false (Twilio no manda JWT)');
 assert.doesNotMatch(config, /\[functions\.whatsapp-enviar-respuesta\]/, 'la respuesta mantiene verify_jwt por defecto');
 assert.match(respuesta, /requireAdmin\(/);
-assert.match(respuesta, /is_super_admin/, 'la respuesta exige super_admin, no cualquier admin');
+assert.match(respuesta, /whatsapp_usuario_autorizado/, 'la respuesta pregunta a la base si el usuario tiene el permiso de WhatsApp');
+assert.doesNotMatch(respuesta, /is_super_admin/, 'la respuesta ya no exige super_admin a secas: la regla vive en la base');
+// Una sola regla de acceso: RLS, RPC del panel, envio, menu y pantalla preguntan lo mismo.
+const permiso = readFileSync('supabase/migrations/20261012222646_whatsapp_bandeja_permiso.sql', 'utf8');
+assert.doesNotMatch(permiso.replace(/^\s*--.*$/gm, ''), /is_super_admin\(\)/, 'la migracion de permiso no usa is_super_admin() como regla de acceso');
+for (const t of ['whatsapp_contactos', 'whatsapp_plantillas', 'whatsapp_mensajes', 'whatsapp_adjuntos']) {
+  assert.match(permiso, new RegExp(`create policy ${t}_autorizados_select on public\\.${t}\\s+for select to authenticated using \\(\\(select public\\.can_use_whatsapp_inbox\\(\\)\\)\\)`), `RLS de ${t} usa can_use_whatsapp_inbox`);
+}
+assert.match(permiso, /whatsapp_media_autorizados_select[\s\S]*can_use_whatsapp_inbox/, 'el bucket usa la misma regla');
+const auth = readFileSync('src/context/AuthContext.tsx', 'utf8');
+const nav = readFileSync('src/components/NavBar.tsx', 'utf8');
+const pantalla = readFileSync('src/pages/admin/AdminWhatsAppEntrantes.tsx', 'utf8');
+assert.match(auth, /rpc\('can_use_whatsapp_inbox'\)/, 'el front consulta la misma funcion SQL, no reimplementa la regla');
+assert.match(nav, /isSuperAdmin \|\| canUseWhatsappInbox\)\s*\n\s*comunicacionesItems\.push\(\{ to: '\/admin\/whatsapp-entrantes'/, 'el menu muestra la bandeja a quien tiene el permiso');
+assert.match(pantalla, /isSuperAdmin \|\| canUseWhatsappInbox/, 'la pantalla acepta a quien tiene el permiso');
+// El constructor de consultas de Supabase es perezoso: `void supabase.rpc(...)` sin `.then()` NO envia la
+// peticion (comprobado con un fetch falso: 0 peticiones). Asi "marcar como leido" nunca se ejecuto.
+for (const linea of pantalla.split('\n').filter(l => /void supabase\.(rpc|from|storage)\b/.test(l))) {
+  assert.match(linea, /\.then\(/, `consulta de Supabase con void y sin .then (nunca se envia): ${linea.trim().slice(0, 80)}`);
+}
+assert.match(pantalla, /rpc\('whatsapp_marcar_leido'[^\n]*\)\.then\(/, 'marcar como leido se ejecuta de verdad');
+assert.match(pantalla, /h-\[calc\(100dvh-4rem\)\]/, 'la pantalla descuenta la barra superior: la caja de respuesta no debe quedar bajo el pliegue');
+assert.doesNotMatch(pantalla, /className=["'`{][^"'`]*\bh-screen\b/, 'ninguna clase usa h-screen (desbordaba 64 px bajo la barra)');
 
 console.log('OK: bandeja de WhatsApp entrante (SID MM, telefono canonico, media, envio ambiguo y estructura).');

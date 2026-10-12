@@ -13,11 +13,12 @@
 // construida desde SUPABASE_URL (nunca desde el Host que llega) y TODOS los
 // parametros; los parametros duplicados se rechazan.
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeaders, ORIGEN_PRINCIPAL } from '../_shared/cors.ts';
 import { verifyTwilioSignature } from '../_shared/mensajeria/twilioWebhook.ts';
 import {
   BUCKET_MEDIA, MAX_BYTES_MEDIA, MIME_PERMITIDOS, estadoWhatsApp, mimeBase, parsearEntrante, sidValido, telefonoCanonico, urlMediaValida,
 } from '../_shared/mensajeria/whatsappBandeja.ts';
+import { DESTINATARIO_AVISO, armarAviso, urlPlataformaValida } from '../_shared/mensajeria/avisoWhatsapp.ts';
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
 
@@ -55,6 +56,35 @@ async function guardarAdjunto(client: Cliente, adj: Adjunto, telefono: string, m
   } catch (e) {
     console.error('whatsapp-webhook-entrante: adjunto', adj.id, e instanceof Error ? e.name : 'error');
     await fallar(e instanceof Error && e.name === 'TimeoutError' ? 'timeout' : 'descarga_fallida').catch(() => {});
+  }
+}
+
+interface DatosAvisoBase { nombre: string | null; es_usuario: boolean; preview: string; num_adjuntos: number }
+
+/**
+ * Manda el correo de aviso (uno por conversacion: lo decide la base) y SOLO si SMTP2GO lo
+ * acepta confirma en la base. Si falla, el aviso queda pendiente y se reintenta con el
+ * siguiente mensaje: no se pierde en silencio. Nunca lanza; no registra llaves ni destinatario.
+ */
+async function enviarAviso(client: Cliente, telefono: string, aviso: DatosAvisoBase) {
+  try {
+    const { data: cfg, error } = await client.from('email_settings').select('smtp_api_key, contact_email, platform_url').maybeSingle();
+    if (error || !cfg?.smtp_api_key) { console.error('whatsapp-webhook-entrante: aviso sin enviar, correo no configurado'); return; }
+    const { asunto, html, texto } = armarAviso({
+      nombre: aviso.nombre, telefono, esUsuario: aviso.es_usuario === true, preview: aviso.preview ?? '',
+      numAdjuntos: Number(aviso.num_adjuntos) || 0, recibidoEn: new Date(),
+      urlPlataforma: urlPlataformaValida(cfg.platform_url) ? cfg.platform_url : ORIGEN_PRINCIPAL,
+    });
+    const res = await fetch('https://api.smtp2go.com/v3/email/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ api_key: cfg.smtp_api_key, to: [DESTINATARIO_AVISO], sender: cfg.contact_email || 'no-reply@toursred.com', subject: asunto, html_body: html, text_body: texto }),
+    });
+    const cuerpo = await res.json().catch(() => null);
+    if (!res.ok || Number(cuerpo?.data?.failed ?? 0) > 0) { console.error('whatsapp-webhook-entrante: el correo de aviso fallo', res.status); return; }
+    const { error: errConfirmar } = await client.rpc('whatsapp_confirmar_aviso', { p_telefono: telefono });
+    if (errConfirmar) console.error('whatsapp-webhook-entrante: no se pudo confirmar el aviso');
+  } catch (e) {
+    console.error('whatsapp-webhook-entrante: aviso', e instanceof Error ? e.name : 'error');
   }
 }
 
@@ -105,12 +135,17 @@ Deno.serve(async req => {
     if (data.estado !== 'ok' && data.estado !== 'duplicado') return twiml(cors);
 
     const pendientes: Adjunto[] = Array.isArray(data.adjuntos) ? data.adjuntos : [];
+    // Twilio da ~15 s para responder: las descargas y el correo siguen en segundo plano.
+    const trabajos: Promise<unknown>[] = [];
     if (pendientes.length > 0) {
-      // Twilio da ~15 s para responder; las descargas siguen en segundo plano.
-      const trabajo = (async () => {
+      trabajos.push((async () => {
         for (const adj of pendientes) await guardarAdjunto(client, adj, telefonoCanonico(data.telefono) ?? data.telefono, data.mensaje_id, accountSid, authToken);
-      })();
-      if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(trabajo); else await trabajo;
+      })());
+    }
+    if (data.avisar === true && data.aviso) trabajos.push(enviarAviso(client, data.telefono, data.aviso));
+    if (trabajos.length > 0) {
+      const todo = Promise.allSettled(trabajos);
+      if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(todo); else await todo;
     }
     return twiml(cors);
   } catch (e) {

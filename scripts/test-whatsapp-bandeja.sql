@@ -25,7 +25,7 @@ create or replace function pg_temp.eq(a anyelement, b anyelement, msg text) retu
 $$ begin if a is distinct from b then raise exception 'FALLA %: esperaba %, obtuvo %', msg, b, a; end if; end $$;
 
 -- Datos: un super_admin, un admin normal, un viajero con el telefono SIN el 1 y otro duplicado
-insert into public.users values ('00000000-0000-0000-0000-0000000000a1', true,  null),
+insert into public.users (id, is_super_admin, phone_verified_e164) values ('00000000-0000-0000-0000-0000000000a1', true,  null),
                                 ('00000000-0000-0000-0000-0000000000a2', false, null),
                                 ('00000000-0000-0000-0000-0000000000b1', false, '+525513209470');
 

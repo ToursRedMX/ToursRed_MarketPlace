@@ -1274,6 +1274,8 @@ export interface SupportAgentPermission {
   user_id: string;
   rol_soporte: SupportAgentRole;
   activo: boolean;
+  // Puede ver y responder los mensajes entrantes de WhatsApp. El default por rol lo pone la base.
+  can_manage_whatsapp: boolean;
   created_at: string;
   updated_at: string;
   user?: { id: string; first_name: string; last_name: string; email: string };

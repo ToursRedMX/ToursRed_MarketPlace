@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Headphones as HeadphonesIcon, ArrowLeft, Plus, CreditCard as Edit2, X, Save, Search, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { SupportAgentPermission, SupportAgentRole } from '../../types';
+import { mensajeDeError } from '../../lib/errores';
 
 const ROLE_OPTIONS: { value: SupportAgentRole; label: string; desc: string }[] = [
   { value: 'super_admin', label: 'Super Admin', desc: 'Configuracion, todos los tickets' },
@@ -19,12 +20,17 @@ const ROLE_BADGE: Record<SupportAgentRole, string> = {
   lectura: 'bg-gray-100 text-gray-600',
 };
 
+// Mismo default que el trigger de la base: Supervisor, Agente y Super Admin traen WhatsApp
+// encendido; Solo Lectura no. Aqui solo precarga la casilla; la base lo repite si no se manda.
+const whatsappPorDefecto = (rol: SupportAgentRole) => rol !== 'lectura';
+
 interface AdminUser { id: string; first_name: string; last_name: string; email: string; }
 
 const AdminSupportAgents: React.FC = () => {
   const [modal, setModal] = useState<{ open: boolean; editing: SupportAgentPermission | null }>({ open: false, editing: null });
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedRole, setSelectedRole] = useState<SupportAgentRole>('agente');
+  const [canWhatsapp, setCanWhatsapp] = useState(whatsappPorDefecto('agente'));
   const [userSearch, setUserSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,9 +71,11 @@ const AdminSupportAgents: React.FC = () => {
     if (agent) {
       setSelectedUserId(agent.user_id);
       setSelectedRole(agent.rol_soporte);
+      setCanWhatsapp(agent.can_manage_whatsapp);
     } else {
       setSelectedUserId('');
       setSelectedRole('agente');
+      setCanWhatsapp(whatsappPorDefecto('agente'));
     }
     setError(null);
   };
@@ -75,11 +83,10 @@ const AdminSupportAgents: React.FC = () => {
   const save = async () => {
     if (!modal.editing && !selectedUserId) { setError('Selecciona un usuario.'); return; }
     setSaving(true); setError(null);
-    if (modal.editing) {
-      await supabase.from('support_agent_permissions').update({ rol_soporte: selectedRole }).eq('id', modal.editing.id);
-    } else {
-      await supabase.from('support_agent_permissions').insert({ user_id: selectedUserId, rol_soporte: selectedRole });
-    }
+    const { error: errorGuardar } = modal.editing
+      ? await supabase.from('support_agent_permissions').update({ rol_soporte: selectedRole, can_manage_whatsapp: canWhatsapp }).eq('id', modal.editing.id)
+      : await supabase.from('support_agent_permissions').insert({ user_id: selectedUserId, rol_soporte: selectedRole, can_manage_whatsapp: canWhatsapp });
+    if (errorGuardar) { setError(mensajeDeError(errorGuardar)); setSaving(false); return; }
     await load();
     setModal({ open: false, editing: null });
     setSaving(false);
@@ -161,6 +168,9 @@ const AdminSupportAgents: React.FC = () => {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[agent.rol_soporte]}`}>
                         {ROLE_OPTIONS.find(r => r.value === agent.rol_soporte)?.label ?? agent.rol_soporte}
                       </span>
+                      {agent.can_manage_whatsapp && (
+                        <span className="ml-1.5 text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">WhatsApp</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium ${agent.activo ? 'text-green-600' : 'text-gray-400'}`}>
@@ -255,7 +265,7 @@ const AdminSupportAgents: React.FC = () => {
                     <label key={role.value} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                       selectedRole === role.value ? 'border-primary-400 bg-primary-50' : 'border-gray-200 hover:border-gray-300'
                     }`}>
-                      <input type="radio" name="role" value={role.value} checked={selectedRole === role.value} onChange={() => setSelectedRole(role.value)} className="mt-0.5 text-primary-600" />
+                      <input type="radio" name="role" value={role.value} checked={selectedRole === role.value} onChange={() => { setSelectedRole(role.value); if (!modal.editing) setCanWhatsapp(whatsappPorDefecto(role.value)); }} className="mt-0.5 text-primary-600" />
                       <div>
                         <p className="text-sm font-medium text-gray-800">{role.label}</p>
                         <p className="text-xs text-gray-500">{role.desc}</p>
@@ -264,6 +274,13 @@ const AdminSupportAgents: React.FC = () => {
                   ))}
                 </div>
               </div>
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:border-gray-300">
+                <input type="checkbox" checked={canWhatsapp} onChange={e => setCanWhatsapp(e.target.checked)} className="mt-0.5 text-primary-600" />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Mensajes de WhatsApp</p>
+                  <p className="text-xs text-gray-500">Puede ver y responder los mensajes entrantes de WhatsApp. Super Admin, Supervisor y Agente lo traen activado por defecto al crearlos; Solo Lectura no.</p>
+                </div>
+              </label>
               {error && <p className="text-sm text-red-600">{error}</p>}
             </div>
             <div className="flex gap-3 p-5 border-t border-gray-200">
