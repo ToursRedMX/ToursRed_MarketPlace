@@ -23,6 +23,19 @@ Una sola regla en la base (`whatsapp_usuario_autorizado`), la misma para RLS, la
 
 Default de los agentes (lo pone un trigger en el INSERT): **Super Admin, Supervisor y Agente = encendido; Solo Lectura = apagado**. Se puede cambiar agente por agente; un cambio de rol posterior no lo reescribe. Los admin que ya existían **no** lo traen: se les da casilla por casilla.
 
+## Aviso por correo (uno por conversación)
+
+Cuando un cliente escribe, llega un correo a `contacto@toursred.com` (por SMTP2GO, con la llave de `email_settings`, como `notify-ops-refund-failed`). Existe para que **no se pierda la ventana de 24 h** de WhatsApp: pasado ese plazo solo se pueden mandar plantillas aprobadas. El correo trae nombre, teléfono, si es usuario registrado, una vista previa del mensaje y la hora límite en CDMX.
+
+**Cuándo avisa** (lo decide la base, `whatsapp_registrar_entrante`): cuando el cliente escribe y
+1. es la primera vez que escribe ese número, **o**
+2. el hilo llevaba **más de 4 horas sin actividad de nadie** (cliente *o* equipo), **o**
+3. el aviso anterior quedó **pendiente** porque el correo falló (se reintenta).
+
+Una ráfaga de mensajes, o un chat donde el equipo va contestando, es **una** conversación: un solo correo. Una pregunta nueva horas después sí avisa. El umbral de 4 h es una constante (`c_silencio`) en esa función.
+
+**Si el correo falla no se pierde en silencio:** la base deja el aviso pendiente y la función solo lo confirma (`whatsapp_confirmar_aviso`) cuando SMTP2GO lo acepta; se reintenta con el siguiente mensaje. Dos webhooks simultáneos del mismo número no duplican el correo (la decisión se toma con la fila bloqueada). **Límite conocido:** si el correo falla y el cliente no vuelve a escribir, no hay un reintento por reloj; el mensaje sigue en la bandeja con su contador de «sin leer».
+
 ## Reglas que ya quedan implementadas
 
 - **Bloqueo:** un número bloqueado no se guarda (el webhook solo suma `descartados_bloqueado`) y no se le puede responder. El historial previo se conserva.
@@ -33,8 +46,8 @@ Default de los agentes (lo pone un trigger en el INSERT): **Super Admin, Supervi
 
 ## Puesta en marcha (en este orden)
 
-1. **Aplicar las migraciones con la versión del archivo** (`20261012215514` ya aplicada; falta `20261012222646`), desde una rama que lo tenga (CLAUDE.md, regla 1 y trampa de `db push`): `Test-Path supabase\migrations\20261012215514_whatsapp_bandeja_entrante.sql` → `supabase db push` debe **listarla**, no decir «up to date». Confirmar después contra la base (tablas, bucket y que el ledger registró esa versión).
-2. **Desplegar las funciones:** `whatsapp-enviar-respuesta` (cambió) y `create-admin-user` (ahora guarda la casilla nueva); el webhook no cambió. Antes, cruzar `verify_jwt` contra la API: `whatsapp-webhook-entrante` = `false`, `whatsapp-enviar-respuesta` = `true`. Después, mandar un `OPTIONS` a cada una.
+1. **Aplicar las migraciones con la versión del archivo** (`20261012215514` ya aplicada; faltan `20261012222646` y `20261012223925`), desde una rama que lo tenga (CLAUDE.md, regla 1 y trampa de `db push`): `Test-Path supabase\migrations\20261012215514_whatsapp_bandeja_entrante.sql` → `supabase db push` debe **listarla**, no decir «up to date». Confirmar después contra la base (tablas, bucket y que el ledger registró esa versión).
+2. **Desplegar las funciones:** `whatsapp-enviar-respuesta` (cambió), `create-admin-user` (ahora guarda la casilla nueva) y **`whatsapp-webhook-entrante`** (ahora manda el correo de aviso; sigue con `verify_jwt = false`). Antes, cruzar `verify_jwt` contra la API: `whatsapp-webhook-entrante` = `false`, `whatsapp-enviar-respuesta` = `true`. Después, mandar un `OPTIONS` a cada una.
 3. **Twilio:** apuntar "When a message comes in" a `https://<proyecto>.supabase.co/functions/v1/whatsapp-webhook-entrante`. Los inbound de la consola traían un Messaging Service (`MG…`): **revisar primero ahí (Messaging → Services → Integration → Incoming Messages)** y en el sender (Edit Sender → Endpoint configuration); si el servicio tiene su propio webhook, manda sobre el del sender.
 4. Variables de entorno: usa las que ya existen (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`). `TWILIO_WHATSAPP_FROM` debe ser exactamente el `To` que Twilio manda en los entrantes (`whatsapp:+15554759009`); si no coincide, el webhook los rechaza con 400.
 5. Prueba: escribir al número desde un teléfono, verlo aparecer en el panel, responder, y confirmar en la base que el saliente quedó con `twilio_sid` y llegó a `entregado`/`leido`.

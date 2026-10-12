@@ -159,6 +159,9 @@ jobs:
       - name: Verify WhatsApp inbox logic (SID MM, phone canon, media, ambiguous send)
         run: node scripts/test-whatsapp-bandeja.mjs
 
+      - name: Verify the WhatsApp new-message email (escaping, 24h limit, confirm only after send)
+        run: node scripts/test-whatsapp-aviso.mjs
+
       - name: Verify search logging respects cookie consent
         run: node scripts/test-registro-de-busqueda.mjs
 
