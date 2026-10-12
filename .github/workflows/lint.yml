@@ -162,6 +162,9 @@ jobs:
       - name: Verify the WhatsApp new-message email (escaping, 24h limit, confirm only after send)
         run: node scripts/test-whatsapp-aviso.mjs
 
+      - name: Verify no Edge Function selects non-existent email_settings columns
+        run: node scripts/test-email-settings-columnas.mjs
+
       - name: Verify search logging respects cookie consent
         run: node scripts/test-registro-de-busqueda.mjs
 

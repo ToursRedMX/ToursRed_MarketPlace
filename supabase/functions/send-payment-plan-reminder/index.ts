@@ -130,12 +130,22 @@ Deno.serve(async (req: Request) => {
     });
 
     // Send email via smtp2go directly
-    const { data: emailSettings } = await supabase
-      .from("email_settings")
-      .select("smtp_api_key, contact_email, platform_url")
-      .maybeSingle();
+    // `platform_url` vive en platform_settings, no en email_settings (pedirla aqui
+    // hacia fallar la consulta y el correo del recordatorio nunca salia).
+    const [
+      { data: emailSettings, error: emailSettingsError },
+      { data: platformSettings },
+    ] = await Promise.all([
+      supabase.from("email_settings").select("smtp_api_key, contact_email").maybeSingle(),
+      supabase.from("platform_settings").select("platform_url").maybeSingle(),
+    ]);
+    if (emailSettingsError) {
+      console.error(
+        `send-payment-plan-reminder: fallo la consulta a email_settings (codigo ${emailSettingsError.code ?? "?"}): ${emailSettingsError.message}`,
+      );
+    }
 
-    const appUrl = emailSettings?.platform_url || "https://toursredmx.netlify.app";
+    const appUrl = platformSettings?.platform_url || "https://toursredmx.netlify.app";
 
     const { data: traveler } = await supabase
       .from("users")

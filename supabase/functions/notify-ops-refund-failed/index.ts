@@ -68,12 +68,30 @@ Deno.serve(async (req: Request) => {
       ? await supabase.from("users").select("email, first_name").eq("id", booking.user_id).maybeSingle()
       : { data: null };
 
-    const { data: emailSettings } = await supabase
-      .from("email_settings")
-      .select("smtp_api_key, contact_email, platform_url")
-      .maybeSingle();
+    // `platform_url` vive en platform_settings, NO en email_settings: pedirla en la tabla
+    // equivocada hacia fallar la consulta entera (42703) y el aviso de reembolso fallido
+    // caia siempre a "SMTP not configured". Se registra el codigo del error para que un
+    // fallo de consulta no se confunda con "no configurado"; nunca la llave.
+    const [
+      { data: emailSettings, error: emailSettingsError },
+      { data: platformSettings, error: platformSettingsError },
+    ] = await Promise.all([
+      supabase.from("email_settings").select("smtp_api_key, contact_email").maybeSingle(),
+      supabase.from("platform_settings").select("platform_url").maybeSingle(),
+    ]);
 
-    const platformUrl = emailSettings?.platform_url || Deno.env.get("SUPABASE_URL") || "";
+    if (emailSettingsError) {
+      console.error(
+        `notify-ops-refund-failed: fallo la consulta a email_settings (codigo ${emailSettingsError.code ?? "?"}): ${emailSettingsError.message}`,
+      );
+    }
+    if (platformSettingsError) {
+      console.error(
+        `notify-ops-refund-failed: fallo la consulta a platform_settings (codigo ${platformSettingsError.code ?? "?"}): ${platformSettingsError.message}`,
+      );
+    }
+
+    const platformUrl = platformSettings?.platform_url || Deno.env.get("SUPABASE_URL") || "";
     const fromEmail = emailSettings?.contact_email || "no-reply@toursred.com";
 
     const bookingCode = booking?.booking_code || refund.booking_id;
@@ -124,7 +142,11 @@ Deno.serve(async (req: Request) => {
         console.log("Refund-failed email sent to ops");
       }
     } else {
-      console.warn("SMTP not configured, logging refund failure to console only");
+      console.warn(
+        emailSettingsError
+          ? "email_settings no se pudo leer (ver error arriba), logging refund failure to console only"
+          : "SMTP not configured, logging refund failure to console only",
+      );
       console.error("REFUND FAILED - Requires manual attention:", JSON.stringify(refund));
     }
 
