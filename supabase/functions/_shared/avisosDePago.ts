@@ -124,11 +124,19 @@ export async function alertarOps(
   filas: [string, string][],
   origen = "webhook de pagos",
 ): Promise<void> {
-  const { data: emailSettings } = await supabase
+  // email_settings NO tiene `sender_email` ni `platform_url` (el remitente es
+  // `contact_email`): pedirlas hacia fallar la consulta (42703) y la alerta nunca salia.
+  const { data: emailSettings, error: errConfig } = await supabase
     .from("email_settings")
-    .select("smtp_api_key, sender_email, platform_url")
+    .select("smtp_api_key, contact_email")
     .maybeSingle();
 
+  if (errConfig) {
+    console.error(
+      `alertarOps: fallo la consulta a email_settings (codigo ${errConfig.code ?? "?"}): ${errConfig.message}. No se envio la alerta "${asunto}"`,
+    );
+    return;
+  }
   if (!emailSettings?.smtp_api_key) {
     console.warn(`Sin smtp_api_key: no se envio la alerta "${asunto}"`);
     return;
@@ -159,7 +167,7 @@ export async function alertarOps(
       body: JSON.stringify({
         api_key: emailSettings.smtp_api_key,
         to: ["contacto@toursred.com"],
-        sender: emailSettings.sender_email || "contacto@toursred.com",
+        sender: emailSettings.contact_email || "contacto@toursred.com",
         subject: asunto,
         html_body: html,
       }),

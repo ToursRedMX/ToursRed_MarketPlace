@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
     if (bookingError || !booking) throw new Error("Reserva no encontrada");
 
     const [{ data: emailSettings }, { data: platformSettingsData }] = await Promise.all([
-      adminClient.from("email_settings").select("smtp_api_key, contact_email, platform_name").single(),
+      adminClient.from("email_settings").select("smtp_api_key, contact_email").single(),
       adminClient.from("platform_settings").select("platform_url").maybeSingle(),
     ]);
 
