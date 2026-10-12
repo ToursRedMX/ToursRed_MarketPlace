@@ -81,10 +81,19 @@ env:
   #                      solo tipos, y quedan fuera de este barrido a proposito.
   #                      Numero MEDIDO por CI en el job 112507236647 (PR #354)
   #                      sobre a593e0e, no local.
-  BASELINE_ERRORS: 249
-  BASELINE_WARNINGS: 87
-  BASELINE_TOTAL: 336
-  BASELINE_FILES: 148
+  #   12-oct  38/34      el bloque react-hooks/* (290) y el resto (8) cayeron a
+  #                      0 fuera de BookingForm.tsx en algun PR entre el 06 y el
+  #                      09-oct, y la base no se movio: 298 problemas de
+  #                      HOLGURA, la tercera vez. Los 38 que quedan (30 any +
+  #                      8 react-hooks) son todos de BookingForm.tsx, codigo
+  #                      muerto en pausa hasta las UAT. Ademas del total,
+  #                      summarize-lint ahora bloquea si CUALQUIER regla supera
+  #                      su fila. Numero MEDIDO por CI en el run 38306117375
+  #                      sobre 83e6c96, no local.
+  BASELINE_ERRORS: 34
+  BASELINE_WARNINGS: 4
+  BASELINE_TOTAL: 38
+  BASELINE_FILES: 1
 
 jobs:
   lint:
