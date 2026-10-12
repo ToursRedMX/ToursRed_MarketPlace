@@ -72,6 +72,11 @@ Deno.test('callback requires matching account, message identity, destination and
   assert.equal(parseTwilioCallback({...params,AccountSid:'other'},config.accountSid),null);
   assert.equal(parseTwilioCallback({...params,MessageSid:'bad'},config.accountSid),null);
   assert.equal(parseTwilioCallback({...params,To:'whatsapp:'+message.destino},config.accountSid),null);
+  // MM (media/plantilla) es un SID valido; cualquier otro prefijo o largo no.
+  assert.equal(parseTwilioCallback({...params,MessageSid:'MM'+'c'.repeat(32)},config.accountSid)?.sid,'MM'+'c'.repeat(32));
+  for(const bad of ['XM'+'c'.repeat(32),'MM'+'c'.repeat(31),'mm'+'c'.repeat(32),'SMMM'+'c'.repeat(30)+'z'])
+    assert.equal(parseTwilioCallback({...params,MessageSid:bad},config.accountSid),null);
+  assert.equal(clasificarTwilio(201,{sid:'MM'+'c'.repeat(32),status:'queued'},false).estado,'aceptado');
 });
 Deno.test('readiness requires active account and an SMS-capable owned sender',async()=>{
   const responses=[{sid:config.accountSid,status:'active'},{incoming_phone_numbers:[{account_sid:config.accountSid,phone_number:config.from,capabilities:{sms:true}}]}];

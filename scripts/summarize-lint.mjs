@@ -18,7 +18,7 @@
  *
  * Con --strict el resumen ademas PUERTEA (F-4 de la auditoria de frontend):
  *   0  el conteo no subio respecto de la linea base
- *   1  subieron errores o warnings sobre la base
+ *   1  subieron errores o warnings sobre la base, o alguna regla sobre su fila
  *   2  el reporte no es utilizable (eslint no linteo nada, JSON ilegible)
  *
  * Por que hacia falta: hasta el 07-sep-2026 este workflow salia verde SIEMPRE
@@ -35,24 +35,27 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Base por regla, medida por CI el 06-oct-2026 sobre a593e0e (job
-// 112507236647, PR #354), con eslint 10 / typescript-eslint 8.68.0. Mover
-// junto con las BASELINE_* de lint.yml: si una baja, se actualizan las dos.
+// Base por regla, medida por CI el 12-oct-2026 sobre 83e6c96 (run
+// 38306117375), con eslint 10 / typescript-eslint 8.68.0. Mover junto con las
+// BASELINE_* de lint.yml: si una baja, se actualizan las dos.
 const BASE = {
   '@typescript-eslint/no-explicit-any': 30,
-  'react-hooks/set-state-in-effect': 107,
-  'react-hooks/exhaustive-deps': 83,
-  'react-hooks/immutability': 82,
-  'react-hooks/refs': 21,
+  'react-hooks/exhaustive-deps': 4,
   'react-hooks/preserve-manual-memoization': 4,
-  'react-refresh/only-export-components': 4,
-  'no-empty': 3,
-  '@typescript-eslint/no-unused-expressions': 1,
-  'react-hooks/purity': 1,
-  // react-hooks/rules-of-hooks y react-hooks/static-components NO van aqui a
-  // proposito: los dos quedaron en 0. Fuera de BASE, si reaparecen se marcan
-  // con el aviso de "reglas fuera de la base" ademas del delta, que es la
-  // senal que queremos.
+  // Los 38 son de BookingForm.tsx, codigo muerto en pausa hasta las UAT (ver
+  // CLAUDE.md). Fuera de ese archivo el repo esta en CERO.
+  //
+  // Reajustada el 12-oct-2026: la base del 06-oct decia 336 cuando CI ya media
+  // 38 — 298 problemas de HOLGURA, la tercera vez que se deja floja (749 el
+  // 03-oct, 1114 el 06-oct). Las reglas que llegaron a 0 SALEN de la tabla a
+  // proposito, igual que rules-of-hooks y static-components antes: si
+  // reaparecen se marcan como "reglas fuera de la base" y, con el corte por
+  // regla de abajo, bloquean.
+  //
+  // Historial de la tabla del 06-oct, para quien busque de donde vino cada
+  // cifra: set-state-in-effect 107, exhaustive-deps 83, immutability 82,
+  // refs 21, preserve-manual-memoization 4, only-export-components 4,
+  // no-empty 3, no-unused-expressions 1, purity 1.
   //
   // Reajustada el 06-oct-2026 contra la medicion de CI del PR #354 (el
   // barrido de `no-explicit-any` en src/, 1144 -> 30). Los 30 que quedan son
@@ -61,24 +64,23 @@ const BASE = {
   // floja: `no-explicit-any` decia 1144 cuando ya eran 30 — 1114 problemas de
   // HOLGURA, peor que la de 749 que ya se habia cerrado una vez el 03-oct.
   // react-hooks/* no se tocaron: misma cifra exacta que el 03-oct en las
-  // nueve reglas de abajo, a proposito — cambian comportamiento en runtime,
+  // nueve reglas del historial de arriba, a proposito — cambian comportamiento en runtime,
   // no solo tipos, y quedan fuera de este barrido.
   //
-  // OJO CON LO QUE ESTA TABLA NO IMPIDE: el corte que BLOQUEA es el total de
-  // errores, no la fila. Mientras estuvo floja se colaron en main dos subidas
-  // por regla sin que nada sonara — `set-state-in-effect` 117 -> 118 y
-  // `no-useless-assignment` 16 -> 17 — porque el total bajaba por otro lado.
-  // Un PR que cambie un `any` por un setState dentro de un efecto sigue
-  // pasando en verde, y esas dos reglas marcan bugs de verdad, no estilo.
+  // Hasta el 12-oct el corte que BLOQUEABA era solo el total, no la fila, y
+  // asi se colaron en main `set-state-in-effect` 117 -> 118 y
+  // `no-useless-assignment` 16 -> 17 mientras el total bajaba por otro lado.
+  // Ahora tambien bloquea cualquier regla que supere su fila (o que no este en
+  // la tabla): cambiar un `any` por un setState en un efecto ya no pasa verde.
 };
 
 // Corriendo local sin las env del workflow, se cae a la misma base para que
 // los deltas sigan teniendo sentido.
 const num = (name, fallback) => Number(process.env[name] ?? fallback);
-const BASELINE_ERRORS = num('BASELINE_ERRORS', 249);
-const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 87);
-const BASELINE_TOTAL = num('BASELINE_TOTAL', 336);
-const BASELINE_FILES = num('BASELINE_FILES', 148);
+const BASELINE_ERRORS = num('BASELINE_ERRORS', 34);
+const BASELINE_WARNINGS = num('BASELINE_WARNINGS', 4);
+const BASELINE_TOTAL = num('BASELINE_TOTAL', 38);
+const BASELINE_FILES = num('BASELINE_FILES', 1);
 
 const argv = process.argv.slice(2);
 const estricto = argv.includes('--strict');
@@ -151,7 +153,7 @@ if (lintedFiles === 0) {
   out.push('> **no es comparable con la base**: revisar `ignores` en `eslint.config.js`.');
   out.push('');
 }
-out.push('| | Ahora | Base 06-oct | Δ |');
+out.push('| | Ahora | Base 12-oct | Δ |');
 out.push('|---|---|---|---|');
 out.push(`| **Problemas** | **${total}** en ${files} archivos | ${BASELINE_TOTAL} en ${BASELINE_FILES} | ${delta(total, BASELINE_TOTAL)} |`);
 out.push(`| Errores | ${errors} | ${BASELINE_ERRORS} | ${delta(errors, BASELINE_ERRORS)} |`);
@@ -188,8 +190,9 @@ if (total > BASELINE_TOTAL) {
   out.push('');
 }
 
-// Una regla que no estaba en la base sale de un plugin nuevo o de un cambio de
-// config, no de codigo nuevo. Conviene notarlo aparte del total.
+// Una regla que no esta en la base es, o una que ya se habia llevado a 0 y
+// volvio por codigo nuevo, o una de un plugin/config nuevo. Las dos bloquean
+// en --strict (ver subieronReglas); aqui solo se nombran aparte del total.
 const nuevas = Object.keys(byRule).filter((r) => !(r in BASE));
 if (nuevas.length) {
   out.push(`> :new: Reglas fuera de la base: ${nuevas.map((r) => `\`${r}\``).join(', ')}.`);
@@ -222,9 +225,14 @@ if (lintedFiles === 0) {
 
 const subieronErrores = errors > BASELINE_ERRORS;
 const subieronWarnings = warnings > BASELINE_WARNINGS;
+// Una regla fuera de BASE cuenta con base 0: cualquier aparicion la sube.
+const subieronReglas = Object.keys(byRule).filter((r) => count(r) > (BASE[r] ?? 0));
 
-if (subieronErrores || subieronWarnings) {
+if (subieronErrores || subieronWarnings || subieronReglas.length) {
   console.error('\n' + '='.repeat(60));
+  for (const r of subieronReglas) {
+    console.error(`Regla que SUBIO: ${r} ${count(r)} vs base ${BASE[r] ?? 0} (+${count(r) - (BASE[r] ?? 0)}).`);
+  }
   if (subieronErrores) {
     console.error(`Errores de lint NUEVOS: ${errors} vs base ${BASELINE_ERRORS} (+${errors - BASELINE_ERRORS}).`);
   }

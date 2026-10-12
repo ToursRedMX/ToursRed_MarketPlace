@@ -5,7 +5,10 @@ import { parseTwilioCallback } from '../../supabase/functions/_shared/mensajeria
 import type { MensajeSms, RoutingSettings } from '../../supabase/functions/_shared/mensajeria/tipos.ts';
 
 const config = { accountSid: 'AC'+'a'.repeat(32), authToken: 'b'.repeat(32), whatsappFrom: 'whatsapp:+15005550006', whatsappContentSid: 'HX'+'c'.repeat(32) };
-const sid = 'SM'+'d'.repeat(32);
+// Twilio devuelve MM (no SM) para WhatsApp enviado con ContentSid: verificado
+// contra un envio real el 12-oct-2026 (MM11673352...). Con SM aqui los tests
+// pasaban mientras produccion rechazaba el SID al enviar y el callback con 400.
+const sid = 'MM'+'d'.repeat(32);
 const message: MensajeSms = { destino: '+525512345678', texto: 'OTP', codigoOtp: '123456', canal: 'whatsapp', correlacion: 'a'.repeat(20), categoria: 'otp', simulacion: false, urlEstados: 'https://example.invalid/callback' };
 const settings: RoutingSettings = { sms_habilitado: false, sms_modo_prueba: false, sms_proveedor_otp: 'labsmobile', sms_proveedor_transaccional: 'labsmobile', sms_proveedor_recordatorios: 'labsmobile', sms_proveedor_respaldo: 'twilio', sms_fallback_habilitado: true, whatsapp_habilitado: true, whatsapp_proveedor_otp: 'twilio' };
 

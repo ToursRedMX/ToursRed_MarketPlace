@@ -21,7 +21,11 @@ export interface WhatsAppReadiness {
   sender_status: string;
   sender_count: number;
 }
-export const messageSidValid = (sid: unknown): sid is string => typeof sid === 'string' && /^SM[0-9a-fA-F]{32}$/.test(sid);
+// SM = SMS; MM = mensajes con media o plantilla, que es lo que Twilio devuelve
+// para WhatsApp enviado con ContentSid. Exigir solo SM descartaba el SID al
+// enviar y rechazaba con 400 el callback (12-oct-2026). Mismo regex en las
+// funciones SQL de 20261012210908_twilio_sid_mm.sql.
+export const messageSidValid = (sid: unknown): sid is string => typeof sid === 'string' && /^(SM|MM)[0-9a-fA-F]{32}$/.test(sid);
 const accountValid = (sid: string) => /^AC[0-9a-fA-F]{32}$/.test(sid);
 const phoneValid = (phone: string) => /^\+[1-9]\d{7,14}$/.test(phone);
 const serviceValid = (sid: string) => /^MG[0-9a-fA-F]{32}$/.test(sid);
