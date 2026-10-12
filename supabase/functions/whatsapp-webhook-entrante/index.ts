@@ -68,12 +68,21 @@ interface DatosAvisoBase { nombre: string | null; es_usuario: boolean; preview: 
  */
 async function enviarAviso(client: Cliente, telefono: string, aviso: DatosAvisoBase) {
   try {
-    const { data: cfg, error } = await client.from('email_settings').select('smtp_api_key, contact_email, platform_url').maybeSingle();
-    if (error || !cfg?.smtp_api_key) { console.error('whatsapp-webhook-entrante: aviso sin enviar, correo no configurado'); return; }
+    // `platform_url` vive en platform_settings, NO en email_settings: pedirla en la tabla equivocada
+    // hacia fallar la consulta entera y el aviso se iba sin mandarse (13-oct-2026).
+    const [{ data: cfg, error: errCorreo }, { data: plataforma }] = await Promise.all([
+      client.from('email_settings').select('smtp_api_key, contact_email').maybeSingle(),
+      client.from('platform_settings').select('platform_url').maybeSingle(),
+    ]);
+    if (errCorreo || !cfg?.smtp_api_key) {
+      // Se registra el CODIGO del error (no la llave): sin eso un fallo de consulta parece "no configurado".
+      console.error('whatsapp-webhook-entrante: aviso sin enviar', errCorreo ? `error de consulta ${errCorreo.code ?? 'sin_codigo'}` : 'sin llave SMTP');
+      return;
+    }
     const { asunto, html, texto } = armarAviso({
       nombre: aviso.nombre, telefono, esUsuario: aviso.es_usuario === true, preview: aviso.preview ?? '',
       numAdjuntos: Number(aviso.num_adjuntos) || 0, recibidoEn: new Date(),
-      urlPlataforma: urlPlataformaValida(cfg.platform_url) ? cfg.platform_url : ORIGEN_PRINCIPAL,
+      urlPlataforma: urlPlataformaValida(plataforma?.platform_url) ? plataforma.platform_url : ORIGEN_PRINCIPAL,
     });
     const res = await fetch('https://api.smtp2go.com/v3/email/send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
