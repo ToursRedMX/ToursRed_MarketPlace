@@ -86,6 +86,7 @@ const PERMISOS_EN_CERO: AdminPermissions = {
   canManageChartOfAccounts: false,
   canManageServiceDesk: false,
   canManageExecutives: false,
+  canManageWhatsapp: false,
 };
 
 const AdminUsers: React.FC = () => {
@@ -120,6 +121,7 @@ const AdminUsers: React.FC = () => {
       canManageInquiries: false,
       canManagePoints: false,
       canManageDiscountCodes: false,
+      canManageWhatsapp: false,
     }
   });
 
@@ -153,7 +155,7 @@ const AdminUsers: React.FC = () => {
         (usersData || []).map(async (user) => {
           const { data: permsData, error: errorPermisos } = await supabase
             .from('admin_permissions')
-            .select('can_manage_agencies, can_manage_users, can_manage_travelers, can_manage_destinations, can_manage_categories, can_manage_departure_points, can_manage_reviews, can_manage_messages, can_manage_inquiries, can_manage_settings, can_manage_memberships, can_manage_points, can_manage_discount_codes, can_view_audit_log, can_view_audit_sensitive_data, can_export_audit_log, can_cancel_bookings, can_manage_expenses, can_view_accounting, can_export_sat_xml, can_manage_chart_of_accounts, can_manage_service_desk, can_manage_executives')
+            .select('can_manage_agencies, can_manage_users, can_manage_travelers, can_manage_destinations, can_manage_categories, can_manage_departure_points, can_manage_reviews, can_manage_messages, can_manage_inquiries, can_manage_settings, can_manage_memberships, can_manage_points, can_manage_discount_codes, can_view_audit_log, can_view_audit_sensitive_data, can_export_audit_log, can_cancel_bookings, can_manage_expenses, can_view_accounting, can_export_sat_xml, can_manage_chart_of_accounts, can_manage_service_desk, can_manage_executives, can_manage_whatsapp')
             .eq('user_id', user.id)
             .maybeSingle();
 
@@ -193,6 +195,7 @@ const AdminUsers: React.FC = () => {
               // servicio. Al 11-sep-2026, 1 de las 2 filas de staff los tiene.
               canManageServiceDesk: permsData.can_manage_service_desk ?? false,
               canManageExecutives: permsData.can_manage_executives ?? false,
+              canManageWhatsapp: permsData.can_manage_whatsapp ?? false,
             } : null
           };
         })
@@ -265,6 +268,7 @@ const AdminUsers: React.FC = () => {
               can_manage_inquiries: newUser.permissions.canManageInquiries,
               can_manage_points: newUser.permissions.canManagePoints,
               can_manage_discount_codes: newUser.permissions.canManageDiscountCodes,
+              can_manage_whatsapp: newUser.permissions.canManageWhatsapp,
             }
           }),
         }
@@ -301,6 +305,7 @@ const AdminUsers: React.FC = () => {
           canManageInquiries: false,
           canManagePoints: false,
           canManageDiscountCodes: false,
+          canManageWhatsapp: false,
         }
       });
 
@@ -335,6 +340,7 @@ const AdminUsers: React.FC = () => {
           can_manage_inquiries: tempPermissions.canManageInquiries,
           can_manage_points: tempPermissions.canManagePoints,
           can_manage_discount_codes: tempPermissions.canManageDiscountCodes,
+          can_manage_whatsapp: tempPermissions.canManageWhatsapp,
           can_view_audit_log: tempPermissions.canViewAuditLog,
           can_view_audit_sensitive_data: tempPermissions.canViewAuditSensitiveData,
           can_export_audit_log: tempPermissions.canExportAuditLog,
@@ -616,6 +622,11 @@ const AdminUsers: React.FC = () => {
                             onChange={(checked) => setTempPermissions({ ...tempPermissions, canManageMessages: checked })}
                           />
                           <PermissionCheckbox
+                            label="Mensajes de WhatsApp"
+                            checked={tempPermissions.canManageWhatsapp}
+                            onChange={(checked) => setTempPermissions({ ...tempPermissions, canManageWhatsapp: checked })}
+                          />
+                          <PermissionCheckbox
                             label="Configuración"
                             checked={tempPermissions.canManageSettings}
                             onChange={(checked) => setTempPermissions({ ...tempPermissions, canManageSettings: checked })}
@@ -731,6 +742,12 @@ const AdminUsers: React.FC = () => {
                           <PermissionCheckbox
                             label="Ver Mensajes"
                             checked={user.permissions?.canManageMessages ?? false}
+                            onChange={() => {}}
+                            disabled
+                          />
+                          <PermissionCheckbox
+                            label="Mensajes de WhatsApp"
+                            checked={user.permissions?.canManageWhatsapp ?? false}
                             onChange={() => {}}
                             disabled
                           />
@@ -1051,6 +1068,14 @@ const AdminUsers: React.FC = () => {
                       onChange={(checked) => setNewUser({
                         ...newUser,
                         permissions: { ...newUser.permissions, canManageMessages: checked }
+                      })}
+                    />
+                    <PermissionCheckbox
+                      label="Mensajes de WhatsApp"
+                      checked={newUser.permissions.canManageWhatsapp}
+                      onChange={(checked) => setNewUser({
+                        ...newUser,
+                        permissions: { ...newUser.permissions, canManageWhatsapp: checked }
                       })}
                     />
                     <PermissionCheckbox

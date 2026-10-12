@@ -109,7 +109,9 @@ const AdjuntoVista: React.FC<{ adjunto: Adjunto }> = ({ adjunto }) => {
 };
 
 const AdminWhatsAppEntrantes: React.FC = () => {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, canUseWhatsappInbox } = useAuth();
+  // El permiso real lo hace cumplir la base (RLS y RPC); esto solo decide que se pinta.
+  const puedeUsar = isSuperAdmin || canUseWhatsappInbox;
   const queryClient = useQueryClient();
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState('');
@@ -127,7 +129,7 @@ const AdminWhatsAppEntrantes: React.FC = () => {
 
   const contactosQuery = useQuery({
     queryKey: ['wa-contactos'],
-    enabled: isSuperAdmin,
+    enabled: puedeUsar,
     queryFn: async () => {
       const { data, error: err } = await supabase.from('whatsapp_contactos').select('*').order('ultimo_mensaje_en', { ascending: false, nullsFirst: false }).limit(300);
       if (err) throw err;
@@ -136,7 +138,7 @@ const AdminWhatsAppEntrantes: React.FC = () => {
   });
   const plantillasQuery = useQuery({
     queryKey: ['wa-plantillas'],
-    enabled: isSuperAdmin,
+    enabled: puedeUsar,
     queryFn: async () => {
       const { data, error: err } = await supabase.from('whatsapp_plantillas').select('id, nombre, descripcion, cuerpo_ejemplo, variables').eq('activa', true).order('nombre');
       if (err) throw err;
@@ -145,7 +147,7 @@ const AdminWhatsAppEntrantes: React.FC = () => {
   });
   const hiloQuery = useQuery({
     queryKey: ['wa-hilo', seleccionado],
-    enabled: isSuperAdmin && seleccionado !== null,
+    enabled: puedeUsar && seleccionado !== null,
     queryFn: async () => {
       const { data, error: err } = await supabase.from('whatsapp_mensajes')
         .select('id, telefono, direccion, tipo, cuerpo, estado, codigo_error, creado_en, whatsapp_adjuntos(id, content_type, tamano_bytes, storage_path, estado, codigo_error)')
@@ -157,12 +159,12 @@ const AdminWhatsAppEntrantes: React.FC = () => {
   const contactos = useMemo(() => contactosQuery.data ?? [], [contactosQuery.data]);
   const mensajes = useMemo(() => (seleccionado ? hiloQuery.data ?? [] : []), [seleccionado, hiloQuery.data]);
   const plantillas = useMemo(() => plantillasQuery.data ?? [], [plantillasQuery.data]);
-  const cargando = isSuperAdmin && contactosQuery.isLoading;
+  const cargando = puedeUsar && contactosQuery.isLoading;
   const error = errorAccion || (contactosQuery.error ? mensajeDeError(contactosQuery.error) : '') || (hiloQuery.error ? mensajeDeError(hiloQuery.error) : '');
 
   // Realtime (respeta RLS): cualquier cambio vuelve a pedir lo que se esta viendo.
   useEffect(() => {
-    if (!isSuperAdmin) return;
+    if (!puedeUsar) return;
     let temporizador: ReturnType<typeof setTimeout> | undefined;
     const refrescar = () => {
       clearTimeout(temporizador);
@@ -177,7 +179,7 @@ const AdminWhatsAppEntrantes: React.FC = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_adjuntos' }, refrescar)
       .subscribe();
     return () => { clearTimeout(temporizador); void supabase.removeChannel(canal); };
-  }, [isSuperAdmin, queryClient]);
+  }, [puedeUsar, queryClient]);
 
   // El contador de la ventana de 24 h se refresca cada minuto.
   useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 60000); return () => clearInterval(t); }, []);
@@ -195,9 +197,16 @@ const AdminWhatsAppEntrantes: React.FC = () => {
   // Al abrir una conversacion con mensajes sin leer se marcan como leidos.
   const sinLeer = contacto?.no_leidos ?? 0;
   const telefonoAbierto = contacto?.telefono;
+  // OJO: el constructor de consultas de Supabase es perezoso, solo envia la peticion al llamar
+  // `.then()` / `await`. Un `void supabase.rpc(...)` a secas NO la manda (comprobado: 0 peticiones).
   useEffect(() => {
-    if (telefonoAbierto && sinLeer > 0) void supabase.rpc('whatsapp_marcar_leido', { p_telefono: telefonoAbierto });
-  }, [telefonoAbierto, sinLeer]);
+    if (!telefonoAbierto || sinLeer === 0) return;
+    void supabase.rpc('whatsapp_marcar_leido', { p_telefono: telefonoAbierto }).then(({ error }) => {
+      if (error) { setErrorAccion(mensajeDeError(error)); return; }
+      // No depende de Realtime: se vuelve a pedir la lista para que el contador baje a 0.
+      void queryClient.invalidateQueries({ queryKey: ['wa-contactos'] });
+    });
+  }, [telefonoAbierto, sinLeer, queryClient]);
 
   const restanteMs = contacto?.ultimo_entrante_en ? new Date(contacto.ultimo_entrante_en).getTime() + VENTANA_MS - ahora : 0;
   const ventanaAbierta = restanteMs > 0;
@@ -240,11 +249,11 @@ const AdminWhatsAppEntrantes: React.FC = () => {
     void queryClient.invalidateQueries({ queryKey: ['wa-contactos'] });
   };
 
-  if (!isSuperAdmin) {
+  if (!puedeUsar) {
     return (
       <div className="container mx-auto px-4 py-12 text-center text-gray-600">
         <ShieldOff className="h-10 w-10 mx-auto mb-3 text-gray-400" />
-        Esta sección es solo para el super administrador.
+        No tienes permiso para ver los mensajes de WhatsApp. Pídele a un administrador que active el permiso.
       </div>
     );
   }
@@ -260,10 +269,12 @@ const AdminWhatsAppEntrantes: React.FC = () => {
   const horas = Math.floor(restanteMs / 3600000);
   const minutos = Math.floor((restanteMs % 3600000) / 60000);
 
+  // Alto = ventana menos la barra superior (h-16 = 4rem). Con h-screen la pantalla desbordaba
+  // 64 px y la caja de respuesta quedaba fuera de vista, debajo del pliegue.
   return (
-    <div className="h-screen flex bg-gray-50">
+    <div className="h-[calc(100dvh-4rem)] flex bg-gray-50 overflow-hidden">
       {/* Lista de contactos */}
-      <div className={`${seleccionado ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 bg-white border-r border-gray-200 flex-col`}>
+      <div className={`${seleccionado ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 min-h-0 bg-white border-r border-gray-200 flex-col`}>
         <div className="p-4 border-b border-gray-200">
           <h1 className="text-lg font-semibold flex items-center">
             <MessageCircle className="h-5 w-5 mr-2" />
@@ -311,14 +322,14 @@ const AdminWhatsAppEntrantes: React.FC = () => {
       </div>
 
       {/* Hilo */}
-      <div className={`${seleccionado ? 'flex' : 'hidden md:flex'} flex-1 flex-col`}>
+      <div className={`${seleccionado ? 'flex' : 'hidden md:flex'} flex-1 min-w-0 min-h-0 flex-col`}>
         {!contacto ? (
           <div className="flex-1 flex items-center justify-center text-gray-500">
             <div className="text-center"><MessageCircle className="h-12 w-12 mx-auto mb-3 text-gray-300" />Selecciona una conversación</div>
           </div>
         ) : (
           <>
-            <div className="p-4 bg-white border-b border-gray-200 flex items-center justify-between">
+            <div className="shrink-0 p-4 bg-white border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-x-3 min-w-0">
                 <button className="md:hidden" onClick={() => seleccionar(null)} aria-label="Volver"><ArrowLeft className="h-5 w-5" /></button>
                 <div className="min-w-0">
@@ -354,7 +365,7 @@ const AdminWhatsAppEntrantes: React.FC = () => {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
               {mensajes.map(m => (
                 <div key={m.id} className={`flex ${m.direccion === 'saliente' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[75%] rounded-lg px-3 py-2 ${m.direccion === 'saliente' ? 'bg-primary-600 text-white' : 'bg-white border border-gray-200 text-gray-900'}`}>
@@ -371,8 +382,8 @@ const AdminWhatsAppEntrantes: React.FC = () => {
               <div ref={finHilo} />
             </div>
 
-            {/* Respuesta */}
-            <div className="p-4 bg-white border-t border-gray-200">
+            {/* Respuesta: fuera del area que se desplaza, siempre visible abajo */}
+            <div className="shrink-0 p-4 bg-white border-t border-gray-200">
               {errorEnvio && <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">{errorEnvio}</div>}
               {contacto.bloqueado ? (
                 <p className="text-sm text-gray-500">Desbloquea el número para poder responderle.</p>

@@ -3,9 +3,11 @@
 // Body: { telefono: "+52...", tipo?: "texto" | "plantilla", cuerpo?: string,
 //         plantilla_id?: uuid, variables?: { "1": "..." } }
 //
-// Solo super_admin. Las reglas de negocio (contacto bloqueado, ventana de 24 h,
-// variables de la plantilla) las decide `whatsapp_preparar_envio` en la base:
-// aqui solo se autentica, se llama a Twilio y se registra el resultado.
+// Solo quien tenga permiso sobre la bandeja (`whatsapp_usuario_autorizado`: super_admin,
+// admin con la casilla o agente de soporte activo con la casilla). Las reglas de negocio
+// (permiso, contacto bloqueado, ventana de 24 h, variables de la plantilla) las decide
+// `whatsapp_preparar_envio` en la base: aqui solo se autentica, se llama a Twilio y se
+// registra el resultado.
 //
 // Se inserta la fila ANTES de llamar a Twilio, y si Twilio responde algo
 // ambiguo (timeout, 5xx) queda como 'desconocido' en vez de 'fallido': el
@@ -19,6 +21,7 @@ const json = (body: Record<string, unknown>, status: number, cors: Record<string
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 const MENSAJES: Record<string, [number, string]> = {
+  NO_AUTORIZADO: [403, 'No tienes permiso para usar los mensajes de WhatsApp.'],
   CONTACTO_NO_EXISTE: [404, 'Ese contacto no existe.'],
   CONTACTO_BLOQUEADO: [409, 'Ese número está bloqueado. Desbloquéalo para poder responderle.'],
   VENTANA_CERRADA: [409, 'Pasaron más de 24 horas desde su último mensaje: WhatsApp solo permite enviar una plantilla aprobada.'],
@@ -37,11 +40,12 @@ Deno.serve(async req => {
   if (!auth.ok) return auth.response;
   // Una persona, no el service role: queda registrado quien respondio.
   const userId = auth.llamador.userId;
-  if (!userId) return json({ error: 'Requiere una sesión de super administrador' }, 403, cors);
+  if (!userId) return json({ error: 'Requiere una sesión de usuario con permiso sobre WhatsApp' }, 403, cors);
 
   const client = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } });
-  const { data: perfil } = await client.from('users').select('is_super_admin').eq('id', userId).maybeSingle();
-  if (perfil?.is_super_admin !== true) return json({ error: 'Requiere permisos de super administrador' }, 403, cors);
+  const { data: autorizado, error: errPermiso } = await client.rpc('whatsapp_usuario_autorizado', { p_user: userId });
+  if (errPermiso) return json({ error: 'No se pudo validar el permiso' }, 500, cors);
+  if (autorizado !== true) return json({ error: MENSAJES.NO_AUTORIZADO[1] }, 403, cors);
 
   let entrada: Record<string, unknown>;
   try { entrada = await req.json(); } catch { return json({ error: 'JSON inválido' }, 400, cors); }

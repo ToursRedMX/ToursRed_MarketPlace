@@ -73,6 +73,7 @@ interface CreateAdminUserRequest {
     can_cancel_bookings?: boolean;
     can_manage_service_desk?: boolean;
     can_manage_executives?: boolean;
+    can_manage_whatsapp?: boolean;
   };
 }
 
@@ -264,6 +265,7 @@ Deno.serve(async (req: Request) => {
         can_cancel_bookings: permissions.can_cancel_bookings ?? false,
         can_manage_service_desk: permissions.can_manage_service_desk ?? false,
         can_manage_executives: permissions.can_manage_executives ?? false,
+        can_manage_whatsapp: permissions.can_manage_whatsapp ?? false,
       });
 
     if (permsError) {

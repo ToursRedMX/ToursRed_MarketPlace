@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as Sentry from '@sentry/react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase, UserRole } from '../lib/supabase';
 import type { Session, User } from '@supabase/supabase-js';
 import {
@@ -31,6 +32,8 @@ export interface AdminPermissions {
   canManageChartOfAccounts: boolean;
   canManageServiceDesk: boolean;
   canManageExecutives: boolean;
+  // Bandeja "Mensajes Entrantes de WhatsApp" (casilla en Usuarios del Sistema)
+  canManageWhatsapp: boolean;
   // Audit permissions
   canViewAuditLog: boolean;
   canViewAuditSensitiveData: boolean;
@@ -200,6 +203,8 @@ interface AuthContextType {
   isAccountExecutive: boolean;
   isEmailVerified: boolean;
   isSuperAdmin: boolean;
+  // Puede usar la bandeja de WhatsApp: super_admin, admin con la casilla o agente de soporte con la casilla.
+  canUseWhatsappInbox: boolean;
   isOnboardingPending: boolean;
   mustChangePassword: boolean;
   permissions: AdminPermissions | null;
@@ -237,6 +242,7 @@ const AuthContext = createContext<AuthContextType>({
   isAccountExecutive: false,
   isEmailVerified: false,
   isSuperAdmin: false,
+  canUseWhatsappInbox: false,
   isOnboardingPending: false,
   mustChangePassword: false,
   permissions: null,
@@ -301,6 +307,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { data: phoneVerification, isPending: phoneVerificationLoading, isError: phoneVerificationError, refetch: refetchPhone } = usePhoneVerification(user?.id);
   const refreshPhoneVerification = useCallback(async () => { await refetchPhone(); }, [refetchPhone]);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  // Una sola fuente de verdad: la misma funcion SQL que usan RLS y las RPC de la bandeja.
+  // Cubre las tres vias (super_admin, casilla en admin_permissions, casilla de agente de soporte).
+  const { data: whatsappAccess } = useQuery({
+    queryKey: ['whatsapp-inbox-access', user?.id],
+    enabled: Boolean(user?.id) && userRole === UserRole.ADMIN,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('can_use_whatsapp_inbox');
+      if (error) throw error;
+      return data === true;
+    },
+  });
+  const canUseWhatsappInbox = userRole === UserRole.ADMIN && whatsappAccess === true;
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -698,6 +717,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 canManageChartOfAccounts: p.can_manage_chart_of_accounts ?? false,
                 canManageServiceDesk: p.can_manage_service_desk ?? false,
                 canManageExecutives: p.can_manage_executives ?? false,
+                canManageWhatsapp: p.can_manage_whatsapp ?? false,
                 canViewAuditLog: p.can_view_audit_log ?? false,
                 canViewAuditSensitiveData: p.can_view_audit_sensitive_data ?? false,
                 canExportAuditLog: p.can_export_audit_log ?? false,
@@ -1171,6 +1191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAccountExecutive,
     isEmailVerified,
     isSuperAdmin,
+    canUseWhatsappInbox,
     isOnboardingPending,
     mustChangePassword,
     permissions,
@@ -1191,7 +1212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signInWithLinkedIn,
     completeOnboarding,
     refreshAuthState,
-  }), [phoneVerification, phoneVerificationLoading, phoneVerificationError, refreshPhoneVerification, user, userRole, isLoading, isAdmin, isAgency, isTraveler, isAccountant, isAccountExecutive, isEmailVerified, isSuperAdmin, isOnboardingPending, mustChangePassword, permissions, accountantPermissions, accountExecutiveInfo, isAgencyStaff, staffInfo, allStaffInfo, activeAgencyId, switchActiveAgency, isAgencyApproved, needsTermsAcceptance, markTermsAccepted, signInWithGoogle, signInWithAzure, signInWithTwitter, signInWithFacebook, signInWithLinkedIn, completeOnboarding, refreshAuthState]);
+  }), [phoneVerification, phoneVerificationLoading, phoneVerificationError, refreshPhoneVerification, user, userRole, isLoading, isAdmin, isAgency, isTraveler, isAccountant, isAccountExecutive, isEmailVerified, isSuperAdmin, canUseWhatsappInbox, isOnboardingPending, mustChangePassword, permissions, accountantPermissions, accountExecutiveInfo, isAgencyStaff, staffInfo, allStaffInfo, activeAgencyId, switchActiveAgency, isAgencyApproved, needsTermsAcceptance, markTermsAccepted, signInWithGoogle, signInWithAzure, signInWithTwitter, signInWithFacebook, signInWithLinkedIn, completeOnboarding, refreshAuthState]);
 
   return (
     <AuthContext.Provider value={contextValue}>
