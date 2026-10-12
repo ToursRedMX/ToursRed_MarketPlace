@@ -147,6 +147,9 @@ jobs:
       - name: Verify x-correlation-id reaches PostgREST but not Edge Functions
         run: node scripts/test-correlacion-front.mjs
 
+      - name: Verify WhatsApp inbox logic (SID MM, phone canon, media, ambiguous send)
+        run: node scripts/test-whatsapp-bandeja.mjs
+
       - name: Verify search logging respects cookie consent
         run: node scripts/test-registro-de-busqueda.mjs
 
