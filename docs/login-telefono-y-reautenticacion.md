@@ -45,6 +45,24 @@ Las funciones **fallan cerrado**: si `reauth_satisfied` no existe, `enforceReaut
 
 Desplegar el front antes que las funciones no rompe nada (el modal solo aparece si el servidor responde `REAUTH_REQUIRED`). Desplegar las funciones antes que la migración **sí** rompe las cancelaciones.
 
+## MFA para gastar saldo y puntos (13-oct-2026, PR siguiente al #381)
+
+**Hallazgo (medido con datos de Axel):** la verificación TOTP valía 15 min para cualquier acción y era por persona, no por sesión. El código tecleado a las 03:01:28 para cancelar una reserva dejó que a las 03:02:16 se debitara Cash sin pedir otro. Además, los pagos **mixtos** (saldo o puntos + tarjeta/PayPal/Conekta/OpenPay/MercadoPago) nunca pedían MFA: el saldo se compromete en la reserva y el webhook del procesador lo debita al cobrar.
+
+**Decisión de Axel:** "que lo pida siempre para poder usar wallet y/o puntos".
+
+- **Prueba de gasto de un solo uso** (`sensitive_verifications.purpose = 'spend'`, vence en 5 min, se consume con `consume_spend_step_up`). Cada gasto exige un código nuevo. La de reautenticación (`'reauth'`, 15 min) queda solo para acciones que no mueven dinero. **Una no sirve para la otra.**
+- **Caminos cubiertos (9):** wallet al 100% (`confirm-booking-wallet-payment`), suplementos, extras, mensualidades con Cash/puntos (`process-payment-plan-installment`), y el cobro de reserva en Stripe, PayPal, Conekta, OpenPay y MercadoPago.
+- **Decisión de cada creador:** `reservaGastaSaldo` (`_shared/gastoDeSaldo.ts`): la reserva tiene `points_used` o `toursred_cash_used` > 0 **y** `payment_status` aún no es `succeeded`. Una reserva ya pagada conserva esos campos para siempre; un suplemento posterior con tarjeta no pide el código.
+- **Hallazgo adjunto:** PayPal y MercadoPago no comprobaban que la reserva fuera de quien paga. Con saldo de por medio, el webhook habría debitado al **dueño** aunque pagara otra persona. El helper ahora exige que la reserva sea de quien llama cuando hay saldo.
+
+**Orden de puesta en marcha:** migración `20261013031834` **primero**; luego las funciones (fallan cerrado: sin `consume_spend_step_up` nadie puede pagar con saldo); el front al final.
+
+**No cubierto, a propósito:**
+- **Aprobación manual** (`approve-booking`): el saldo se compromete cuando la persona crea la reserva (RPC desde el navegador) y se debita cuando la agencia aprueba. No hay un punto del servidor donde pedir el código en ese camino sin tocar la RPC de creación. Pendiente de decidir.
+- **`confirm-checkin-wallet-charge`:** lo inicia la agencia con un OTP que da el viajero en persona; es otro control.
+- **Dos pagos simultáneos con un solo código:** lo evita `for update skip locked`; no se probó (requiere dos sesiones).
+
 ## Sin verificar / riesgos abiertos
 
 - Dónde se pide MFA al iniciar sesión a viajeros y agencias que lo activaron (`MfaGate` solo cubre admin, contador y ejecutivo).

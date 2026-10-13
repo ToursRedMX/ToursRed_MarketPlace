@@ -1642,7 +1642,7 @@ const TravelerBookings: React.FC = () => {
       const { selectedProvider } = paymentModal;
 
       if (selectedProvider === 'mercadopago') {
-        const mpResponse = await fetch(
+        const mpResponse = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-mercadopago-preference`,
           {
             method: 'POST',
@@ -1674,7 +1674,7 @@ const TravelerBookings: React.FC = () => {
           throw new Error('No se recibió la información de MercadoPago');
         }
       } else if (selectedProvider === 'paypal') {
-        const ppResponse = await fetch(
+        const ppResponse = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-paypal-order`,
           {
             method: 'POST',
@@ -1704,7 +1704,7 @@ const TravelerBookings: React.FC = () => {
           throw new Error('No se recibió la URL de PayPal');
         }
       } else if (selectedProvider === 'conekta') {
-        const conektaResp = await fetch(
+        const conektaResp = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-conekta-order`,
           {
             method: 'POST',
@@ -1736,7 +1736,7 @@ const TravelerBookings: React.FC = () => {
           throw new Error('No se recibió la URL de pago de Conekta');
         }
       } else if (selectedProvider === 'openpay') {
-        const opResp = await fetch(
+        const opResp = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-openpay-checkout`,
           {
             method: 'POST',
@@ -1767,7 +1767,7 @@ const TravelerBookings: React.FC = () => {
         }
       } else {
         // Stripe
-        const response = await fetch(
+        const response = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`,
           {
             method: 'POST',

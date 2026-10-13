@@ -751,6 +751,20 @@ jobs:
           PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS reauth_unica;" -c "CREATE DATABASE reauth_unica;"
           node scripts/test-reauth-unica-sql.mjs
 
+      # Gastar saldo o puntos exige un codigo TOTP de UN SOLO USO (13-oct-2026): el codigo
+      # tecleado para cancelar una reserva ya no abre un pago, y cada gasto pide uno nuevo.
+      # La prueba reproduce primero el defecto con la logica vieja. Cubre los 9 caminos que
+      # gastan saldo y las pantallas que los llaman.
+      - name: Verify spend step-up is single-use and covers every spending path
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: step_up_gasto
+        run: |
+          PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS step_up_gasto;" -c "CREATE DATABASE step_up_gasto;"
+          node scripts/test-step-up-gasto-sql.mjs
+
       # Misma categoria que el paso de arriba: una regla escrita dos veces. El
       # enmascarado de IP vive en `public.enmascarar_ip` —de donde
       # `insert_audit_log` deriva el `ip_masked` de la bitacora— y en

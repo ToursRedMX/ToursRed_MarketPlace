@@ -33,7 +33,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { code } = body as { code?: string };
+    const { code, purpose: purposeIn } = body as { code?: string; purpose?: string };
+    // 'spend' = prueba de UN SOLO USO para gastar saldo/puntos (vence en 5 min y se consume);
+    // 'reauth' (default) = la de siempre, 15 min, para acciones sensibles que no mueven dinero.
+    const purpose = purposeIn === "spend" ? "spend" : "reauth";
     if (!code || typeof code !== "string") {
       return new Response(JSON.stringify({ error: "Codigo requerido" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -147,10 +150,11 @@ Deno.serve(async (req: Request) => {
     // le seguia, tambien en 403. Aqui SI se revisa: si no queda guardada, no
     // se le dice al cliente que quedo verificado.
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 15 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + (purpose === "spend" ? 5 : 15) * 60 * 1000);
     const { error: verificationError } = await adminClient.from("sensitive_verifications").insert({
       user_id: user.id,
       method: "totp",
+      purpose,
       verified_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),
     });

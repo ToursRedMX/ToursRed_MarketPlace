@@ -6,6 +6,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -164,6 +165,14 @@ Deno.serve(async (req: Request) => {
 
     const serviceChargePct = Number(platformSettings?.payment_plan_service_charge_pct ?? 5);
     const isWalletPayment = payment_method === "toursred_cash" || payment_method === "points";
+
+    // MFA para gastar saldo/puntos (13-oct-2026): pagar una mensualidad con ToursRed Cash o con
+    // puntos descuenta del wallet de quien llama. Exige un codigo TOTP de UN SOLO USO, igual que
+    // el pago de una reserva con wallet. Sin MFA configurado responde MFA_NOT_CONFIGURED.
+    if (isWalletPayment) {
+      const stepUpBlock = await enforceStepUp(userClient, supabaseServiceKey, supabaseUrl, user.id);
+      if (stepUpBlock) return stepUpBlock;
+    }
 
     let grossServiceCharge: number;
     let exemptionApplied = 0;

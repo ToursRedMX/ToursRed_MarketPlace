@@ -41,6 +41,10 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const { turnstileEnabled } = useTurnstileEnabled();
   const resolverRef = useRef<((result: boolean) => void) | null>(null);
+  // Para que sirve el codigo que se va a pedir: 'spend' = gastar saldo/puntos (un solo uso, 5 min),
+  // 'reauth' = acciones sensibles que no mueven dinero (15 min). El servidor emite pruebas
+  // distintas: el codigo de una no sirve para la otra.
+  const proposito = useRef<'spend' | 'reauth'>('spend');
 
   const resolveAndClose = useCallback((result: boolean) => {
     setModalState({ open: false });
@@ -71,7 +75,7 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           'Authorization': `Bearer ${session?.access_token}`,
           'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, purpose: proposito.current }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.verified) {
@@ -110,6 +114,7 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (res.status === 409 && data.code === 'USE_TOTP') {
         setPassword('');
         setCaptchaToken('');
+        proposito.current = 'reauth';
         setModalState({ open: true, kind: 'step_up_required' });
         setVerifying(false);
         return;
@@ -161,6 +166,8 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const pideContrasena = body.code === 'REAUTH_REQUIRED' && reauth?.method === 'password';
+    // STEP_UP_REQUIRED lo mandan las funciones que GASTAN saldo/puntos; REAUTH_REQUIRED, las demas.
+    proposito.current = body.code === 'REAUTH_REQUIRED' ? 'reauth' : 'spend';
     const verified = await new Promise<boolean>((resolve) => {
       resolverRef.current = resolve;
       setModalState({ open: true, kind: pideContrasena ? 'password_required' : 'step_up_required' });

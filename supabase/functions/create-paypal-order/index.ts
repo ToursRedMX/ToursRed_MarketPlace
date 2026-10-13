@@ -6,6 +6,7 @@ import { origenParaRedirigir } from "../_shared/cors.ts";
 import { exigibleAlProcesador } from "../_shared/exigible.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { exigirMfaSiGastaSaldo } from "../_shared/gastoDeSaldo.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -195,7 +196,7 @@ Deno.serve(async (req: Request) => {
     } else {
       const { data: booking, error: bookingErr } = await supabase
         .from("bookings")
-        .select("amount_due_now, deposit_amount, membership_cost, payment_status")
+        .select("amount_due_now, deposit_amount, membership_cost, payment_status, points_used, toursred_cash_used, user_id")
         .eq("id", bookingId)
         .maybeSingle();
       if (bookingErr || !booking) {
@@ -208,6 +209,10 @@ Deno.serve(async (req: Request) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      // MFA para gastar saldo/puntos (13-oct-2026): el webhook debita lo comprometido en la
+      // reserva cuando este cobro sale bien. Ver _shared/gastoDeSaldo.ts.
+      const stepUpBlock = await exigirMfaSiGastaSaldo(req, ppUser?.id, booking);
+      if (stepUpBlock) return stepUpBlock;
       const { data: existingPayments } = await supabase
         .from("payment_transactions")
         .select("amount")

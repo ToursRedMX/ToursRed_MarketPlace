@@ -4,6 +4,17 @@ import { ChevronLeft, AlertCircle, Tag, Award, Wallet, Crown, Shield, Loader2, C
 import { useBookingFlow } from '../../context/BookingFlowContext';
 import { useAuth } from '../../context/AuthContext';
 import { useStepUp } from '../../context/StepUpContext';
+
+// Pagos MIXTOS (saldo o puntos + otro medio): el servidor exige un codigo TOTP de UN SOLO USO antes
+// de crear el cobro. Si la persona cierra el modal, o no tiene MFA, la reserva YA existe (pendiente
+// de pago): no es un error de red, y no se debe reintentar creando otra.
+const MENSAJE_MFA_PENDIENTE =
+  'Tu reserva quedó creada, pero falta confirmar con tu código de verificación en dos pasos para usar tu saldo o tus puntos. Puedes completar el pago desde Mis reservas.';
+async function bloqueoDeMfa(resp: Response): Promise<boolean> {
+  if (resp.status !== 403) return false;
+  const cuerpo = await resp.clone().json().catch(() => null) as { code?: string } | null;
+  return cuerpo?.code === 'STEP_UP_REQUIRED' || cuerpo?.code === 'MFA_NOT_CONFIGURED';
+}
 import { useMembershipPrices } from '../../hooks/useMembershipPrices';
 import { montoDeDescuento, descuentoDeCargoPorServicio, descuentoDeSeguro } from '../../utils/descuentoDeReserva.ts';
 import { calcularPromocionDeGrupo } from '../../utils/promocionDeGrupo.ts';
@@ -795,7 +806,7 @@ const BookingFlowStep4: React.FC = () => {
       if (flow.paymentProvider === 'stripe') {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No hay sesion activa');
-        const resp = await fetch(
+        const resp = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`,
           {
             method: 'POST',
@@ -814,6 +825,7 @@ const BookingFlowStep4: React.FC = () => {
             body: JSON.stringify({ bookingId, customerEmail: user.email, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, addMembership: flow.addMembership, membershipPlan: flow.membershipPlan, toursRedCashUsed: srvCashApplied, pointsUsed: srvPointsApplied }),
           }
         );
+        if (await bloqueoDeMfa(resp)) { setCreateError(MENSAJE_MFA_PENDIENTE); return; }
         if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.error || 'Error al crear la sesion de pago'); }
         const { url } = await resp.json();
         window.location.href = url;
@@ -823,7 +835,7 @@ const BookingFlowStep4: React.FC = () => {
       if (flow.paymentProvider === 'mercadopago') {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No hay sesion activa');
-        const resp = await fetch(
+        const resp = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-mercadopago-preference`,
           {
             method: 'POST',
@@ -831,6 +843,7 @@ const BookingFlowStep4: React.FC = () => {
             body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, deviceId: await getMpDeviceId() }),
           }
         );
+        if (await bloqueoDeMfa(resp)) { setCreateError(MENSAJE_MFA_PENDIENTE); return; }
         const mpResult = await resp.json();
         if (!resp.ok || !mpResult.success) throw new Error(mpResult.error || 'Error al crear la preferencia de pago');
         if (!mpResult.url) throw new Error('No se recibió la URL de pago de MercadoPago');
@@ -841,7 +854,7 @@ const BookingFlowStep4: React.FC = () => {
       if (flow.paymentProvider === 'paypal') {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No hay sesion activa');
-        const resp = await fetch(
+        const resp = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-paypal-order`,
           {
             method: 'POST',
@@ -849,6 +862,7 @@ const BookingFlowStep4: React.FC = () => {
             body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}` }),
           }
         );
+        if (await bloqueoDeMfa(resp)) { setCreateError(MENSAJE_MFA_PENDIENTE); return; }
         if (!resp.ok) throw new Error('Error al crear la orden de PayPal');
         const { url } = await resp.json();
         if (!url) throw new Error('PayPal no devolvió la URL de aprobación');
@@ -859,7 +873,7 @@ const BookingFlowStep4: React.FC = () => {
       if (flow.paymentProvider === 'conekta') {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No hay sesion activa');
-        const resp = await fetch(
+        const resp = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-conekta-order`,
           {
             method: 'POST',
@@ -874,6 +888,7 @@ const BookingFlowStep4: React.FC = () => {
             }),
           }
         );
+        if (await bloqueoDeMfa(resp)) { setCreateError(MENSAJE_MFA_PENDIENTE); return; }
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
           throw new Error(err.error || 'Error al crear la orden de Conekta');
@@ -887,7 +902,7 @@ const BookingFlowStep4: React.FC = () => {
       if (flow.paymentProvider === 'openpay') {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No hay sesion activa');
-        const resp = await fetch(
+        const resp = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-openpay-checkout`,
           {
             method: 'POST',
@@ -895,6 +910,7 @@ const BookingFlowStep4: React.FC = () => {
             body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, context: 'booking', method: flow.openpayMethod }),
           }
         );
+        if (await bloqueoDeMfa(resp)) { setCreateError(MENSAJE_MFA_PENDIENTE); return; }
         if (!resp.ok) throw new Error('Error al crear el cargo de Openpay');
         const data = await resp.json();
         if (data.url) {
