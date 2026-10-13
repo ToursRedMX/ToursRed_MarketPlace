@@ -5,6 +5,7 @@ import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enforceReauth } from "../_shared/reauth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,6 +89,12 @@ Deno.serve(async (req: Request) => {
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     if (userError || !user) return err("Token inválido");
+
+    // Reautenticacion (13-oct-2026): cancelar la reserva de un viajero (agencia) exige TOTP si la cuenta tiene MFA, o la contraseña
+    // actual si no (ver _shared/reauth.ts). Falla cerrado.
+    const reauthBloqueo = await enforceReauth(supabase, user.id, corsHeaders);
+    if (reauthBloqueo) return reauthBloqueo;
+
 
     const { booking_id, cancellation_reason } = await req.json();
     if (!booking_id) return err("booking_id es requerido");

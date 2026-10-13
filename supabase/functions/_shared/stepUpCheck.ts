@@ -26,6 +26,9 @@ export async function checkStepUp(
       .from("sensitive_verifications")
       .select("id")
       .eq("user_id", userId)
+      // Solo vale un TOTP. Otro tipo de prueba (p. ej. contraseña, que vive aparte en
+      // reauth_proofs) NO debe abrir el pago con ToursRed Cash, que exige el segundo factor.
+      .eq("method", "totp")
       .gt("expires_at", now)
       .order("verified_at", { ascending: false })
       .limit(1);

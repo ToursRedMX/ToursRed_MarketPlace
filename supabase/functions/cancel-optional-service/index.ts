@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enforceReauth } from "../_shared/reauth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,6 +56,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Reautenticacion (13-oct-2026): cancelar un servicio opcional exige TOTP si la cuenta tiene MFA, o la contraseña
+    // actual si no (ver _shared/reauth.ts). Falla cerrado.
+    const reauthBloqueo = await enforceReauth(serviceClient, user.id, corsHeaders);
+    if (reauthBloqueo) return reauthBloqueo;
+
 
     // Load the optional service row with its parent tour_optional_services
     const { data: optService, error: optError } = await serviceClient

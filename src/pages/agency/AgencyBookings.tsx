@@ -9,6 +9,7 @@ import PaymentPlanCalendar from '../../components/PaymentPlanCalendar';
 import { Booking, BookingTraveler, BookingSupplement, BookingOptionalService } from '../../types';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
+import { useStepUp } from '../../context/StepUpContext';
 import ReviewForm from '../../components/ReviewForm';
 import { exportTourReportToExcel, exportTourReportToPDF } from '../../utils/reportExports';
 import TourMassMessageModal from '../../components/TourMassMessageModal';
@@ -44,6 +45,7 @@ const AgencyBookings: React.FC = () => {
   const { user } = useAuth();
   const { agencyId: resolvedAgencyId, loading: agencyLoading } = useAgencyId();
   const navigate = useNavigate();
+  const { fetchWithStepUp } = useStepUp();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -791,7 +793,7 @@ const AgencyBookings: React.FC = () => {
         throw new Error('No hay sesión activa');
       }
 
-      const response = await fetch(
+      const response = await fetchWithStepUp(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-agency-booking-cancellation`,
         {
           method: 'POST',

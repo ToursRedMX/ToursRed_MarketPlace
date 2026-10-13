@@ -2,14 +2,30 @@ import React, { createContext, useContext, useState, useCallback, useRef } from 
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Shield, ShieldAlert, Loader2, X } from 'lucide-react';
+import TurnstileWidget from '../components/TurnstileWidget';
+import { useTurnstileEnabled } from '../hooks/useTurnstileEnabled';
 
 type ModalState =
   | { open: false }
   | { open: true; kind: 'mfa_required' }
-  | { open: true; kind: 'step_up_required' };
+  | { open: true; kind: 'step_up_required' }
+  | { open: true; kind: 'password_required' };
+
+/** Cuerpo JSON tipico de nuestras Edge Functions: `success`/`error` y lo demas sin tipar. */
+export interface RespuestaFuncion {
+  success?: boolean;
+  error?: string;
+  [clave: string]: unknown;
+}
 
 interface StepUpContextValue {
   fetchWithStepUp: (input: string, init?: RequestInit) => Promise<Response>;
+  /**
+   * Como `supabase.functions.invoke`, pero reintenta tras pedir la reautenticacion (TOTP o
+   * contraseña) cuando la funcion responde REAUTH_REQUIRED. En respuestas no 2xx devuelve
+   * `error` con el mensaje del servidor (invoke solo da "non-2xx status code").
+   */
+  invokeWithStepUp: (nombre: string, body: unknown) => Promise<{ data: RespuestaFuncion | null; error: Error | null }>;
 }
 
 const StepUpContext = createContext<StepUpContextValue | undefined>(undefined);
@@ -20,11 +36,17 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [password, setPassword] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
+  const { turnstileEnabled } = useTurnstileEnabled();
   const resolverRef = useRef<((result: boolean) => void) | null>(null);
 
   const resolveAndClose = useCallback((result: boolean) => {
     setModalState({ open: false });
     setCode('');
+    setPassword('');
+    setCaptchaToken('');
     setModalError('');
     setVerifying(false);
     if (resolverRef.current) {
@@ -64,6 +86,49 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [code, resolveAndClose]);
 
+  // Cuenta SIN MFA: la reautenticacion es la contraseña actual (verify-reauth). Si la cuenta
+  // SI tiene MFA el servidor responde 409 USE_TOTP y se cambia al modal del codigo.
+  const handleVerifyPassword = useCallback(async () => {
+    if (!password) {
+      setModalError('Escribe tu contraseña actual.');
+      return;
+    }
+    setVerifying(true);
+    setModalError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-reauth`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ password, captchaToken: captchaToken || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409 && data.code === 'USE_TOTP') {
+        setPassword('');
+        setCaptchaToken('');
+        setModalState({ open: true, kind: 'step_up_required' });
+        setVerifying(false);
+        return;
+      }
+      if (!res.ok || !data.verified) {
+        setModalError(data.error || 'No se pudo verificar. Intenta de nuevo.');
+        // El token de Turnstile es de un solo uso: tras un intento hay que pedir uno nuevo.
+        setCaptchaToken('');
+        setCaptchaAttempt((n) => n + 1);
+        setVerifying(false);
+        return;
+      }
+      resolveAndClose(true);
+    } catch {
+      setModalError('No se pudo verificar. Intenta de nuevo.');
+      setVerifying(false);
+    }
+  }, [password, captchaToken, resolveAndClose]);
+
   const fetchWithStepUp = useCallback(async (input: string, init?: RequestInit): Promise<Response> => {
     const firstResponse = await fetch(input, init);
     if (firstResponse.status !== 403) {
@@ -77,7 +142,10 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return firstResponse;
     }
 
-    if (body?.code !== 'MFA_NOT_CONFIGURED' && body?.code !== 'STEP_UP_REQUIRED') {
+    // REAUTH_REQUIRED lo manda enforceReauth (acciones sensibles distintas del pago con
+    // ToursRed Cash): con MFA pide el codigo TOTP, sin MFA la contraseña actual.
+    const reauth = body as { code?: string; method?: string } | undefined;
+    if (body?.code !== 'MFA_NOT_CONFIGURED' && body?.code !== 'STEP_UP_REQUIRED' && body?.code !== 'REAUTH_REQUIRED') {
       return firstResponse;
     }
 
@@ -92,9 +160,10 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return firstResponse;
     }
 
+    const pideContrasena = body.code === 'REAUTH_REQUIRED' && reauth?.method === 'password';
     const verified = await new Promise<boolean>((resolve) => {
       resolverRef.current = resolve;
-      setModalState({ open: true, kind: 'step_up_required' });
+      setModalState({ open: true, kind: pideContrasena ? 'password_required' : 'step_up_required' });
     });
 
     if (!verified) {
@@ -104,8 +173,29 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return fetch(input, init);
   }, [navigate]);
 
+  const invokeWithStepUp = useCallback(async (nombre: string, body: unknown) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return { data: null, error: new Error('No hay sesión activa') };
+      const res = await fetchWithStepUp(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${nombre}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => null)) as RespuestaFuncion | null;
+      if (!res.ok) return { data, error: new Error(data?.error || `Error ${res.status}`) };
+      return { data, error: null };
+    } catch (e) {
+      return { data: null, error: e instanceof Error ? e : new Error('No se pudo completar la solicitud') };
+    }
+  }, [fetchWithStepUp]);
+
   return (
-    <StepUpContext.Provider value={{ fetchWithStepUp }}>
+    <StepUpContext.Provider value={{ fetchWithStepUp, invokeWithStepUp }}>
       {children}
       {modalState.open && (
         <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
@@ -139,6 +229,52 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     className="flex-1 bg-blue-600 text-white font-medium py-2.5 px-4 rounded-lg hover:bg-blue-700"
                   >
                     Activar ahora
+                  </button>
+                </div>
+              </>
+            ) : modalState.kind === 'password_required' ? (
+              <>
+                <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mb-4">
+                  <Shield className="w-6 h-6 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Confirma tu contraseña</h3>
+                <p className="text-sm text-slate-600 mb-4">
+                  Por seguridad, escribe tu contraseña actual para continuar.
+                </p>
+                {modalError && (
+                  <div className="mb-3 text-sm text-red-600 bg-red-50 rounded-lg p-2.5">{modalError}</div>
+                )}
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Contraseña actual"
+                  autoComplete="current-password"
+                  autoFocus
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2.5 mb-4 focus:ring-2 focus:ring-blue-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && password && !verifying && (!turnstileEnabled || captchaToken)) handleVerifyPassword();
+                  }}
+                />
+                {(turnstileEnabled || captchaToken) && (
+                  <div className="flex justify-center mb-4">
+                    <TurnstileWidget key={captchaAttempt} onToken={setCaptchaToken} />
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => resolveAndClose(false)}
+                    className="flex-1 py-2.5 px-4 border border-slate-300 text-slate-600 font-medium rounded-lg hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleVerifyPassword}
+                    disabled={!password || verifying || (turnstileEnabled && !captchaToken)}
+                    className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white font-medium py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Verificar
                   </button>
                 </div>
               </>
