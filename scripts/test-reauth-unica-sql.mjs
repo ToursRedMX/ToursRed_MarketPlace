@@ -225,4 +225,18 @@ prueba('enforceReauth: falla cerrado si la base no responde y distingue totp de 
   assert.match(helper, /tieneTotp === true \? "totp" : "password"/);
 });
 
+// ---- 8. La pantalla (StepUpContext) -------------------------------------------------------------------------------
+const ui = readFileSync(new URL('../src/context/StepUpContext.tsx', import.meta.url), 'utf8');
+prueba('StepUpContext: REAUTH_REQUIRED abre el modal de contraseña o el de TOTP segun lo que diga el servidor', () => {
+  assert.match(ui, /body\?\.code !== 'REAUTH_REQUIRED'/, 'reconoce REAUTH_REQUIRED');
+  assert.match(ui, /pideContrasena = body\.code === 'REAUTH_REQUIRED' && reauth\?\.method === 'password'/);
+  assert.match(ui, /kind: pideContrasena \? 'password_required' : 'step_up_required'/);
+});
+prueba('StepUpContext: la contraseña va a verify-reauth, 409 USE_TOTP cambia al codigo, y el token de Turnstile se renueva', () => {
+  assert.match(ui, /functions\/v1\/verify-reauth/);
+  assert.match(ui, /res\.status === 409 && data\.code === 'USE_TOTP'[\s\S]*kind: 'step_up_required'/);
+  assert.match(ui, /setCaptchaToken\(''\);\s*setCaptchaAttempt\(\(n\) => n \+ 1\)/, 'tras un intento fallido pide un token nuevo');
+  assert.doesNotMatch(ui, /console\.\w+\([^)]*password/i, 'no registra la contraseña');
+});
+
 console.log(`${n} pruebas de reautenticacion unica OK.`);
