@@ -13,7 +13,7 @@
   "dependencies": {
     "@icons-pack/react-simple-icons": "^13.15.1",
     "@mapbox/search-js-react": "^1.6.0",
-    "@sentry/react": "^11.3.0",
+    "@sentry/react": "^11.6.0",
     "@supabase/supabase-js": "2.117.2",
     "@tanstack/react-query": "^5.104.1",
     "@tiptap/extension-link": "^3.31.4",
