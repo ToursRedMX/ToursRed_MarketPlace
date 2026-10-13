@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Shield, ShieldAlert, ShieldCheck, KeyRound, Loader2, AlertTriangle, Info } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldCheck, KeyRound, Smartphone, Loader2, AlertTriangle, Info } from 'lucide-react';
 import { mensajeDeError } from '../lib/errores';
 
 export const SecurityTogglesSection: React.FC = () => {
   const [mfaAdmins, setMfaAdmins] = useState(false);
   const [mfaAccountant, setMfaAccountant] = useState(false);
   const [passkeysEnabled, setPasskeysEnabled] = useState(false);
+  const [phoneLoginEnabled, setPhoneLoginEnabled] = useState(false);
+  // Canales reales de OTP: sin al menos uno (y fuera de modo prueba) el login por telefono no puede entregar codigos.
+  const [otpListo, setOtpListo] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -20,7 +23,7 @@ export const SecurityTogglesSection: React.FC = () => {
     try {
       const { data, error: errorSettings } = await supabase
         .from('platform_settings')
-        .select('mfa_required_for_admins, mfa_required_for_accountant, passkeys_enabled')
+        .select('mfa_required_for_admins, mfa_required_for_accountant, passkeys_enabled, phone_login_enabled, sms_habilitado, whatsapp_habilitado, sms_modo_prueba')
         .maybeSingle();
 
       // Si no podemos leer, los `?? false` pintarian los tres interruptores
@@ -35,6 +38,8 @@ export const SecurityTogglesSection: React.FC = () => {
       setMfaAdmins(data?.mfa_required_for_admins ?? false);
       setMfaAccountant(data?.mfa_required_for_accountant ?? false);
       setPasskeysEnabled(data?.passkeys_enabled ?? false);
+      setPhoneLoginEnabled(data?.phone_login_enabled ?? false);
+      setOtpListo(Boolean(data && (data.sms_habilitado || data.whatsapp_habilitado) && !data.sms_modo_prueba));
 
       const { data: factors, error: errorFactores } = await supabase.auth.mfa.listFactors();
       if (errorFactores) {
@@ -75,6 +80,7 @@ export const SecurityTogglesSection: React.FC = () => {
       if (field === 'mfa_required_for_admins') setMfaAdmins(!value);
       if (field === 'mfa_required_for_accountant') setMfaAccountant(!value);
       if (field === 'passkeys_enabled') setPasskeysEnabled(!value);
+      if (field === 'phone_login_enabled') setPhoneLoginEnabled(!value);
     } finally {
       setSaving(false);
     }
@@ -122,7 +128,7 @@ export const SecurityTogglesSection: React.FC = () => {
         </div>
         <div>
           <h3 className="font-semibold text-slate-900">Seguridad de la plataforma</h3>
-          <p className="text-sm text-slate-500">Configura autenticacion de dos factores y claves de acceso</p>
+          <p className="text-sm text-slate-500">Configura autenticacion de dos factores, claves de acceso y entrada con celular</p>
         </div>
       </div>
 
@@ -185,7 +191,7 @@ export const SecurityTogglesSection: React.FC = () => {
         </div>
 
         {/* Passkeys */}
-        <div className="flex items-start justify-between gap-4 py-3">
+        <div className="flex items-start justify-between gap-4 py-3 border-b border-slate-100">
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <KeyRound className="w-5 h-5 text-violet-600" />
@@ -201,6 +207,34 @@ export const SecurityTogglesSection: React.FC = () => {
               const v = !passkeysEnabled;
               setPasskeysEnabled(v);
               await saveToggle('passkeys_enabled', v);
+            }}
+            disabled={saving}
+          />
+        </div>
+
+        {/* Login por telefono */}
+        <div className="flex items-start justify-between gap-4 py-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-emerald-600" />
+              <h4 className="font-medium text-slate-800">Entrar con el celular (código por SMS o WhatsApp)</h4>
+            </div>
+            <p className="text-sm text-slate-500 mt-1 ml-7">
+              Muestra «Entrar con mi celular» en el login. Solo entran cuentas con celular verificado; si la cuenta tiene MFA, se pide también el código de la app.
+            </p>
+            {!otpListo && (
+              <div className="mt-2 ml-7 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
+                <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                Ahora mismo no hay un canal real de códigos (SMS o WhatsApp activado y fuera de modo de prueba). Si lo activas así, el botón aparecerá pero nadie podrá entrar. Revisa la configuración de SMS/WhatsApp primero.
+              </div>
+            )}
+          </div>
+          <ToggleSwitch
+            checked={phoneLoginEnabled}
+            onChange={async () => {
+              const v = !phoneLoginEnabled;
+              setPhoneLoginEnabled(v);
+              await saveToggle('phone_login_enabled', v);
             }}
             disabled={saving}
           />

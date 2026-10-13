@@ -312,5 +312,11 @@ prueba('los perfiles montan «Acceso a tu cuenta» y dejan de solo lectura el ce
     assert.match(src(p), /readOnly=\{telefonoVerificado\}/, p);
   assert.match(src('src/pages/executive/ExecutivePerfil.tsx'), /if \(user\?\.id && !telefonoVerificado\)/);
 });
+prueba('configuracion de la plataforma: el interruptor de login por telefono se lee y se guarda con su rollback visual', () => {
+  const f = src('src/components/SecurityTogglesSection.tsx');
+  assert.match(f, /phone_login_enabled, sms_habilitado, whatsapp_habilitado, sms_modo_prueba/);
+  assert.match(f, /await saveToggle\('phone_login_enabled', v\)/);
+  assert.match(f, /if \(field === 'phone_login_enabled'\) setPhoneLoginEnabled\(!value\)/, 'si falla el guardado, el interruptor vuelve a su estado real');
+});
 
 console.log(`${n} pruebas de login por telefono / cambio pendiente OK.`);
