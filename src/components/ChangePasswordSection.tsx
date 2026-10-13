@@ -1,25 +1,20 @@
 import React, { useState } from 'react';
 import { Lock, Eye, EyeOff, Save, AlertCircle, CheckCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import TurnstileWidget from './TurnstileWidget';
-import { useTurnstileEnabled } from '../hooks/useTurnstileEnabled';
+import { useStepUp } from '../context/StepUpContext';
+import { establecerContrasena } from '../lib/establecerContrasena';
 import { esContrasenaFiltrada } from '../lib/contrasenaFiltrada';
 import { validarContrasena } from '../lib/politicaContrasena';
 import { mensajeDeError } from '../lib/errores';
 
 const ChangePasswordSection: React.FC = () => {
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChanging, setIsChanging] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [turnstileToken, setTurnstileToken] = useState('');
-  const [captchaAttempt, setCaptchaAttempt] = useState(0);
-  const { turnstileEnabled } = useTurnstileEnabled();
+  const { invokeWithStepUp } = useStepUp();
 
   const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
@@ -29,18 +24,13 @@ const ChangePasswordSection: React.FC = () => {
     setError('');
     setSuccess('');
 
-    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+    if (!passwordForm.newPassword || !passwordForm.confirmPassword) {
       setError('Todos los campos son obligatorios');
       return;
     }
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setError('Las contraseñas nuevas no coinciden');
-      return;
-    }
-
-    if (passwordForm.currentPassword === passwordForm.newPassword) {
-      setError('La nueva contraseña debe ser diferente a la actual');
       return;
     }
 
@@ -53,24 +43,9 @@ const ChangePasswordSection: React.FC = () => {
     setIsChanging(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) {
-        throw new Error('No se pudo obtener la información del usuario');
-      }
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: passwordForm.currentPassword,
-        options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
-      });
-
-      if (signInError) {
-        throw new Error('La contraseña actual es incorrecta');
-      }
-
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: passwordForm.newPassword
-      });
+      // La contraseña actual (o el codigo de la app de autenticacion si hay MFA) la pide el SERVIDOR con un modal:
+      // `updateUser({ password })` desde el navegador no la exige.
+      const { error: updateError } = await establecerContrasena(passwordForm.newPassword, invokeWithStepUp);
 
       if (updateError) {
         if (esContrasenaFiltrada(updateError)) {
@@ -81,7 +56,6 @@ const ChangePasswordSection: React.FC = () => {
 
       setSuccess('Contraseña actualizada correctamente');
       setPasswordForm({
-        currentPassword: '',
         newPassword: '',
         confirmPassword: ''
       });
@@ -90,22 +64,12 @@ const ChangePasswordSection: React.FC = () => {
     } catch (err) {
       setError(mensajeDeError(err) || 'Error al cambiar la contraseña');
     } finally {
-      // El token de Turnstile es de un solo uso y Supabase lo manda a
-      // siteverify ANTES de mirar las credenciales, asi que un intento fallido
-      // lo gasta. Sin esto, el token quemado se quedaba en el estado y el
-      // siguiente intento lo reenviaba: el usuario corregia su contraseña y
-      // seguia viendo un error de captcha. Cambiar el `key` remonta el widget y
-      // emite uno nuevo — mismo patron que ya usan las tres paginas
-      // internacionales.
-      setTurnstileToken('');
-      setCaptchaAttempt(value => value + 1);
       setIsChanging(false);
     }
   };
 
   const handleCancel = () => {
     setPasswordForm({
-      currentPassword: '',
       newPassword: '',
       confirmPassword: ''
     });
@@ -138,29 +102,6 @@ const ChangePasswordSection: React.FC = () => {
       )}
 
       <form onSubmit={handleChangePassword} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Contraseña Actual *
-          </label>
-          <div className="relative">
-            <input
-              type={showCurrentPassword ? 'text' : 'password'}
-              value={passwordForm.currentPassword}
-              onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-              className="input pr-10"
-              placeholder="Ingresa tu contraseña actual"
-              disabled={isChanging}
-            />
-            <button
-              type="button"
-              onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              {showCurrentPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Nueva Contraseña *
@@ -210,11 +151,9 @@ const ChangePasswordSection: React.FC = () => {
           </div>
         </div>
 
-        {(turnstileEnabled || turnstileToken) && (
-          <div className="flex justify-center">
-            <TurnstileWidget key={captchaAttempt} onToken={setTurnstileToken} />
-          </div>
-        )}
+        <p className="text-xs text-gray-500">
+          Al guardar te pediremos confirmar tu identidad: tu contraseña actual o, si tienes verificación en dos pasos, el código de tu app de autenticación.
+        </p>
 
         <div className="flex justify-end gap-3 pt-2">
           <button
@@ -227,7 +166,7 @@ const ChangePasswordSection: React.FC = () => {
           </button>
           <button
             type="submit"
-            disabled={isChanging || (turnstileEnabled && !turnstileToken)}
+            disabled={isChanging}
             className="btn btn-primary flex items-center"
           >
             {isChanging ? (

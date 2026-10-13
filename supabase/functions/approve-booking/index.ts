@@ -70,22 +70,7 @@ Deno.serve(async (req: Request) => {
     // Leer la reserva con todos los campos necesarios
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
-      .select(`
-        id,
-        user_id,
-        status,
-        user_payment,
-        points_used,
-        toursred_cash_used,
-        travel_insurance_cost,
-        travel_insurance_included,
-        total_price,
-        service_charge,
-        service_charge_discount,
-        used_membership_benefit,
-        agency_id,
-        tours(name)
-      `)
+      .select("id, status, agency_id")
       .eq("id", booking_id)
       .maybeSingle();
 
@@ -166,184 +151,17 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- FLUJO DE APROBACION ---
+    //
+    // Aprobar NUNCA mueve dinero del viajero (13-oct-2026). Hasta esa fecha, si el saldo y los puntos
+    // comprometidos al crear la reserva cubrian el 100%, esta funcion —que la dispara la AGENCIA— descontaba
+    // ToursRed Cash y puntos del viajero y confirmaba la reserva: gastar saldo sin que el viajero escribiera
+    // su codigo MFA, que es lo que exigen todos los demas caminos de gasto. Ahora la aprobacion solo abre la
+    // ventana de pago de 12 h y el viajero completa el pago desde «Completar Pago»
+    // (confirm-booking-wallet-payment / procesadores), donde SI se pide el codigo.
+    //
+    // Medido contra la base el 13-oct-2026: 0 reservas se habian autoconfirmado por este camino.
 
-    // Calcular cuánto está ya cubierto por puntos y cash
-    const pointsValue = (booking.points_used || 0) / 100;
-    const cashUsed = booking.toursred_cash_used || 0;
-    const totalCovered = pointsValue + cashUsed;
-    const totalToPay = booking.user_payment || 0;
-
-    // ¿Está completamente cubierto sin necesidad de otro método de pago?
-    const autoConfirm = totalToPay > 0 && totalCovered >= totalToPay;
-
-    if (autoConfirm) {
-      // Aprobar Y confirmar en una sola operacion atomica
-      const { error: updateError } = await supabase
-        .from("bookings")
-        .update({
-          approval_status: "approved",
-          approval_notes: notes || null,
-          approved_at: now,
-          approved_by: user.id,
-          payment_status: "succeeded",
-          status: "confirmed",
-          payment_method: pointsValue > 0 && cashUsed > 0
-            ? "toursred_points_and_cash"
-            : cashUsed > 0
-              ? "toursred_cash"
-              : "toursred_points",
-          paid_at: now,
-          updated_at: now,
-          service_charge: 0,
-        })
-        .eq("id", booking_id);
-
-      if (updateError) throw new Error(updateError.message);
-
-      // Descontar ToursRed Cash del monedero si se usó
-      if (cashUsed > 0) {
-        const { error: walletError } = await supabase.rpc("update_wallet_balance", {
-          p_user_id: booking.user_id,
-          p_amount: -cashUsed,
-          p_type: "debit",
-          p_description: `Pago de reserva para ${(booking.tours as unknown as { name?: string } | null)?.name || "tour"}`,
-          p_reference_id: booking_id,
-          p_reference_type: "booking",
-          p_idempotency_key: `${booking_id}_charge_booking`,
-        });
-
-        if (walletError) {
-          console.error("Error al descontar cash del monedero:", walletError);
-        }
-      }
-
-      // Descontar puntos si se usaron
-      if (booking.points_used > 0) {
-        // El parametro se llama p_amount, no p_points. Con el nombre mal,
-        // PostgREST no resuelve la funcion —busca una firma que no existe— y
-        // la llamada falla SIEMPRE. Como el error solo se registra en consola
-        // (abajo), el canje de puntos al aprobar una reserva nunca se aplico.
-        // Detectado el 08-sep-2026 al ejecutar deduct_points para validar M-2;
-        // ver R-1 en docs/auditorias/2026-09-05-auditoria-funciones-postgres.md.
-        const { error: pointsError } = await supabase.rpc("deduct_points", {
-          p_user_id: booking.user_id,
-          p_amount: booking.points_used,
-          p_description: `Canje de puntos para reserva ${booking_id}`,
-          p_reference_id: booking_id,
-          p_reference_type: "booking",
-        });
-
-        if (pointsError) {
-          console.error("Error al descontar puntos:", pointsError);
-        }
-      }
-
-      // Aplicar exención de membresía via RPC centralizado (atómico, FOR UPDATE)
-      if (!autoConfirm && !booking.used_membership_benefit) {
-        const { data: platformSettings } = await supabase
-          .from("platform_settings")
-          .select("service_charge_percentage")
-          .maybeSingle();
-
-        const serviceChargeRate = platformSettings?.service_charge_percentage || 5;
-        const fullServiceCharge = ((booking.total_price || 0) * serviceChargeRate) / 100;
-
-        const { data: exemptionResult } = await supabase
-          .rpc("apply_membership_service_fee_exemption", { p_user_id: booking.user_id, p_gross_service_charge: fullServiceCharge });
-        const exemptionUsed = parseFloat(exemptionResult?.exemption_applied ?? "0");
-
-        if (exemptionUsed > 0) {
-          await supabase
-            .from("bookings")
-            .update({
-              used_membership_benefit: true,
-              membership_service_fee_saved: exemptionUsed,
-            })
-            .eq("id", booking_id);
-        }
-      }
-
-      // Process unpaid optional services (pickup, language, traditional optionals)
-      try {
-        const { data: unpaidOptionals } = await supabase
-          .from('booking_optional_services')
-          .select('id, subtotal, total_paid')
-          .eq('booking_id', booking_id)
-          .eq('is_cancelled', false)
-          .is('paid_at', null);
-
-        if (unpaidOptionals && unpaidOptionals.length > 0) {
-          const paymentMethod = pointsValue > 0 && cashUsed > 0
-            ? "toursred_points_and_cash"
-            : cashUsed > 0
-              ? "toursred_cash"
-              : "toursred_points";
-
-          // Cuando NO es autoConfirm, aqui se recalculaba service_charge y se volvia a
-          // llamar apply_membership_service_fee_exemption: esa RPC muta memberships, y
-          // create_booking_atomic ya aplico la exencion sobre el cargo de los extras
-          // (linea 348 de esa funcion) y guardo el service_charge neto al crear la
-          // reserva. Repetirlo consumia dos veces el tope mensual del socio.
-          //
-          // El guard de :234 (!booking.used_membership_benefit) protegia el cargo BASE,
-          // pero este bucle quedaba fuera de el: !autoConfirm no significa "ya exentado",
-          // solo "no cubierto del todo con monedero". Mismo criterio que
-          // openpay-webhook:317, que ya lo evitaba a proposito.
-          //
-          // El caso autoConfirm SI sigue escribiendo cero: ahi la reserva se cubrio por
-          // completo con monedero o puntos y no hay cargo por servicio que cobrar.
-          for (const opt of unpaidOptionals) {
-            if ((opt.total_paid || opt.subtotal) <= 0) continue;
-
-            await supabase
-              .from('booking_optional_services')
-              .update({
-                paid_at: now,
-                payment_method: paymentMethod,
-                total_paid: opt.total_paid || opt.subtotal,
-                ...(autoConfirm ? { service_charge: 0, membership_exemption_used: 0 } : {}),
-              })
-              .eq('id', opt.id);
-          }
-          console.log(`Processed ${unpaidOptionals.length} optional services for booking ${booking_id} (approve-booking)`);
-        }
-      } catch (optError) {
-        console.error('Error processing optional services (approve-booking):', optError);
-      }
-
-      // Trigger CFDI si el PAC está configurado (pago con compensación: puntos y/o wallet)
-      const { data: cfdiSettings } = await supabase
-        .from("platform_settings")
-        .select("pac_provider")
-        .maybeSingle();
-
-      const { data: secrets } = await supabase
-        .from("platform_secrets")
-        .select("pac_api_key_encrypted")
-        .maybeSingle();
-
-      if (cfdiSettings?.pac_provider && cfdiSettings.pac_provider !== "none" && secrets?.pac_api_key_encrypted) {
-        EdgeRuntime.waitUntil(
-          fetch(`${supabaseUrl}/functions/v1/generate-booking-cfdi`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({ booking_id, payment_form: "17" }),
-          }).catch((err) => console.error("CFDI trigger failed (approve-booking):", err))
-        );
-      }
-
-      return new Response(
-        JSON.stringify({ success: true, auto_confirmed: true, action: "approved" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Aprobacion normal: actualizar approval_status y dar 12h para pagar.
-    // payment_due_at queda NULL en el camino auto-confirmado de arriba porque
-    // ahi el pago ya se completo con wallet/puntos en la misma operacion.
+    // Aprobar: actualizar approval_status y dar 12h para que el viajero pague (con su codigo MFA si usa saldo).
     const paymentDueAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
     const { error: updateError } = await supabase
       .from("bookings")

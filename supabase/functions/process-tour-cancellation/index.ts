@@ -76,7 +76,7 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     if (userError || !user) throw new Error("Invalid user token");
 
-    // Reautenticacion (14-oct-2026): cancelar un tour entero exige TOTP si la cuenta tiene MFA, o la contraseña actual si no
+    // Reautenticacion (13-oct-2026): cancelar un tour entero exige TOTP si la cuenta tiene MFA, o la contraseña actual si no
     // (ver _shared/reauth.ts). Va antes de cualquier efecto. Falla cerrado.
     const reauthBloqueo = await enforceReauth(supabase, user.id, corsHeaders);
     if (reauthBloqueo) return reauthBloqueo;

@@ -1,6 +1,6 @@
 # Login por teléfono y reautenticación de acciones sensibles
 
-Estado (14-oct-2026): **construido en tres PRs (#381 reautenticación y cancelaciones, #383 MFA para gastar saldo, y el de login por teléfono + cambio de teléfono/correo + cancelación de tour entero).** Lo que no se haya podido probar contra Supabase real se marca como tal.
+Estado (13-oct-2026): **construido en tres PRs (#381 reautenticación y cancelaciones, #383 MFA para gastar saldo, y el de login por teléfono + cambio de teléfono/correo + cancelación de tour entero).** Lo que no se haya podido probar contra Supabase real se marca como tal.
 
 ## Qué se construye
 
@@ -31,7 +31,7 @@ Con el código válido, una Edge Function llama a `auth.admin.generateLink({ typ
 
 Hecho en este PR: regla única en la base, `verify-reauth`, `enforceReauth`, modal de contraseña/TOTP, y las **6 cancelaciones** detrás de la regla (viajero: reserva completa, parcial, servicio opcional, suplemento; agencia: reserva y slot receptivo). La vista previa de la cancelación parcial y `check_capacity_only` del receptivo **no** la piden (solo leen).
 
-`process-tour-cancellation` (la agencia cancela un tour entero) **entra desde el 14-oct-2026**, por decisión de Axel; ya son 7 las cancelaciones detrás de la regla.
+`process-tour-cancellation` (la agencia cancela un tour entero) **entra desde el 13-oct-2026**, por decisión de Axel; ya son 7 las cancelaciones detrás de la regla.
 
 ## Orden de puesta en marcha (importa)
 
@@ -57,7 +57,7 @@ Desplegar el front antes que las funciones no rompe nada (el modal solo aparece 
 **Orden de puesta en marcha:** migración `20261013031834` **primero**; luego las funciones (fallan cerrado: sin `consume_spend_step_up` nadie puede pagar con saldo); el front al final.
 
 **No cubierto, a propósito:**
-- **Aprobación manual** (`approve-booking`): el saldo se compromete cuando la persona crea la reserva (RPC desde el navegador) y se debita cuando la agencia aprueba. No hay un punto del servidor donde pedir el código en ese camino sin tocar la RPC de creación. Pendiente de decidir.
+- **Aprobación manual** (`approve-booking`): **cerrado el 13-oct-2026** (ver «Cerrado después», más abajo): aprobar ya no mueve el saldo; el viajero paga con su código.
 - **`confirm-checkin-wallet-charge`:** lo inicia la agencia con un OTP que da el viajero en persona; es otro control.
 - **Dos pagos simultáneos con un solo código:** lo evita `for update skip locked`; no se probó (requiere dos sesiones).
 
@@ -69,7 +69,7 @@ Desplegar el front antes que las funciones no rompe nada (el modal solo aparece 
 - Una cuenta sin MFA queda protegida solo por el chip del teléfono en el login por OTP (riesgo de SIM swap): el wallet sigue exigiendo MFA; datos personales y reservas quedan expuestos. Decisión de Axel: aceptado al inicio.
 - Migraciones: **solo commiteadas, no aplicadas** (CLAUDE.md, regla 1).
 
-## Login por teléfono, cambio de teléfono y de correo (14-oct-2026)
+## Login por teléfono, cambio de teléfono y de correo (13-oct-2026)
 
 ### Qué hay
 - **Entrar con el celular** (`PhoneLoginForm`, botón «Entrar con mi celular» en el login): `request-login-otp` busca la cuenta por `users.phone_verified_e164` (activa, correo verificado) y manda el código por SMS o WhatsApp (el que elija la persona); `verify-login-otp` lo valida con la misma `verify_phone_challenge` del motor OTP y, **solo si es bueno**, entrega un token de un solo uso (`generateLink` magiclink) que el navegador canjea con `verifyOtp`. Si la cuenta tiene TOTP, la pantalla pide el código de la app antes de dejar pasar; cancelar ese paso cierra la sesión.
@@ -96,7 +96,29 @@ Desplegar el front antes que las funciones no rompe nada (el modal solo aparece 
 - `scripts/test-phone-otp-db.mjs` (contenedor Docker de Axel) se **actualizó pero no se corrió** por no haber Docker aquí.
 - Que una cuenta con TOTP no pueda quedarse con sesión `aal1` saltándose la pantalla: la sesión sí nace `aal1` y el segundo factor lo exige la interfaz (igual que hoy en el login con contraseña para viajeros y agencias; `MfaGate` solo manda en admin/contador/ejecutivo). Gastar saldo y cancelar siguen pidiendo su propia prueba aunque alguien se salte la pantalla.
 
-### Sigue pendiente
-- **Cambiar la contraseña con prueba del lado del servidor.** `ChangePasswordSection` comprueba la contraseña actual con `signInWithPassword` en el navegador, pero `updateUser({password})` no la exige: quien tenga un token puede llamarlo directo. Lo cierra el ajuste «Require current password when changing password» de Supabase Auth (acción de Axel en el Dashboard) **más** adaptar los flujos que fijan contraseña sin tener la anterior (`FirstLoginPasswordGate`, `ExecutivePerfil`, altas sociales) y probar «olvidé mi contraseña» después.
-- Aprobación manual (`approve-booking`) y `confirm-checkin-wallet-charge`: ver arriba.
+### Cerrado después (13-oct-2026, PR de cierre)
+
+- **Aprobar una reserva ya no mueve el saldo del viajero.** `approve-booking` lo dispara la agencia; si saldo y puntos comprometidos cubrían el 100%, descontaba y confirmaba sin el código MFA del viajero. Medido contra la base: 0 reservas habían pasado por ahí. Ahora aprobar solo abre la ventana de pago de 12 h y el viajero completa el pago desde «Completar Pago», que pasa por `confirm-booking-wallet-payment` (exige el código). `coberturaReservaAprobada` (`src/lib/`) calcula qué mandar al RPC: los puntos y el Cash **comprometidos** (antes mandaba `p_points_to_use: 0` y el RPC rechazaba el pago como insuficiente, así que ese camino tampoco podía terminar una reserva cubierta con puntos). También cambia el cálculo de «¿ya está cubierta?»: el Cash comprometido al crear la reserva ahora cuenta (antes se ignoraba y se cobraba todo por tarjeta).
+- **La contraseña se cambia desde el servidor.** `set-password` (Edge Function, `verify_jwt` por defecto): política → reautenticación (si la cuenta tiene contraseña o TOTP) → cambio por la API de administración → cierra las demás sesiones y avisa por correo (solo en un cambio real; el alta inicial de una cuenta social no). Una cuenta social **sin contraseña y sin MFA** puede fijar su primera contraseña sin reautenticación (no hay actual que pedir): límite aceptado. `user_has_password` (migración nueva, solo `service_role`) decide si hay contraseña. El front usa `establecerContrasena` (`src/lib/`): `ChangePasswordSection`, `FirstLoginPasswordGate` y `ExecutivePerfil` con `invokeWithStepUp` (modal de contraseña o TOTP) y las 10 páginas de alta social con la llamada simple. `ChangePasswordSection` ya no pide «contraseña actual» en el formulario: la pide el modal.
+
+### Orden de puesta en marcha de este PR
+
+1. Migración `20261013055618_user_has_password` **con la versión del archivo** (`db push --dry-run` primero; la rama debe tener el archivo). Confirmar contra la base que existe `public.user_has_password` y que solo `service_role` la ejecuta.
+2. Funciones: **nueva** `set-password` (`verify_jwt = true`, el default); **modificada** `approve-booking`. `OPTIONS` a las dos. Cruzar `verify_jwt` contra la API.
+3. Front (Netlify con el merge; recarga forzada).
+4. Probar: (a) cambiar contraseña desde el perfil de un viajero **sin MFA** (debe salir el modal de contraseña actual) y de uno **con MFA** (modal de código); (b) alta con Google/Microsoft de una cuenta nueva; (c) primer inicio de sesión de una agencia con contraseña temporal; (d) «olvidé mi contraseña»; (e) aprobar como agencia una reserva de un tour de aprobación manual cubierta con saldo/puntos y pagarla como viajero (debe pedir el código).
+5. **Solo si (a)–(d) salen bien:** activar «Require current password when changing password» en Supabase Auth (Dashboard → Authentication → Sign In / Providers → Email). Si después algo se rompe, apagarlo; no hay migración que revertir.
+
+### Sin verificar (decirlo antes de afirmarlo)
+
+- Que ese ajuste bloquee `updateUser({ password })` directo **sin** romper el alta social ni «olvidé mi contraseña» (este último usa `verify-reset-code`, que pasa por la API de administración y no debería verse afectado). No se pudo leer ni probar desde el entorno de desarrollo.
+- Que `set-password` arranque (`OPTIONS`) y que `admin.updateUserById` aplique las reglas de contraseña débil/filtrada igual que `updateUser`: el código mapea `weak_password` por código, pero no se vio contra Supabase real.
+- Que «Completar Pago» termine de punta a punta una reserva de aprobación manual cubierta con puntos: la lógica pura está probada, la pantalla no se ejecutó.
+- `scripts/test-phone-otp-db.mjs` (contenedor Docker de Axel): actualizado, no corrido.
 - Costos de SMS/WhatsApp a México y quién paga el login por teléfono: sin medir.
+
+### Sigue pendiente
+
+- Activar el ajuste de Supabase del paso 5 (acción de Axel).
+- Correr `test-phone-otp-db.mjs` y medir el costo del login por celular.
+- `confirm-checkin-wallet-charge`: conserva su control propio (OTP del viajero en persona); no se tocó.
