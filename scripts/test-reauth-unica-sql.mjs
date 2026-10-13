@@ -198,4 +198,31 @@ prueba('checkStepUp filtra sensitive_verifications por method = totp (la contras
   assert.match(cuerpo, /\.from\("sensitive_verifications"\)[\s\S]*\.eq\("method", "totp"\)/, 'falta el filtro por method');
 });
 
+// ---- 7. verify-reauth y enforceReauth (se leen como texto: Deno no esta disponible aqui) --------------------
+const fn = readFileSync(new URL('../supabase/functions/verify-reauth/index.ts', import.meta.url), 'utf8');
+const helper = readFileSync(new URL('../supabase/functions/_shared/reauth.ts', import.meta.url), 'utf8');
+prueba('verify-reauth: con TOTP responde 409 ANTES de mirar la contraseña', () => {
+  const iTotp = fn.indexOf('rpc("user_has_totp"');
+  const iClave = fn.indexOf('.auth.signInWithPassword(');
+  assert.ok(iTotp > 0 && iClave > iTotp, 'la consulta de TOTP debe ir antes de signInWithPassword');
+  assert.match(fn.slice(iTotp, iClave), /tieneTotp === true[\s\S]*409/, 'con TOTP responde 409');
+});
+prueba('verify-reauth: guarda la prueba SOLO despues de verificar la contraseña, con method password', () => {
+  assert.ok(fn.indexOf('from("reauth_proofs").insert') > fn.indexOf('.auth.signInWithPassword('));
+  assert.match(fn, /method: "password"/);
+  assert.match(fn, /errorClave \|\| !inicio\?\.session \|\| inicio\.user\?\.id !== user\.id/, 'exige que el usuario verificado sea el de la sesion');
+});
+prueba('verify-reauth: limite de 5 fallos en 10 min, falla cerrado y no registra la contraseña', () => {
+  assert.match(fn, /MAX_FALLOS = 5/);
+  assert.match(fn, /fallos \?\? 0\) >= MAX_FALLOS[\s\S]*429/);
+  assert.match(fn, /errorConteo[\s\S]*503/, 'si no puede contar intentos, rechaza');
+  assert.doesNotMatch(fn, /console\.\w+\([^)]*password/i, 'la contraseña no se registra');
+  assert.match(fn, /admin\.signOut\(/, 'cierra la sesion que crea la verificacion');
+});
+prueba('enforceReauth: falla cerrado si la base no responde y distingue totp de password', () => {
+  assert.match(helper, /if \(error\) \{[\s\S]*503/);
+  assert.match(helper, /vigente === true\) return null/);
+  assert.match(helper, /tieneTotp === true \? "totp" : "password"/);
+});
+
 console.log(`${n} pruebas de reautenticacion unica OK.`);
