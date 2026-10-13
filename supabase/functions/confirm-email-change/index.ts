@@ -7,6 +7,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { hmac } from '../_shared/mensajeria/seguridad.ts';
+import { opcionesConContexto, sinUserAgentDeNavegador } from '../_shared/contextoAuditoria.ts';
 import { enviarCorreoSimple, marcoCorreoSeguridad, enmascararCorreo } from '../_shared/correoSimple.ts';
 
 Deno.serve(async req => {
@@ -15,7 +16,7 @@ Deno.serve(async req => {
   if (req.method !== 'POST') return new Response('method', { status: 405, headers: cors });
   const responder = (cuerpo: Record<string, unknown>, status = 200) => Response.json(cuerpo, { status, headers: cors });
   try {
-    const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } });
+    const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', sinUserAgentDeNavegador(opcionesConContexto(req, { auth: { persistSession: false } })));
     const token = req.headers.get('Authorization')?.replace('Bearer ', '') ?? '';
     const { data: { user }, error: userError } = await admin.auth.getUser(token);
     if (userError || !user) return responder({ code: 'USER_SESSION_REQUIRED' }, 401);

@@ -60,6 +60,11 @@
       "nombre": "zoho-oauth-connect",
       "motivo": "publica",
       "nota": "Endpoint de compatibilidad para clientes antiguos: Zoho está retirado y la función solo responde 410 sin leer ni modificar credenciales."
+    },
+    {
+      "nombre": "verify-login-otp",
+      "motivo": "publica",
+      "nota": "Login por telefono: llega SIN sesion por definicion. Su control es el codigo OTP (verify_phone_challenge: 5 intentos por reto, tope diario de fallos, un solo uso) y el interruptor phone_login_enabled."
     }
   ]
 }

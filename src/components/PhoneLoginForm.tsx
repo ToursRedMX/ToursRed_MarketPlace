@@ -93,9 +93,21 @@ const PhoneLoginForm: React.FC<Props> = ({ onLoggedIn, onCancel }) => {
       if (sesion.error || !sesion.data.user) throw new Error('No se pudo iniciar la sesión. Solicita un código nuevo.');
       const user = sesion.data.user;
 
-      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
-        const { data: factores } = await supabase.auth.mfa.listFactors();
+      // Si no se puede saber si la cuenta tiene segundo factor, NO se entra: cerrar la sesion es mejor que
+      // dejar pasar a una cuenta con MFA por un fallo de lectura.
+      const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aalError || !aal) {
+        console.error('[PhoneLoginForm] no se pudo leer el nivel de aseguramiento:', aalError);
+        await supabase.auth.signOut();
+        throw new Error('No pudimos verificar la seguridad de tu cuenta. Intenta de nuevo.');
+      }
+      if (aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+        const { data: factores, error: factoresError } = await supabase.auth.mfa.listFactors();
+        if (factoresError) {
+          console.error('[PhoneLoginForm] no se pudieron leer los factores MFA:', factoresError);
+          await supabase.auth.signOut();
+          throw new Error('No pudimos verificar la seguridad de tu cuenta. Intenta de nuevo.');
+        }
         const factor = factores?.totp?.find(f => f.status === 'verified');
         if (factor) {
           setFactorId(factor.id); setUsuario(user); setTotp(''); setPaso('mfa');
