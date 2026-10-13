@@ -116,7 +116,7 @@ interface PartialCancellationPolicy {
 const TravelerBookings: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { fetchWithStepUp } = useStepUp();
+  const { fetchWithStepUp, invokeWithStepUp } = useStepUp();
   const [searchParams, setSearchParams] = useSearchParams();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
@@ -1089,15 +1089,11 @@ const TravelerBookings: React.FC = () => {
     }));
 
     try {
-      const { data: result, error: fnError } = await supabase.functions.invoke(
-        'process-traveler-cancellation',
-        {
-          body: {
-            booking_id: cancellationModal.booking.id,
-            cancellation_reason: cancellationModal.cancellationReason || undefined,
-          },
-        }
-      );
+      // Cancelar una reserva exige reautenticacion (TOTP si hay MFA, contraseña si no).
+      const { data: result, error: fnError } = await invokeWithStepUp('process-traveler-cancellation', {
+        booking_id: cancellationModal.booking.id,
+        cancellation_reason: cancellationModal.cancellationReason || undefined,
+      });
 
       if (fnError) throw new Error(fnError.message);
       if (result?.error) throw new Error(result.error);
@@ -1211,7 +1207,7 @@ const TravelerBookings: React.FC = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No hay sesión activa');
-      const response = await fetch(
+      const response = await fetchWithStepUp(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-optional-service`,
         {
           method: 'POST',
@@ -1245,7 +1241,7 @@ const TravelerBookings: React.FC = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No hay sesión activa');
-      const response = await fetch(
+      const response = await fetchWithStepUp(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-individual-supplement`,
         {
           method: 'POST',
@@ -1453,7 +1449,7 @@ const TravelerBookings: React.FC = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No hay sesión activa');
 
-      const response = await fetch(
+      const response = await fetchWithStepUp(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-partial-cancellation`,
         {
           method: 'POST',

@@ -11,8 +11,21 @@ type ModalState =
   | { open: true; kind: 'step_up_required' }
   | { open: true; kind: 'password_required' };
 
+/** Cuerpo JSON tipico de nuestras Edge Functions: `success`/`error` y lo demas sin tipar. */
+export interface RespuestaFuncion {
+  success?: boolean;
+  error?: string;
+  [clave: string]: unknown;
+}
+
 interface StepUpContextValue {
   fetchWithStepUp: (input: string, init?: RequestInit) => Promise<Response>;
+  /**
+   * Como `supabase.functions.invoke`, pero reintenta tras pedir la reautenticacion (TOTP o
+   * contraseña) cuando la funcion responde REAUTH_REQUIRED. En respuestas no 2xx devuelve
+   * `error` con el mensaje del servidor (invoke solo da "non-2xx status code").
+   */
+  invokeWithStepUp: (nombre: string, body: unknown) => Promise<{ data: RespuestaFuncion | null; error: Error | null }>;
 }
 
 const StepUpContext = createContext<StepUpContextValue | undefined>(undefined);
@@ -160,8 +173,29 @@ export const StepUpProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return fetch(input, init);
   }, [navigate]);
 
+  const invokeWithStepUp = useCallback(async (nombre: string, body: unknown) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return { data: null, error: new Error('No hay sesión activa') };
+      const res = await fetchWithStepUp(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${nombre}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => null)) as RespuestaFuncion | null;
+      if (!res.ok) return { data, error: new Error(data?.error || `Error ${res.status}`) };
+      return { data, error: null };
+    } catch (e) {
+      return { data: null, error: e instanceof Error ? e : new Error('No se pudo completar la solicitud') };
+    }
+  }, [fetchWithStepUp]);
+
   return (
-    <StepUpContext.Provider value={{ fetchWithStepUp }}>
+    <StepUpContext.Provider value={{ fetchWithStepUp, invokeWithStepUp }}>
       {children}
       {modalState.open && (
         <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">

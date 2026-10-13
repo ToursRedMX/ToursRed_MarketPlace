@@ -5,6 +5,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta } from "../_shared/falloSilencioso.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enforceReauth } from "../_shared/reauth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -110,6 +111,14 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+    }
+
+    // Reautenticacion (13-oct-2026): cancelar o reagendar un slot toca las reservas de varios
+    // viajeros: exige TOTP si la cuenta tiene MFA, o la contraseña actual si no (ver
+    // _shared/reauth.ts). `check_capacity_only` solo lee y devuelve antes de escribir: no lo pide.
+    if (check_capacity_only !== true) {
+      const reauthBloqueo = await enforceReauth(adminClient, user.id, corsHeaders);
+      if (reauthBloqueo) return reauthBloqueo;
     }
 
     const { data: affectedBookings, error: bookingsError } = await adminClient

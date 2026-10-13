@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { politicaDelTour, salidaDelTour, type TourConPolitica } from "../_shared/politicaCancelacion.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enforceReauth } from "../_shared/reauth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -281,6 +282,12 @@ Deno.serve(async (req: Request) => {
         policy,
       });
     }
+
+    // Reautenticacion (13-oct-2026): cancelar viajeros de una reserva exige TOTP si la cuenta
+    // tiene MFA, o la contraseña actual si no (ver _shared/reauth.ts). La vista previa NO lo
+    // pide (ya devolvio arriba, sin escribir nada).
+    const reauthBloqueo = await enforceReauth(supabase, user.id, corsHeaders);
+    if (reauthBloqueo) return reauthBloqueo;
 
     // ── Execution mode: perform all side effects ──
     let transactionId: string | null = null;

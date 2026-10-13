@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useStepUp } from '../../context/StepUpContext';
 import { useAgencyId } from '../../hooks/useAgencyId';
 import { createTour, searchDestinations, supabase, updateTour, deleteTour, getAllDestinations, createDestination, getTourCategories, getFeaturedPlans, getAgencyFeaturedSlots, joinFeaturedWaitlist, checkSlugAvailable, updateTourSlug } from '../../lib/supabase';
 import { Plus, X, CreditCard, Trash2, Eye, Calendar, MapPin, Users, DollarSign, Save, Minus, Copy, CalendarX, AlertCircle, XCircle, FileText, Image, CheckSquare, Tag, PawPrint, Clock, Settings, Ban, ShoppingBag, Info, Percent, RefreshCw, Layers, Car, Globe, AlertTriangle, Bus, Pencil, Sparkles, Star, TrendingUp, CheckCircle, Loader2, Lock, ChevronDown, Shield } from 'lucide-react';
@@ -85,6 +86,7 @@ interface SelectedDeparturePoint extends DeparturePoint {
 const AgencyTours: React.FC = () => {
   const { user, isAgencyStaff, staffInfo } = useAuth();
   const { agencyId: resolvedAgencyId } = useAgencyId();
+  const { invokeWithStepUp } = useStepUp();
   const canCreate = !isAgencyStaff || (staffInfo?.permissions.canManageTours ?? false);
   const canEdit = !isAgencyStaff || (staffInfo?.permissions.canEditTours ?? false) || (staffInfo?.permissions.canManageTours ?? false);
   const canDelete = !isAgencyStaff || (staffInfo?.permissions.canManageTours ?? false);
@@ -1618,12 +1620,11 @@ const AgencyTours: React.FC = () => {
 
     try {
       if (action === 'slot-cancel') {
-        const { data, error } = await supabase.functions.invoke('process-receptivo-slot-cancellation', {
-          body: {
-            slot_id: selectedSlot.id,
-            tour_id: tour.id,
-            cancellation_reason: reason.trim(),
-          },
+        // Cancelar un slot toca las reservas de varios viajeros: exige reautenticacion.
+        const { data, error } = await invokeWithStepUp('process-receptivo-slot-cancellation', {
+          slot_id: selectedSlot.id,
+          tour_id: tour.id,
+          cancellation_reason: reason.trim(),
         });
         if (error) throw error;
         if (data && !data.success) throw new Error(data.error || 'Error al cancelar el slot');
@@ -1659,14 +1660,12 @@ const AgencyTours: React.FC = () => {
           return;
         }
 
-        const { data: rescheduleData, error: rescheduleError } = await supabase.functions.invoke('process-receptivo-slot-cancellation', {
-          body: {
-            slot_id: selectedSlot.id,
-            tour_id: tour.id,
-            cancellation_reason: reason.trim(),
-            reschedule_to_date: newSlotDate,
-            reschedule_to_time: newSlotTime,
-          },
+        const { data: rescheduleData, error: rescheduleError } = await invokeWithStepUp('process-receptivo-slot-cancellation', {
+          slot_id: selectedSlot.id,
+          tour_id: tour.id,
+          cancellation_reason: reason.trim(),
+          reschedule_to_date: newSlotDate,
+          reschedule_to_time: newSlotTime,
         });
         if (rescheduleError) throw rescheduleError;
         if (rescheduleData && !rescheduleData.success) throw new Error(rescheduleData.error || 'Error al reagendar el slot');
@@ -1706,12 +1705,10 @@ const AgencyTours: React.FC = () => {
 
     try {
       if (resolution === 'refund') {
-        const { data, error } = await supabase.functions.invoke('process-receptivo-slot-cancellation', {
-          body: {
-            slot_id: originalSlotId,
-            tour_id: tourId,
-            cancellation_reason: reason,
-          },
+        const { data, error } = await invokeWithStepUp('process-receptivo-slot-cancellation', {
+          slot_id: originalSlotId,
+          tour_id: tourId,
+          cancellation_reason: reason,
         });
         if (error) throw error;
         if (data && !data.success) throw new Error(data.error || 'Error al procesar reembolsos');

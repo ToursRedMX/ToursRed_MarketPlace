@@ -27,6 +27,24 @@ Guarda el teléfono como identidad en `auth.users` (hoy 0 de 12 cuentas lo tiene
 
 Con el código válido, una Edge Function llama a `auth.admin.generateLink({ type: 'magiclink' })` y devuelve el `token_hash`; el navegador lo canjea con `verifyOtp`. La sesión nace `aal1`; `MfaGate` decide por el `aal` del JWT, así que el MFA se pide igual que hoy. **No probado todavía:** qué `type` acepta el canje; debe probarse contra el proyecto antes de mergear.
 
+## Estado de la implementación (actualizado 13-oct-2026)
+
+Hecho en este PR: regla única en la base, `verify-reauth`, `enforceReauth`, modal de contraseña/TOTP, y las **6 cancelaciones** detrás de la regla (viajero: reserva completa, parcial, servicio opcional, suplemento; agencia: reserva y slot receptivo). La vista previa de la cancelación parcial y `check_capacity_only` del receptivo **no** la piden (solo leen).
+
+**Fuera de alcance, a propósito:** `process-tour-cancellation` (la agencia cancela un tour entero) no se tocó; no estaba en lo acordado. Es una acción de impacto mayor que las de arriba: conviene decidir si entra.
+
+Pendiente: cambio de teléfono y de correo con verificación del valor nuevo, y el login por teléfono.
+
+## Orden de puesta en marcha (importa)
+
+Las funciones **fallan cerrado**: si `reauth_satisfied` no existe, `enforceReauth` responde 503 y **nadie puede cancelar**. Por eso, en este orden:
+
+1. Aplicar la migración `20261013014305` **con la versión del archivo** (CLAUDE.md, regla 1 y trampa de `db push`) y confirmar contra la base que existen `reauth_proofs`, `user_has_totp` y `reauth_satisfied`.
+2. Desplegar `verify-reauth` (verify_jwt = true, el default) y las 6 funciones de cancelación; mandar un `OPTIONS` a cada una.
+3. Desplegar el front.
+
+Desplegar el front antes que las funciones no rompe nada (el modal solo aparece si el servidor responde `REAUTH_REQUIRED`). Desplegar las funciones antes que la migración **sí** rompe las cancelaciones.
+
 ## Sin verificar / riesgos abiertos
 
 - Dónde se pide MFA al iniciar sesión a viajeros y agencias que lo activaron (`MfaGate` solo cubre admin, contador y ejecutivo).

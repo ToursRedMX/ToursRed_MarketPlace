@@ -239,4 +239,48 @@ prueba('StepUpContext: la contraseña va a verify-reauth, 409 USE_TOTP cambia al
   assert.doesNotMatch(ui, /console\.\w+\([^)]*password/i, 'no registra la contraseña');
 });
 
+// ---- 9. Las 6 funciones de cancelacion exigen la regla ANTES de su primer efecto ------------------------------------
+const CANCELACIONES = {
+  'process-traveler-cancellation': { primerEfecto: '.from("bookings")' },
+  'process-agency-booking-cancellation': { primerEfecto: '.from("bookings")' },
+  'process-partial-cancellation': { primerEfecto: '.rpc("procesar_reembolso_parcial"' },
+  'cancel-optional-service': { primerEfecto: 'serviceClient' },
+  'cancel-individual-supplement': { primerEfecto: 'serviceClient' },
+  'process-receptivo-slot-cancellation': { primerEfecto: '.from("bookings")' },
+};
+for (const [nombre, { primerEfecto }] of Object.entries(CANCELACIONES)) {
+  prueba(`${nombre}: importa enforceReauth y lo exige antes de ${primerEfecto}`, () => {
+    const src = readFileSync(new URL(`../supabase/functions/${nombre}/index.ts`, import.meta.url), 'utf8');
+    assert.match(src, /import \{ enforceReauth \} from "\.\.\/_shared\/reauth\.ts";/);
+    const llamadas = [...src.matchAll(/await enforceReauth\(/g)];
+    assert.equal(llamadas.length, 1, 'una sola exigencia, ni cero ni dos');
+    assert.match(src, /if \(reauthBloqueo\) return reauthBloqueo;/, 'devuelve el bloqueo, no lo ignora');
+    const iExigencia = src.indexOf('await enforceReauth(');
+    const iEfecto = nombre.startsWith('cancel-') ? src.indexOf('await serviceClient\n') : src.indexOf(primerEfecto, src.indexOf('Deno.serve'));
+    assert.ok(iEfecto > iExigencia, `la exigencia debe ir ANTES de ${primerEfecto}`);
+  });
+}
+prueba('la vista previa de la parcial y check_capacity_only de receptivo NO piden reautenticacion', () => {
+  const parcial = readFileSync(new URL('../supabase/functions/process-partial-cancellation/index.ts', import.meta.url), 'utf8');
+  assert.ok(parcial.indexOf('await enforceReauth(') > parcial.indexOf('if (isPreview) {'), 'tras el return de la vista previa');
+  const rec = readFileSync(new URL('../supabase/functions/process-receptivo-slot-cancellation/index.ts', import.meta.url), 'utf8');
+  assert.match(rec, /if \(check_capacity_only !== true\) \{\s*const reauthBloqueo = await enforceReauth/);
+});
+prueba('las pantallas llaman a las funciones de cancelacion con reintento de reautenticacion', () => {
+  const tb = readFileSync(new URL('../src/pages/traveler/TravelerBookings.tsx', import.meta.url), 'utf8');
+  assert.match(tb, /invokeWithStepUp\('process-traveler-cancellation'/);
+  assert.doesNotMatch(tb, /functions\.invoke\(\s*'process-traveler-cancellation'/);
+  for (const f of ['cancel-optional-service', 'cancel-individual-supplement'])
+    assert.match(tb, new RegExp('await fetchWithStepUp\\([\\s\\S]{0,80}functions/v1/' + f));
+  assert.match(tb, /await fetchWithStepUp\(\s*`[^`]*process-partial-cancellation`,[\s\S]{0,600}traveler_ids: Array\.from\(partialCancellationModal\.selectedIds\)/, 'la ejecucion parcial usa el reintento');
+  assert.match(tb, /await fetch\(\s*`[^`]*process-partial-cancellation`,[\s\S]{0,600}preview: true/, 'la vista previa sigue con fetch normal');
+  const ab = readFileSync(new URL('../src/pages/agency/AgencyBookings.tsx', import.meta.url), 'utf8');
+  assert.match(ab, /await fetchWithStepUp\(\s*`[^`]*process-agency-booking-cancellation`/);
+  const at = readFileSync(new URL('../src/pages/agency/AgencyTours.tsx', import.meta.url), 'utf8');
+  assert.equal([...at.matchAll(/invokeWithStepUp\('process-receptivo-slot-cancellation'/g)].length, 3, 'cancelar, reagendar y reembolsar');
+  const planos = [...at.matchAll(/supabase\.functions\.invoke\('process-receptivo-slot-cancellation'[\s\S]{0,400}?\}\);/g)];
+  assert.equal(planos.length, 1, 'solo queda un invoke plano');
+  assert.match(planos[0][0], /check_capacity_only: true/, 'y es el de solo lectura');
+});
+
 console.log(`${n} pruebas de reautenticacion unica OK.`);

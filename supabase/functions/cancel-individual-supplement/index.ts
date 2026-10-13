@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enforceReauth } from "../_shared/reauth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,6 +57,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Reautenticacion (13-oct-2026): cancelar un suplemento exige TOTP si la cuenta tiene MFA, o la contraseña
+    // actual si no (ver _shared/reauth.ts). Falla cerrado.
+    const reauthBloqueo = await enforceReauth(serviceClient, user.id, corsHeaders);
+    if (reauthBloqueo) return reauthBloqueo;
+
 
     const { data: supplement, error: suppError } = await serviceClient
       .from("booking_supplements")
