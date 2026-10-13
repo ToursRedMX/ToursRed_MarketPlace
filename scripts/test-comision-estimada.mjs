@@ -39,4 +39,44 @@ for (const [monto, pct, fijo, esperado] of [
   casos++;
 }
 
+// Tarifa real de Conekta (3.5% + $2.50 + IVA), guardada con el IVA dentro
+// (migracion 20261013030932): debe reproducir al centavo el cobro real del
+// 12-oct-2026 (orden ord_31u32BWu46zQSZq1x, $500, fee=2320). Con la tasa vieja
+// (3.29% + $2.50) daba 18.95.
+assert.equal(estimarComisionProcesador(500, 4.06, 2.9), 23.2, 'la tarifa 4.06% + $2.90 debe dar los 23.20 que cobro Conekta');
+assert.equal(estimarComisionProcesador(500, 3.29, 2.5), 18.95, 'control: la tasa vieja daba 18.95');
+casos += 2;
+
+const { comisionRealCentavos } = cargar('supabase/functions/_shared/estimarComisionProcesador.ts');
+for (const [candidatos, esperado, nota] of [
+  // El caso real: la API sin fee, el evento firmado con 2320.
+  [[undefined, 2320], { centavos: 2320, posicion: 1 }, 'API sin fee -> gana el evento'],
+  [[1500, 2320], { centavos: 1500, posicion: 0 }, 'si la API la trae, manda la API'],
+  [[0, 2320], { centavos: 2320, posicion: 1 }, 'un 0 de la API no es una comision real'],
+  [['2320'], { centavos: 2320, posicion: 0 }, 'acepta el numero como texto'],
+  [[0, '0'], null, 'todo en 0 -> null (se estima)'],
+  [[null, undefined], null, 'nada -> null (se estima)'],
+  [[true, -5, 'abc', NaN, Infinity], null, 'basura no cuenta como comision'],
+]) {
+  // El objeto nace en el contexto de vm (otro Object.prototype): se normaliza
+  // antes de comparar, si no deepStrictEqual falla con valores identicos.
+  const obtenido = comisionRealCentavos(candidatos);
+  assert.deepEqual(obtenido === null ? null : { ...obtenido }, esperado, `comisionRealCentavos: ${nota}`);
+  casos++;
+}
+
+// Contrato sobre conekta-webhook (el codigo, no una copia): los dos defectos del
+// 12-oct-2026 no deben volver.
+const webhook = readFileSync('supabase/functions/conekta-webhook/index.ts', 'utf8');
+// A) el evento firmado es candidato de la comision real, despues de la API.
+assert.match(webhook, /comisionRealCentavos\(\[feeApi, feeEvento\]\)/, 'conekta-webhook debe probar la comision de la API y luego la del evento');
+// B) la escritura final (eventos procesados) parte de la metadata ACTUAL, no de
+//    la copia `tx.metadata` del inicio, que borraba processor_fee_estimada.
+const bloqueFinal = webhook.slice(webhook.indexOf('// Mark event as processed (idempotency)'));
+assert.ok(bloqueFinal.length < webhook.length, 'no se encontro el bloque "Mark event as processed"');
+const updateFinal = bloqueFinal.slice(0, bloqueFinal.indexOf('.eq("id", tx.id)'));
+assert.match(updateFinal, /metadataActual\(/, 'la escritura final debe leer la metadata actual');
+assert.doesNotMatch(updateFinal, /\.\.\.\(?tx\.metadata/, 'la escritura final no debe reescribir desde tx.metadata');
+casos += 3;
+
 console.log(`estimarComisionProcesador: ${casos} casos, formula de create_accounting_entry_for_booking replicada.`);
