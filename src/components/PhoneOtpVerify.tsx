@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Smartphone } from 'lucide-react';
 import { useOtpChannels, otpChannelLabel, type OtpChannel } from '../hooks/useOtpChannels';
-import { invokePhoneOtp } from '../lib/phoneOtp';
+import { invokePhoneOtp, phoneOtpMessages } from '../lib/phoneOtp';
+import { useStepUp } from '../context/StepUpContext';
 import TurnstileWidget from './TurnstileWidget';
 import { useTurnstileEnabled } from '../hooks/useTurnstileEnabled';
 
@@ -35,6 +36,7 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified, phone: cont
   const [captchaKey, setCaptchaKey] = useState(0);
   const { turnstileEnabled, loading: captchaLoading } = useTurnstileEnabled();
   const channels = useOtpChannels();
+  const { invokeWithStepUp } = useStepUp();
   const [preferredChannel, setChannel] = useState<OtpChannel>('sms');
   const channel = channels.data?.channels.includes(preferredChannel) ? preferredChannel : channels.data?.channels[0];
 
@@ -53,7 +55,13 @@ const PhoneOtpVerify: React.FC<Props> = ({ initialPhone, onVerified, phone: cont
     try {
       if (!channel) throw new Error('No hay canales de verificación habilitados.');
       await beforeRequest?.();
-      const data = await invokePhoneOtp('request-phone-otp', { phone, country, channel, turnstile_token: captcha });
+      // Con reintento de reautenticacion: cambiar un telefono ya verificado responde REAUTH_REQUIRED.
+      const { data: respuesta, error: solicitudError } = await invokeWithStepUp('request-phone-otp', { phone, country, channel, turnstile_token: captcha });
+      if (solicitudError || !respuesta) {
+        const codigo = typeof respuesta?.code === 'string' ? respuesta.code : 'OTP_UNAVAILABLE';
+        throw new Error(phoneOtpMessages[codigo] ?? 'No se pudo completar la solicitud. Intenta más tarde.');
+      }
+      const data = respuesta as { challenge_id: string; phone_suffix: string; expires_at: string; simulated?: boolean; delivery?: string };
       onRequested?.();
       setChallenge(data.challenge_id);
       setSuffix(data.phone_suffix);

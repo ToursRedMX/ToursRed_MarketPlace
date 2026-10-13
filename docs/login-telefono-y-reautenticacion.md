@@ -1,6 +1,6 @@
 # Login por teléfono y reautenticación de acciones sensibles
 
-Estado: **diseño acordado con Axel (13-oct-2026), implementación en curso en este PR.** Este documento se actualiza con lo que de verdad quede construido; lo que no esté verificado se marca como tal.
+Estado (14-oct-2026): **construido en tres PRs (#381 reautenticación y cancelaciones, #383 MFA para gastar saldo, y el de login por teléfono + cambio de teléfono/correo + cancelación de tour entero).** Lo que no se haya podido probar contra Supabase real se marca como tal.
 
 ## Qué se construye
 
@@ -31,9 +31,7 @@ Con el código válido, una Edge Function llama a `auth.admin.generateLink({ typ
 
 Hecho en este PR: regla única en la base, `verify-reauth`, `enforceReauth`, modal de contraseña/TOTP, y las **6 cancelaciones** detrás de la regla (viajero: reserva completa, parcial, servicio opcional, suplemento; agencia: reserva y slot receptivo). La vista previa de la cancelación parcial y `check_capacity_only` del receptivo **no** la piden (solo leen).
 
-**Fuera de alcance, a propósito:** `process-tour-cancellation` (la agencia cancela un tour entero) no se tocó; no estaba en lo acordado. Es una acción de impacto mayor que las de arriba: conviene decidir si entra.
-
-Pendiente: cambio de teléfono y de correo con verificación del valor nuevo, y el login por teléfono.
+`process-tour-cancellation` (la agencia cancela un tour entero) **entra desde el 14-oct-2026**, por decisión de Axel; ya son 7 las cancelaciones detrás de la regla.
 
 ## Orden de puesta en marcha (importa)
 
@@ -70,3 +68,35 @@ Desplegar el front antes que las funciones no rompe nada (el modal solo aparece 
 - Costos de SMS/WhatsApp a México.
 - Una cuenta sin MFA queda protegida solo por el chip del teléfono en el login por OTP (riesgo de SIM swap): el wallet sigue exigiendo MFA; datos personales y reservas quedan expuestos. Decisión de Axel: aceptado al inicio.
 - Migraciones: **solo commiteadas, no aplicadas** (CLAUDE.md, regla 1).
+
+## Login por teléfono, cambio de teléfono y de correo (14-oct-2026)
+
+### Qué hay
+- **Entrar con el celular** (`PhoneLoginForm`, botón «Entrar con mi celular» en el login): `request-login-otp` busca la cuenta por `users.phone_verified_e164` (activa, correo verificado) y manda el código por SMS o WhatsApp (el que elija la persona); `verify-login-otp` lo valida con la misma `verify_phone_challenge` del motor OTP y, **solo si es bueno**, entrega un token de un solo uso (`generateLink` magiclink) que el navegador canjea con `verifyOtp`. Si la cuenta tiene TOTP, la pantalla pide el código de la app antes de dejar pasar; cancelar ese paso cierra la sesión.
+- **Interruptor:** `platform_settings.phone_login_enabled`, **apagado por defecto**. Se enciende con `update public.platform_settings set phone_login_enabled = true;` después de probar en staging. No hay pantalla de admin para esto todavía.
+- **Cuenta inexistente:** se responde igual que un envío real (reto falso, nada sale). Limite honesto: el cooldown de 60 s y los topes solo existen para cuentas reales, así que insistir en un número distingue cuáles lo son.
+- **Fallos del login con bucket propio** (`login:<user>`): adivinar mal el código de una cuenta ajena bloquea su login por teléfono (5 por día) pero **no** su verificación normal ni correo+contraseña.
+- **Cambio de teléfono pendiente:** antes, pedir un código para otro número escribía `users.phone_number` y el trigger borraba la verificación vigente sin probar el nuevo. Ahora el vigente se conserva hasta confirmar el código del número nuevo; luego cambian número y verificación juntos. Un teléfono **verificado** ya no se puede escribir directo en `users` (trigger `PHONE_CHANGE_REQUIRES_OTP`), ni con reautenticación.
+- **Reautenticación en el cambio de teléfono:** `request-phone-otp` responde `403 REAUTH_REQUIRED` (TOTP si hay MFA, si no contraseña) y `PhoneOtpVerify` usa `invokeWithStepUp`, así que sale el mismo modal que en las cancelaciones.
+- **Cambio de correo:** `request-email-change` (reautenticación → código de 6 dígitos al correo **nuevo**, HMAC, 15 min, 5 intentos, 3 solicitudes/hora) y `confirm-email-change` (código bueno → `auth.admin.updateUserById`, sincroniza `public.users`, aviso al correo **anterior**, cierra las demás sesiones). El correo vigente no cambia hasta confirmar.
+- **Pantalla:** `AccountAccessSection` («Acceso a tu cuenta») en los perfiles de viajero, agencia, administrador y ejecutivo. El campo de celular de esos perfiles queda de solo lectura si ya está verificado.
+- **Cancelar un tour entero** (`process-tour-cancellation`) exige la misma reautenticación.
+
+### Orden de puesta en marcha
+1. Migraciones `20261013043540_login_por_telefono_y_cambio_pendiente` y `20261013044213_cambio_de_correo_verificado`, **con la versión del archivo** (CLAUDE.md, regla 1 y trampa de `db push`; `--dry-run` primero). Confirmar contra la base: columna `phone_login_enabled`, funciones `find_user_for_phone_login`, `get_login_challenge`, `issue_email_change`, `confirm_email_change`, tabla `email_change_requests`.
+2. Funciones nuevas: `request-login-otp` y `verify-login-otp` (**`verify_jwt = false`**, ya en `config.toml`; cruzar contra la API tras desplegar), `request-email-change` y `confirm-email-change` (`verify_jwt = true`). Modificadas: `request-phone-otp`, `process-tour-cancellation`. `OPTIONS` a cada una.
+3. Front. Con `phone_login_enabled = false` el botón no aparece.
+4. Probar en staging; luego encender el interruptor.
+
+### Sin verificar (decirlo antes de afirmarlo)
+- **El canje `generateLink` → `verifyOtp`.** No se pudo probar fuera de Supabase real. El front prueba el `type` que devuelve el servidor (`magiclink`) y, si falla, `email`. Si ninguno funciona, hay que ajustar esa pieza antes de encender el interruptor.
+- Que `generateLink` no dependa de que el proveedor Email de Auth esté activo.
+- Envío real de SMS y de WhatsApp en el login, y del correo con el código del cambio de correo (SMTP2GO).
+- `deno check` de las funciones nuevas en local (no hay Deno en este entorno; lo cubre `tipos-edge` del CI).
+- `scripts/test-phone-otp-db.mjs` (contenedor Docker de Axel) se **actualizó pero no se corrió** por no haber Docker aquí.
+- Que una cuenta con TOTP no pueda quedarse con sesión `aal1` saltándose la pantalla: la sesión sí nace `aal1` y el segundo factor lo exige la interfaz (igual que hoy en el login con contraseña para viajeros y agencias; `MfaGate` solo manda en admin/contador/ejecutivo). Gastar saldo y cancelar siguen pidiendo su propia prueba aunque alguien se salte la pantalla.
+
+### Sigue pendiente
+- **Cambiar la contraseña con prueba del lado del servidor.** `ChangePasswordSection` comprueba la contraseña actual con `signInWithPassword` en el navegador, pero `updateUser({password})` no la exige: quien tenga un token puede llamarlo directo. Lo cierra el ajuste «Require current password when changing password» de Supabase Auth (acción de Axel en el Dashboard) **más** adaptar los flujos que fijan contraseña sin tener la anterior (`FirstLoginPasswordGate`, `ExecutivePerfil`, altas sociales) y probar «olvidé mi contraseña» después.
+- Aprobación manual (`approve-booking`) y `confirm-checkin-wallet-charge`: ver arriba.
+- Costos de SMS/WhatsApp a México y quién paga el login por teléfono: sin medir.

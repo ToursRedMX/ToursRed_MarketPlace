@@ -1767,7 +1767,7 @@ const AgencyTours: React.FC = () => {
     setReceptivoActionsModal(prev => ({ ...prev, isSubmitting: true, error: '' }));
 
     try {
-      const { data, error } = await supabase.functions.invoke('process-tour-cancellation', {
+      const { data, error } = await invokeWithStepUp('process-tour-cancellation', {
         body: {
           tour_id: tour.id,
           cancellation_reason: reason.trim(),
@@ -1892,7 +1892,7 @@ const AgencyTours: React.FC = () => {
     }));
 
     try {
-      const { data, error } = await supabase.functions.invoke('process-tour-cancellation', {
+      const { data, error } = await invokeWithStepUp('process-tour-cancellation', {
         body: {
           tour_id: cancelModal.tour.id,
           cancellation_reason: cancelFormData.cancellation_reason.trim(),

@@ -6,6 +6,7 @@ import { validarRfcAgencia, tieneDatosFiscalesCompletos } from '../../lib/valida
 import { useAgencyId } from '../../hooks/useAgencyId';
 import ImageUploader from '../../components/ImageUploader';
 import ChangePasswordSection from '../../components/ChangePasswordSection';
+import AccountAccessSection from '../../components/AccountAccessSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import LinkedAccountsSection from '../../components/LinkedAccountsSection';
 import { mensajeDeError } from '../../lib/errores';
@@ -1309,6 +1310,7 @@ const AgencyProfile: React.FC = () => {
               </div>
               <h2 className="text-base font-semibold text-gray-900">Seguridad</h2>
             </div>
+            <AccountAccessSection />
             <ChangePasswordSection />
             {/* Seguridad - Autenticacion en dos pasos */}
             <MfaSettingsSection />

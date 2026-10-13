@@ -765,6 +765,31 @@ jobs:
           PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS step_up_gasto;" -c "CREATE DATABASE step_up_gasto;"
           node scripts/test-step-up-gasto-sql.mjs
 
+      # Login por telefono (OTP) y cambio de telefono PENDIENTE (14-oct-2026). Reproduce primero el
+      # defecto con las funciones viejas (pedir un codigo para un numero nuevo borraba el telefono
+      # verificado vigente sin probar el nuevo) y luego corre la migracion tal cual. Cubre ademas las
+      # Edge Functions y pantallas del login por analisis estatico.
+      - name: Verify phone login and pending phone change
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: login_telefono
+        run: |
+          PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS login_telefono;" -c "CREATE DATABASE login_telefono;"
+          node scripts/test-login-telefono-sql.mjs
+
+      # Cambio de correo con verificacion del correo nuevo: intentos, vencimiento, un solo uso, topes.
+      - name: Verify verified email change
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: cambio_correo
+        run: |
+          PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS cambio_correo;" -c "CREATE DATABASE cambio_correo;"
+          node scripts/test-cambio-correo-sql.mjs
+
       # Misma categoria que el paso de arriba: una regla escrita dos veces. El
       # enmascarado de IP vive en `public.enmascarar_ip` —de donde
       # `insert_audit_log` deriva el `ip_masked` de la bitacora— y en

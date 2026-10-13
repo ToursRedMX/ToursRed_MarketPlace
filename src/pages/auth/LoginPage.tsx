@@ -5,6 +5,7 @@ import { signIn, supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import TurnstileWidget from '../../components/TurnstileWidget';
 import { useTurnstileEnabled } from '../../hooks/useTurnstileEnabled';
+import PhoneLoginForm from '../../components/PhoneLoginForm';
 import { mensajeDeError } from '../../lib/errores';
 
 interface OAuthToggles {
@@ -68,6 +69,8 @@ const LoginPage: React.FC = () => {
   const { turnstileEnabled } = useTurnstileEnabled();
   const [oauthToggles, setOauthToggles] = useState<OAuthToggles>({ google: true, azure: true, x: false, facebook: false, linkedin: false });
   const [passkeysEnabled, setPasskeysEnabled] = useState(false);
+  const [phoneLoginEnabled, setPhoneLoginEnabled] = useState(false);
+  const [phoneMode, setPhoneMode] = useState(false);
   const [isPasskeyLoading, setIsPasskeyLoading] = useState(false);
   const deviceFingerprintRef = useRef<string>(computeDeviceFingerprint());
   const navigate = useNavigate();
@@ -94,7 +97,7 @@ const LoginPage: React.FC = () => {
   useEffect(() => {
     Promise.resolve(supabase
       .from('platform_settings')
-      .select('oauth_google_login_enabled, oauth_azure_login_enabled, oauth_twitter_login_enabled, oauth_facebook_login_enabled, oauth_linkedin_login_enabled, passkeys_enabled')
+      .select('oauth_google_login_enabled, oauth_azure_login_enabled, oauth_twitter_login_enabled, oauth_facebook_login_enabled, oauth_linkedin_login_enabled, passkeys_enabled, phone_login_enabled')
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
@@ -106,6 +109,7 @@ const LoginPage: React.FC = () => {
             linkedin: data.oauth_linkedin_login_enabled ?? false,
           });
           setPasskeysEnabled(data.passkeys_enabled ?? false);
+          setPhoneLoginEnabled(data.phone_login_enabled ?? false);
         }
       }))
       .catch(() => {});
@@ -129,6 +133,20 @@ const LoginPage: React.FC = () => {
       );
     } catch {
       // best-effort
+    }
+  };
+
+  const irAlPanel = (role: string | undefined) => {
+    if (redirectUrl) {
+      navigate(redirectUrl, { replace: true });
+    } else if (role === 'admin') {
+      navigate('/admin/dashboard');
+    } else if (role === 'agency') {
+      navigate('/agency/dashboard');
+    } else if (role === 'traveler') {
+      navigate('/traveler/dashboard');
+    } else {
+      navigate(from, { replace: true });
     }
   };
 
@@ -268,6 +286,12 @@ const LoginPage: React.FC = () => {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          {phoneMode ? (
+            <PhoneLoginForm
+              onLoggedIn={(user) => irAlPanel(user.user_metadata?.role)}
+              onCancel={() => setPhoneMode(false)}
+            />
+          ) : (<>
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
               <div className={`flex items-start gap-2 px-4 py-3 rounded border ${ipBlocked ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-error-50 border-error-200 text-error-700'}`}>
@@ -363,6 +387,18 @@ const LoginPage: React.FC = () => {
               </button>
             </div>
           </form>
+
+          {phoneLoginEnabled && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => { setError(''); setPhoneMode(true); }}
+                className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Entrar con mi celular
+              </button>
+            </div>
+          )}
 
           {passkeysEnabled && typeof window !== 'undefined' && window.PublicKeyCredential && (
             <div className="mt-4">
@@ -525,6 +561,8 @@ const LoginPage: React.FC = () => {
 
           </div>
           )}
+
+          </>)}
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <Link

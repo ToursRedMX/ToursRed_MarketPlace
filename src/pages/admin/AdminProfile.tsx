@@ -3,6 +3,8 @@ import { User, Mail, Phone, Calendar, Shield, Save, CreditCard as Edit } from 'l
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import ChangePasswordSection from '../../components/ChangePasswordSection';
+import { useAccesoCuenta } from '../../hooks/useAccesoCuenta';
+import AccountAccessSection from '../../components/AccountAccessSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import { PasskeySettingsSection } from '../../components/PasskeySettingsSection';
 import { normalizarTelefono } from '../../lib/telefono';
@@ -10,6 +12,7 @@ import { mensajeDeError } from '../../lib/errores';
 
 const AdminProfile: React.FC = () => {
   const { user } = useAuth();
+  const { telefonoVerificado } = useAccesoCuenta();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -215,13 +218,17 @@ const AdminProfile: React.FC = () => {
                       Teléfono
                     </label>
                     {isEditing ? (
+                      <>
                       <input
                         type="tel"
                         value={profile.phone_number}
                         onChange={(e) => setProfile({...profile, phone_number: e.target.value})}
+                        readOnly={telefonoVerificado}
                         className="input"
                         placeholder="55 1234 5678"
                       />
+                      {telefonoVerificado && <p className="mt-1 text-xs text-gray-500">Tu celular está verificado. Para cambiarlo usa «Acceso a tu cuenta» más abajo.</p>}
+                      </>
                     ) : (
                       <div className="flex items-center p-3 bg-gray-50 rounded-md">
                         <Phone className="h-4 w-4 text-gray-400 mr-2" />
@@ -294,6 +301,11 @@ const AdminProfile: React.FC = () => {
                     </button>
                   </div>
                 )}
+              </div>
+
+              {/* Acceso: correo y celular */}
+              <div className="border-t border-gray-200 pt-6">
+                <AccountAccessSection />
               </div>
 
               {/* Seguridad - Cambiar Contraseña */}
