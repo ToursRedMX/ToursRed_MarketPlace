@@ -140,8 +140,8 @@ const AdminSettings: React.FC = () => {
     paypal_commission_fixed: 4.0,
     mercadopago_commission_pct: 3.49,
     mercadopago_commission_fixed: 4.0,
-    conekta_commission_pct: 3.29,
-    conekta_commission_fixed: 2.5,
+    conekta_commission_pct: 4.06,
+    conekta_commission_fixed: 2.9,
     mercadopago_public_key: '',
     paypal_client_id: '',
     pac_provider: 'facturapi',
@@ -1516,7 +1516,7 @@ const AdminSettings: React.FC = () => {
                   { provider: 'stripe', label: 'Stripe', note: 'IVA incluido' },
                   { provider: 'paypal', label: 'PayPal' },
                   { provider: 'mercadopago', label: 'Mercado Pago' },
-                  { provider: 'conekta', label: 'Conekta' },
+                  { provider: 'conekta', label: 'Conekta', note: 'IVA incluido' },
                   { provider: 'openpay', label: 'Openpay' },
                 ].map(({ provider, label, note }) => (
                   <div key={provider} className="bg-white border border-gray-200 rounded-lg p-3">
