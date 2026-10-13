@@ -63,13 +63,16 @@ for (const test of cfdiCases) {
 }
 
 const verified = { totp: [{ id: 'factor', status: 'verified' }] };
+// enforceStepUp: el codigo TOTP para GASTAR saldo es de UN SOLO USO (13-oct-2026). La base lo consume
+// con `consume_spend_step_up`; aqui `consumed` es lo que esa funcion devuelve. Solo `true` estricto pasa.
 const stepCases = [
-  { factors: verified, rows: [{ id: 'verification' }], allowed: true },
-  { factors: verified, rows: [], code: 'STEP_UP_REQUIRED' },
-  { factors: verified, rows: null, code: 'STEP_UP_REQUIRED' },
-  { factors: verified, rows: 'invalid', code: 'STEP_UP_REQUIRED' },
-  { factors: verified, rows: [{}], code: 'STEP_UP_REQUIRED' },
-  { factors: verified, rows: [{ id: 'verification' }], queryError: true, code: 'STEP_UP_REQUIRED' },
+  { factors: verified, consumed: true, allowed: true },
+  { factors: verified, consumed: false, code: 'STEP_UP_REQUIRED' },
+  { factors: verified, consumed: null, code: 'STEP_UP_REQUIRED' },
+  { factors: verified, consumed: 'true', code: 'STEP_UP_REQUIRED' },
+  { factors: verified, consumed: 1, code: 'STEP_UP_REQUIRED' },
+  { factors: verified, consumed: [{ id: 'verification' }], code: 'STEP_UP_REQUIRED' },
+  { factors: verified, consumed: true, queryError: true, code: 'STEP_UP_REQUIRED' },
   { factors: verified, queryThrows: true, code: 'STEP_UP_REQUIRED' },
   { factors: verified, factorsError: true, code: 'MFA_NOT_CONFIGURED', noQuery: true },
   { factorsThrows: true, code: 'MFA_NOT_CONFIGURED', noQuery: true },
@@ -81,28 +84,22 @@ const stepCases = [
 ];
 for (const test of stepCases) {
   let queries = 0;
+  const llamadas = [];
   const step = load('stepUpCheck', { createClient(url, key) {
     queries++;
     assert.equal(url, 'https://db.test'); assert.equal(key, 'service-key');
-    return { from(table) {
-      assert.equal(table, 'sensitive_verifications');
-      // checkStepUp debe pedir SOLO filas method='totp': una prueba de otro tipo (la contraseña,
-      // que vive aparte en reauth_proofs) no puede abrir el pago con ToursRed Cash.
-      let filtroMethod = false;
-      const q = { select() { return q; },
-        eq(column, id) {
-          if (column === 'method') { assert.equal(id, 'totp'); filtroMethod = true; return q; }
-          assert.equal(column, 'user_id'); assert.equal(id, 'caller'); return q;
-        },
-        gt(column, date) { assert.equal(column, 'expires_at'); assert.ok(Math.abs(Date.now() - Date.parse(date)) < 1000); return q; },
-        order() { return q; }, async limit(count) {
-          assert.equal(count, 1);
-          assert.equal(filtroMethod, true, 'la consulta debe filtrar por method = totp');
-          if (test.queryThrows) throw new Error('query failed');
-          return { data: test.rows, error: test.queryError ? {} : null };
-        } };
-      return q;
-    } };
+    return {
+      // Un solo camino hacia la base: consumir la prueba. NUNCA leer la tabla (`from`), porque una
+      // lectura de "existe alguna fila vigente" es justo lo que dejaba reutilizar un codigo.
+      from() { throw new Error('checkStepUp no debe leer sensitive_verifications: debe CONSUMIR la prueba'); },
+      async rpc(nombre, args) {
+        // Se registra y se afirma FUERA: dentro, el try/catch de checkStepUp (que falla cerrado) se
+        // tragaria la aserciones y la prueba pasaria por la razon equivocada.
+        llamadas.push([nombre, args?.p_user, Object.keys(args ?? {}).join(',')]);
+        if (test.queryThrows) throw new Error('query failed');
+        return { data: test.consumed, error: test.queryError ? {} : null };
+      },
+    };
   } });
   const client = { auth: { mfa: { async listFactors() {
     if (test.factorsThrows) throw new Error('MFA unavailable');
@@ -112,5 +109,48 @@ for (const test of stepCases) {
   if (test.allowed) assert.equal(response, null);
   else { assert.equal(response.status, 403); assert.equal((await response.json()).code, test.code); }
   assert.equal(queries, test.noQuery ? 0 : 1);
+  if (!test.noQuery) assert.deepEqual(llamadas, [['consume_spend_step_up', 'caller', 'p_user']], 'una sola llamada: consume_spend_step_up({ p_user })');
+  else assert.deepEqual(llamadas, []);
 }
-console.log(`Shared authorization: ${cfdiCases.length + stepCases.length} scenarios passed without network or business mutations.`);
+// ---- gastoDeSaldo: cuando un cobro de RESERVA gasta saldo/puntos y exige el codigo ---------------------
+// Un pago MIXTO (saldo o puntos + otro medio) comprometia el saldo en la reserva y el webhook lo
+// debitaba sin segundo factor (13-oct-2026). La decision se toma con la reserva.
+{
+  const sinEfectos = load('gastoDeSaldo', { ...denoServicio });
+  const decide = [
+    [{ payment_status: 'pending', points_used: 25000, toursred_cash_used: 0 }, true, 'puntos pendientes'],
+    [{ payment_status: 'pending', points_used: 0, toursred_cash_used: '250.00' }, true, 'Cash pendiente (viene como texto)'],
+    [{ payment_status: 'pending', points_used: 5, toursred_cash_used: '10.50' }, true, 'ambos'],
+    [{ payment_status: null, points_used: 100 }, true, 'sin payment_status: aun no se pago'],
+    [{ payment_status: 'succeeded', points_used: 25000, toursred_cash_used: '250.00' }, false, 'YA pagada: un suplemento posterior con tarjeta no pide el codigo'],
+    [{ payment_status: 'pending', points_used: 0, toursred_cash_used: '0.00' }, false, 'sin saldo ni puntos'],
+    [{ payment_status: 'pending', points_used: null, toursred_cash_used: null }, false, 'nulos'],
+    [{ payment_status: 'pending', points_used: -5, toursred_cash_used: 'abc' }, false, 'basura no cuenta como saldo'],
+    [null, false, 'sin reserva'], [undefined, false, 'indefinida'],
+  ];
+  for (const [reserva, esperado, que] of decide) assert.equal(sinEfectos.reservaGastaSaldo(reserva), esperado, que);
+
+  const escenarios = [
+    { que: 'sin saldo: pasa y NO consulta el MFA', reserva: { payment_status: 'pending' }, userId: 'dueno', auth: 'Bearer x', pasa: true, enforce: 0 },
+    { que: 'con saldo y reserva AJENA: 403 sin tocar el MFA', reserva: { payment_status: 'pending', points_used: 10, user_id: 'otro' }, userId: 'dueno', auth: 'Bearer x', status: 403, enforce: 0 },
+    { que: 'con saldo sin cabecera Authorization: 401', reserva: { payment_status: 'pending', points_used: 10, user_id: 'dueno' }, userId: 'dueno', auth: null, status: 401, enforce: 0 },
+    { que: 'con saldo sin userId: 401', reserva: { payment_status: 'pending', points_used: 10, user_id: 'dueno' }, userId: undefined, auth: 'Bearer x', status: 401, enforce: 0 },
+    { que: 'con saldo del dueno: exige el codigo y devuelve su respuesta', reserva: { payment_status: 'pending', points_used: 10, user_id: 'dueno' }, userId: 'dueno', auth: 'Bearer x', status: 403, enforce: 1, bloqueo: true },
+    { que: 'con saldo del dueno y codigo valido: pasa', reserva: { payment_status: 'pending', toursred_cash_used: '1', user_id: 'dueno' }, userId: 'dueno', auth: 'Bearer x', pasa: true, enforce: 1 },
+    { que: 'reserva sin user_id (solo viene en algunos select): igual exige el codigo', reserva: { payment_status: 'pending', points_used: 10 }, userId: 'dueno', auth: 'Bearer x', status: 403, enforce: 1, bloqueo: true },
+  ];
+  for (const e of escenarios) {
+    let enforce = 0; let args = null;
+    const guarda = load('gastoDeSaldo', {
+      Deno: { env: { get: (k) => `valor-${k}` } },
+      createClient: () => ({ auth: { mfa: {} } }),
+      enforceStepUp: async (...a) => { enforce++; args = a; return e.bloqueo ? new Response('{"code":"STEP_UP_REQUIRED"}', { status: 403 }) : null; },
+    });
+    const req = { headers: { get: (h) => (h === 'Authorization' ? e.auth : null) } };
+    const r = await guarda.exigirMfaSiGastaSaldo(req, e.userId, e.reserva);
+    if (e.pasa) assert.equal(r, null, e.que); else assert.equal(r.status, e.status, e.que);
+    assert.equal(enforce, e.enforce, `${e.que}: veces que se consulta el MFA`);
+    if (e.enforce) assert.equal(args[3], e.userId, `${e.que}: el codigo se exige a QUIEN llama`);
+  }
+}
+console.log(`Shared authorization: ${cfdiCases.length + stepCases.length} scenarios (+ gastoDeSaldo) passed without network or business mutations.`);

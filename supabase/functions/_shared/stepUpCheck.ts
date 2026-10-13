@@ -13,7 +13,16 @@ const corsHeadersForResponses = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-export async function checkStepUp(
+/**
+ * Consume la prueba de TOTP de UN SOLO USO para gastar saldo o puntos (13-oct-2026).
+ *
+ * Antes esto solo comprobaba que existiera alguna fila vigente (15 min, de cualquier
+ * accion): un codigo tecleado para cancelar una reserva abria un pago un minuto despues.
+ * Ahora cada gasto exige un codigo nuevo: la fila `purpose='spend'` se marca consumida de
+ * forma atomica en la base (public.consume_spend_step_up) y no sirve para un segundo gasto.
+ * Falla CERRADO: cualquier error se trata como "no verificado".
+ */
+export async function consumeSpendStepUp(
   serviceRoleKey: string,
   supabaseUrl: string,
   userId: string
@@ -21,24 +30,11 @@ export async function checkStepUp(
   if (!userId) return { verified: false, reason: "STEP_UP_REQUIRED" };
   try {
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const now = new Date().toISOString();
-    const { data, error } = await adminClient
-      .from("sensitive_verifications")
-      .select("id")
-      .eq("user_id", userId)
-      // Solo vale un TOTP. Otro tipo de prueba (p. ej. contraseña, que vive aparte en
-      // reauth_proofs) NO debe abrir el pago con ToursRed Cash, que exige el segundo factor.
-      .eq("method", "totp")
-      .gt("expires_at", now)
-      .order("verified_at", { ascending: false })
-      .limit(1);
-
+    const { data, error } = await adminClient.rpc("consume_spend_step_up", { p_user: userId });
     if (error) {
       return { verified: false, reason: "Error verifying recent authentication" };
     }
-    if (Array.isArray(data) && data.some(row => row && typeof row.id === "string" && row.id.length > 0)) {
-      return { verified: true };
-    }
+    if (data === true) return { verified: true };
     return { verified: false, reason: "STEP_UP_REQUIRED" };
   } catch {
     return { verified: false, reason: "Error verifying recent authentication" };
@@ -89,7 +85,7 @@ export async function enforceStepUp(
   if (!hasMfa) {
     return mfaRequiredResponse();
   }
-  const stepUp = await checkStepUp(serviceRoleKey, supabaseUrl, userId);
+  const stepUp = await consumeSpendStepUp(serviceRoleKey, supabaseUrl, userId);
   if (!stepUp.verified) {
     return stepUpRequiredResponse();
   }

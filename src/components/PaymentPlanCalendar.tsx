@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Calendar, CreditCard, CheckCircle, Clock, AlertCircle, AlertTriangle, ChevronDown, ChevronUp, Loader2, DollarSign, Receipt } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { useStepUp } from '../context/StepUpContext';
 import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -35,6 +36,8 @@ const PLAN_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, agencyView = false, onPaymentSuccess, adjustedTotal }) => {
+  // Pagar una mensualidad con ToursRed Cash o puntos exige un codigo TOTP de un solo uso.
+  const { fetchWithStepUp } = useStepUp();
   const { user } = useAuth();
   const [isExpanded, setIsExpanded] = useState(false);
   const [payingInstallmentId, setPayingInstallmentId] = useState<string | null>(null);
@@ -114,7 +117,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
         return;
       }
 
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment-plan-installment`, {
+      const res = await fetchWithStepUp(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment-plan-installment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -182,7 +185,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
         return;
       }
 
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment-plan-installment`, {
+      const res = await fetchWithStepUp(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment-plan-installment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

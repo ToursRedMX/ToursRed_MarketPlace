@@ -6,6 +6,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir, urlDeRetornoSegura } from "../_shared/cors.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
+import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -278,6 +279,16 @@ Deno.serve(async (req) => {
     // confirma igual. O sea: el descuento se daba y nunca se pagaba.
     const cashSolicitado = Math.max(0, Number(toursRedCashUsed) || 0);
     const puntosSolicitados = Math.max(0, Math.floor(Number(pointsUsed) || 0));
+
+    // MFA para gastar saldo o puntos (13-oct-2026). Un pago MIXTO (puntos o Cash + tarjeta)
+    // gastaba el saldo sin segundo factor: el webhook lo debita de estos metadatos despues de
+    // que Stripe cobra. Ahora, igual que el pago con wallet al 100%, exige un codigo TOTP de
+    // UN SOLO USO. Sin MFA configurado responde MFA_NOT_CONFIGURED. Va antes de crear la sesion
+    // de cobro y antes de validar saldos: no revela cuanto hay a quien no ha verificado.
+    if (cashSolicitado > 0 || puntosSolicitados > 0) {
+      const stepUpBlock = await enforceStepUp(userClient, supabaseServiceKey, supabaseUrl, user.id);
+      if (stepUpBlock) return stepUpBlock;
+    }
 
     if (cashSolicitado > 0) {
       const { data: cashWallet } = await supabase

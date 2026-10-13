@@ -191,11 +191,16 @@ prueba('RLS activado en reauth_proofs', () => {
   assert.equal(psql(`select relrowsecurity from pg_class where oid='public.reauth_proofs'::regclass`), 't');
 });
 
-// ---- 6. El paso a paso del wallet (checkStepUp) solo acepta TOTP --------------------------------------------
-prueba('checkStepUp filtra sensitive_verifications por method = totp (la contraseña no abre el wallet)', () => {
+// ---- 6. El paso a paso del wallet ya no comparte pruebas con la reautenticacion ------------------------------------
+// Antes (13-oct-2026, PR #381) checkStepUp filtraba por method='totp'. Hoy el gasto usa una prueba PROPIA
+// de un solo uso (migracion 20261013031834): se consume por RPC y no lee la tabla. La cobertura fina esta en
+// scripts/test-step-up-gasto-sql.mjs; aqui solo se ata que una contraseña (reauth_proofs) nunca la abre.
+prueba('stepUpCheck consume la prueba de gasto por RPC y no mira reauth_proofs (la contraseña no abre el wallet)', () => {
   const ts = readFileSync(new URL('../supabase/functions/_shared/stepUpCheck.ts', import.meta.url), 'utf8');
-  const cuerpo = recortar(ts, 'export async function checkStepUp', '\n}\n', 'checkStepUp');
-  assert.match(cuerpo, /\.from\("sensitive_verifications"\)[\s\S]*\.eq\("method", "totp"\)/, 'falta el filtro por method');
+  const cuerpo = recortar(ts, 'export async function consumeSpendStepUp', '\n}\n', 'consumeSpendStepUp');
+  assert.match(cuerpo, /\.rpc\("consume_spend_step_up"/, 'debe CONSUMIR la prueba');
+  assert.doesNotMatch(ts, /reauth_proofs/, 'la prueba por contraseña no tiene nada que ver con el gasto');
+  assert.doesNotMatch(ts, /export async function checkStepUp/, 'el "existe alguna fila vigente" ya no existe');
 });
 
 // ---- 7. verify-reauth y enforceReauth (se leen como texto: Deno no esta disponible aqui) --------------------
