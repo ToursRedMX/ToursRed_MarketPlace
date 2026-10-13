@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useStepUp } from '../context/StepUpContext';
+import { establecerContrasena } from '../lib/establecerContrasena';
 import { validarContrasena } from '../lib/politicaContrasena';
 import { mensajeDeError } from '../lib/errores';
 
@@ -10,6 +12,7 @@ interface FirstLoginPasswordGateProps {
 }
 
 export default function FirstLoginPasswordGate({ userId, onPasswordChanged }: FirstLoginPasswordGateProps) {
+  const { invokeWithStepUp } = useStepUp();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -37,7 +40,7 @@ export default function FirstLoginPasswordGate({ userId, onPasswordChanged }: Fi
 
     setIsSubmitting(true);
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      const { error: updateError } = await establecerContrasena(newPassword, invokeWithStepUp);
       if (updateError) throw updateError;
 
       const { error: dbError } = await supabase

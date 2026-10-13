@@ -8,6 +8,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import { useAccesoCuenta } from '../../hooks/useAccesoCuenta';
+import { useStepUp } from '../../context/StepUpContext';
+import { establecerContrasena } from '../../lib/establecerContrasena';
 import AccountAccessSection from '../../components/AccountAccessSection';
 import { normalizarTelefono } from '../../lib/telefono';
 import { validarContrasena } from '../../lib/politicaContrasena';
@@ -66,6 +68,7 @@ const SectionMessage = ({ section, message, onDismiss }: { section: string; mess
 export default function ExecutivePerfil() {
   const { user, accountExecutiveInfo } = useAuth();
   const { telefonoVerificado } = useAccesoCuenta();
+  const { invokeWithStepUp } = useStepUp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [profile, setProfile] = useState<ExecutiveProfile | null>(null);
@@ -285,7 +288,7 @@ export default function ExecutivePerfil() {
     if (newPassword !== confirmPassword) { showMsg('error', 'Las contraseñas no coinciden.', 'password'); return; }
     setIsSavingPassword(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await establecerContrasena(newPassword, invokeWithStepUp);
       if (error) throw error;
       setNewPassword(''); setConfirmPassword('');
       showMsg('success', 'Contraseña actualizada correctamente.', 'password');

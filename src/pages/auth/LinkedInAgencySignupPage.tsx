@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, UserRole } from '../../lib/supabase';
+import { establecerContrasena } from '../../lib/establecerContrasena';
 import { useAuth } from '../../context/AuthContext';
 import { useFieldAvailability } from '../../hooks/useFieldAvailability';
 import { validarRfcAgencia } from '../../lib/validarRfcAgencia';
@@ -115,7 +116,7 @@ const LinkedInAgencySignupPage: React.FC = () => {
       if (!user) throw new Error('Sesión no encontrada');
 
       // Primero la contraseña: si es débil o filtrada falla antes de escribir en BD.
-      const { error: pwError } = await supabase.auth.updateUser({ password });
+      const { error: pwError } = await establecerContrasena(password);
       if (pwError) {
         if (esContrasenaFiltrada(pwError)) throw new Error('Esta contraseña ha sido expuesta en brechas de datos. Por favor elige una más segura.');
         throw pwError;

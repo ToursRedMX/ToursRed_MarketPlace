@@ -765,7 +765,7 @@ jobs:
           PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS step_up_gasto;" -c "CREATE DATABASE step_up_gasto;"
           node scripts/test-step-up-gasto-sql.mjs
 
-      # Login por telefono (OTP) y cambio de telefono PENDIENTE (14-oct-2026). Reproduce primero el
+      # Login por telefono (OTP) y cambio de telefono PENDIENTE (13-oct-2026). Reproduce primero el
       # defecto con las funciones viejas (pedir un codigo para un numero nuevo borraba el telefono
       # verificado vigente sin probar el nuevo) y luego corre la migracion tal cual. Cubre ademas las
       # Edge Functions y pantallas del login por analisis estatico.
@@ -789,6 +789,24 @@ jobs:
         run: |
           PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS cambio_correo;" -c "CREATE DATABASE cambio_correo;"
           node scripts/test-cambio-correo-sql.mjs
+
+      # Aprobar una reserva NO mueve el saldo del viajero (13-oct-2026): approve-booking lo dispara la agencia y,
+      # si saldo/puntos cubrian el 100%, descontaba y confirmaba sin el codigo MFA del viajero. La prueba vigila
+      # que ya no toque el monedero y que «Completar Pago» mande los puntos y el Cash comprometidos.
+      - name: Verify approving a booking never moves the traveler's balance
+        run: node scripts/test-aprobacion-no-gasta-saldo.mjs
+
+      # Cambiar la contraseña con reautenticacion DEL SERVIDOR (13-oct-2026): updateUser({password}) desde el
+      # navegador no pide la actual. Vigila set-password, user_has_password y que nadie en src/ llame a updateUser.
+      - name: Verify password changes are re-authenticated server-side
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: contrasena_servidor
+        run: |
+          PGDATABASE=postgres psql -c "DROP DATABASE IF EXISTS contrasena_servidor;" -c "CREATE DATABASE contrasena_servidor;"
+          node scripts/test-contrasena-servidor.mjs
 
       # Misma categoria que el paso de arriba: una regla escrita dos veces. El
       # enmascarado de IP vive en `public.enmascarar_ip` —de donde

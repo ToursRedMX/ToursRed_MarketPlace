@@ -20,6 +20,7 @@ import PaymentProviderSelector from '../../components/PaymentProviderSelector';
 import { comoFilas } from '../../lib/relacionesSupabase';
 import { reembolsoPorMedio } from '../../utils/reembolsoPorMedio';
 import { mensajeDeError } from '../../lib/errores';
+import { coberturaReservaAprobada } from '../../lib/coberturaReservaAprobada';
 
 interface TotalPaidRow {
   booking_id: string;
@@ -1574,10 +1575,12 @@ const TravelerBookings: React.FC = () => {
       // Calcular el monto a cobrar después de aplicar puntos ya usados y ToursRed Cash
       const originalAmount = booking.user_payment || booking.deposit_amount || 0;
       const pointsAlreadyUsed = ((booking.points_used || 0) / 100);
+      // Cobertura con los puntos y el Cash comprometidos al crear la reserva (ver coberturaReservaAprobada.ts).
+      const cobertura = coberturaReservaAprobada(booking, toursRedCashToUse);
       const amountToCharge = originalAmount - pointsAlreadyUsed - toursRedCashToUse;
 
-      // Si el monto es 0 o menor, confirmar directamente
-      if (amountToCharge <= 0) {
+      // Si el monto es 0 o menor —o los puntos y el Cash comprometidos ya cubren todo—, confirmar directamente
+      if (amountToCharge <= 0 || cobertura.montoACobrar <= 0) {
         const walletRes = await fetchWithStepUp(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-booking-wallet-payment`,
           {
@@ -1589,8 +1592,9 @@ const TravelerBookings: React.FC = () => {
             },
             body: JSON.stringify({
               p_booking_id: booking.id,
-              p_points_to_use: 0,
-              p_cash_to_use: toursRedCashToUse,
+              // Los puntos y el Cash COMPROMETIDOS se descuentan aqui, con el codigo MFA del viajero.
+              p_points_to_use: cobertura.puntosAportados,
+              p_cash_to_use: cobertura.efectivoAportado,
               p_idempotency_key: `${booking.id}_charge_booking`,
             }),
           }
