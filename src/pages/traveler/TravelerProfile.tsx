@@ -8,6 +8,8 @@ import { es } from 'date-fns/locale';
 import TravelerReviewsDisplay from '../../components/TravelerReviewsDisplay';
 import ProfilePictureUploader from '../../components/ProfilePictureUploader';
 import ChangePasswordSection from '../../components/ChangePasswordSection';
+import { useAccesoCuenta } from '../../hooks/useAccesoCuenta';
+import AccountAccessSection from '../../components/AccountAccessSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import LinkedAccountsSection from '../../components/LinkedAccountsSection';
 import { mensajeDeError } from '../../lib/errores';
@@ -174,6 +176,7 @@ const SecuritySection: React.FC<{ userId?: string }> = ({ userId }) => {
 
 const TravelerProfile: React.FC = () => {
   const { user } = useAuth();
+  const { telefonoVerificado } = useAccesoCuenta();
   const [profile, setProfile] = useState<TravelerProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -697,9 +700,11 @@ const TravelerProfile: React.FC = () => {
                         type="tel"
                         value={editForm.phone_number}
                         onChange={(e) => setEditForm({...editForm, phone_number: e.target.value})}
+                        readOnly={telefonoVerificado}
                         className="input"
                         placeholder="+52 55 1234 5678"
                       />
+                      {telefonoVerificado && <p className="mt-1 text-xs text-gray-500">Tu celular está verificado. Para cambiarlo usa «Acceso a tu cuenta» más abajo.</p>}
                     </div>
 
                     <div>
@@ -1410,6 +1415,11 @@ const TravelerProfile: React.FC = () => {
         {/* Calificaciones del Viajero */}
         <div className="mt-6">
           <TravelerReviewsDisplay travelerId={profile.id} />
+        </div>
+
+        {/* Acceso: correo y celular (cambio con reautenticación y verificación del valor nuevo) */}
+        <div className="mt-6">
+          <AccountAccessSection />
         </div>
 
         {/* Seguridad - Cambiar Contraseña */}

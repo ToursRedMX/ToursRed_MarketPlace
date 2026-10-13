@@ -5,6 +5,7 @@ import { normalizarTelefonoSms } from '../_shared/mensajeria/telefono.ts';
 import { hmac, nuevoCodigo, datosOtp } from '../_shared/mensajeria/seguridad.ts';
 import { plantillaOtp } from '../_shared/mensajeria/plantillas.ts';
 import { cargarRuntime, enviarPersistido } from '../_shared/mensajeria/servicio.ts';
+import { enforceReauth } from '../_shared/reauth.ts';
 
 Deno.serve(async req => {
   const cors=corsHeaders(req);
@@ -37,6 +38,9 @@ Deno.serve(async req => {
     const [codeHash,userHash,phoneHash,ipHash]=await Promise.all([hmac(pepper,datosOtp(userId,id,phone.e164,code)),hmac(pepper,'user:'+userId),hmac(pepper,'phone:'+phone.e164),hmac(pepper,'ip:'+ip)]);
     const {data,error}=await client.rpc('issue_phone_challenge',{p_user:userId,p_id:id,p_phone:phone.e164,p_hash:codeHash,p_user_hash:userHash,p_phone_hash:phoneHash,p_ip_hash:ipHash,p_simulated:runtime.settings.sms_modo_prueba,p_channel:channel});
     if(error)throw Error('emision_no_disponible');
+    // Cambiar un telefono ya verificado exige reautenticacion (TOTP si hay MFA, si no la contraseña): se responde
+    // con el 403 REAUTH_REQUIRED que el navegador sabe convertir en el modal y reintentar.
+    if(data?.code==='PHONE_REAUTH_REQUIRED'){const bloqueo=await enforceReauth(client,userId,cors);if(bloqueo)return bloqueo;}
     if(!data?.ok)return Response.json(data,{status:['OTP_COOLDOWN','OTP_RATE_LIMIT','OTP_LOCKED'].includes(data?.code)?429:400,headers:cors});
     const sent=await enviarPersistido(client,runtime,{verificationId:id},'otp',phone.e164,plantillaOtp(code),channel,code);
     return Response.json({...data,channel,phone_suffix:phone.e164.slice(-4),delivery:sent.estado}, {status:sent.estado==='fallido'?503:200,headers:cors});

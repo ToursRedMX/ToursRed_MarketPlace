@@ -7,6 +7,8 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
+import { useAccesoCuenta } from '../../hooks/useAccesoCuenta';
+import AccountAccessSection from '../../components/AccountAccessSection';
 import { normalizarTelefono } from '../../lib/telefono';
 import { validarContrasena } from '../../lib/politicaContrasena';
 import { mensajeDeError } from '../../lib/errores';
@@ -63,6 +65,7 @@ const SectionMessage = ({ section, message, onDismiss }: { section: string; mess
 
 export default function ExecutivePerfil() {
   const { user, accountExecutiveInfo } = useAuth();
+  const { telefonoVerificado } = useAccesoCuenta();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [profile, setProfile] = useState<ExecutiveProfile | null>(null);
@@ -197,7 +200,8 @@ export default function ExecutivePerfil() {
       // users.phone_number es donde se busca el telefono de cualquier cuenta
       // (recuperar contrasena, y a futuro SMS/WhatsApp). Antes del 01-oct-2026 el
       // del ejecutivo solo vivia en account_executives y nadie lo encontraba.
-      if (user?.id) {
+      // Un celular verificado solo cambia por «Acceso a tu cuenta»; escribirlo aqui lo rechaza la base.
+      if (user?.id && !telefonoVerificado) {
         const { error: errorUsuario } = await supabase.from('users')
           .update({ phone_number: telefono })
           .eq('id', user.id);
@@ -364,7 +368,8 @@ export default function ExecutivePerfil() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5"><span className="flex items-center gap-1"><Phone className="h-3 w-3" /> Teléfono</span></label>
-              <input value={phone} onChange={e => setPhone(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="+52 55 0000 0000" />
+              <input value={phone} onChange={e => setPhone(e.target.value)} readOnly={telefonoVerificado} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="+52 55 0000 0000" />
+              {telefonoVerificado && <p className="mt-1 text-xs text-gray-500">Tu celular está verificado. Para cambiarlo usa «Acceso a tu cuenta» más abajo.</p>}
             </div>
           </div>
           <div className="flex justify-end">
@@ -573,6 +578,9 @@ export default function ExecutivePerfil() {
           </div>
         </div>
       </div>
+
+      {/* Acceso: correo y celular */}
+      <AccountAccessSection />
 
       {/* Seguridad - Autenticacion en dos pasos */}
       <MfaSettingsSection />

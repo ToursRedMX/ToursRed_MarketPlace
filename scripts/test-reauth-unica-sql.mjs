@@ -244,7 +244,7 @@ prueba('StepUpContext: la contraseña va a verify-reauth, 409 USE_TOTP cambia al
   assert.doesNotMatch(ui, /console\.\w+\([^)]*password/i, 'no registra la contraseña');
 });
 
-// ---- 9. Las 6 funciones de cancelacion exigen la regla ANTES de su primer efecto ------------------------------------
+// ---- 9. Las 7 funciones de cancelacion exigen la regla ANTES de su primer efecto ------------------------------------
 const CANCELACIONES = {
   'process-traveler-cancellation': { primerEfecto: '.from("bookings")' },
   'process-agency-booking-cancellation': { primerEfecto: '.from("bookings")' },
@@ -252,6 +252,7 @@ const CANCELACIONES = {
   'cancel-optional-service': { primerEfecto: 'serviceClient' },
   'cancel-individual-supplement': { primerEfecto: 'serviceClient' },
   'process-receptivo-slot-cancellation': { primerEfecto: '.from("bookings")' },
+  'process-tour-cancellation': { primerEfecto: '.from("tours")' },
 };
 for (const [nombre, { primerEfecto }] of Object.entries(CANCELACIONES)) {
   prueba(`${nombre}: importa enforceReauth y lo exige antes de ${primerEfecto}`, () => {
@@ -283,6 +284,8 @@ prueba('las pantallas llaman a las funciones de cancelacion con reintento de rea
   assert.match(ab, /await fetchWithStepUp\(\s*`[^`]*process-agency-booking-cancellation`/);
   const at = readFileSync(new URL('../src/pages/agency/AgencyTours.tsx', import.meta.url), 'utf8');
   assert.equal([...at.matchAll(/invokeWithStepUp\('process-receptivo-slot-cancellation'/g)].length, 3, 'cancelar, reagendar y reembolsar');
+  assert.equal([...at.matchAll(/invokeWithStepUp\('process-tour-cancellation'/g)].length, 2, 'cancelar tour entero (normal y receptivo)');
+  assert.doesNotMatch(at, /supabase\.functions\.invoke\('process-tour-cancellation'/);
   const planos = [...at.matchAll(/supabase\.functions\.invoke\('process-receptivo-slot-cancellation'[\s\S]{0,400}?\}\);/g)];
   assert.equal(planos.length, 1, 'solo queda un invoke plano');
   assert.match(planos[0][0], /check_capacity_only: true/, 'y es el de solo lectura');

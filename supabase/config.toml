@@ -12,6 +12,12 @@ project_id = "ToursRed_MarketPlace"
 [functions."send-external-sale-qr"]
 verify_jwt = false # requireUser validates the user; RPC validates agency permissions.
 
+[functions."request-login-otp"]
+verify_jwt = false # Login por telefono: llega SIN sesion. Interruptor: platform_settings.phone_login_enabled.
+
+[functions."verify-login-otp"]
+verify_jwt = false # Login por telefono: llega SIN sesion; el codigo OTP es la prueba.
+
 [functions."check-login-risk"]
 verify_jwt = false
 
