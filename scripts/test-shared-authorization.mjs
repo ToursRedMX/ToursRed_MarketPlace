@@ -86,11 +86,18 @@ for (const test of stepCases) {
     assert.equal(url, 'https://db.test'); assert.equal(key, 'service-key');
     return { from(table) {
       assert.equal(table, 'sensitive_verifications');
+      // checkStepUp debe pedir SOLO filas method='totp': una prueba de otro tipo (la contraseña,
+      // que vive aparte en reauth_proofs) no puede abrir el pago con ToursRed Cash.
+      let filtroMethod = false;
       const q = { select() { return q; },
-        eq(column, id) { assert.equal(column, 'user_id'); assert.equal(id, 'caller'); return q; },
+        eq(column, id) {
+          if (column === 'method') { assert.equal(id, 'totp'); filtroMethod = true; return q; }
+          assert.equal(column, 'user_id'); assert.equal(id, 'caller'); return q;
+        },
         gt(column, date) { assert.equal(column, 'expires_at'); assert.ok(Math.abs(Date.now() - Date.parse(date)) < 1000); return q; },
         order() { return q; }, async limit(count) {
           assert.equal(count, 1);
+          assert.equal(filtroMethod, true, 'la consulta debe filtrar por method = totp');
           if (test.queryThrows) throw new Error('query failed');
           return { data: test.rows, error: test.queryError ? {} : null };
         } };
