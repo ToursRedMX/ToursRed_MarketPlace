@@ -5,7 +5,7 @@ import { cubreElAnticipo } from "../_shared/exigible.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { avisosCon } from "../_shared/avisosDePago.ts";
-import { estimarComisionProcesador } from "../_shared/estimarComisionProcesador.ts";
+import { comisionRealCentavos, estimarComisionProcesador } from "../_shared/estimarComisionProcesador.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 
 interface ConektaCharge {
@@ -35,6 +35,16 @@ interface ConektaOrder {
   amount?: number;
   metadata?: Record<string, string | undefined>;
   charges?: ConektaCharge[] | { data?: ConektaCharge[] };
+}
+
+// La metadata tal como esta AHORA en la fila. Las escrituras de este webhook la
+// mezclan con esto y no con la copia de `tx` leida al principio, que puede estar
+// vieja: reescribir desde esa copia borraba lo anotado en medio. Si la lectura
+// falla se cae a la copia, que es lo mismo que se hacia antes.
+async function metadataActual(supabase: SupabaseClient, txId: string, respaldo: unknown): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase.from("payment_transactions").select("metadata").eq("id", txId).maybeSingle();
+  const actual = !error && data?.metadata && typeof data.metadata === "object" ? data.metadata : respaldo;
+  return actual && typeof actual === "object" ? { ...(actual as Record<string, unknown>) } : {};
 }
 
 // Conekta manda `charges` como arreglo plano en algunas respuestas y como
@@ -366,12 +376,22 @@ Deno.serve(async (req: Request) => {
       // platform_settings) que ya usa create_accounting_entry_for_booking como
       // respaldo (migracion 20260804042551) -- no se inventa una tasa nueva, se
       // reusa la que ya existe para el mismo proposito.
+      //
+      // Orden de preferencia (12-oct-2026): 1) la orden pedida a la API, 2) el
+      // cargo del EVENTO firmado (la firma RSA ya se verifico arriba), 3) estimar.
+      // El paso 2 no existia: la API devolvio la orden sin `fee` mientras el evento
+      // order.paid del mismo cobro traia fee=2320, y se estimo 18.95 en vez de 23.20.
+      // Del evento solo se toma el cargo si es de ESTA orden.
       if (conektaOrder) {
-        const charge = chargesArray(conektaOrder)[0];
-        const feeCentavos = charge?.fee;
+        const feeApi = chargesArray(conektaOrder)[0]?.fee;
+        const evento = eventData as ConektaOrder & ConektaCharge & { order_id?: string };
+        const feeEvento = eventData.id === orderId
+          ? chargesArray(evento)[0]?.fee
+          : (evento.order_id === orderId ? evento.fee : undefined);
+        const real = comisionRealCentavos([feeApi, feeEvento]);
         const txAmount = Number(tx.amount) || 0;
-        let conektaFee = feeCentavos != null ? Number(feeCentavos) / 100 : 0;
-        let feeEstimada = false;
+        let conektaFee = real ? real.centavos / 100 : 0;
+        let origenFee: "api" | "evento" | "estimada" | null = real ? (real.posicion === 0 ? "api" : "evento") : null;
 
         if (conektaFee === 0 && txAmount > 0) {
           const { data: settings } = await supabase
@@ -379,12 +399,14 @@ Deno.serve(async (req: Request) => {
             .select("conekta_commission_pct, conekta_commission_fixed")
             .limit(1)
             .maybeSingle();
-          const pct = Number(settings?.conekta_commission_pct ?? 3.29);
-          const fijo = Number(settings?.conekta_commission_fixed ?? 2.5);
+          // Respaldo si la fila no trae tasa: 3.5% + $2.50 + IVA, ya con el IVA
+          // dentro (4.06% + $2.90), que es como se guarda en platform_settings.
+          const pct = Number(settings?.conekta_commission_pct ?? 4.06);
+          const fijo = Number(settings?.conekta_commission_fixed ?? 2.9);
           conektaFee = estimarComisionProcesador(txAmount, pct, fijo);
-          feeEstimada = true;
+          origenFee = "estimada";
           console.warn(
-            `Conekta no mando comision real para la orden ${orderId} (charge.fee=${feeCentavos}); ` +
+            `Conekta no mando comision real para la orden ${orderId} (api fee=${feeApi}, evento fee=${feeEvento}); ` +
             `estimada en ${conektaFee} con ${pct}% + $${fijo}`
           );
         }
@@ -394,11 +416,11 @@ Deno.serve(async (req: Request) => {
           .update({
             processor_fee: conektaFee,
             net_amount: txAmount - conektaFee,
-            // Solo se toca metadata cuando se estima: en el camino normal (fee
-            // real > 0) no hay nada que agregar, y sobreescribirla igual
-            // arriesgaria perder algo que otro camino le haya escrito desde
-            // que se leyo `tx` al principio de la funcion.
-            ...(feeEstimada ? { metadata: { ...(tx.metadata || {}), processor_fee_estimada: true } } : {}),
+            // Se mezcla con la metadata ACTUAL de la fila, no con la copia de `tx`
+            // leida al inicio: otro camino pudo escribirle desde entonces.
+            ...(origenFee
+              ? { metadata: { ...(await metadataActual(supabase, tx.id, tx.metadata)), processor_fee_origen: origenFee, ...(origenFee === "estimada" ? { processor_fee_estimada: true } : {}) } }
+              : {}),
           })
           .eq("id", tx.id);
       }
@@ -935,12 +957,19 @@ Deno.serve(async (req: Request) => {
     }
 
     // Mark event as processed (idempotency)
-    const updatedEvents = [...processedEvents, eventId].filter(Boolean);
+    // Se parte de la metadata ACTUAL, no de `tx.metadata`: con la copia del inicio
+    // esta escritura borraba lo que el propio webhook acababa de anotar (asi se
+    // perdio processor_fee_estimada el 12-oct-2026, orden ord_31u32BWu46zQSZq1x).
+    // La lista de eventos tambien se une con la actual: un evento concurrente pudo
+    // anotar el suyo desde que se leyo `tx`.
+    const metadataFresca = await metadataActual(supabase, tx.id, tx.metadata);
+    const yaAnotados = Array.isArray(metadataFresca.processed_webhook_events) ? metadataFresca.processed_webhook_events as string[] : [];
+    const updatedEvents = [...new Set([...yaAnotados, ...processedEvents, eventId].filter(Boolean))];
     await supabase
       .from("payment_transactions")
       .update({
         metadata: {
-          ...tx.metadata,
+          ...metadataFresca,
           processed_webhook_events: updatedEvents,
           last_webhook_event: eventType,
           last_webhook_at: new Date().toISOString(),
