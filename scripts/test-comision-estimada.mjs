@@ -47,6 +47,18 @@ assert.equal(estimarComisionProcesador(500, 4.06, 2.9), 23.2, 'la tarifa 4.06% +
 assert.equal(estimarComisionProcesador(500, 3.29, 2.5), 18.95, 'control: la tasa vieja daba 18.95');
 casos += 2;
 
+// Tarifa real de Stripe (3.6% + $3.00 + IVA, tarjeta nacional), guardada con el IVA
+// dentro (migracion 20261014061244). Se ancla a un cobro real: $1,338.75 con tarjeta de
+// prueba (EE.UU., +0.5% internacional), Stripe reporto 67.15 = (1338.75 x 4.1% + 3) x 1.16.
+// La tarifa nacional + el recargo internacional con IVA (0.5 x 1.16 = 0.58) debe dar lo mismo.
+assert.equal(estimarComisionProcesador(1338.75, 4.176 + 0.58, 3.48), 67.15, 'nacional + internacional debe reproducir el cobro real de 67.15');
+assert.equal(estimarComisionProcesador(1000, 4.176, 3.48), Math.round((1000 * 0.036 + 3) * 1.16 * 100) / 100, '4.176% + $3.48 es 3.6% + $3 con el IVA encima');
+const migracionStripe = readFileSync('supabase/migrations/20261014061244_stripe_tarifa_real.sql', 'utf8');
+assert.match(migracionStripe, /set stripe_commission_pct = 4\.176,\s+stripe_commission_fixed = 3\.48;/, 'la migracion guarda 4.176 / 3.48');
+const pantalla = readFileSync('src/pages/admin/AdminSettings.tsx', 'utf8');
+assert.match(pantalla, /stripe_commission_pct: 4\.176,\s+stripe_commission_fixed: 3\.48,/, 'la pantalla arranca con la misma tarifa que la base');
+casos += 4;
+
 const { comisionRealCentavos } = cargar('supabase/functions/_shared/estimarComisionProcesador.ts');
 for (const [candidatos, esperado, nota] of [
   // El caso real: la API sin fee, el evento firmado con 2320.
