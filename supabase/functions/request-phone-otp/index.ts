@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import { requireUser } from '../_shared/auth.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { extraerIpDelCliente } from '../_shared/contextoAuditoria.ts';
 import { normalizarTelefonoSms } from '../_shared/mensajeria/telefono.ts';
 import { hmac, nuevoCodigo, datosOtp } from '../_shared/mensajeria/seguridad.ts';
 import { plantillaOtp } from '../_shared/mensajeria/plantillas.ts';
@@ -34,9 +35,10 @@ Deno.serve(async req => {
     const pepper=Deno.env.get('PHONE_OTP_PEPPER')??'',userId=auth.llamador.userId,id=crypto.randomUUID(),code=nuevoCodigo();
     // Missing IP uses a shared fail-closed bucket. User/phone limits remain
     // authoritative even when a proxy chain cannot identify an address.
-    const ip=req.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim()||'unknown';
-    const [codeHash,userHash,phoneHash,ipHash]=await Promise.all([hmac(pepper,datosOtp(userId,id,phone.e164,code)),hmac(pepper,'user:'+userId),hmac(pepper,'phone:'+phone.e164),hmac(pepper,'ip:'+ip)]);
-    const {data,error}=await client.rpc('issue_phone_challenge',{p_user:userId,p_id:id,p_phone:phone.e164,p_hash:codeHash,p_user_hash:userHash,p_phone_hash:phoneHash,p_ip_hash:ipHash,p_simulated:runtime.settings.sms_modo_prueba,p_channel:channel});
+    // cf-connecting-ip primero: el ultimo salto de x-forwarded-for era un proxy de Supabase (20261014054007).
+    const ip=extraerIpDelCliente(req);
+    const [codeHash,userHash,phoneHash,ipHash]=await Promise.all([hmac(pepper,datosOtp(userId,id,phone.e164,code)),hmac(pepper,'user:'+userId),hmac(pepper,'phone:'+phone.e164),hmac(pepper,'ip:'+(ip??'unknown'))]);
+    const {data,error}=await client.rpc('issue_phone_challenge',{p_user:userId,p_id:id,p_phone:phone.e164,p_hash:codeHash,p_user_hash:userHash,p_phone_hash:phoneHash,p_ip_hash:ipHash,p_simulated:runtime.settings.sms_modo_prueba,p_channel:channel,p_ip:ip});
     if(error)throw Error('emision_no_disponible');
     // Cambiar un telefono ya verificado exige reautenticacion (TOTP si hay MFA, si no la contraseña): se responde
     // con el 403 REAUTH_REQUIRED que el navegador sabe convertir en el modal y reintentar.

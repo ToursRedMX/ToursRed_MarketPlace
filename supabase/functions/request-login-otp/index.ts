@@ -13,6 +13,7 @@
 // Interruptor: platform_settings.phone_login_enabled (default false).
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { extraerIpDelCliente } from '../_shared/contextoAuditoria.ts';
 import { normalizarTelefonoSms } from '../_shared/mensajeria/telefono.ts';
 import { hmac, nuevoCodigo, datosOtp } from '../_shared/mensajeria/seguridad.ts';
 import { plantillaOtp } from '../_shared/mensajeria/plantillas.ts';
@@ -54,9 +55,10 @@ Deno.serve(async req => {
     }
 
     const pepper = Deno.env.get('PHONE_OTP_PEPPER') ?? '', id = crypto.randomUUID(), code = nuevoCodigo();
-    const ip = req.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() || 'unknown';
-    const [codeHash, userHash, phoneHash, ipHash] = await Promise.all([hmac(pepper, datosOtp(userId, id, phone.e164, code)), hmac(pepper, 'login:' + userId), hmac(pepper, 'phone:' + phone.e164), hmac(pepper, 'ip:' + ip)]);
-    const { data, error } = await client.rpc('issue_phone_challenge', { p_user: userId, p_id: id, p_phone: phone.e164, p_hash: codeHash, p_user_hash: userHash, p_phone_hash: phoneHash, p_ip_hash: ipHash, p_simulated: runtime.settings.sms_modo_prueba, p_channel: channel });
+    // cf-connecting-ip primero: el ultimo salto de x-forwarded-for era un proxy de Supabase (20261014054007).
+    const ip = extraerIpDelCliente(req);
+    const [codeHash, userHash, phoneHash, ipHash] = await Promise.all([hmac(pepper, datosOtp(userId, id, phone.e164, code)), hmac(pepper, 'login:' + userId), hmac(pepper, 'phone:' + phone.e164), hmac(pepper, 'ip:' + (ip ?? 'unknown'))]);
+    const { data, error } = await client.rpc('issue_phone_challenge', { p_user: userId, p_id: id, p_phone: phone.e164, p_hash: codeHash, p_user_hash: userHash, p_phone_hash: phoneHash, p_ip_hash: ipHash, p_simulated: runtime.settings.sms_modo_prueba, p_channel: channel, p_ip: ip });
     if (error) throw Error('emision_no_disponible');
     if (!data?.ok) {
       if (ERRORES_DE_LIMITE.includes(data?.code)) return Response.json({ code: data.code }, { status: data.code === 'SMS_UNAVAILABLE' ? 503 : 429, headers: cors });
