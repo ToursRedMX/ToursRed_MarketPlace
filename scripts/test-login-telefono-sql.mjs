@@ -15,6 +15,9 @@
  *  6. Las funciones nuevas solo las ejecuta service_role.
  *  7. Un reto de login se resuelve con verify_phone_challenge: bucket de fallos propio ('login:'),
  *     5 intentos, y un fallo en login NO bloquea la verificacion normal de la misma cuenta.
+ *  9. IP del cliente (migracion 20261014054007): el reto guarda la IP en claro, la llamada de 9
+ *     argumentos de las funciones ya desplegadas sigue sirviendo, y request-login-otp/request-phone-otp
+ *     toman la IP con extraerIpDelCliente (el ultimo salto de x-forwarded-for era un proxy de Supabase).
  *
  * LIMITES HONESTOS: esquema minimo + recortes de las migraciones reales (NO la cadena completa, patron 5).
  * No prueba las Edge Functions ni el canje de sesion contra Supabase Auth.
@@ -34,6 +37,7 @@ const enforcement = leer('20261008054539_phone_otp_enforcement.sql');
 const canales = leer('20261009052107_phone_otp_whatsapp_channels.sql');
 const reauth = leer('20261013014305_reautenticacion_unica.sql');
 const NUEVA = leer('20261013043540_login_por_telefono_y_cambio_pendiente.sql');
+const IP_CLIENTE = leer('20261014054007_otp_ip_del_cliente.sql');
 
 function recortar(texto, inicio, fin, nombre) {
   const i = texto.indexOf(inicio); assert.ok(i >= 0, `no se encontro ${nombre}`);
@@ -50,6 +54,7 @@ const eventosTabla = recortar(enforcement, 'create table messaging_private.phone
 const guardViejo = recortar(enforcement, 'create function public.guard_phone_number_change', '\nend $$;', 'guard viejo');
 const issueViejo = recortar(canales, 'create or replace function public.issue_phone_challenge(p_user uuid,p_id uuid,p_phone text,p_hash text,p_user_hash text,p_phone_hash text,p_ip_hash text,p_simulated boolean,p_channel text)', '\nend $$;', 'issue viejo');
 const verifyViejo = recortar(enforcement, 'create function public.verify_phone_challenge', '\nend $$;', 'verify viejo');
+const envoltorio8 = recortar(canales, 'create or replace function public.issue_phone_challenge(p_user uuid,p_id uuid,p_phone text,p_hash text,p_user_hash text,p_phone_hash text,p_ip_hash text,p_simulated boolean) returns jsonb', '\n$$;', 'envoltorio de 8 argumentos');
 
 psql(`
   drop schema if exists messaging_private cascade;
@@ -57,7 +62,8 @@ psql(`
   drop table if exists public.reauth_proofs, public.sensitive_verifications, public.users, public.platform_settings cascade;
   drop function if exists public.normalizar_telefono(text), public.guard_phone_number_change(), public.guard_phone_verification_fields(),
     public.user_has_totp(uuid), public.reauth_satisfied(uuid), public.consume_sms_rate_limit(text,text,timestamptz,timestamptz,integer,integer),
-    public.issue_phone_challenge(uuid,uuid,text,text,text,text,text,boolean,text), public.verify_phone_challenge(uuid,uuid,text,text),
+    public.issue_phone_challenge(uuid,uuid,text,text,text,text,text,boolean,text), public.issue_phone_challenge(uuid,uuid,text,text,text,text,text,boolean,text,text),
+    public.issue_phone_challenge(uuid,uuid,text,text,text,text,text,boolean), public.verify_phone_challenge(uuid,uuid,text,text),
     public.find_user_for_phone_login(text), public.get_login_challenge(uuid);
   do $$ begin
     if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
@@ -99,6 +105,7 @@ psql(`
   ${guardViejo}
   create trigger guard_phone_number_change before update of phone_number on public.users for each row execute function public.guard_phone_number_change();
   ${issueViejo}
+  ${envoltorio8}
   ${verifyViejo}
 `);
 
@@ -317,6 +324,59 @@ prueba('configuracion de la plataforma: el interruptor de login por telefono se 
   assert.match(f, /phone_login_enabled, sms_habilitado, whatsapp_habilitado, sms_modo_prueba/);
   assert.match(f, /await saveToggle\('phone_login_enabled', v\)/);
   assert.match(f, /if \(field === 'phone_login_enabled'\) setPhoneLoginEnabled\(!value\)/, 'si falla el guardado, el interruptor vuelve a su estado real');
+});
+
+// ---- 9. IP del cliente (20261014054007) ------------------------------------------------------------------
+psql(IP_CLIENTE);
+const ipDe = (c) => psql(`select coalesce(host(ip_address),'nula') from messaging_private.phone_verifications where id='${c.id}'`);
+// Asi llama una Edge Function: argumentos CON NOMBRE (supabase-js rpc), con o sin p_ip.
+const pedirConNombre = (u, extra = '') => {
+  const id = randomUUID();
+  const r = JSON.parse(psql(`select public.issue_phone_challenge(p_user=>'${u.id}',p_id=>'${id}',p_phone=>'${u.tel}',p_hash=>'${BUENO}',p_user_hash=>'${hash(u.id)}',p_phone_hash=>'${hash(u.tel)}',p_ip_hash=>'${hash(u.id + 'ip')}',p_simulated=>false,p_channel=>'sms'${extra})`));
+  return { ...r, id };
+};
+prueba('IP: el reto guarda la IP del cliente en claro', () => {
+  const u = usuario(); const c = pedirConNombre(u, ",p_ip=>'187.190.63.128'");
+  assert.equal(c.ok, true);
+  assert.equal(ipDe(c), '187.190.63.128');
+});
+prueba('IP: tambien IPv6', () => {
+  const u = usuario(); const c = pedirConNombre(u, ",p_ip=>'2806:2f0:9000::1'");
+  assert.equal(c.ok, true);
+  assert.equal(ipDe(c), '2806:2f0:9000::1');
+});
+prueba('IP: la llamada SIN p_ip (Edge Functions desplegadas antes del cambio) sigue emitiendo el reto', () => {
+  const u = usuario(); const c = pedirConNombre(u);
+  assert.equal(c.ok, true);
+  assert.equal(ipDe(c), 'nula');
+});
+prueba('IP: una IP mal formada o vacia no impide el envio, se guarda nula', () => {
+  for (const mala of ['unknown', '', '999.1.1.1']) {
+    const u = usuario(); const c = pedirConNombre(u, `,p_ip=>'${mala}'`);
+    assert.equal(c.ok, true, mala);
+    assert.equal(ipDe(c), 'nula', mala);
+  }
+});
+prueba('IP: el envoltorio de 8 argumentos sigue resolviendo (a la de 10)', () => {
+  const u = usuario(); const id = randomUUID();
+  const r = JSON.parse(psql(`select public.issue_phone_challenge('${u.id}','${id}','${u.tel}','${BUENO}','${hash(u.id)}','${hash(u.tel)}','${hash(u.id + 'ip')}',false)`));
+  assert.equal(r.ok, true);
+});
+prueba('IP: la firma de 9 ya no existe (con ella la llamada con nombre seria ambigua) y la de 10 es solo de service_role', () => {
+  assert.equal(psql(`select count(*) from pg_proc where proname='issue_phone_challenge' and pronargs=9`), '0');
+  const f = 'public.issue_phone_challenge(uuid,uuid,text,text,text,text,text,boolean,text,text)';
+  assert.equal(psql(`select has_function_privilege('anon','${f}','execute') or has_function_privilege('authenticated','${f}','execute')`), 'f');
+  assert.equal(psql(`select has_function_privilege('service_role','${f}','execute')`), 't');
+});
+prueba('IP: request-login-otp y request-phone-otp usan extraerIpDelCliente y la mandan como p_ip', () => {
+  for (const fn of ['request-login-otp', 'request-phone-otp']) {
+    const f = sinComentarios(`supabase/functions/${fn}/index.ts`);
+    assert.doesNotMatch(f, /x-forwarded-for/i, `${fn}: no lee x-forwarded-for a mano`);
+    assert.match(f, /import \{ extraerIpDelCliente \} from '\.\.\/_shared\/contextoAuditoria\.ts'/, fn);
+    assert.match(f, /const ip ?= ?extraerIpDelCliente\(req\)/, fn);
+    assert.match(f, /'ip:' ?\+ ?\(ip ?\?\? ?'unknown'\)/, `${fn}: el hash del limite usa la misma IP`);
+    assert.match(f, /p_ip: ?ip\b/, `${fn}: manda la IP en claro`);
+  }
 });
 
 console.log(`${n} pruebas de login por telefono / cambio pendiente OK.`);
