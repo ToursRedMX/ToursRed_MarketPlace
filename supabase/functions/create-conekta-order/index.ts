@@ -6,7 +6,7 @@ import { origenParaRedirigir } from "../_shared/cors.ts";
 import { exigibleAlProcesador } from "../_shared/exigible.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
-import { exigirMfaSiGastaSaldo } from "../_shared/gastoDeSaldo.ts";
+import { apartarSaldoDeReserva, exigirMfaSiGastaSaldo } from "../_shared/gastoDeSaldo.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -141,10 +141,13 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "No tienes permiso sobre esta reserva" }, 403);
       }
 
-      // MFA para gastar saldo/puntos (13-oct-2026): el webhook debita lo comprometido en la
-      // reserva cuando este cobro sale bien. Ver _shared/gastoDeSaldo.ts.
+      // MFA para gastar saldo/puntos (13-oct-2026). Ver _shared/gastoDeSaldo.ts.
       const stepUpBlock = await exigirMfaSiGastaSaldo(req, user?.id, booking);
       if (stepUpBlock) return stepUpBlock;
+      // Apartar el saldo ANTES de abrir la pasarela (16-oct-2026): antes se debitaba
+      // al confirmar (Conekta y OpenPay ni eso) y podia confirmarse sin pagarlo.
+      const apartadoBlock = await apartarSaldoDeReserva(supabase, booking_id, booking);
+      if (apartadoBlock) return apartadoBlock;
 
       const { data: alreadySucceeded } = await supabase
         .from("payment_transactions")

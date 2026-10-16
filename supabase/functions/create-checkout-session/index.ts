@@ -7,6 +7,7 @@ import { origenParaRedirigir, urlDeRetornoSegura } from "../_shared/cors.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
+import { apartarSaldoDeReserva } from "../_shared/gastoDeSaldo.ts";
 import { clienteStripeVigente } from "../_shared/clienteStripe.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
@@ -344,6 +345,17 @@ Deno.serve(async (req) => {
         );
       }
     }
+
+    // Apartar el saldo ANTES de crear la sesion (16-oct-2026). Comprobar el saldo
+    // arriba no cerraba la ventana hasta el webhook: si se gastaba en otra
+    // pestana, el webhook no podia debitarlo y la reserva se confirmaba con el
+    // descuento sin pagar (TRG-E5BGCYW29XY). Se apartan los montos que esta
+    // sesion descuenta, que son los que el webhook vuelve a pedir (no-op).
+    const apartadoBlock = await apartarSaldoDeReserva(supabase, bookingId, booking, {
+      puntos: puntosSolicitados,
+      cash: cashSolicitado,
+    });
+    if (apartadoBlock) return apartadoBlock;
 
     const { data: customers, error: customerError } = await supabase
       .from("stripe_customers")

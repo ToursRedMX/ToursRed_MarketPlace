@@ -2864,29 +2864,12 @@ Deno.serve(async (req) => {
           .eq('id', bookingId)
           .single();
 
-        if (booking) {
-          if (booking.points_used && booking.points_used > 0) {
-            await supabase.rpc('refund_points_for_cancelled_booking', {
-              p_booking_id: bookingId,
-              p_points_to_refund: booking.points_used
-            });
-            console.log(`Refunded ${booking.points_used} points for expired booking`);
-          }
-
-          const toursRedCashUsed = parseFloat(booking.toursred_cash_used || '0');
-          if (toursRedCashUsed > 0) {
-            await supabase.rpc('update_wallet_balance', {
-              p_user_id: booking.user_id,
-              p_amount: toursRedCashUsed,
-              p_type: 'credit',
-              p_description: `Reembolso de reserva expirada #${booking.booking_code}`,
-              p_reference_id: bookingId,
-              p_reference_type: 'booking_refund',
-              p_idempotency_key: `${bookingId}_refund_booking`
-            });
-            console.log(`Refunded ${toursRedCashUsed} MXN ToursRed Cash for expired booking`);
-          }
-        }
+        // El saldo apartado al crear la sesion lo devuelve el trigger
+        // liberar_saldo_apartado al pasar la reserva a cancelled (16-oct-2026).
+        // Aqui se acreditaba toursred_cash_used aunque nunca se hubiera debitado
+        // (se debitaba al confirmar): creaba Cash de la nada. Y la devolucion de
+        // puntos llamaba a refund_points_for_cancelled_booking con un parametro
+        // que no existe: fallaba siempre.
 
         const expiredUpdate: Record<string, unknown> = {
           status: 'cancelled',
@@ -2909,7 +2892,10 @@ Deno.serve(async (req) => {
         const { error: bookingError } = await supabase
           .from('bookings')
           .update(expiredUpdate)
-          .eq('id', bookingId);
+          .eq('id', bookingId)
+          // Una sesion vieja que expira (o un intento fallido que llega tarde) no
+          // debe cancelar una reserva que ya se pago por otra sesion (16-oct-2026).
+          .neq('payment_status', 'succeeded');
 
         if (bookingError) {
           console.error(`Error cancelling expired booking: ${bookingError.message}`);
@@ -2938,29 +2924,12 @@ Deno.serve(async (req) => {
           .eq('id', bookingId)
           .single();
 
-        if (booking) {
-          if (booking.points_used && booking.points_used > 0) {
-            await supabase.rpc('refund_points_for_cancelled_booking', {
-              p_booking_id: bookingId,
-              p_points_to_refund: booking.points_used
-            });
-            console.log(`Refunded ${booking.points_used} points for failed booking`);
-          }
-
-          const toursRedCashUsed = parseFloat(booking.toursred_cash_used || '0');
-          if (toursRedCashUsed > 0) {
-            await supabase.rpc('update_wallet_balance', {
-              p_user_id: booking.user_id,
-              p_amount: toursRedCashUsed,
-              p_type: 'credit',
-              p_description: `Reembolso de reserva fallida #${booking.booking_code}`,
-              p_reference_id: bookingId,
-              p_reference_type: 'booking_refund',
-              p_idempotency_key: `${bookingId}_refund_booking`
-            });
-            console.log(`Refunded ${toursRedCashUsed} MXN ToursRed Cash for failed booking`);
-          }
-        }
+        // El saldo apartado al crear la sesion lo devuelve el trigger
+        // liberar_saldo_apartado al pasar la reserva a cancelled (16-oct-2026).
+        // Aqui se acreditaba toursred_cash_used aunque nunca se hubiera debitado
+        // (se debitaba al confirmar): creaba Cash de la nada. Y la devolucion de
+        // puntos llamaba a refund_points_for_cancelled_booking con un parametro
+        // que no existe: fallaba siempre.
 
         const failedUpdate: Record<string, unknown> = {
           status: 'cancelled',
@@ -2982,7 +2951,10 @@ Deno.serve(async (req) => {
         const { error: bookingError } = await supabase
           .from('bookings')
           .update(failedUpdate)
-          .eq('id', bookingId);
+          .eq('id', bookingId)
+          // Una sesion vieja que expira (o un intento fallido que llega tarde) no
+          // debe cancelar una reserva que ya se pago por otra sesion (16-oct-2026).
+          .neq('payment_status', 'succeeded');
 
         if (bookingError) {
           console.error(`Error cancelling failed booking: ${bookingError.message}`);
