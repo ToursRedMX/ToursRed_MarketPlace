@@ -7,7 +7,8 @@ import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
-import { ajustarVencimientoDeApartado, apartarPuntosDeCargo, expiracionDelCobroConPuntos, MINUTOS_APARTADO_CONEKTA, MINUTOS_APARTADO_OPENPAY, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
+import { capturarOrdenPaypal, crearOrdenPaypal } from "../_shared/ordenPaypal.ts";
+import { ajustarVencimientoDeApartado, apartarPuntosDeCargo, consumirPuntosDeCargo, expiracionDelCobroConPuntos, expiracionMercadoPago, MINUTOS_APARTADO, MINUTOS_APARTADO_CONEKTA, MINUTOS_APARTADO_OPENPAY, MINUTOS_APARTADO_PAYPAL, puntosDeCargo, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -217,8 +218,9 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const puntosUsados = puntosAplicados.puntos;
-    const pesosEnPuntos = puntosAplicados.pesos;
+    // let: en una confirmacion de MercadoPago/PayPal salen de lo apartado.
+    let puntosUsados = puntosAplicados.puntos;
+    let pesosEnPuntos = puntosAplicados.pesos;
 
     // Load overdue and pending installments ordered by due_date (oldest first)
     const { data: installments } = await supabase
@@ -272,12 +274,12 @@ Deno.serve(async (req: Request) => {
           await supabase.from("payment_transactions").insert({
             booking_id: booking.id,
             stripe_payment_intent_id: providerTransactionId,
-            amount: totalToPay,
+            amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             currency: "mxn",
             status: "succeeded",
             payment_processor: "stripe",
             processor_fee: 0,
-            net_amount: totalToPay,
+            net_amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             charge_context: "payment_plan_installment",
             charge_reference_id: txId,
           });
@@ -292,12 +294,12 @@ Deno.serve(async (req: Request) => {
           await supabase.from("payment_transactions").insert({
             booking_id: booking.id,
             mercadopago_payment_id: providerTransactionId,
-            amount: totalToPay,
+            amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             currency: "mxn",
             status: "succeeded",
             payment_processor: "mercadopago",
             processor_fee: 0,
-            net_amount: totalToPay,
+            net_amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             charge_context: "payment_plan_installment",
             charge_reference_id: txId,
           });
@@ -312,12 +314,12 @@ Deno.serve(async (req: Request) => {
           await supabase.from("payment_transactions").insert({
             booking_id: booking.id,
             paypal_capture_id: providerTransactionId,
-            amount: totalToPay,
+            amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             currency: "mxn",
             status: "succeeded",
             payment_processor: "paypal",
             processor_fee: 0,
-            net_amount: totalToPay,
+            net_amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             charge_context: "payment_plan_installment",
             charge_reference_id: txId,
           });
@@ -522,25 +524,42 @@ Deno.serve(async (req: Request) => {
       const origin = origenParaRedirigir(req);
       const notificationUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`;
 
-      // Path (a): No payment_id → create Checkout Pro preference for redirect flow
+      // Path (a): crear la preferencia.
       if (!mercadopago_payment_id) {
+        let apartadoId: string | null = null;
+        if (puntosUsados > 0) {
+          const apartado = await apartarPuntosDeCargo(supabase, user.id, "payment_plan_installment", plan_id, puntosUsados, MINUTOS_APARTADO);
+          if (!apartado.ok) {
+          return new Response(JSON.stringify({ error: apartado.error }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+          }
+          apartadoId = apartado.id;
+        }
+
+        // amount y pay_full_balance viajan en el regreso (16-oct-2026): antes el
+        // regreso confirmaba siempre el saldo completo y un abono parcial no
+        // cuadraba.
+        const retorno = `${origin}/payment-return?provider=mercadopago&plan_id=${plan_id}&context=payment_plan_installment&amount=${effectiveAmount}&pay_full_balance=${pay_full_balance}`;
         const preferencePayload = {
           items: [{
             title: `Abono plan de pagos - ${tourName} (${bookingCode})`,
-            unit_price: totalToPay,
+            unit_price: montoPasarela,
             quantity: 1,
             currency_id: "MXN",
           }],
           external_reference: plan_id,
           notification_url: notificationUrl,
           back_urls: {
-            success: `${origin}/payment-return?provider=mercadopago&plan_id=${plan_id}&status=success&context=payment_plan_installment&pay_full_balance=${pay_full_balance}`,
-            failure: `${origin}/payment-return?provider=mercadopago&plan_id=${plan_id}&status=failure&context=payment_plan_installment&pay_full_balance=${pay_full_balance}`,
-            pending: `${origin}/payment-return?provider=mercadopago&plan_id=${plan_id}&status=pending&context=payment_plan_installment&pay_full_balance=${pay_full_balance}`,
+            success: `${retorno}&status=success`,
+            failure: `${retorno}&status=failure`,
+            pending: `${retorno}&status=pending`,
           },
           auto_return: "approved",
           payment_methods: { excluded_payment_types: [{ id: "ticket" }] },
-          metadata: { plan_id, payment_for: "payment_plan_installment", user_id: user.id },
+          ...(apartadoId ? { expires: true, expiration_date_to: expiracionMercadoPago() } : {}),
+          metadata: { plan_id, payment_for: "payment_plan_installment", user_id: user.id, points_used: puntosUsados },
         };
 
         const prefResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
@@ -550,103 +569,129 @@ Deno.serve(async (req: Request) => {
         });
         const prefData = await prefResponse.json();
         if (!prefResponse.ok) {
+          if (apartadoId) await supabase.rpc("liberar_puntos_de_cargo", { p_apartado_id: apartadoId });
           return new Response(JSON.stringify({ error: prefData.message || "Error al crear preferencia de MercadoPago" }), {
-            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         return new Response(JSON.stringify({ success: true, url: prefData.init_point }), {
-          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Path (b): mercadopago_payment_id present → verify against MP API before confirming
-      if (mercadopago_payment_id) {
-        const verifyResponse = await fetch(`https://api.mercadopago.com/v1/payments/${mercadopago_payment_id}`, {
-          headers: { Authorization: `Bearer ${mpAccessToken}` },
-        });
-        const mpPayment = await verifyResponse.json();
-        if (!verifyResponse.ok || mpPayment.status !== "approved") {
-          return new Response(JSON.stringify({
-            error: "El pago no fue aprobado por MercadoPago",
-            mp_status: mpPayment.status,
-            status_detail: mpPayment.status_detail,
-          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        if (mpPayment.external_reference !== plan_id) {
-          return new Response(JSON.stringify({ error: "La referencia externa del pago no coincide" }), {
-            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        const mpAmount = parseFloat(mpPayment.transaction_amount || "0");
-        if (Math.abs(mpAmount - totalToPay) > 0.50) {
-          return new Response(JSON.stringify({
-            error: `El monto del pago (${mpAmount}) no coincide con el esperado (${totalToPay})`,
-          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        const { pointsEarned } = await finalizePayment("mercadopago", String(mercadopago_payment_id));
-        return new Response(JSON.stringify({
-          success: true,
-          amount_paid: effectiveAmount,
-          total_charged: totalToPay,
-          points_earned: pointsEarned,
-          message: "Abono con MercadoPago completado.",
-        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-    }
-
-    // 5. PayPal
-    if (payment_method === "paypal") {
-      if (!paypal_order_id) {
-        return new Response(JSON.stringify({ error: "paypal_order_id es requerido para PayPal" }), {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const paypalClientId = platformSettings?.paypal_client_id;
-      const paypalClientSecret = platformSecrets?.paypal_client_secret;
-      const isSandbox = platformSettings?.paypal_sandbox ?? true;
+      // Path (b): confirmar el pago al regresar.
+      const verifyResponse = await fetch(`https://api.mercadopago.com/v1/payments/${mercadopago_payment_id}`, {
+        headers: { Authorization: `Bearer ${mpAccessToken}` },
+      });
+      const mpPayment = await verifyResponse.json();
+      if (!verifyResponse.ok || mpPayment.status !== "approved") {
+        return new Response(JSON.stringify({
+          error: "El pago no fue aprobado por MercadoPago",
+          mp_status: mpPayment.status,
+          status_detail: mpPayment.status_detail,
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (mpPayment.external_reference !== plan_id) {
+        return new Response(JSON.stringify({ error: "La referencia externa del pago no coincide" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const puntosApartadosMp = await puntosDeCargo(supabase, "payment_plan_installment", plan_id);
+      const esperadoMp = parseFloat((totalToPay - puntosApartadosMp / 100).toFixed(2));
+      const mpAmount = parseFloat(mpPayment.transaction_amount || "0");
+      if (Math.abs(mpAmount - esperadoMp) > 0.50) {
+        return new Response(JSON.stringify({
+          error: `El monto del pago (${mpAmount}) no coincide con el esperado (${esperadoMp})`,
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      puntosUsados = await consumirPuntosDeCargo(supabase, "payment_plan_installment", plan_id);
+      pesosEnPuntos = puntosUsados / 100;
+      const { pointsEarned } = await finalizePayment("mercadopago", String(mercadopago_payment_id));
+      return new Response(JSON.stringify({
+        success: true,
+        amount_paid: effectiveAmount,
+        total_charged: esperadoMp,
+        points_used: puntosUsados,
+        points_earned: pointsEarned,
+        message: "Abono con MercadoPago completado.",
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // 5. PayPal
+    if (payment_method === "paypal") {
+      const paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID") || platformSettings?.paypal_client_id;
+      const paypalClientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET") || platformSecrets?.paypal_client_secret;
       if (!paypalClientId || !paypalClientSecret) {
         return new Response(JSON.stringify({ error: "PayPal no configurado" }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      const credPaypal = { clientId: paypalClientId, clientSecret: paypalClientSecret, sandbox: platformSettings?.paypal_sandbox ?? true };
 
-      const base = isSandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
-      const tokenRes = await fetch(`${base}/v1/oauth2/token`, {
-        method: "POST",
-        headers: { Authorization: `Basic ${btoa(`${paypalClientId}:${paypalClientSecret}`)}`, "Content-Type": "application/x-www-form-urlencoded" },
-        body: "grant_type=client_credentials",
-      });
-      const { access_token } = await tokenRes.json();
+      // Crear el pedido (16-oct-2026: antes lo creaba create-paypal-order, con
+      // su propio calculo del monto y sin el cargo por servicio).
+      if (!paypal_order_id) {
+        let apartadoId: string | null = null;
+        if (puntosUsados > 0) {
+          const apartado = await apartarPuntosDeCargo(supabase, user.id, "payment_plan_installment", plan_id, puntosUsados, MINUTOS_APARTADO_PAYPAL);
+          if (!apartado.ok) {
+          return new Response(JSON.stringify({ error: apartado.error }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+          }
+          apartadoId = apartado.id;
+        }
+        const origin = origenParaRedirigir(req);
+        try {
+          const orden = await crearOrdenPaypal(credPaypal, {
+            monto: montoPasarela,
+            descripcion: `Abono plan de pago: ${tourName} (${bookingCode})`,
+            referencia: plan_id,
+            returnUrl: `${origin}/payment-return?provider=paypal&context=payment_plan_installment&plan_id=${plan_id}&amount=${effectiveAmount}&tr_status=success${pay_full_balance ? "&pay_full_balance=true" : ""}`,
+            cancelUrl: `${origin}/traveler/bookings`,
+            requestId: `payment_plan_${plan_id}_${Date.now()}`,
+          });
+          return new Response(JSON.stringify({ success: true, url: orden.url, order_id: orden.id }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } catch (ppErr) {
+          if (apartadoId) await supabase.rpc("liberar_puntos_de_cargo", { p_apartado_id: apartadoId });
+          console.error("PayPal (abono):", ppErr);
+          return new Response(JSON.stringify({ error: "Error al crear la orden de PayPal" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
 
-      const captureRes = await fetch(`${base}/v2/checkout/orders/${paypal_order_id}/capture`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${access_token}` },
-      });
-      const captureData = await captureRes.json();
-
-      if (!captureRes.ok || captureData.status !== "COMPLETED") {
+      // Capturar al regresar.
+      const captura = await capturarOrdenPaypal(credPaypal, paypal_order_id);
+      if (!captura.ok) {
         return new Response(JSON.stringify({ error: "Error al capturar el pago PayPal" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
-      const capturedAmountPp = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
-      if (Math.abs(capturedAmountPp - totalToPay) > 0.5) {
+      const puntosApartadosPp = await puntosDeCargo(supabase, "payment_plan_installment", plan_id);
+      const esperadoPp = parseFloat((totalToPay - puntosApartadosPp / 100).toFixed(2));
+      if (Math.abs(captura.monto - esperadoPp) > 0.5) {
         return new Response(JSON.stringify({
-          error: `El monto capturado (${capturedAmountPp}) no coincide con el esperado (${totalToPay})`,
+          error: `El monto capturado (${captura.monto}) no coincide con el esperado (${esperadoPp})`,
         }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      const transactionId = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? paypal_order_id;
-      const { pointsEarned } = await finalizePayment("paypal", transactionId);
+      puntosUsados = await consumirPuntosDeCargo(supabase, "payment_plan_installment", plan_id);
+      pesosEnPuntos = puntosUsados / 100;
+      const { pointsEarned } = await finalizePayment("paypal", captura.capturaId);
       return new Response(JSON.stringify({
         success: true,
         amount_paid: effectiveAmount,
-        total_charged: totalToPay,
+        total_charged: esperadoPp,
+        points_used: puntosUsados,
         points_earned: pointsEarned,
         message: "Abono con PayPal completado.",
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });

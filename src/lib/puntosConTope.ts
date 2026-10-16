@@ -7,9 +7,8 @@
 
 export const PUNTOS_POR_PESO = 100;
 
-/** Metodos que aceptan points_to_use. Igual que METODOS_CON_PUNTOS del servidor:
- *  MercadoPago y PayPal, en el siguiente PR. */
-const METODOS_CON_PUNTOS: readonly string[] = ['toursred_cash', 'stripe', 'conekta', 'openpay'];
+/** Metodos que aceptan points_to_use. Igual que METODOS_CON_PUNTOS del servidor. */
+const METODOS_CON_PUNTOS: readonly string[] = ['toursred_cash', 'stripe', 'conekta', 'openpay', 'mercadopago', 'paypal'];
 
 export function aceptaPuntos(metodo: string): boolean {
   return METODOS_CON_PUNTOS.includes(metodo);

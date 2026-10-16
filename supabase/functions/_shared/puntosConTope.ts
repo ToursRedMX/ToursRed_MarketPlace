@@ -9,10 +9,9 @@
 //   - "points" deja de ser una forma de pago: pagar 100% con puntos rompe el
 //     tope. Los puntos viajan en `points_to_use` junto con el metodo que paga
 //     el resto.
-//   - El resto se paga con ToursRed Cash, tarjeta (Stripe), Conekta u OpenPay.
-//     Con pasarela los puntos se apartan al crear el cobro y se consumen al
-//     confirmarlo (puntos_apartados_cargos, 20261016060535). MercadoPago y
-//     PayPal usan la misma base en el siguiente PR; mientras, se rechazan.
+//   - El resto se paga con ToursRed Cash o con cualquier pasarela. Con pasarela
+//     los puntos se apartan al crear el cobro y se consumen al confirmarlo
+//     (puntos_apartados_cargos, 20261016060535).
 //
 // 100 puntos = $1 MXN, la misma conversion que deduct_points_for_booking.
 
@@ -20,7 +19,7 @@ export const PUNTOS_POR_PESO = 100;
 export const TOPE_PUNTOS = 0.5;
 
 /** Metodos que hoy aceptan points_to_use. */
-export const METODOS_CON_PUNTOS: readonly string[] = ["toursred_cash", "stripe", "conekta", "openpay"];
+export const METODOS_CON_PUNTOS: readonly string[] = ["toursred_cash", "stripe", "conekta", "openpay", "mercadopago", "paypal"];
 
 /** Maximo de puntos que puede cubrir un pago de `baseMxn` pesos. */
 export function maxPuntosPermitidos(baseMxn: number): number {
@@ -57,7 +56,7 @@ export function validarFormaDePuntos(metodo: string, puntosPedidos: unknown): Pu
   if (puntos === 0) return { ok: true, puntos: 0, pesos: 0 };
 
   if (!METODOS_CON_PUNTOS.includes(metodo)) {
-    return { ok: false, error: "Por ahora los puntos no se pueden combinar con MercadoPago ni PayPal." };
+    return { ok: false, error: "Ese método de pago no acepta puntos ToursRed." };
   }
 
   return { ok: true, puntos, pesos: puntos / PUNTOS_POR_PESO };
@@ -110,6 +109,14 @@ export const MINUTOS_APARTADO_CONEKTA = (HORAS_CHECKOUT_CONEKTA + 2) * 60;
 /** OpenPay: lo mismo mientras no se sepa su fecha limite; con el due_date del
  *  cargo (efectivo, SPEI) se ajusta con ajustarVencimientoDeApartado. */
 export const MINUTOS_APARTADO_OPENPAY = MINUTOS_APARTADO_CONEKTA;
+/** PayPal: un pedido sin aprobar caduca a las 3 h; el apartado, a las 4 h. */
+export const MINUTOS_APARTADO_PAYPAL = 240;
+
+/** Caducidad de la preferencia de MercadoPago (expiration_date_to), en el
+ *  formato con zona horaria que pide su API. */
+export function expiracionMercadoPago(): string {
+  return new Date(Date.now() + MINUTOS_COBRO_CON_PUNTOS * 60_000).toISOString().replace("Z", "+00:00");
+}
 
 export type ContextoDeCargo = "supplement" | "optional_service" | "insurance" | "payment_plan_installment";
 
@@ -177,4 +184,19 @@ export async function ajustarVencimientoDeApartado(
   const vence = new Date(Math.max(limite + 2 * 3_600_000, Date.now() + MINUTOS_APARTADO_OPENPAY * 60_000)).toISOString();
   const { error } = await supabase.from("puntos_apartados_cargos").update({ vence_en: vence }).eq("id", apartadoId);
   if (error) console.error(`ajustarVencimientoDeApartado ${apartadoId}: ${error.message}`);
+}
+
+/** Puntos apartados para el cargo, sin consumirlos (para verificar el monto
+ *  cobrado antes de registrarlo). 0 si el cargo no uso puntos. */
+export async function puntosDeCargo(supabase: ClienteConRpc, contexto: ContextoDeCargo, referencia: string): Promise<number> {
+  const { data, error } = await supabase.rpc("puntos_de_cargo", { p_contexto: contexto, p_referencia: referencia });
+  if (error) throw new Error(`puntos_de_cargo: ${error.message}`);
+  return Number(data || 0);
+}
+
+/** Consume los puntos apartados del cargo (idempotente) y devuelve cuantos. */
+export async function consumirPuntosDeCargo(supabase: ClienteConRpc, contexto: ContextoDeCargo, referencia: string): Promise<number> {
+  const { data, error } = await supabase.rpc("consumir_puntos_de_cargo", { p_contexto: contexto, p_referencia: referencia });
+  if (error) throw new Error(`consumir_puntos_de_cargo: ${error.message}`);
+  return Number(data || 0);
 }

@@ -2059,56 +2059,6 @@ const TravelerBookings: React.FC = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
 
-      if (selectedMethod === 'mercadopago') {
-        const totalAmount = Number(bookingSupplement.unit_price || 0) * Number(bookingSupplement.quantity || 1);
-        const mpRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-mercadopago-preference`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            supplementId: bookingSupplement.id,
-            customerEmail: (await supabase.auth.getUser()).data.user?.email,
-            amount: totalAmount,
-            description: `Suplemento: ${bookingSupplement.tour_supplements?.name || 'Suplemento'}`,
-            context: 'supplement',
-            deviceId: await getMpDeviceId(),
-          }),
-        });
-        const mpData = await mpRes.json();
-        if (!mpRes.ok || !mpData.success) throw new Error(mpData.error || 'Error al crear preferencia de MercadoPago');
-        if (!mpData.url) throw new Error('No se recibió la URL de pago de MercadoPago');
-        setSupplementDirectPayModal(prev => ({ ...prev, open: false, isProcessing: false }));
-        window.location.href = mpData.url;
-        return;
-      }
-
-      if (selectedMethod === 'paypal') {
-        const totalAmount = Number(bookingSupplement.unit_price || 0) * Number(bookingSupplement.quantity || 1);
-        const ppRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-paypal-order`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-            'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({
-            bookingId: bookingSupplement.id,
-            amount: totalAmount,
-            description: `Suplemento: ${bookingSupplement.tour_supplements?.name || 'Suplemento'}`,
-            context: 'supplement',
-          }),
-        });
-        const ppData = await ppRes.json();
-        if (!ppRes.ok || !ppData.success) throw new Error(ppData.error || 'Error al crear orden de PayPal');
-        setSupplementDirectPayModal(prev => ({ ...prev, open: false, isProcessing: false }));
-        window.location.href = ppData.url;
-        return;
-      }
-
       const payRes = await fetchWithStepUp(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-supplement-payment`, {
         method: 'POST',
         headers: {
@@ -2340,21 +2290,6 @@ const TravelerBookings: React.FC = () => {
             ...puntosExtra,
           };
 
-      if (selectedMethod === 'paypal') {
-        const amount = type === 'optional_service'
-          ? Number(item.price_per_person) * quantity
-          : extrasModal.insuranceCost || Number(booking.travel_insurance_cost || 0);
-        const ppRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-paypal-order`, {
-          method: 'POST', headers,
-          body: JSON.stringify({ bookingId: booking.id, amount, description: type === 'optional_service' ? `Servicio: ${item.name}` : 'Seguro de viaje', context: 'extras', extrasBody: body }),
-        });
-        const ppData = await ppRes.json();
-        if (!ppRes.ok || !ppData.success) throw new Error(ppData.error || 'Error al crear orden de PayPal');
-        setExtrasPaymentModal(prev => ({ ...prev, open: false, isProcessing: false }));
-        window.location.href = ppData.url;
-        return;
-      }
-
       const res = await fetchWithStepUp(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/purchase-post-booking-extras`, {
         method: 'POST', headers, body: JSON.stringify(body),
       });
@@ -2416,57 +2351,10 @@ const TravelerBookings: React.FC = () => {
       if (!res.ok) throw new Error(data.error || 'Error solicitando suplemento');
 
       if (data.status === 'pending_payment' || data.status === 'approved') {
-        if (selectedMethod === 'mercadopago') {
-          const totalAmount = Number(supplement.price || 0) * quantity;
-          const mpRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-mercadopago-preference`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.access_token}`,
-              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            },
-            body: JSON.stringify({
-              bookingId: booking.id,
-              supplementId: data.booking_supplement_id,
-              customerEmail: (await supabase.auth.getUser()).data.user?.email,
-              amount: totalAmount,
-              description: `Suplemento: ${supplement.name || 'Suplemento'}`,
-              context: 'supplement',
-              deviceId: await getMpDeviceId(),
-            }),
-          });
-          const mpData = await mpRes.json();
-          if (!mpRes.ok || !mpData.success) throw new Error(mpData.error || 'Error al crear preferencia de MercadoPago');
-          if (!mpData.url) throw new Error('No se recibió la URL de pago de MercadoPago');
-          setSupplementPaymentModal(prev => ({ ...prev, open: false, isProcessing: false }));
-          window.location.href = mpData.url;
-          return;
-        }
-
-        if (selectedMethod === 'paypal') {
-          const totalAmount = Number(supplement.price || 0) * quantity;
-          const ppRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-paypal-order`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.access_token}`,
-              'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            },
-            body: JSON.stringify({
-              bookingId: data.booking_supplement_id,
-              amount: totalAmount,
-              description: `Suplemento: ${supplement.name || 'Suplemento'}`,
-              context: 'supplement',
-            }),
-          });
-          const ppData = await ppRes.json();
-          if (!ppRes.ok || !ppData.success) throw new Error(ppData.error || 'Error al crear orden de PayPal');
-          setSupplementPaymentModal(prev => ({ ...prev, open: false, isProcessing: false }));
-          window.location.href = ppData.url;
-          return;
-        }
-
-        // Proceed to process payment for this supplement
+        // Todos los metodos, MercadoPago y PayPal incluidos, los cobra
+        // process-supplement-payment (16-oct-2026): calcula el monto, aparta los
+        // puntos y pide el codigo MFA del gasto. Antes MercadoPago y PayPal se
+        // pedian directo a create-mercadopago-preference / create-paypal-order.
         const payRes = await fetchWithStepUp(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-supplement-payment`, {
           method: 'POST',
           headers: {

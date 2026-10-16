@@ -707,6 +707,20 @@ jobs:
       # existe en booking_supplements).
       - name: Puntos + Conekta / OpenPay
         run: node scripts/test-puntos-conekta-openpay.mjs
+
+      # Puntos + MercadoPago / PayPal, y la unificacion: estos cobros los crean y
+      # confirman las tres funciones de cobro (antes el front los pedia directo,
+      # con otro calculo del monto y sin codigo MFA).
+      - name: Puntos + MercadoPago / PayPal (base)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS puntos_mp_paypal;" -c "CREATE DATABASE puntos_mp_paypal;"
+          cd scripts
+          psql -h localhost -U postgres -d puntos_mp_paypal -v ON_ERROR_STOP=1 -f test-puntos-de-cargo.sql
+
+      - name: Puntos + MercadoPago / PayPal (funciones y pantallas)
+        run: node scripts/test-puntos-mp-paypal.mjs
 
       # No existia una forma de reversar una poliza publicada: las tres
       # primeras reversas del ERP se armaron a mano, invirtiendo cada partida.
