@@ -50,13 +50,10 @@ prueba('"points" sola ya no es forma de pago', () => {
   assert.match(r.error, /50%/);
 });
 
-prueba('los puntos se combinan con Cash, tarjeta, Conekta u OpenPay; MercadoPago y PayPal, en el siguiente PR', () => {
-  for (const metodo of ['paypal', 'mercadopago']) {
-    assert.equal(servidor.validarFormaDePuntos(metodo, 100).ok, false, metodo);
-    assert.deepEqual(servidor.validarFormaDePuntos(metodo, undefined), { ok: true, puntos: 0, pesos: 0 }, `${metodo} sin puntos`);
-  }
+prueba('los puntos se combinan con Cash y con cualquier pasarela', () => {
+  assert.equal(servidor.validarFormaDePuntos('metodo_inventado', 100).ok, false);
   assert.deepEqual(servidor.validarFormaDePuntos('toursred_cash', 2500), { ok: true, puntos: 2500, pesos: 25 });
-  for (const metodo of ['stripe', 'conekta', 'openpay']) {
+  for (const metodo of ['stripe', 'conekta', 'openpay', 'mercadopago', 'paypal']) {
     assert.deepEqual(servidor.validarFormaDePuntos(metodo, 2500), { ok: true, puntos: 2500, pesos: 25 }, metodo);
   }
 });

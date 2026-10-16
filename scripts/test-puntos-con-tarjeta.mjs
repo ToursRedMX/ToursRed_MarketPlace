@@ -31,12 +31,9 @@ const fuente = (f) => sinComentarios(readFileSync(f, 'utf8'));
 // ---------------------------------------------------------------------------
 // 1. La regla
 // ---------------------------------------------------------------------------
-prueba('Stripe acepta puntos; MercadoPago y PayPal todavia no', () => {
+prueba('Stripe acepta puntos, con el mismo tope del 50%', () => {
   assert.equal(m.validarPuntos('stripe', 25000, 500).ok, true);
   assert.equal(m.validarPuntos('stripe', 25001, 500).ok, false, 'el tope del 50% aplica igual');
-  for (const metodo of ['paypal', 'mercadopago']) {
-    assert.equal(m.validarFormaDePuntos(metodo, 100).ok, false, metodo);
-  }
 });
 
 prueba('el cobro con puntos expira ANTES que el apartado (ningun pago llega ya liberado)', () => {

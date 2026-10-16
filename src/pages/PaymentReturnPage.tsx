@@ -84,6 +84,9 @@ export default function PaymentReturnPage() {
               type: extraType,
               payment_method: 'mercadopago',
               mercadopago_payment_id: mpPaymentId,
+              // La fila del servicio se creo al abrir el cobro: se reusa, no se
+              // inserta otra (16-oct-2026).
+              ...(extraBosId ? { booking_optional_service_id: extraBosId } : {}),
             };
             if (extraType === 'optional_service' && extraTourOptionalServiceId) {
               extrasBody.tour_optional_service_id = extraTourOptionalServiceId;
@@ -130,12 +133,15 @@ export default function PaymentReturnPage() {
                   'Authorization': `Bearer ${session?.access_token}`,
                   'Apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
                 },
+                // amount y pay_full_balance vienen en el regreso (16-oct-2026): antes
+                // se confirmaba siempre el saldo completo y un abono parcial no
+                // cuadraba con lo cobrado.
                 body: JSON.stringify({
                   plan_id: planId,
-                  amount: 1,
+                  amount: parseFloat(searchParams.get('amount') || '0') || 1,
                   payment_method: 'mercadopago',
                   mercadopago_payment_id: mpPaymentId,
-                  pay_full_balance: true,
+                  pay_full_balance: searchParams.get('amount') ? payFullBalance : true,
                 }),
               }
             );
@@ -220,6 +226,8 @@ export default function PaymentReturnPage() {
             type: extraType,
             payment_method: 'paypal',
             paypal_order_id: paypalOrderId,
+            // La fila del servicio se creo al abrir el cobro: se reusa.
+            ...(extraBosId ? { booking_optional_service_id: extraBosId } : {}),
           };
           if (extraType === 'optional_service' && extraTourOptionalServiceId) {
             extrasBody.tour_optional_service_id = extraTourOptionalServiceId;

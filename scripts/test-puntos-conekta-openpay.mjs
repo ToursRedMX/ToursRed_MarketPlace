@@ -35,9 +35,8 @@ const rama = (c, metodo) => {
 // ---------------------------------------------------------------------------
 // 1. La regla
 // ---------------------------------------------------------------------------
-prueba('Conekta y OpenPay aceptan puntos; MercadoPago y PayPal todavia no', () => {
+prueba('Conekta y OpenPay aceptan puntos', () => {
   for (const metodo of ['conekta', 'openpay']) assert.equal(m.validarPuntos(metodo, 25000, 500).ok, true, metodo);
-  for (const metodo of ['mercadopago', 'paypal']) assert.equal(m.validarFormaDePuntos(metodo, 100).ok, false, metodo);
 });
 
 prueba('el apartado vence despues de que Conekta cierra el checkout (71 h)', () => {

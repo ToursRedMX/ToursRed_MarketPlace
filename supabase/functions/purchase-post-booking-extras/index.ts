@@ -7,7 +7,8 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
-import { ajustarVencimientoDeApartado, apartarPuntosDeCargo, expiracionDelCobroConPuntos, MINUTOS_APARTADO_CONEKTA, MINUTOS_APARTADO_OPENPAY, puntosGanadosSinPasarela, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
+import { capturarOrdenPaypal, crearOrdenPaypal } from "../_shared/ordenPaypal.ts";
+import { ajustarVencimientoDeApartado, apartarPuntosDeCargo, consumirPuntosDeCargo, expiracionDelCobroConPuntos, expiracionMercadoPago, MINUTOS_APARTADO, MINUTOS_APARTADO_CONEKTA, MINUTOS_APARTADO_OPENPAY, MINUTOS_APARTADO_PAYPAL, puntosDeCargo, puntosGanadosSinPasarela, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,7 +67,8 @@ Deno.serve(async (req: Request) => {
       bnpl_product_type,     // "aplazo_bnpl" | "creditea_bnpl" | "coppel_bnpl"
       openpay_method,        // "card" | "spei" | "cash"
       insurance_days,
-      points_to_use,         // puntos que paga, junto con ToursRed Cash (tope 50%)
+      points_to_use,         // puntos que paga, junto con otro metodo (tope 50%)
+      booking_optional_service_id, // al confirmar MercadoPago/PayPal: la fila creada al abrir el cobro
     } = await req.json();
 
     if (!booking_id || !type || !payment_method) {
@@ -167,7 +169,35 @@ Deno.serve(async (req: Request) => {
       return null;
     };
 
-    if (type === "optional_service") {
+    if (type === "optional_service" && booking_optional_service_id && (mercadopago_payment_id || paypal_order_id)) {
+      // Confirmacion al regresar de MercadoPago/PayPal (16-oct-2026). La fila del
+      // servicio se creo al abrir el cobro, con sus montos. Antes se insertaba
+      // OTRA aqui: su id no coincidia con el external_reference del pago, se
+      // borraba y el viajero veia un error aunque habia pagado.
+      const { data: bosPrevio } = await supabase
+        .from("booking_optional_services")
+        .select("id, booking_id, subtotal, service_charge, total_paid, membership_exemption_used, agency_commission, paid_at, is_cancelled, tour_optional_services(name)")
+        .eq("id", booking_optional_service_id)
+        .maybeSingle();
+      if (!bosPrevio || bosPrevio.booking_id !== booking_id || bosPrevio.is_cancelled) {
+        return new Response(JSON.stringify({ error: "Servicio opcional no encontrado" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (bosPrevio.paid_at) {
+        return new Response(JSON.stringify({ success: true, already_paid: true, booking_optional_service_id: bosPrevio.id }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      itemName = (bosPrevio.tour_optional_services as unknown as { name?: string } | null)?.name ?? "Servicio opcional";
+      subtotal = Number(bosPrevio.subtotal) || 0;
+      netServiceCharge = Number(bosPrevio.service_charge) || 0;
+      grossServiceCharge = netServiceCharge;
+      exemptionApplied = Number(bosPrevio.membership_exemption_used) || 0;
+      agencyCommission = Number(bosPrevio.agency_commission) || 0;
+      totalToPay = Number(bosPrevio.total_paid) || parseFloat((subtotal + netServiceCharge).toFixed(2));
+      bookingOptionalServiceId = bosPrevio.id;
+    } else if (type === "optional_service") {
       const { data: service } = await supabase
         .from("tour_optional_services")
         .select("id, name, price_per_person, max_capacity, is_active, tour_id")
@@ -409,12 +439,12 @@ Deno.serve(async (req: Request) => {
           await supabase.from("payment_transactions").insert({
             booking_id,
             stripe_payment_intent_id: intentId,
-            amount: totalToPay,
+            amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             currency: "mxn",
             status: "succeeded",
             payment_processor: "stripe",
             processor_fee: 0,
-            net_amount: totalToPay,
+            net_amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             charge_context: extraChargeContext,
             charge_reference_id: extraRefId,
           });
@@ -429,12 +459,12 @@ Deno.serve(async (req: Request) => {
           await supabase.from("payment_transactions").insert({
             booking_id,
             mercadopago_payment_id: intentId,
-            amount: totalToPay,
+            amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             currency: "mxn",
             status: "succeeded",
             payment_processor: "mercadopago",
             processor_fee: 0,
-            net_amount: totalToPay,
+            net_amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             charge_context: extraChargeContext,
             charge_reference_id: extraRefId,
           });
@@ -449,12 +479,12 @@ Deno.serve(async (req: Request) => {
           await supabase.from("payment_transactions").insert({
             booking_id,
             paypal_capture_id: intentId,
-            amount: totalToPay,
+            amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             currency: "mxn",
             status: "succeeded",
             payment_processor: "paypal",
             processor_fee: 0,
-            net_amount: totalToPay,
+            net_amount: parseFloat((totalToPay - pesosEnPuntos).toFixed(2)),
             charge_context: extraChargeContext,
             charge_reference_id: extraRefId,
           });
@@ -629,24 +659,41 @@ Deno.serve(async (req: Request) => {
       const extraChargeContext = type === "insurance" ? "insurance" : "optional_service";
       const extraRefId = bookingOptionalServiceId || booking_id;
 
+      // (a) Crear la preferencia.
       if (!mercadopago_payment_id) {
+        let apartadoId: string | null = null;
+        if (puntosUsados > 0) {
+          const apartado = await apartarPuntosDeCargo(supabase, user.id, type === "insurance" ? "insurance" : "optional_service", type === "insurance" ? booking_id : bookingOptionalServiceId!, puntosUsados, MINUTOS_APARTADO);
+          if (!apartado.ok) {
+            if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+            return new Response(JSON.stringify({ error: apartado.error }), {
+              status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          apartadoId = apartado.id;
+        }
+
+        // extra_type y bos_id: PaymentReturnPage los necesita para confirmar
+        // (antes faltaban y el regreso no sabia que extra era).
+        const retorno = `${origin}/payment-return?provider=mercadopago&booking_id=${booking_id}&extra_type=${type}&bos_id=${bookingOptionalServiceId || ""}&context=${extraChargeContext}`;
         const preferencePayload = {
           items: [{
             title: itemName,
-            unit_price: totalToPay,
+            unit_price: montoPasarela,
             quantity: 1,
             currency_id: "MXN",
           }],
           external_reference: extraRefId,
           notification_url: notificationUrl,
           back_urls: {
-            success: `${origin}/payment-return?provider=mercadopago&booking_id=${booking_id}&status=success&context=${extraChargeContext}`,
-            failure: `${origin}/payment-return?provider=mercadopago&booking_id=${booking_id}&status=failure&context=${extraChargeContext}`,
-            pending: `${origin}/payment-return?provider=mercadopago&booking_id=${booking_id}&status=pending&context=${extraChargeContext}`,
+            success: `${retorno}&status=success`,
+            failure: `${retorno}&status=failure`,
+            pending: `${retorno}&status=pending`,
           },
           auto_return: "approved",
           payment_methods: { excluded_payment_types: [{ id: "ticket" }] },
-          metadata: { booking_id, booking_optional_service_id: bookingOptionalServiceId || "", extra_type: type, payment_for: "post_booking_extra", user_id: user.id },
+          ...(apartadoId ? { expires: true, expiration_date_to: expiracionMercadoPago() } : {}),
+          metadata: { booking_id, booking_optional_service_id: bookingOptionalServiceId || "", extra_type: type, payment_for: "post_booking_extra", user_id: user.id, points_used: puntosUsados },
         };
 
         const prefResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
@@ -656,7 +703,8 @@ Deno.serve(async (req: Request) => {
         });
         const prefData = await prefResponse.json();
         if (!prefResponse.ok) {
-          if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+          if (apartadoId) await supabase.rpc("liberar_puntos_de_cargo", { p_apartado_id: apartadoId });
+            if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
           return new Response(JSON.stringify({ error: prefData.message || "Error al crear preferencia de MercadoPago" }), {
             status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -666,92 +714,109 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      if (mercadopago_payment_id) {
-        const verifyResponse = await fetch(`https://api.mercadopago.com/v1/payments/${mercadopago_payment_id}`, {
-          headers: { Authorization: `Bearer ${mpAccessToken}` },
-        });
-        const mpPayment = await verifyResponse.json();
-        if (!verifyResponse.ok || mpPayment.status !== "approved") {
-          if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
-          return new Response(JSON.stringify({
-            error: "El pago no fue aprobado por MercadoPago",
-            mp_status: mpPayment.status,
-            status_detail: mpPayment.status_detail,
-          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        if (mpPayment.external_reference !== extraRefId) {
-          if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
-          return new Response(JSON.stringify({ error: "La referencia externa del pago no coincide" }), {
-            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        const mpAmount = parseFloat(mpPayment.transaction_amount || "0");
-        if (Math.abs(mpAmount - totalToPay) > 0.50) {
-          if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
-          return new Response(JSON.stringify({
-            error: `El monto del pago (${mpAmount}) no coincide con el esperado (${totalToPay})`,
-          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        const pointsEarned = await finalizePayment("mercadopago", String(mercadopago_payment_id));
+      // (b) Confirmar el pago al regresar.
+      const verifyResponse = await fetch(`https://api.mercadopago.com/v1/payments/${mercadopago_payment_id}`, {
+        headers: { Authorization: `Bearer ${mpAccessToken}` },
+      });
+      const mpPayment = await verifyResponse.json();
+      if (!verifyResponse.ok || mpPayment.status !== "approved") {
         return new Response(JSON.stringify({
-          success: true, total_charged: totalToPay, points_earned: pointsEarned,
-          booking_optional_service_id: bookingOptionalServiceId,
-          message: "Pago con MercadoPago completado.",
-        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          error: "El pago no fue aprobado por MercadoPago",
+          mp_status: mpPayment.status,
+          status_detail: mpPayment.status_detail,
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-    }
-
-    if (payment_method === "paypal") {
-      if (!paypal_order_id) {
-        if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
-        return new Response(JSON.stringify({ error: "paypal_order_id es requerido para PayPal" }), {
+      if (mpPayment.external_reference !== extraRefId) {
+        return new Response(JSON.stringify({ error: "La referencia externa del pago no coincide" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      const puntosApartadosMp = await puntosDeCargo(supabase, type === "insurance" ? "insurance" : "optional_service", type === "insurance" ? booking_id : bookingOptionalServiceId!);
+      const esperadoMp = parseFloat((totalToPay - puntosApartadosMp / 100).toFixed(2));
+      const mpAmount = parseFloat(mpPayment.transaction_amount || "0");
+      if (Math.abs(mpAmount - esperadoMp) > 0.50) {
+        return new Response(JSON.stringify({
+          error: `El monto del pago (${mpAmount}) no coincide con el esperado (${esperadoMp})`,
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      puntosUsados = await consumirPuntosDeCargo(supabase, type === "insurance" ? "insurance" : "optional_service", type === "insurance" ? booking_id : bookingOptionalServiceId!);
+      pesosEnPuntos = puntosUsados / 100;
+      const pointsEarned = await finalizePayment("mercadopago", String(mercadopago_payment_id));
+      return new Response(JSON.stringify({
+        success: true, total_charged: esperadoMp, points_used: puntosUsados, points_earned: pointsEarned,
+        booking_optional_service_id: bookingOptionalServiceId,
+        message: "Pago con MercadoPago completado.",
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
-      const paypalClientId = platformSettings?.paypal_client_id;
-      const paypalClientSecret = platformSecrets?.paypal_client_secret;
-      const isSandbox = platformSettings?.paypal_sandbox ?? true;
+    if (payment_method === "paypal") {
+      const paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID") || platformSettings?.paypal_client_id;
+      const paypalClientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET") || platformSecrets?.paypal_client_secret;
       if (!paypalClientId || !paypalClientSecret) {
         if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
         return new Response(JSON.stringify({ error: "PayPal no configurado" }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      const credPaypal = { clientId: paypalClientId, clientSecret: paypalClientSecret, sandbox: platformSettings?.paypal_sandbox ?? true };
 
-      const base = isSandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
-      const tokenRes = await fetch(`${base}/v1/oauth2/token`, {
-        method: "POST",
-        headers: { Authorization: `Basic ${btoa(`${paypalClientId}:${paypalClientSecret}`)}`, "Content-Type": "application/x-www-form-urlencoded" },
-        body: "grant_type=client_credentials",
-      });
-      const { access_token } = await tokenRes.json();
+      // (a) Crear el pedido (16-oct-2026: antes lo creaba create-paypal-order,
+      // que para un servicio opcional buscaba una fila que todavia no existia y
+      // respondia 409).
+      if (!paypal_order_id) {
+        let apartadoId: string | null = null;
+        if (puntosUsados > 0) {
+          const apartado = await apartarPuntosDeCargo(supabase, user.id, type === "insurance" ? "insurance" : "optional_service", type === "insurance" ? booking_id : bookingOptionalServiceId!, puntosUsados, MINUTOS_APARTADO_PAYPAL);
+          if (!apartado.ok) {
+            if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+            return new Response(JSON.stringify({ error: apartado.error }), {
+              status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          apartadoId = apartado.id;
+        }
+        const origin = origenParaRedirigir(req);
+        try {
+          const orden = await crearOrdenPaypal(credPaypal, {
+            monto: montoPasarela,
+            descripcion: type === "insurance" ? "Seguro de viaje" : `Servicio: ${itemName}`,
+            referencia: bookingOptionalServiceId || booking_id,
+            returnUrl: `${origin}/payment-return?provider=paypal&booking_id=${booking_id}&extra_type=${type}&bos_id=${bookingOptionalServiceId || ""}&tr_status=success`,
+            cancelUrl: `${origin}/traveler/bookings`,
+            requestId: `extra_${bookingOptionalServiceId || booking_id}_${Date.now()}`,
+          });
+          return new Response(JSON.stringify({ success: true, url: orden.url, order_id: orden.id, booking_optional_service_id: bookingOptionalServiceId }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } catch (ppErr) {
+          if (apartadoId) await supabase.rpc("liberar_puntos_de_cargo", { p_apartado_id: apartadoId });
+            if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+          console.error("PayPal (extra):", ppErr);
+          return new Response(JSON.stringify({ error: "Error al crear la orden de PayPal" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
 
-      const captureRes = await fetch(`${base}/v2/checkout/orders/${paypal_order_id}/capture`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${access_token}` },
-      });
-      const captureData = await captureRes.json();
-
-      if (!captureRes.ok || captureData.status !== "COMPLETED") {
-        if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+      // (b) Capturar al regresar.
+      const captura = await capturarOrdenPaypal(credPaypal, paypal_order_id);
+      if (!captura.ok) {
         return new Response(JSON.stringify({ error: "Error al capturar el pago PayPal" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
-      const capturedAmountPp = parseFloat(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value ?? "0");
-      if (Math.abs(capturedAmountPp - totalToPay) > 0.5) {
-        if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+      const puntosApartadosPp = await puntosDeCargo(supabase, type === "insurance" ? "insurance" : "optional_service", type === "insurance" ? booking_id : bookingOptionalServiceId!);
+      const esperadoPp = parseFloat((totalToPay - puntosApartadosPp / 100).toFixed(2));
+      if (Math.abs(captura.monto - esperadoPp) > 0.5) {
         return new Response(JSON.stringify({
-          error: `El monto capturado (${capturedAmountPp}) no coincide con el esperado (${totalToPay})`,
+          error: `El monto capturado (${captura.monto}) no coincide con el esperado (${esperadoPp})`,
         }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      const transactionId = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? paypal_order_id;
-      const pointsEarned = await finalizePayment("paypal", transactionId);
+      puntosUsados = await consumirPuntosDeCargo(supabase, type === "insurance" ? "insurance" : "optional_service", type === "insurance" ? booking_id : bookingOptionalServiceId!);
+      pesosEnPuntos = puntosUsados / 100;
+      const pointsEarned = await finalizePayment("paypal", captura.capturaId);
       return new Response(JSON.stringify({
-        success: true, total_charged: totalToPay, points_earned: pointsEarned,
+        success: true, total_charged: esperadoPp, points_used: puntosUsados, points_earned: pointsEarned,
         booking_optional_service_id: bookingOptionalServiceId,
         message: "Pago con PayPal completado.",
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });

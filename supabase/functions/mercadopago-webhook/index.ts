@@ -451,9 +451,16 @@ Deno.serve(async (req: Request) => {
         const insFee = sumaFeeMercadoPago(payment.fee_details);
         const insFeeSplit = separarFeeBaseIva(insFee);
 
+        // Puntos + MercadoPago (16-oct-2026): los apartados al crear la
+        // preferencia se consumen aqui; el costo del seguro es lo cobrado MAS lo
+        // que pagaron los puntos.
+        const { data: puntosIns, error: puntosInsError } = await supabase
+          .rpc("consumir_puntos_de_cargo", { p_contexto: "insurance", p_referencia: externalReference });
+        if (puntosInsError) console.error(`consumir_puntos_de_cargo (MP, seguro): ${puntosInsError.message}`);
+
         await supabase.from("bookings").update({
           travel_insurance_included: true,
-          travel_insurance_cost: insAmount,
+          travel_insurance_cost: insAmount + Number(puntosIns || 0) / 100,
           updated_at: new Date().toISOString(),
         }).eq("id", externalReference);
 
@@ -512,6 +519,13 @@ Deno.serve(async (req: Request) => {
         const optFee = sumaFeeMercadoPago(payment.fee_details);
         const optFeeSplit = separarFeeBaseIva(optFee);
 
+        // Puntos + MercadoPago (16-oct-2026): se consumen aqui y quedan en el
+        // servicio; el cobro registrado es solo lo de MercadoPago.
+        const { data: puntosOpt, error: puntosOptError } = await supabase
+          .rpc("consumir_puntos_de_cargo", { p_contexto: "optional_service", p_referencia: externalReference });
+        if (puntosOptError) console.error(`consumir_puntos_de_cargo (MP, servicio opcional): ${puntosOptError.message}`);
+        const optCobrado = parseFloat((optAmount - Number(puntosOpt || 0) / 100).toFixed(2));
+
         await supabase.from("booking_optional_services").update({
           paid_at: new Date().toISOString(),
           payment_method: "mercadopago",
@@ -521,14 +535,14 @@ Deno.serve(async (req: Request) => {
         await supabase.from("payment_transactions").insert({
           booking_id: pendingOptService.booking_id,
           mercadopago_payment_id: String(notificationId),
-          amount: optAmount,
+          amount: optCobrado,
           currency: "mxn",
           status: "succeeded",
           payment_processor: "mercadopago",
           processor_fee: optFee,
           processor_fee_base: optFeeSplit.base,
           processor_fee_iva: optFeeSplit.iva,
-          net_amount: optAmount - optFee,
+          net_amount: optCobrado - optFee,
           charge_context: "optional_service",
           charge_reference_id: externalReference,
         });
@@ -563,16 +577,28 @@ Deno.serve(async (req: Request) => {
         .from("booking_supplements")
         .select("id, status")
         .eq("id", externalReference)
-        .eq("status", "pending_payment")
+        // 'approved' tambien: un suplemento que requiere aprobacion se paga en
+        // ese estado, y antes este webhook no lo veia.
+        .in("status", ["pending_payment", "approved"])
         .maybeSingle();
 
       if (bookingSupplement) {
+        // Puntos + MercadoPago (16-oct-2026): se consumen aqui y quedan en el
+        // suplemento antes del CFDI y la poliza.
+        const { data: puntosSupp, error: puntosSuppError } = await supabase
+          .rpc("consumir_puntos_de_cargo", { p_contexto: "supplement", p_referencia: externalReference });
+        if (puntosSuppError) console.error(`consumir_puntos_de_cargo (MP, suplemento): ${puntosSuppError.message}`);
+
+        // payment_method / payment_intent_id: payment_id y payment_provider no
+        // existen en booking_supplements, el UPDATE entero fallaba y el
+        // suplemento nunca quedaba pagado por este camino.
         const { error: suppUpdateError } = await supabase
           .from("booking_supplements")
           .update({
             status: "paid",
-            payment_id: String(notificationId),
-            payment_provider: "mercadopago",
+            payment_method: "mercadopago",
+            payment_intent_id: String(notificationId),
+            paid_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq("id", externalReference);
@@ -595,7 +621,8 @@ Deno.serve(async (req: Request) => {
             if (suppDetails) {
               const suppFee = sumaFeeMercadoPago(payment.fee_details);
               const suppFeeSplit = separarFeeBaseIva(suppFee);
-              const suppAmount = Number(suppDetails.total_paid) || 0;
+              // Lo cobrado por MercadoPago: total_paid menos lo que pagaron los puntos.
+              const suppAmount = parseFloat(((Number(suppDetails.total_paid) || 0) - Number(puntosSupp || 0) / 100).toFixed(2));
               await supabase.from("payment_transactions").insert({
                 booking_id: suppDetails.booking_id,
                 mercadopago_payment_id: String(notificationId),
@@ -621,7 +648,8 @@ Deno.serve(async (req: Request) => {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
               },
-              body: JSON.stringify({ supplement_id: externalReference, payment_form: getMercadoPagoPaymentForm(payment) }),
+              // booking_supplement_id: con supplement_id el generador respondia 400.
+              body: JSON.stringify({ booking_supplement_id: externalReference, payment_form: getMercadoPagoPaymentForm(payment) }),
             }
           ).catch((err) => console.error("Error triggering supplement CFDI (MP webhook):", err));
 
