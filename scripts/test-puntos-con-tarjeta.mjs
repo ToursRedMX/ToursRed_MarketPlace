@@ -31,10 +31,10 @@ const fuente = (f) => sinComentarios(readFileSync(f, 'utf8'));
 // ---------------------------------------------------------------------------
 // 1. La regla
 // ---------------------------------------------------------------------------
-prueba('Stripe acepta puntos; las otras pasarelas todavia no', () => {
+prueba('Stripe acepta puntos; MercadoPago y PayPal todavia no', () => {
   assert.equal(m.validarPuntos('stripe', 25000, 500).ok, true);
   assert.equal(m.validarPuntos('stripe', 25001, 500).ok, false, 'el tope del 50% aplica igual');
-  for (const metodo of ['paypal', 'mercadopago', 'conekta', 'openpay']) {
+  for (const metodo of ['paypal', 'mercadopago']) {
     assert.equal(m.validarFormaDePuntos(metodo, 100).ok, false, metodo);
   }
 });
@@ -100,16 +100,16 @@ prueba('stripe-webhook: el CFDI del extra recibe el valor completo y los puntos 
 // ---------------------------------------------------------------------------
 // 3. Pantallas
 // ---------------------------------------------------------------------------
-prueba('TravelerBookings: la casilla y points_to_use tambien con tarjeta', () => {
+prueba('TravelerBookings: la casilla y points_to_use con todo metodo que acepta puntos', () => {
   const tb = fuente('src/pages/traveler/TravelerBookings.tsx');
-  assert.equal((tb.match(/\.selectedMethod === 'toursred_cash' \|\| \w+\.selectedMethod === 'stripe'\) && \(\s*<UsarPuntosConCash/g) || []).length, 3);
-  assert.equal((tb.match(/\(selectedMethod === 'toursred_cash' \|\| selectedMethod === 'stripe'\)\s*\? \{ points_to_use: puntosAAplicar\(/g) || []).length, 3);
+  assert.equal((tb.match(/\{aceptaPuntos\(\w+\.selectedMethod\) && \(\s*<UsarPuntosConCash/g) || []).length, 3);
+  assert.equal((tb.match(/aceptaPuntos\(selectedMethod\)\s*\? \{ points_to_use: puntosAAplicar\(/g) || []).length, 3);
 });
 
-prueba('PaymentPlanCalendar: la casilla y points_to_use tambien con tarjeta', () => {
+prueba('PaymentPlanCalendar: la casilla y points_to_use con todo metodo que acepta puntos', () => {
   const cal = fuente('src/components/PaymentPlanCalendar.tsx');
-  assert.equal((cal.match(/\(paymentProvider === 'toursred_cash' \|\| paymentProvider === 'stripe'\) && \(\s*<UsarPuntosConCash/g) || []).length, 2);
-  assert.equal((cal.match(/\(\(paymentProvider === 'toursred_cash' \|\| paymentProvider === 'stripe'\)\s*\? \{ points_to_use: puntosAAplicar\(/g) || []).length, 2);
+  assert.equal((cal.match(/\{aceptaPuntos\(paymentProvider\) && \(\s*<UsarPuntosConCash/g) || []).length, 2);
+  assert.equal((cal.match(/\.\.\.\(aceptaPuntos\(paymentProvider\)\s*\? \{ points_to_use: puntosAAplicar\(/g) || []).length, 2);
 });
 
 console.log(`Puntos + tarjeta: ${casos} casos OK`);

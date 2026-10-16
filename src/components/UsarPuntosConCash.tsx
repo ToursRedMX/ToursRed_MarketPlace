@@ -4,7 +4,7 @@ import { PUNTOS_POR_PESO, maxPuntosPermitidos, puntosAAplicar } from '../lib/pun
 
 // Casilla de puntos ToursRed para suplementos, extras y mensualidades (regla de
 // Axel, 16-oct-2026): los puntos cubren como maximo el 50% de un pago y, por
-// ahora, se combinan con ToursRed Cash o con tarjeta (Stripe). Es la misma casilla que el flujo de
+// ahora, se combinan con ToursRed Cash, tarjeta, Conekta u OpenPay. Es la misma casilla que el flujo de
 // reserva (BookingFlowStep4): marcada aplica min(saldo, tope). El tope vive en
 // src/lib/puntosConTope.ts y el servidor lo vuelve a validar.
 

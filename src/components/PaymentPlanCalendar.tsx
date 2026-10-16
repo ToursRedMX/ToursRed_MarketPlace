@@ -11,7 +11,7 @@ import type { BookingPaymentPlan, InstallmentStatus } from '../types';
 import PaymentProviderSelector, { type PaymentProvider, type ConektaMethod } from './PaymentProviderSelector';
 import { comoFila } from '../lib/relacionesSupabase';
 import UsarPuntosConCash from './UsarPuntosConCash';
-import { puntosAAplicar } from '../lib/puntosConTope';
+import { aceptaPuntos, puntosAAplicar } from '../lib/puntosConTope';
 
 interface PaymentPlanCalendarProps {
   bookingId: string;
@@ -148,7 +148,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
           plan_id: plan.id,
           amount,
           payment_method: paymentProvider,
-          ...((paymentProvider === 'toursred_cash' || paymentProvider === 'stripe')
+          ...(aceptaPuntos(paymentProvider)
             ? { points_to_use: puntosAAplicar(usePoints, pointsBalance, Math.min(amount, plan.pending_balance)) }
             : {}),
           ...(paymentProvider === 'conekta' ? { conekta_method: conektaMethod } : {}),
@@ -220,7 +220,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
           amount: plan.pending_balance,
           payment_method: paymentProvider,
           pay_full_balance: true,
-          ...((paymentProvider === 'toursred_cash' || paymentProvider === 'stripe')
+          ...(aceptaPuntos(paymentProvider)
             ? { points_to_use: puntosAAplicar(usePoints, pointsBalance, plan.pending_balance) }
             : {}),
           ...(paymentProvider === 'conekta' ? { conekta_method: conektaMethod } : {}),
@@ -433,7 +433,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
                         conektaMethod={conektaMethod}
                         onConektaMethodChange={setConektaMethod}
                       />
-                      {(paymentProvider === 'toursred_cash' || paymentProvider === 'stripe') && (
+                      {aceptaPuntos(paymentProvider) && (
                         <UsarPuntosConCash
                           saldoPuntos={pointsBalance}
                           baseMxn={Math.min(parseFloat(payAmount) || 0, plan.pending_balance)}
@@ -490,7 +490,7 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
                 conektaMethod={conektaMethod}
                 onConektaMethodChange={setConektaMethod}
               />
-              {(paymentProvider === 'toursred_cash' || paymentProvider === 'stripe') && (
+              {aceptaPuntos(paymentProvider) && (
                 <UsarPuntosConCash
                   saldoPuntos={pointsBalance}
                   baseMxn={plan.pending_balance}

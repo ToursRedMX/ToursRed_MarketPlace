@@ -7,7 +7,7 @@ import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
-import { apartarPuntosDeCargo, expiracionDelCobroConPuntos, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
+import { ajustarVencimientoDeApartado, apartarPuntosDeCargo, expiracionDelCobroConPuntos, MINUTOS_APARTADO_CONEKTA, MINUTOS_APARTADO_OPENPAY, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -351,6 +351,9 @@ Deno.serve(async (req: Request) => {
 
     // ===================== PAYMENT ROUTING =====================
 
+    // Lo que cobra la pasarela: el total menos lo que pagan los puntos.
+    const montoPasarela = parseFloat((totalToPay - pesosEnPuntos).toFixed(2));
+
     // 1. ToursRed Cash (con o sin puntos; "points" sola ya no se acepta, ver arriba)
     if (payment_method === "toursred_cash") {
       // Lo que no cubren los puntos sale del Cash. Los puntos ya pasaron el tope.
@@ -672,13 +675,13 @@ Deno.serve(async (req: Request) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        if (totalToPay < 1200) {
+        if (montoPasarela < 1200) {
           return new Response(JSON.stringify({ error: "El monto mínimo para BNPL es $1,200 MXN" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        if (totalToPay > 16000) {
+        if (montoPasarela > 16000) {
           return new Response(JSON.stringify({ error: "El monto máximo para BNPL es $16,000 MXN por transacción" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -699,7 +702,7 @@ Deno.serve(async (req: Request) => {
       const failureUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking.id}&status=failure&context=payment_plan_installment`;
       const cancelUrl = `${origin}/payment-return?provider=conekta&booking_id=${booking.id}&status=cancel&context=payment_plan_installment`;
 
-      const amountInCents = Math.round(totalToPay * 100);
+      const amountInCents = Math.round(montoPasarela * 100);
       const orderPayload: Record<string, unknown> = {
         currency: "MXN",
         amount: amountInCents,
@@ -718,6 +721,7 @@ Deno.serve(async (req: Request) => {
           expires_at: Math.floor(Date.now() / 1000) + 71 * 3600,
         },
         metadata: {
+          points_used: String(puntosUsados),
           booking_id: booking.id,
           payment_method_type: conekta_method,
           context: "payment_plan_installment",
@@ -729,6 +733,20 @@ Deno.serve(async (req: Request) => {
           ...(conekta_method === "bnpl" ? { bnpl_product_type } : {}),
         },
       };
+
+      // Puntos + Conekta (16-oct-2026): los puntos se apartan ANTES de crear el
+      // cobro y el procesador cobra el resto (montoPasarela). El webhook los
+      // consume al confirmar; si el cobro vence sin pagarse, el cron los libera.
+      let apartadoId: string | null = null;
+      if (puntosUsados > 0) {
+        const apartado = await apartarPuntosDeCargo(supabase, user.id, "payment_plan_installment", plan_id, puntosUsados, MINUTOS_APARTADO_CONEKTA);
+        if (!apartado.ok) {
+          return new Response(JSON.stringify({ error: apartado.error }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        apartadoId = apartado.id;
+      }
 
       const conektaApiBase = Deno.env.get("CONEKTA_API_BASE") || "https://api.conekta.io";
       const apiResponse = await fetch(`${conektaApiBase}/orders`, {
@@ -743,6 +761,7 @@ Deno.serve(async (req: Request) => {
       });
 
       if (!apiResponse.ok) {
+        if (apartadoId) await supabase.rpc("liberar_puntos_de_cargo", { p_apartado_id: apartadoId });
         const errorBody = await apiResponse.text();
         console.error("Conekta API error:", errorBody);
         let errorMsg = "Error al crear orden de Conekta";
@@ -761,6 +780,7 @@ Deno.serve(async (req: Request) => {
       const checkoutUrl = order.checkout?.url;
 
       if (!orderId) {
+        if (apartadoId) await supabase.rpc("liberar_puntos_de_cargo", { p_apartado_id: apartadoId });
         return new Response(JSON.stringify({ error: "Respuesta inválida de Conekta" }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -771,13 +791,13 @@ Deno.serve(async (req: Request) => {
       const idempotencyKey = `${booking.id}_payment_plan_installment_${plan_id}_${Date.now()}`;
       await supabase.from("payment_transactions").insert({
         booking_id: booking.id,
-        amount: totalToPay,
+        amount: montoPasarela,
         currency: "mxn",
         status: "pending",
         payment_method_type: conekta_method,
         payment_processor: "conekta",
         processor_fee: 0,
-        net_amount: totalToPay,
+        net_amount: montoPasarela,
         conekta_order_id: orderId,
         bnpl_product_type: conekta_method === "bnpl" ? bnpl_product_type : null,
         p_idempotency_key: idempotencyKey,
@@ -794,7 +814,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         order_id: orderId,
         checkout_url: checkoutUrl,
-        amount: totalToPay,
+        amount: montoPasarela,
         payment_method_type: conekta_method,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -843,8 +863,22 @@ Deno.serve(async (req: Request) => {
       const origin = origenParaRedirigir(req);
       const successUrlOp = `${origin}/payment-pending/${plan_id}?context=payment_plan_installment`;
       const orderIdOp = `payment_plan_installment_${plan_id}_${Date.now()}`;
-      const roundedAmtPp = Math.round(totalToPay * 100) / 100;
+      const roundedAmtPp = Math.round(montoPasarela * 100) / 100;
       const descPp = `Abono plan de pago: ${tourName} (${bookingCode})`;
+
+      // Puntos + OpenPay (16-oct-2026): los puntos se apartan ANTES de crear el
+      // cobro y el procesador cobra el resto (montoPasarela). El webhook los
+      // consume al confirmar; si el cobro vence sin pagarse, el cron los libera.
+      let apartadoId: string | null = null;
+      if (puntosUsados > 0) {
+        const apartado = await apartarPuntosDeCargo(supabase, user.id, "payment_plan_installment", plan_id, puntosUsados, MINUTOS_APARTADO_OPENPAY);
+        if (!apartado.ok) {
+          return new Response(JSON.stringify({ error: apartado.error }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        apartadoId = apartado.id;
+      }
 
       let chargeOp;
       try {
@@ -860,10 +894,13 @@ Deno.serve(async (req: Request) => {
           });
         }
       } catch (e) {
+        if (apartadoId) await supabase.rpc("liberar_puntos_de_cargo", { p_apartado_id: apartadoId });
         return new Response(JSON.stringify({ error: mensajeDeError(e) }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      // Efectivo y SPEI se pagan despues: el apartado vence despues de su fecha limite.
+      if (apartadoId) await ajustarVencimientoDeApartado(supabase, apartadoId, chargeOp.due_date);
 
       const paymentMethodMetadataPp: Record<string, unknown> = {
         openpay_method, openpay_charge_id: chargeOp.id, openpay_status: chargeOp.status,
@@ -883,9 +920,9 @@ Deno.serve(async (req: Request) => {
       }
 
       await supabase.from("payment_transactions").insert({
-        booking_id: booking.id, amount: totalToPay, currency: "mxn", status: "pending",
+        booking_id: booking.id, amount: montoPasarela, currency: "mxn", status: "pending",
         payment_method_type: openpay_method, payment_processor: "openpay",
-        processor_fee: 0, net_amount: totalToPay, openpay_charge_id: chargeOp.id,
+        processor_fee: 0, net_amount: montoPasarela, openpay_charge_id: chargeOp.id,
         charge_context: "payment_plan_installment", charge_reference_id: plan_id,
         metadata: paymentMethodMetadataPp,
       });
@@ -894,7 +931,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         url: openpay_method === "card" ? chargeOp.payment_method?.url : undefined,
         payment_method: openpay_method !== "card" ? chargeOp.payment_method : undefined,
-        amount: totalToPay,
+        amount: montoPasarela,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

@@ -9,10 +9,10 @@
 //   - "points" deja de ser una forma de pago: pagar 100% con puntos rompe el
 //     tope. Los puntos viajan en `points_to_use` junto con el metodo que paga
 //     el resto.
-//   - El resto se paga con ToursRed Cash o con tarjeta (Stripe). Con pasarela
-//     los puntos se apartan al crear el cobro y se consumen al confirmarlo
-//     (puntos_apartados_cargos, 20261016060535). MercadoPago, PayPal, Conekta y
-//     OpenPay usan la misma base en el siguiente PR; mientras, se rechazan.
+//   - El resto se paga con ToursRed Cash, tarjeta (Stripe), Conekta u OpenPay.
+//     Con pasarela los puntos se apartan al crear el cobro y se consumen al
+//     confirmarlo (puntos_apartados_cargos, 20261016060535). MercadoPago y
+//     PayPal usan la misma base en el siguiente PR; mientras, se rechazan.
 //
 // 100 puntos = $1 MXN, la misma conversion que deduct_points_for_booking.
 
@@ -20,7 +20,7 @@ export const PUNTOS_POR_PESO = 100;
 export const TOPE_PUNTOS = 0.5;
 
 /** Metodos que hoy aceptan points_to_use. */
-export const METODOS_CON_PUNTOS: readonly string[] = ["toursred_cash", "stripe"];
+export const METODOS_CON_PUNTOS: readonly string[] = ["toursred_cash", "stripe", "conekta", "openpay"];
 
 /** Maximo de puntos que puede cubrir un pago de `baseMxn` pesos. */
 export function maxPuntosPermitidos(baseMxn: number): number {
@@ -57,7 +57,7 @@ export function validarFormaDePuntos(metodo: string, puntosPedidos: unknown): Pu
   if (puntos === 0) return { ok: true, puntos: 0, pesos: 0 };
 
   if (!METODOS_CON_PUNTOS.includes(metodo)) {
-    return { ok: false, error: "Por ahora los puntos solo se pueden combinar con ToursRed Cash o con tarjeta." };
+    return { ok: false, error: "Por ahora los puntos no se pueden combinar con MercadoPago ni PayPal." };
   }
 
   return { ok: true, puntos, pesos: puntos / PUNTOS_POR_PESO };
@@ -103,6 +103,14 @@ export function puntosGanadosSinPasarela(totalMxn: number, pesosEnPuntos: number
 export const MINUTOS_COBRO_CON_PUNTOS = 120;
 export const MINUTOS_APARTADO = 180;
 
+/** Conekta deja el checkout abierto 71 h (efectivo y SPEI se pagan despues):
+ *  el apartado vence 2 h despues de que ya no se puede pagar. */
+export const HORAS_CHECKOUT_CONEKTA = 71;
+export const MINUTOS_APARTADO_CONEKTA = (HORAS_CHECKOUT_CONEKTA + 2) * 60;
+/** OpenPay: lo mismo mientras no se sepa su fecha limite; con el due_date del
+ *  cargo (efectivo, SPEI) se ajusta con ajustarVencimientoDeApartado. */
+export const MINUTOS_APARTADO_OPENPAY = MINUTOS_APARTADO_CONEKTA;
+
 export type ContextoDeCargo = "supplement" | "optional_service" | "insurance" | "payment_plan_installment";
 
 interface ClienteConRpc {
@@ -119,8 +127,9 @@ export async function apartarPuntosDeCargo(
   contexto: ContextoDeCargo,
   referencia: string,
   puntos: number,
+  minutos: number = MINUTOS_APARTADO,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const venceEn = new Date(Date.now() + MINUTOS_APARTADO * 60_000).toISOString();
+  const venceEn = new Date(Date.now() + minutos * 60_000).toISOString();
   const { data, error } = await supabase.rpc("apartar_puntos_de_cargo", {
     p_user_id: userId,
     p_contexto: contexto,
@@ -143,4 +152,29 @@ export async function apartarPuntosDeCargo(
 /** Segundos epoch en que expira el cobro con pasarela (Stripe `expires_at`). */
 export function expiracionDelCobroConPuntos(): number {
   return Math.floor(Date.now() / 1000) + MINUTOS_COBRO_CON_PUNTOS * 60;
+}
+
+interface ClienteConTabla {
+  from: (tabla: string) => {
+    update: (valores: Record<string, unknown>) => {
+      eq: (columna: string, valor: string) => PromiseLike<{ error: { message: string } | null }>;
+    };
+  };
+}
+
+/**
+ * Si el procesador dio una fecha limite de pago (efectivo, SPEI), el apartado
+ * vence 2 h despues de ella. Solo se alarga: nunca vence antes que el cobro.
+ */
+export async function ajustarVencimientoDeApartado(
+  supabase: ClienteConTabla,
+  apartadoId: string,
+  fechaLimite: string | null | undefined,
+): Promise<void> {
+  if (!fechaLimite) return;
+  const limite = Date.parse(fechaLimite);
+  if (!Number.isFinite(limite)) return;
+  const vence = new Date(Math.max(limite + 2 * 3_600_000, Date.now() + MINUTOS_APARTADO_OPENPAY * 60_000)).toISOString();
+  const { error } = await supabase.from("puntos_apartados_cargos").update({ vence_en: vence }).eq("id", apartadoId);
+  if (error) console.error(`ajustarVencimientoDeApartado ${apartadoId}: ${error.message}`);
 }
