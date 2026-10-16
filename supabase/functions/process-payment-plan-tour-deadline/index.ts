@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+import { puntosDelCargo } from "../_shared/puntosDeCargos.ts";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { registrarFallo, vigilarRespuesta, vigilarResultado } from "../_shared/falloSilencioso.ts";
@@ -262,7 +263,7 @@ Deno.serve(async (req: Request) => {
 
         const { data: ppTransactions, error: transactionsError } = await supabase
           .from("booking_payment_plan_transactions")
-          .select("service_charge")
+          .select("service_charge, points_used, amount, payment_provider")
           .eq("booking_id", booking.id)
           .eq("status", "completed");
 
@@ -271,8 +272,12 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
+        // Lo pagado con puntos en los abonos va dentro de totalPaid y regresa
+        // como puntos, no como Cash (16-oct-2026).
+        let puntosDeAbonos = 0;
         for (const tx of (ppTransactions || [])) {
           totalServiceCharge += Number(tx.service_charge || 0);
+          puntosDeAbonos += puntosDelCargo({ points_used: tx.points_used, metodo: tx.payment_provider, total: tx.amount });
         }
 
         // refundAmount = totalPaid directly (service charges are NOT subtracted —
@@ -291,6 +296,7 @@ Deno.serve(async (req: Request) => {
           p_set_cancelled_at: true,
           p_cancellation_type: "payment_plan_auto_cancel",
           p_cancellation_refund_amount: refundAmount,
+          p_puntos_cargos_posteriores: puntosDeAbonos,
         });
 
         if (rpcError || !rpcResult?.success) {

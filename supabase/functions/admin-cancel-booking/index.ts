@@ -1,5 +1,6 @@
 ﻿import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+import { puntosDelCargo } from "../_shared/puntosDeCargos.ts";
 import { markPointsAsClawedBack } from "../_shared/pointsTraceability.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
@@ -157,7 +158,7 @@ Deno.serve(async (req: Request) => {
         id, status, payment_status, deposit_amount, service_charge,
         user_id, tour_id, agency_id, booking_code, cancelled_at,
         points_earned, points_used, travel_insurance_included, travel_insurance_cost,
-        has_payment_plan,
+        has_payment_plan, travel_insurance_points_used,
         tours!bookings_tour_id_fkey(id, name, start_date, end_date),
         agencies!bookings_agency_id_fkey(id, name, contact_email),
         users!bookings_user_id_fkey(id, email, first_name, last_name)
@@ -179,7 +180,7 @@ Deno.serve(async (req: Request) => {
     // Admin cancellations refund ALL optionals regardless of is_refundable.
     const { data: optionalServices } = await supabase
       .from("booking_optional_services")
-      .select("id, service_kind, subtotal, service_charge, total_paid, membership_exemption_used, tour_optional_services(is_refundable)")
+      .select("id, service_kind, subtotal, service_charge, total_paid, membership_exemption_used, points_used, payment_method, tour_optional_services(is_refundable)")
       .eq("booking_id", booking_id)
       .eq("is_cancelled", false);
 
@@ -194,6 +195,11 @@ Deno.serve(async (req: Request) => {
     // Se calcula una vez aqui y se reusa mas abajo (antes se volvia a consultar
     // booking_payment_plan_transactions tres veces mas, identico, para lo mismo).
     let paymentPlanServiceCharge = 0;
+    // Puntos con que se pagaron, despues de reservar, los cargos que entran al
+    // reembolso sugerido (abonos, seguro, extras y suplementos). Ver mas abajo.
+    let puntosCargosPosteriores = booking.travel_insurance_included
+      ? Number(booking.travel_insurance_points_used) || 0
+      : 0;
 
     if (booking.has_payment_plan) {
       const { data: installments } = await supabase
@@ -211,13 +217,14 @@ Deno.serve(async (req: Request) => {
       // Add service charges from completed payment plan transactions
       const { data: ppTransactions } = await supabase
         .from("booking_payment_plan_transactions")
-        .select("service_charge")
+        .select("service_charge, points_used, amount, payment_provider")
         .eq("booking_id", booking_id)
         .eq("status", "completed");
 
       for (const tx of (ppTransactions || [])) {
         totalPaidByTraveler += Number(tx.service_charge || 0);
         paymentPlanServiceCharge += Number(tx.service_charge || 0);
+        puntosCargosPosteriores += puntosDelCargo({ points_used: tx.points_used, metodo: tx.payment_provider, total: tx.amount });
       }
     }
 
@@ -229,6 +236,7 @@ Deno.serve(async (req: Request) => {
     for (const os of (optionalServices || [])) {
       // Admin cancellation: all optionals are refundable
       optionalsRefundBucket += Number(os.total_paid || os.subtotal || 0);
+      puntosCargosPosteriores += puntosDelCargo({ points_used: os.points_used, metodo: os.payment_method, total: os.total_paid ?? os.subtotal });
     }
     optionalsRefundBucket = Math.round(optionalsRefundBucket * 100) / 100;
 
@@ -240,7 +248,7 @@ Deno.serve(async (req: Request) => {
     // Fetch refundable supplements (paid and cancellable)
     const { data: supplements } = await supabase
       .from("booking_supplements")
-      .select("id, total_paid, refund_amount, status, tour_supplements(is_cancellable)")
+      .select("id, total_paid, refund_amount, status, points_used, payment_method, tour_supplements(is_cancellable)")
       .eq("booking_id", booking_id)
       .eq("status", "paid");
 
@@ -249,6 +257,7 @@ Deno.serve(async (req: Request) => {
       const tourSupplement = supp.tour_supplements as unknown as { is_cancellable?: boolean } | null;
       if (tourSupplement?.is_cancellable !== false) {
         supplementsRefundable += Number(supp.total_paid || 0);
+        puntosCargosPosteriores += puntosDelCargo({ points_used: supp.points_used, metodo: supp.payment_method, total: supp.total_paid });
       }
     }
 
@@ -256,6 +265,14 @@ Deno.serve(async (req: Request) => {
     // No double refund — optionals are cancelled via cancel_booking_optional_services RPC
     // and their refund_amount is set there; the tour refund is separate.
     const suggestedRefund = Math.round((tourRefundBucket + optionalsRefundBucket + supplementsRefundable) * 100) / 100;
+
+    // El admin decide cuanto devolver. Lo pagado con puntos despues de reservar
+    // regresa como puntos en la misma proporcion que el reembolso guarda con el
+    // sugerido, y sale del Cash (16-oct-2026). Antes todo salia en Cash.
+    const proporcionReembolso = suggestedRefund > 0
+      ? Math.min(1, Math.max(0, Number(refund_amount) || 0) / suggestedRefund)
+      : 0;
+    const puntosADevolver = Math.floor(puntosCargosPosteriores * proporcionReembolso);
 
     const now = new Date().toISOString();
     let receiptFilePath: string | null = null;
@@ -272,6 +289,7 @@ Deno.serve(async (req: Request) => {
         p_set_cancelled_at: !isPrepare,
         p_cancellation_type: "admin_cancelled",
         p_cancellation_refund_amount: Number(refund_amount) || 0,
+        p_puntos_cargos_posteriores: puntosADevolver,
       });
 
       if (rpcError || !rpcResult?.success) {
@@ -289,6 +307,9 @@ Deno.serve(async (req: Request) => {
         p_set_cancelled_at: !isPrepare,
         p_cancellation_type: "admin_cancelled",
         p_cancellation_refund_amount: refund_method === "original_payment_method" ? 0 : (Number(refund_amount) || 0),
+        // Sin reembolso a la billetera, los puntos regresan igual como puntos:
+        // no hay otra forma de devolverlos.
+        p_puntos_cargos_posteriores: puntosADevolver,
       });
 
       if (rpcError || !rpcResult?.success) {

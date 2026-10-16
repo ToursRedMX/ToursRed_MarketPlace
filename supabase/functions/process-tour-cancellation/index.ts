@@ -6,6 +6,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enforceReauth } from "../_shared/reauth.ts";
+import { puntosDelCargo } from "../_shared/puntosDeCargos.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -138,6 +139,9 @@ Deno.serve(async (req: Request) => {
         let originalServiceCharge = Number(booking.service_charge || 0);
 
         let installmentsPaid = 0;
+        // Lo pagado con puntos despues de reservar (abonos, seguro, extras)
+        // regresa como puntos, no como Cash (16-oct-2026). Todo al 100%.
+        let puntosCargosPosteriores = 0;
         if (booking.has_payment_plan) {
           const { data: installments } = await supabase
             .from("booking_payment_plan_installments")
@@ -153,22 +157,26 @@ Deno.serve(async (req: Request) => {
 
           const { data: ppTransactions } = await supabase
             .from("booking_payment_plan_transactions")
-            .select("service_charge")
+            .select("service_charge, points_used, amount, payment_provider")
             .eq("booking_id", booking.id)
             .eq("status", "completed");
 
           for (const tx of (ppTransactions || [])) {
             originalServiceCharge += Number(tx.service_charge || 0);
+            puntosCargosPosteriores += puntosDelCargo({ points_used: tx.points_used, metodo: tx.payment_provider, total: tx.amount });
           }
         }
         const principalPaid = originalDepositAmount + installmentsPaid;
 
         const insuranceRefund = booking.travel_insurance_included
           ? Number(booking.travel_insurance_cost || 0) : 0;
+        if (booking.travel_insurance_included) {
+          puntosCargosPosteriores += Number(booking.travel_insurance_points_used) || 0;
+        }
 
         const { data: optionalServicesData } = await supabase
           .from("booking_optional_services")
-          .select("subtotal, service_charge, total_paid")
+          .select("subtotal, service_charge, total_paid, points_used, payment_method")
           .eq("booking_id", booking.id)
           .eq("is_cancelled", false);
 
@@ -176,6 +184,7 @@ Deno.serve(async (req: Request) => {
         let optionalServicesServiceCharge = 0;
         for (const bos of (optionalServicesData || [])) {
           optionalServicesRefundable += Number(bos.total_paid || bos.subtotal || 0);
+          puntosCargosPosteriores += puntosDelCargo({ points_used: bos.points_used, metodo: bos.payment_method, total: bos.total_paid ?? bos.subtotal });
           optionalServicesServiceCharge += Number(bos.service_charge || 0);
         }
 
@@ -193,6 +202,7 @@ Deno.serve(async (req: Request) => {
             p_set_cancelled_at: true,
             p_cancellation_type: "agency_cancellation",
             p_cancellation_refund_amount: refundAmount,
+            p_puntos_cargos_posteriores: puntosCargosPosteriores,
           }
         );
         if (refundError) throw new Error(`Error en reembolso atómico: ${refundError.message}`);
@@ -238,7 +248,7 @@ Deno.serve(async (req: Request) => {
         // Refund paid supplements
         const { data: paidSupplements } = await supabase
           .from("booking_supplements")
-          .select("id, total_paid, tour_supplements(name)")
+          .select("id, total_paid, points_used, payment_method, tour_supplements(name)")
           .eq("booking_id", booking.id)
           .eq("status", "paid");
 
@@ -247,13 +257,21 @@ Deno.serve(async (req: Request) => {
             const supRefundAmount = Number(sup.total_paid) || 0;
             if (supRefundAmount <= 0) continue;
 
-            const { error: supWalletError } = await supabase.rpc("update_wallet_balance", {
+            // Lo pagado con puntos regresa como puntos; antes todo total_paid
+            // salia en Cash (16-oct-2026).
+            const supPuntos = Math.min(
+              puntosDelCargo({ points_used: sup.points_used, metodo: sup.payment_method, total: sup.total_paid }),
+              Math.round(supRefundAmount * 100),
+            );
+            const { error: supWalletError } = await supabase.rpc("reembolsar_saldo_y_puntos", {
               p_user_id: booking.user_id,
-              p_amount: supRefundAmount,
-              p_type: "refund",
-              p_description: `Reembolso suplemento "${(sup.tour_supplements as unknown as { name: string } | null)?.name}" por cancelación del tour: ${tour.name}`,
+              p_cash: Math.max(0, Math.round((supRefundAmount - supPuntos / 100) * 100) / 100),
+              p_points_return: supPuntos,
+              p_points_clawback: 0,
               p_reference_id: sup.id,
-              p_reference_type: "supplement_cancellation",
+              p_points_reference_type: "supplement",
+              p_cash_reference_type: "supplement_cancellation",
+              p_description: `Reembolso suplemento "${(sup.tour_supplements as unknown as { name: string } | null)?.name}" por cancelación del tour: ${tour.name}`,
               p_idempotency_key: `${sup.id}_tour_cancel_supplement_refund`,
             });
             if (supWalletError) console.error(`Error refunding supplement ${sup.id}:`, supWalletError.message);
