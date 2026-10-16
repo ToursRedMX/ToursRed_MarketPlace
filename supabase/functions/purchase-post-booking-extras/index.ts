@@ -7,7 +7,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
-import { puntosGanadosSinPasarela, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
+import { apartarPuntosDeCargo, expiracionDelCobroConPuntos, puntosGanadosSinPasarela, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -91,7 +91,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Step-up auth: traveler is spending their own wallet/points directly (self-service).
-    if (payment_method === "toursred_cash" || payment_method === "points") {
+    // Los puntos con tarjeta tambien son gasto de saldo: mismo codigo MFA.
+    if (payment_method === "toursred_cash" || payment_method === "points" || formaPuntos.puntos > 0) {
       const stepUpBlock = await enforceStepUp(userClient, supabaseServiceKey, supabaseUrl, user.id);
       if (stepUpBlock) return stepUpBlock;
     }
@@ -553,27 +554,57 @@ Deno.serve(async (req: Request) => {
         ? `${origin}/extras-success?type=insurance&booking_id=${booking_id}`
         : `${origin}/extras-success?type=optional_service&bos_id=${bookingOptionalServiceId}&booking_id=${booking_id}`;
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        mode: "payment",
-        line_items: [{
-          price_data: {
-            currency: "mxn",
-            product_data: { name: itemName },
-            unit_amount: Math.round(totalToPay * 100),
+      // Puntos + tarjeta (16-oct-2026): los puntos se apartan ANTES de abrir el
+      // cobro y la tarjeta cobra el resto. stripe-webhook los consume al
+      // confirmar; si la sesion expira sin pagarse, el cron los libera.
+      const montoTarjeta = parseFloat((totalToPay - pesosEnPuntos).toFixed(2));
+      let apartadoId: string | null = null;
+      if (puntosUsados > 0) {
+        const apartado = await apartarPuntosDeCargo(
+          supabase, user.id,
+          type === "insurance" ? "insurance" : "optional_service",
+          type === "insurance" ? booking_id : bookingOptionalServiceId!,
+          puntosUsados,
+        );
+        if (!apartado.ok) {
+          if (bookingOptionalServiceId) await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+          return new Response(JSON.stringify({ error: apartado.error }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        apartadoId = apartado.id;
+      }
+
+      let session;
+      try {
+        session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          mode: "payment",
+          line_items: [{
+            price_data: {
+              currency: "mxn",
+              product_data: { name: itemName },
+              unit_amount: Math.round(montoTarjeta * 100),
+            },
+            quantity: 1,
+          }],
+          // Con puntos apartados, el cobro expira antes que el apartado.
+          ...(apartadoId ? { expires_at: expiracionDelCobroConPuntos() } : {}),
+          metadata: {
+            booking_id,
+            booking_optional_service_id: bookingOptionalServiceId || "",
+            extra_type: type,
+            payment_for: "post_booking_extra",
+            user_id: user.id,
+            points_used: String(puntosUsados),
           },
-          quantity: 1,
-        }],
-        metadata: {
-          booking_id,
-          booking_optional_service_id: bookingOptionalServiceId || "",
-          extra_type: type,
-          payment_for: "post_booking_extra",
-          user_id: user.id,
-        },
-        success_url: successUrl,
-        cancel_url: `${origin}/traveler/bookings`,
-      });
+          success_url: successUrl,
+          cancel_url: `${origin}/traveler/bookings`,
+        });
+      } catch (stripeErr) {
+        if (apartadoId) await supabase.rpc("liberar_puntos_de_cargo", { p_apartado_id: apartadoId });
+        throw stripeErr;
+      }
 
       return new Response(JSON.stringify({
         success: true, url: session.url,

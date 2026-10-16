@@ -7,7 +7,7 @@ import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
-import { validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
+import { apartarPuntosDeCargo, expiracionDelCobroConPuntos, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -182,6 +182,11 @@ Deno.serve(async (req: Request) => {
     // puntos descuenta del wallet de quien llama. Exige un codigo TOTP de UN SOLO USO, igual que
     // el pago de una reserva con wallet. Sin MFA configurado responde MFA_NOT_CONFIGURED.
     if (isWalletPayment) {
+      const stepUpBlock = await enforceStepUp(userClient, supabaseServiceKey, supabaseUrl, user.id);
+      if (stepUpBlock) return stepUpBlock;
+    }
+    // Puntos con tarjeta: tambien son gasto de saldo, mismo codigo MFA.
+    if (!isWalletPayment && formaPuntos.puntos > 0) {
       const stepUpBlock = await enforceStepUp(userClient, supabaseServiceKey, supabaseUrl, user.id);
       if (stepUpBlock) return stepUpBlock;
     }
@@ -437,7 +442,8 @@ Deno.serve(async (req: Request) => {
             name: `Abono plan de pago: ${tourName}`,
             description: `Reserva ${bookingCode}`,
           },
-          unit_amount: Math.round(effectiveAmount * 100),
+          // Los puntos pagan parte del abono; la tarjeta, el resto.
+          unit_amount: Math.round((effectiveAmount - pesosEnPuntos) * 100),
         },
         quantity: 1,
       }];
@@ -454,20 +460,45 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        mode: "payment",
-        line_items: lineItems,
-        metadata: {
-          plan_id,
-          payment_for: "payment_plan_installment",
-          user_id: user.id,
-          effective_amount: String(effectiveAmount),
-          net_service_charge: String(netServiceCharge),
-        },
-        success_url: `${origin}/payment-plan-success?plan_id=${plan_id}`,
-        cancel_url: `${origin}/traveler/bookings`,
-      });
+      // Puntos + tarjeta (16-oct-2026): los puntos se apartan ANTES de abrir el
+      // cobro. stripe-webhook los consume al confirmar y los guarda en el abono;
+      // si la sesion expira sin pagarse, el cron los libera.
+      let apartadoId: string | null = null;
+      if (puntosUsados > 0) {
+        const apartado = await apartarPuntosDeCargo(supabase, user.id, "payment_plan_installment", plan_id, puntosUsados);
+        if (!apartado.ok) {
+          return new Response(JSON.stringify({ error: apartado.error }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        apartadoId = apartado.id;
+      }
+
+      let session;
+      try {
+        session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          mode: "payment",
+          line_items: lineItems,
+          // Con puntos apartados, el cobro expira antes que el apartado.
+          ...(apartadoId ? { expires_at: expiracionDelCobroConPuntos() } : {}),
+          metadata: {
+            plan_id,
+            payment_for: "payment_plan_installment",
+            user_id: user.id,
+            // El abono COMPLETO: los puntos pagan su parte y se reparte entero.
+            effective_amount: String(effectiveAmount),
+            net_service_charge: String(netServiceCharge),
+            points_used: String(puntosUsados),
+          },
+          success_url: `${origin}/payment-plan-success?plan_id=${plan_id}`,
+          cancel_url: `${origin}/traveler/bookings`,
+        });
+      } catch (stripeErr) {
+        if (apartadoId) await supabase.rpc("liberar_puntos_de_cargo", { p_apartado_id: apartadoId });
+        throw stripeErr;
+      }
 
       return new Response(JSON.stringify({ success: true, url: session.url }), {
         status: 200,

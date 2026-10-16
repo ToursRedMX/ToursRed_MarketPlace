@@ -2119,7 +2119,7 @@ const TravelerBookings: React.FC = () => {
         body: JSON.stringify({
           booking_supplement_id: bookingSupplement.id,
           payment_method: selectedMethod,
-          ...(selectedMethod === 'toursred_cash'
+          ...((selectedMethod === 'toursred_cash' || selectedMethod === 'stripe')
             ? { points_to_use: puntosAAplicar(supplementDirectPayModal.usePoints, supplementDirectPayModal.pointsBalance, Number(bookingSupplement.unit_price || 0) * Number(bookingSupplement.quantity || 1)) }
             : {}),
           ...(selectedMethod === 'conekta' ? { conekta_method: supplementDirectPayModal.conektaMethod, ...(supplementDirectPayModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) } : {}),
@@ -2321,11 +2321,11 @@ const TravelerBookings: React.FC = () => {
       const openpayExtra = selectedMethod === 'openpay'
         ? { openpay_method: extrasPaymentModal.openpayMethod }
         : {};
-      // Puntos (tope 50%) solo junto con ToursRed Cash.
+      // Puntos (tope 50%) con ToursRed Cash o con tarjeta (Stripe).
       const baseExtra = type === 'optional_service'
         ? Number(item.price_per_person || 0) * quantity
         : (extrasModal.insuranceCost || Number(booking.travel_insurance_cost || 0));
-      const puntosExtra = selectedMethod === 'toursred_cash'
+      const puntosExtra = (selectedMethod === 'toursred_cash' || selectedMethod === 'stripe')
         ? { points_to_use: puntosAAplicar(extrasPaymentModal.usePoints, extrasPaymentModal.pointsBalance, baseExtra) }
         : {};
       const body = type === 'optional_service'
@@ -2478,7 +2478,7 @@ const TravelerBookings: React.FC = () => {
             booking_supplement_id: data.booking_supplement_id,
             payment_method: selectedMethod,
             toursred_cash_amount: selectedMethod === 'toursred_cash' ? cashToUse : 0,
-            ...(selectedMethod === 'toursred_cash'
+            ...((selectedMethod === 'toursred_cash' || selectedMethod === 'stripe')
               ? { points_to_use: puntosAAplicar(supplementPaymentModal.usePoints, supplementPaymentModal.pointsBalance, Number(supplement.price || 0) * quantity) }
               : {}),
             ...(selectedMethod === 'conekta' ? { conekta_method: supplementPaymentModal.conektaMethod, ...(supplementPaymentModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) } : {}),
@@ -4854,7 +4854,7 @@ const TravelerBookings: React.FC = () => {
                     ))}
                   </div>
 
-                  {supplementPaymentModal.selectedMethod === 'toursred_cash' && (
+                  {(supplementPaymentModal.selectedMethod === 'toursred_cash' || supplementPaymentModal.selectedMethod === 'stripe') && (
                     <UsarPuntosConCash
                       saldoPuntos={supplementPaymentModal.pointsBalance}
                       baseMxn={Number(supplementPaymentModal.supplement?.price || 0) * supplementPaymentModal.quantity}
@@ -5201,7 +5201,7 @@ const TravelerBookings: React.FC = () => {
                     ))}
                   </div>
 
-                  {supplementDirectPayModal.selectedMethod === 'toursred_cash' && (
+                  {(supplementDirectPayModal.selectedMethod === 'toursred_cash' || supplementDirectPayModal.selectedMethod === 'stripe') && (
                     <UsarPuntosConCash
                       saldoPuntos={supplementDirectPayModal.pointsBalance}
                       baseMxn={Number(supplementDirectPayModal.bookingSupplement?.unit_price || 0) * Number(supplementDirectPayModal.bookingSupplement?.quantity || 1)}
@@ -5596,7 +5596,7 @@ const TravelerBookings: React.FC = () => {
                     ))}
                   </div>
 
-                  {extrasPaymentModal.selectedMethod === 'toursred_cash' && (
+                  {(extrasPaymentModal.selectedMethod === 'toursred_cash' || extrasPaymentModal.selectedMethod === 'stripe') && (
                     <UsarPuntosConCash
                       saldoPuntos={extrasPaymentModal.pointsBalance}
                       baseMxn={extrasPaymentModal.type === 'optional_service' ? Number(extrasPaymentModal.item?.price_per_person || 0) * extrasPaymentModal.quantity : (extrasModal.insuranceCost || Number(extrasPaymentModal.booking?.travel_insurance_cost || 0))}

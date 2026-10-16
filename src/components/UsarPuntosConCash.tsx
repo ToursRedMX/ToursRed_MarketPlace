@@ -4,7 +4,7 @@ import { PUNTOS_POR_PESO, maxPuntosPermitidos, puntosAAplicar } from '../lib/pun
 
 // Casilla de puntos ToursRed para suplementos, extras y mensualidades (regla de
 // Axel, 16-oct-2026): los puntos cubren como maximo el 50% de un pago y, por
-// ahora, se combinan solo con ToursRed Cash. Es la misma casilla que el flujo de
+// ahora, se combinan con ToursRed Cash o con tarjeta (Stripe). Es la misma casilla que el flujo de
 // reserva (BookingFlowStep4): marcada aplica min(saldo, tope). El tope vive en
 // src/lib/puntosConTope.ts y el servidor lo vuelve a validar.
 
@@ -21,7 +21,6 @@ export default function UsarPuntosConCash({ saldoPuntos, baseMxn, usar, onChange
   if (saldoPuntos <= 0 || max <= 0) return null;
 
   const aplicados = puntosAAplicar(usar, saldoPuntos, baseMxn);
-  const cash = Math.max(0, baseMxn - aplicados / PUNTOS_POR_PESO);
 
   return (
     <div className="mt-3">
@@ -44,8 +43,8 @@ export default function UsarPuntosConCash({ saldoPuntos, baseMxn, usar, onChange
       </label>
       {usar && aplicados > 0 && (
         <p className="text-xs text-gray-600 mt-2">
-          Pagarás {formatCurrencyMXN(cash)} con ToursRed Cash y {aplicados.toLocaleString('es-MX')} puntos
-          ({formatCurrencyMXN(aplicados / PUNTOS_POR_PESO)}).
+          Se aplicarán {aplicados.toLocaleString('es-MX')} puntos ({formatCurrencyMXN(aplicados / PUNTOS_POR_PESO)});
+          el resto se cobra con el método que elegiste.
         </p>
       )}
     </div>

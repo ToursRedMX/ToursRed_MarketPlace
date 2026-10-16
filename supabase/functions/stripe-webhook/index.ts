@@ -351,6 +351,14 @@ Deno.serve(async (req) => {
             const supplementCommission = parseFloat((subtotal * supplementCommissionPct / 100).toFixed(2));
             const totalToPay = parseFloat((subtotal + netServiceCharge).toFixed(2));
 
+            // Puntos + tarjeta (16-oct-2026): los puntos apartados al crear el cobro
+            // se consumen aqui y quedan en booking_supplements.points_used, antes
+            // de la poliza y del CFDI. Stripe cobro el resto.
+            const { data: puntosSupp, error: puntosSuppError } = await supabase
+              .rpc('consumir_puntos_de_cargo', { p_contexto: 'supplement', p_referencia: bookingSupplementId });
+            if (puntosSuppError) await registrarFallo('stripe-webhook: consumir puntos del suplemento', puntosSuppError, { bookingSupplementId });
+            const pesosSupp = Number(puntosSupp || 0) / 100;
+
             // Award points if member
             let pointsEarned = 0;
             const { data: activeMembership } = await supabase
@@ -421,12 +429,13 @@ Deno.serve(async (req) => {
               await supabase.from('payment_transactions').insert({
                 booking_id: suppReq.booking_id,
                 stripe_payment_intent_id: suppPaymentIntentId,
-                amount: totalToPay,
+                // Lo que cobro la tarjeta: sin la parte pagada con puntos.
+                amount: parseFloat((totalToPay - pesosSupp).toFixed(2)),
                 currency: 'mxn',
                 status: 'succeeded',
                 payment_processor: 'stripe',
                 processor_fee: 0,
-                net_amount: totalToPay,
+                net_amount: parseFloat((totalToPay - pesosSupp).toFixed(2)),
                 charge_context: 'supplement',
                 charge_reference_id: bookingSupplementId,
               });
@@ -558,6 +567,17 @@ Deno.serve(async (req) => {
               );
             }
 
+            // Puntos + tarjeta (16-oct-2026): los puntos apartados al crear el cobro
+            // se consumen aqui y quedan en el extra (points_used del servicio, o
+            // travel_insurance_points_used de la reserva), antes de la poliza y
+            // del CFDI. Stripe cobro el resto.
+            const { data: puntosExtra, error: puntosExtraError } = await supabase.rpc('consumir_puntos_de_cargo', {
+              p_contexto: extraType === 'insurance' ? 'insurance' : 'optional_service',
+              p_referencia: extraType === 'insurance' ? extraBookingId : extraBosId,
+            });
+            if (puntosExtraError) await registrarFallo('stripe-webhook: consumir puntos del extra', puntosExtraError, { extraType, extraBookingId, extraBosId });
+            const puntosDelExtra = Number(puntosExtra || 0);
+
             // Apply membership exemption via centralized RPC
             const grossServiceCharge = parseFloat((subtotal * serviceChargePct / 100).toFixed(2));
             const { data: exemptionResult } = await supabase
@@ -642,9 +662,12 @@ Deno.serve(async (req) => {
               const cfdiFunction = extraType === 'optional_service'
                 ? 'generate-optional-service-cfdi'
                 : 'generate-post-booking-insurance-cfdi';
+              // total_paid es el valor COMPLETO del extra: el generador le resta
+              // points_used. amount_total ya viene sin la parte de puntos.
+              const totalDelExtra = parseFloat((((session.amount_total ?? 0) / 100) + puntosDelExtra / 100).toFixed(2));
               const cfdiBody = extraType === 'optional_service'
-                ? { booking_optional_service_id: extraBosId, service_charge: netServiceChargeExtra, total_paid: (session.amount_total ?? 0) / 100, payment_method: 'stripe' }
-                : { booking_id: extraBookingId, service_charge: netServiceChargeExtra, total_paid: (session.amount_total ?? 0) / 100, payment_method: 'stripe' };
+                ? { booking_optional_service_id: extraBosId, service_charge: netServiceChargeExtra, total_paid: totalDelExtra, payment_method: 'stripe', points_used: puntosDelExtra }
+                : { booking_id: extraBookingId, service_charge: netServiceChargeExtra, total_paid: totalDelExtra, payment_method: 'stripe', points_used: puntosDelExtra };
 
               EdgeRuntime.waitUntil(
                 fetch(`${supabaseUrl}/functions/v1/${cfdiFunction}`, {
@@ -777,6 +800,14 @@ Deno.serve(async (req) => {
             const netServiceChargePlan = parseFloat(exemptionResultPlan?.net_service_charge ?? grossServiceChargePlan.toString());
             const effectiveNetServiceCharge = netServiceCharge > 0 ? netServiceChargePlan : 0;
 
+            // Puntos + tarjeta (16-oct-2026): los puntos apartados al crear el cobro
+            // se consumen aqui y se guardan en la transaccion del abono. El abono
+            // (effectiveAmount) es completo; Stripe cobro el resto.
+            const { data: puntosAbono, error: puntosAbonoError } = await supabase
+              .rpc('consumir_puntos_de_cargo', { p_contexto: 'payment_plan_installment', p_referencia: planId });
+            if (puntosAbonoError) await registrarFallo('stripe-webhook: consumir puntos del abono', puntosAbonoError, { planId });
+            const puntosDelAbono = Number(puntosAbono || 0);
+
             // Calculate points earned (actual award happens after txRecord creation)
             let pointsEarned = 0;
             const { data: activeMembership } = await supabase
@@ -805,6 +836,7 @@ Deno.serve(async (req) => {
                 provider_transaction_id: session.payment_intent as string ?? session.id,
                 membership_exemption_used: exemptionAppliedPlan > 0,
                 points_earned: pointsEarned,
+                points_used: puntosDelAbono,
                 status: 'completed',
               })
               .select()
@@ -822,7 +854,8 @@ Deno.serve(async (req) => {
               .select('id')
               .eq('stripe_payment_intent_id', planPaymentIntentId)
               .maybeSingle();
-            const planTotalToPay = parseFloat((effectiveAmount + effectiveNetServiceCharge).toFixed(2));
+            // Lo que cobro la tarjeta: sin la parte pagada con puntos.
+            const planTotalToPay = parseFloat((effectiveAmount + effectiveNetServiceCharge - puntosDelAbono / 100).toFixed(2));
             if (!existingPlanTx && planPaymentIntentId) {
               await supabase.from('payment_transactions').insert({
                 booking_id: bookingRow.id,
