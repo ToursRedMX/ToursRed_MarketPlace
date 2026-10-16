@@ -220,7 +220,9 @@ Deno.serve(async (req: Request) => {
         p_provider_transaction_id: providerTransactionId || presetTxId || null,
         p_user_id: user.id,
         p_membership_exemption_used: exemptionApplied > 0,
-        p_is_wallet_payment: isWalletPayment,
+        // Solo decide los puntos dobles: con puntos van sencillos (regla de Axel,
+        // 16-oct-2026). La exencion del cargo por servicio sigue usando isWalletPayment.
+        p_is_wallet_payment: payment_method === "toursred_cash",
       });
 
       if (allocError || !result) throw new Error(`allocate_payment_plan_installment failed: ${allocError?.message}`);

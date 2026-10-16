@@ -622,6 +622,23 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d pagos -v ON_ERROR_STOP=1 -f test-pagar-gasto.sql
 
+      # Cada peso pagado da un punto, tambien el pagado con puntos (regla de
+      # Axel, 16-oct-2026). En las reservas no contaba: 25,000 pts + $250 de
+      # Stripe dieron 250 en vez de 500. La prueba reproduce eso con la funcion
+      # vigente antes de aplicar la migracion real.
+      - name: Los pesos pagados con puntos generan puntos sencillos
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS puntos;" -c "CREATE DATABASE puntos;"
+          cd scripts
+          psql -h localhost -U postgres -d puntos -v ON_ERROR_STOP=1 -f test-puntos-pagados-con-puntos.sql
+
+      # Suplementos, extras y mensualidades duplicaban los puntos tambien al
+      # pagar con puntos; los dobles son solo para ToursRed Cash.
+      - name: Los puntos dobles son solo para ToursRed Cash
+        run: node scripts/check-puntos-dobles-solo-cash.mjs
+
       # No existia una forma de reversar una poliza publicada: las tres
       # primeras reversas del ERP se armaron a mano, invirtiendo cada partida.
       # reverse_accounting_entry automatiza eso y ademas amplia el permiso
