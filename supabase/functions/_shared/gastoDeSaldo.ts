@@ -66,3 +66,52 @@ export async function exigirMfaSiGastaSaldo(
   });
   return await enforceStepUp(userClient, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, supabaseUrl, userId);
 }
+
+// Apartar el saldo al crear el cobro (16-oct-2026).
+//
+// Antes, el saldo y los puntos de un pago mixto se debitaban en el webhook,
+// DESPUES de que la pasarela cobraba el monto ya descontado. Si en esa ventana
+// se gastaban en otra pestana, el webhook fallaba en silencio y la reserva se
+// confirmaba con el descuento sin pagar; y Conekta y OpenPay ni siquiera los
+// debitaban. apartar_saldo_de_reserva los descuenta AQUI, antes de abrir la
+// pasarela, con las mismas llaves que los webhooks (su descuento posterior es
+// un no-op). Si la reserva muere sin pagarse, el trigger liberar_saldo_apartado
+// los devuelve.
+
+interface ClienteConRpc {
+  rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: { message: string } | null }>;
+}
+
+/**
+ * `null` = puede seguir (no hay saldo que apartar, o ya quedo apartado).
+ * Si no, la Response 400 lista para devolver: no se abre la pasarela.
+ *
+ * @param montos  lo que el cobro aplica como descuento. Sin montos se aparta lo
+ *                comprometido en la reserva (lo que ya descuenta amount_due_now).
+ */
+export async function apartarSaldoDeReserva(
+  supabase: ClienteConRpc,
+  bookingId: string,
+  reserva: ReservaConSaldo | null | undefined,
+  montos?: { puntos: number; cash: number },
+): Promise<Response | null> {
+  const gasta = montos ? (montos.puntos > 0 || montos.cash > 0) : reservaGastaSaldo(reserva);
+  if (!gasta) return null;
+  const { error } = await supabase.rpc("apartar_saldo_de_reserva", {
+    p_booking_id: bookingId,
+    ...(montos ? { p_puntos: montos.puntos, p_cash: montos.cash } : {}),
+  });
+  if (!error) return null;
+  console.error(`apartar_saldo_de_reserva ${bookingId}: ${error.message}`);
+  const sinSaldo = /insuficiente|insufficient/i.test(error.message);
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: sinSaldo
+        ? "Tu saldo de ToursRed Cash o tus puntos ya no alcanzan para el descuento de esta reserva."
+        : "No pudimos apartar tu saldo de ToursRed Cash y puntos para este pago. Intenta de nuevo.",
+      details: sinSaldo ? "insufficient_balance" : "hold_failed",
+    }),
+    { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } },
+  );
+}

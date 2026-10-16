@@ -674,6 +674,20 @@ jobs:
       - name: Cancelacion completa devuelve puntos como puntos (llamadores)
         run: node scripts/test-cancelacion-puntos-posteriores.mjs
 
+      # El saldo de un pago mixto se debitaba al confirmar (Conekta y OpenPay ni
+      # eso): podia confirmarse una reserva con el descuento sin pagar. Ahora se
+      # aparta al crear el cobro y se devuelve si la reserva muere sin pagarse.
+      - name: Apartar el saldo al crear el cobro (base)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS apartar_saldo;" -c "CREATE DATABASE apartar_saldo;"
+          cd scripts
+          psql -h localhost -U postgres -d apartar_saldo -v ON_ERROR_STOP=1 -f test-apartar-saldo.sql
+
+      - name: Apartar el saldo al crear el cobro (funciones)
+        run: node scripts/test-apartar-saldo.mjs
+
       # No existia una forma de reversar una poliza publicada: las tres
       # primeras reversas del ERP se armaron a mano, invirtiendo cada partida.
       # reverse_accounting_entry automatiza eso y ademas amplia el permiso
