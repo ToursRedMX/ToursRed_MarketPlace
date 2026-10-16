@@ -5,7 +5,7 @@ import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
-import { ajustarVencimientoDeApartado, apartarPuntosDeCargo, expiracionDelCobroConPuntos, MINUTOS_APARTADO_CONEKTA, MINUTOS_APARTADO_OPENPAY, puntosGanadosSinPasarela, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
+import { apartarPuntosDeCargo, expiracionDelCobroConPuntos, MINUTOS_APARTADO_CONEKTA, MINUTOS_APARTADO_OPENPAY, puntosGanadosSinPasarela, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
