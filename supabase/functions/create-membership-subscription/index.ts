@@ -3,6 +3,7 @@ import Stripe from 'npm:stripe@22.3.0';
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { clienteStripeVigente } from "../_shared/clienteStripe.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -132,23 +133,32 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Price ID not configured for ${planType} plan`);
     }
 
-    let customer;
     const { data: existingMembership } = await supabase
       .from('memberships')
       .select('stripe_customer_id')
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (existingMembership?.stripe_customer_id) {
-      customer = await stripe.customers.retrieve(existingMembership.stripe_customer_id);
-    } else {
-      customer = await stripe.customers.create({
+    let customerId: string | null = existingMembership?.stripe_customer_id ?? null;
+
+    // El webhook reescribe memberships.stripe_customer_id al nacer la
+    // suscripcion, asi que aqui basta con no reutilizar uno que ya no existe.
+    if (customerId && !(await clienteStripeVigente(stripe, customerId))) {
+      console.warn(
+        `create-membership-subscription: el cliente ${customerId} del usuario ${user.id} no existe en esta cuenta de Stripe; se crea uno nuevo`
+      );
+      customerId = null;
+    }
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
         email: user.email,
         name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || user.email,
         metadata: {
           supabase_user_id: user.id,
         },
       });
+      customerId = customer.id;
     }
 
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
@@ -183,7 +193,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      customer: customer.id,
+      customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
