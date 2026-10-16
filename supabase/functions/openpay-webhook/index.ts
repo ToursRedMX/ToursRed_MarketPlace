@@ -520,9 +520,16 @@ Deno.serve(async (req: Request) => {
             return new Response("OK", { status: 200, headers: corsHeaders });
           }
 
+          // Puntos + OpenPay (16-oct-2026): los puntos apartados al crear el cargo
+          // se consumen aqui y quedan en el cargo antes del CFDI y la poliza.
+          const { error: puntosErrorSupp } = await supabase.rpc("consumir_puntos_de_cargo", { p_contexto: "supplement", p_referencia: chargeReferenceId });
+          if (puntosErrorSupp) console.error(`consumir_puntos_de_cargo (OpenPay, suplemento): ${puntosErrorSupp.message}`);
+
+          // payment_method e intent: sin ellos la poliza y el CFDI no sabian con
+          // que se pago (16-oct-2026).
           await supabase
             .from("booking_supplements")
-            .update({ status: "paid", paid_at: new Date().toISOString() })
+            .update({ status: "paid", paid_at: new Date().toISOString(), payment_method: "openpay", payment_intent_id: transaction.id })
             .eq("id", chargeReferenceId);
 
           await supabase
@@ -633,6 +640,11 @@ Deno.serve(async (req: Request) => {
           );
 
         } else if (chargeContext === "insurance" && chargeReferenceId) {
+          // Puntos + OpenPay (16-oct-2026): los puntos apartados al crear el cargo
+          // se consumen aqui y quedan en el cargo antes del CFDI y la poliza.
+          const { error: puntosErrorIns } = await supabase.rpc("consumir_puntos_de_cargo", { p_contexto: "insurance", p_referencia: chargeReferenceId });
+          if (puntosErrorIns) console.error(`consumir_puntos_de_cargo (OpenPay, seguro): ${puntosErrorIns.message}`);
+
           const extraSubtotal = parseFloat(transaction.metadata?.extra_subtotal || String(chargeAmount));
           await supabase.from("bookings").update({
             travel_insurance_included: true,
@@ -669,6 +681,11 @@ Deno.serve(async (req: Request) => {
           );
 
         } else if (chargeContext === "optional_service" && chargeReferenceId) {
+          // Puntos + OpenPay (16-oct-2026): los puntos apartados al crear el cargo
+          // se consumen aqui y quedan en el cargo antes del CFDI y la poliza.
+          const { error: puntosErrorOs } = await supabase.rpc("consumir_puntos_de_cargo", { p_contexto: "optional_service", p_referencia: chargeReferenceId });
+          if (puntosErrorOs) console.error(`consumir_puntos_de_cargo (OpenPay, servicio opcional): ${puntosErrorOs.message}`);
+
           const { data: bosRowOp } = await supabase.from("booking_optional_services").select("subtotal, booking_id").eq("id", chargeReferenceId).maybeSingle();
           const extraSubtotalOs = Number(bosRowOp?.subtotal) || parseFloat(transaction.metadata?.extra_subtotal || String(chargeAmount));
 
@@ -721,7 +738,16 @@ Deno.serve(async (req: Request) => {
           const metaGrossServiceCharge = transaction.metadata?.gross_service_charge;
           const metaExemptionApplied = transaction.metadata?.membership_exemption_applied === "true";
 
-          const effectiveAmountPp = metaEffectiveAmount != null ? parseFloat(metaEffectiveAmount) : chargeAmount;
+          // Puntos + OpenPay (16-oct-2026): los del abono se consumen aqui y se
+          // guardan en la transaccion.
+          const { data: puntosAbonoOp, error: puntosAbonoOpError } = await supabase
+            .rpc("consumir_puntos_de_cargo", { p_contexto: "payment_plan_installment", p_referencia: planId });
+          if (puntosAbonoOpError) console.error(`consumir_puntos_de_cargo (OpenPay, abono): ${puntosAbonoOpError.message}`);
+          const pesosPuntosAbonoOp = Number(puntosAbonoOp || 0) / 100;
+
+          // Efectivo y SPEI no llevan metadata: el abono es lo cobrado MAS lo
+          // que pagaron los puntos (el cargo ya venia descontado).
+          const effectiveAmountPp = metaEffectiveAmount != null ? parseFloat(metaEffectiveAmount) : chargeAmount + pesosPuntosAbonoOp;
           const serviceChargePp = metaNetServiceCharge != null ? parseFloat(metaNetServiceCharge) : 0;
           const grossServiceChargePp = metaGrossServiceCharge != null ? parseFloat(metaGrossServiceCharge) : 0;
           const membershipExemptionUsedPp = metaEffectiveAmount != null ? metaExemptionApplied : false;
@@ -731,6 +757,7 @@ Deno.serve(async (req: Request) => {
             p_service_charge: serviceChargePp, p_gross_service_charge: grossServiceChargePp,
             p_provider_transaction_id: transaction.id, p_user_id: planUserId,
             p_membership_exemption_used: membershipExemptionUsedPp, p_is_wallet_payment: false,
+            p_points_used: Number(puntosAbonoOp || 0),
           });
 
           if (allocError) {

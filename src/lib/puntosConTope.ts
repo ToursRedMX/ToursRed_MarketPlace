@@ -6,6 +6,14 @@
 // solo evita mandar una peticion que se va a rechazar.
 
 export const PUNTOS_POR_PESO = 100;
+
+/** Metodos que aceptan points_to_use. Igual que METODOS_CON_PUNTOS del servidor:
+ *  MercadoPago y PayPal, en el siguiente PR. */
+const METODOS_CON_PUNTOS: readonly string[] = ['toursred_cash', 'stripe', 'conekta', 'openpay'];
+
+export function aceptaPuntos(metodo: string): boolean {
+  return METODOS_CON_PUNTOS.includes(metodo);
+}
 const TOPE_PUNTOS = 0.5;
 
 /** Maximo de puntos para un pago de `baseMxn`. Igual que maxPuntosPermitidos del servidor. */

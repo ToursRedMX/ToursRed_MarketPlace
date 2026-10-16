@@ -214,6 +214,16 @@ Deno.serve(async (req: Request) => {
       }
 
       amount = Number(supplement.total_paid);
+      // Puntos + OpenPay (16-oct-2026): process-supplement-payment aparta los
+      // puntos antes de llamar aqui; el cargo es el total menos esos puntos.
+      const { data: apartadoSupp } = await supabase
+        .from("puntos_apartados_cargos")
+        .select("puntos")
+        .eq("contexto", "supplement")
+        .eq("referencia", supplementId)
+        .eq("estado", "apartado")
+        .maybeSingle();
+      amount = Math.round((amount - Number(apartadoSupp?.puntos ?? 0) / 100) * 100) / 100;
       if (amount <= 0) {
         return new Response(
           JSON.stringify({ error: "El monto del suplemento no es válido" }),

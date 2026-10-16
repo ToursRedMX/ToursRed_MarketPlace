@@ -701,6 +701,12 @@ jobs:
 
       - name: Puntos + tarjeta (funciones y pantallas)
         run: node scripts/test-puntos-con-tarjeta.mjs
+
+      # Puntos + Conekta / OpenPay, sobre la misma base que la tarjeta. Incluye
+      # el suplemento de Conekta que nunca quedaba pagado (payment_provider no
+      # existe en booking_supplements).
+      - name: Puntos + Conekta / OpenPay
+        run: node scripts/test-puntos-conekta-openpay.mjs
 
       # No existia una forma de reversar una poliza publicada: las tres
       # primeras reversas del ERP se armaron a mano, invirtiendo cada partida.

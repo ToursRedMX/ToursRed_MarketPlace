@@ -593,15 +593,24 @@ Deno.serve(async (req: Request) => {
           }
         }
       } else if (chargeContext === "supplement" && chargeReferenceId) {
-        await supabase
+        // Puntos + Conekta (16-oct-2026): los puntos apartados al crear la orden
+        // se consumen aqui y quedan en el cargo antes del CFDI y la poliza.
+        const { error: puntosError } = await supabase.rpc("consumir_puntos_de_cargo", { p_contexto: "supplement", p_referencia: chargeReferenceId });
+        if (puntosError) console.error(`consumir_puntos_de_cargo (Conekta, suplemento): ${puntosError.message}`);
+        // payment_method, no payment_provider: esa columna no existe en
+        // booking_supplements y el UPDATE entero fallaba, asi que el suplemento
+        // pagado con Conekta nunca quedaba pagado (16-oct-2026).
+        const { error: suppUpdateErr } = await supabase
           .from("booking_supplements")
           .update({
             status: "paid",
-            payment_provider: "conekta",
+            payment_method: "conekta",
+            payment_intent_id: orderId,
             paid_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq("id", chargeReferenceId);
+        if (suppUpdateErr) console.error(`Error marcando suplemento ${chargeReferenceId} como pagado (Conekta):`, suppUpdateErr.message);
 
         const { data: suppRow } = await supabase
           .from("booking_supplements")
@@ -646,6 +655,10 @@ Deno.serve(async (req: Request) => {
           })()
         );
       } else if (chargeContext === "insurance" && chargeReferenceId) {
+        // Puntos + Conekta (16-oct-2026): los puntos apartados al crear la orden
+        // se consumen aqui y quedan en el cargo antes del CFDI y la poliza.
+        const { error: puntosError } = await supabase.rpc("consumir_puntos_de_cargo", { p_contexto: "insurance", p_referencia: chargeReferenceId });
+        if (puntosError) console.error(`consumir_puntos_de_cargo (Conekta, seguro): ${puntosError.message}`);
         const extraSubtotal = parseFloat(conektaOrder?.metadata?.extra_subtotal || String(tx.amount));
         const insuranceDaysMeta = conektaOrder?.metadata?.insurance_days ? Number(conektaOrder.metadata.insurance_days) : null;
 
@@ -695,6 +708,10 @@ Deno.serve(async (req: Request) => {
           })()
         );
       } else if (chargeContext === "optional_service" && chargeReferenceId) {
+        // Puntos + Conekta (16-oct-2026): los puntos apartados al crear la orden
+        // se consumen aqui y quedan en el cargo antes del CFDI y la poliza.
+        const { error: puntosError } = await supabase.rpc("consumir_puntos_de_cargo", { p_contexto: "optional_service", p_referencia: chargeReferenceId });
+        if (puntosError) console.error(`consumir_puntos_de_cargo (Conekta, servicio opcional): ${puntosError.message}`);
         const { data: bosRow } = await supabase.from("booking_optional_services").select("subtotal").eq("id", chargeReferenceId).maybeSingle();
         const extraSubtotal = Number(bosRow?.subtotal) || parseFloat(conektaOrder?.metadata?.extra_subtotal || String(tx.amount));
 
@@ -801,6 +818,12 @@ Deno.serve(async (req: Request) => {
         const grossServiceCharge = metaGrossServiceCharge != null ? parseFloat(metaGrossServiceCharge) : 0;
         const membershipExemptionUsed = metaEffectiveAmount != null ? metaExemptionApplied : false;
 
+        // Puntos + Conekta (16-oct-2026): los del abono se consumen aqui y se
+        // guardan en la transaccion (effectiveAmount es el abono completo).
+        const { data: puntosAbono, error: puntosAbonoError } = await supabase
+          .rpc("consumir_puntos_de_cargo", { p_contexto: "payment_plan_installment", p_referencia: planId });
+        if (puntosAbonoError) console.error(`consumir_puntos_de_cargo (Conekta, abono): ${puntosAbonoError.message}`);
+
         // Call the shared SQL function — it handles idempotency, allocations, points, plan totals
         const { data: allocResult, error: allocError } = await supabase.rpc("allocate_payment_plan_installment", {
           p_plan_id: planId,
@@ -812,6 +835,7 @@ Deno.serve(async (req: Request) => {
           p_user_id: planUserId,
           p_membership_exemption_used: membershipExemptionUsed,
           p_is_wallet_payment: false,
+          p_points_used: Number(puntosAbono || 0),
         });
 
         if (allocError) {
