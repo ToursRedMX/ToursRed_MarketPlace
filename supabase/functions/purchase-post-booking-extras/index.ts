@@ -276,8 +276,9 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (activeMembership) {
-        const isWallet = payment_method === "toursred_cash" || payment_method === "points";
-        pointsEarned = isWallet ? Math.floor(subtotal) * 2 : Math.floor(subtotal);
+        // Doble solo con ToursRed Cash: lo pagado con puntos da puntos sencillos
+        // (regla de Axel, 16-oct-2026; los puntos no son monedero).
+        pointsEarned = payment_method === "toursred_cash" ? Math.floor(subtotal) * 2 : Math.floor(subtotal);
         if (pointsEarned > 0) {
           const { data: walletId } = await supabase.rpc("get_or_create_points_wallet", { p_user_id: user.id });
           if (walletId) {
