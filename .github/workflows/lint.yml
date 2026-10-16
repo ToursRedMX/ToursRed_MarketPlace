@@ -399,6 +399,13 @@ jobs:
       - name: Verify an unpaid SPEI/OXXO session is never recorded as a charge
         run: node scripts/test-cobros-stripe.mjs
 
+      # Un cus_... guardado solo vale en la cuenta de Stripe donde se creo. El
+      # 16-oct-2026 un pago mixto murio con «No such customer» porque la llave
+      # ya apuntaba a otra cuenta; lo mismo le pasara a todo cliente de prueba
+      # guardado el dia que la llave pase a livemode.
+      - name: Verify a saved Stripe customer is checked before reuse
+        run: node scripts/test-cliente-stripe.mjs
+
       # getStripeProcessorFee leia el TOTAL de la comision e ignoraba
       # fee_details, que viene en la misma respuesta con el desglose. Por eso
       # processor_fee_base y processor_fee_iva nacian nulas en Stripe mientras

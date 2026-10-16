@@ -7,6 +7,7 @@ import { origenParaRedirigir, urlDeRetornoSegura } from "../_shared/cors.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
+import { clienteStripeVigente } from "../_shared/clienteStripe.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -354,9 +355,16 @@ Deno.serve(async (req) => {
       console.error("Error fetching customer:", customerError);
     }
 
-    let customerId;
+    let customerId: string | null = customers?.customer_id ?? null;
 
-    if (!customers) {
+    if (customerId && !(await clienteStripeVigente(stripe, customerId))) {
+      console.warn(
+        `create-checkout-session: el cliente ${customerId} del usuario ${booking.user_id} no existe en esta cuenta de Stripe; se crea uno nuevo`
+      );
+      customerId = null;
+    }
+
+    if (!customerId) {
       const { data: userProfile } = await supabase
         .from("users")
         .select("first_name, last_name, email")
@@ -373,18 +381,19 @@ Deno.serve(async (req) => {
 
       customerId = customer.id;
 
+      // upsert y no insert: si habia una fila, es la del cliente que ya no
+      // existe y hay que reemplazarla (user_id es UNIQUE).
       const { error: insertError } = await supabase
         .from("stripe_customers")
-        .insert({
+        .upsert({
           user_id: booking.user_id,
           customer_id: customer.id,
-        });
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
 
       if (insertError) {
         console.error("Error saving customer:", insertError);
       }
-    } else {
-      customerId = customers.customer_id;
     }
 
     const sessionConfig: CheckoutSessionConfig = {
