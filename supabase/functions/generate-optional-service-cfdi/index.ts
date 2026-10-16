@@ -1,4 +1,4 @@
-﻿import { calculateTaxBreakdown, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
+﻿import { calculateTaxBreakdown, repartirDescuentoBruto, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
@@ -139,7 +139,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { booking_optional_service_id, service_charge, total_paid, payment_method } = await req.json();
+    const { booking_optional_service_id, service_charge, total_paid, payment_method, points_used } = await req.json();
     if (!booking_optional_service_id) {
       return new Response(JSON.stringify({ error: "booking_optional_service_id es requerido" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -178,7 +178,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, booking_id, quantity, unit_price, subtotal,
         tour_optional_service:tour_optional_service_id(id, name, tour_id),
-        bookings:booking_id(id, user_id, tour_id), tax_treatment, exempt_ratio`)
+        bookings:booking_id(id, user_id, tour_id), tax_treatment, exempt_ratio, points_used`)
       .eq("id", booking_optional_service_id)
       .maybeSingle();
 
@@ -231,7 +231,17 @@ Deno.serve(async (req: Request) => {
     }
 
     const netServiceCharge = Number(service_charge ?? 0);
-    const exactTotal = Number(total_paid ?? (Number(bosRecord.subtotal) + netServiceCharge));
+    const totalCobrado = Number(total_paid ?? (Number(bosRecord.subtotal) + netServiceCharge));
+    // ToursRed Points: DESCUENTO, no forma de pago (igual que generate-booking-cfdi).
+    // Llegan en el body porque purchase-post-booking-extras dispara este CFDI
+    // antes de guardar points_used en la fila; si no vienen, se leen de la fila.
+    const puntosMxn = Math.min(totalCobrado, Number(points_used ?? (bosRecord as { points_used?: number }).points_used ?? 0) / 100);
+    const exactTotal = Math.round((totalCobrado - puntosMxn) * 100) / 100;
+    if (exactTotal <= 0) {
+      return new Response(JSON.stringify({ message: "Sin CFDI: el extra se pagó completo con puntos (descuento)" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Desglose fiscal del OPCIONAL segun su propio snapshot. No hereda del
     // tour: una "Entrada a Six Flags" exenta convive con un tour gravado.
@@ -352,6 +362,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Los puntos, repartidos como descuento entre las partidas. El IVA y el
+    // subtotal de la base salen de los conceptos ya descontados.
+    repartirDescuentoBruto(conceptos, puntosMxn);
+    const ivaFacturado = puntosMxn > 0
+      ? Math.round(conceptos.filter((c) => !c.exento)
+          .reduce((s, c) => s + (c.valor_unitario * c.cantidad - (c.descuento ?? 0)) * 0.16, 0) * 100) / 100
+      : iva;
+    const subtotalFacturado = puntosMxn > 0 ? Math.round((exactTotal - ivaFacturado) * 100) / 100 : subtotal_db;
+
     // â”€â”€ Guardia de cuadre â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Verifica que los conceptos reconstruyan lo cobrado ANTES de timbrar. El
     // bug de `cantidad` en suplementos y opcionales (el CFDI amparaba el doble
@@ -388,7 +407,8 @@ Deno.serve(async (req: Request) => {
         ...(receptorResidenciaFiscal ? { residencia_fiscal: receptorResidenciaFiscal } : {}),
       },
       conceptos,
-      payment_form: payment_method === "stripe" ? "04" : payment_method === "paypal" ? "04" : payment_method === "mercadopago" ? "04" : "03",
+      // toursred_cash: monedero electronico (05); antes caia en 03 (transferencia).
+      payment_form: payment_method === "toursred_cash" ? "05" : payment_method === "stripe" ? "04" : payment_method === "paypal" ? "04" : payment_method === "mercadopago" ? "04" : "03",
     };
 
     const { data: cfdiRecord, error: insertError } = await supabase
@@ -405,8 +425,8 @@ Deno.serve(async (req: Request) => {
         receptor_regimen_fiscal: receptorRegimen,
         receptor_uso_cfdi: receptorUsoCfdi,
         receptor_codigo_postal: receptorCP,
-        subtotal: subtotal_db,
-        iva_amount: iva,
+        subtotal: subtotalFacturado,
+        iva_amount: ivaFacturado,
         exempt_amount: Math.round(
           conceptos.filter((c) => c.exento)
             .reduce((s, c) => s + c.valor_unitario * c.cantidad - (c.descuento ?? 0), 0) * 100,

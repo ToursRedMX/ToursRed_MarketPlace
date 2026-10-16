@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
+import { repartirDescuentoBruto } from "../_shared/taxBreakdown.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -110,7 +111,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { booking_id, service_charge, total_paid, payment_method } = await req.json();
+    const { booking_id, service_charge, total_paid, payment_method, points_used } = await req.json();
     if (!booking_id) {
       return new Response(JSON.stringify({ error: "booking_id es requerido" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -145,7 +146,7 @@ Deno.serve(async (req: Request) => {
     // Load booking
     const { data: bookingData } = await supabase
       .from("bookings")
-      .select("id, user_id, tour_id, agency_id, travel_insurance_cost, travel_insurance_included, booking_code")
+      .select("id, user_id, tour_id, agency_id, travel_insurance_cost, travel_insurance_included, booking_code, travel_insurance_points_used")
       .eq("id", booking_id)
       .maybeSingle();
 
@@ -162,7 +163,15 @@ Deno.serve(async (req: Request) => {
 
     const insuranceCost = Number(total_paid ?? bookingData.travel_insurance_cost ?? 0);
     const netServiceCharge = Number(service_charge ?? 0);
-    const exactTotal = insuranceCost;
+    // ToursRed Points: DESCUENTO, no forma de pago (igual que generate-booking-cfdi).
+    // Llegan en el body desde purchase-post-booking-extras; si no, de la reserva.
+    const puntosMxn = Math.min(insuranceCost, Number(points_used ?? bookingData.travel_insurance_points_used ?? 0) / 100);
+    const exactTotal = Math.round((insuranceCost - puntosMxn) * 100) / 100;
+    if (exactTotal <= 0) {
+      return new Response(JSON.stringify({ message: "Sin CFDI: el seguro se pagó completo con puntos (descuento)" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Load traveler
     const { data: traveler } = await supabase
@@ -251,6 +260,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Los puntos, repartidos como descuento entre las partidas (todas gravadas al
+    // 16%, asi que el IVA de arriba, sobre exactTotal, ya es el descontado).
+    repartirDescuentoBruto(conceptos, puntosMxn);
+
     const cfdiRequest: CfdiRequest = {
       tipo_de_comprobante: "I",
       serie,
@@ -263,7 +276,8 @@ Deno.serve(async (req: Request) => {
         ...(receptorResidenciaFiscal ? { residencia_fiscal: receptorResidenciaFiscal } : {}),
       },
       conceptos,
-      payment_form: payment_method === "stripe" ? "04" : payment_method === "paypal" ? "04" : payment_method === "mercadopago" ? "04" : "03",
+      // toursred_cash: monedero electronico (05); antes caia en 03 (transferencia).
+      payment_form: payment_method === "toursred_cash" ? "05" : payment_method === "stripe" ? "04" : payment_method === "paypal" ? "04" : payment_method === "mercadopago" ? "04" : "03",
     };
 
     const { data: cfdiRecord, error: insertError } = await supabase

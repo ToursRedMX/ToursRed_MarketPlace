@@ -10,6 +10,8 @@ import { es } from 'date-fns/locale';
 import type { BookingPaymentPlan, InstallmentStatus } from '../types';
 import PaymentProviderSelector, { type PaymentProvider, type ConektaMethod } from './PaymentProviderSelector';
 import { comoFila } from '../lib/relacionesSupabase';
+import UsarPuntosConCash from './UsarPuntosConCash';
+import { puntosAAplicar } from '../lib/puntosConTope';
 
 interface PaymentPlanCalendarProps {
   bookingId: string;
@@ -47,6 +49,25 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState('');
+  // Puntos con ToursRed Cash: hasta el 50% de cada abono (regla de Axel, 16-oct-2026).
+  const [usePoints, setUsePoints] = useState(false);
+
+  const { data: pointsBalance = 0 } = useQuery({
+    queryKey: ['points-balance', user?.id],
+    enabled: !agencyView && !!user,
+    queryFn: async (): Promise<number> => {
+      const { data, error } = await supabase
+        .from('toursred_points_wallets')
+        .select('balance')
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      if (error) {
+        console.error('PaymentPlanCalendar: no se pudo leer el saldo de puntos', error);
+        return 0;
+      }
+      return Number(data?.balance ?? 0);
+    },
+  });
 
   const { data: plan, isPending: isLoading, refetch: fetchPlan } = useQuery({
     queryKey: ['payment-plan', bookingId],
@@ -127,6 +148,9 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
           plan_id: plan.id,
           amount,
           payment_method: paymentProvider,
+          ...(paymentProvider === 'toursred_cash'
+            ? { points_to_use: puntosAAplicar(usePoints, pointsBalance, Math.min(amount, plan.pending_balance)) }
+            : {}),
           ...(paymentProvider === 'conekta' ? { conekta_method: conektaMethod } : {}),
         }),
       });
@@ -196,6 +220,9 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
           amount: plan.pending_balance,
           payment_method: paymentProvider,
           pay_full_balance: true,
+          ...(paymentProvider === 'toursred_cash'
+            ? { points_to_use: puntosAAplicar(usePoints, pointsBalance, plan.pending_balance) }
+            : {}),
           ...(paymentProvider === 'conekta' ? { conekta_method: conektaMethod } : {}),
         }),
       });
@@ -406,6 +433,14 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
                         conektaMethod={conektaMethod}
                         onConektaMethodChange={setConektaMethod}
                       />
+                      {paymentProvider === 'toursred_cash' && (
+                        <UsarPuntosConCash
+                          saldoPuntos={pointsBalance}
+                          baseMxn={Math.min(parseFloat(payAmount) || 0, plan.pending_balance)}
+                          usar={usePoints}
+                          onChange={setUsePoints}
+                        />
+                      )}
                       <div className="flex gap-2">
                         <button
                           type="button"
@@ -455,6 +490,14 @@ const PaymentPlanCalendar: React.FC<PaymentPlanCalendarProps> = ({ bookingId, ag
                 conektaMethod={conektaMethod}
                 onConektaMethodChange={setConektaMethod}
               />
+              {paymentProvider === 'toursred_cash' && (
+                <UsarPuntosConCash
+                  saldoPuntos={pointsBalance}
+                  baseMxn={plan.pending_balance}
+                  usar={usePoints}
+                  onChange={setUsePoints}
+                />
+              )}
             </div>
           )}
         </div>

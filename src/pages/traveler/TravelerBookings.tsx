@@ -13,6 +13,8 @@ import ReviewForm from '../../components/ReviewForm';
 import { useFormPersistence } from '../../hooks/useFormPersistence';
 import { usePreventUnload } from '../../hooks/usePreventUnload';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import UsarPuntosConCash from '../../components/UsarPuntosConCash';
+import { puntosAAplicar } from '../../lib/puntosConTope';
 import { paymentLabel } from '../../utils/paymentLabels';
 import { validateAllTravelers } from '../../utils/birthDateValidation';
 import { getMpDeviceId } from '../../utils/mercadopagoDevice';
@@ -56,7 +58,8 @@ interface SlotRescheduleInfo {
 }
 
 /** Union duplicada en los tres modales de pago de extras/suplementos. */
-type ExtraPaymentMethod = 'toursred_cash' | 'points' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
+// "points" ya no es forma de pago (tope del 50%, 16-oct-2026): los puntos van con ToursRed Cash.
+type ExtraPaymentMethod = 'toursred_cash' | 'stripe' | 'mercadopago' | 'paypal' | 'conekta' | 'openpay';
 
 /**
  * `handlePayExistingSupplement`/`handleProcessDirectSupplementPayment` solo
@@ -137,6 +140,7 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
+    usePoints: boolean;
     selectedMethod: ExtraPaymentMethod;
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
     openpayMethod: 'card' | 'spei' | 'cash';
@@ -152,6 +156,7 @@ const TravelerBookings: React.FC = () => {
     walletBalance: 0,
     pointsBalance: 0,
     pointsValueMxn: 0,
+    usePoints: false,
     selectedMethod: 'stripe',
     conektaMethod: 'card',
     openpayMethod: 'card',
@@ -172,6 +177,7 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
+    usePoints: boolean;
     selectedMethod: ExtraPaymentMethod;
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
     openpayMethod: 'card' | 'spei' | 'cash';
@@ -184,6 +190,7 @@ const TravelerBookings: React.FC = () => {
     walletBalance: 0,
     pointsBalance: 0,
     pointsValueMxn: 0,
+    usePoints: false,
     selectedMethod: 'stripe',
     conektaMethod: 'card',
     openpayMethod: 'card',
@@ -226,6 +233,7 @@ const TravelerBookings: React.FC = () => {
     walletBalance: number;
     pointsBalance: number;
     pointsValueMxn: number;
+    usePoints: boolean;
     selectedMethod: ExtraPaymentMethod;
     conektaMethod: 'card' | 'cash' | 'spei' | 'bnpl';
     openpayMethod: 'card' | 'spei' | 'cash';
@@ -240,6 +248,7 @@ const TravelerBookings: React.FC = () => {
     walletBalance: 0,
     pointsBalance: 0,
     pointsValueMxn: 0,
+    usePoints: false,
     selectedMethod: 'stripe',
     conektaMethod: 'card',
     openpayMethod: 'card',
@@ -1995,6 +2004,7 @@ const TravelerBookings: React.FC = () => {
       walletBalance: walletData?.balance ?? 0,
       pointsBalance: pointsData?.balance ?? 0,
       pointsValueMxn: Math.floor((pointsData?.balance ?? 0) / 100),
+      usePoints: false,
       selectedMethod: 'stripe',
       conektaMethod: 'card',
       openpayMethod: 'card',
@@ -2032,6 +2042,7 @@ const TravelerBookings: React.FC = () => {
       walletBalance: walletData?.balance ?? 0,
       pointsBalance: pointsData?.balance ?? 0,
       pointsValueMxn: Math.floor((pointsData?.balance ?? 0) / 100),
+      usePoints: false,
       selectedMethod: 'stripe',
       // Mismo caso que el modal de deposito: sin estas dos, el radio de metodo
       // sale sin marcar y el cobro de Conekta viaja con `conekta_method` vacio.
@@ -2108,6 +2119,9 @@ const TravelerBookings: React.FC = () => {
         body: JSON.stringify({
           booking_supplement_id: bookingSupplement.id,
           payment_method: selectedMethod,
+          ...(selectedMethod === 'toursred_cash'
+            ? { points_to_use: puntosAAplicar(supplementDirectPayModal.usePoints, supplementDirectPayModal.pointsBalance, Number(bookingSupplement.unit_price || 0) * Number(bookingSupplement.quantity || 1)) }
+            : {}),
           ...(selectedMethod === 'conekta' ? { conekta_method: supplementDirectPayModal.conektaMethod, ...(supplementDirectPayModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) } : {}),
           ...(selectedMethod === 'openpay' ? { openpay_method: supplementDirectPayModal.openpayMethod } : {}),
         }),
@@ -2279,6 +2293,7 @@ const TravelerBookings: React.FC = () => {
       walletBalance: walletRes.data?.balance ?? 0,
       pointsBalance: pointsRes.data?.balance ?? 0,
       pointsValueMxn: Math.floor((pointsRes.data?.balance ?? 0) / 100),
+      usePoints: false,
       selectedMethod: 'stripe',
       conektaMethod: 'card',
       openpayMethod: 'card',
@@ -2306,8 +2321,15 @@ const TravelerBookings: React.FC = () => {
       const openpayExtra = selectedMethod === 'openpay'
         ? { openpay_method: extrasPaymentModal.openpayMethod }
         : {};
+      // Puntos (tope 50%) solo junto con ToursRed Cash.
+      const baseExtra = type === 'optional_service'
+        ? Number(item.price_per_person || 0) * quantity
+        : (extrasModal.insuranceCost || Number(booking.travel_insurance_cost || 0));
+      const puntosExtra = selectedMethod === 'toursred_cash'
+        ? { points_to_use: puntosAAplicar(extrasPaymentModal.usePoints, extrasPaymentModal.pointsBalance, baseExtra) }
+        : {};
       const body = type === 'optional_service'
-        ? { booking_id: booking.id, type: 'optional_service', tour_optional_service_id: item.id, quantity, payment_method: selectedMethod, ...conektaExtra, ...openpayExtra }
+        ? { booking_id: booking.id, type: 'optional_service', tour_optional_service_id: item.id, quantity, payment_method: selectedMethod, ...conektaExtra, ...openpayExtra, ...puntosExtra }
         : {
             booking_id: booking.id,
             type: 'insurance',
@@ -2315,6 +2337,7 @@ const TravelerBookings: React.FC = () => {
             ...(isStandaloneInsurance ? { insurance_days: extrasModal.insuranceDays } : {}),
             ...conektaExtra,
             ...openpayExtra,
+            ...puntosExtra,
           };
 
       if (selectedMethod === 'paypal') {
@@ -2455,6 +2478,9 @@ const TravelerBookings: React.FC = () => {
             booking_supplement_id: data.booking_supplement_id,
             payment_method: selectedMethod,
             toursred_cash_amount: selectedMethod === 'toursred_cash' ? cashToUse : 0,
+            ...(selectedMethod === 'toursred_cash'
+              ? { points_to_use: puntosAAplicar(supplementPaymentModal.usePoints, supplementPaymentModal.pointsBalance, Number(supplement.price || 0) * quantity) }
+              : {}),
             ...(selectedMethod === 'conekta' ? { conekta_method: supplementPaymentModal.conektaMethod, ...(supplementPaymentModal.conektaMethod === 'bnpl' ? { bnpl_product_type: 'aplazo_bnpl' } : {}) } : {}),
             ...(selectedMethod === 'openpay' ? { openpay_method: supplementPaymentModal.openpayMethod } : {}),
           }),
@@ -4809,7 +4835,6 @@ const TravelerBookings: React.FC = () => {
                     {[
                       { id: 'stripe', label: 'Tarjeta de credito / debito' },
                       { id: 'toursred_cash', label: `ToursRed Cash (Saldo: ${formatCurrencyMXN(supplementPaymentModal.walletBalance)})` },
-                      { id: 'points', label: `Puntos ToursRed (${supplementPaymentModal.pointsBalance} pts = ${formatCurrencyMXN(supplementPaymentModal.pointsValueMxn)})` },
                       { id: 'mercadopago', label: 'MercadoPago' },
                       { id: 'paypal', label: 'PayPal' },
                       { id: 'conekta', label: 'Conekta (Tarjeta, Efectivo, SPEI, BNPL)' },
@@ -4828,6 +4853,15 @@ const TravelerBookings: React.FC = () => {
                       </label>
                     ))}
                   </div>
+
+                  {supplementPaymentModal.selectedMethod === 'toursred_cash' && (
+                    <UsarPuntosConCash
+                      saldoPuntos={supplementPaymentModal.pointsBalance}
+                      baseMxn={Number(supplementPaymentModal.supplement?.price || 0) * supplementPaymentModal.quantity}
+                      usar={supplementPaymentModal.usePoints}
+                      onChange={(usar) => setSupplementPaymentModal(prev => ({ ...prev, usePoints: usar }))}
+                    />
+                  )}
 
                   {supplementPaymentModal.selectedMethod === 'conekta' && (
                     <div className="mt-3 pl-6 space-y-2 border-l-2 border-gray-200">
@@ -5148,7 +5182,6 @@ const TravelerBookings: React.FC = () => {
                     {[
                       { id: 'stripe', label: 'Tarjeta de credito / debito' },
                       { id: 'toursred_cash', label: `ToursRed Cash (Saldo: ${formatCurrencyMXN(supplementDirectPayModal.walletBalance)})` },
-                      { id: 'points', label: `Puntos ToursRed (${supplementDirectPayModal.pointsBalance} pts = ${formatCurrencyMXN(supplementDirectPayModal.pointsValueMxn)})` },
                       { id: 'mercadopago', label: 'MercadoPago' },
                       { id: 'paypal', label: 'PayPal' },
                       { id: 'conekta', label: 'Conekta (Tarjeta, Efectivo, SPEI, BNPL)' },
@@ -5167,6 +5200,15 @@ const TravelerBookings: React.FC = () => {
                       </label>
                     ))}
                   </div>
+
+                  {supplementDirectPayModal.selectedMethod === 'toursred_cash' && (
+                    <UsarPuntosConCash
+                      saldoPuntos={supplementDirectPayModal.pointsBalance}
+                      baseMxn={Number(supplementDirectPayModal.bookingSupplement?.unit_price || 0) * Number(supplementDirectPayModal.bookingSupplement?.quantity || 1)}
+                      usar={supplementDirectPayModal.usePoints}
+                      onChange={(usar) => setSupplementDirectPayModal(prev => ({ ...prev, usePoints: usar }))}
+                    />
+                  )}
 
                   {supplementDirectPayModal.selectedMethod === 'conekta' && (
                     <div className="mt-3 pl-6 space-y-2 border-l-2 border-gray-200">
@@ -5535,7 +5577,6 @@ const TravelerBookings: React.FC = () => {
                     {[
                       { id: 'stripe', label: 'Tarjeta de credito / debito' },
                       { id: 'toursred_cash', label: `ToursRed Cash (Saldo: ${formatCurrencyMXN(extrasPaymentModal.walletBalance)})` },
-                      { id: 'points', label: `Puntos ToursRed (${extrasPaymentModal.pointsBalance} pts = ${formatCurrencyMXN(extrasPaymentModal.pointsValueMxn)})` },
                       { id: 'mercadopago', label: 'MercadoPago' },
                       { id: 'paypal', label: 'PayPal' },
                       { id: 'conekta', label: 'Conekta (Tarjeta, Efectivo, SPEI, BNPL)' },
@@ -5554,6 +5595,15 @@ const TravelerBookings: React.FC = () => {
                       </label>
                     ))}
                   </div>
+
+                  {extrasPaymentModal.selectedMethod === 'toursred_cash' && (
+                    <UsarPuntosConCash
+                      saldoPuntos={extrasPaymentModal.pointsBalance}
+                      baseMxn={extrasPaymentModal.type === 'optional_service' ? Number(extrasPaymentModal.item?.price_per_person || 0) * extrasPaymentModal.quantity : (extrasModal.insuranceCost || Number(extrasPaymentModal.booking?.travel_insurance_cost || 0))}
+                      usar={extrasPaymentModal.usePoints}
+                      onChange={(usar) => setExtrasPaymentModal(prev => ({ ...prev, usePoints: usar }))}
+                    />
+                  )}
 
                   {extrasPaymentModal.selectedMethod === 'conekta' && (
                     <div className="mt-3 pl-6 space-y-2 border-l-2 border-gray-200">

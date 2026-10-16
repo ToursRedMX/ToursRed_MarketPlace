@@ -7,6 +7,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { puntosGanadosSinPasarela, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,6 +66,7 @@ Deno.serve(async (req: Request) => {
       bnpl_product_type,     // "aplazo_bnpl" | "creditea_bnpl" | "coppel_bnpl"
       openpay_method,        // "card" | "spei" | "cash"
       insurance_days,
+      points_to_use,         // puntos que paga, junto con ToursRed Cash (tope 50%)
     } = await req.json();
 
     if (!booking_id || !type || !payment_method) {
@@ -75,6 +77,15 @@ Deno.serve(async (req: Request) => {
 
     if (type === "optional_service" && (!tour_optional_service_id || !quantity || quantity < 1)) {
       return new Response(JSON.stringify({ error: "tour_optional_service_id y quantity son requeridos para servicios opcionales" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Los puntos ya no pagan solos (tope del 50%, regla de Axel del 16-oct-2026).
+    // Se rechaza antes del codigo MFA para no gastarle uno al viajero.
+    const formaPuntos = validarFormaDePuntos(payment_method, points_to_use);
+    if (!formaPuntos.ok) {
+      return new Response(JSON.stringify({ error: formaPuntos.error }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -138,6 +149,22 @@ Deno.serve(async (req: Request) => {
     let exemptionApplied = 0;
     let totalToPay = 0;
     let agencyCommission = 0;
+    let puntosUsados = 0;
+    let pesosEnPuntos = 0;
+
+    // Tope del 50% sobre el subtotal del extra. Va antes de insertar la fila del
+    // servicio opcional, para no dejar una fila huerfana si se rechaza.
+    const rechazoPorTope = (base: number): Response | null => {
+      const r = validarPuntos(payment_method, points_to_use, base);
+      if (!r.ok) {
+        return new Response(JSON.stringify({ error: r.error }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      puntosUsados = r.puntos;
+      pesosEnPuntos = r.pesos;
+      return null;
+    };
 
     if (type === "optional_service") {
       const { data: service } = await supabase
@@ -175,6 +202,8 @@ Deno.serve(async (req: Request) => {
 
       itemName = service.name;
       subtotal = parseFloat((Number(service.price_per_person) * quantity).toFixed(2));
+      const topeOpcional = rechazoPorTope(subtotal);
+      if (topeOpcional) return topeOpcional;
       const isWallet = payment_method === "toursred_cash" || payment_method === "points";
       if (isWallet) {
         grossServiceCharge = 0;
@@ -245,6 +274,8 @@ Deno.serve(async (req: Request) => {
       const insuranceCost = parseFloat((pricePerDayPerTraveler * tourDays * totalTravelers).toFixed(2));
       itemName = "Seguro de asistencia de viaje";
       subtotal = insuranceCost;
+      const topeSeguro = rechazoPorTope(subtotal);
+      if (topeSeguro) return topeSeguro;
       const isWallet = payment_method === "toursred_cash" || payment_method === "points";
       if (isWallet) {
         grossServiceCharge = 0;
@@ -278,7 +309,7 @@ Deno.serve(async (req: Request) => {
       if (activeMembership) {
         // Doble solo con ToursRed Cash: lo pagado con puntos da puntos sencillos
         // (regla de Axel, 16-oct-2026; los puntos no son monedero).
-        pointsEarned = payment_method === "toursred_cash" ? Math.floor(subtotal) * 2 : Math.floor(subtotal);
+        pointsEarned = payment_method === "toursred_cash" ? puntosGanadosSinPasarela(subtotal, pesosEnPuntos) : Math.floor(subtotal);
         if (pointsEarned > 0) {
           const { data: walletId } = await supabase.rpc("get_or_create_points_wallet", { p_user_id: user.id });
           if (walletId) {
@@ -318,6 +349,12 @@ Deno.serve(async (req: Request) => {
         if (insurance_days && Number(insurance_days) > 0) {
           insuranceUpdate.insurance_days = Math.min(30, Number(insurance_days));
         }
+        // El seguro comprado despues no tiene fila propia: lo que se pago con
+        // saldo queda en la reserva para que su poliza no lo cargue a Bancos.
+        if (method === "toursred_cash") {
+          insuranceUpdate.travel_insurance_points_used = puntosUsados;
+          insuranceUpdate.travel_insurance_cash_used = parseFloat((totalToPay - pesosEnPuntos).toFixed(2));
+        }
         await supabase.from("bookings").update(insuranceUpdate).eq("id", booking_id);
       }
 
@@ -337,9 +374,11 @@ Deno.serve(async (req: Request) => {
         ? "generate-optional-service-cfdi"
         : "generate-post-booking-insurance-cfdi";
 
+      // points_used va en el body porque el CFDI se dispara antes de que la fila
+      // del extra guarde sus puntos (mas abajo): leerlo de la base daria cero.
       const cfdiBody = type === "optional_service"
-        ? { booking_optional_service_id: bookingOptionalServiceId, service_charge: netServiceCharge, total_paid: totalToPay, payment_method: method }
-        : { booking_id, service_charge: netServiceCharge, total_paid: totalToPay, payment_method: method };
+        ? { booking_optional_service_id: bookingOptionalServiceId, service_charge: netServiceCharge, total_paid: totalToPay, payment_method: method, points_used: puntosUsados }
+        : { booking_id, service_charge: netServiceCharge, total_paid: totalToPay, payment_method: method, points_used: puntosUsados };
 
       if (platformSettings?.pac_provider && platformSettings.pac_provider !== "none") {
         EdgeRuntime.waitUntil(
@@ -353,7 +392,7 @@ Deno.serve(async (req: Request) => {
 
       if (bookingOptionalServiceId) {
         await supabase.from("booking_optional_services")
-          .update({ paid_at: new Date().toISOString(), payment_method: method })
+          .update({ paid_at: new Date().toISOString(), payment_method: method, points_used: puntosUsados })
           .eq("id", bookingOptionalServiceId);
       }
 
@@ -425,6 +464,14 @@ Deno.serve(async (req: Request) => {
     };
 
     if (payment_method === "toursred_cash") {
+      // Lo que no cubren los puntos sale del Cash. Los puntos ya pasaron el tope.
+      const cashACobrar = parseFloat((totalToPay - pesosEnPuntos).toFixed(2));
+      const borrarFilaPendiente = async () => {
+        if (bookingOptionalServiceId) {
+          await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
+        }
+      };
+
       const { data: wallet } = await supabase
         .from("toursred_cash_wallets")
         .select("id, balance")
@@ -433,82 +480,61 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       const walletBalance = Number(wallet?.balance ?? 0);
-      if (walletBalance < totalToPay) {
-        if (bookingOptionalServiceId) {
-          await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
-        }
+      if (walletBalance < cashACobrar) {
+        await borrarFilaPendiente();
         return new Response(JSON.stringify({
-          error: `Saldo insuficiente. Tienes $${walletBalance.toFixed(2)} y necesitas $${totalToPay.toFixed(2)}`,
+          error: `Saldo insuficiente. Tienes $${walletBalance.toFixed(2)} y necesitas $${cashACobrar.toFixed(2)}`,
         }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      const { error: walletError } = await supabase.rpc("update_wallet_balance", {
+      if (puntosUsados > 0) {
+        const { data: pWallet } = await supabase
+          .from("toursred_points_wallets")
+          .select("balance")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const pointsBalance = Number(pWallet?.balance ?? 0);
+        if (pointsBalance < puntosUsados) {
+          await borrarFilaPendiente();
+          return new Response(JSON.stringify({
+            error: `Puntos insuficientes. Tienes ${pointsBalance} puntos y quieres usar ${puntosUsados}`,
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
+
+      // Puntos y Cash en UNA transaccion: si uno falla, no se cobra ninguno.
+      const { error: walletError } = await supabase.rpc("cobrar_saldo_y_puntos", {
         p_user_id: user.id,
-        p_amount: -totalToPay,
-        p_type: "debit",
-        p_description: `${type === "insurance" ? "Seguro de viaje" : `Servicio extra: ${itemName}`} - Reserva ${booking_id.slice(0, 8).toUpperCase()}`,
+        p_cash: cashACobrar,
+        p_points: puntosUsados,
         p_reference_id: bookingOptionalServiceId || booking_id,
         p_reference_type: type === "optional_service" ? "optional_service_payment" : "insurance_payment",
+        p_description: `${type === "insurance" ? "Seguro de viaje" : `Servicio extra: ${itemName}`} - Reserva ${booking_id.slice(0, 8).toUpperCase()}`,
         p_idempotency_key: `${bookingOptionalServiceId || booking_id}_charge`,
       });
 
       if (walletError) {
-        if (bookingOptionalServiceId) {
-          await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
-        }
+        await borrarFilaPendiente();
         return new Response(JSON.stringify({ error: "Error al procesar el pago con ToursRed Cash" }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const pointsEarned = await finalizePayment("toursred_cash", null);
+
+      // Los cobros con saldo no pasan por ningun webhook, que es donde se crea la
+      // poliza de los cobros con pasarela: sin esto, ninguno tenia asiento.
+      const { error: asientoError } = type === "optional_service"
+        ? await supabase.rpc("create_accounting_entry_for_optional_service", { p_bos_id: bookingOptionalServiceId })
+        : await supabase.rpc("create_accounting_entry_for_insurance_purchase", { p_booking_id: booking_id });
+      if (asientoError) console.error("Error creando poliza del extra (Cash):", asientoError.message);
+
+      const detallePuntos = puntosUsados > 0 ? ` y ${puntosUsados.toLocaleString("es-MX")} puntos` : "";
       return new Response(JSON.stringify({
-        success: true, total_charged: totalToPay, points_earned: pointsEarned,
+        success: true, total_charged: totalToPay, cash_charged: cashACobrar,
+        points_used: puntosUsados, points_earned: pointsEarned,
         booking_optional_service_id: bookingOptionalServiceId,
-        message: `Pago completado. Se descontaron $${totalToPay.toFixed(2)} de tu ToursRed Cash.`,
-      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (payment_method === "points") {
-      const pointsNeeded = Math.ceil(totalToPay * 100);
-      const { data: pWallet } = await supabase
-        .from("toursred_points_wallets")
-        .select("id, balance")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      const pointsBalance = Number(pWallet?.balance ?? 0);
-      if (pointsBalance < pointsNeeded) {
-        if (bookingOptionalServiceId) {
-          await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
-        }
-        return new Response(JSON.stringify({
-          error: `Puntos insuficientes. Tienes ${pointsBalance} puntos y necesitas ${pointsNeeded}`,
-        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      const { error: deductError } = await supabase.rpc("deduct_points", {
-        p_user_id: user.id,
-        p_amount: pointsNeeded,
-        p_description: `Pago de extra: ${itemName}`,
-        p_reference_id: bookingOptionalServiceId || booking_id,
-        p_reference_type: type === "optional_service" ? "optional_service_payment" : "insurance_payment",
-      });
-
-      if (deductError) {
-        if (bookingOptionalServiceId) {
-          await supabase.from("booking_optional_services").delete().eq("id", bookingOptionalServiceId);
-        }
-        return new Response(JSON.stringify({ error: "Error al procesar el pago con puntos" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      await finalizePayment("points", null);
-      return new Response(JSON.stringify({
-        success: true, points_used: pointsNeeded,
-        booking_optional_service_id: bookingOptionalServiceId,
-        message: `Pago completado con ${pointsNeeded} puntos ToursRed.`,
+        message: `Pago completado. Se descontaron $${cashACobrar.toFixed(2)} de tu ToursRed Cash${detallePuntos}.`,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

@@ -1,4 +1,4 @@
-﻿import { calculateTaxBreakdown, type TaxTreatment } from "../_shared/taxBreakdown.ts";
+﻿import { calculateTaxBreakdown, repartirDescuentoBruto, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
@@ -280,14 +280,15 @@ Deno.serve(async (req: Request) => {
 
     // Load the specific transaction to get service_charge + principal amount.
     // transaction_id is optional, so fall back to the latest completed allocation for this installment.
-    let transaction: { amount: number; service_charge: number } | null = null;
+    type AbonoDelCfdi = { amount: number; service_charge: number; points_used?: number; payment_provider?: string };
+    let transaction: AbonoDelCfdi | null = null;
     if (transaction_id) {
       const { data: txnRow } = await supabase
         .from("booking_payment_plan_transactions")
-        .select("amount, service_charge")
+        .select("amount, service_charge, points_used, payment_provider")
         .eq("id", transaction_id)
         .maybeSingle();
-      transaction = txnRow as { amount: number; service_charge: number } | null;
+      transaction = txnRow as AbonoDelCfdi | null;
     }
     if (!transaction) {
       const { data: allocRow } = await supabase
@@ -300,10 +301,10 @@ Deno.serve(async (req: Request) => {
       if (allocRow) {
         const { data: txnRow } = await supabase
           .from("booking_payment_plan_transactions")
-          .select("amount, service_charge")
+          .select("amount, service_charge, points_used, payment_provider")
           .eq("id", allocRow.transaction_id)
           .maybeSingle();
-        transaction = txnRow as { amount: number; service_charge: number } | null;
+        transaction = txnRow as AbonoDelCfdi | null;
       }
     }
     const txnAmount = transaction ? Number(transaction.amount) : Number(installment.amount_due);
@@ -312,10 +313,14 @@ Deno.serve(async (req: Request) => {
 
     const r6 = (n: number) => Math.round(n * 1000000) / 1000000;
 
+    // ToursRed Points del abono: DESCUENTO, no forma de pago (igual que
+    // generate-booking-cfdi). Se reparten entre los conceptos mas abajo.
+    const puntosMxn = Math.min(txnAmount, Number(transaction?.points_used ?? 0) / 100);
+
     // Recalcular subtotal / iva / total desde la suma real de los conceptos (principal + penalidad + cargo)
-    const conceptosTotal = txnAmount + penaltyAmount + txnServiceCharge;
-    const iva = Math.round(conceptosTotal * 16 / 116 * 100) / 100;
-    const subtotal = Math.round((conceptosTotal - iva) * 100) / 100;
+    const conceptosTotal = Math.round((txnAmount + penaltyAmount + txnServiceCharge - puntosMxn) * 100) / 100;
+    let iva = Math.round(conceptosTotal * 16 / 116 * 100) / 100;
+    let subtotal = Math.round((conceptosTotal - iva) * 100) / 100;
     const total = conceptosTotal;
 
     // Receptor logic (same rules as generate-booking-cfdi)
@@ -446,6 +451,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Los puntos, repartidos como descuento; con descuento, el IVA sale de los
+    // conceptos ya descontados (puede haber parte exenta).
+    if (puntosMxn > 0) {
+      repartirDescuentoBruto(conceptos, puntosMxn);
+      iva = Math.round(conceptos.filter((c) => !c.exento)
+        .reduce((acc, c) => acc + (c.valor_unitario * c.cantidad - (c.descuento ?? 0)) * 0.16, 0) * 100) / 100;
+      subtotal = Math.round((total - iva) * 100) / 100;
+    }
+
     const cfdiRequest: CfdiRequest = {
       tipo_de_comprobante: "I",
       serie,
@@ -459,7 +473,8 @@ Deno.serve(async (req: Request) => {
         ...(receptorResidenciaFiscal ? { residencia_fiscal: receptorResidenciaFiscal } : {}),
       },
       conceptos,
-      payment_form: payment_form || "03",
+      // Abono con ToursRed Cash: monedero electronico (05). Antes caia en 03.
+      payment_form: transaction?.payment_provider === "toursred_cash" ? "05" : (payment_form || "03"),
     };
 
     // Create pending CFDI record

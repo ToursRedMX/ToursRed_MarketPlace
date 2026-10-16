@@ -5,6 +5,7 @@ import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { puntosGanadosSinPasarela, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,10 +72,20 @@ Deno.serve(async (req: Request) => {
       conekta_method,
       bnpl_product_type,
       openpay_method,   // "card" | "spei" | "cash"
+      points_to_use,    // puntos que paga, junto con ToursRed Cash (tope 50%)
     } = await req.json();
 
     if (!booking_supplement_id || !payment_method) {
       return new Response(JSON.stringify({ error: "booking_supplement_id y payment_method son requeridos" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Los puntos ya no pagan solos (tope del 50%, regla de Axel del 16-oct-2026).
+    // Se rechaza antes del codigo MFA para no gastarle uno al viajero.
+    const formaPuntos = validarFormaDePuntos(payment_method, points_to_use);
+    if (!formaPuntos.ok) {
+      return new Response(JSON.stringify({ error: formaPuntos.error }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -198,6 +209,16 @@ Deno.serve(async (req: Request) => {
     const supplementCommission = parseFloat((subtotal * supplementCommissionPct / 100).toFixed(2));
     const totalToPay = parseFloat((subtotal + netServiceCharge).toFixed(2));
 
+    // Tope del 50% sobre el subtotal del suplemento.
+    const puntosAplicados = validarPuntos(payment_method, points_to_use, subtotal);
+    if (!puntosAplicados.ok) {
+      return new Response(JSON.stringify({ error: puntosAplicados.error }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const puntosUsados = puntosAplicados.puntos;
+    const pesosEnPuntos = puntosAplicados.pesos;
+
     const supplementName = suppTourSupplement?.name ?? "Suplemento";
 
     const finalizePayment = async (method: string, intentId: string | null) => {
@@ -213,7 +234,7 @@ Deno.serve(async (req: Request) => {
       if (activeMembership) {
         // Doble solo con ToursRed Cash: lo pagado con puntos da puntos sencillos
         // (regla de Axel, 16-oct-2026; los puntos no son monedero).
-        pointsEarned = payment_method === "toursred_cash" ? Math.floor(subtotal) * 2 : Math.floor(subtotal);
+        pointsEarned = payment_method === "toursred_cash" ? puntosGanadosSinPasarela(subtotal, pesosEnPuntos) : Math.floor(subtotal);
         if (pointsEarned > 0) {
           const { data: walletId } = await supabase.rpc("get_or_create_points_wallet", { p_user_id: user.id });
           if (walletId) {
@@ -254,6 +275,7 @@ Deno.serve(async (req: Request) => {
         total_paid: totalToPay,
         paid_at: new Date().toISOString(),
         points_earned: pointsEarned,
+        points_used: puntosUsados,
         updated_at: new Date().toISOString(),
       }).eq("id", booking_supplement_id);
 
@@ -363,6 +385,9 @@ Deno.serve(async (req: Request) => {
     };
 
     if (payment_method === "toursred_cash") {
+      // Lo que no cubren los puntos sale del Cash. Los puntos ya pasaron el tope.
+      const cashACobrar = parseFloat((totalToPay - pesosEnPuntos).toFixed(2));
+
       const { data: wallet } = await supabase
         .from("toursred_cash_wallets")
         .select("id, balance")
@@ -371,19 +396,34 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       const walletBalance = Number(wallet?.balance ?? 0);
-      if (walletBalance < totalToPay) {
+      if (walletBalance < cashACobrar) {
         return new Response(JSON.stringify({
-          error: `Saldo insuficiente. Tienes $${walletBalance.toFixed(2)} y necesitas $${totalToPay.toFixed(2)}`,
+          error: `Saldo insuficiente. Tienes $${walletBalance.toFixed(2)} y necesitas $${cashACobrar.toFixed(2)}`,
         }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      const { error: walletError } = await supabase.rpc("update_wallet_balance", {
+      if (puntosUsados > 0) {
+        const { data: pWallet } = await supabase
+          .from("toursred_points_wallets")
+          .select("balance")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const pointsBalance = Number(pWallet?.balance ?? 0);
+        if (pointsBalance < puntosUsados) {
+          return new Response(JSON.stringify({
+            error: `Puntos insuficientes. Tienes ${pointsBalance} puntos y quieres usar ${puntosUsados}`,
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
+
+      // Puntos y Cash en UNA transaccion: si uno falla, no se cobra ninguno.
+      const { error: walletError } = await supabase.rpc("cobrar_saldo_y_puntos", {
         p_user_id: user.id,
-        p_amount: -totalToPay,
-        p_type: "debit",
-        p_description: `Suplemento: ${supplementName} (${suppReq.quantity}x $${Number(suppReq.unit_price).toFixed(2)})`,
+        p_cash: cashACobrar,
+        p_points: puntosUsados,
         p_reference_id: booking_supplement_id,
         p_reference_type: "supplement_payment",
+        p_description: `Suplemento: ${supplementName} (${suppReq.quantity}x $${Number(suppReq.unit_price).toFixed(2)})`,
         p_idempotency_key: `${booking_supplement_id}_charge`,
       });
 
@@ -394,48 +434,20 @@ Deno.serve(async (req: Request) => {
       }
 
       const pointsEarned = await finalizePayment("toursred_cash", null);
+
+      // Los cobros con saldo no pasan por ningun webhook, que es donde se crea la
+      // poliza de los cobros con pasarela: sin esto, ninguno tenia asiento.
+      const { error: asientoError } = await supabase.rpc("create_accounting_entry_for_supplement", { p_supplement_id: booking_supplement_id });
+      if (asientoError) console.error("Error creando poliza del suplemento (Cash):", asientoError.message);
+
+      const detallePuntos = puntosUsados > 0 ? ` y ${puntosUsados.toLocaleString("es-MX")} puntos` : "";
       return new Response(JSON.stringify({
         success: true,
         total_charged: totalToPay,
+        cash_charged: cashACobrar,
+        points_used: puntosUsados,
         points_earned: pointsEarned,
-        message: `Pago completado. Se descontaron $${totalToPay.toFixed(2)} de tu ToursRed Cash.${pointsEarned > 0 ? ` Ganaste ${pointsEarned} puntos.` : ""}`,
-      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (payment_method === "points") {
-      const pointsNeeded = Math.ceil(totalToPay * 100);
-      const { data: pWallet } = await supabase
-        .from("toursred_points_wallets")
-        .select("id, balance")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      const pointsBalance = Number(pWallet?.balance ?? 0);
-      if (pointsBalance < pointsNeeded) {
-        return new Response(JSON.stringify({
-          error: `Puntos insuficientes. Tienes ${pointsBalance} puntos y necesitas ${pointsNeeded}`,
-        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      const { error: deductError } = await supabase.rpc("deduct_points", {
-        p_user_id: user.id,
-        p_amount: pointsNeeded,
-        p_description: `Pago de suplemento: ${supplementName}`,
-        p_reference_id: booking_supplement_id,
-        p_reference_type: "supplement_payment",
-      });
-
-      if (deductError) {
-        return new Response(JSON.stringify({ error: "Error al procesar el pago con puntos" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      await finalizePayment("points", null);
-      return new Response(JSON.stringify({
-        success: true,
-        points_used: pointsNeeded,
-        message: `Pago completado con ${pointsNeeded} puntos ToursRed.`,
+        message: `Pago completado. Se descontaron $${cashACobrar.toFixed(2)} de tu ToursRed Cash${detallePuntos}.${pointsEarned > 0 ? ` Ganaste ${pointsEarned} puntos.` : ""}`,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
