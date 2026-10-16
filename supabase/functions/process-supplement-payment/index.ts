@@ -5,7 +5,7 @@ import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
-import { puntosGanadosSinPasarela, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
+import { apartarPuntosDeCargo, expiracionDelCobroConPuntos, puntosGanadosSinPasarela, validarFormaDePuntos, validarPuntos } from "../_shared/puntosConTope.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,7 +93,8 @@ Deno.serve(async (req: Request) => {
     // Step-up auth: traveler is spending their own wallet/points directly (self-service).
     // Only enforce for wallet/points methods — card/redirect processors already require
     // the traveler to authenticate with their bank/card issuer.
-    if (payment_method === "toursred_cash" || payment_method === "points") {
+    // Los puntos con tarjeta tambien son gasto de saldo: mismo codigo MFA.
+    if (payment_method === "toursred_cash" || payment_method === "points" || formaPuntos.puntos > 0) {
       const stepUpBlock = await enforceStepUp(userClient, supabaseServiceKey, supabaseUrl, user.id);
       if (stepUpBlock) return stepUpBlock;
     }
@@ -462,28 +463,52 @@ Deno.serve(async (req: Request) => {
 
       const origin = origenParaRedirigir(req);
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        mode: "payment",
-        line_items: [{
-          price_data: {
-            currency: "mxn",
-            product_data: {
-              name: supplementName,
-              description: `${suppReq.quantity}x suplemento`,
+      // Puntos + tarjeta (16-oct-2026): los puntos se apartan ANTES de abrir el
+      // cobro y la tarjeta cobra el resto. stripe-webhook los consume al
+      // confirmar; si la sesion expira sin pagarse, el cron los libera.
+      const montoTarjeta = parseFloat((totalToPay - pesosEnPuntos).toFixed(2));
+      let apartadoId: string | null = null;
+      if (puntosUsados > 0) {
+        const apartado = await apartarPuntosDeCargo(supabase, user.id, "supplement", booking_supplement_id, puntosUsados);
+        if (!apartado.ok) {
+          return new Response(JSON.stringify({ error: apartado.error }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        apartadoId = apartado.id;
+      }
+
+      let session;
+      try {
+        session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          mode: "payment",
+          line_items: [{
+            price_data: {
+              currency: "mxn",
+              product_data: {
+                name: supplementName,
+                description: `${suppReq.quantity}x suplemento`,
+              },
+              unit_amount: Math.round(montoTarjeta * 100),
             },
-            unit_amount: Math.round(totalToPay * 100),
+            quantity: 1,
+          }],
+          // Con puntos apartados, el cobro expira antes que el apartado.
+          ...(apartadoId ? { expires_at: expiracionDelCobroConPuntos() } : {}),
+          metadata: {
+            booking_supplement_id,
+            payment_for: "supplement",
+            user_id: user.id,
+            points_used: String(puntosUsados),
           },
-          quantity: 1,
-        }],
-        metadata: {
-          booking_supplement_id,
-          payment_for: "supplement",
-          user_id: user.id,
-        },
-        success_url: `${origin}/supplement-success?supplement_id=${booking_supplement_id}`,
-        cancel_url: `${origin}/traveler/bookings`,
-      });
+          success_url: `${origin}/supplement-success?supplement_id=${booking_supplement_id}`,
+          cancel_url: `${origin}/traveler/bookings`,
+        });
+      } catch (stripeErr) {
+        if (apartadoId) await supabase.rpc("liberar_puntos_de_cargo", { p_apartado_id: apartadoId });
+        throw stripeErr;
+      }
 
       return new Response(JSON.stringify({
         success: true,

@@ -688,6 +688,20 @@ jobs:
       - name: Apartar el saldo al crear el cobro (funciones)
         run: node scripts/test-apartar-saldo.mjs
 
+      # Puntos + tarjeta en suplementos, extras y mensualidades: los puntos se
+      # apartan al crear el cobro, se consumen al confirmar y se liberan si la
+      # sesion expira sin pagarse.
+      - name: Puntos + tarjeta (base)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS puntos_tarjeta;" -c "CREATE DATABASE puntos_tarjeta;"
+          cd scripts
+          psql -h localhost -U postgres -d puntos_tarjeta -v ON_ERROR_STOP=1 -f test-puntos-apartados-cargos.sql
+
+      - name: Puntos + tarjeta (funciones y pantallas)
+        run: node scripts/test-puntos-con-tarjeta.mjs
+
       # No existia una forma de reversar una poliza publicada: las tres
       # primeras reversas del ERP se armaron a mano, invirtiendo cada partida.
       # reverse_accounting_entry automatiza eso y ademas amplia el permiso

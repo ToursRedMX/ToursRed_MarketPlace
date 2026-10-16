@@ -50,12 +50,13 @@ prueba('"points" sola ya no es forma de pago', () => {
   assert.match(r.error, /50%/);
 });
 
-prueba('los puntos solo se combinan con ToursRed Cash (por ahora)', () => {
-  for (const metodo of ['stripe', 'paypal', 'mercadopago', 'conekta', 'openpay']) {
+prueba('los puntos se combinan con ToursRed Cash o tarjeta; las demas pasarelas, en el siguiente PR', () => {
+  for (const metodo of ['paypal', 'mercadopago', 'conekta', 'openpay']) {
     assert.equal(servidor.validarFormaDePuntos(metodo, 100).ok, false, metodo);
     assert.deepEqual(servidor.validarFormaDePuntos(metodo, undefined), { ok: true, puntos: 0, pesos: 0 }, `${metodo} sin puntos`);
   }
   assert.deepEqual(servidor.validarFormaDePuntos('toursred_cash', 2500), { ok: true, puntos: 2500, pesos: 25 });
+  assert.deepEqual(servidor.validarFormaDePuntos('stripe', 2500), { ok: true, puntos: 2500, pesos: 25 });
 });
 
 prueba('points_to_use invalido se rechaza', () => {
