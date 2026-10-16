@@ -1,4 +1,4 @@
-﻿import { calculateTaxBreakdown, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
+﻿import { calculateTaxBreakdown, repartirDescuentoBruto, verifyConceptosTotal, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
@@ -167,7 +167,7 @@ Deno.serve(async (req: Request) => {
       .from("booking_supplements")
       .select(`
         id, booking_id, quantity, unit_price, service_charge, membership_exemption_used,
-        total_paid, payment_method, status, tax_treatment, exempt_ratio,
+        total_paid, payment_method, status, tax_treatment, exempt_ratio, points_used,
         tour_supplements!inner(id, name, tour_id),
         bookings!inner(id, user_id, tour_id)
       `)
@@ -245,7 +245,18 @@ Deno.serve(async (req: Request) => {
     // Amounts
     const subtotal_supp = Number(suppReq.unit_price) * suppReq.quantity;
     const netServiceCharge = Number(suppReq.service_charge);
-    const exactTotal = Number(suppReq.total_paid);
+    // ToursRed Points: DESCUENTO, no forma de pago (igual que generate-booking-cfdi).
+    // Antes no se restaban: el CFDI amparaba lo pagado con puntos como si fuera
+    // dinero. Un suplemento viejo pagado 100% con puntos no tiene nada que facturar.
+    const puntosMxn = suppReq.payment_method === "points" && !(Number((suppReq as { points_used?: number }).points_used) > 0)
+      ? Number(suppReq.total_paid)
+      : Math.min(Number(suppReq.total_paid), Number((suppReq as { points_used?: number }).points_used ?? 0) / 100);
+    const exactTotal = Math.round((Number(suppReq.total_paid) - puntosMxn) * 100) / 100;
+    if (exactTotal <= 0) {
+      return new Response(JSON.stringify({ message: "Sin CFDI: el suplemento se pagó completo con puntos (descuento)" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Desglose fiscal del SUPLEMENTO segun su propio snapshot, congelado al
     // cobrarse. Independiente del tour y de los servicios opcionales.
@@ -335,7 +346,9 @@ Deno.serve(async (req: Request) => {
     const supplementName = cfdiTourSupplement?.name || "Suplemento";
     const suppRef = booking_supplement_id.slice(0, 8).toUpperCase();
     const serie = (settings.cfdi_serie_booking || "A") + "S";
-    const effectivePaymentForm = payment_form || "03";
+    // Pagado con ToursRed Cash (con o sin puntos): monedero electronico, 05. Antes
+    // salia 03 (transferencia) porque el cobro con Cash no mandaba payment_form.
+    const effectivePaymentForm = suppReq.payment_method === "toursred_cash" ? "05" : (payment_form || "03");
 
     const conceptos: CfdiConcepto[] = [];
 
@@ -374,6 +387,15 @@ Deno.serve(async (req: Request) => {
         valor_unitario: precioServicio,
       });
     }
+
+    // Los puntos, repartidos como descuento entre las partidas. El IVA y el
+    // subtotal de la base salen de los conceptos ya descontados.
+    repartirDescuentoBruto(conceptos, puntosMxn);
+    const ivaFacturado = puntosMxn > 0
+      ? Math.round(conceptos.filter((c) => !c.exento)
+          .reduce((s, c) => s + (c.valor_unitario * c.cantidad - (c.descuento ?? 0)) * 0.16, 0) * 100) / 100
+      : iva;
+    const subtotalFacturado = puntosMxn > 0 ? Math.round((exactTotal - ivaFacturado) * 100) / 100 : subtotal_db;
 
     // â”€â”€ Guardia de cuadre â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Verifica que los conceptos reconstruyan lo cobrado ANTES de timbrar. El
@@ -430,8 +452,8 @@ Deno.serve(async (req: Request) => {
         receptor_regimen_fiscal: receptorRegimen,
         receptor_uso_cfdi: receptorUsoCfdi,
         receptor_codigo_postal: receptorCP,
-        subtotal: subtotal_db,
-        iva_amount: iva,
+        subtotal: subtotalFacturado,
+        iva_amount: ivaFacturado,
         exempt_amount: Math.round(
           conceptos.filter((c) => c.exento)
             .reduce((s, c) => s + c.valor_unitario * c.cantidad - (c.descuento ?? 0), 0) * 100,

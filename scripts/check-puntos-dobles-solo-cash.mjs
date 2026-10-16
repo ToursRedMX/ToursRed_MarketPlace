@@ -15,7 +15,10 @@ import { readFileSync } from 'node:fs';
 const leer = (f) => readFileSync(`supabase/functions/${f}/index.ts`, 'utf8');
 const sinComentarios = (s) => s.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
 
-const DOBLE_SOLO_CASH = /pointsEarned = payment_method === "toursred_cash" \? Math\.floor\(subtotal\) \* 2 : Math\.floor\(subtotal\);/;
+// Desde el 16-oct-2026 (tope del 50%) el Cash puede venir con puntos: la formula
+// vive en _shared/puntosConTope.ts (Cash doble, puntos sencillos) y su prueba
+// esta en test-puntos-tope-50.mjs.
+const DOBLE_SOLO_CASH = /pointsEarned = payment_method === "toursred_cash" \? puntosGanadosSinPasarela\(subtotal, pesosEnPuntos\) : Math\.floor\(subtotal\);/;
 const DOBLE_CON_BANDERA = /pointsEarned = isWallet(Payment)? \?/;
 const EXENCION = /const isWallet(Payment)? = payment_method === "toursred_cash" \|\| payment_method === "points";/;
 

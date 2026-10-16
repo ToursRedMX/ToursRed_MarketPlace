@@ -182,3 +182,54 @@ export function verifyConceptosTotal(
   const diff = Math.round((computed - expected) * 100) / 100;
   return { ok: Math.abs(diff) <= tolerance, computed, expected, diff };
 }
+
+// ═══════════ DESCUENTO POR PUNTOS (solo Deno, no va en la canonica) ═════════
+
+/**
+ * Reparte un descuento BRUTO (con IVA) entre los conceptos, proporcional a lo
+ * que cada uno tiene disponible y sin dejar ninguno en negativo. Muta
+ * `descuento` en cada concepto.
+ *
+ * Es el algoritmo de generate-booking-cfdi para los puntos, sacado aqui para
+ * los CFDI de suplemento, servicio opcional, seguro y abono (16-oct-2026). El
+ * reparto va en bruto y se convierte a las unidades de cada concepto al
+ * aplicarlo: en un concepto gravado el descuento es neto de IVA (bruto/1.16),
+ * en uno exento es el importe completo. Repartir bruto/1.16 por igual entre
+ * todos descontaria de menos en los exentos.
+ *
+ * Los puntos ToursRed son un DESCUENTO (lealtad, no entra dinero), no una forma
+ * de pago. ToursRed Cash si es forma de pago (05) y NO pasa por aqui.
+ */
+export function repartirDescuentoBruto(
+  conceptos: VerifiableConcepto[],
+  descuentoBruto: number,
+): void {
+  if (!(descuentoBruto > 0)) return;
+  const factor = (c: VerifiableConcepto) => (c.exento ? 1 : 1 + VAT_RATE);
+  const disponible = (c: VerifiableConcepto) => (c.valor_unitario * c.cantidad - (c.descuento ?? 0)) * factor(c);
+  const base = conceptos.reduce((acc, c) => acc + disponible(c), 0);
+  if (base <= 0) return;
+
+  let repartido = 0;
+  conceptos.forEach((c, i) => {
+    const libre = disponible(c);
+    const teorico = i === conceptos.length - 1
+      ? descuentoBruto - repartido
+      : (descuentoBruto * libre) / base;
+    const aplicadoBruto = Math.max(0, Math.min(Math.round(teorico * 1_000_000) / 1_000_000, libre));
+    if (aplicadoBruto > 0) {
+      c.descuento = Math.round(((c.descuento ?? 0) + aplicadoBruto / factor(c)) * 1_000_000) / 1_000_000;
+      repartido += aplicadoBruto;
+    }
+  });
+}
+
+/**
+ * Forma de pago SAT de un cobro con saldo. Regla 2.7.1.29 RMF: con varias
+ * formas de pago en PUE se registra la de la CANTIDAD MAYOR. Los puntos no
+ * cuentan: salieron como descuento. Si lo pagado con ToursRed Cash (monedero
+ * electronico, 05) supera lo de la pasarela, gana 05.
+ */
+export function formaDePagoConMonedero(cashAplicado: number, montoPasarela: number, formaPasarela: string): string {
+  return cashAplicado > montoPasarela ? "05" : formaPasarela;
+}

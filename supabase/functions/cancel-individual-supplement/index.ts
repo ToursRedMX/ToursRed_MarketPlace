@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, booking_id, tour_supplement_id, quantity, unit_price, service_charge,
         membership_exemption_used, total_paid, status, points_earned, cfdi_invoice_id,
-        tax_treatment, exempt_ratio,
+        tax_treatment, exempt_ratio, points_used, payment_method,
         tour_supplements (id, name, is_cancellable)
       `)
       .eq("id", booking_supplement_id)
@@ -182,15 +182,43 @@ Deno.serve(async (req: Request) => {
       };
     }
 
+    // Lo pagado con puntos regresa como PUNTOS, no como Cash (16-oct-2026). Antes
+    // se devolvia todo total_paid en Cash, asi que un suplemento pagado con
+    // puntos se convertia en dinero al cancelarlo. Un suplemento viejo pagado
+    // 100% con puntos (payment_method "points", sin points_used) cuenta entero
+    // como puntos.
+    const pagadoSoloConPuntos = supplement.payment_method === "points" && !(Number(supplement.points_used) > 0);
+    const puntosDelSuplemento = pagadoSoloConPuntos
+      ? Math.round(oldTotalPaid * 100)
+      : (Number(supplement.points_used) || 0);
+    const fraccion = isFullCancel ? 1 : qtyToCancel! / currentQuantity;
+    const puntosDeLoCancelado = Math.round(puntosDelSuplemento * fraccion);
+    const puntosADevolver = refundAmount > 0 ? puntosDeLoCancelado : 0;
+    const cashADevolver = refundAmount > 0
+      ? Math.max(0, Math.round((refundAmount - puntosDeLoCancelado / 100) * 100) / 100)
+      : 0;
+    // Los puntos que se ganaron con lo que se devuelve, se quitan. Antes se
+    // intentaba con deduct_points_for_booking y un p_user_id que esa funcion no
+    // tiene: fallaba siempre, en silencio.
+    const pointsEarned = Number(supplement.points_earned) || 0;
+    const puntosGanadosAQuitar = refundAmount > 0 ? Math.floor(pointsEarned * fraccion) : 0;
+
+    if (!isFullCancel) {
+      updatePayload.points_used = pagadoSoloConPuntos ? 0 : puntosDelSuplemento - puntosDeLoCancelado;
+      updatePayload.points_earned = pointsEarned - puntosGanadosAQuitar;
+    }
+
     let transactionId: string | null = null;
-    if (refundAmount > 0) {
-      const { data: refundData, error: refundError } = await serviceClient.rpc("update_wallet_balance", {
+    if (cashADevolver > 0 || puntosADevolver > 0 || puntosGanadosAQuitar > 0) {
+      const { data: refundData, error: refundError } = await serviceClient.rpc("reembolsar_saldo_y_puntos", {
         p_user_id: user.id,
-        p_amount: refundAmount,
-        p_type: "refund",
-        p_description: `Reembolso por cancelación de "${supplementName}" en ${tourName}`,
+        p_cash: cashADevolver,
+        p_points_return: puntosADevolver,
+        p_points_clawback: puntosGanadosAQuitar,
         p_reference_id: supplement.id,
-        p_reference_type: "supplement_cancellation",
+        p_points_reference_type: "supplement",
+        p_cash_reference_type: "supplement_cancellation",
+        p_description: `Reembolso por cancelación de "${supplementName}" en ${tourName}`,
         p_idempotency_key: `${supplement.id}_${crypto.randomUUID()}_refund`,
       });
 
@@ -200,7 +228,7 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      transactionId = refundData?.transaction_id || null;
+      transactionId = (refundData as { cash_transaction_id?: string } | null)?.cash_transaction_id || null;
     }
 
     const { error: updateError } = await serviceClient
@@ -245,22 +273,6 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const pointsEarned = Number(supplement.points_earned) || 0;
-    if (pointsEarned > 0 && refundAmount > 0) {
-      try {
-        const pointsToDeduct = Math.min(Math.floor(refundAmount), pointsEarned);
-        if (pointsToDeduct > 0) {
-          await serviceClient.rpc("deduct_points_for_booking", {
-            p_booking_id: booking_id,
-            p_user_id: user.id,
-            p_points_to_deduct: pointsToDeduct,
-          });
-        }
-      } catch (pointsErr) {
-        console.error("Error descontando puntos (no crítico):", pointsErr);
-      }
-    }
-
     // CFDI handling: cancel CFDI (motivo 03) for total, credit note for partial
     const cfdiInvoiceId = supplement.cfdi_invoice_id as string | null;
     if (cfdiInvoiceId && refundAmount > 0) {
@@ -285,8 +297,10 @@ Deno.serve(async (req: Request) => {
                 }
               })()
             );
-          } else {
-            // Partial cancellation: generate credit note (tipo E, tipo_relacion "01")
+          } else if (cashADevolver > 0) {
+            // Partial cancellation: generate credit note (tipo E, tipo_relacion "01").
+            // Por lo que se devuelve en dinero: lo pagado con puntos salio como
+            // descuento en el CFDI original, no se facturo.
             const agency = booking.agencies as unknown as { id: string; user_id: string; rfc?: string; razon_social?: string; regimen_fiscal?: string; postal_code?: string } | null;
             const terceroAgencia = agency?.rfc && agency?.postal_code
               ? {
@@ -302,7 +316,7 @@ Deno.serve(async (req: Request) => {
                 body: {
                   booking_id,
                   user_id: user.id,
-                  refund_amount: refundAmount,
+                  refund_amount: cashADevolver,
                   item_description: `Suplemento: ${supplementName} — ${tourName}`,
                   related_cfdi_invoice_id: cfdiInvoiceId,
                   related_cfdi_uuid: cfdiRow.uuid_fiscal,
@@ -348,6 +362,8 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({
       success: true,
       refund_amount: refundAmount,
+      cash_refunded: cashADevolver,
+      points_refunded: puntosADevolver,
       is_cancellable: isCancellable,
       transaction_id: transactionId,
     }), {

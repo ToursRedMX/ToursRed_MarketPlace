@@ -639,6 +639,26 @@ jobs:
       - name: Los puntos dobles son solo para ToursRed Cash
         run: node scripts/check-puntos-dobles-solo-cash.mjs
 
+      # Los puntos cubren como maximo el 50% de cualquier pago (regla de Axel,
+      # 16-oct-2026): suplementos, extras y mensualidades se pagaban 100% con
+      # puntos. Ahora van junto con ToursRed Cash, en una sola transaccion, y se
+      # registran como descuento absorbido por ToursRed (603), no como dinero
+      # en Bancos. Corre la migracion real; incluye TRG-0E05 y TRG-IDBZH, cuyas
+      # polizas cargaban a Bancos lo pagado con puntos.
+      - name: Puntos con tope del 50% y pago mixto con Cash (base)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS puntos_tope;" -c "CREATE DATABASE puntos_tope;"
+          cd scripts
+          psql -h localhost -U postgres -d puntos_tope -v ON_ERROR_STOP=1 -f test-puntos-tope-50-y-pago-mixto.sql
+
+      # La misma regla del lado de las Edge Functions y las pantallas: importa
+      # los dos modulos del tope (servidor y navegador) y lee el contrato de
+      # cada cobro, cancelacion y CFDI.
+      - name: Puntos con tope del 50% (funciones y pantallas)
+        run: node scripts/test-puntos-tope-50.mjs
+
       # No existia una forma de reversar una poliza publicada: las tres
       # primeras reversas del ERP se armaron a mano, invirtiendo cada partida.
       # reverse_accounting_entry automatiza eso y ademas amplia el permiso

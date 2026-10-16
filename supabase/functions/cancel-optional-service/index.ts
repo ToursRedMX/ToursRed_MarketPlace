@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, booking_id, tour_optional_service_id, quantity, unit_price, subtotal,
         service_charge, total_paid, membership_exemption_used, is_cancelled, service_kind,
-        tax_treatment, exempt_ratio,
+        tax_treatment, exempt_ratio, points_used, payment_method,
         tour_optional_services (id, name, is_refundable)
       `)
       .eq("id", booking_optional_service_id)
@@ -189,16 +189,52 @@ Deno.serve(async (req: Request) => {
       };
     }
 
+    // Lo pagado con puntos regresa como PUNTOS, no como Cash (16-oct-2026). Antes
+    // se devolvia el subtotal entero en Cash, asi que un extra pagado con puntos
+    // se convertia en dinero al cancelarlo. Un extra viejo pagado 100% con puntos
+    // (payment_method "points", sin points_used) cuenta entero como puntos.
+    const pagadoSoloConPuntos = optService.payment_method === "points" && !(Number(optService.points_used) > 0);
+    const puntosDelExtra = pagadoSoloConPuntos
+      ? Math.round(oldTotalPaid * 100)
+      : (Number(optService.points_used) || 0);
+    const fraccion = isFullCancel ? 1 : qtyToCancel! / currentQuantity;
+    const puntosDeLoCancelado = Math.round(puntosDelExtra * fraccion);
+    const puntosADevolver = refundAmount > 0 ? puntosDeLoCancelado : 0;
+    const cashADevolver = refundAmount > 0
+      ? Math.max(0, Math.round((refundAmount - puntosDeLoCancelado / 100) * 100) / 100)
+      : 0;
+
+    // Los puntos que se ganaron con lo que se devuelve, se quitan: los que dice
+    // el movimiento 'earned' de este extra, en proporcion. Antes se quitaba
+    // floor(reembolso) con deduct_points_for_booking y un p_user_id que esa
+    // funcion no tiene: fallaba siempre, en silencio.
+    let puntosGanadosAQuitar = 0;
+    if (refundAmount > 0) {
+      const { data: ganados } = await serviceClient
+        .from("toursred_points_transactions")
+        .select("amount")
+        .eq("reference_id", optService.id)
+        .eq("type", "earned");
+      const totalGanado = (ganados || []).reduce((s: number, r: { amount: number | null }) => s + Number(r.amount || 0), 0);
+      puntosGanadosAQuitar = Math.floor(totalGanado * fraccion);
+    }
+
+    if (!isFullCancel) {
+      updatePayload.points_used = pagadoSoloConPuntos ? 0 : puntosDelExtra - puntosDeLoCancelado;
+    }
+
     // Refund to ToursRed Cash wallet (only subtotal, never service_charge)
     let transactionId: string | null = null;
-    if (refundAmount > 0) {
-      const { data: refundData, error: refundError } = await serviceClient.rpc("update_wallet_balance", {
+    if (cashADevolver > 0 || puntosADevolver > 0 || puntosGanadosAQuitar > 0) {
+      const { data: refundData, error: refundError } = await serviceClient.rpc("reembolsar_saldo_y_puntos", {
         p_user_id: user.id,
-        p_amount: refundAmount,
-        p_type: "refund",
-        p_description: `Reembolso por cancelación de "${serviceName}" en ${tourName}`,
+        p_cash: cashADevolver,
+        p_points_return: puntosADevolver,
+        p_points_clawback: puntosGanadosAQuitar,
         p_reference_id: optService.id,
-        p_reference_type: "optional_service_cancellation",
+        p_points_reference_type: "optional_service_payment",
+        p_cash_reference_type: "optional_service_cancellation",
+        p_description: `Reembolso por cancelación de "${serviceName}" en ${tourName}`,
         p_idempotency_key: `${optService.id}_${crypto.randomUUID()}_refund`,
       });
 
@@ -208,7 +244,7 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      transactionId = refundData?.transaction_id || null;
+      transactionId = (refundData as { cash_transaction_id?: string } | null)?.cash_transaction_id || null;
     }
 
     // Update the optional service row
@@ -256,23 +292,9 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Deduct points (1 peso = 1 punto)
-    if (refundAmount > 0) {
-      try {
-        const pointsToDeduct = Math.floor(refundAmount);
-        if (pointsToDeduct > 0) {
-          await serviceClient.rpc("deduct_points_for_booking", {
-            p_booking_id: booking_id,
-            p_user_id: user.id,
-            p_points_to_deduct: pointsToDeduct,
-          });
-        }
-      } catch (pointsErr) {
-        console.error("Error descontando puntos (no crítico):", pointsErr);
-      }
-    }
-
-    // CFDI handling — cancel CFDI (motivo 03) for total with own CFDI, credit note for partial/bundled
+    // CFDI handling — cancel CFDI (motivo 03) for total with own CFDI, credit note for partial/bundled.
+    // Las notas de credito van por lo devuelto en dinero: lo pagado con puntos
+    // salio como descuento en el CFDI original, no se facturo.
     if (refundAmount > 0) {
       try {
         // Check if this optional service has its own CFDI (generated via generate-optional-service-cfdi)
@@ -297,7 +319,7 @@ Deno.serve(async (req: Request) => {
                 }
               })()
             );
-          } else {
+          } else if (cashADevolver > 0) {
             // Partial cancellation: generate credit note (tipo E, tipo_relacion "01")
             const agency = booking.agencies as unknown as { id: string; user_id: string; rfc?: string; razon_social?: string; regimen_fiscal?: string; postal_code?: string } | null;
             const terceroAgencia = agency?.rfc && agency?.postal_code
@@ -314,7 +336,7 @@ Deno.serve(async (req: Request) => {
                 body: {
                   booking_id,
                   user_id: user.id,
-                  refund_amount: refundAmount,
+                  refund_amount: cashADevolver,
                   item_description: `Servicio opcional: ${serviceName} — ${tourName}`,
                   related_cfdi_invoice_id: ownCfdi.id,
                   related_cfdi_uuid: ownCfdi.uuid_fiscal,
@@ -340,7 +362,7 @@ Deno.serve(async (req: Request) => {
             .eq("status", "stamped")
             .maybeSingle();
 
-          if (depositCfdi && depositCfdi.uuid_fiscal) {
+          if (depositCfdi && depositCfdi.uuid_fiscal && cashADevolver > 0) {
             const agency = booking.agencies as unknown as { id: string; user_id: string; rfc?: string; razon_social?: string; regimen_fiscal?: string; postal_code?: string } | null;
             const terceroAgencia = agency?.rfc && agency?.postal_code
               ? {
@@ -356,7 +378,7 @@ Deno.serve(async (req: Request) => {
                 body: {
                   booking_id,
                   user_id: user.id,
-                  refund_amount: refundAmount,
+                  refund_amount: cashADevolver,
                   item_description: `Servicio opcional: ${serviceName} — ${tourName}`,
                   related_cfdi_invoice_id: depositCfdi.id,
                   related_cfdi_uuid: depositCfdi.uuid_fiscal,
