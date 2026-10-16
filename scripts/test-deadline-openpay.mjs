@@ -12,6 +12,10 @@ const helperServicio = { exports: {}, Request, Headers, Response, console: { war
   Deno: { env: { get: key => key === 'SENTRY_BACKEND_DSN' ? undefined : 'service' } } };
 vm.runInNewContext(compile(readFileSync('supabase/functions/_shared/auth.ts', 'utf8')), helperServicio);
 const { requireServiceRole } = helperServicio.exports;
+// El modulo real de puntos de cargos posteriores (16-oct-2026), compilado igual.
+const helperPuntos = { exports: {} };
+vm.runInNewContext(compile(readFileSync('supabase/functions/_shared/puntosDeCargos.ts', 'utf8')), helperPuntos);
+const { puntosDelCargo } = helperPuntos.exports;
 const scenarios = [ {}, { denied: true }, { days: 17 }, { planStatus: 'completed' },
   ...['booking_payment_plans', 'booking_payment_plan_installments', 'booking_payment_plan_transactions'].map(tableError => ({ tableError })),
   { tableError: 'cfdi_invoices' }, { invokeError: true }, { invokeThrows: true },
@@ -25,7 +29,7 @@ for (const test of scenarios) {
       const data = table === 'bookings' ? [{ id: 'booking', user_id: 'user', deposit_amount: 100, service_charge: 10, tours: { name: 'Tour', start_date: start } }]
         : table === 'booking_payment_plans' ? { id: 'plan', status: test.planStatus ?? 'active' }
         : table === 'booking_payment_plan_installments' ? [{ installment_number: 1, amount_paid: 100 }, { installment_number: 2, amount_paid: 50 }]
-        : table === 'booking_payment_plan_transactions' ? [{ service_charge: 5 }]
+        : table === 'booking_payment_plan_transactions' ? [{ service_charge: 5, points_used: 3000, amount: 50, payment_provider: 'toursred_cash' }]
         : table === 'booking_cancellations' ? { id: 'cancellation' }
         : table === 'cfdi_invoices' ? [{ id: 'invoice-one' }, { id: 'invoice-two' }] : null;
       const result = { data, error: test.tableError === table ? { message: 'query failure' } : null };
@@ -47,6 +51,7 @@ for (const test of scenarios) {
   vm.runInNewContext(compile(source), { exports: {}, Response, console: { log() {}, error() {}, warn() {} },
     createClient: () => client,
     requireServiceRole,
+    puntosDelCargo,
     Deno: { env: { get: key => key === 'SENTRY_BACKEND_DSN' ? undefined : 'service' }, serve(fn) { handler = fn; } },
     EdgeRuntime: { waitUntil(task) { tasks.push(task); } },
     async registrarFallo(...args) { failures.push(args); },
@@ -57,7 +62,9 @@ for (const test of scenarios) {
   assert.equal(response.status, test.denied ? 401 : 200);
   const blocked = test.denied || test.days || test.planStatus || ['booking_payment_plans', 'booking_payment_plan_installments', 'booking_payment_plan_transactions'].includes(test.tableError);
   assert.equal(refunds.length, blocked ? 0 : 1);
-  if (!blocked) { assert.equal(refunds[0].p_refund_amount, 150); assert.equal(invoices.length, test.tableError === 'cfdi_invoices' ? 0 : 2); }
+  if (!blocked) { assert.equal(refunds[0].p_refund_amount, 150);
+    // Los puntos del abono van en el monto y regresan como puntos.
+    assert.equal(refunds[0].p_puntos_cargos_posteriores, 3000); assert.equal(invoices.length, test.tableError === 'cfdi_invoices' ? 0 : 2); }
   if (test.tableError || test.invokeError || test.invokeThrows) assert.ok(failures.length > 0);
   for (const invoice of invoices) { assert.equal(invoice.motivo, '03'); assert.equal(invoice.cancellation_id, 'cancellation'); }
 }

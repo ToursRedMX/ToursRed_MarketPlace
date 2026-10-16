@@ -659,6 +659,21 @@ jobs:
       - name: Puntos con tope del 50% (funciones y pantallas)
         run: node scripts/test-puntos-tope-50.mjs
 
+      # Cancelar la reserva completa devolvia en Cash lo pagado con puntos
+      # despues de reservar (extras, seguro, abonos y suplementos). Ahora
+      # process_cancellation_refund recibe esos puntos y los devuelve como
+      # puntos, sin tapar al trigger que devuelve los de la reserva.
+      - name: Cancelacion completa devuelve puntos como puntos (base)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS cancelacion_puntos;" -c "CREATE DATABASE cancelacion_puntos;"
+          cd scripts
+          psql -h localhost -U postgres -d cancelacion_puntos -v ON_ERROR_STOP=1 -f test-cancelacion-puntos-posteriores.sql
+
+      - name: Cancelacion completa devuelve puntos como puntos (llamadores)
+        run: node scripts/test-cancelacion-puntos-posteriores.mjs
+
       # No existia una forma de reversar una poliza publicada: las tres
       # primeras reversas del ERP se armaron a mano, invirtiendo cada partida.
       # reverse_accounting_entry automatiza eso y ademas amplia el permiso

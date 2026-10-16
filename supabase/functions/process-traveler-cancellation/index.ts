@@ -6,6 +6,7 @@ import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/context
 import { politicaDelTour, salidaDelTour, type TourConPolitica } from "../_shared/politicaCancelacion.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enforceReauth } from "../_shared/reauth.ts";
+import { puntosAlPorcentaje, puntosDelCargo } from "../_shared/puntosDeCargos.ts";
 
 async function cancelStampedCfds(
   // Solo se usan .from() y .functions.invoke(). Pedir el cliente completo
@@ -105,6 +106,7 @@ Deno.serve(async (req: Request) => {
         user_id, tour_id, agency_id, booking_code, cancelled_at,
         is_no_show, approval_status, selected_date, selected_time,
         travel_insurance_included, travel_insurance_cost, has_payment_plan,
+        travel_insurance_points_used,
         tours!bookings_tour_id_fkey(
           id, name, tour_type, start_date,
           cancellation_not_allowed,
@@ -230,6 +232,8 @@ Deno.serve(async (req: Request) => {
     // When has_payment_plan, installment 1 ("Anticipo") already represents the
     // deposit — adding deposit_amount on top would double-count it.
     let installmentsPaid = 0;
+    // Puntos con que se pagaron los abonos posteriores: van dentro del principal.
+    let puntosDeAbonos = 0;
     if (reserva.has_payment_plan) {
       const { data: installments } = await supabase
         .from("booking_payment_plan_installments")
@@ -245,11 +249,12 @@ Deno.serve(async (req: Request) => {
       // Add service charges from completed payment plan transactions
       const { data: ppTransactions } = await supabase
         .from("booking_payment_plan_transactions")
-        .select("service_charge")
+        .select("service_charge, points_used, amount, payment_provider")
         .eq("booking_id", booking_id)
         .eq("status", "completed");
       for (const tx of (ppTransactions || [])) {
         originalServiceCharge += Number(tx.service_charge || 0);
+        puntosDeAbonos += puntosDelCargo({ points_used: tx.points_used, metodo: tx.payment_provider, total: tx.amount });
       }
     }
     const principalPaid = originalDepositAmount + installmentsPaid;
@@ -257,11 +262,13 @@ Deno.serve(async (req: Request) => {
     // Fetch optional services
     const { data: optionalServicesData } = await supabase
       .from("booking_optional_services")
-      .select("subtotal, service_charge, service_kind, tour_optional_service_id, tour_optional_services(is_refundable)")
+      .select("subtotal, service_charge, service_kind, tour_optional_service_id, points_used, payment_method, total_paid, tour_optional_services(is_refundable)")
       .eq("booking_id", booking_id)
       .eq("is_cancelled", false);
 
     let optionalServicesRefundable = 0;
+    // Puntos de los extras que se devuelven (al 100%, igual que su subtotal).
+    let puntosDeOpcionales = 0;
     let optionalServicesServiceCharge = 0;
     for (const bos of (optionalServicesData || [])) {
       const serviceKind = bos.service_kind;
@@ -269,7 +276,10 @@ Deno.serve(async (req: Request) => {
       const isRefundable = serviceKind === 'pickup' || serviceKind === 'language'
         ? true
         : tourOptionalService?.is_refundable !== false;
-      if (isRefundable) optionalServicesRefundable += Number(bos.subtotal || 0);
+      if (isRefundable) {
+        optionalServicesRefundable += Number(bos.subtotal || 0);
+        puntosDeOpcionales += puntosDelCargo({ points_used: bos.points_used, metodo: bos.payment_method, total: bos.total_paid ?? bos.subtotal });
+      }
       optionalServicesServiceCharge += Number(bos.service_charge || 0);
     }
 
@@ -284,6 +294,17 @@ Deno.serve(async (req: Request) => {
       : 0;
 
     const principalRefund = principalPaid * refundPct;
+
+    // Lo pagado con puntos DESPUES de reservar (abonos, seguro, extras) va dentro
+    // de refundAmountToTraveler y regresa como puntos, con la misma regla que su
+    // monto: abonos y seguro al porcentaje de la politica, extras al 100%. Antes
+    // todo salia en Cash (16-oct-2026).
+    const puntosCargosPosteriores =
+      puntosAlPorcentaje(puntosDeAbonos, refundPct) +
+      (reserva.travel_insurance_included
+        ? puntosAlPorcentaje(Number((booking as unknown as { travel_insurance_points_used?: number | null }).travel_insurance_points_used) || 0, refundPct)
+        : 0) +
+      puntosDeOpcionales;
     const refundAmountToTraveler = principalRefund + optionalServicesRefundable + insuranceRefund;
     // Penalty split: 70% to agency, 30% to platform (only applies when penaltyAmount > 0).
     // Homologado con process-partial-cancellation (ya usaba 70/30) por decision
@@ -324,6 +345,7 @@ Deno.serve(async (req: Request) => {
       // floor(points_used x refundPct) puntos. Hasta el 25-sep-2026 se
       // devolvia el total en Cash Y ademas el 100% de los puntos.
       p_porcentaje_puntos: refundPct,
+      p_puntos_cargos_posteriores: puntosCargosPosteriores,
     });
 
     if (rpcError || !rpcResult?.success) {

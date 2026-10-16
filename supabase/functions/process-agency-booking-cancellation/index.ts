@@ -6,6 +6,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enforceReauth } from "../_shared/reauth.ts";
+import { puntosDelCargo } from "../_shared/puntosDeCargos.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -104,7 +105,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, status, deposit_amount, service_charge,
         user_id, tour_id, agency_id, booking_code, cancelled_at,
-        has_payment_plan, travel_insurance_included, travel_insurance_cost,
+        has_payment_plan, travel_insurance_included, travel_insurance_cost, travel_insurance_points_used,
         tours!bookings_tour_id_fkey(id, name, start_date)
       `)
       .eq("id", booking_id)
@@ -150,6 +151,9 @@ Deno.serve(async (req: Request) => {
 
     // Include payment plan installments (installment_number > 1)
     let installmentsPaid = 0;
+    // Lo pagado con puntos despues de reservar (abonos, seguro, extras) regresa
+    // como puntos, no como Cash (16-oct-2026). La agencia devuelve todo al 100%.
+    let puntosCargosPosteriores = 0;
     if (reserva.has_payment_plan) {
       const { data: installments } = await supabase
         .from("booking_payment_plan_installments")
@@ -166,12 +170,13 @@ Deno.serve(async (req: Request) => {
       // Add service charges from completed payment plan transactions
       const { data: ppTransactions } = await supabase
         .from("booking_payment_plan_transactions")
-        .select("service_charge")
+        .select("service_charge, points_used, amount, payment_provider")
         .eq("booking_id", booking_id)
         .eq("status", "completed");
 
       for (const tx of (ppTransactions || [])) {
         originalServiceCharge += Number(tx.service_charge || 0);
+        puntosCargosPosteriores += puntosDelCargo({ points_used: tx.points_used, metodo: tx.payment_provider, total: tx.amount });
       }
     }
     const principalPaid = originalDepositAmount + installmentsPaid;
@@ -180,11 +185,14 @@ Deno.serve(async (req: Request) => {
     const insuranceRefund = reserva.travel_insurance_included
       ? Number(reserva.travel_insurance_cost || 0)
       : 0;
+    if (reserva.travel_insurance_included) {
+      puntosCargosPosteriores += Number((booking as unknown as { travel_insurance_points_used?: number | null }).travel_insurance_points_used) || 0;
+    }
 
     // Optional services refund
     const { data: optionalServicesData } = await supabase
       .from("booking_optional_services")
-      .select("subtotal, service_charge, total_paid, tour_optional_services(is_refundable)")
+      .select("subtotal, service_charge, total_paid, points_used, payment_method, tour_optional_services(is_refundable)")
       .eq("booking_id", booking_id)
       .eq("is_cancelled", false);
 
@@ -192,6 +200,7 @@ Deno.serve(async (req: Request) => {
     let optionalServicesServiceCharge = 0;
     for (const bos of (optionalServicesData || [])) {
       optionalServicesRefundable += Number(bos.total_paid || bos.subtotal || 0);
+      puntosCargosPosteriores += puntosDelCargo({ points_used: bos.points_used, metodo: bos.payment_method, total: bos.total_paid ?? bos.subtotal });
       optionalServicesServiceCharge += Number(bos.service_charge || 0);
     }
 
@@ -215,6 +224,7 @@ Deno.serve(async (req: Request) => {
       p_set_cancelled_at: true,
       p_cancellation_type: "agency_cancellation",
       p_cancellation_refund_amount: refundAmount,
+      p_puntos_cargos_posteriores: puntosCargosPosteriores,
     });
 
     if (refundError) throw new Error(`Error en reembolso atómico: ${refundError.message}`);
