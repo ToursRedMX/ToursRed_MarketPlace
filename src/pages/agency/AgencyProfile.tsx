@@ -9,6 +9,7 @@ import ChangePasswordSection from '../../components/ChangePasswordSection';
 import AccountAccessSection from '../../components/AccountAccessSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import LinkedAccountsSection from '../../components/LinkedAccountsSection';
+import { SmsPreferences } from '../../components/SmsPreferences';
 import { mensajeDeError } from '../../lib/errores';
 
 interface AgencyProfile {
@@ -1324,6 +1325,10 @@ const AgencyProfile: React.FC = () => {
               <h2 className="text-base font-semibold text-gray-900">Cuentas Vinculadas</h2>
             </div>
             <LinkedAccountsSection />
+          </div>
+
+          <div className="bg-white rounded-lg shadow-xs border border-gray-100 overflow-hidden px-6 pb-6">
+            <SmsPreferences />
           </div>
         </div>
       </div>
