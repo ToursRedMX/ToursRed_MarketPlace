@@ -12,6 +12,7 @@ import { useAccesoCuenta } from '../../hooks/useAccesoCuenta';
 import AccountAccessSection from '../../components/AccountAccessSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import LinkedAccountsSection from '../../components/LinkedAccountsSection';
+import { SmsPreferences } from '../../components/SmsPreferences';
 import { mensajeDeError } from '../../lib/errores';
 
 interface TravelerProfile {
@@ -1435,6 +1436,11 @@ const TravelerProfile: React.FC = () => {
         {/* Cuentas vinculadas */}
         <div className="mt-6">
           <LinkedAccountsSection />
+        </div>
+
+        {/* Notificaciones por SMS (confirmacion y recordatorio de reserva) -- apagadas por default */}
+        <div className="mt-6">
+          <SmsPreferences />
         </div>
 
         {/* Seguridad - Historial de acceso */}
