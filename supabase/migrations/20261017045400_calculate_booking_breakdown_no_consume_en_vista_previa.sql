@@ -652,5 +652,16 @@ RETURN jsonb_build_object(
 END;
 $function$;
 
-COMMENT ON FUNCTION public.calculate_booking_breakdown IS
+-- Firma completa, no solo el nombre: desde esta migracion hay dos funciones
+-- llamadas calculate_booking_breakdown (la de 7 parametros de la migracion
+-- 20261017021213 sigue viva -- esta migracion la REEMPLAZA via CREATE OR
+-- REPLACE arriba porque PL/pgSQL compara por firma completa, pero el CREATE
+-- OR REPLACE de un nombre con una firma DISTINTA no borra la version vieja,
+-- crea una sobrecarga nueva. Por eso el DROP explicito de abajo: sin el,
+-- quedarian las dos, y cualquier llamada con 7 argumentos (como la que ya
+-- hace create_booking_atomic) seria ambigua entre "la de 7" y "la de 8 con
+-- el 8vo en default".
+DROP FUNCTION IF EXISTS public.calculate_booking_breakdown(uuid, uuid, jsonb, jsonb, jsonb, integer, integer);
+
+COMMENT ON FUNCTION public.calculate_booking_breakdown(uuid, uuid, jsonb, jsonb, jsonb, integer, integer, boolean) IS
 'Calculo del desglose de costos de una reserva. Con p_consume_exemption=true (default, el que usa create_booking_atomic) consume el cupo mensual de exencion de membresia como siempre. Con false (preview_booking_breakdown) calcula la MISMA exencion sin escribir nada -- de verdad sin efectos secundarios. No incrementa tour_promotions.times_used en ningun caso -- eso es responsabilidad de quien la llama para crear la reserva de verdad.';
