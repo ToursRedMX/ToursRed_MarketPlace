@@ -15,12 +15,9 @@ async function bloqueoDeMfa(resp: Response): Promise<boolean> {
   const cuerpo = await resp.clone().json().catch(() => null) as { code?: string } | null;
   return cuerpo?.code === 'STEP_UP_REQUIRED' || cuerpo?.code === 'MFA_NOT_CONFIGURED';
 }
-import { useMembershipPrices } from '../../hooks/useMembershipPrices';
-import { montoDeDescuento, descuentoDeCargoPorServicio, descuentoDeSeguro } from '../../utils/descuentoDeReserva.ts';
 import { calcularPromocionDeGrupo } from '../../utils/promocionDeGrupo.ts';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
-import { getEffectiveDepositPct } from '../../utils/depositCalculation';
 import { totalTravelerCount } from '../../types/booking-flow';
 import { getMpDeviceId } from '../../utils/mercadopagoDevice';
 import PaymentProviderSelector, {
@@ -43,17 +40,96 @@ const CATEGORIA_ORDER = ['adulto', 'nino', 'infante', 'adulto_mayor', 'mascota']
 
 // 100 pts = $1 MXN — misma conversion que deduct_points_for_booking en la BD.
 const POINTS_PER_MXN = 100;
-// Los ToursRed Points nunca cubren mas del 50% del monto.
-const MAX_POINTS_COVERAGE = 0.5;
 // Monto minimo que aceptan los procesadores; un residuo menor se absorbe como $0.
 const MIN_PROCESSOR_AMOUNT = 10;
+
+// Forma del jsonb que devuelve preview_booking_breakdown (supabase/migrations/
+// 20261017045539 + 20261017052432). Es el mismo calculo que usa
+// create_booking_atomic para cobrar -- este componente deja de reimplementarlo.
+interface BookingBreakdown {
+  success: boolean;
+  error?: string;
+  base_tour_price: number;
+  extras_subtotal: number;
+  extras_sc_base: number;
+  extras_sc: number;
+  extras_exemption: number;
+  base_service_charge: number;
+  deposit_sc: number;
+  base_exemption: number;
+  has_membership: boolean;
+  membership_cost: number;
+  insurance_cost: number;
+  insurance_days: number;
+  discount_amount: number;
+  service_charge_discount_amount: number;
+  insurance_discount_amount: number;
+  promo_id: string | null;
+  promo_discount: number;
+  deposit_pct: number;
+  deposit_amount: number;
+  points_discount: number;
+  max_points_allowed: number;
+  wallet_discount: number;
+  is_full_wallet: boolean;
+  grand_total: number;
+  due_now: number;
+  amount_to_charge: number;
+}
+
+// Subconjunto de p_booking_data que SI lee calculate_booking_breakdown (via
+// preview_booking_breakdown o create_booking_atomic). Se arma una sola vez y
+// se reutiliza para la vista previa y para la reserva real -- antes cada una
+// tenia su propio calculo y podian desalinearse.
+function buildPricingBookingData(args: {
+  userId: string;
+  tourId: string;
+  travelersCount: number;
+  slotId: string | null;
+  selectedDate: string | null;
+  paidSpots: number | null;
+  discountCodeId: string | null;
+  includeInsurance: boolean;
+  insuranceDiscountCodeId: string | null;
+  insuranceDays: number;
+  pointsRequested: number;
+  cashRequested: number;
+  addMembership: boolean;
+  membershipPlan: 'mensual' | 'anual' | null;
+  pickupZoneName: string | null;
+  selectedLanguage: string | null;
+}): Record<string, unknown> {
+  return {
+    user_id: args.userId,
+    tour_id: args.tourId,
+    travelers_count: args.travelersCount,
+    slot_id: args.slotId,
+    selected_date: args.selectedDate,
+    // Misma INTENCION que ya mandaba este componente: el servidor recalcula
+    // el faltante de verdad contra tour_slots.booked_count.
+    pagar_minimo_garantizado: !!(args.paidSpots && args.paidSpots > args.travelersCount),
+    es_reserva_preventa: false,
+    discount_code_id: args.discountCodeId,
+    travel_insurance_included: args.includeInsurance,
+    insurance_discount_code_id: args.insuranceDiscountCodeId,
+    insurance_days: args.insuranceDays,
+    // Se manda el balance COMPLETO cuando la casilla esta marcada; el
+    // servidor topa contra el 50% y el saldo real (misma regla que
+    // create_booking_atomic / _shared/puntosConTope.ts).
+    points_used: args.pointsRequested,
+    toursred_cash_used: args.cashRequested,
+    membership_purchased: args.addMembership,
+    membership_plan: args.addMembership ? args.membershipPlan : null,
+    pickup_zone_name: args.pickupZoneName,
+    selected_language: args.selectedLanguage,
+  };
+}
 
 const BookingFlowStep4: React.FC = () => {
   const { flow, updateFlow, goToStep, sessionId, resetFlow } = useBookingFlow();
   const { user } = useAuth();
   const { fetchWithStepUp } = useStepUp();
   const navigate = useNavigate();
-  const { prices: membershipPrices } = useMembershipPrices();
 
   const tour = flow.tour;
 
@@ -75,8 +151,6 @@ const BookingFlowStep4: React.FC = () => {
   );
 
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
-  const [serviceChargePct, setServiceChargePct] = useState(10);
-  const [insurancePricePerDay, setInsurancePricePerDay] = useState(79);
   const [hasMembership, setHasMembership] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [pointsBalance, setPointsBalance] = useState(0);
@@ -109,25 +183,19 @@ const BookingFlowStep4: React.FC = () => {
     { points: number; cash: number; amount: number } | null
   >(null);
 
+  // El desglose de costos ya no se reimplementa aqui: lo calcula
+  // preview_booking_breakdown (mismo camino que usa create_booking_atomic
+  // para cobrar). Se conserva el ULTIMO resultado exitoso mientras llega uno
+  // nuevo, para no mostrar $0 cada vez que se aplica un codigo o se marca una
+  // casilla -- isLoadingBreakdown/breakdownError son lo que gatean el boton.
+  const [breakdown, setBreakdown] = useState<BookingBreakdown | null>(null);
+  const [isLoadingBreakdown, setIsLoadingBreakdown] = useState(true);
+  const [breakdownError, setBreakdownError] = useState('');
+
   useEffect(() => {
     if (!tour || !user) return;
     const load = async () => {
       try {
-        const { data: settings, error: errSettings } = await supabase
-          .from('platform_settings')
-          .select('service_charge_percentage, travel_insurance_price_per_day_per_traveler')
-          .maybeSingle();
-        if (errSettings) {
-          console.error('[Step4] no se pudo leer platform_settings:', errSettings);
-          setLoadError('No pudimos confirmar la comision de servicio. El total mostrado puede no ser el correcto: recarga la pagina antes de pagar.');
-        }
-        if (settings) {
-          setServiceChargePct(settings.service_charge_percentage || 10);
-          if (settings.travel_insurance_price_per_day_per_traveler != null) {
-            setInsurancePricePerDay(settings.travel_insurance_price_per_day_per_traveler);
-          }
-        }
-
         const { data: memData, error: errMem } = await supabase
           .from('memberships')
           .select('status, current_period_end')
@@ -213,18 +281,6 @@ const BookingFlowStep4: React.FC = () => {
   // contra tour_slots.booked_count al crear la reserva.
   const extraSpots = !esPerVehicle && flow.paidSpots ? Math.max(0, flow.paidSpots - totalTravelers) : 0;
 
-  const baseTourPrice = useMemo(() => {
-    if (!tour) return 0;
-    if (esPerVehicle) {
-      // Precio fijo por vehiculo: reemplaza la suma por viajero, igual que
-      // create_booking_atomic (20260929060000).
-      return adultBasePrice * preventaRatio;
-    }
-    const travelersSum = flow.travelers.reduce((sum, t) => sum + (t.precio_aplicado || 0), 0);
-    const extraSpotsCost = extraSpots * adultBasePrice * preventaRatio;
-    return travelersSum + extraSpotsCost;
-  }, [tour, flow.travelers, esPerVehicle, adultBasePrice, preventaRatio, extraSpots]);
-
   // Traveler category breakdown
   const travelerCategoryBreakdown = useMemo(() => {
     const groups: Record<string, { count: number; unitPrice: number; subtotal: number }> = {};
@@ -242,14 +298,6 @@ const BookingFlowStep4: React.FC = () => {
       .map((cat) => ({ cat, ...groups[cat] }));
   }, [flow.travelers]);
 
-  const extrasSubtotal = useMemo(() => {
-    return flow.optionalServices.reduce((sum, s) => sum + (s.subtotal || 0), 0);
-  }, [flow.optionalServices]);
-
-  const extrasServiceChargeBase = useMemo(() => {
-    return flow.optionalServices.reduce((sum, s) => sum + (s.service_charge || 0), 0);
-  }, [flow.optionalServices]);
-
   const insuranceDays = useMemo(() => {
     if (!tour || !flow.includeInsurance) return 0;
     if (tour.tour_type === 'receptivo' && tour.receptivo_modality === 'privado') return 1;
@@ -259,6 +307,66 @@ const BookingFlowStep4: React.FC = () => {
     const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     return Math.max(1, days);
   }, [tour, flow.includeInsurance]);
+
+  // Vista previa del cobro real: mismo camino que create_booking_atomic
+  // (calculate_booking_breakdown), sin reservar nada. Se reconsulta cuando
+  // cambia algo que afecta el monto -- codigos, casillas de puntos/saldo.
+  // El resultado anterior se conserva mientras llega uno nuevo (no se limpia
+  // a null en cada refetch) para no mostrar $0 por un instante.
+  useEffect(() => {
+    if (!tour || !user) return;
+    let vivo = true;
+    void (async () => {
+      setIsLoadingBreakdown(true);
+      setBreakdownError('');
+      const pricingData = buildPricingBookingData({
+        userId: user.id,
+        tourId: tour.id,
+        travelersCount: totalTravelers,
+        slotId: flow.selectedSlot?.id || null,
+        selectedDate: flow.selectedDate || null,
+        paidSpots: flow.paidSpots,
+        discountCodeId: flow.discountCodeId || null,
+        includeInsurance: flow.includeInsurance,
+        insuranceDiscountCodeId: flow.insuranceDiscountCodeId || null,
+        insuranceDays,
+        pointsRequested: usePoints ? pointsBalance : 0,
+        cashRequested: useWallet ? walletBalance : 0,
+        addMembership: flow.addMembership,
+        membershipPlan: flow.membershipPlan,
+        pickupZoneName: flow.pickupZoneName,
+        selectedLanguage: flow.selectedLanguage,
+      });
+      const travelersJson = flow.travelers.map((t) => ({ categoria_viajero: t.categoria_viajero }));
+      const optionalServicesJson = flow.optionalServices.map((s) => ({
+        tour_optional_service_id: s.tour_optional_service_id,
+        service_kind: s.service_kind,
+        quantity: s.quantity,
+      }));
+      const { data, error } = await supabase.rpc('preview_booking_breakdown', {
+        p_booking_data: pricingData,
+        p_travelers: travelersJson,
+        p_optional_services: optionalServicesJson,
+      });
+      if (!vivo) return;
+      const result = data as BookingBreakdown | null;
+      if (error || !result?.success) {
+        console.error('[Step4] fallo preview_booking_breakdown', error || result?.error);
+        setBreakdownError('No pudimos calcular el total a cobrar. Recarga la página antes de pagar.');
+        setIsLoadingBreakdown(false);
+        return;
+      }
+      setBreakdown(result);
+      setIsLoadingBreakdown(false);
+    })();
+    return () => { vivo = false; };
+  }, [
+    tour, user, totalTravelers, flow.travelers, flow.optionalServices,
+    flow.selectedSlot?.id, flow.selectedDate, flow.paidSpots,
+    flow.discountCodeId, flow.includeInsurance, flow.insuranceDiscountCodeId, insuranceDays,
+    usePoints, useWallet, pointsBalance, walletBalance,
+    flow.addMembership, flow.membershipPlan, flow.pickupZoneName, flow.selectedLanguage,
+  ]);
 
   // La promocion de grupo vigente del tour. La RPC ya filtra por `is_active`,
   // fechas y usos agotados, y devuelve como mucho una.
@@ -284,75 +392,37 @@ const BookingFlowStep4: React.FC = () => {
     // este efecto —que llama a updateFlow— seria un bucle infinito.
   }, [tour?.id, updateFlow]);
 
-  const insuranceCost = useMemo(() => {
-    if (!flow.includeInsurance) return 0;
-    return insurancePricePerDay * insuranceDays * totalTravelers;
-  }, [flow.includeInsurance, insurancePricePerDay, insuranceDays, totalTravelers]);
+  // A partir de aqui, todo numero de dinero sale de `breakdown` (o es 0
+  // mientras no ha llegado el primero). Nada de esto se vuelve a calcular en
+  // el cliente: evita exactamente el hueco que corrigio la migracion
+  // 20261017052432 (codigos service_fee_*/insurance_* que se veian aplicados
+  // en pantalla pero nunca bajaban lo que de verdad se cobraba).
+  const baseTourPrice = breakdown?.base_tour_price ?? 0;
+  const extrasSubtotal = breakdown?.extras_subtotal ?? 0;
+  const extrasServiceChargeBase = breakdown?.extras_sc_base ?? 0;
+  const extrasExemptionUsed = breakdown?.extras_exemption ?? 0;
+  const extrasServiceCharge = breakdown?.extras_sc ?? 0;
 
-  const baseServiceCharge = useMemo(() => {
-    return Math.round(baseTourPrice * (serviceChargePct / 100) * 100) / 100;
-  }, [baseTourPrice, serviceChargePct]);
+  const insuranceDiscountAmount = breakdown?.insurance_discount_amount ?? 0;
+  const effectiveInsuranceCost = breakdown?.insurance_cost ?? 0;
+  const insuranceCost = effectiveInsuranceCost + insuranceDiscountAmount;
 
+  // base_service_charge que devuelve el servidor ya viene NETO del codigo de
+  // descuento (seccion 4.5 de calculate_booking_breakdown); se le vuelve a
+  // sumar aqui solo para mostrar la linea "bruto" del desglose.
+  const serviceChargeDiscount = breakdown?.service_charge_discount_amount ?? 0;
+  const baseServiceCharge = (breakdown?.base_service_charge ?? 0) + serviceChargeDiscount;
   const shouldWaiveServiceCharge = hasMembership || flow.addMembership;
-
-  const exemptionUsed = useMemo(() => {
-    if (shouldWaiveServiceCharge && hasMembership) {
-      return Math.min(baseServiceCharge, remainingExemption);
-    }
-    if (flow.addMembership) return baseServiceCharge;
-    return 0;
-  }, [baseServiceCharge, shouldWaiveServiceCharge, hasMembership, flow.addMembership, remainingExemption]);
-
-  const depositServiceCharge = useMemo(() => {
-    if (shouldWaiveServiceCharge && hasMembership) {
-      return Math.round((baseServiceCharge - exemptionUsed) * 100) / 100;
-    }
-    if (flow.addMembership) return 0;
-    return baseServiceCharge;
-  }, [baseServiceCharge, shouldWaiveServiceCharge, hasMembership, flow.addMembership, exemptionUsed]);
-
-  const extrasExemptionUsed = useMemo(() => {
-    const remainingAfterDeposit = Math.max(0, remainingExemption - exemptionUsed);
-    if (shouldWaiveServiceCharge && hasMembership) {
-      return Math.min(extrasServiceChargeBase, remainingAfterDeposit);
-    }
-    if (flow.addMembership) return extrasServiceChargeBase;
-    return 0;
-  }, [extrasServiceChargeBase, shouldWaiveServiceCharge, hasMembership, flow.addMembership, remainingExemption, exemptionUsed]);
-
-  const extrasServiceCharge = useMemo(() => {
-    if (shouldWaiveServiceCharge && hasMembership) {
-      return Math.round((extrasServiceChargeBase - extrasExemptionUsed) * 100) / 100;
-    }
-    if (flow.addMembership) return 0;
-    return extrasServiceChargeBase;
-  }, [extrasServiceChargeBase, shouldWaiveServiceCharge, hasMembership, flow.addMembership, extrasExemptionUsed]);
-
-  // Descuento de cargo por servicio. Va sobre el cargo del anticipo, que es el
-  // que el viajero paga hoy.
-  const insuranceDiscountAmount = useMemo(
-    () => (flow.includeInsurance ? descuentoDeSeguro(flow.insuranceDiscountMeta, insuranceCost) : 0),
-    [flow.includeInsurance, flow.insuranceDiscountMeta, insuranceCost],
-  );
-  const effectiveInsuranceCost = Math.max(0, insuranceCost - insuranceDiscountAmount);
-
-  const serviceChargeDiscount = useMemo(
-    () => descuentoDeCargoPorServicio(flow.discountCodeMeta, depositServiceCharge),
-    [flow.discountCodeMeta, depositServiceCharge],
-  );
+  const exemptionUsed = breakdown?.base_exemption ?? 0;
+  const depositServiceCharge = breakdown?.deposit_sc ?? 0;
 
   const hasReachedExemptionLimit = hasMembership && remainingExemption < (baseServiceCharge + extrasServiceChargeBase);
 
-  const membershipCost = useMemo(() => {
-    if (!flow.addMembership || hasMembership || !membershipPrices) return 0;
-    return flow.membershipPlan === 'anual' ? membershipPrices.annualPrice : membershipPrices.monthlyPrice;
-  }, [flow.addMembership, flow.membershipPlan, hasMembership, membershipPrices]);
+  const membershipCost = breakdown?.membership_cost ?? 0;
 
-  // Los DOS destinos posibles, derivados del codigo guardado. Un codigo de
-  // `service_fees` no toca el precio del tour —lo paga la plataforma de su
-  // margen, no la agencia— y uno de tour no toca el cargo por servicio.
-  // Descuento por promocion de grupo. Va sobre el precio del tour y ANTES que
-  // el codigo de descuento: el codigo rebaja lo que ya quedo con promocion.
+  // La ETIQUETA de la promocion (texto + "casi lo logras") se sigue generando
+  // aqui -- es solo UI, no un monto -- pero el descuento real que se cobra
+  // viene de breakdown.promo_discount (mismo query que corre el servidor).
   const promo = useMemo(() => {
     const viajeros = { adultos: 0, ninos: 0, infantes: 0, adultos_mayores: 0, mascotas: 0 };
     const precios = { adulto: 0, nino: 0, infante: 0, adulto_mayor: 0 };
@@ -368,97 +438,36 @@ const BookingFlowStep4: React.FC = () => {
     return calcularPromocionDeGrupo(flow.promocion, viajeros, precios);
   }, [flow.promocion, flow.travelers]);
 
-  const promoDiscountAmount = promo.activa ? promo.descuento : 0;
-  const precioTrasPromocion = Math.max(0, baseTourPrice - promoDiscountAmount);
+  const promoDiscountAmount = breakdown?.promo_discount ?? 0;
+  const discountAmount = breakdown?.discount_amount ?? 0;
+  const effectiveDepositPct = breakdown?.deposit_pct ?? 0;
+  const depositAmount = breakdown?.deposit_amount ?? 0;
 
-  const discountAmount = useMemo(
-    () => montoDeDescuento(flow.discountCodeMeta, precioTrasPromocion),
-    [flow.discountCodeMeta, precioTrasPromocion],
-  );
-
-  // Anticipo efectivo. La regla vive en utils/depositCalculation para que Step1 y
-  // Step4 nunca muestren porcentajes distintos para el mismo tour, y se mantiene en
-  // paridad con la seccion 8 de create_booking_atomic.
-  const effectiveDepositPct = useMemo(
-    () => getEffectiveDepositPct(tour, flow.selectedDate, flow.isHighRisk),
-    [tour, flow.selectedDate, flow.isHighRisk]
-  );
-
-  const tourPriceAfterDiscount = Math.max(0, precioTrasPromocion - discountAmount);
-
-  // El anticipo vive sobre el precio BRUTO del tour, no sobre el neto de wallet.
-  const depositAmount = Math.round(tourPriceAfterDiscount * (effectiveDepositPct / 100) * 100) / 100;
-
-  // ── PASE 1 (tentativo): monto EXIGIBLE AHORA sin cargos por servicio.
-  // Puntos y wallet se topan contra el anticipo, NO contra el tour completo:
-  // el viajero cubre lo que debe hoy, no la reserva entera.
-  // Tambien rompe la circularidad SC -> exigible -> wallet -> SC.
-  const netBeforeCharges = Math.max(
-    0,
-    depositAmount + extrasSubtotal + effectiveInsuranceCost + membershipCost
-  );
-
-  // Tope del 50%: los puntos nunca cubren mas de la mitad del monto exigible.
-  // Vive del netBeforeCharges de ESTE render, no de un monto capturado al marcar
-  // la casilla: si viajeros/extras/seguro cambian despues con la casilla ya
-  // marcada, el punto de partida no puede quedarse atras (bug del 24-sep-2026,
-  // ver bitacora).
-  const maxPointsAllowed = Math.floor(netBeforeCharges * POINTS_PER_MXN * MAX_POINTS_COVERAGE);
-  // pointsWalletActive || hasMembership: portado de BookingForm.tsx. Vuelve a
-  // comprobarse aqui (no solo al pintar el checkbox) por si usePoints quedo
-  // en true de una sesion anterior con la membresia todavia vigente.
+  const maxPointsAllowed = breakdown?.max_points_allowed ?? 0;
+  // pointsWalletActive || hasMembership: portado de BookingForm.tsx. Gatea si
+  // se muestra la casilla; el tope real de cuanto se aplica lo decide el
+  // servidor (v_points_wallet_active/v_membership_still_valid, mas frescos
+  // que estos dos flags locales).
   const canUsePoints = pointsWalletActive || hasMembership;
-  const pointsApplied = usePoints && canUsePoints
-    ? Math.min(pointsBalance, maxPointsAllowed)
-    : 0;
-  const pointsDiscount = pointsApplied / POINTS_PER_MXN;
+  const pointsDiscount = breakdown?.points_discount ?? 0;
+  const pointsApplied = Math.round(pointsDiscount * POINTS_PER_MXN);
 
-  const tentativeCashNeeded = Math.max(0, netBeforeCharges - pointsDiscount);
-  const tentativeRemaining = Math.max(
-    0,
-    tentativeCashNeeded - Math.min(walletBalance, tentativeCashNeeded)
-  );
+  const walletDiscount = breakdown?.wallet_discount ?? 0;
+  const isFullWalletPayment = breakdown?.is_full_wallet ?? false;
 
-  // Exencion de cargo por servicio al cubrir el 100% del exigible con ToursRed Cash.
-  const isFullWalletPayment = useWallet
-    && tentativeCashNeeded > 0
-    && totalTravelers > 0
-    && !flow.addMembership
-    && tentativeRemaining < MIN_PROCESSOR_AMOUNT;
+  const dueNow = breakdown?.due_now ?? 0;
+  const grandTotal = breakdown?.grand_total ?? 0;
 
-  // ── PASE 2: aplicar la exencion y recalcular con los montos definitivos.
-  const effectiveDepositServiceCharge = isFullWalletPayment
-    ? 0
-    : Math.max(0, Math.round((depositServiceCharge - serviceChargeDiscount) * 100) / 100);
-  const effectiveExtrasServiceCharge = isFullWalletPayment ? 0 : extrasServiceCharge;
-
-  // Tope duro del wallet: el exigible ahora, de ESTE render. No se permite
-  // abonar de mas, y tampoco se congela el monto al marcar la casilla — mismo
-  // motivo que arriba: netBeforeCharges puede subir despues sin que el usuario
-  // vuelva a tocar el checkbox.
-  const walletDiscount = useWallet
-    ? Math.min(
-        walletBalance,
-        Math.max(0, netBeforeCharges - pointsDiscount)
-      )
-    : 0;
-
-  // Exigible ahora CON cargos por servicio.
-  const dueNow = depositAmount + effectiveDepositServiceCharge + extrasSubtotal
-    + effectiveExtrasServiceCharge + effectiveInsuranceCost + membershipCost;
-
-  // Valor total de la reserva (referencia para el desglose).
-  const subtotalBeforeDiscount = tourPriceAfterDiscount + extrasSubtotal
-    + effectiveExtrasServiceCharge + effectiveInsuranceCost + effectiveDepositServiceCharge + membershipCost;
-
-  const grandTotal = Math.max(0, subtotalBeforeDiscount - pointsDiscount - walletDiscount);
-
+  // El pago parcial NO existe en el servidor (solo en la confirmacion real) --
+  // sigue siendo una decision del cliente, acotada por lo que YA bajo del
+  // exigible por puntos/saldo.
+  const dueAfterPointsWallet = Math.max(0, dueNow - pointsDiscount - walletDiscount);
   // !flow.isHighRisk tambien aqui: un payNowMode='partial' que haya quedado
   // de una sesion anterior (antes de que Step3 confirmara el riesgo) no debe
   // dejar cobrar menos del 100% aunque el checkbox ya este oculto en pantalla.
   const rawAmountToPay = flow.payNowMode === 'partial' && !isFullWalletPayment && !flow.isHighRisk
-    ? Math.min(flow.partialPaymentAmount, Math.max(0, dueNow - pointsDiscount - walletDiscount))
-    : Math.max(0, dueNow - pointsDiscount - walletDiscount);
+    ? Math.min(flow.partialPaymentAmount, dueAfterPointsWallet)
+    : dueAfterPointsWallet;
 
   // Residuo por debajo del minimo del procesador -> $0.
   const amountToPay = rawAmountToPay > 0 && rawAmountToPay < MIN_PROCESSOR_AMOUNT
@@ -469,6 +478,10 @@ const BookingFlowStep4: React.FC = () => {
   const isWalletOnlyPayment = amountToPay === 0 && (walletDiscount > 0 || pointsDiscount > 0);
 
   // Beneficio ToursRed Cash: el saldo alcanza para cubrir todo el exigible.
+  // netBeforeCharges es pura suma de campos que YA devolvio el servidor (no
+  // reaplica descuentos/exenciones) -- se arma aqui solo para esta comparacion.
+  const netBeforeCharges = depositAmount + extrasSubtotal + effectiveInsuranceCost + membershipCost;
+  const tentativeCashNeeded = Math.max(0, netBeforeCharges - pointsDiscount);
   const wouldQualifyForWalletBenefit = !useWallet
     && walletBalance > 0
     && totalTravelers > 0
@@ -592,6 +605,14 @@ const BookingFlowStep4: React.FC = () => {
       return;
     }
 
+    // Defensa en profundidad: el boton ya se deshabilita sin un breakdown
+    // valido, pero esto evita cobrar con numeros locales si de todos modos
+    // se llega aqui (por ejemplo, una carrera con el efecto de arriba).
+    if (!breakdown) {
+      setCreateError('No pudimos confirmar el total a cobrar. Recarga la página antes de pagar.');
+      return;
+    }
+
     if (!flow.isHighRisk && flow.payNowMode === 'partial' && (flow.partialPaymentAmount <= 0 || flow.partialPaymentAmount >= depositAmount - 10)) {
       setCreateError('El monto del pago parcial debe ser menor al depósito total (dejando al menos $10 MXN de saldo).');
       return;
@@ -609,11 +630,31 @@ const BookingFlowStep4: React.FC = () => {
       // que ya acepta approval_status en el payload y por default usa 'approved'.
       const isManualApproval = tour.booking_approval_type === 'manual';
 
+      // Mismo subconjunto que ya se le mando a preview_booking_breakdown --
+      // create_booking_atomic recalcula todo de nuevo con esto, no confia en
+      // los montos de dinero que se agregan abajo.
+      const pricingInput = buildPricingBookingData({
+        userId: user.id,
+        tourId: tour.id,
+        travelersCount: totalTravelers,
+        slotId: flow.selectedSlot?.id || null,
+        selectedDate: flow.selectedDate || null,
+        paidSpots: flow.paidSpots,
+        discountCodeId: flow.discountCodeId || null,
+        includeInsurance: flow.includeInsurance,
+        insuranceDiscountCodeId: flow.insuranceDiscountCodeId || null,
+        insuranceDays,
+        pointsRequested: usePoints ? pointsBalance : 0,
+        cashRequested: useWallet ? walletBalance : 0,
+        addMembership: flow.addMembership,
+        membershipPlan: flow.membershipPlan,
+        pickupZoneName: flow.pickupZoneName,
+        selectedLanguage: flow.selectedLanguage,
+      });
+
       const bookingData: Record<string, unknown> = {
-        user_id: user.id,
-        tour_id: tour.id,
+        ...pricingInput,
         agency_id: tour.agency_id || tour.agencies?.id,
-        travelers_count: totalTravelers,
         total_price: grandTotal,
         deposit_amount: depositAmount,
         // La comision NO se manda: la calcula `create_booking_atomic`, que es a
@@ -629,12 +670,10 @@ const BookingFlowStep4: React.FC = () => {
         // backend hace `precio * tasa` sin dividir, que es lo correcto: medido,
         // las comisiones reales son del 10% exacto. Si alguien hubiera hecho que
         // este valor se usara, habria cobrado el 0.1%.
-        service_charge: effectiveDepositServiceCharge,
+        service_charge: depositServiceCharge,
         user_payment: amountToPay,
-        platform_revenue: effectiveDepositServiceCharge + effectiveExtrasServiceCharge,
+        platform_revenue: depositServiceCharge + extrasServiceCharge,
         booking_date: bookingDate,
-        slot_id: flow.selectedSlot?.id || null,
-        selected_date: flow.selectedDate || null,
         selected_time: flow.selectedTime || null,
         status: 'pending',
         payment_status: 'pending',
@@ -644,36 +683,23 @@ const BookingFlowStep4: React.FC = () => {
         count_infantes: flow.travelerCounts.infantes,
         count_adultos_mayores: flow.travelerCounts.adultos_mayores,
         count_mascotas: flow.travelerCounts.mascotas,
-        points_used: pointsApplied,
-        toursred_cash_used: walletDiscount,
-        discount_code_id: flow.discountCodeId || null,
         discount_amount: discountAmount,
         service_charge_discount: serviceChargeDiscount,
         payment_provider: flow.paymentProvider,
         conekta_method: flow.paymentProvider === 'conekta' ? flow.conektaMethod : null,
         openpay_method: flow.paymentProvider === 'openpay' ? flow.openpayMethod : null,
         pickup_type: flow.pickupType,
-        pickup_zone_name: flow.pickupZoneName,
         pickup_zone_extra_cost: flow.optionalServices.filter(e => e.service_kind === 'pickup').reduce((s, e) => s + e.subtotal, 0),
-        selected_language: flow.selectedLanguage,
         language_extra_cost: flow.optionalServices.filter(e => e.service_kind === 'language').reduce((s, e) => s + e.subtotal, 0),
         restrictions_accepted: flow.restrictionsAccepted,
-        // create_booking_atomic (20260929060000) recalcula el faltante de
-        // verdad contra tour_slots.booked_count — esto solo manda la
-        // INTENCION (Step1 decidio pagar el minimo garantizado, o el tour lo
-        // exige via politica_bajo_minimo, que el servidor ya sabe del tour).
-        pagar_minimo_garantizado: !!(flow.paidSpots && flow.paidSpots > totalTravelers),
-        es_reserva_preventa: false,
-        travel_insurance_included: flow.includeInsurance,
         travel_insurance_cost: effectiveInsuranceCost,
-        insurance_discount_code_id: flow.insuranceDiscountCodeId || null,
         insurance_discount_amount: insuranceDiscountAmount,
-        promotion_id: promo.activa ? flow.promocion?.id ?? null : null,
+        // El id de promocion lo resuelve el propio servidor (breakdown.promo_id),
+        // no la lectura independiente de flow.promocion que solo alimenta la
+        // etiqueta de texto.
+        promotion_id: breakdown.promo_id,
         promo_discount_amount: promoDiscountAmount,
-        insurance_days: insuranceDays,
         selected_payment_mode: 'standard',
-        membership_purchased: flow.addMembership,
-        membership_plan: flow.addMembership ? flow.membershipPlan : null,
         membership_cost: membershipCost,
         initial_payment_amount: amountToPay,
       };
@@ -961,6 +987,13 @@ const BookingFlowStep4: React.FC = () => {
           </div>
         )}
 
+        {breakdownError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            {breakdownError}
+          </div>
+        )}
+
         {adjustedByServer && (
           <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-sm flex items-start gap-2">
             <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
@@ -978,6 +1011,11 @@ const BookingFlowStep4: React.FC = () => {
         )}
 
         {/* Cost breakdown */}
+        {!breakdown ? (
+          <div className="mb-6 p-4 bg-gray-50 rounded-xl flex items-center justify-center gap-2 text-gray-500 text-sm">
+            <Loader2 className="w-4 h-4 animate-spin" /> Calculando el total...
+          </div>
+        ) : (
         <div className="mb-6 p-4 bg-gray-50 rounded-xl flex flex-col gap-y-2">
 
           {/* Traveler category breakdown — no aplica con precio fijo por
@@ -1080,13 +1118,21 @@ const BookingFlowStep4: React.FC = () => {
             </div>
           )}
 
-          {/* Deposit service charge: bruto → descuento → neto */}
+          {/* Deposit service charge: bruto → descuento de codigo → descuento de membresia → neto */}
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Cargo por servicio</span>
             <span className={`font-medium ${isFullWalletPayment ? 'line-through text-gray-400' : 'text-gray-800'}`}>
               {formatCurrencyMXN(baseServiceCharge)}
             </span>
           </div>
+          {!isFullWalletPayment && serviceChargeDiscount > 0 && (
+            <div className="flex justify-between text-sm text-emerald-700">
+              <span className="flex items-center gap-1">
+                <Tag className="w-3 h-3" /> Descuento de cargo por servicio ({flow.discountCode})
+              </span>
+              <span className="font-medium">-{formatCurrencyMXN(serviceChargeDiscount)}</span>
+            </div>
+          )}
           {isFullWalletPayment && (baseServiceCharge > 0 || extrasServiceChargeBase > 0) && (
             <>
               <div className="flex justify-between text-sm text-teal-700">
@@ -1112,6 +1158,12 @@ const BookingFlowStep4: React.FC = () => {
             </div>
           )}
           {!isFullWalletPayment && shouldWaiveServiceCharge && exemptionUsed > 0 && (
+            <div className="flex justify-between text-sm text-gray-500">
+              <span className="pl-4">Cargo por servicio (con descuento)</span>
+              <span className="font-medium text-gray-700">{formatCurrencyMXN(depositServiceCharge)}</span>
+            </div>
+          )}
+          {!isFullWalletPayment && serviceChargeDiscount > 0 && !(shouldWaiveServiceCharge && exemptionUsed > 0) && (
             <div className="flex justify-between text-sm text-gray-500">
               <span className="pl-4">Cargo por servicio (con descuento)</span>
               <span className="font-medium text-gray-700">{formatCurrencyMXN(depositServiceCharge)}</span>
@@ -1193,6 +1245,7 @@ const BookingFlowStep4: React.FC = () => {
             </>
           )}
         </div>
+        )}
 
         {/* ToursRed Points earned banner */}
         {amountToPay > 0 && (
@@ -1511,7 +1564,7 @@ const BookingFlowStep4: React.FC = () => {
           </button>
           <button
             onClick={handlePayment}
-            disabled={isCreating || isLoadingSettings}
+            disabled={isCreating || isLoadingSettings || isLoadingBreakdown || !breakdown || !!breakdownError}
             className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 disabled:bg-gray-300 transition-colors"
           >
             {isCreating ? (
