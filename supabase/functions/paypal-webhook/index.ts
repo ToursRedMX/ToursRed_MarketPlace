@@ -5,6 +5,7 @@ import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/context
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { avisosCon } from "../_shared/avisosDePago.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { asentarCobroPaypal, type ClienteMinimo } from "../_shared/cobrosPaypal.ts";
 
 // Forma minima de lo que de verdad se lee de `resource`: PayPal manda un
 // objeto distinto por cada event_type (captura, reembolso, disputa...), asi
@@ -282,11 +283,17 @@ Deno.serve(async (req: Request) => {
       }
 
       // ============================================================
-      // PAYMENT.CAPTURE.COMPLETED — backfill payment_transactions if missing
+      // PAYMENT.CAPTURE.COMPLETED — backfill payment_transactions if missing,
+      // o rellenar la comision real si la fila ya existia en $0 (PENDING).
       // ============================================================
       case "PAYMENT.CAPTURE.COMPLETED": {
         const captureId = resource?.id;
         if (!captureId) break;
+
+        const amount = parseFloat(resource?.amount?.value || "0");
+        const paypalFee = parseFloat(
+          resource?.seller_receivable_breakdown?.paypal_fee?.value || "0"
+        );
 
         const { data: existingTx } = await supabase
           .from("payment_transactions")
@@ -295,7 +302,20 @@ Deno.serve(async (req: Request) => {
           .maybeSingle();
 
         if (existingTx) {
-          // Transaction already exists, nothing to do
+          // La fila ya existia -- normalmente insertada cuando la captura
+          // quedo en PENDING, sin comision todavia (PayPal no manda
+          // seller_receivable_breakdown hasta liquidar). Ahora que llego la
+          // real, se rellena -- nunca se pisa una buena con un cero, regla
+          // de asentarCobroPaypal (_shared/cobrosPaypal.ts). Si el asiento
+          // contable ya se publico sin esta comision, el cron diario
+          // asentar_comisiones_faltantes() genera el ajuste.
+          if (paypalFee > 0) {
+            await asentarCobroPaypal(supabase as unknown as ClienteMinimo, {
+              paypal_capture_id: captureId,
+              processor_fee: paypalFee,
+              net_amount: amount - paypalFee,
+            });
+          }
           break;
         }
 
@@ -307,11 +327,6 @@ Deno.serve(async (req: Request) => {
           .maybeSingle();
 
         if (booking) {
-          const amount = parseFloat(resource?.amount?.value || "0");
-          const paypalFee = parseFloat(
-            resource?.seller_receivable_breakdown?.paypal_fee?.value || "0"
-          );
-
           await supabase.from("payment_transactions").insert({
             booking_id: booking.id,
             paypal_capture_id: captureId,
