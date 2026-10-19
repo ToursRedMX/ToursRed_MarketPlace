@@ -82,8 +82,8 @@ assert.ok(webhook.indexOf("rpc('whatsapp_confirmar_aviso'") > smtp, 'confirma DE
 const entreMedio = webhook.slice(smtp, webhook.indexOf("rpc('whatsapp_confirmar_aviso'"));
 assert.match(entreMedio, /!res\.ok[^\n]*return/, 'si SMTP2GO rechaza, NO confirma (el aviso queda pendiente y se reintenta)');
 assert.match(webhook, /data\.avisar === true && data\.aviso/, 'solo avisa cuando la base lo decide');
-// La URL de la plataforma NO esta en email_settings (columnas reales: id, contact_email, smtp_host, smtp_port,
-// smtp_user, smtp_password, updated_at, updated_by, smtp_api_key, internal_service_key). Pedirla ahi rompia la
+// La URL de la plataforma NO esta en email_settings (columnas reales: id, contact_email,
+// updated_at, updated_by, smtp_api_key, internal_service_key). Pedirla ahi rompia la
 // consulta entera y el aviso se iba en silencio (13-oct-2026).
 assert.doesNotMatch(webhook, /from\('email_settings'\)\.select\('[^']*platform_url/, 'platform_url no se pide a email_settings: esa columna no existe');
 assert.match(webhook, /from\('platform_settings'\)\.select\('platform_url'\)/, 'platform_url se lee de platform_settings');
