@@ -10,10 +10,6 @@ import { mensajeDeError } from '../../lib/errores';
 interface EmailSettings {
   id: string;
   contact_email: string;
-  smtp_host: string;
-  smtp_port: number;
-  smtp_user: string;
-  smtp_password: string;
   smtp_api_key: string;
 }
 
@@ -109,10 +105,6 @@ const AdminSettings: React.FC = () => {
   const [settings, setSettings] = useState<EmailSettings>({
     id: '',
     contact_email: '',
-    smtp_host: '',
-    smtp_port: 2525,
-    smtp_user: '',
-    smtp_password: '',
     smtp_api_key: '',
   });
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings>({
@@ -412,10 +404,6 @@ const AdminSettings: React.FC = () => {
           .from('email_settings')
           .update({
             contact_email: settings.contact_email,
-            smtp_host: settings.smtp_host,
-            smtp_port: settings.smtp_port,
-            smtp_user: settings.smtp_user,
-            smtp_password: settings.smtp_password,
             smtp_api_key: settings.smtp_api_key,
             updated_at: new Date().toISOString(),
           })
@@ -549,7 +537,7 @@ const AdminSettings: React.FC = () => {
     const { name, value } = e.target;
     setSettings(prev => ({
       ...prev,
-      [name]: name === 'smtp_port' ? parseInt(value) || 0 : value,
+      [name]: value,
     }));
   };
 
@@ -1777,72 +1765,11 @@ const AdminSettings: React.FC = () => {
           <div className="flex items-center gap-x-3 mb-4">
             <Server className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">
-              Configuración SMTP
+              Envío de correo (SMTP2GO)
             </h2>
           </div>
 
           <div className="space-y-4">
-            <div>
-              <label htmlFor="smtp_host" className="block text-sm font-medium text-gray-700 mb-1">
-                Servidor SMTP
-              </label>
-              <input
-                type="text"
-                id="smtp_host"
-                name="smtp_host"
-                value={settings.smtp_host}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="smtp_port" className="block text-sm font-medium text-gray-700 mb-1">
-                Puerto SMTP
-              </label>
-              <input
-                type="number"
-                id="smtp_port"
-                name="smtp_port"
-                value={settings.smtp_port}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="smtp_user" className="block text-sm font-medium text-gray-700 mb-1">
-                Usuario SMTP
-              </label>
-              <input
-                type="text"
-                id="smtp_user"
-                name="smtp_user"
-                value={settings.smtp_user}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="smtp_password" className="block text-sm font-medium text-gray-700 mb-1">
-                Contraseña SMTP
-              </label>
-              <div className="relative">
-                <input
-                  type={showSecrets['smtp_password'] ? 'text' : 'password'}
-                  id="smtp_password"
-                  name="smtp_password"
-                  value={settings.smtp_password}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                />
-                <button type="button" onClick={() => toggleSecret('smtp_password')} className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600">
-                  {showSecrets['smtp_password'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
             <div>
               <label htmlFor="smtp_api_key" className="block text-sm font-medium text-gray-700 mb-1">
                 API Key SMTP2GO

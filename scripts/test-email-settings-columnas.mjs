@@ -14,7 +14,7 @@
  *    y NO registran la llave SMTP.
  *
  * LO QUE NO PUEDE HACER: no conoce la base. Si se agrega una columna a email_settings hay que
- * sumarla a COLUMNAS_REALES (lista verificada contra information_schema el 13-oct-2026).
+ * sumarla a COLUMNAS_REALES (lista verificada contra information_schema el 13-oct-2026; sin smtp_host/port/user/password desde su retiro, 19-oct-2026).
  * Un `.select()` armado dinamicamente (no literal) no se analiza.
  *
  * whatsapp-webhook-entrante queda fuera SOLO hasta que se mergee ToursRed_MarketPlace#379, que lo
@@ -25,7 +25,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const COLUMNAS_REALES = new Set([
-  'id', 'contact_email', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_password',
+  'id', 'contact_email',
   'updated_at', 'updated_by', 'smtp_api_key', 'internal_service_key', '*',
 ]);
 const EXCEPCIONES = new Set(['whatsapp-webhook-entrante']);
