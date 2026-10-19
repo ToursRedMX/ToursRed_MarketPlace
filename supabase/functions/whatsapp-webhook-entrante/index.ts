@@ -19,6 +19,7 @@ import {
   BUCKET_MEDIA, MAX_BYTES_MEDIA, MIME_PERMITIDOS, estadoWhatsApp, mimeBase, parsearEntrante, sidValido, telefonoCanonico, urlMediaValida,
 } from '../_shared/mensajeria/whatsappBandeja.ts';
 import { DESTINATARIO_AVISO, armarAviso, urlPlataformaValida } from '../_shared/mensajeria/avisoWhatsapp.ts';
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
 
@@ -74,7 +75,7 @@ async function enviarAviso(client: Cliente, telefono: string, aviso: DatosAvisoB
       client.from('email_settings').select('smtp_api_key, contact_email').maybeSingle(),
       client.from('platform_settings').select('platform_url').maybeSingle(),
     ]);
-    if (errCorreo || !cfg?.smtp_api_key) {
+    if (errCorreo || !cfg) {
       // Se registra el CODIGO del error (no la llave): sin eso un fallo de consulta parece "no configurado".
       console.error('whatsapp-webhook-entrante: aviso sin enviar', errCorreo ? `error de consulta ${errCorreo.code ?? 'sin_codigo'}` : 'sin llave SMTP');
       return;
@@ -84,10 +85,7 @@ async function enviarAviso(client: Cliente, telefono: string, aviso: DatosAvisoB
       numAdjuntos: Number(aviso.num_adjuntos) || 0, recibidoEn: new Date(),
       urlPlataforma: urlPlataformaValida(plataforma?.platform_url) ? plataforma.platform_url : ORIGEN_PRINCIPAL,
     });
-    const res = await fetch('https://api.smtp2go.com/v3/email/send', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
-      body: JSON.stringify({ api_key: cfg.smtp_api_key, to: [DESTINATARIO_AVISO], sender: cfg.contact_email || 'no-reply@toursred.com', subject: asunto, html_body: html, text_body: texto }),
-    });
+    const res = await enviarPayloadSmtp2go(client, { to: [DESTINATARIO_AVISO], sender: cfg.contact_email || 'no-reply@toursred.com', subject: asunto, html_body: html, text_body: texto });
     const cuerpo = await res.json().catch(() => null);
     if (!res.ok || Number(cuerpo?.data?.failed ?? 0) > 0) { console.error('whatsapp-webhook-entrante: el correo de aviso fallo', res.status); return; }
     const { error: errConfirmar } = await client.rpc('whatsapp_confirmar_aviso', { p_telefono: telefono });

@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -261,7 +262,7 @@ Deno.serve(async (req: Request) => {
         .select("*")
         .single();
 
-      if (emailError || !emailSettings?.smtp_api_key) {
+      if (emailError || !emailSettings) {
         console.error("❌ Email settings not configured:", emailError);
       } else {
         const formatDate = (dateStr: string) => {
@@ -377,19 +378,12 @@ Deno.serve(async (req: Request) => {
 </html>
         `;
 
-        const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            api_key: emailSettings.smtp_api_key,
+        const emailResponse = await enviarPayloadSmtp2go(supabase, {
             to: [tour.agency.contact_email],
             sender: emailSettings.contact_email,
             subject: subject,
             html_body: htmlContent,
-          }),
-        });
+          });
 
         const emailResult = await emailResponse.json();
 

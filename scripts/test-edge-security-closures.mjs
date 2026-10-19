@@ -91,10 +91,10 @@ for (const test of [
         if (test.throws) throw Error('timeout');
         return new Response(JSON.stringify({ success: test.success ?? true }), { status: test.httpError ? 500 : 200 });
       }
-      assert.equal(url, 'https://api.smtp2go.com/v3/email/send');
-      emails++;
-      return new Response(JSON.stringify({ data: {} }));
+      assert.fail(`fetch inesperado: ${url}`);
     },
+    // El correo sale por _shared/correo/compat.ts (proveedor configurable), no por un fetch directo.
+    async enviarPayloadSmtp2go() { emails++; return new Response(JSON.stringify({ data: {} })); },
   });
   const response = await handler(new Request('https://handler.test', { method: 'POST', body: JSON.stringify({ name: 'Person', email: ' Person@Example.com ', phone: '5555555555', destination: 'Trip', num_people: 2, turnstile_token: test.token }) }));
   assert.equal(response.status, test.status, JSON.stringify(test));

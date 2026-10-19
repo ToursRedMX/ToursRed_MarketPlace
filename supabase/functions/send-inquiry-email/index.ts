@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -166,7 +167,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (!emailSettings.smtp_api_key) {
+    if (!emailSettings) {
       console.error("SMTP API key not configured");
       return new Response(
         JSON.stringify({ error: "API key de SMTP no configurada" }),
@@ -298,7 +299,6 @@ ID de Cotizacion: ${inquiry.id}
     `;
 
     const adminEmailPayload = {
-      api_key: emailSettings.smtp_api_key,
       to: [emailSettings.contact_email],
       sender: `no-reply@toursred.com`,
       subject: `Nueva Cotizacion Internacional - ${sourceLabel} - ${destination}`,
@@ -314,13 +314,7 @@ ID de Cotizacion: ${inquiry.id}
 
     console.log("Sending admin email via SMTP2GO API...");
 
-    const adminResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(adminEmailPayload),
-    });
+    const adminResponse = await enviarPayloadSmtp2go(supabase, adminEmailPayload);
 
     const adminResult = await adminResponse.json();
 
@@ -438,7 +432,6 @@ Red de Agencias de Viajes Aliadas
     `;
 
     const userEmailPayload = {
-      api_key: emailSettings.smtp_api_key,
       to: [email],
       sender: `no-reply@toursred.com`,
       subject: `Cotizacion Recibida! - ${sourceLabel} Tours Internacionales`,
@@ -454,13 +447,7 @@ Red de Agencias de Viajes Aliadas
 
     console.log("Sending user confirmation email via SMTP2GO API...");
 
-    const userResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(userEmailPayload),
-    });
+    const userResponse = await enviarPayloadSmtp2go(supabase, userEmailPayload);
 
     const userResult = await userResponse.json();
 

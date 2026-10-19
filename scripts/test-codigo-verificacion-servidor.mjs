@@ -89,11 +89,14 @@ async function run(test) {
         from: makeFrom(test, state),
       };
     },
-    async fetch(url, init) {
-      assert.equal(url, 'https://api.smtp2go.com/v3/email/send');
+    // El envio ya no es un fetch a SMTP2GO: pasa por _shared/correo/compat.ts (proveedor configurable).
+    async enviarPayloadSmtp2go(_cliente, payload) {
       state.emailSent = state.savedCode;
-      state.emailTo = JSON.parse(init.body).to;
+      state.emailTo = JSON.parse(JSON.stringify(payload.to)); // sale del realm del vm: deepEqual lo distingue
       return new Response(JSON.stringify({ data: {} }));
+    },
+    async fetch(url) {
+      assert.fail(`fetch inesperado: ${url}`);
     },
   });
   vm.runInContext(compiled, context);

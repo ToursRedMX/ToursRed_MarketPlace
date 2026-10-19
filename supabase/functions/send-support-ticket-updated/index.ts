@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireAdmin } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,7 +57,7 @@ Deno.serve(async (req: Request) => {
       .select("smtp_api_key")
       .maybeSingle();
 
-    if (!emailSettings?.smtp_api_key) {
+    if (!emailSettings) {
       return new Response(
         JSON.stringify({ error: "Configuracion de email no disponible" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -155,7 +156,6 @@ Puedes responder a este correo para agregar mas informacion.
 ToursRed — soporte@toursred.com.mx`;
 
     const emailPayload = {
-      api_key: emailSettings.smtp_api_key,
       to: [solicitante_email],
       sender: "soporte@toursred.com.mx",
       subject,
@@ -166,11 +166,7 @@ ToursRed — soporte@toursred.com.mx`;
       ],
     };
 
-    const response = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(emailPayload),
-    });
+    const response = await enviarPayloadSmtp2go(supabase, emailPayload);
 
     if (!response.ok) {
       const result = await response.json();

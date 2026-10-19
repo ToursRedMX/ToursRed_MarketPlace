@@ -30,6 +30,8 @@
  * error de 2026.
  */
 
+import { enviarCorreo } from "./correo/enviarCorreo.ts";
+
 /**
  * Lo unico que estas funciones usan del cliente.
  *
@@ -111,8 +113,7 @@ export async function notificarAdmins(
 }
 
 /**
- * Correo a operaciones, mismo camino que notify-ops-refund-failed: smtp2go con
- * la llave guardada en email_settings.
+ * Correo a operaciones, por el proveedor de correo configurado (`_shared/correo/enviarCorreo.ts`).
  *
  * `origen` sale en el pie del correo. Antes decia siempre "webhook de Stripe";
  * ahora lo manda quien llama, porque con cinco procesadores esa linea fija
@@ -124,24 +125,6 @@ export async function alertarOps(
   filas: [string, string][],
   origen = "webhook de pagos",
 ): Promise<void> {
-  // email_settings NO tiene `sender_email` ni `platform_url` (el remitente es
-  // `contact_email`): pedirlas hacia fallar la consulta (42703) y la alerta nunca salia.
-  const { data: emailSettings, error: errConfig } = await supabase
-    .from("email_settings")
-    .select("smtp_api_key, contact_email")
-    .maybeSingle();
-
-  if (errConfig) {
-    console.error(
-      `alertarOps: fallo la consulta a email_settings (codigo ${errConfig.code ?? "?"}): ${errConfig.message}. No se envio la alerta "${asunto}"`,
-    );
-    return;
-  }
-  if (!emailSettings?.smtp_api_key) {
-    console.warn(`Sin smtp_api_key: no se envio la alerta "${asunto}"`);
-    return;
-  }
-
   const cuerpo = filas
     .map(
       ([k, v]) =>
@@ -160,22 +143,9 @@ export async function alertarOps(
     </div>
   `;
 
-  try {
-    const res = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: emailSettings.smtp_api_key,
-        to: ["contacto@toursred.com"],
-        sender: emailSettings.contact_email || "contacto@toursred.com",
-        subject: asunto,
-        html_body: html,
-      }),
-    });
-    if (!res.ok) console.error("smtp2go rechazo la alerta:", await res.text());
-  } catch (e) {
-    console.error("Error enviando la alerta a operaciones:", e);
-  }
+  // Por el proveedor configurado en email_settings (con su respaldo); no lanza.
+  const resultado = await enviarCorreo(supabase, { para: "contacto@toursred.com", asunto, html });
+  if (!resultado.ok) console.error(`alertarOps: no se envio la alerta "${asunto}" (${resultado.codigo})`);
 }
 
 /**

@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 // "Avisame": manda el correo a quien pidio que le avisaran cuando una agencia
 // publicara un tour de su destino. Lo llama el cron `send-destination-alerts`
@@ -107,7 +108,7 @@ Deno.serve(async (req: Request) => {
       .from("email_settings")
       .select("smtp_api_key")
       .maybeSingle();
-    if (!emailSettings?.smtp_api_key) {
+    if (!emailSettings) {
       return new Response(JSON.stringify({ error: "Configuracion de email no disponible" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -136,16 +137,11 @@ Deno.serve(async (req: Request) => {
       let ok = false;
       try {
         const { asunto, html } = construirCorreo(aviso, platformUrl);
-        const respuesta = await fetch("https://api.smtp2go.com/v3/email/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            api_key: emailSettings.smtp_api_key,
-            to: [aviso.first_name ? `${aviso.first_name.replace(/[<>"]/g, "")} <${aviso.email}>` : aviso.email],
-            sender: "ToursRed <noreply@toursred.com>",
-            subject: asunto,
-            html_body: html,
-          }),
+        const respuesta = await enviarPayloadSmtp2go(supabase, {
+          to: [aviso.first_name ? `${aviso.first_name.replace(/[<>"]/g, "")} <${aviso.email}>` : aviso.email],
+          sender: "ToursRed <noreply@toursred.com>",
+          subject: asunto,
+          html_body: html,
         });
         const resultado = await respuesta.json();
         ok = resultado?.data?.succeeded === 1;

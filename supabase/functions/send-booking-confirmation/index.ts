@@ -5,6 +5,7 @@ import { mensajeDeError } from "../_shared/errores.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { llamadaInterna } from "../_shared/auth.ts";
 import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -191,7 +192,7 @@ Deno.serve(async (req: Request) => {
       supabase.from("platform_settings").select("*").maybeSingle()
     ]);
 
-    if (emailSettingsResult.error || !emailSettingsResult.data || !emailSettingsResult.data.smtp_api_key) {
+    if (emailSettingsResult.error || !emailSettingsResult.data) {
       console.error("Email settings not configured:", emailSettingsResult.error);
       return new Response(
         JSON.stringify({
@@ -1278,7 +1279,6 @@ Deno.serve(async (req: Request) => {
 
     for (const email of emails) {
       const emailPayload = {
-        api_key: emailSettings.smtp_api_key,
         to: [email.to],
         sender: emailSettings.contact_email,
         subject: email.subject,
@@ -1287,13 +1287,7 @@ Deno.serve(async (req: Request) => {
 
       console.log(`Sending email to ${email.recipient}:`, email.to);
 
-      const response = await fetch("https://api.smtp2go.com/v3/email/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(emailPayload),
-      });
+      const response = await enviarPayloadSmtp2go(supabase, emailPayload);
 
       const result = await response.json();
 

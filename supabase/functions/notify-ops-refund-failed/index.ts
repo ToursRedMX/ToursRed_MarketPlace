@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,21 +120,14 @@ Deno.serve(async (req: Request) => {
     `;
 
     const emailPayload = {
-      api_key: emailSettings?.smtp_api_key,
       to: ["contacto@toursred.com"],
       sender: fromEmail,
       subject: `[ALERTA] Reembolso Fallido - ${bookingCode} - ${refund.payment_processor}`,
       html_body: emailHtml,
     };
 
-    if (emailSettings?.smtp_api_key) {
-      const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(emailPayload),
-      });
+    if (emailSettings) {
+      const emailResponse = await enviarPayloadSmtp2go(supabase, emailPayload);
 
       if (!emailResponse.ok) {
         const errText = await emailResponse.text();

@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -244,17 +245,11 @@ Deno.serve(async (req: Request) => {
       .select("smtp_api_key, contact_email")
       .maybeSingle();
 
-    if (emailSettings?.smtp_api_key) {
+    if (emailSettings && traveler?.email) {
       const fromEmail = emailSettings.contact_email || "contacto@toursred.com";
-      await fetch("https://api.smtp2go.com/v3/email/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Smtp2go-Api-Key": emailSettings.smtp_api_key,
-        },
-        body: JSON.stringify({
+      await enviarPayloadSmtp2go(supabase, {
           sender: fromEmail,
-          to: [traveler?.email],
+          to: [traveler.email],
           subject: "Codigo de autorización - Cobro con ToursRed Cash",
           html_body: `
             <!DOCTYPE html>
@@ -326,8 +321,7 @@ Deno.serve(async (req: Request) => {
               </body>
             </html>
           `,
-        }),
-      }).catch((err) => console.error("Error enviando email OTP:", err));
+        }).catch((err) => console.error("Error enviando email OTP:", err));
     }
 
     return new Response(

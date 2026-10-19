@@ -165,6 +165,12 @@ jobs:
       - name: Verify no Edge Function selects non-existent email_settings columns
         run: node scripts/test-email-settings-columnas.mjs
 
+      - name: Verify the configurable email provider (SMTP2GO / SendGrid, fallback)
+        run: node scripts/test-correo-proveedor.mjs
+
+      - name: Verify no Edge Function sends email outside _shared/correo
+        run: node scripts/check-correo-directo.mjs
+
       - name: Verify search logging respects cookie consent
         run: node scripts/test-registro-de-busqueda.mjs
 

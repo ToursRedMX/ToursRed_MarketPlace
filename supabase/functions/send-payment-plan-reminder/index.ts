@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -153,15 +154,11 @@ Deno.serve(async (req: Request) => {
       .eq("id", booking.user_id)
       .maybeSingle();
 
-    if (traveler?.email && emailSettings?.smtp_api_key) {
+    if (traveler?.email && emailSettings) {
       EdgeRuntime.waitUntil(
         (async () => {
           try {
-            await fetch("https://api.smtp2go.com/v3/email/send", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                api_key: emailSettings.smtp_api_key,
+            await enviarPayloadSmtp2go(supabase, {
                 to: [traveler.email],
                 sender: emailSettings.contact_email || "noreply@toursred.com",
                 subject: title,
@@ -181,8 +178,7 @@ Deno.serve(async (req: Request) => {
                     </a>
                   </div>
                 `,
-              }),
-            });
+              });
           } catch (e) {
             console.error("Error sending payment plan reminder email:", e);
           }

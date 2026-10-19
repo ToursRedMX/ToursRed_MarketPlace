@@ -1,33 +1,17 @@
-// Envio de un correo transaccional sencillo por SMTP2GO, con la misma configuracion que el resto de las
-// funciones de correo (`email_settings.smtp_api_key` / `contact_email`). Devuelve true solo si el
-// proveedor lo acepto; nunca lanza ni registra el cuerpo (puede llevar un codigo).
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+// Envio de un correo transaccional sencillo por el proveedor configurado en `email_settings`
+// (SMTP2GO o SendGrid, con respaldo opcional: ver `_shared/correo/enviarCorreo.ts`). Devuelve true
+// solo si el proveedor lo acepto; nunca lanza ni registra el cuerpo (puede llevar un codigo).
+import { enviarCorreo } from "./correo/enviarCorreo.ts";
+import type { ClienteCorreo } from "./correo/tipos.ts";
 
 export async function enviarCorreoSimple(
-  admin: Pick<SupabaseClient, "from">,
+  admin: ClienteCorreo,
   para: string,
   asunto: string,
   html: string,
 ): Promise<boolean> {
   try {
-    const { data: ajustes } = await admin.from("email_settings").select("smtp_api_key, contact_email").maybeSingle();
-    const llave = ajustes?.smtp_api_key;
-    if (!llave) {
-      console.error("enviarCorreoSimple: SMTP2GO sin configurar");
-      return false;
-    }
-    const respuesta = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Smtp2go-Api-Key": llave },
-      body: JSON.stringify({ sender: ajustes?.contact_email || "contacto@toursred.com", to: [para], subject: asunto, html_body: html }),
-      signal: AbortSignal.timeout(10000),
-    });
-    const cuerpo = await respuesta.json().catch(() => null);
-    if (!respuesta.ok || cuerpo?.data?.error) {
-      console.error("enviarCorreoSimple: el proveedor rechazo el envio", respuesta.status);
-      return false;
-    }
-    return true;
+    return (await enviarCorreo(admin, { para, asunto, html })).ok;
   } catch {
     console.error("enviarCorreoSimple: fallo el envio");
     return false;

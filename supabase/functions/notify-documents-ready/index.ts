@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,7 +89,7 @@ Deno.serve(async (req: Request) => {
       adminClient.from("platform_settings").select("platform_url").maybeSingle(),
     ]);
 
-    if (!emailSettings?.smtp_api_key) {
+    if (!emailSettings) {
       return new Response(JSON.stringify({ error: "Configuración de email no disponible" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -163,18 +164,13 @@ Deno.serve(async (req: Request) => {
 
     const textContent = `Documentos listos para revisión\n\nAgencia: ${agency.name}\nContacto: ${contactName ?? "—"}\nEmail: ${agency.contact_email}\n${agency.contact_phone ? `Teléfono: ${agency.contact_phone}\n` : ""}Tipo: ${personaLabel}\n\nRevisa los documentos en: ${platformUrl}/admin/agencias`;
 
-    const emailRes = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key:   emailSettings.smtp_api_key,
+    const emailRes = await enviarPayloadSmtp2go(adminClient, {
         to:        ["agencias@toursred.com.mx"],
         sender:    "no-reply@toursred.com",
         subject:   `Documentos listos para revisión: ${agency.name}`,
         text_body: textContent,
         html_body: htmlContent,
-      }),
-    });
+      });
 
     const emailResult = await emailRes.json();
     if (!emailRes.ok || emailResult.data?.error) {

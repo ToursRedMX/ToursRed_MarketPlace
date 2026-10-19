@@ -76,11 +76,12 @@ for (const mala of ['javascript:alert(1)', 'http://toursred.com', 'https://a b.c
 
 // 4. Integracion en el webhook ---------------------------------------------------------------------------------
 const webhook = readFileSync('supabase/functions/whatsapp-webhook-entrante/index.ts', 'utf8');
-const smtp = webhook.indexOf('api.smtp2go.com');
-assert.ok(smtp > 0, 'el webhook manda el correo por SMTP2GO, como el resto del repo');
+const smtp = webhook.indexOf('enviarPayloadSmtp2go(client');
+assert.ok(smtp > 0, 'el webhook manda el correo por el proveedor configurado, como el resto del repo');
+assert.doesNotMatch(webhook, /api\.smtp2go\.com/, 'sin fetch directo a SMTP2GO');
 assert.ok(webhook.indexOf("rpc('whatsapp_confirmar_aviso'") > smtp, 'confirma DESPUES de mandar el correo');
 const entreMedio = webhook.slice(smtp, webhook.indexOf("rpc('whatsapp_confirmar_aviso'"));
-assert.match(entreMedio, /!res\.ok[^\n]*return/, 'si SMTP2GO rechaza, NO confirma (el aviso queda pendiente y se reintenta)');
+assert.match(entreMedio, /!res\.ok[^\n]*return/, 'si el proveedor rechaza, NO confirma (el aviso queda pendiente y se reintenta)');
 assert.match(webhook, /data\.avisar === true && data\.aviso/, 'solo avisa cuando la base lo decide');
 // La URL de la plataforma NO esta en email_settings (columnas reales: id, contact_email,
 // updated_at, updated_by, smtp_api_key, internal_service_key). Pedirla ahi rompia la

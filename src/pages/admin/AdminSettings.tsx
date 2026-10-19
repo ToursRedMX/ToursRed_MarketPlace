@@ -11,7 +11,17 @@ interface EmailSettings {
   id: string;
   contact_email: string;
   smtp_api_key: string;
+  email_provider: ProveedorCorreo;
+  email_fallback_provider: ProveedorCorreo | null;
+  email_fallback_enabled: boolean;
 }
+
+type ProveedorCorreo = 'smtp2go' | 'sendgrid';
+
+const PROVEEDORES_CORREO: { valor: ProveedorCorreo; etiqueta: string }[] = [
+  { valor: 'sendgrid', etiqueta: 'Twilio SendGrid' },
+  { valor: 'smtp2go', etiqueta: 'SMTP2GO' },
+];
 
 interface PlatformSecrets {
   mercadopago_access_token: string;
@@ -106,6 +116,9 @@ const AdminSettings: React.FC = () => {
     id: '',
     contact_email: '',
     smtp_api_key: '',
+    email_provider: 'smtp2go',
+    email_fallback_provider: null,
+    email_fallback_enabled: false,
   });
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings>({
     id: '',
@@ -362,7 +375,12 @@ const AdminSettings: React.FC = () => {
       if (platformResult.error) throw platformResult.error;
 
       if (emailResult.data) {
-        setSettings(emailResult.data);
+        setSettings({
+          ...emailResult.data,
+          email_provider: emailResult.data.email_provider ?? 'smtp2go',
+          email_fallback_provider: emailResult.data.email_fallback_provider ?? null,
+          email_fallback_enabled: emailResult.data.email_fallback_enabled ?? false,
+        });
       }
 
       if (platformResult.data) {
@@ -405,6 +423,9 @@ const AdminSettings: React.FC = () => {
           .update({
             contact_email: settings.contact_email,
             smtp_api_key: settings.smtp_api_key,
+            email_provider: settings.email_provider,
+            email_fallback_provider: settings.email_fallback_enabled ? settings.email_fallback_provider : null,
+            email_fallback_enabled: settings.email_fallback_enabled && settings.email_fallback_provider !== null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', settings.id),
@@ -539,6 +560,20 @@ const AdminSettings: React.FC = () => {
       ...prev,
       [name]: value,
     }));
+  };
+
+  // El respaldo no puede ser el mismo proveedor que el principal: al cambiar el principal se
+  // descarta un respaldo que quedaria igual.
+  const handleProveedorPrincipal = (proveedor: ProveedorCorreo) => {
+    setSettings(prev => {
+      const choca = prev.email_fallback_provider === proveedor;
+      return {
+        ...prev,
+        email_provider: proveedor,
+        email_fallback_provider: choca ? null : prev.email_fallback_provider,
+        email_fallback_enabled: choca ? false : prev.email_fallback_enabled,
+      };
+    });
   };
 
   const handleSecretChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1765,17 +1800,66 @@ const AdminSettings: React.FC = () => {
           <div className="flex items-center gap-x-3 mb-4">
             <Server className="w-6 h-6 text-primary-600" />
             <h2 className="text-xl font-semibold text-gray-900">
-              Envío de correo (SMTP2GO)
+              Envío de correo
             </h2>
           </div>
 
           <div className="space-y-4">
             <div>
+              <label htmlFor="email_provider" className="block text-sm font-medium text-gray-700 mb-1">
+                Proveedor principal
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Por aquí salen todos los correos de la plataforma. Twilio SendGrid usa el secreto SENDGRID_API_KEY de las Edge Functions; SMTP2GO usa la API key de abajo.
+              </p>
+              <select
+                id="email_provider"
+                value={settings.email_provider}
+                onChange={(e) => handleProveedorPrincipal(e.target.value as ProveedorCorreo)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+              >
+                {PROVEEDORES_CORREO.map(p => <option key={p.valor} value={p.valor}>{p.etiqueta}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-x-2 text-sm font-medium text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={settings.email_fallback_enabled}
+                  onChange={(e) => setSettings(prev => ({
+                    ...prev,
+                    email_fallback_enabled: e.target.checked,
+                    email_fallback_provider: e.target.checked
+                      ? (prev.email_fallback_provider ?? PROVEEDORES_CORREO.find(p => p.valor !== prev.email_provider)!.valor)
+                      : prev.email_fallback_provider,
+                  }))}
+                />
+                Usar un proveedor de respaldo
+              </label>
+              <p className="text-xs text-gray-500 mt-1 mb-2">
+                Si el principal rechaza el correo o está caído, se intenta por el respaldo. Si el principal tarda y no contesta, no se reintenta para no duplicar el correo.
+              </p>
+              {settings.email_fallback_enabled && (
+                <select
+                  aria-label="Proveedor de respaldo"
+                  value={settings.email_fallback_provider ?? ''}
+                  onChange={(e) => setSettings(prev => ({ ...prev, email_fallback_provider: e.target.value as ProveedorCorreo }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                >
+                  {PROVEEDORES_CORREO.filter(p => p.valor !== settings.email_provider).map(p => (
+                    <option key={p.valor} value={p.valor}>{p.etiqueta}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div>
               <label htmlFor="smtp_api_key" className="block text-sm font-medium text-gray-700 mb-1">
                 API Key SMTP2GO
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                El API key se usa para enviar emails a través de SMTP2GO
+                Se usa cuando SMTP2GO es el principal o el respaldo
               </p>
               <div className="relative">
                 <input

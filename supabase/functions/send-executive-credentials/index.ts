@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,7 +58,7 @@ Deno.serve(async (req: Request) => {
       supabase.from("platform_settings").select("platform_url").maybeSingle(),
     ]);
 
-    if (!emailSettings?.smtp_api_key) {
+    if (!emailSettings) {
       console.error("SMTP API key not configured");
       return new Response(
         JSON.stringify({ error: "API key de SMTP no configurada" }),
@@ -163,7 +164,6 @@ Inicia sesión en: ${appUrl}/login
 © ${new Date().getFullYear()} ToursRed. Todos los derechos reservados.`;
 
     const emailPayload = {
-      api_key: emailSettings.smtp_api_key,
       to: [email],
       sender: fromEmail,
       subject: "Tus credenciales de acceso - ToursRed Ejecutivos",
@@ -171,11 +171,7 @@ Inicia sesión en: ${appUrl}/login
       text_body: textContent,
     };
 
-    const response = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(emailPayload),
-    });
+    const response = await enviarPayloadSmtp2go(supabase, emailPayload);
 
     const result = await response.json();
 
