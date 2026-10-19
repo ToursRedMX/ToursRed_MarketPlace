@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -210,9 +211,7 @@ Deno.serve(async (req: Request) => {
       console.error("Error obteniendo configuración de email:", settingsError);
     }
 
-    const smtpApiKey = emailSettings?.smtp_api_key;
-
-    if (!smtpApiKey) {
+    if (!emailSettings) {
       console.error("API key de SMTP2GO no configurada");
       return new Response(
         JSON.stringify({
@@ -229,13 +228,7 @@ Deno.serve(async (req: Request) => {
     const fromEmail = emailSettings?.contact_email || "contacto@toursred.com";
     const displayName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || 'Usuario';
 
-    const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Smtp2go-Api-Key": smtpApiKey,
-      },
-      body: JSON.stringify({
+    const emailResponse = await enviarPayloadSmtp2go(supabase, {
         sender: fromEmail,
         to: [email],
         subject: "Recuperación de contraseña - ToursRed",
@@ -289,8 +282,7 @@ Deno.serve(async (req: Request) => {
             </body>
           </html>
         `,
-      }),
-    });
+      });
 
     const emailData = await emailResponse.json();
 

@@ -5,6 +5,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go, type PayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const etiquetaDeSexo = (sexo: string | null | undefined): string =>
   sexo === "masculino" ? "MASCULINO"
@@ -201,7 +202,7 @@ Deno.serve(async (req: Request) => {
       .select("smtp_api_key, contact_email")
       .maybeSingle();
 
-    if (!emailSettings?.smtp_api_key) {
+    if (!emailSettings) {
       throw new Error("Email settings no configurados");
     }
 
@@ -443,8 +444,7 @@ Deno.serve(async (req: Request) => {
       booking_code
     );
 
-    const emailPayload: Record<string, unknown> = {
-      api_key: emailSettings.smtp_api_key,
+    const emailPayload: PayloadSmtp2go = {
       to: [recipientEmail],
       sender: emailSettings.contact_email,
       subject: `Seguro de viaje — ${booking_code} | ${tour_name}`,
@@ -458,11 +458,7 @@ Deno.serve(async (req: Request) => {
       ],
     };
 
-    const smtpResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(emailPayload),
-    });
+    const smtpResponse = await enviarPayloadSmtp2go(supabase, emailPayload);
 
     const smtpData = await smtpResponse.json();
     console.log("SMTP response:", JSON.stringify(smtpData));

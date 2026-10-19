@@ -4,6 +4,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { llamadaInterna } from "../_shared/auth.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
+import type { ClienteCorreo } from "../_shared/correo/tipos.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -192,7 +194,7 @@ Deno.serve(async (req: Request) => {
       supabase.from("platform_settings").select("platform_url").maybeSingle(),
     ]);
 
-    if (!emailSettings?.smtp_api_key) {
+    if (!emailSettings) {
       throw new Error("Email settings not configured");
     }
 
@@ -208,7 +210,7 @@ Deno.serve(async (req: Request) => {
     if (sendToRecipient && giftCard.recipient_email) {
       try {
         await sendGiftCardEmail(
-          emailSettings.smtp_api_key,
+          supabase,
           giftCard,
           giftCard.recipient_email,
           giftCard.recipient_name || "Estimado viajero",
@@ -225,7 +227,7 @@ Deno.serve(async (req: Request) => {
     if (sendToPurchaser) {
       try {
         await sendGiftCardEmail(
-          emailSettings.smtp_api_key,
+          supabase,
           giftCard,
           giftCard.purchaser_email,
           giftCard.purchaser_name,
@@ -256,9 +258,9 @@ Deno.serve(async (req: Request) => {
         .select("contact_email, smtp_api_key")
         .single();
 
-      if (adminEmailSettings?.contact_email && adminEmailSettings?.smtp_api_key) {
+      if (adminEmailSettings?.contact_email && adminEmailSettings) {
         await sendAdminNotificationEmail(
-          adminEmailSettings.smtp_api_key,
+          supabase,
           adminEmailSettings.contact_email,
           giftCard,
           appUrl
@@ -300,7 +302,7 @@ Deno.serve(async (req: Request) => {
 });
 
 async function sendGiftCardEmail(
-  apiKey: string,
+  supabase: ClienteCorreo,
   giftCard: GiftCardForEmail,
   recipientEmail: string,
   recipientName: string,
@@ -511,14 +513,7 @@ Válida hasta: ${expiryDate}
     text_body: textBody,
   };
 
-  const response = await fetch("https://api.smtp2go.com/v3/email/send", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Smtp2go-Api-Key": apiKey,
-    },
-    body: JSON.stringify(emailPayload),
-  });
+  const response = await enviarPayloadSmtp2go(supabase, emailPayload);
 
   if (!response.ok) {
     const errorData = await response.json();
@@ -527,7 +522,7 @@ Válida hasta: ${expiryDate}
 }
 
 async function sendAdminNotificationEmail(
-  apiKey: string,
+  supabase: ClienteCorreo,
   adminEmail: string,
   giftCard: GiftCardForEmail,
   appUrl: string
@@ -622,14 +617,7 @@ Proveedor: ${giftCard.payment_provider || 'stripe'}
     text_body: textBody,
   };
 
-  const response = await fetch("https://api.smtp2go.com/v3/email/send", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Smtp2go-Api-Key": apiKey,
-    },
-    body: JSON.stringify(emailPayload),
-  });
+  const response = await enviarPayloadSmtp2go(supabase, emailPayload);
 
   if (!response.ok) {
     const errorData = await response.json();

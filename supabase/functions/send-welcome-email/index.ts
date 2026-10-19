@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -64,9 +65,7 @@ Deno.serve(async (req: Request) => {
       supabase.from("platform_settings").select("platform_url").maybeSingle(),
     ]);
 
-    const smtpApiKey = emailSettings?.smtp_api_key;
-
-    if (!smtpApiKey) {
+    if (!emailSettings) {
       console.error("SMTP2GO API key not configured");
       return new Response(
         JSON.stringify({ success: false, error: "Email configuration not available" }),
@@ -169,20 +168,13 @@ Deno.serve(async (req: Request) => {
       </html>
     `;
 
-    const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Smtp2go-Api-Key": smtpApiKey,
-      },
-      body: JSON.stringify({
+    const emailResponse = await enviarPayloadSmtp2go(supabase, {
         sender: fromEmail,
         to: [userData.email],
         subject: "¡Bienvenido a ToursRed! Tu cuenta está lista",
         html_body: htmlContent,
         text_body: `Hola ${displayName},\n\nTu correo ha sido verificado exitosamente. ¡Bienvenido a ToursRed!\n\nYa puedes:\n- Explorar tours nacionales e internacionales\n- Acceder a membresía ToursRed Plus con descuentos exclusivos\n- Referir amigos y ganar 5,000 puntos por cada uno\n- Regalar experiencias con nuestras tarjetas de regalo\n\nVisítanos en: ${appUrl}\n\n¿Tienes dudas? Escríbenos a ${fromEmail}\n\n© ${new Date().getFullYear()} ToursRed. Todos los derechos reservados.`,
-      }),
-    });
+      });
 
     const emailData = await emailResponse.json();
 

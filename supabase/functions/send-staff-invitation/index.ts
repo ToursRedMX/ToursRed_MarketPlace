@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -159,7 +160,7 @@ Deno.serve(async (req: Request) => {
       .select("smtp_api_key")
       .maybeSingle();
 
-    if (!emailSettings?.smtp_api_key) {
+    if (!emailSettings) {
       return new Response(
         JSON.stringify({ error: "API key de email no configurada" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -254,7 +255,6 @@ Si no solicitaste esta invitacion, puedes ignorar este mensaje.
 Equipo ToursRed`;
 
     const emailPayload = {
-      api_key: emailSettings.smtp_api_key,
       to: [normalizedEmail],
       sender: "no-reply@toursred.com",
       subject: `${agency.name} te invita a ser Coordinador en ToursRed`,
@@ -262,11 +262,7 @@ Equipo ToursRed`;
       html_body: htmlContent,
     };
 
-    const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(emailPayload),
-    });
+    const emailResponse = await enviarPayloadSmtp2go(supabase, emailPayload);
 
     const emailResult = await emailResponse.json();
 

@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -133,7 +134,7 @@ Deno.serve(async (req: Request) => {
       .select("smtp_api_key, contact_email")
       .maybeSingle();
 
-    if (!emailSettings?.smtp_api_key) {
+    if (!emailSettings) {
       return new Response(
         JSON.stringify({ success: false, message: "Configuración de email no disponible" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -271,7 +272,6 @@ Deno.serve(async (req: Request) => {
     `;
 
     const emailPayload = {
-      api_key: emailSettings.smtp_api_key,
       to: [traveler.email],
       sender: emailSettings.contact_email,
       subject: isPartial
@@ -280,11 +280,7 @@ Deno.serve(async (req: Request) => {
       html_body: emailHtml,
     };
 
-    const response = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(emailPayload),
-    });
+    const response = await enviarPayloadSmtp2go(supabase, emailPayload);
 
     const result = await response.json();
 

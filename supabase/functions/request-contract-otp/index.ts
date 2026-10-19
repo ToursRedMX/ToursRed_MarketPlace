@@ -1,6 +1,7 @@
 ﻿import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,21 +45,14 @@ async function sendOtpEmail(
     .returns<{ smtp_api_key: string | null; contact_email: string | null }[]>()
     .maybeSingle();
 
-  const smtpApiKey = emailSettings?.smtp_api_key;
-  if (!smtpApiKey) {
+  if (!emailSettings) {
     console.warn("SMTP API key not configured — OTP stored in DB but email not sent");
     return;
   }
 
   const fromEmail = emailSettings?.contact_email || "contacto@toursred.com";
 
-  const res = await fetch("https://api.smtp2go.com/v3/email/send", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Smtp2go-Api-Key": smtpApiKey,
-    },
-    body: JSON.stringify({
+  const res = await enviarPayloadSmtp2go(supabase, {
       sender: fromEmail,
       to: [email],
       subject: "Código de verificación para firma de contrato — ToursRed",
@@ -92,8 +86,7 @@ async function sendOtpEmail(
     </div>
   </body>
 </html>`,
-    }),
-  });
+    });
 
   if (!res.ok) {
     const text = await res.text();

@@ -14,7 +14,7 @@
  *    y NO registran la llave SMTP.
  *
  * LO QUE NO PUEDE HACER: no conoce la base. Si se agrega una columna a email_settings hay que
- * sumarla a COLUMNAS_REALES (lista verificada contra information_schema el 13-oct-2026; sin smtp_host/port/user/password desde su retiro, 19-oct-2026).
+ * sumarla a COLUMNAS_REALES (lista verificada contra information_schema el 13-oct-2026; sin smtp_host/port/user/password desde su retiro, 19-oct-2026; con email_provider/_fallback_* desde la migracion 20261019214718).
  * Un `.select()` armado dinamicamente (no literal) no se analiza.
  *
  * whatsapp-webhook-entrante queda fuera SOLO hasta que se mergee ToursRed_MarketPlace#379, que lo
@@ -27,6 +27,7 @@ import path from 'node:path';
 const COLUMNAS_REALES = new Set([
   'id', 'contact_email',
   'updated_at', 'updated_by', 'smtp_api_key', 'internal_service_key', '*',
+  'email_provider', 'email_fallback_provider', 'email_fallback_enabled',
 ]);
 const EXCEPCIONES = new Set(['whatsapp-webhook-entrante']);
 const RAIZ = 'supabase/functions';
@@ -55,13 +56,16 @@ assert.ok(consultas >= 3, `se esperaban >= 3 consultas a email_settings y se vie
 for (const [f, etiqueta] of [
   ['supabase/functions/notify-ops-refund-failed/index.ts', 'emailSettingsError'],
   ['supabase/functions/send-payment-plan-reminder/index.ts', 'emailSettingsError'],
-  ['supabase/functions/_shared/avisosDePago.ts', 'errConfig'],
 ]) {
   const src = readFileSync(f, 'utf8');
   assert.match(src, new RegExp(`error:\\s*${etiqueta}`), `${f}: debe capturar el error de email_settings`);
   assert.match(src, new RegExp(`if\\s*\\(\\s*${etiqueta}\\s*\\)`), `${f}: debe actuar sobre el error de email_settings`);
   assert.doesNotMatch(src, /console\.\w+\([^)]*\.smtp_api_key/, `${f}: la llave SMTP no se registra`);
 }
+const mod = readFileSync('supabase/functions/_shared/correo/enviarCorreo.ts', 'utf8');
+assert.match(mod, /const \{ data, error \} = await admin\s*\.from\("email_settings"\)/, 'enviarCorreo captura el error de email_settings');
+assert.match(mod, /if \(error\)/, 'enviarCorreo actua sobre el error de email_settings');
+assert.doesNotMatch(mod, /console\.\w+\([^)]*smtp_api_key/, 'enviarCorreo no registra la llave');
 const ops = readFileSync('supabase/functions/notify-ops-refund-failed/index.ts', 'utf8');
 assert.match(ops, /from\("platform_settings"\)\.select\("platform_url"\)/, 'platform_url se lee de platform_settings');
 

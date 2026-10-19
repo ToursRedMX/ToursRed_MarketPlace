@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -100,9 +101,7 @@ Deno.serve(async (req: Request) => {
       supabase.from("platform_settings").select("platform_url").maybeSingle(),
     ]);
 
-    const smtpApiKey = emailSettings?.smtp_api_key;
-
-    if (!smtpApiKey) {
+    if (!emailSettings) {
       console.error("SMTP2GO API key not configured");
       return new Response(
         JSON.stringify({ success: false, error: "Email configuration not available" }),
@@ -176,20 +175,13 @@ Deno.serve(async (req: Request) => {
       </html>
     `;
 
-    const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Smtp2go-Api-Key": smtpApiKey,
-      },
-      body: JSON.stringify({
+    const emailResponse = await enviarPayloadSmtp2go(supabase, {
         sender: fromEmail,
         to: [referrerEmail],
         subject: "¡Nuevo referido registrado en ToursRed!",
         html_body: htmlContent,
         text_body: `Hola ${referrerName},\n\n${referredName} se ha registrado en ToursRed usando tu código de referido ${referralCode}.\n\nEstado: Pendiente de primera reserva\n\nCuando tu referido complete su primera reserva, ambos recibirán 5,000 puntos ToursRed.\n\nVe tus referidos en: ${appUrl}/traveler/referrals\n\nGracias por ser parte de ToursRed.`,
-      }),
-    });
+      });
 
     const emailData = await emailResponse.json();
 

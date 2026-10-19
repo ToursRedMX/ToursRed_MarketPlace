@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { envRequerida } from "../_shared/env.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -45,7 +46,7 @@ Deno.serve(async (req)=>{
     const safeAgencyName = escapeHtml(String(agency_name));
     const safeReference = reference ? escapeHtml(String(reference)) : '';
     const { data: settings } = await supabase.from("email_settings").select("smtp_api_key, contact_email").maybeSingle();
-    if (!settings?.smtp_api_key) {
+    if (!settings) {
       console.log("SMTP not configured, skipping email notification");
       return new Response(JSON.stringify({
         success: true,
@@ -147,19 +148,12 @@ Deno.serve(async (req)=>{
         </body>
       </html>
     `;
-    const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        api_key: settings.smtp_api_key,
+    const emailResponse = await enviarPayloadSmtp2go(supabase, {
         to: [agency_email],
         sender: settings.contact_email || "notifications@toursred.com",
         subject: emailSubject,
         html_body: emailBody
-      })
-    });
+      });
     if (!emailResponse.ok) {
       const errorText = await emailResponse.text();
       console.error("Failed to send email:", errorText);

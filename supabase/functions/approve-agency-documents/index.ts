@@ -4,6 +4,7 @@ import type { ContractData } from "../_shared/contractDocDefinition.ts";
 import { checkAal2Required, aal2Response } from "../_shared/aal2Check.ts";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -454,7 +455,7 @@ Deno.serve(async (req: Request) => {
               .select("platform_url")
               .maybeSingle();
 
-            if (emailSettings?.smtp_api_key) {
+            if (emailSettings) {
               const fromEmail = emailSettings.contact_email || "contacto@toursred.com";
               const appUrl    = platformSettings?.platform_url || "https://toursredmx.netlify.app";
               const logoUrl   = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/images/email-logo.png`;
@@ -508,16 +509,12 @@ Deno.serve(async (req: Request) => {
 </body>
 </html>`;
 
-              await fetch("https://api.smtp2go.com/v3/email/send", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-Smtp2go-Api-Key": emailSettings.smtp_api_key },
-                body: JSON.stringify({
+              await enviarPayloadSmtp2go(supabase, {
                   sender:    fromEmail,
                   to:        [toEmail],
                   subject:   `Documentos aprobados — Firma tu contrato — ToursRed`,
                   html_body: htmlContent,
-                }),
-              });
+                });
             }
           } catch (emailErr) {
             console.error("Error sending approval email:", emailErr);
@@ -589,7 +586,7 @@ Deno.serve(async (req: Request) => {
               .select("platform_url")
               .maybeSingle();
 
-            if (emailSettings?.smtp_api_key) {
+            if (emailSettings) {
               const fromEmail    = emailSettings.contact_email || "contacto@toursred.com";
               const appUrl       = platformSettings?.platform_url || "https://toursredmx.netlify.app";
               const logoUrl      = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/images/email-logo.png`;
@@ -651,16 +648,12 @@ Deno.serve(async (req: Request) => {
 </body>
 </html>`;
 
-              await fetch("https://api.smtp2go.com/v3/email/send", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-Smtp2go-Api-Key": emailSettings.smtp_api_key },
-                body: JSON.stringify({
+              await enviarPayloadSmtp2go(supabase, {
                   sender:    fromEmail,
                   to:        [toEmail],
                   subject:   `Documento(s) rechazado(s) en "${agencyName}" — ToursRed`,
                   html_body: htmlContent,
-                }),
-              });
+                });
             }
           } catch (emailErr) {
             console.error("Error sending rejection email:", emailErr);

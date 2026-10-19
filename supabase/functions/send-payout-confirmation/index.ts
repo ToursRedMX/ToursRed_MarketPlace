@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -112,7 +113,7 @@ Deno.serve(async (req: Request) => {
       .select("*")
       .maybeSingle();
 
-    if (settingsError || !emailSettings?.smtp_api_key) {
+    if (settingsError || !emailSettings) {
       console.error("Error configuracion email:", settingsError);
       throw new Error("Configuracion de email no disponible");
     }
@@ -320,7 +321,6 @@ Equipo ToursRed
     console.log("Enviando email a agencia:", agencyEmail);
 
     const emailPayload = {
-      api_key: emailSettings.smtp_api_key,
       to: [agencyEmail, adminEmail],
       sender: "no-reply@toursred.com",
       subject: `Pago Procesado - ${formattedAmount} | ToursRed`,
@@ -328,13 +328,7 @@ Equipo ToursRed
       text_body: textBody,
     };
 
-    const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(emailPayload),
-    });
+    const emailResponse = await enviarPayloadSmtp2go(supabase, emailPayload);
 
     const result = await emailResponse.json();
 

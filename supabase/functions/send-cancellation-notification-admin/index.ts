@@ -3,6 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -113,7 +114,7 @@ Deno.serve(async (req: Request) => {
       .select('contact_email, smtp_api_key')
       .single();
 
-    if (!emailSettings || !emailSettings.smtp_api_key || !emailSettings.contact_email) {
+    if (!emailSettings || !emailSettings.contact_email) {
       throw new Error('SMTP o email de administrador no configurado');
     }
 
@@ -400,19 +401,12 @@ Deno.serve(async (req: Request) => {
       ? `[Admin] Cancelación Administrativa - ${tour.name}`
       : `[Admin] Cancelación de Reserva - ${tour.name}`;
 
-    const sendEmailResponse = await fetch('https://api.smtp2go.com/v3/email/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        api_key: emailSettings.smtp_api_key,
+    const sendEmailResponse = await enviarPayloadSmtp2go(supabase, {
         to: [emailSettings.contact_email],
         sender: emailSettings.contact_email,
         subject,
         html_body: emailHtml,
-      }),
-    });
+      });
 
     if (!sendEmailResponse.ok) {
       const errorText = await sendEmailResponse.text();

@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -157,7 +158,7 @@ Deno.serve(async (req: Request) => {
         .select("*")
         .maybeSingle();
 
-      if (emailError || !data?.smtp_api_key) {
+      if (emailError || !data) {
         return new Response(
           JSON.stringify({ error: "Configuración de email no disponible" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -226,7 +227,6 @@ Deno.serve(async (req: Request) => {
     const logoUrl = "https://huzsedewwzjywcpbkjkm.supabase.co/storage/v1/object/public/images/email-logo.png";
     const fromEmail = emailSettings?.from_email || "noreply@toursred.com";
     const fromName = emailSettings?.from_name || "ToursRed";
-    const smtp2goApiKey = emailSettings?.smtp_api_key || "";
 
     let successCount = 0;
     let errorCount = 0;
@@ -311,17 +311,12 @@ Deno.serve(async (req: Request) => {
         `.trim();
 
           try {
-            const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                api_key: smtp2goApiKey,
+            const emailResponse = await enviarPayloadSmtp2go(supabase, {
                 to: [`${attendee.first_name} ${attendee.last_name} <${attendee.email}>`],
                 sender: `${fromName} <${fromEmail}>`,
                 subject,
                 html_body: emailHtml,
-              }),
-            });
+              });
 
             const emailResult = await emailResponse.json();
             emailDelivered = emailResult?.data?.succeeded === 1;

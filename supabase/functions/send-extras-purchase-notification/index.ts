@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
+import type { ClienteCorreo } from "../_shared/correo/tipos.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,23 +67,18 @@ function formatDate(dateStr: string | null | undefined): string {
 const TOURSRED_LOGO_HTML = `<img src="https://huzsedewwzjywcpbkjkm.supabase.co/storage/v1/object/public/images/email-logo.png" alt="ToursRed Logo" style="max-width:180px;height:auto;background:rgba(255,255,255,0.15);padding:8px 12px;border-radius:8px;" />`;
 
 async function sendEmail(
-  apiKey: string,
+  supabase: ClienteCorreo,
   senderEmail: string,
   to: string[],
   subject: string,
   html: string
 ): Promise<void> {
-  const response = await fetch("https://api.smtp2go.com/v3/email/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: apiKey,
+  const response = await enviarPayloadSmtp2go(supabase, {
       to,
       sender: senderEmail,
       subject,
       html_body: html,
-    }),
-  });
+    });
   const data = await response.json();
   if (data.data?.succeeded !== 1) {
     throw new Error("smtp2go error: " + JSON.stringify(data));
@@ -118,7 +115,7 @@ Deno.serve(async (req: Request) => {
       .select("smtp_api_key, contact_email")
       .maybeSingle();
 
-    if (!emailSettings?.smtp_api_key) {
+    if (!emailSettings) {
       return new Response(JSON.stringify({ error: "Email settings no configurados" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -222,7 +219,7 @@ Deno.serve(async (req: Request) => {
 </body>
 </html>`;
         await sendEmail(
-          emailSettings.smtp_api_key,
+          supabase,
           emailSettings.contact_email,
           [travelerEmail],
           `¡Tu seguro de viaje está activo! — ${booking.booking_code}`,
@@ -335,7 +332,7 @@ Deno.serve(async (req: Request) => {
 </body>
 </html>`;
         await sendEmail(
-          emailSettings.smtp_api_key,
+          supabase,
           emailSettings.contact_email,
           [travelerEmail],
           `Servicio adicional confirmado — ${booking.booking_code}: ${serviceName}`,
@@ -390,7 +387,7 @@ Deno.serve(async (req: Request) => {
 </body>
 </html>`;
         await sendEmail(
-          emailSettings.smtp_api_key,
+          supabase,
           emailSettings.contact_email,
           [agencyEmail],
           `Nuevo servicio adicional — ${booking.booking_code}: ${serviceName}`,

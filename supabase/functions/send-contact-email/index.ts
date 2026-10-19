@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -184,7 +185,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (!emailSettings.smtp_api_key) {
+    if (!emailSettings) {
       console.error("SMTP API key not configured");
       return new Response(
         JSON.stringify({ error: "API key de SMTP no configurada" }),
@@ -257,7 +258,6 @@ Este mensaje fue enviado desde el formulario de contacto de ToursRed.
     `;
 
     const emailPayload = {
-      api_key: emailSettings.smtp_api_key,
       to: [emailSettings.contact_email],
       sender: `no-reply@toursred.com`,
       subject: `Nuevo mensaje de contacto de ${name}`,
@@ -273,13 +273,7 @@ Este mensaje fue enviado desde el formulario de contacto de ToursRed.
 
     console.log("Sending email via SMTP2GO API...");
 
-    const response = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(emailPayload),
-    });
+    const response = await enviarPayloadSmtp2go(supabase, emailPayload);
 
     const result = await response.json();
 

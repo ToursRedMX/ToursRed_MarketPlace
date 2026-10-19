@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireUser } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -92,7 +93,7 @@ Deno.serve(async (req: Request) => {
       supabase.from("platform_settings").select("platform_url").maybeSingle(),
     ]);
 
-    if (emailSettingsResult.error || !emailSettingsResult.data || !emailSettingsResult.data.smtp_api_key) {
+    if (emailSettingsResult.error || !emailSettingsResult.data) {
       console.error("Email settings not configured:", emailSettingsResult.error);
       return new Response(
         JSON.stringify({
@@ -202,7 +203,6 @@ Deno.serve(async (req: Request) => {
     `;
 
     const emailPayload = {
-      api_key: emailSettings.smtp_api_key,
       to: [booking.agency.contact_email],
       sender: emailSettings.contact_email,
       subject: `Nueva Solicitud de Reserva - ${booking.tour.name}`,
@@ -211,13 +211,7 @@ Deno.serve(async (req: Request) => {
 
     console.log(`📧 Enviando email a ${booking.agency.contact_email}...`);
 
-    const emailResponse = await fetch('https://api.smtp2go.com/v3/email/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(emailPayload),
-    });
+    const emailResponse = await enviarPayloadSmtp2go(supabase, emailPayload);
 
     const result = await emailResponse.json();
 

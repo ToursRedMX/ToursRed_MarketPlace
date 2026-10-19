@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,7 +94,7 @@ Deno.serve(async (req: Request) => {
       supabase.from("platform_settings").select("platform_url").maybeSingle(),
     ]);
 
-    if (!emailSettings?.smtp_api_key) {
+    if (!emailSettings) {
       throw new Error("Email settings not configured");
     }
 
@@ -276,19 +277,12 @@ Deno.serve(async (req: Request) => {
 </html>
     `;
 
-    const emailResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Smtp2go-Api-Key": emailSettings.smtp_api_key,
-      },
-      body: JSON.stringify({
+    const emailResponse = await enviarPayloadSmtp2go(supabase, {
         sender: emailSettings.contact_email,
         to: [recipientEmail],
         subject: `Tour Cancelado - ${tourName}`,
         html_body: htmlContent,
-      }),
-    });
+      });
 
     const emailResult = await emailResponse.json();
 

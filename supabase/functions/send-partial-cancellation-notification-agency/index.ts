@@ -3,6 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,7 +94,7 @@ Deno.serve(async (req: Request) => {
       .select('contact_email, smtp_api_key')
       .single();
 
-    if (!settings || !settings.smtp_api_key) throw new Error('SMTP no configurado');
+    if (!settings) throw new Error('SMTP no configurado');
 
     const { data: platformSettings } = await supabase
       .from('platform_settings')
@@ -269,17 +270,12 @@ Deno.serve(async (req: Request) => {
 </body>
 </html>`;
 
-    const sendEmailResponse = await fetch('https://api.smtp2go.com/v3/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: settings.smtp_api_key,
+    const sendEmailResponse = await enviarPayloadSmtp2go(supabase, {
         to: [agency.contact_email],
         sender: settings.contact_email,
         subject: `Cancelación Parcial de Viajeros - ${tour.name}`,
         html_body: emailHtml,
-      }),
-    });
+      });
 
     if (!sendEmailResponse.ok) {
       const errorText = await sendEmailResponse.text();
