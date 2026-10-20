@@ -31,6 +31,7 @@ const sinComentarios = (s) => s
   .map((l) => l.replace(/\s\/\/.*$/, ''))
   .join('\n');
 const fuente = (f) => sinComentarios(readFileSync(f, 'utf8'));
+const fn = (n) => fuente(`supabase/functions/${n}/index.ts`);
 
 const cobro = (amount, extra = {}) => ({ amount, status: 'succeeded', charge_context: 'booking_deposit', ...extra });
 const reserva = (extra = {}) => ({ payment_status: 'processing', amount_due_now: 550, membership_cost: 0, deposit_amount: 500, total_price: 1000, ...extra });
@@ -185,6 +186,17 @@ await prueba('TravelerBookings: «Completar pago» usa el saldo en el modal, en 
   assert.match(f, /paymentModal\.walletBalance > 0 && saldoPendiente == null && \(\(\) => \{/);
   // y el modal lo dice
   assert.match(f, /Saldo por pagar \(ya abonaste una parte\):/);
+});
+
+await prueba('TravelerBookings: «Completar pago» siempre manda el monto a las cinco pasarelas (MercadoPago lo exige)', () => {
+  const f = fuente('src/pages/traveler/TravelerBookings.tsx');
+  // antes: `processing ? undefined : amountToCharge` -> MercadoPago respondia 400 «Datos incompletos»
+  assert.doesNotMatch(f, /montoAEnviar = [^;]*undefined/);
+  assert.match(f, /const montoAEnviar = amountToCharge;/);
+  assert.equal((f.match(/amount: montoAEnviar,/g) ?? []).length, 5, 'Stripe, MercadoPago, PayPal, Conekta y Openpay');
+  // y la funcion de MercadoPago sigue exigiendolo: si algun dia deja de hacerlo, este contrato se puede aflojar
+  const mp = fn('create-mercadopago-preference');
+  assert.match(mp, /if \(!amount\) \{\s*return new Response\(JSON\.stringify\(\{ error: "Datos incompletos" \}\)/);
 });
 
 console.log(`OK: ${casos} casos de abono recibido.`);
