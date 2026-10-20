@@ -95,12 +95,16 @@ prueba('autorizacion: solo Bearer con el token exacto; sin secreto configurado n
   assert.equal(m.autorizadoPorToken('Bearer abc123', null), false);
 });
 
-prueba('la funcion: 503 sin secreto, 401 sin autorizacion, 200 al reconocer o no, 500 si no guarda; no registra el cuerpo', () => {
+prueba('la funcion: 200 sin cabecera (el ping de Zoho), 503 sin secreto, 401 con cabecera incorrecta, 200 al reconocer o no, 500 si no guarda; no registra el cuerpo', () => {
   const f = fuente('supabase/functions/zoho-email-webhook/index.ts');
+  const iSinCabecera = f.indexOf('if (!req.headers.get("Authorization"))');
   const iSecreto = f.indexOf('Deno.env.get("ZOHO_WEBHOOK_TOKEN")');
   const iAuth = f.indexOf('autorizadoPorToken(req.headers.get("Authorization"), esperado)');
   const iLee = f.indexOf('req.json()');
-  assert.ok(iSecreto > 0 && iAuth > iSecreto && iLee > iAuth, 'primero el secreto, luego la autorizacion, y solo despues se lee el cuerpo');
+  assert.ok(iSinCabecera > 0 && iSecreto > iSinCabecera && iAuth > iSecreto && iLee > iAuth,
+    'primero el ping sin cabecera, luego el secreto, luego la autorizacion, y solo despues se lee el cuerpo');
+  // el ping de Zoho (sin cabecera) responde 200 SIN leer el cuerpo ni tocar la base
+  assert.match(f, /if \(!req\.headers\.get\("Authorization"\)\) \{\s*return json\(\{ recibido: 0, autorizado: false \}, 200\);\s*\}/);
   assert.match(f, /if \(!esperado\) \{[\s\S]*?503/);
   assert.match(f, /if \(!autorizadoPorToken[\s\S]*?401/);
   assert.match(f, /filas\.length === 0[\s\S]*?json\(\{ recibido: 0 \}, 200\)/);
