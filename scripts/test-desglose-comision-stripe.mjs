@@ -228,15 +228,17 @@ casos.push(async () => {
   assert.equal(cols.processor_fee_iva, 31.36);
 });
 
-// --- 11. Los SEIS sitios del webhook pasan por el ayudante -----------------
+// --- 11. Los SIETE sitios del webhook pasan por el ayudante ----------------
+// El septimo es el abono por debajo del anticipo (pago con mas de un metodo, 19-oct-2026):
+// su rama hace `break` antes del bloque normal y dejaba processor_fee en 0.
 casos.push(async () => {
   const llamadas = (FUENTE.match(/getStripeProcessorFee\(stripe,/g) || []).length;
-  assert.equal(llamadas, 6,
-    `se esperaban 6 consultas de comision (supplement, extras, plan, anticipo, payment_intent, membresia) y hay ${llamadas}`);
+  assert.equal(llamadas, 7,
+    `se esperaban 7 consultas de comision (supplement, extras, plan, anticipo, abono, payment_intent, membresia) y hay ${llamadas}`);
 
   const conAyudante = (FUENTE.match(/\.update\(columnasDeComision\(/g) || []).length;
-  assert.equal(conAyudante, 6,
-    `los 6 updates de comision tienen que pasar por columnasDeComision y hay ${conAyudante}`);
+  assert.equal(conAyudante, 7,
+    `los 7 updates de comision tienen que pasar por columnasDeComision y hay ${conAyudante}`);
 
   // Ninguno puede volver a escribir las columnas a mano: se saltaria la regla
   // de omitir el desglose cuando es nulo.

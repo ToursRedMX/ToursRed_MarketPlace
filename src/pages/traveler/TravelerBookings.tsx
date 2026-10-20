@@ -1587,6 +1587,12 @@ const TravelerBookings: React.FC = () => {
       // Cobertura con los puntos y el Cash comprometidos al crear la reserva (ver coberturaReservaAprobada.ts).
       const cobertura = coberturaReservaAprobada(booking, toursRedCashToUse);
       const amountToCharge = originalAmount - pointsAlreadyUsed - toursRedCashToUse;
+      // Con abonos previos (reserva en `processing`, pagada con «mas de un metodo»)
+      // `user_payment` ya no es el saldo: solo Openpay y Conekta lo descuentan al
+      // cobrar, Stripe, PayPal y MercadoPago no. Sin monto, las cinco funciones de
+      // cobro calculan el saldo real (exigible menos lo pagado por TODOS los
+      // procesadores) y cobran eso.
+      const montoAEnviar = booking.payment_status === 'processing' ? undefined : amountToCharge;
 
       // Si el monto es 0 o menor —o los puntos y el Cash comprometidos ya cubren todo—, confirmar directamente
       if (amountToCharge <= 0 || cobertura.montoACobrar <= 0) {
@@ -1666,7 +1672,7 @@ const TravelerBookings: React.FC = () => {
             body: JSON.stringify({
               bookingId: booking.id,
               customerEmail: user?.email,
-              amount: amountToCharge,
+              amount: montoAEnviar,
               description: `Depósito para ${booking.tours?.name || 'Tour'}`,
               context: 'booking',
               deviceId: await getMpDeviceId(),
@@ -1697,7 +1703,7 @@ const TravelerBookings: React.FC = () => {
             },
             body: JSON.stringify({
               bookingId: booking.id,
-              amount: amountToCharge,
+              amount: montoAEnviar,
               description: `Depósito para ${booking.tours?.name || 'Tour'}`,
               context: 'booking',
             }),
@@ -1727,7 +1733,7 @@ const TravelerBookings: React.FC = () => {
             },
             body: JSON.stringify({
               booking_id: booking.id,
-              amount: amountToCharge,
+              amount: montoAEnviar,
               description: `Depósito para ${booking.tours?.name || 'Tour'}`,
               payment_method_type: paymentModal.conektaMethod,
               context: 'booking_deposit',
@@ -1759,7 +1765,7 @@ const TravelerBookings: React.FC = () => {
             },
             body: JSON.stringify({
               bookingId: booking.id,
-              amount: amountToCharge,
+              amount: montoAEnviar,
               description: `Depósito para ${booking.tours?.name || 'Tour'}`,
               context: 'booking',
               method: paymentModal.openpayMethod,
@@ -1790,7 +1796,7 @@ const TravelerBookings: React.FC = () => {
             },
             body: JSON.stringify({
               bookingId: booking.id,
-              amount: amountToCharge,
+              amount: montoAEnviar,
               currency: 'mxn',
               description: `Pago de reserva - ${booking.tours?.name || 'Tour'}`,
               success_url: `${window.location.origin}/booking-success?booking_id=${booking.id}`,

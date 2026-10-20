@@ -6,6 +6,7 @@ import { mensajeDeError } from "../_shared/errores.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { registrarDisputa } from "../_shared/disputas.ts";
 import { avisosCon } from "../_shared/avisosDePago.ts";
+import { exigibleAlProcesador } from "../_shared/exigible.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -383,9 +384,10 @@ Deno.serve(async (req: Request) => {
           if (booking) {
             // Confirmar contra el exigible real. Con deposit_amount se confirmaba la
             // reserva cobrando de menos (quedaban fuera cargo por servicio y extras).
-            const requiredAmount = booking.amount_due_now != null
-              ? Math.max(Number(booking.deposit_amount || 0), Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0))
-              : Number(booking.deposit_amount || booking.total_price || 0);
+            // Neto de puntos y Cash, igual que el techo con el que create-openpay-checkout
+            // deja cobrar (_shared/exigible.ts). El maximo con deposit_amount lo subia
+            // por encima de lo que cualquier procesador puede cobrar con puntos o Cash.
+            const requiredAmount = exigibleAlProcesador(booking);
             const newUserPayment = Math.max(0, Number(booking.user_payment || 0) - chargeAmount);
 
             if (totalPaid >= requiredAmount) {

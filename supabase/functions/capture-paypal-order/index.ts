@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { cubreElAnticipo } from "../_shared/exigible.ts";
+import { pagadoEnProcesadores } from "../_shared/pagoParcial.ts";
 import { asentarCobroPaypal } from "../_shared/cobrosPaypal.ts";
 import { registrarFallo } from "../_shared/falloSilencioso.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
@@ -230,14 +231,18 @@ async function confirmBooking(supabase: SupabaseClient, bookingId: string, paypa
   // reserva 860a587c tiene un `payment_plan_installment` de 2,162.79 que hoy se
   // suma contra un anticipo de 3,089.70. `_shared/coberturaDePago.ts` filtra
   // igual; esta consulta se habia quedado atras.
-  const { data: priorPaypalPayments, error: errorPagosPrevios } = await supabase
-    .from("payment_transactions")
-    .select("amount")
-    .eq("booking_id", bookingId)
-    .eq("status", "succeeded")
-    .eq("payment_processor", "paypal")
-    .eq("charge_context", "booking_deposit");
-  const alreadyPaid = (priorPaypalPayments || []).reduce((sum: number, tx: { amount: number | string | null }) => sum + Number(tx.amount || 0), 0);
+  //
+  // Y de TODOS los procesadores, no solo PayPal (19-oct-2026): con «pagar con mas
+  // de un metodo» el abono anterior pudo ser de Stripe, MercadoPago, etc. Contar
+  // solo PayPal dejaba la reserva en `processing` para siempre aunque ya estuviera
+  // cubierta.
+  let alreadyPaid = 0;
+  let errorPagosPrevios: { message: string } | null = null;
+  try {
+    alreadyPaid = await pagadoEnProcesadores(supabase, bookingId);
+  } catch (e) {
+    errorPagosPrevios = { message: e instanceof Error ? e.message : String(e) };
+  }
   const totalPaid = alreadyPaid + capturedAmount;
   // Ver `_shared/exigible.ts`. El maximo con `amount_due_now` convertia esto en
   // un piso que quien pago con puntos o ToursRed Cash NUNCA alcanza: la reserva

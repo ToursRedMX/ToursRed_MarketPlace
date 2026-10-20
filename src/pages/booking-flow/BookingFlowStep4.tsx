@@ -27,6 +27,7 @@ import PaymentProviderSelector, {
   OpenpayMethod,
 } from '../../components/PaymentProviderSelector';
 import { mensajeDeError } from '../../lib/errores';
+import { montoDelCobroAhora } from '../../lib/pagoParcial';
 
 const CATEGORIA_LABELS: Record<string, string> = {
   adulto: 'Adulto',
@@ -465,7 +466,7 @@ const BookingFlowStep4: React.FC = () => {
   // !flow.isHighRisk tambien aqui: un payNowMode='partial' que haya quedado
   // de una sesion anterior (antes de que Step3 confirmara el riesgo) no debe
   // dejar cobrar menos del 100% aunque el checkbox ya este oculto en pantalla.
-  const rawAmountToPay = flow.payNowMode === 'partial' && !isFullWalletPayment && !flow.isHighRisk
+  const rawAmountToPay = flow.payNowMode === 'partial' && !isFullWalletPayment && !flow.isHighRisk && !flow.addMembership
     ? Math.min(flow.partialPaymentAmount, dueAfterPointsWallet)
     : dueAfterPointsWallet;
 
@@ -613,8 +614,12 @@ const BookingFlowStep4: React.FC = () => {
       return;
     }
 
-    if (!flow.isHighRisk && flow.payNowMode === 'partial' && (flow.partialPaymentAmount <= 0 || flow.partialPaymentAmount >= depositAmount - 10)) {
+    if (!flow.isHighRisk && !flow.addMembership && flow.payNowMode === 'partial' && (flow.partialPaymentAmount <= 0 || flow.partialPaymentAmount >= depositAmount - 10)) {
       setCreateError('El monto del pago parcial debe ser menor al depósito total (dejando al menos $10 MXN de saldo).');
+      return;
+    }
+    if (!flow.isHighRisk && !flow.addMembership && flow.payNowMode === 'partial' && flow.partialPaymentAmount < MIN_PROCESSOR_AMOUNT) {
+      setCreateError(`El pago parcial mínimo es de ${formatCurrencyMXN(MIN_PROCESSOR_AMOUNT)}.`);
       return;
     }
 
@@ -754,6 +759,12 @@ const BookingFlowStep4: React.FC = () => {
       const srvCashApplied = Number(bookingResult.toursred_cash_applied ?? walletDiscount);
       const srvAmountToCharge = Number(bookingResult.amount_to_charge ?? amountToPay);
       const srvIsFullWallet = Boolean(bookingResult.is_full_wallet ?? isFullWalletPayment);
+      // `amount_to_charge` es el exigible COMPLETO; con «pagar con más de un
+      // método» a la pasarela solo va lo que el viajero eligió pagar ahora. El
+      // resto queda como saldo pendiente de la reserva (ver lib/pagoParcial.ts).
+      const srvAmountNow = flow.payNowMode === 'partial' && !flow.isHighRisk && !flow.addMembership
+        ? montoDelCobroAhora(srvAmountToCharge, flow.partialPaymentAmount)
+        : srvAmountToCharge;
 
       if (srvPointsApplied !== pointsApplied || srvCashApplied !== walletDiscount) {
         setAdjustedByServer({
@@ -848,7 +859,7 @@ const BookingFlowStep4: React.FC = () => {
             // y el pago se rechazaba con "El monto a cobrar no coincide con el
             // desglose de la reserva". Bug preexistente, no de este PR: se
             // destapo el 24-sep-2026 probando 1 viajero + puntos + Stripe.
-            body: JSON.stringify({ bookingId, customerEmail: user.email, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, addMembership: flow.addMembership, membershipPlan: flow.membershipPlan, toursRedCashUsed: srvCashApplied, pointsUsed: srvPointsApplied }),
+            body: JSON.stringify({ bookingId, customerEmail: user.email, amount: srvAmountNow, description: `Deposito para ${tour.name}`, addMembership: flow.addMembership, membershipPlan: flow.membershipPlan, toursRedCashUsed: srvCashApplied, pointsUsed: srvPointsApplied }),
           }
         );
         if (await bloqueoDeMfa(resp)) { setCreateError(MENSAJE_MFA_PENDIENTE); return; }
@@ -866,7 +877,7 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, deviceId: await getMpDeviceId() }),
+            body: JSON.stringify({ bookingId, amount: srvAmountNow, description: `Deposito para ${tour.name}`, deviceId: await getMpDeviceId() }),
           }
         );
         if (await bloqueoDeMfa(resp)) { setCreateError(MENSAJE_MFA_PENDIENTE); return; }
@@ -885,7 +896,7 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}` }),
+            body: JSON.stringify({ bookingId, amount: srvAmountNow, description: `Deposito para ${tour.name}` }),
           }
         );
         if (await bloqueoDeMfa(resp)) { setCreateError(MENSAJE_MFA_PENDIENTE); return; }
@@ -906,7 +917,7 @@ const BookingFlowStep4: React.FC = () => {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
             body: JSON.stringify({
               booking_id: bookingId,
-              amount: srvAmountToCharge,
+              amount: srvAmountNow,
               description: `Deposito para ${tour.name}`,
               payment_method_type: flow.conektaMethod,
               context: 'booking_deposit',
@@ -933,7 +944,7 @@ const BookingFlowStep4: React.FC = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-            body: JSON.stringify({ bookingId, amount: srvAmountToCharge, description: `Deposito para ${tour.name}`, context: 'booking', method: flow.openpayMethod }),
+            body: JSON.stringify({ bookingId, amount: srvAmountNow, description: `Deposito para ${tour.name}`, context: 'booking', method: flow.openpayMethod }),
           }
         );
         if (await bloqueoDeMfa(resp)) { setCreateError(MENSAJE_MFA_PENDIENTE); return; }
@@ -1511,7 +1522,7 @@ const BookingFlowStep4: React.FC = () => {
         )}
 
         {/* Partial payment option */}
-        {dueNow > 500 && !isWalletOnlyPayment && !flow.isHighRisk && (
+        {dueNow > 500 && !isWalletOnlyPayment && !flow.isHighRisk && !flow.addMembership && (
           <div className="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input

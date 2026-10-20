@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { exigibleAlProcesador } from "../_shared/exigible.ts";
+import { pagadoEnProcesadores } from "../_shared/pagoParcial.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { apartarSaldoDeReserva, exigirMfaSiGastaSaldo } from "../_shared/gastoDeSaldo.ts";
@@ -216,13 +217,9 @@ Deno.serve(async (req: Request) => {
       // al confirmar (Conekta y OpenPay ni eso) y podia confirmarse sin pagarlo.
       const apartadoBlock = await apartarSaldoDeReserva(supabase, bookingId, booking);
       if (apartadoBlock) return apartadoBlock;
-      const { data: existingPayments } = await supabase
-        .from("payment_transactions")
-        .select("amount")
-        .eq("booking_id", bookingId)
-        .eq("status", "succeeded")
-        .eq("payment_processor", "paypal");
-      const alreadyPaid = (existingPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      // Lo ya pagado por TODOS los procesadores: con «pagar con mas de un metodo»
+      // el abono anterior pudo ser de otro. Solo contar PayPal dejaba cobrar de mas.
+      const alreadyPaid = await pagadoEnProcesadores(supabase, bookingId);
       // Ver nota en create-openpay-checkout: el techo es el exigible, no el anticipo.
       // Ver `_shared/exigible.ts`: el maximo con deposit_amount anulaba el
       // descuento de puntos y ToursRed Cash, y subia el techo por encima de lo
