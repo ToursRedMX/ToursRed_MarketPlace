@@ -28,7 +28,7 @@ function simular(...respuestas) {
     llamadas.push({ url: String(url), init, cuerpo: JSON.parse(init.body) });
     const r = respuestas.shift();
     if (r instanceof Error) throw r;
-    return new Response(r.cuerpo === undefined ? null : JSON.stringify(r.cuerpo), { status: r.status });
+    return new Response(r.cuerpo === undefined ? null : JSON.stringify(r.cuerpo), { status: r.status, headers: r.headers });
   };
 }
 const OK_SMTP2GO = { status: 200, cuerpo: { data: { succeeded: 1, failed: 0 } } };
@@ -71,7 +71,7 @@ await prueba('SMTP2GO: llave en el header, payload y adjuntos', async () => {
 await prueba('SMTP2GO: 200 con data.error / failed / succeeded 0 es rechazo; 4xx rechazo; 5xx no disponible; red incierto', async () => {
   for (const cuerpo of [{ data: { error: 'x' } }, { data: { failed: 1, succeeded: 0 } }, { data: { succeeded: 0 } }]) {
     simular({ status: 200, cuerpo });
-    assert.deepEqual(await enviarPorSmtp2go('k', correo, 's@x.com'), { ok: false, clase: 'rechazo_confirmado', codigo: 'smtp2go_rechazo' });
+    assert.deepEqual(await enviarPorSmtp2go('k', correo, 's@x.com'), { ok: false, clase: 'rechazo_confirmado', codigo: 'smtp2go_rechazo', httpStatus: 200 });
   }
   simular({ status: 400, cuerpo: {} });
   assert.equal((await enviarPorSmtp2go('k', correo, 's@x.com')).clase, 'rechazo_confirmado');
@@ -306,6 +306,93 @@ await prueba('enviarCorreo no registra el cuerpo del correo ni las llaves', asyn
   } finally { console.error = antes; }
   assert.ok(logs.length > 0);
   for (const l of logs) assert.doesNotMatch(l, /123456|SG\.secreto|llave-secreta|viajero@ejemplo/, `registro con datos sensibles: ${l}`);
+});
+
+const clienteBitacora = (opciones = {}) => {
+  const filas = [];
+  return {
+    filas,
+    from: (tabla) => ({
+      insert: async (fila) => {
+        if (opciones.lanza) throw new Error('base caida');
+        if (opciones.error) return { error: { code: 'XX000' } };
+        filas.push({ tabla, ...fila });
+        return { error: null };
+      },
+    }),
+  };
+};
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+await prueba('bitacora: cada intento deja una fila con su referencia, el estado y los destinatarios, sin el cuerpo', async () => {
+  const admin = clienteBitacora();
+  env.ZOHO_EMAIL_API_KEY = 'zk';
+  simular({ status: 201, cuerpo: { data: [{ code: 'EM_104' }], message: 'OK', request_id: 'req-1' } });
+  const r = await enviarCorreo(admin, { para: ['Ana Perez <a@x.com>', 'b@x.com'], asunto: 'x'.repeat(300), html: '<p>codigo 123456</p>', texto: 'tambien 123456' },
+    ajustes({ email_provider: 'zoho' }));
+  assert.equal(r.ok, true);
+  assert.equal(admin.filas.length, 1);
+  const f = admin.filas[0];
+  assert.equal(f.tabla, 'bitacora_envio_correo');
+  assert.match(f.id, UUID);
+  assert.match(f.envio_id, UUID);
+  assert.equal(f.proveedor, 'zoho');
+  assert.equal(f.es_respaldo, false);
+  assert.equal(f.aceptado, true);
+  assert.equal(f.clase, null);
+  assert.equal(f.codigo, null);
+  assert.equal(f.http_status, 201);
+  assert.equal(f.id_proveedor, 'req-1');
+  assert.deepEqual(f.destinatarios, ['a@x.com', 'b@x.com'], 'solo la direccion, sin el nombre');
+  assert.equal(f.asunto.length, 200, 'el asunto se corta a 200');
+  assert.doesNotMatch(JSON.stringify(f), /123456|<p>/, 'el cuerpo no se guarda');
+  // la referencia que se guarda es la que viajo al proveedor: asi se cruza con sus eventos
+  assert.equal(llamadas[0].cuerpo.client_reference, f.id);
+});
+
+await prueba('bitacora: el respaldo deja SU fila, del mismo envio, y la referencia llega a SendGrid', async () => {
+  const admin = clienteBitacora();
+  env.ZOHO_EMAIL_API_KEY = 'zk';
+  env.SENDGRID_API_KEY = 'SG.env';
+  simular({ status: 400, cuerpo: { data: { error_code: 'X' } } }, { status: 202, headers: { 'x-message-id': 'sg-msg-9' } });
+  const r = await enviarCorreo(admin, correo, ajustes({ email_provider: 'zoho', email_fallback_provider: 'sendgrid', email_fallback_enabled: true }));
+  assert.deepEqual(r, { ok: true, proveedor: 'sendgrid', respaldo: true });
+  assert.equal(admin.filas.length, 2);
+  const [p, b] = admin.filas;
+  assert.equal(p.envio_id, b.envio_id, 'principal y respaldo comparten envio_id');
+  assert.notEqual(p.id, b.id);
+  assert.deepEqual([p.proveedor, p.es_respaldo, p.aceptado, p.clase, p.codigo, p.http_status], ['zoho', false, false, 'rechazo_confirmado', 'zoho_http_400', 400]);
+  assert.deepEqual([b.proveedor, b.es_respaldo, b.aceptado, b.http_status, b.id_proveedor], ['sendgrid', true, true, 202, 'sg-msg-9']);
+  assert.equal(llamadas[1].cuerpo.custom_args.referencia, b.id);
+});
+
+await prueba('bitacora: SMTP2GO guarda su email_id; un proveedor sin llave tambien deja su fila', async () => {
+  const admin = clienteBitacora();
+  simular({ status: 200, cuerpo: { data: { succeeded: 1, failed: 0, email_id: 'sm-77' } } });
+  await enviarCorreo(admin, correo, ajustes());
+  assert.equal(admin.filas[0].id_proveedor, 'sm-77');
+  delete env.SENDGRID_API_KEY;
+  const admin2 = clienteBitacora();
+  simular();
+  const r = await enviarCorreo(admin2, correo, ajustes({ email_provider: 'sendgrid' }));
+  assert.equal(r.ok, false);
+  assert.deepEqual([admin2.filas[0].aceptado, admin2.filas[0].clase, admin2.filas[0].codigo, admin2.filas[0].http_status], [false, 'no_configurado', 'sendgrid_sin_llave', null]);
+  assert.equal(llamadas.length, 0);
+});
+
+await prueba('bitacora: si la bitacora falla, el correo sale igual y el registro no lleva datos personales', async () => {
+  const logs = [];
+  const antes = console.error; console.error = (...a) => logs.push(a.join(' '));
+  try {
+    for (const opciones of [{ lanza: true }, { error: true }]) {
+      simular(OK_SMTP2GO);
+      const r = await enviarCorreo(clienteBitacora(opciones), { ...correo, para: 'secreto@ejemplo.com', asunto: 'asunto-privado' }, ajustes());
+      assert.equal(r.ok, true, JSON.stringify(opciones));
+      assert.equal(llamadas.length, 1);
+    }
+  } finally { console.error = antes; }
+  assert.equal(logs.length, 2);
+  for (const l of logs) assert.doesNotMatch(l, /secreto@ejemplo|asunto-privado|123456/, l);
 });
 
 await prueba('contrato del codigo fuente: la migracion y el modulo comparten proveedores y la llave de SendGrid es un secreto', () => {

@@ -14,7 +14,7 @@ export function separarRemitente(remitente: string): { email: string; name?: str
   return { email: remitente.trim() };
 }
 
-function lista(para: string | string[]): string[] {
+export function lista(para: string | string[]): string[] {
   return Array.isArray(para) ? para : [para];
 }
 
@@ -50,14 +50,14 @@ export async function enviarPorSmtp2go(
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!respuesta.ok) return { ok: false, clase: claseHttp(respuesta.status), codigo: `smtp2go_http_${respuesta.status}` };
+    if (!respuesta.ok) return { ok: false, clase: claseHttp(respuesta.status), codigo: `smtp2go_http_${respuesta.status}`, httpStatus: respuesta.status };
     // SMTP2GO responde 200 aunque el envio falle: el resultado real va en `data`.
     const cuerpo = await respuesta.json().catch(() => null);
     const data = cuerpo?.data;
     if (data?.error || Number(data?.failed ?? 0) > 0 || (data?.succeeded !== undefined && Number(data.succeeded) === 0)) {
-      return { ok: false, clase: "rechazo_confirmado", codigo: "smtp2go_rechazo" };
+      return { ok: false, clase: "rechazo_confirmado", codigo: "smtp2go_rechazo", httpStatus: respuesta.status };
     }
-    return { ok: true };
+    return { ok: true, httpStatus: respuesta.status, ...(data?.email_id ? { idProveedor: String(data.email_id) } : {}) };
   } catch {
     return { ok: false, clase: "incierto", codigo: "smtp2go_sin_respuesta" };
   }
@@ -73,6 +73,7 @@ export async function enviarPorZoho(
   llave: string | null | undefined,
   correo: CorreoSaliente,
   remitente: string,
+  referencia?: string,
 ): Promise<ResultadoProveedor> {
   if (!llave) return { ok: false, clase: "no_configurado", codigo: "zoho_sin_llave" };
   const persona = (valor: string) => {
@@ -90,6 +91,8 @@ export async function enviarPorZoho(
         to: lista(correo.para).map((p) => ({ email_address: persona(p) })),
         subject: correo.asunto,
         htmlbody: correo.html,
+        // Referencia propia: vuelve en los eventos del webhook y se cruza con bitacora_envio_correo.id.
+        ...(referencia ? { client_reference: referencia } : {}),
         ...(correo.texto ? { textbody: correo.texto } : {}),
         ...(correo.responderA ? { reply_to: [persona(correo.responderA)] } : {}),
         ...(adjuntos.length
@@ -104,8 +107,11 @@ export async function enviarPorZoho(
     // Cualquier 2xx es aceptado (la documentacion dice 200, pero ZeptoMail/CPaaS puede responder 201):
     // tomar solo el 200 como exito hizo que un correo YA ENTREGADO por Zoho se reenviara por el respaldo y
     // llegara dos veces (19-oct-2026). El 400 trae `data.error_code`, que no se registra junto con el correo.
-    if (respuesta.status >= 200 && respuesta.status < 300) return { ok: true };
-    return { ok: false, clase: claseHttp(respuesta.status), codigo: `zoho_http_${respuesta.status}` };
+    if (respuesta.status >= 200 && respuesta.status < 300) {
+      const cuerpo = await respuesta.json().catch(() => null);
+      return { ok: true, httpStatus: respuesta.status, ...(cuerpo?.request_id ? { idProveedor: String(cuerpo.request_id) } : {}) };
+    }
+    return { ok: false, clase: claseHttp(respuesta.status), codigo: `zoho_http_${respuesta.status}`, httpStatus: respuesta.status };
   } catch {
     return { ok: false, clase: "incierto", codigo: "zoho_sin_respuesta" };
   }
@@ -115,6 +121,7 @@ export async function enviarPorSendgrid(
   llave: string | null | undefined,
   correo: CorreoSaliente,
   remitente: string,
+  referencia?: string,
 ): Promise<ResultadoProveedor> {
   if (!llave) return { ok: false, clase: "no_configurado", codigo: "sendgrid_sin_llave" };
   try {
@@ -126,6 +133,8 @@ export async function enviarPorSendgrid(
         personalizations: [{ to: lista(correo.para).map(separarRemitente) }],
         from: separarRemitente(remitente),
         subject: correo.asunto,
+        // Referencia propia: vuelve en los eventos de SendGrid y se cruza con bitacora_envio_correo.id.
+        ...(referencia ? { custom_args: { referencia } } : {}),
         // SendGrid exige text/plain antes de text/html cuando van los dos.
         content: [
           ...(correo.texto ? [{ type: "text/plain", value: correo.texto }] : []),
@@ -146,8 +155,11 @@ export async function enviarPorSendgrid(
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     // 202 = aceptado para entrega; cualquier otro estado es fallo (el cuerpo trae `errors`, pero no se registra).
-    if (respuesta.status === 202) return { ok: true };
-    return { ok: false, clase: claseHttp(respuesta.status), codigo: `sendgrid_http_${respuesta.status}` };
+    if (respuesta.status === 202) {
+      const id = respuesta.headers.get("x-message-id");
+      return { ok: true, httpStatus: 202, ...(id ? { idProveedor: id } : {}) };
+    }
+    return { ok: false, clase: claseHttp(respuesta.status), codigo: `sendgrid_http_${respuesta.status}`, httpStatus: respuesta.status };
   } catch {
     return { ok: false, clase: "incierto", codigo: "sendgrid_sin_respuesta" };
   }

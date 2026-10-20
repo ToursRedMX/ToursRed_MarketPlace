@@ -281,3 +281,8 @@ verify_jwt = false
 # el handler). Recibe mensajes entrantes de WhatsApp y callbacks de estado.
 [functions.whatsapp-webhook-entrante]
 verify_jwt = false
+
+# Zoho (correos transaccionales) avisa rebotes/aperturas/clics y no manda JWT de Supabase: la funcion exige
+# `Authorization: Bearer <ZOHO_WEBHOOK_TOKEN>` y sin ese secreto configurado responde 503.
+[functions."zoho-email-webhook"]
+verify_jwt = false
