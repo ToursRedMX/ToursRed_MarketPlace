@@ -143,4 +143,16 @@ await prueba('BookingSuccessPage: con abono pendiente no dice «reserva confirma
   assert.match(f.slice(f.indexOf(') : (', i)), /Tu reserva ha sido confirmada/, 'el camino de siempre se conserva');
 });
 
+await prueba('BookingSuccessPage: con abono separa «falta para confirmar» (ToursRed) del saldo del día del tour (agencia)', () => {
+  const f = fuente('src/pages/BookingSuccessPage.tsx');
+  // lo que falta para confirmar solo aparece con abono pendiente y muestra el saldo del abono
+  assert.match(f, /\{abono && \(\s*<div[^>]*>\s*<span>Falta para confirmar tu reserva:<\/span>\s*<span>\{formatCurrencyMXN\(abono\.saldo\)\}<\/span>/);
+  // el saldo de la agencia ya no se llama «Saldo Restante»: se confundia con lo que falta para confirmar
+  assert.doesNotMatch(f, /Saldo Restante/);
+  assert.match(f, /Saldo a pagar a la agencia el día del tour:/);
+  // el aviso explica las dos cosas cuando hay abono, y la de siempre cuando no
+  assert.match(f, /Para confirmar tu reserva te faltan \{formatCurrencyMXN\(abono\.saldo\)\}/);
+  assert.match(f, /se paga\s*directamente a \{tour\.agencies\?\.name\} el día del tour/);
+});
+
 console.log(`OK: ${casos} casos de abono recibido.`);

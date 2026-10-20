@@ -633,15 +633,35 @@ const BookingSuccessPage: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Con un abono pendiente hay DOS cosas por pagar y no deben confundirse: lo que falta para
+                      confirmar la reserva (a ToursRed, ahora) y el saldo del tour (a la agencia, el día del servicio). */}
+                  {abono && (
+                    <div className="flex justify-between font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 -mx-1 mt-2">
+                      <span>Falta para confirmar tu reserva:</span>
+                      <span>{formatCurrencyMXN(abono.saldo)}</span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between text-sm text-gray-500 mt-2">
-                    <span>Saldo Restante:</span>
+                    <span>Saldo a pagar a la agencia el día del tour:</span>
                     <span>{formatCurrencyMXN((booking.total_price || 0) - (booking.deposit_amount || 0))}</span>
                   </div>
                 </div>
 
                 <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                   <p className="text-sm text-yellow-800">
-                    <strong>Importante:</strong> El saldo restante se paga directamente a {tour.agencies?.name} según sus políticas.
+                    {abono ? (
+                      <>
+                        <strong>Importante:</strong> Para confirmar tu reserva te faltan {formatCurrencyMXN(abono.saldo)}, que se pagan aquí
+                        en ToursRed desde «Mis reservas». El saldo de {formatCurrencyMXN((booking.total_price || 0) - (booking.deposit_amount || 0))} se
+                        paga directamente a {tour.agencies?.name} el día del tour, según sus políticas.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Importante:</strong> El saldo de {formatCurrencyMXN((booking.total_price || 0) - (booking.deposit_amount || 0))} se paga
+                        directamente a {tour.agencies?.name} el día del tour, según sus políticas.
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -689,7 +709,7 @@ const BookingSuccessPage: React.FC = () => {
                   </span>
                 </div>
                 <div className="text-sm text-gray-600">
-                  Coordina el pago del saldo restante directamente con {tour.agencies?.name}
+                  Coordina el pago de este saldo directamente con {tour.agencies?.name} para el día del tour
                 </div>
               </div>
             </div>
