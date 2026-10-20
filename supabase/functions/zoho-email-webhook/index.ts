@@ -39,6 +39,16 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Método no permitido" }, 405);
   }
 
+  // Zoho "Verificar" la URL ANTES de guardar el encabezado de autorizacion: la documentacion dice que
+  // comprueba que el endpoint "is reachable and returns status code 200", y el formulario avisa que «la llamada
+  // de API no debe estar autenticada». Con un 401 el formulario no deja agregar el webhook (19-oct-2026). Una
+  // llamada SIN cabecera Authorization no hace nada (ni lee el cuerpo ni toca la base) y responde 200: es el
+  // ping de Zoho y no necesita credenciales. Una cabecera PRESENTE pero incorrecta si es 401, para que un token
+  // mal copiado se note en vez de fallar en silencio.
+  if (!req.headers.get("Authorization")) {
+    return json({ recibido: 0, autorizado: false }, 200);
+  }
+
   // Sin secreto configurado el receptor NO acepta nada: no queda abierto por olvido.
   const esperado = Deno.env.get("ZOHO_WEBHOOK_TOKEN");
   if (!esperado) {
