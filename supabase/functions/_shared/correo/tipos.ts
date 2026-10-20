@@ -40,8 +40,23 @@ export type ResultadoCorreo =
 
 /** Resultado de UN proveedor, antes de decidir si se intenta el respaldo. */
 export type ResultadoProveedor =
-  | { ok: true }
-  | { ok: false; clase: ClaseFalloCorreo; codigo: string };
+  | { ok: true; httpStatus?: number; idProveedor?: string }
+  | { ok: false; clase: ClaseFalloCorreo; codigo: string; httpStatus?: number };
+
+/** Una fila de `bitacora_envio_correo`: un intento de envio. */
+export interface FilaBitacoraEnvio {
+  id: string;
+  envio_id: string;
+  proveedor: ProveedorCorreo;
+  es_respaldo: boolean;
+  aceptado: boolean;
+  clase: ClaseFalloCorreo | null;
+  codigo: string | null;
+  http_status: number | null;
+  id_proveedor: string | null;
+  destinatarios: string[];
+  asunto: string;
+}
 
 export interface AjustesCorreo {
   contact_email: string | null;

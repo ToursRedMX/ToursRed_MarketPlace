@@ -6,12 +6,13 @@
 // otro proveedor lo duplicaria, asi que ahi se reporta el fallo y no se reintenta.
 //
 // Las llaves de SendGrid y Zoho son secretos de la Edge Function (SENDGRID_API_KEY, ZOHO_EMAIL_API_KEY), no columnas.
-import { enviarPorSendgrid, enviarPorSmtp2go, enviarPorZoho } from "./proveedores.ts";
+import { enviarPorSendgrid, enviarPorSmtp2go, enviarPorZoho, lista, separarRemitente } from "./proveedores.ts";
 import {
   PROVEEDORES_CORREO,
   type AjustesCorreo,
   type ClienteCorreo,
   type CorreoSaliente,
+  type FilaBitacoraEnvio,
   type ProveedorCorreo,
   type ResultadoCorreo,
   type ResultadoProveedor,
@@ -56,14 +57,33 @@ export async function leerAjustesCorreo(admin: ClienteCorreo): Promise<AjustesCo
   return ajustes;
 }
 
-function intentar(proveedor: ProveedorCorreo, ajustes: AjustesCorreo, correo: CorreoSaliente, remitente: string): Promise<ResultadoProveedor> {
+function intentar(
+  proveedor: ProveedorCorreo,
+  ajustes: AjustesCorreo,
+  correo: CorreoSaliente,
+  remitente: string,
+  referencia: string,
+): Promise<ResultadoProveedor> {
   switch (proveedor) {
     case "sendgrid":
-      return enviarPorSendgrid(Deno.env.get("SENDGRID_API_KEY"), correo, remitente);
+      return enviarPorSendgrid(Deno.env.get("SENDGRID_API_KEY"), correo, remitente, referencia);
     case "zoho":
-      return enviarPorZoho(Deno.env.get("ZOHO_EMAIL_API_KEY"), correo, remitente);
+      return enviarPorZoho(Deno.env.get("ZOHO_EMAIL_API_KEY"), correo, remitente, referencia);
     default:
       return enviarPorSmtp2go(ajustes.smtp_api_key, correo, remitente);
+  }
+}
+
+/**
+ * Deja en `bitacora_envio_correo` que acepto (o rechazo) el proveedor. NUNCA lanza ni retrasa el correo: si la
+ * bitacora falla se registra solo el codigo del error, sin destinatarios ni asunto.
+ */
+async function registrar(admin: ClienteCorreo, fila: FilaBitacoraEnvio): Promise<void> {
+  try {
+    const { error } = await admin.from("bitacora_envio_correo").insert(fila);
+    if (error) console.error(`enviarCorreo: no se pudo registrar el envio en la bitacora (codigo ${error.code ?? "?"})`);
+  } catch {
+    console.error("enviarCorreo: fallo el registro del envio en la bitacora");
   }
 }
 
@@ -84,13 +104,37 @@ export async function enviarCorreo(
   const remitente = correo.remitente || cfg.contact_email || REMITENTE_POR_DEFECTO;
   const principal = cfg.email_provider;
 
-  const r1 = await intentar(principal, cfg, correo, remitente);
+  // Un intento = una fila de bitacora. `id` es la referencia que viaja al proveedor; `envio_id` agrupa el
+  // intento principal y el de respaldo del mismo correo. El cuerpo NO se guarda.
+  const envioId = crypto.randomUUID();
+  const destinatarios = lista(correo.para).map((p) => separarRemitente(p).email);
+  const asunto = correo.asunto.slice(0, 200);
+  const intento = async (proveedor: ProveedorCorreo, esRespaldo: boolean): Promise<ResultadoProveedor> => {
+    const referencia = crypto.randomUUID();
+    const r = await intentar(proveedor, cfg, correo, remitente, referencia);
+    await registrar(admin, {
+      id: referencia,
+      envio_id: envioId,
+      proveedor,
+      es_respaldo: esRespaldo,
+      aceptado: r.ok,
+      clase: r.ok ? null : r.clase,
+      codigo: r.ok ? null : r.codigo,
+      http_status: r.httpStatus ?? null,
+      id_proveedor: r.ok ? (r.idProveedor ?? null) : null,
+      destinatarios,
+      asunto,
+    });
+    return r;
+  };
+
+  const r1 = await intento(principal, false);
   if (r1.ok) return { ok: true, proveedor: principal, respaldo: false };
 
   const respaldo = cfg.email_fallback_provider;
   if (cfg.email_fallback_enabled && respaldo && respaldo !== principal && FALLBACK_SEGURO.has(r1.clase)) {
     console.error(`enviarCorreo: ${principal} no acepto el correo (${r1.codigo}); se intenta ${respaldo}`);
-    const r2 = await intentar(respaldo, cfg, correo, remitente);
+    const r2 = await intento(respaldo, true);
     if (r2.ok) return { ok: true, proveedor: respaldo, respaldo: true };
     console.error(`enviarCorreo: el respaldo ${respaldo} tampoco lo envio (${r2.codigo})`);
     return { ok: false, proveedor: respaldo, clase: r2.clase, codigo: r2.codigo, respaldo: true };
