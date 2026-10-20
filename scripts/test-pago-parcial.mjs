@@ -76,9 +76,11 @@ prueba('Paso 4: las cinco pasarelas reciben srvAmountNow', () => {
 prueba('Paso 4: srvAmountNow sale de montoDelCobroAhora con el parcial elegido', () => {
   assert.match(paso4, /srvAmountNow\s*=\s*flow\.payNowMode === 'partial'[^;]*montoDelCobroAhora\(srvAmountToCharge,\s*flow\.partialPaymentAmount\)/);
 });
-prueba('Mis reservas: con abonos previos (processing) no manda monto y el servidor decide el saldo', () => {
+prueba('Mis reservas: «Completar pago» manda SIEMPRE el monto (con abonos previos, el saldo); MercadoPago lo exige', () => {
   const mb = sinComentarios('src/pages/traveler/TravelerBookings.tsx');
-  assert.match(mb, /montoAEnviar\s*=\s*booking\.payment_status === 'processing' \? undefined : amountToCharge/);
+  // 19-oct-2026: omitir el monto con `processing` hacia que create-mercadopago-preference respondiera «Datos incompletos»
+  assert.match(mb, /montoAEnviar\s*=\s*amountToCharge;/);
+  assert.doesNotMatch(mb, /montoAEnviar[^;]*undefined/);
   assert.equal((mb.match(/amount:\s*montoAEnviar/g) ?? []).length, 5);
 });
 
