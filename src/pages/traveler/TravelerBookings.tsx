@@ -22,6 +22,7 @@ import PaymentProviderSelector from '../../components/PaymentProviderSelector';
 import { comoFilas } from '../../lib/relacionesSupabase';
 import { reembolsoPorMedio } from '../../utils/reembolsoPorMedio';
 import { mensajeDeError } from '../../lib/errores';
+import { leerEstadoDeAbono, montoBaseDelPago } from '../../lib/abonoRecibido';
 import { coberturaReservaAprobada } from '../../lib/coberturaReservaAprobada';
 
 interface TotalPaidRow {
@@ -314,6 +315,8 @@ const TravelerBookings: React.FC = () => {
     installmentsPaid: 0,
   });
 
+  // Saldo que falta para confirmar una reserva con abono previo (`processing`); null en las demás.
+  const [saldoPendiente, setSaldoPendiente] = useState<number | null>(null);
   const [paymentModal, setPaymentModal] = useState<{
     open: boolean;
     booking: Booking | null;
@@ -1535,6 +1538,11 @@ const TravelerBookings: React.FC = () => {
 
       const walletBalance = walletData?.balance || 0;
 
+      // Con abonos previos el saldo sale de lo ya cobrado por TODOS los procesadores (`user_payment` solo lo
+      // descuentan Openpay y Conekta). Si la lectura falla se queda en null y el modal se comporta como antes.
+      const estadoAbono = booking.payment_status === 'processing' ? await leerEstadoDeAbono(supabase, booking.id) : null;
+      setSaldoPendiente(estadoAbono?.hayAbonoPendiente ? estadoAbono.saldo : null);
+
       setPaymentModal({
         open: true,
         booking: booking,
@@ -1582,8 +1590,7 @@ const TravelerBookings: React.FC = () => {
       }
 
       // Calcular el monto a cobrar después de aplicar puntos ya usados y ToursRed Cash
-      const originalAmount = booking.user_payment || booking.deposit_amount || 0;
-      const pointsAlreadyUsed = ((booking.points_used || 0) / 100);
+      const { monto: originalAmount, puntosYaDescontados: pointsAlreadyUsed } = montoBaseDelPago(booking, saldoPendiente);
       // Cobertura con los puntos y el Cash comprometidos al crear la reserva (ver coberturaReservaAprobada.ts).
       const cobertura = coberturaReservaAprobada(booking, toursRedCashToUse);
       const amountToCharge = originalAmount - pointsAlreadyUsed - toursRedCashToUse;
@@ -4096,8 +4103,7 @@ const TravelerBookings: React.FC = () => {
 
                 {/* Payment Provider Selector */}
                 {(() => {
-                  const originalAmount = paymentModal.booking?.user_payment || paymentModal.booking?.deposit_amount || 0;
-                  const pointsAlreadyUsed = ((paymentModal.booking?.points_used || 0) / 100);
+                  const { monto: originalAmount, puntosYaDescontados: pointsAlreadyUsed } = montoBaseDelPago(paymentModal.booking, saldoPendiente);
                   const finalAmount = originalAmount - pointsAlreadyUsed - paymentModal.toursRedCashToUse;
                   if (finalAmount > 0) {
                     return (
@@ -4128,15 +4134,16 @@ const TravelerBookings: React.FC = () => {
                 {/* Payment Summary */}
                 <div className="flex flex-col gap-y-3">
                   {(() => {
-                    const discountAmount = paymentModal.booking?.discount_amount || 0;
-                    const userPayment = paymentModal.booking?.user_payment || paymentModal.booking?.deposit_amount || 0;
+                    // Con un abono previo el descuento ya quedó dentro del primer cobro: el saldo se muestra solo.
+                    const discountAmount = saldoPendiente != null ? 0 : (paymentModal.booking?.discount_amount || 0);
+                    const userPayment = montoBaseDelPago(paymentModal.booking, saldoPendiente).monto;
                     const preDiscountAmount = userPayment + discountAmount;
                     const discountCode = paymentModal.booking?.discount_codes;
 
                     return (
                       <>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">{discountAmount > 0 ? 'Subtotal:' : 'Monto Original:'}</span>
+                          <span className="text-gray-600">{saldoPendiente != null ? 'Saldo por pagar (ya abonaste una parte):' : discountAmount > 0 ? 'Subtotal:' : 'Monto Original:'}</span>
                           <span className="font-semibold">{formatCurrencyMXN(preDiscountAmount)}</span>
                         </div>
 
@@ -4174,9 +4181,10 @@ const TravelerBookings: React.FC = () => {
                   )}
 
                   {/* ToursRed Cash Section */}
-                  {paymentModal.walletBalance > 0 && (() => {
-                    const originalAmount = paymentModal.booking?.user_payment || paymentModal.booking?.deposit_amount || 0;
-                    const pointsAlreadyUsed = ((paymentModal.booking?.points_used || 0) / 100);
+                  {/* Con un abono previo no se ofrece ToursRed Cash: el Cash se aplica sobre el primer cobro y
+                      aquí se pagaría el saldo con la pasarela. */}
+                  {paymentModal.walletBalance > 0 && saldoPendiente == null && (() => {
+                    const { monto: originalAmount, puntosYaDescontados: pointsAlreadyUsed } = montoBaseDelPago(paymentModal.booking, saldoPendiente);
                     const remainingAmount = originalAmount - pointsAlreadyUsed;
 
                     return (
@@ -4245,8 +4253,7 @@ const TravelerBookings: React.FC = () => {
                       <span>Total a Pagar{paymentModal.toursRedCashToUse > 0 ? ` con ${paymentModal.selectedProvider === 'mercadopago' ? 'MercadoPago' : paymentModal.selectedProvider === 'paypal' ? 'PayPal' : paymentModal.selectedProvider === 'conekta' ? 'Conekta' : paymentModal.selectedProvider === 'openpay' ? 'Openpay' : 'Stripe'}` : ''}:</span>
                       <span className="text-primary-600">
                         {formatCurrencyMXN((() => {
-                          const originalAmount = paymentModal.booking?.user_payment || paymentModal.booking?.deposit_amount || 0;
-                          const pointsAlreadyUsed = ((paymentModal.booking?.points_used || 0) / 100);
+                          const { monto: originalAmount, puntosYaDescontados: pointsAlreadyUsed } = montoBaseDelPago(paymentModal.booking, saldoPendiente);
                           const remainingAmount = originalAmount - pointsAlreadyUsed;
                           return Math.max(0, remainingAmount - paymentModal.toursRedCashToUse);
                         })())}
@@ -4277,8 +4284,7 @@ const TravelerBookings: React.FC = () => {
                     ) : (
                       <>
                         {(() => {
-                          const originalAmount = paymentModal.booking?.user_payment || paymentModal.booking?.deposit_amount || 0;
-                          const pointsAlreadyUsed = ((paymentModal.booking?.points_used || 0) / 100);
+                          const { monto: originalAmount, puntosYaDescontados: pointsAlreadyUsed } = montoBaseDelPago(paymentModal.booking, saldoPendiente);
                           const remainingAmount = originalAmount - pointsAlreadyUsed;
                           const finalAmount = remainingAmount - paymentModal.toursRedCashToUse;
                           if (finalAmount <= 0) return 'Confirmar Pago';
