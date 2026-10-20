@@ -72,6 +72,7 @@ import AdminTravelers from './pages/admin/AdminTravelers';
 import AdminReviews from './pages/admin/AdminReviews';
 import AdminMessages from './pages/admin/AdminMessages';
 import AdminWhatsAppEntrantes from './pages/admin/AdminWhatsAppEntrantes';
+import AdminBitacoraCorreo from './pages/admin/AdminBitacoraCorreo';
 import AdminDestinations from './pages/admin/AdminDestinations';
 import AdminDeparturePoints from './pages/admin/AdminDeparturePoints';
 import AdminCategories from './pages/admin/AdminCategories';
@@ -576,6 +577,14 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
                 <AdminWhatsAppEntrantes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/bitacora-correo"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <AdminBitacoraCorreo />
               </ProtectedRoute>
             }
           />

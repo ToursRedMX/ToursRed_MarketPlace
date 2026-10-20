@@ -174,6 +174,9 @@ jobs:
       - name: Verify the email log and the Zoho webhook receiver
         run: node scripts/test-webhook-zoho.mjs
 
+      - name: Verify the admin email log screen
+        run: node scripts/test-bitacora-correo-admin.mjs
+
       - name: Verify the return screen after a partial payment (abono recibido)
         run: node scripts/test-abono-recibido.mjs
 
