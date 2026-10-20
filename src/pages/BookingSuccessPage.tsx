@@ -10,6 +10,7 @@ import { formatCurrencyMXN } from '../utils/formatCurrency';
 import { etiquetaPlanMembresia } from '../lib/planMembresia';
 import { paymentLabel, processorLabel } from '../utils/paymentLabels';
 import { mensajeDeError } from '../lib/errores';
+import { leerEstadoDeAbono, type EstadoDeAbono } from '../lib/abonoRecibido';
 
 // Mismas etiquetas y mismo orden que `BookingFlowStep4`, que es donde el
 // viajero vio este desglose por ultima vez antes de pagar: si aqui se ordenara
@@ -37,6 +38,9 @@ const BookingSuccessPage: React.FC = () => {
   // pantalla de PAGO EXITOSO decia "Total pagado: $0" justo despues de cobrar.
   // Con esta bandera se muestra un guion en vez de una cifra falsa.
   const [totalPagadoDesconocido, setTotalPagadoDesconocido] = useState(false);
+  // Pago con «más de un método»: el abono ya está cobrado pero la reserva espera el resto. Sin esto la
+  // pantalla decía «Tu reserva ha sido confirmada» con la mitad por pagar.
+  const [abono, setAbono] = useState<EstadoDeAbono | null>(null);
 
   /**
    * Desglose por categoria de viajero.
@@ -113,6 +117,9 @@ const BookingSuccessPage: React.FC = () => {
 
       setBooking(bookingData);
       setTour(bookingData.tours);
+
+      const estadoAbono = await leerEstadoDeAbono(supabase, bookingId);
+      setAbono(estadoAbono?.hayAbonoPendiente ? estadoAbono : null);
 
       // Fetch the real total paid from payment_transactions + wallet + points
       const { data: totalPaidResult, error: errorTotalPagado } = await supabase
@@ -253,15 +260,35 @@ const BookingSuccessPage: React.FC = () => {
       <div className="max-w-3xl mx-auto">
         {/* Success Header */}
         <div className="text-center mb-8">
-          <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
-            <CheckCircle className="h-8 w-8 text-green-600" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            ¡Pago Exitoso!
-          </h1>
-          <p className="text-lg text-gray-600">
-            Tu reserva ha sido confirmada. Recibirás un email de confirmación en breve.
-          </p>
+          {abono ? (
+            <>
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
+                <Wallet className="h-8 w-8 text-blue-600" />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                ¡Abono recibido!
+              </h1>
+              <p className="text-lg text-gray-600">
+                Confirmamos tu abono de {formatCurrencyMXN(abono.abonado)}. Tu reserva se confirma cuando
+                completes el pago: te faltan {formatCurrencyMXN(abono.saldo)}.
+              </p>
+              <Link to="/traveler/bookings" className="btn btn-primary mt-4 inline-block">
+                Completar pago en Mis reservas
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <CheckCircle className="h-8 w-8 text-green-600" />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                ¡Pago Exitoso!
+              </h1>
+              <p className="text-lg text-gray-600">
+                Tu reserva ha sido confirmada. Recibirás un email de confirmación en breve.
+              </p>
+            </>
+          )}
         </div>
 
         {/* Booking Details */}
