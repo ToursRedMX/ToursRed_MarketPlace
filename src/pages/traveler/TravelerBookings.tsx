@@ -1594,12 +1594,12 @@ const TravelerBookings: React.FC = () => {
       // Cobertura con los puntos y el Cash comprometidos al crear la reserva (ver coberturaReservaAprobada.ts).
       const cobertura = coberturaReservaAprobada(booking, toursRedCashToUse);
       const amountToCharge = originalAmount - pointsAlreadyUsed - toursRedCashToUse;
-      // Con abonos previos (reserva en `processing`, pagada con «mas de un metodo»)
-      // `user_payment` ya no es el saldo: solo Openpay y Conekta lo descuentan al
-      // cobrar, Stripe, PayPal y MercadoPago no. Sin monto, las cinco funciones de
-      // cobro calculan el saldo real (exigible menos lo pagado por TODOS los
-      // procesadores) y cobran eso.
-      const montoAEnviar = booking.payment_status === 'processing' ? undefined : amountToCharge;
+      // Siempre se manda el monto. Con abonos previos (reserva en `processing`, pagada con «mas de un
+      // metodo») `originalAmount` ya es el SALDO (ver montoBaseDelPago), no `user_payment`. Antes se omitia el
+      // monto en ese caso y create-mercadopago-preference respondia 400 «Datos incompletos» (reportado el
+      // 19-oct-2026): es la unica de las cinco que exige `amount` antes de calcular el saldo. Si el saldo
+      // fuera mayor al real, las cinco funciones lo rechazan («excede el saldo restante»), nunca cobran de mas.
+      const montoAEnviar = amountToCharge;
 
       // Si el monto es 0 o menor —o los puntos y el Cash comprometidos ya cubren todo—, confirmar directamente
       if (amountToCharge <= 0 || cobertura.montoACobrar <= 0) {
