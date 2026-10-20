@@ -101,8 +101,10 @@ export async function enviarPorZoho(
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    // 200 = aceptado; 400 trae `data.error_code`, que no se registra junto con el correo.
-    if (respuesta.status === 200) return { ok: true };
+    // Cualquier 2xx es aceptado (la documentacion dice 200, pero ZeptoMail/CPaaS puede responder 201):
+    // tomar solo el 200 como exito hizo que un correo YA ENTREGADO por Zoho se reenviara por el respaldo y
+    // llegara dos veces (19-oct-2026). El 400 trae `data.error_code`, que no se registra junto con el correo.
+    if (respuesta.status >= 200 && respuesta.status < 300) return { ok: true };
     return { ok: false, clase: claseHttp(respuesta.status), codigo: `zoho_http_${respuesta.status}` };
   } catch {
     return { ok: false, clase: "incierto", codigo: "zoho_sin_respuesta" };
