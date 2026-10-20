@@ -61,6 +61,25 @@ export function estadoDeAbono(reserva: DatosDeReservaAbono, cobros: CobroDeReser
   };
 }
 
+/**
+ * Monto del que parte el modal «Completar pago» de Mis reservas, y los puntos que ya vienen restados.
+ *
+ * Con un abono previo (reserva `processing`) el monto es el SALDO que falta para confirmar, no
+ * `user_payment`: solo Openpay y Conekta lo descuentan al cobrar, Stripe, PayPal y MercadoPago no, así que
+ * tras un abono de $350 por Stripe el modal seguía diciendo $550 (reportado el 19-oct-2026). El saldo ya es
+ * neto de los puntos que se aplicaron al crear la reserva: no se restan otra vez.
+ */
+export function montoBaseDelPago(
+  reserva: { user_payment?: number | string | null; deposit_amount?: number | string | null; points_used?: number | string | null } | null | undefined,
+  saldoPendiente: number | null | undefined,
+): { monto: number; puntosYaDescontados: number } {
+  if (saldoPendiente != null) return { monto: saldoPendiente, puntosYaDescontados: 0 };
+  return {
+    monto: Number(reserva?.user_payment) || Number(reserva?.deposit_amount) || 0,
+    puntosYaDescontados: num(reserva?.points_used) / 100,
+  };
+}
+
 /** Lo único que se usa del cliente de Supabase. */
 export interface ClienteDeLectura {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

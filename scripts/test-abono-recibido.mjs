@@ -155,4 +155,36 @@ await prueba('BookingSuccessPage: con abono separa «falta para confirmar» (Tou
   assert.match(f, /se paga\s*directamente a \{tour\.agencies\?\.name\} el día del tour/);
 });
 
+await prueba('montoBaseDelPago: con abono el modal parte del SALDO (no de user_payment) y no resta los puntos otra vez', () => {
+  // el caso reportado: abono de $350 por Stripe, user_payment sigue en 550, el modal decia $550
+  const stripe = { user_payment: 550, deposit_amount: 500, points_used: 0 };
+  assert.deepEqual(m.montoBaseDelPago(stripe, 200), { monto: 200, puntosYaDescontados: 0 });
+  // el saldo ya es neto de los puntos del primer cobro
+  assert.deepEqual(m.montoBaseDelPago({ ...stripe, points_used: 5000 }, 200), { monto: 200, puntosYaDescontados: 0 });
+  // sin abono previo no cambia nada de lo de siempre
+  assert.deepEqual(m.montoBaseDelPago(stripe, null), { monto: 550, puntosYaDescontados: 0 });
+  assert.deepEqual(m.montoBaseDelPago({ user_payment: null, deposit_amount: 500, points_used: 5000 }, undefined), { monto: 500, puntosYaDescontados: 50 });
+  assert.deepEqual(m.montoBaseDelPago({ user_payment: 0, deposit_amount: null }, null), { monto: 0, puntosYaDescontados: 0 });
+  assert.deepEqual(m.montoBaseDelPago(null, null), { monto: 0, puntosYaDescontados: 0 });
+  // saldo 0 es un saldo (no se confunde con «no hay saldo calculado»)
+  assert.equal(m.montoBaseDelPago(stripe, 0).monto, 0);
+});
+
+await prueba('TravelerBookings: «Completar pago» usa el saldo en el modal, en el cobro y no ofrece Cash con abono', () => {
+  const f = fuente('src/pages/traveler/TravelerBookings.tsx');
+  assert.match(f, /import \{ leerEstadoDeAbono, montoBaseDelPago \} from '\.\.\/\.\.\/lib\/abonoRecibido'/);
+  // el saldo se calcula al abrir el modal, solo para reservas en `processing`
+  assert.match(f, /booking\.payment_status === 'processing' \? await leerEstadoDeAbono\(supabase, booking\.id\) : null/);
+  assert.match(f, /setSaldoPendiente\(estadoAbono\?\.hayAbonoPendiente \? estadoAbono\.saldo : null\)/);
+  // ningún sitio vuelve a leer user_payment a mano: todos pasan por montoBaseDelPago
+  assert.doesNotMatch(f, /paymentModal\.booking\?\.user_payment \|\| paymentModal\.booking\?\.deposit_amount/);
+  assert.doesNotMatch(f, /booking\.user_payment \|\| booking\.deposit_amount \|\| 0/);
+  assert.equal((f.match(/montoBaseDelPago\(paymentModal\.booking, saldoPendiente\)/g) ?? []).length, 5, 'selector, resumen, cash, total y boton');
+  assert.match(f, /montoBaseDelPago\(booking, saldoPendiente\)/, 'el cobro (handleProceedWithPayment)');
+  // con abono previo no se ofrece ToursRed Cash
+  assert.match(f, /paymentModal\.walletBalance > 0 && saldoPendiente == null && \(\(\) => \{/);
+  // y el modal lo dice
+  assert.match(f, /Saldo por pagar \(ya abonaste una parte\):/);
+});
+
 console.log(`OK: ${casos} casos de abono recibido.`);
