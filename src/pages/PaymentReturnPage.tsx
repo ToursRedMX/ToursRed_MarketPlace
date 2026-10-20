@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Loader2, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { leerEstadoDeAbono, type EstadoDeAbono } from '../lib/abonoRecibido';
+import { formatCurrencyMXN } from '../utils/formatCurrency';
 
-type ReturnStatus = 'loading' | 'success' | 'pending' | 'cancel' | 'error';
+// 'partial': el cobro ya está confirmado pero es un abono («pagar con más de un método»); la reserva
+// espera el resto desde «Mis reservas». Sin esto la pantalla se quedaba en «Pago en proceso».
+type ReturnStatus = 'loading' | 'success' | 'pending' | 'partial' | 'cancel' | 'error';
 
 export default function PaymentReturnPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<ReturnStatus>('loading');
   const [message, setMessage] = useState('');
+  const [abono, setAbono] = useState<EstadoDeAbono | null>(null);
   const hasRunRef = useRef(false);
 
   const provider = searchParams.get('provider');
@@ -33,6 +38,18 @@ export default function PaymentReturnPage() {
 
   // MercadoPago sends collection_status on return (approved, null, rejected, etc.)
   const mpCollectionStatus = searchParams.get('collection_status');
+
+  // true si lo cobrado es un abono y la reserva espera el resto: muestra «Abono recibido» en vez de
+  // «Pago exitoso» o de un «en proceso» que nunca termina. Si la lectura falla devuelve false y la
+  // pantalla se comporta como antes.
+  const mostrarAbonoSiCorresponde = async (): Promise<boolean> => {
+    if (!bookingId) return false;
+    const estado = await leerEstadoDeAbono(supabase, bookingId);
+    if (!estado?.hayAbonoPendiente) return false;
+    setAbono(estado);
+    setStatus('partial');
+    return true;
+  };
 
   const handleReturn = async () => {
     // MercadoPago collection_status takes priority for MP payments
@@ -158,6 +175,7 @@ export default function PaymentReturnPage() {
           }
           setTimeout(() => navigate(`/payment-plan-success?plan_id=${planId}`), 2000);
         } else if (bookingId) {
+          if (await mostrarAbonoSiCorresponde()) return;
           setMessage('Pago exitoso. Tu reserva ha sido confirmada.');
           setTimeout(() => navigate(`/booking-success?booking_id=${bookingId}`), 2000);
         }
@@ -312,6 +330,7 @@ export default function PaymentReturnPage() {
         const result = await response.json();
 
         if (result.success) {
+          if (!giftCardId && await mostrarAbonoSiCorresponde()) return;
           setStatus('success');
           if (giftCardId) {
             setMessage('Pago exitoso. Tu tarjeta de regalo fue procesada.');
@@ -347,6 +366,7 @@ export default function PaymentReturnPage() {
           : `/extras-success?type=optional_service&bos_id=${extraBosId}&booking_id=${bookingId}`;
         setTimeout(() => navigate(successUrl), 2000);
       } else if (bookingId) {
+        if (await mostrarAbonoSiCorresponde()) return;
         setMessage('Pago exitoso. Tu reserva ha sido confirmada.');
         setTimeout(() => navigate(`/booking-success?booking_id=${bookingId}`), 2000);
       }
@@ -423,6 +443,8 @@ export default function PaymentReturnPage() {
               setTimeout(() => navigate(`/booking-success?booking_id=${bookingId}`), 2000);
               return;
             }
+            // Abono confirmado: la reserva queda en `processing` hasta que se complete el saldo.
+            if (booking?.payment_status === 'processing' && await mostrarAbonoSiCorresponde()) return;
             if (booking?.status === 'cancelled' || booking?.payment_status === 'cancelled') {
               setStatus('error');
               setMessage('El pago no pudo ser completado. Por favor intenta nuevamente.');
@@ -430,7 +452,9 @@ export default function PaymentReturnPage() {
             }
           } catch (_) { /* keep polling */ }
         }
-        // Timeout — show pending, the webhook will update eventually
+        // Timeout — un último vistazo: el abono pudo confirmarse en el último intento
+        if (await mostrarAbonoSiCorresponde()) return;
+        // show pending, the webhook will update eventually
         setStatus('pending');
         setMessage('Tu pago está siendo procesado. Te notificaremos por correo cuando sea confirmado.');
         return;
@@ -476,6 +500,8 @@ export default function PaymentReturnPage() {
               setTimeout(() => navigate(`/booking-success?booking_id=${bookingId}`), 2000);
               return;
             }
+            // Abono confirmado: la reserva queda en `processing` hasta que se complete el saldo.
+            if (booking?.payment_status === 'processing' && await mostrarAbonoSiCorresponde()) return;
             if (booking?.status === 'cancelled' || booking?.payment_status === 'cancelled') {
               setStatus('error');
               setMessage('El pago no pudo ser completado. Por favor intenta nuevamente.');
@@ -483,7 +509,9 @@ export default function PaymentReturnPage() {
             }
           } catch (_) { /* keep polling */ }
         }
-        // Timeout — show pending, the webhook will update eventually
+        // Timeout — un último vistazo: el abono pudo confirmarse en el último intento
+        if (await mostrarAbonoSiCorresponde()) return;
+        // show pending, the webhook will update eventually
         setStatus('pending');
         setMessage('Tu pago está siendo procesado. Te notificaremos por correo cuando sea confirmado.');
         return;
@@ -557,6 +585,39 @@ export default function PaymentReturnPage() {
             >
               Ver mis reservas
             </button>
+          </>
+        )}
+
+        {status === 'partial' && abono && (
+          <>
+            <div className="flex justify-center mb-6">
+              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center">
+                <Wallet className="w-10 h-10 text-blue-600" />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Abono recibido</h2>
+            <p className="text-gray-500 mb-4">
+              Confirmamos tu abono de <strong>{formatCurrencyMXN(abono.abonado)}</strong>. Tu reserva se
+              confirma cuando completes el pago.
+            </p>
+            <p className="text-gray-700 mb-6">
+              Saldo pendiente: <strong>{formatCurrencyMXN(abono.saldo)}</strong>. Puedes completarlo desde
+              «Mis reservas» con cualquier método de pago.
+            </p>
+            <div className="flex flex-col gap-y-3">
+              <button
+                onClick={handleGoToBookings}
+                className="w-full py-3 bg-primary-600 text-white rounded-xl font-semibold hover:bg-primary-700 transition-colors"
+              >
+                Completar pago en Mis reservas
+              </button>
+              <button
+                onClick={handleGoHome}
+                className="w-full py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Volver al inicio
+              </button>
+            </div>
           </>
         )}
 

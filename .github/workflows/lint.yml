@@ -171,6 +171,9 @@ jobs:
       - name: Verify no Edge Function sends email outside _shared/correo
         run: node scripts/check-correo-directo.mjs
 
+      - name: Verify the return screen after a partial payment (abono recibido)
+        run: node scripts/test-abono-recibido.mjs
+
       - name: Verify search logging respects cookie consent
         run: node scripts/test-registro-de-busqueda.mjs
 
