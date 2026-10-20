@@ -298,7 +298,7 @@ Deno.serve(async (req: Request) => {
 
         await enviarPayloadSmtp2go(supabase, {
             to: ["soporte@toursred.com.mx"],
-            sender: "soporte@toursred.com.mx",
+            sender: "soporte@toursred.com",
             subject: `[Nuevo Ticket] ${folioData} — ${solicitante_nombre}`,
             text_body: `Nuevo ticket de soporte\n\nFolio: ${folioData}\nSolicitante: ${solicitante_nombre} (${solicitante_email})\nCategoria: ${subcategory.nombre}\n\nDescripcion:\n${descripcion}`,
             html_body: htmlBody,

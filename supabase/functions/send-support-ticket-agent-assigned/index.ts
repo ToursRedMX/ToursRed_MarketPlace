@@ -148,7 +148,7 @@ ToursRed — soporte@toursred.com.mx`;
 
     const response = await enviarPayloadSmtp2go(supabase, {
         to: [agente_email],
-        sender: "soporte@toursred.com.mx",
+        sender: "soporte@toursred.com",
         subject: `[${folio}] Ticket asignado — ToursRed`,
         text_body: textBody,
         html_body: htmlBody,

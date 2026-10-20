@@ -172,7 +172,7 @@ ToursRed — soporte@toursred.com.mx`;
 
     const emailPayload = {
       to: [solicitante_email],
-      sender: "soporte@toursred.com.mx",
+      sender: "soporte@toursred.com",
       subject: `[${folio}] Tu ticket de soporte fue registrado — ToursRed`,
       text_body: textBody,
       html_body: htmlBody,
