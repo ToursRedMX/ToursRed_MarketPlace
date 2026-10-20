@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 const env = {};
 globalThis.Deno = { env: { get: (k) => env[k] } };
 
-const { separarRemitente, enviarPorSendgrid, enviarPorSmtp2go } = await import('../supabase/functions/_shared/correo/proveedores.ts');
+const { separarRemitente, enviarPorSendgrid, enviarPorSmtp2go, enviarPorZoho } = await import('../supabase/functions/_shared/correo/proveedores.ts');
 const { enviarCorreo, leerAjustesCorreo, limpiarCacheAjustesCorreo } = await import('../supabase/functions/_shared/correo/enviarCorreo.ts');
 
 let casos = 0;
@@ -33,6 +33,7 @@ function simular(...respuestas) {
 }
 const OK_SMTP2GO = { status: 200, cuerpo: { data: { succeeded: 1, failed: 0 } } };
 const OK_SENDGRID = { status: 202 };
+const OK_ZOHO = { status: 200, cuerpo: { data: [{ code: 'EM_104' }], message: 'OK' } };
 
 const correo = { para: 'viajero@ejemplo.com', asunto: 'Hola', html: '<p>codigo 123456</p>' };
 const ajustes = (extra = {}) => ({
@@ -127,6 +128,42 @@ await prueba('SendGrid: solo HTML cuando no hay texto; 4xx rechazo, 429/5xx no d
   assert.equal((await enviarPorSendgrid('', correo, 's@x.com')).clase, 'no_configurado');
 });
 
+await prueba('Zoho: Authorization con prefijo, payload, adjuntos e imagen en linea', async () => {
+  simular(OK_ZOHO, OK_ZOHO);
+  const r = await enviarPorZoho('abc123', { ...correo, para: ['a@x.com', 'Ana Perez <ana@x.com>'], texto: 't', responderA: 'Soporte <r@x.com>',
+    adjuntos: [{ nombre: 'f.pdf', contenidoBase64: 'QQ==', mimetype: 'application/pdf' }, { nombre: 'qr.png', contenidoBase64: 'Qg==', mimetype: 'image/png', enLinea: true }] },
+  'ToursRed <noreply@toursred.com>');
+  assert.equal(r.ok, true);
+  const [l] = llamadas;
+  assert.equal(l.url, 'https://cpaas.zoho.com/v1.1/email');
+  assert.equal(l.init.headers.Authorization, 'Zoho-enczapikey abc123', 'agrega el prefijo si el secreto no lo trae');
+  assert.deepEqual(l.cuerpo.from, { address: 'noreply@toursred.com', name: 'ToursRed' });
+  assert.deepEqual(l.cuerpo.to, [{ email_address: { address: 'a@x.com' } }, { email_address: { address: 'ana@x.com', name: 'Ana Perez' } }]);
+  assert.equal(l.cuerpo.subject, correo.asunto);
+  assert.equal(l.cuerpo.htmlbody, correo.html);
+  assert.equal(l.cuerpo.textbody, 't');
+  assert.deepEqual(l.cuerpo.reply_to, [{ address: 'r@x.com', name: 'Soporte' }]);
+  assert.deepEqual(l.cuerpo.attachments, [{ name: 'f.pdf', mime_type: 'application/pdf', content: 'QQ==' }]);
+  assert.deepEqual(l.cuerpo.inline_images, [{ name: 'qr.png', mime_type: 'image/png', content: 'Qg==', cid: 'qr.png' }]);
+  await enviarPorZoho('Zoho-enczapikey yaprefijo', correo, 's@x.com');
+  assert.equal(llamadas[1].init.headers.Authorization, 'Zoho-enczapikey yaprefijo', 'no duplica el prefijo');
+  assert.equal('attachments' in llamadas[1].cuerpo || 'inline_images' in llamadas[1].cuerpo || 'reply_to' in llamadas[1].cuerpo, false);
+});
+
+await prueba('Zoho: 200 es exito; 4xx rechazo; 429/5xx no disponible; red incierto; sin llave', async () => {
+  for (const [status, clase] of [[400, 'rechazo_confirmado'], [401, 'rechazo_confirmado'], [429, 'no_disponible'], [500, 'no_disponible']]) {
+    simular({ status, cuerpo: { data: { error_code: 'X' } } });
+    const r = await enviarPorZoho('k', correo, 's@x.com');
+    assert.equal(r.clase, clase, `HTTP ${status}`);
+    assert.equal(r.codigo, `zoho_http_${status}`);
+  }
+  simular({ status: 202 });
+  assert.equal((await enviarPorZoho('k', correo, 's@x.com')).ok, false, 'solo 200 es exito');
+  simular(new Error('red'));
+  assert.equal((await enviarPorZoho('k', correo, 's@x.com')).clase, 'incierto');
+  assert.equal((await enviarPorZoho('', correo, 's@x.com')).clase, 'no_configurado');
+});
+
 await prueba('enviarCorreo: usa el principal configurado y no toca el otro', async () => {
   env.SENDGRID_API_KEY = 'SG.env';
   simular(OK_SENDGRID);
@@ -137,6 +174,23 @@ await prueba('enviarCorreo: usa el principal configurado y no toca el otro', asy
   simular(OK_SMTP2GO);
   assert.deepEqual(await enviarCorreo({}, correo, ajustes()), { ok: true, proveedor: 'smtp2go', respaldo: false });
   assert.match(llamadas[0].url, /smtp2go/);
+  env.ZOHO_EMAIL_API_KEY = 'zk';
+  simular(OK_ZOHO);
+  assert.deepEqual(await enviarCorreo({}, correo, ajustes({ email_provider: 'zoho' })), { ok: true, proveedor: 'zoho', respaldo: false });
+  assert.equal(llamadas.length, 1);
+  assert.equal(llamadas[0].init.headers.Authorization, 'Zoho-enczapikey zk');
+  // Zoho como respaldo de SendGrid y SendGrid como respaldo de Zoho
+  simular({ status: 403 }, OK_ZOHO);
+  assert.deepEqual(await enviarCorreo({}, correo, ajustes({ email_provider: 'sendgrid', email_fallback_provider: 'zoho', email_fallback_enabled: true })),
+    { ok: true, proveedor: 'zoho', respaldo: true });
+  simular({ status: 400, cuerpo: {} }, OK_SENDGRID);
+  assert.deepEqual(await enviarCorreo({}, correo, ajustes({ email_provider: 'zoho', email_fallback_provider: 'sendgrid', email_fallback_enabled: true })),
+    { ok: true, proveedor: 'sendgrid', respaldo: true });
+  delete env.ZOHO_EMAIL_API_KEY;
+  simular(OK_SMTP2GO);
+  const sinLlave = await enviarCorreo({}, correo, ajustes({ email_provider: 'zoho', email_fallback_provider: 'smtp2go', email_fallback_enabled: true }));
+  assert.deepEqual(sinLlave, { ok: true, proveedor: 'smtp2go', respaldo: true }, 'sin secreto de Zoho pasa al respaldo');
+  assert.equal(llamadas.length, 1);
 });
 
 await prueba('enviarCorreo: remitente por defecto, el de la funcion y el de la base', async () => {
@@ -188,6 +242,10 @@ await prueba('enviarCorreo: respaldo solo si el principal NO lo acepto con certe
 await prueba('leerAjustesCorreo: valor desconocido cae a smtp2go; error o sin fila dan null', async () => {
   limpiarCacheAjustesCorreo();
   const fila = { smtp_api_key: 'k', contact_email: 'c@x.com', email_provider: 'mailgun', email_fallback_provider: 'otro', email_fallback_enabled: true };
+  const conZoho = await leerAjustesCorreo(clienteConAjustes({ ...fila, email_provider: 'zoho', email_fallback_provider: 'sendgrid' }));
+  assert.equal(conZoho.email_provider, 'zoho');
+  assert.equal(conZoho.email_fallback_provider, 'sendgrid');
+  limpiarCacheAjustesCorreo();
   assert.deepEqual(await leerAjustesCorreo(clienteConAjustes(fila)), {
     contact_email: 'c@x.com', smtp_api_key: 'k', email_provider: 'smtp2go', email_fallback_provider: null, email_fallback_enabled: true,
   });
@@ -234,7 +292,11 @@ await prueba('enviarCorreo no registra el cuerpo del correo ni las llaves', asyn
 await prueba('contrato del codigo fuente: la migracion y el modulo comparten proveedores y la llave de SendGrid es un secreto', () => {
   const tipos = readFileSync('supabase/functions/_shared/correo/tipos.ts', 'utf8');
   const sql = readFileSync('supabase/migrations/20261019214718_email_settings_proveedor_configurable.sql', 'utf8');
-  assert.match(tipos, /"smtp2go" \| "sendgrid"/);
+  assert.match(tipos, /"smtp2go" \| "sendgrid" \| "zoho"/);
+  const sqlZoho = readFileSync('supabase/migrations/20261020053214_email_settings_agregar_zoho.sql', 'utf8');
+  assert.match(sqlZoho, /email_provider IN \('smtp2go', 'sendgrid', 'zoho'\)/);
+  assert.match(sqlZoho, /email_fallback_provider IN \('smtp2go', 'sendgrid', 'zoho'\)/);
+  assert.doesNotMatch(sqlZoho, /zoho_api_key|ZOHO_EMAIL_API_KEY\s*=/i, 'la llave de Zoho no se guarda en la base');
   assert.match(sql, /IN \('smtp2go', 'sendgrid'\)/);
   assert.match(sql, /DEFAULT 'smtp2go'/);
   assert.match(sql, /email_fallback_enabled boolean NOT NULL DEFAULT false/);
@@ -242,6 +304,7 @@ await prueba('contrato del codigo fuente: la migracion y el modulo comparten pro
   const ui = readFileSync('src/pages/admin/AdminSettings.tsx', 'utf8');
   assert.match(ui, /email_provider: settings\.email_provider/);
   assert.match(ui, /PROVEEDORES_CORREO/);
+  assert.match(ui, /valor: 'zoho'/);
 });
 
 console.log(`OK: ${casos} casos del proveedor de correo.`);

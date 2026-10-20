@@ -16,11 +16,12 @@ interface EmailSettings {
   email_fallback_enabled: boolean;
 }
 
-type ProveedorCorreo = 'smtp2go' | 'sendgrid';
+type ProveedorCorreo = 'smtp2go' | 'sendgrid' | 'zoho';
 
 const PROVEEDORES_CORREO: { valor: ProveedorCorreo; etiqueta: string }[] = [
   { valor: 'sendgrid', etiqueta: 'Twilio SendGrid' },
   { valor: 'smtp2go', etiqueta: 'SMTP2GO' },
+  { valor: 'zoho', etiqueta: 'Zoho Mail (correos transaccionales)' },
 ];
 
 interface PlatformSecrets {
@@ -1810,7 +1811,7 @@ const AdminSettings: React.FC = () => {
                 Proveedor principal
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                Por aquí salen todos los correos de la plataforma. Twilio SendGrid usa el secreto SENDGRID_API_KEY de las Edge Functions; SMTP2GO usa la API key de abajo.
+                Por aquí salen todos los correos de la plataforma. Twilio SendGrid y Zoho usan los secretos SENDGRID_API_KEY y ZOHO_EMAIL_API_KEY de las Edge Functions; SMTP2GO usa la API key de abajo.
               </p>
               <select
                 id="email_provider"

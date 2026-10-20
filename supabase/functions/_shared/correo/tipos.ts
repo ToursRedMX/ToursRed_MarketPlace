@@ -1,9 +1,9 @@
 // Tipos del envio de correo. Un solo contrato para todos los proveedores: quien llama
 // no sabe si el correo sale por SMTP2GO o por SendGrid (Twilio).
 
-export type ProveedorCorreo = "smtp2go" | "sendgrid";
+export type ProveedorCorreo = "smtp2go" | "sendgrid" | "zoho";
 
-export const PROVEEDORES_CORREO: readonly ProveedorCorreo[] = ["smtp2go", "sendgrid"];
+export const PROVEEDORES_CORREO: readonly ProveedorCorreo[] = ["smtp2go", "sendgrid", "zoho"];
 
 export interface AdjuntoCorreo {
   nombre: string;
