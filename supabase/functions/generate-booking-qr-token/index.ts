@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { llamadaInterna } from "../_shared/auth.ts";
+import { inicioDeLaReserva, vencimientoDelQr } from "../_shared/inicioDeLaReserva.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +18,9 @@ type ReservaQr = {
   id: string;
   user_id: string;
   agency_id: string;
+  slot_id: string | null;
+  selected_date: string | null;
+  booking_date: string | null;
   tour: { start_date: string | null } | null;
   agency: { user_id: string } | null;
 };
@@ -97,7 +101,7 @@ Deno.serve(async (req: Request) => {
     // siquiera que exista, para no dejar el oraculo de enumeracion.
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
-      .select("id, user_id, agency_id, tour:tours(start_date), agency:agencies(user_id)")
+      .select("id, user_id, agency_id, slot_id, selected_date, booking_date, tour:tours(start_date), agency:agencies(user_id)")
       .eq("id", booking_id)
       .returns<ReservaQr[]>()
       .maybeSingle();
@@ -164,18 +168,36 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // tours.start_date es nullable. Sin este guard, `new Date(null)` daba
-    // Invalid Date, expires_at salia NaN y el INSERT de abajo fallaba con un
-    // error de Postgres que no decia nada de la fecha faltante.
-    if (!booking.tour?.start_date) {
+    // tours.start_date es nullable: los tours receptivos (salidas por horario) no lo tienen, su fecha
+    // vive en la reserva y en el horario. Antes se respondia 422 aqui y esas reservas nunca tenian QR
+    // (19-oct-2026). Ver `_shared/inicioDeLaReserva.ts`. Sin NINGUNA fecha valida seguimos negandonos:
+    // `new Date(null)` daba Invalid Date, expires_at salia NaN y el INSERT fallaba con un error de
+    // Postgres que no decia nada de la fecha faltante.
+    let slot: { slot_date: string | null; departure_time: string | null } | null = null;
+    if (!booking.tour?.start_date && booking.slot_id) {
+      const { data: slotData } = await supabase
+        .from("tour_slots")
+        .select("slot_date, departure_time")
+        .eq("id", booking.slot_id)
+        .maybeSingle();
+      slot = slotData;
+    }
+
+    const inicio = inicioDeLaReserva({
+      tourStart: booking.tour?.start_date,
+      slotDate: slot?.slot_date,
+      departureTime: slot?.departure_time,
+      selectedDate: booking.selected_date,
+      bookingDate: booking.booking_date,
+    });
+    if (!inicio) {
       return new Response(
-        JSON.stringify({ error: "El tour de esta reserva no tiene fecha de inicio" }),
+        JSON.stringify({ error: "La reserva no tiene una fecha de inicio para generar el QR" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const tourStartDate = new Date(booking.tour.start_date);
-    const expiresAt = new Date(tourStartDate.getTime() + 24 * 60 * 60 * 1000);
+    const expiresAt = vencimientoDelQr(inicio);
 
     const { data: tokenRecord, error: insertError } = await supabase
       .from("booking_checkin_tokens")
