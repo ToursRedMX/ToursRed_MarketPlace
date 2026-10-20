@@ -4,6 +4,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { apartarSaldoDeReserva, exigirMfaSiGastaSaldo } from "../_shared/gastoDeSaldo.ts";
+import { exigibleAlProcesador } from "../_shared/exigible.ts";
+import { pagadoEnProcesadores } from "../_shared/pagoParcial.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -222,14 +224,12 @@ Deno.serve(async (req: Request) => {
     } else if (bookingId) {
       const { data: booking } = await supabase
         .from("bookings")
-        .select("amount_due_now, deposit_amount, payment_status, user_id, points_used, toursred_cash_used")
+        .select("amount_due_now, deposit_amount, membership_cost, payment_status, user_id, points_used, toursred_cash_used")
         .eq("id", bookingId)
         .maybeSingle();
       if (booking) {
         // Ver nota en create-openpay-checkout: el techo es el exigible, no el anticipo.
-        const depositAmount = booking.amount_due_now != null
-          ? Number(booking.amount_due_now)
-          : Number(booking.deposit_amount || 0);
+        const depositAmount = exigibleAlProcesador(booking);
         if (booking.payment_status === "succeeded") {
           return new Response(JSON.stringify({ error: "La reserva ya esta pagada" }), {
             status: 400,
@@ -243,13 +243,8 @@ Deno.serve(async (req: Request) => {
         // al confirmar (Conekta y OpenPay ni eso) y podia confirmarse sin pagarlo.
         const apartadoBlock = await apartarSaldoDeReserva(supabase, bookingId, booking);
         if (apartadoBlock) return apartadoBlock;
-        const { data: existingPayments } = await supabase
-          .from("payment_transactions")
-          .select("amount")
-          .eq("booking_id", bookingId)
-          .eq("status", "succeeded")
-          .eq("payment_processor", "mercadopago");
-        const alreadyPaid = (existingPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+        // Lo ya pagado por TODOS los procesadores (ver _shared/pagoParcial.ts).
+        const alreadyPaid = await pagadoEnProcesadores(supabase, bookingId);
         const remainingBalanceMp = Math.max(0, depositAmount - alreadyPaid);
 
         if (remainingBalanceMp <= 0) {

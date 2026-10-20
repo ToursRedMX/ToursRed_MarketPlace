@@ -1173,6 +1173,23 @@ Deno.serve(async (req) => {
               paymentStatus,
             );
 
+            // La comision real de este abono. Antes esta rama dejaba
+            // processor_fee en 0 y net_amount igual al monto: el `break` de abajo se
+            // salta el bloque que la escribe en el camino normal, y un pago con
+            // «mas de un metodo» (19-oct-2026) entra SIEMPRE por aqui el primero.
+            const comisionDelAbono = paymentIntentId && estadoSegunStripe(paymentStatus) === 'succeeded'
+              ? await getStripeProcessorFee(stripe, paymentIntentId)
+              : null;
+            const feeDelAbono = comisionDelAbono && centavosMembresia > 0
+              ? repartirComision(comisionDelAbono, centavosMembresia, session.amount_total ?? 0).reserva
+              : comisionDelAbono;
+            if (feeDelAbono) {
+              await supabase
+                .from('payment_transactions')
+                .update(columnasDeComision(feeDelAbono))
+                .eq('stripe_payment_intent_id', paymentIntentId);
+            }
+
             await supabase
               .from('bookings')
               .update({ payment_status: 'processing', payment_intent_id: paymentIntentId })

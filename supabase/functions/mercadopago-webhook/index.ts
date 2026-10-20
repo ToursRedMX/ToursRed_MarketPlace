@@ -7,6 +7,8 @@ import { avisosCon } from "../_shared/avisosDePago.ts";
 import { separarFeeBaseIva } from "../_shared/separarFeeBaseIva.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { DefinicionParcialidad } from "../_shared/planesDePago.ts";
+import { exigibleAlProcesador } from "../_shared/exigible.ts";
+import { pagadoEnProcesadores } from "../_shared/pagoParcial.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -736,19 +738,14 @@ Deno.serve(async (req: Request) => {
           console.error("Error inserting payment_transactions (MP webhook):", txErr);
         }
 
-        // Incremental payment check: sum all confirmed MP payments and compare to deposit_amount
-        const depositAmount = Math.max(
-          Number(booking.deposit_amount || 0),
-          Number(booking.amount_due_now || 0) - Number(booking.membership_cost || 0),
-        );
-        const { data: priorPayments } = await supabase
-          .from("payment_transactions")
-          .select("amount")
-          .eq("booking_id", externalReference)
-          .eq("status", "succeeded")
-          .eq("payment_processor", "mercadopago");
-
-        const totalPaid = (priorPayments || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+        // Pago incremental: se suma lo cobrado por TODOS los procesadores (con
+        // «pagar con mas de un metodo» el otro abono pudo ser de Stripe, PayPal...)
+        // y se compara contra el exigible NETO de puntos y Cash, que es lo que los
+        // procesadores tienen que cobrar. Antes: solo filas de MP contra
+        // max(deposit_amount, due_now - membresia), un piso que con puntos o Cash
+        // ningun procesador alcanza (ver _shared/exigible.ts).
+        const depositAmount = exigibleAlProcesador(booking);
+        const totalPaid = await pagadoEnProcesadores(supabase, externalReference);
         const isFullyPaid = totalPaid >= depositAmount - 0.50;
 
         if (!isFullyPaid) {

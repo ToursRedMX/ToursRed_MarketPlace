@@ -9,6 +9,8 @@ import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
 import { enforceStepUp } from "../_shared/stepUpCheck.ts";
 import { apartarSaldoDeReserva } from "../_shared/gastoDeSaldo.ts";
 import { clienteStripeVigente } from "../_shared/clienteStripe.ts";
+import { exigibleAlProcesador } from "../_shared/exigible.ts";
+import { decidirCobroStripe, pagadoEnProcesadores } from "../_shared/pagoParcial.ts";
 
 const sentryDsn = Deno.env.get("SENTRY_BACKEND_DSN");
 if (sentryDsn) {
@@ -107,7 +109,10 @@ Deno.serve(async (req) => {
       pointsUsed = 0
     } = await req.json();
 
-    if (amount == null || !bookingId) {
+    // `amount` puede faltar solo al completar el saldo de una reserva con abonos
+    // previos («Completar pago» en Mis reservas): ahi el servidor decide el saldo.
+    // Con membresia sigue siendo obligatorio (la rama de suscripcion lo usa).
+    if (!bookingId || (amount == null && addMembership)) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -120,7 +125,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (amount <= 0) {
+    if (amount != null && amount <= 0) {
       return new Response(
         JSON.stringify({ success: false, error: "El monto a cobrar es cero; no se requiere pago con tarjeta." }),
         {
@@ -603,7 +608,7 @@ Deno.serve(async (req) => {
       // Sin membresia, el tope de puntos/Cash del front no incluye nada mas
       // que absorber: `sobrante` siempre es 0 aqui en la practica (no hay
       // membresia a la que descontarle). Se ignora a proposito.
-      const { lineItems } = buildDesgloseLineItems(
+      let { lineItems } = buildDesgloseLineItems(
         booking,
         unpaidOptionals,
         puntosSolicitados,
@@ -612,15 +617,59 @@ Deno.serve(async (req) => {
         description
       );
 
-      const errorMonto = validarMontoDelCliente(amount, lineItems, bookingId);
-      if (errorMonto) {
+      // Pago con «más de un método» (19-oct-2026): hasta hoy `amount` solo
+      // detectaba desacuerdo y Stripe cobraba SIEMPRE las lineas completas, asi
+      // que un abono de $350 sobre $550 se rechazaba como «no coincide» (o, con
+      // los otros procesadores, se cobraba el total). Ahora un monto menor al
+      // total, o cualquier cobro con pagos previos, es un abono: se cobra tal
+      // cual y con tope en el saldo (ver _shared/pagoParcial.ts).
+      const { data: dueRow, error: dueErr } = await supabase
+        .from("bookings")
+        .select("amount_due_now, deposit_amount, membership_cost, total_price")
+        .eq("id", bookingId)
+        .single();
+      if (dueErr || !dueRow) {
         return new Response(
-          JSON.stringify({ success: false, error: errorMonto, details: "amount_mismatch" }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 400,
-          }
+          JSON.stringify({ success: false, error: "No se pudo leer el saldo de la reserva" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
         );
+      }
+      const pagadoPrevio = await pagadoEnProcesadores(supabase, bookingId);
+      const decision = decidirCobroStripe({
+        // Sin `amount` (completar saldo) se cobra el saldo completo.
+        montoCliente: amount != null ? Number(amount) : Math.max(0, exigibleAlProcesador(dueRow) - pagadoPrevio),
+        totalLineas: sumarLineas(lineItems),
+        saldo: Math.max(0, exigibleAlProcesador(dueRow) - pagadoPrevio),
+        pagadoPrevio,
+        tolerancia: TOLERANCIA_MONTO_MXN,
+        minimo: 10,
+      });
+      if (decision.modo === "rechazo") {
+        return new Response(
+          JSON.stringify({ success: false, error: decision.error, details: "amount_mismatch" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        );
+      }
+      if (decision.modo === "parcial") {
+        lineItems = [{
+          price_data: {
+            currency,
+            product_data: { name: `Abono a tu reserva - ${description || "Reserva"}` },
+            unit_amount: Math.round(decision.monto * 100),
+          },
+          quantity: 1,
+        }];
+      } else {
+        const errorMonto = amount != null ? validarMontoDelCliente(Number(amount), lineItems, bookingId) : null;
+        if (errorMonto) {
+          return new Response(
+            JSON.stringify({ success: false, error: errorMonto, details: "amount_mismatch" }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 400,
+            }
+          );
+        }
       }
 
       sessionConfig.mode = "payment";
@@ -666,7 +715,7 @@ Deno.serve(async (req) => {
     // expirada o ya completada, y no puede pagar. Con el bucket, los reintentos
     // de un mismo arranque se deduplican y un intento nuevo obtiene sesion nueva.
     const ventana = Math.floor(Date.now() / (10 * 60 * 1000));
-    const idempotencyKey = `checkout_${bookingId}_${planMembresia ?? 'booking'}_${cashSolicitado}_${puntosSolicitados}_${ventana}`;
+    const idempotencyKey = `checkout_${bookingId}_${planMembresia ?? 'booking'}_${cashSolicitado}_${puntosSolicitados}_${amount != null ? Math.round(Number(amount) * 100) : 'saldo'}_${ventana}`;
     const session = await stripe.checkout.sessions.create(sessionConfig, { idempotencyKey });
 
     return new Response(

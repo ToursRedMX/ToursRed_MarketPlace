@@ -228,6 +228,12 @@ jobs:
       - name: Verify the amount-due and deposit-floor rules
         run: node scripts/test-exigible.mjs
 
+      # Pago con «mas de un metodo»: cada procesador cobra exactamente el monto
+      # parcial elegido (el paso 4 mandaba el total del servidor), Stripe acepta
+      # un abono y el saldo se mide contra los cobros de TODOS los procesadores.
+      - name: Verify split payments charge exactly the chosen amount
+        run: node scripts/test-pago-parcial.mjs
+
       # La tasa de comision que ve y guarda AdminAgencies sale de
       # platform_settings, no de un 10% clavado. El `||` de antes trataba el 0
       # como ausente, asi que un 0% pactado se convertia en 10% al reabrir la

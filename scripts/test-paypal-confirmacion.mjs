@@ -41,6 +41,8 @@ const EXIGIBLE = 'supabase/functions/_shared/exigible.ts';
 // ReferenceError que el try/catch de la funcion se traga en silencio: la fila
 // no se insertaba y el caso 1 fallaba con «0 !== 1».
 const COBROS_PAYPAL = 'supabase/functions/_shared/cobrosPaypal.ts';
+// Lo ya pagado se mide con el ayudante compartido (todos los procesadores), asi que tambien se carga.
+const PAGO_PARCIAL = 'supabase/functions/_shared/pagoParcial.ts';
 
 const codigo = readFileSync(FUENTE, 'utf8');
 
@@ -170,6 +172,9 @@ function montar(estado) {
   vm.runInContext(compilar(readFileSync(COBROS_PAYPAL, 'utf8')), contexto);
   Object.assign(contexto, contexto.exports);
 
+  vm.runInContext(compilar(readFileSync(PAGO_PARCIAL, 'utf8')), contexto);
+  Object.assign(contexto, contexto.exports);
+
   vm.runInContext(compilar([
     recortarFuncion(codigo, 'registrarCobroPaypal'),
     recortarFuncion(codigo, 'confirmBooking'),
@@ -294,6 +299,21 @@ casos.push(async () => {
   const r = montar({ reserva: { payment_status: 'succeeded', deposit_amount: 100, user_id: 'u1', points_used: 0, toursred_cash_used: 0 }, transacciones: [] });
   await r.confirmBooking(r.supabase, 'b1', 'cap-1', captura('cap-1', 500), null);
   assert.equal(r.registro.updates.length, 0, 'una reserva ya confirmada no se vuelve a tocar');
+});
+
+// --- 11. Pago con mas de un metodo: el abono anterior fue de OTRO procesador --
+//     19-oct-2026. Stripe $1,600 + PayPal $1,600 sobre un anticipo de $3,000: antes solo se
+//     contaban los cobros de PayPal, asi que la reserva se quedaba en `processing`.
+casos.push(async () => {
+  const r = montar({
+    reserva: { payment_status: 'processing', deposit_amount: 3000, user_id: 'u1', points_used: 0, toursred_cash_used: 0 },
+    transacciones: [
+      { amount: 1600, status: 'succeeded', payment_processor: 'stripe', charge_context: 'booking_deposit', stripe_payment_intent_id: 'pi_1' },
+    ],
+  });
+  await r.confirmBooking(r.supabase, 'b1', 'cap-2', captura('cap-2', 1600), null);
+  assert.ok(confirmada(r),
+    'FALLO: el abono de Stripe no se suma al de PayPal: lo ya pagado se esta midiendo solo contra PayPal');
 });
 
 let ok = 0;
