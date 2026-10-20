@@ -63,6 +63,52 @@ export async function enviarPorSmtp2go(
   }
 }
 
+/** Zoho espera `Zoho-enczapikey <token>`; se acepta el secreto con o sin ese prefijo. */
+function autorizacionZoho(llave: string): string {
+  const t = llave.trim();
+  return /^zoho-enczapikey\s/i.test(t) ? t : `Zoho-enczapikey ${t}`;
+}
+
+export async function enviarPorZoho(
+  llave: string | null | undefined,
+  correo: CorreoSaliente,
+  remitente: string,
+): Promise<ResultadoProveedor> {
+  if (!llave) return { ok: false, clase: "no_configurado", codigo: "zoho_sin_llave" };
+  const persona = (valor: string) => {
+    const { email, name } = separarRemitente(valor);
+    return name ? { address: email, name } : { address: email };
+  };
+  const adjuntos = (correo.adjuntos ?? []).filter((a) => !a.enLinea);
+  const enLinea = (correo.adjuntos ?? []).filter((a) => a.enLinea);
+  try {
+    const respuesta = await fetch("https://cpaas.zoho.com/v1.1/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: autorizacionZoho(llave) },
+      body: JSON.stringify({
+        from: persona(remitente),
+        to: lista(correo.para).map((p) => ({ email_address: persona(p) })),
+        subject: correo.asunto,
+        htmlbody: correo.html,
+        ...(correo.texto ? { textbody: correo.texto } : {}),
+        ...(correo.responderA ? { reply_to: [persona(correo.responderA)] } : {}),
+        ...(adjuntos.length
+          ? { attachments: adjuntos.map((a) => ({ name: a.nombre, mime_type: a.mimetype, content: a.contenidoBase64 })) }
+          : {}),
+        ...(enLinea.length
+          ? { inline_images: enLinea.map((a) => ({ name: a.nombre, mime_type: a.mimetype, content: a.contenidoBase64, cid: a.nombre })) }
+          : {}),
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    // 200 = aceptado; 400 trae `data.error_code`, que no se registra junto con el correo.
+    if (respuesta.status === 200) return { ok: true };
+    return { ok: false, clase: claseHttp(respuesta.status), codigo: `zoho_http_${respuesta.status}` };
+  } catch {
+    return { ok: false, clase: "incierto", codigo: "zoho_sin_respuesta" };
+  }
+}
+
 export async function enviarPorSendgrid(
   llave: string | null | undefined,
   correo: CorreoSaliente,

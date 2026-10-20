@@ -5,8 +5,8 @@
 // 5xx/429 o llave ausente). Con un timeout o una red caida el correo pudo salir: reintentar por
 // otro proveedor lo duplicaria, asi que ahi se reporta el fallo y no se reintenta.
 //
-// La llave de SendGrid es un secreto de la Edge Function (SENDGRID_API_KEY), no una columna.
-import { enviarPorSendgrid, enviarPorSmtp2go } from "./proveedores.ts";
+// Las llaves de SendGrid y Zoho son secretos de la Edge Function (SENDGRID_API_KEY, ZOHO_EMAIL_API_KEY), no columnas.
+import { enviarPorSendgrid, enviarPorSmtp2go, enviarPorZoho } from "./proveedores.ts";
 import {
   PROVEEDORES_CORREO,
   type AjustesCorreo,
@@ -57,9 +57,14 @@ export async function leerAjustesCorreo(admin: ClienteCorreo): Promise<AjustesCo
 }
 
 function intentar(proveedor: ProveedorCorreo, ajustes: AjustesCorreo, correo: CorreoSaliente, remitente: string): Promise<ResultadoProveedor> {
-  return proveedor === "sendgrid"
-    ? enviarPorSendgrid(Deno.env.get("SENDGRID_API_KEY"), correo, remitente)
-    : enviarPorSmtp2go(ajustes.smtp_api_key, correo, remitente);
+  switch (proveedor) {
+    case "sendgrid":
+      return enviarPorSendgrid(Deno.env.get("SENDGRID_API_KEY"), correo, remitente);
+    case "zoho":
+      return enviarPorZoho(Deno.env.get("ZOHO_EMAIL_API_KEY"), correo, remitente);
+    default:
+      return enviarPorSmtp2go(ajustes.smtp_api_key, correo, remitente);
+  }
 }
 
 const FALLBACK_SEGURO = new Set(["rechazo_confirmado", "no_disponible", "no_configurado"]);
