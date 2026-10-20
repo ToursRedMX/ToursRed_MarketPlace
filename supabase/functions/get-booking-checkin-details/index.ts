@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { fechasParaMostrar } from "../_shared/inicioDeLaReserva.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,6 +35,9 @@ type ReservaCheckinDetalle = {
   user_id: string;
   agency_id: string;
   wallet_charged_at_checkin: number;
+  slot_id: string | null;
+  selected_date: string | null;
+  booking_date: string | null;
   tour: {
     id: string;
     name: string;
@@ -148,6 +152,9 @@ Deno.serve(async (req: Request) => {
         user_id,
         agency_id,
         wallet_charged_at_checkin,
+        slot_id,
+        selected_date,
+        booking_date,
         tour:tours(id, name, destination, start_date, end_date),
         traveler:users!bookings_user_id_fkey(id, first_name, last_name, email, phone_number),
         agency:agencies(id, name, user_id, contact_email, contact_phone)
@@ -179,6 +186,29 @@ Deno.serve(async (req: Request) => {
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Los tours receptivos no tienen start_date/end_date: la pantalla mostraba la fecha vacia. Se completa
+    // con el dia del horario de la reserva (`_shared/inicioDeLaReserva.ts`).
+    let slotFechas: { slot_date: string | null; end_date: string | null } | null = null;
+    if (booking.slot_id && (!booking.tour?.start_date || !booking.tour?.end_date)) {
+      const { data: slotData } = await supabase
+        .from("tour_slots")
+        .select("slot_date, end_date")
+        .eq("id", booking.slot_id)
+        .maybeSingle();
+      slotFechas = slotData;
+    }
+    const tourConFechas = booking.tour
+      ? {
+        ...booking.tour,
+        ...fechasParaMostrar(booking.tour, {
+          slotDate: slotFechas?.slot_date,
+          slotEndDate: slotFechas?.end_date,
+          selectedDate: booking.selected_date,
+          bookingDate: booking.booking_date,
+        }),
+      }
+      : booking.tour;
 
     const { data: travelers } = await supabase
       .from("booking_travelers")
@@ -245,7 +275,7 @@ Deno.serve(async (req: Request) => {
           checkin_status: booking.checkin_status,
           checkin_at: booking.checkin_at,
           selected_seats: booking.selected_seats || [],
-          tour: booking.tour,
+          tour: tourConFechas,
           traveler: booking.traveler,
           agency: {
             id: booking.agency?.id,
