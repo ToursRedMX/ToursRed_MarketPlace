@@ -157,8 +157,15 @@ await prueba('Zoho: 200 es exito; 4xx rechazo; 429/5xx no disponible; red incier
     assert.equal(r.clase, clase, `HTTP ${status}`);
     assert.equal(r.codigo, `zoho_http_${status}`);
   }
-  simular({ status: 202 });
-  assert.equal((await enviarPorZoho('k', correo, 's@x.com')).ok, false, 'solo 200 es exito');
+  // cualquier 2xx es exito: con un 201 un correo ya entregado se reenviaba por el respaldo (llegaba doble)
+  for (const status of [200, 201, 202, 204]) {
+    simular({ status, cuerpo: status === 204 ? undefined : { data: [{ code: 'EM_104' }], message: 'OK' } });
+    assert.equal((await enviarPorZoho('k', correo, 's@x.com')).ok, true, `HTTP ${status}`);
+  }
+  for (const status of [301, 302]) {
+    simular({ status });
+    assert.equal((await enviarPorZoho('k', correo, 's@x.com')).ok, false, `HTTP ${status} no es exito`);
+  }
   simular(new Error('red'));
   assert.equal((await enviarPorZoho('k', correo, 's@x.com')).clase, 'incierto');
   assert.equal((await enviarPorZoho('', correo, 's@x.com')).clase, 'no_configurado');
@@ -191,6 +198,18 @@ await prueba('enviarCorreo: usa el principal configurado y no toca el otro', asy
   const sinLlave = await enviarCorreo({}, correo, ajustes({ email_provider: 'zoho', email_fallback_provider: 'smtp2go', email_fallback_enabled: true }));
   assert.deepEqual(sinLlave, { ok: true, proveedor: 'smtp2go', respaldo: true }, 'sin secreto de Zoho pasa al respaldo');
   assert.equal(llamadas.length, 1);
+});
+
+await prueba('enviarCorreo: si Zoho acepta con 201 NO se manda otra copia por el respaldo (el doble envio del 19-oct)', async () => {
+  const zohoConSendgrid = ajustes({ email_provider: 'zoho', email_fallback_provider: 'sendgrid', email_fallback_enabled: true });
+  env.ZOHO_EMAIL_API_KEY = 'zk';
+  env.SENDGRID_API_KEY = 'SG.env';
+  for (const status of [200, 201, 202]) {
+    simular({ status, cuerpo: { data: [{ code: 'EM_104' }], message: 'OK' } }, OK_SENDGRID);
+    assert.deepEqual(await enviarCorreo({}, correo, zohoConSendgrid), { ok: true, proveedor: 'zoho', respaldo: false }, `HTTP ${status}`);
+    assert.equal(llamadas.length, 1, `HTTP ${status}: un solo envio, sin copia por SendGrid`);
+    assert.match(llamadas[0].url, /zoho/);
+  }
 });
 
 await prueba('enviarCorreo: remitente por defecto, el de la funcion y el de la base', async () => {
