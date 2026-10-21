@@ -628,6 +628,19 @@ jobs:
           cd scripts
           psql -h localhost -U postgres -d comisiones -v ON_ERROR_STOP=1 -f test-comisiones-al-libro.sql
 
+      # Un anticipo pagado con dos metodos (Stripe $350 + PayPal $200): el asiento
+      # suma la comision de los DOS cobros. Antes tomaba solo la del ultimo y Bancos
+      # salia de mas aunque la poliza cuadrara. Migracion 20261020051530.
+      - name: Verify the ledger entry sums the fee of every deposit charge
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS asiento_cobros;" -c "CREATE DATABASE asiento_cobros;"
+          cd scripts
+          psql -h localhost -U postgres -d asiento_cobros -v ON_ERROR_STOP=1 -f test-asiento-varios-cobros.sql
+
       # Pagar un gasto: despues de registrarlo, y en parcialidades. Antes no
       # habia camino — la pantalla solo editaba borradores y
       # registrar_gasto_operacion sale temprano si ya esta registrado — y el
