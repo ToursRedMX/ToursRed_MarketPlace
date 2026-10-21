@@ -42,11 +42,14 @@ interface FilaMensaje extends Message {
 interface MessageThreadProps {
   conversationId: string;
   conversationTitle?: string;
+  /** Se llama despues de ocultar la conversacion, para que la pagina cierre el hilo. */
+  onConversationHidden?: () => void;
 }
 
 const MessageThread: React.FC<MessageThreadProps> = ({
   conversationId,
-  conversationTitle
+  conversationTitle,
+  onConversationHidden
 }) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -205,6 +208,38 @@ const MessageThread: React.FC<MessageThreadProps> = ({
     setEditContent('');
   };
 
+  // "Eliminar" una conversacion la oculta SOLO para quien la borra (su fila en
+  // message_participants pasa a is_active = false); la otra parte y los admins la
+  // conservan, y un mensaje nuevo la vuelve a mostrar (trigger en la base). Se pide
+  // la fila de vuelta con .select(): con RLS un UPDATE bloqueado no da error, solo
+  // afecta 0 filas, y sin esta comprobacion la pantalla diria que se elimino.
+  const hideConversation = async () => {
+    if (!user) return;
+    if (!confirm('¿Eliminar esta conversación? Dejarás de verla, pero la otra persona conserva la suya. Si te escribe de nuevo, volverá a aparecer.')) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('message_participants')
+        .update({ is_active: false })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', user.id)
+        .select('id');
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      if (!data || data.length === 0) {
+        throw new Error('No participas en esta conversación.');
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['user-conversations'] });
+      onConversationHidden?.();
+    } catch (err) {
+      console.error('Error hiding conversation:', err);
+      setError(mensajeDeError(err) || 'Error al eliminar la conversación');
+    }
+  };
+
   const deleteMessage = async (messageId: string) => {
     if (!confirm('¿Estás seguro de que quieres eliminar este mensaje?')) return;
 
@@ -305,10 +340,19 @@ const MessageThread: React.FC<MessageThreadProps> = ({
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 bg-white">
+      <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">
           {conversationTitle || 'Conversación'}
         </h2>
+        <button
+          type="button"
+          onClick={hideConversation}
+          className="flex items-center gap-1 text-sm text-gray-500 hover:text-error-600"
+          title="Eliminar conversación"
+        >
+          <Trash2 className="h-4 w-4" />
+          Eliminar conversación
+        </button>
       </div>
 
       {/* Messages */}
