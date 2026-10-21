@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Star } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useFormPersistence } from '../hooks/useFormPersistence';
 import { usePreventUnload } from '../hooks/usePreventUnload';
@@ -26,6 +27,7 @@ export default function ReviewForm({
   onCancel,
   existingReview
 }: ReviewFormProps) {
+  const queryClient = useQueryClient();
   const [rating, setRating] = useState(existingReview?.rating || 0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState(existingReview?.comment || '');
@@ -115,6 +117,20 @@ export default function ReviewForm({
       }
 
       reviewFormPersistence.clearStorage();
+
+      // La pestana "Resenas" del tour (AgencyReviews) lee con react-query, y el
+      // cliente de la app usa staleTime de 5 min y refetchOnMount: false. Sin
+      // invalidar aqui, una resena recien guardada no aparecia en esa pestana hasta
+      // que pasaba la cache (hasta 30 min): la calificacion de la agencia ya habia
+      // subido pero la lista seguia en "No hay resenas todavia". Tambien se refresca
+      // el permiso, para que el formulario de AgencyReviews deje de ofrecerse.
+      if (reviewType === 'agency') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['agency-reviews'] }),
+          queryClient.invalidateQueries({ queryKey: ['agency-review-permission'] }),
+        ]);
+      }
+
       if (onSuccess) onSuccess();
     } catch (err) {
       console.error('Error submitting review:', err);
