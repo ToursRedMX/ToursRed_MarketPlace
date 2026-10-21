@@ -8,10 +8,12 @@ import { mensajeDeError } from '../../lib/errores';
 
 interface User {
   id: string;
-  first_name?: string;
-  last_name?: string;
-  email: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  // Un viajero ve a las agencias por su nombre, sin el correo de quien las administra.
+  email?: string | null;
   role: string;
+  agency_name?: string | null;
 }
 
 interface Tour {
@@ -60,11 +62,10 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
   } = useQuery({
     queryKey: ['create-conversation-data', user?.id, isAgency, isTraveler],
     queryFn: async () => {
-      // Fetch users (excluding current user)
-      const { data: usersData, error: usersError } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, email, role')
-        .neq('id', user?.id);
+      // A quien se le puede escribir lo decide el servidor segun el rol. Antes se
+      // leia public.users directo, y por RLS un viajero solo se veia a si mismo:
+      // la lista salia siempre vacia ("No se encontraron usuarios").
+      const { data: usersData, error: usersError } = await supabase.rpc('get_contactos_mensajeria');
 
       if (usersError) {
         throw new Error(usersError.message);
@@ -127,7 +128,7 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
         bookings = comoFilas<Booking>(bookingsData);
       }
 
-      return { users: usersData || [], bookings, tours };
+      return { users: comoFilas<User>(usersData), bookings, tours };
     },
     enabled: isOpen && !!user,
   });
@@ -206,7 +207,7 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
     if (user.first_name || user.last_name) {
       return `${user.first_name || ''} ${user.last_name || ''}`.trim();
     }
-    return user.email;
+    return user.email || user.agency_name || 'Usuario';
   };
 
   const getRoleLabel = (role: string) => {
@@ -233,7 +234,7 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
 
   const filteredUsers = users.filter(user =>
     getUserDisplayName(user).toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (user.email ?? '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (!isOpen) return null;
@@ -382,9 +383,11 @@ const CreateConversationModal: React.FC<CreateConversationModalProps> = ({
                             <div className="font-medium text-gray-900">
                               {getUserDisplayName(user)}
                             </div>
-                            <div className="text-sm text-gray-500">
-                              {user.email}
-                            </div>
+                            {user.email && (
+                              <div className="text-sm text-gray-500">
+                                {user.email}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <span className={`px-2 py-1 text-xs rounded-full ${getRoleColor(user.role)}`}>
