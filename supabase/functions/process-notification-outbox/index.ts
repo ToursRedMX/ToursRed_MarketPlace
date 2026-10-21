@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import { requireServiceRole } from '../_shared/auth.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { cargarRuntime, enviarPersistido } from '../_shared/mensajeria/servicio.ts';
-import { plantillaConfirmacion, plantillaRecordatorio } from '../_shared/mensajeria/plantillas.ts';
+import { textoDeNotificacion } from '../_shared/mensajeria/plantillas.ts';
 import type { Categoria } from '../_shared/mensajeria/tipos.ts';
 
 Deno.serve(async req => {
@@ -28,8 +28,7 @@ Deno.serve(async req => {
           await client.rpc('finish_sms_notification', { p_id: job.id, p_lease: job.lease_token, p_state: 'cancelado' });
           continue;
         }
-        const text = job.category === 'reserva_confirmada' ? plantillaConfirmacion(snapshot.folio, runtime.platform_url)
-          : plantillaRecordatorio(snapshot.tour, snapshot.meeting_point, snapshot.folio, snapshot.departure_time);
+        const text = textoDeNotificacion(job.category, snapshot, runtime.platform_url);
         const result = await enviarPersistido(client, await cargarRuntime(client), { outboxId: job.id, lease: job.lease_token }, job.category as Categoria, snapshot.destination, text);
         if (result.estado === 'fallido' && (result.clase === 'rechazo_confirmado' || result.codigo === 'limite_consumo')) {
           const { data: deferred, error: deferError } = await client.rpc('defer_sms_notification', { p_id: job.id, p_lease: job.lease_token });
