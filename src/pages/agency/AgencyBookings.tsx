@@ -686,13 +686,32 @@ const AgencyBookings: React.FC = () => {
   };
 
   const handleSendMessage = async (booking: Booking) => {
-    if (!booking.users?.id || !agencyId) return;
+    if (!booking.users?.id || !user) return;
 
-    const { data: existingConversation, error: errorConversacion } = await supabase
-      .from('conversations')
-      .select('id')
-      .or(`and(user1_id.eq.${agencyId},user2_id.eq.${booking.users.id}),and(user1_id.eq.${booking.users.id},user2_id.eq.${agencyId})`)
-      .maybeSingle();
+    // Una conversacion no guarda a sus dos lados en columnas: los participantes
+    // viven en message_participants (el codigo anterior buscaba user1_id/user2_id,
+    // que no existen, y le pasaba el id de la agencia en vez del del usuario, asi
+    // que el boton siempre fallaba). Se buscan las conversaciones donde estoy yo
+    // y de ahi la que tambien tiene al viajero.
+    const { data: mias, error: errorMias } = await supabase
+      .from('message_participants')
+      .select('conversation_id')
+      .eq('user_id', user.id);
+
+    let existingConversation: { id: string } | null = null;
+    let errorConversacion = errorMias;
+    const misIds = (mias ?? []).map((fila) => fila.conversation_id);
+
+    if (!errorMias && misIds.length > 0) {
+      const { data: conViajero, error: errorViajero } = await supabase
+        .from('message_participants')
+        .select('conversation_id')
+        .eq('user_id', booking.users.id)
+        .in('conversation_id', misIds)
+        .limit(1);
+      errorConversacion = errorViajero;
+      if (conViajero?.[0]) existingConversation = { id: conViajero[0].conversation_id };
+    }
 
     // Sin esta comprobacion, un error manda a "conversacion nueva" y duplica
     // el hilo que ya existia con ese viajero.
