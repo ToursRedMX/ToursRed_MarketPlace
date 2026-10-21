@@ -4,9 +4,14 @@ import ConversationList from '../components/messaging/ConversationList';
 import MessageThread from '../components/messaging/MessageThread';
 import CreateConversationModal from '../components/messaging/CreateConversationModal';
 import { MessageCircle } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 const MessagingPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [conversationTitle] = useState<string>('');
@@ -19,15 +24,39 @@ const MessagingPage: React.FC = () => {
     if (conversationFromUrl) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedConversationId(conversationFromUrl);
+      // Entrar por enlace ("Contactar agencia", "enviar mensaje") a una conversacion
+      // que el usuario habia eliminado la vuelve a mostrar en su lista. Si no estaba
+      // oculta, o no participa (un admin), no afecta ninguna fila.
+      if (user) {
+        void supabase
+          .from('message_participants')
+          .update({ is_active: true })
+          .eq('conversation_id', conversationFromUrl)
+          .eq('user_id', user.id)
+          .eq('is_active', false)
+          .select('id')
+          .then(({ data }) => {
+            if (data && data.length > 0) {
+              void queryClient.invalidateQueries({ queryKey: ['user-conversations'] });
+            }
+          });
+      }
     } else if (newConversationUserId) {
       setPreselectedUserId(newConversationUserId);
       setIsCreateModalOpen(true);
     }
-  }, [searchParams]);
+  }, [searchParams, user, queryClient]);
 
   const handleSelectConversation = (conversationId: string) => {
     setSelectedConversationId(conversationId);
     // You could fetch conversation details here to set the title
+  };
+
+  // Al ocultarla se cierra el hilo y se quita ?conversation= de la URL, para que
+  // recargar no vuelva a abrir una conversacion que ya no se ve en la lista.
+  const handleConversationHidden = () => {
+    setSelectedConversationId(null);
+    setSearchParams({}, { replace: true });
   };
 
   const handleCreateConversation = () => {
@@ -56,6 +85,7 @@ const MessagingPage: React.FC = () => {
           <MessageThread
             conversationId={selectedConversationId}
             conversationTitle={conversationTitle}
+            onConversationHidden={handleConversationHidden}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center bg-gray-50">
