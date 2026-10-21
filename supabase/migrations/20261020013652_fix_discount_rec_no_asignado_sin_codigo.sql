@@ -1,24 +1,3 @@
--- ============================================================================
--- EXPORTACION FUNCIONAL desde supabase_migrations.schema_migrations
---
--- Este archivo NO es la migracion original: es el SQL que la base registro
--- haber ejecutado, reconstruido a partir del ledger.
---
---   version: 20261020013652
---   name:    fix_discount_rec_no_asignado_sin_codigo
---
--- Recuperado : las sentencias ejecutadas, en su orden original.
--- Perdido    : los comentarios sueltos entre sentencias. El ledger guarda solo
---              sentencias ejecutables, asi que la documentacion que tuviera el
---              archivo original no es recuperable desde aqui.
--- Transformado: saltos de linea desescapados y ';' separadores repuestos, que
---              statements[] no conserva. La alineacion puede diferir.
---
--- Se agrega para que el cambio de esquema sea revisable y reproducible desde
--- el repo. Para el detalle de por que existe, ver el bullet del desfase de
--- migraciones en claude.md.
--- ============================================================================
-
 -- Bug encontrado probando una reserva sin codigo de descuento (preview_booking_breakdown
 -- daba 500): la migracion 20261017052432 confiaba en que `v_discount_code_found AND
 -- v_discount_rec.discount_type IN (...)` evaluaria v_discount_rec SOLO si
@@ -734,9 +713,7 @@ RETURN jsonb_build_object(
 'agency_commission_rate', v_rates.agency_commission_rate
 );
 END;
-$function$
-;
+$function$;
 
 COMMENT ON FUNCTION public.calculate_booking_breakdown IS
-'Calculo del desglose de costos de una reserva. Con p_consume_exemption=true (default, el que usa create_booking_atomic) consume el cupo mensual de exencion de membresia como siempre. Con false (preview_booking_breakdown) calcula la MISMA exencion sin escribir nada -- de verdad sin efectos secundarios. No incrementa tour_promotions.times_used en ningun caso -- eso es responsabilidad de quien la llama para crear la reserva de verdad. Fix 2026-10-20: el descuento de cargo por servicio/seguro usa un IF anidado, no un AND, para no leer v_discount_rec sin asignar cuando no hay codigo de descuento.'
-;
+'Calculo del desglose de costos de una reserva. Con p_consume_exemption=true (default, el que usa create_booking_atomic) consume el cupo mensual de exencion de membresia como siempre. Con false (preview_booking_breakdown) calcula la MISMA exencion sin escribir nada -- de verdad sin efectos secundarios. No incrementa tour_promotions.times_used en ningun caso -- eso es responsabilidad de quien la llama para crear la reserva de verdad. Fix 2026-10-20: el descuento de cargo por servicio/seguro usa un IF anidado, no un AND, para no leer v_discount_rec sin asignar cuando no hay codigo de descuento.';

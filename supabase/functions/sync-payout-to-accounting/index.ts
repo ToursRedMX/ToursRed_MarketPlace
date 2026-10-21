@@ -136,8 +136,8 @@ Deno.serve(async (req: Request) => {
       .from("agency_payouts")
       .select(`
         id, amount, platform_commission_amount, net_amount, status, created_at, payment_date, notes, payout_code, bank_reference, bill_number,
-        agencies (id, user_id, rfc, razon_social, regimen_fiscal, postal_code,
-          users (email, first_name, last_name))
+        agencies!agency_payouts_agency_id_fkey (id, user_id, rfc, razon_social, regimen_fiscal, postal_code,
+          users!agencies_user_id_fkey (email, first_name, last_name))
       `)
       .eq("id", payout_id)
       .returns<PayoutContable[]>()
