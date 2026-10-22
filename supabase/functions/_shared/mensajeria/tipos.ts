@@ -1,7 +1,7 @@
 export type Proveedor = 'labsmobile' | 'twilio' | 'mock';
 export type CanalOtp = 'sms' | 'whatsapp';
 export type Categoria = 'otp' | 'reserva_confirmada' | 'recordatorio_tour' | 'agencia_reserva' | 'agencia_cancelacion' | 'agencia_mensaje';
-export type EstadoEntrega = 'aceptado' | 'enviado' | 'entregado' | 'fallido' | 'resultado_desconocido' | 'simulado';
+export type EstadoEntrega = 'aceptado' | 'enviado' | 'entregado' | 'leido' | 'fallido' | 'resultado_desconocido' | 'simulado';
 export type ResultadoEnvio =
   | { estado: 'aceptado'; idProveedor: string }
   | { estado: 'simulado'; idProveedor: string }

@@ -110,7 +110,7 @@ const simplePermissions: SimplePermission[] = [
   { key: 'can_view_financials', label: 'Ver Finanzas', description: 'Ver estados de cuenta y registros financieros' },
   { key: 'can_view_reports', label: 'Ver Reportes', description: 'Acceder a los reportes de actividad' },
   { key: 'can_manage_discount_codes', label: 'Gestionar Codigos de Descuento', description: 'Crear y gestionar codigos de descuento' },
-  { key: 'can_view_messages', label: 'Ver Mensajes', description: 'Leer y responder mensajes de la agencia' },
+  { key: 'can_view_messages', label: 'Ver Mensajes', description: 'Leer y responder los mensajes de los tours y reservas de la agencia, y recibir su aviso por SMS si lo activa en su perfil' },
   { key: 'can_manage_destinations', label: 'Gestionar Destinos', description: 'Crear y gestionar los destinos de la agencia' },
 ];
 

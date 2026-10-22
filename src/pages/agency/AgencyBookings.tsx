@@ -725,7 +725,11 @@ const AgencyBookings: React.FC = () => {
     if (existingConversation) {
       navigate(`/messages?conversation=${existingConversation.id}`);
     } else {
-      navigate(`/messages?newConversation=${booking.users.id}`);
+      // Con la reserva y el tour, la conversacion queda ligada a la agencia: asi el personal
+      // con el permiso "Ver Mensajes" tambien la ve y recibe sus avisos.
+      const params = new URLSearchParams({ newConversation: booking.users.id, booking: booking.id });
+      if (booking.tour_id) params.set('tour', booking.tour_id);
+      navigate(`/messages?${params.toString()}`);
     }
     handleCloseContactModal();
   };

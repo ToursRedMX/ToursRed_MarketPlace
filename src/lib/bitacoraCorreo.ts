@@ -22,7 +22,7 @@ export const ETIQUETAS_CLASE: Record<string, string> = {
 export const etiquetaProveedor = (p: string): string => (ETIQUETAS_PROVEEDOR as Record<string, string>)[p] ?? p;
 export const etiquetaClase = (c: string | null | undefined): string => (c ? ETIQUETAS_CLASE[c] ?? c : '');
 
-export type ClaveEntrega = 'no_aceptado' | 'rebote_duro' | 'rebote_suave' | 'spam' | 'abierto' | 'entregado' | 'aceptado';
+export type ClaveEntrega = 'no_aceptado' | 'descartado' | 'rebote_duro' | 'rebote_suave' | 'spam' | 'abierto' | 'entregado' | 'aceptado';
 
 export interface EstadoEntrega {
   clave: ClaveEntrega;
@@ -34,11 +34,14 @@ export interface EstadoEntrega {
 /**
  * Lo que se le muestra al admin de un envío: lo peor que se sepa manda. Un rebote duro o un spam pesan más que un
  * «entregado» anterior; abierto implica entregado; sin eventos solo se sabe que el proveedor lo aceptó (eso NO es
- * lo mismo que entregado: SendGrid y SMTP2GO todavía no mandan eventos).
+ * lo mismo que entregado). Zoho, SendGrid y SMTP2GO mandan eventos; los de los dos últimos se normalizan a estos
+ * mismos tipos al recibirlos (ver supabase/functions/_shared/correo/eventosCorreo.ts).
  */
 export function estadoDeEntrega(aceptado: boolean, tiposDeEvento: string[]): EstadoEntrega {
   if (!aceptado) return { clave: 'no_aceptado', texto: 'No aceptado', tono: 'rojo' };
   const tipos = new Set(tiposDeEvento);
+  // «dropped»: el proveedor lo aceptó pero lo descartó sin intentar entregarlo (dirección dada de baja, rechazada o inválida).
+  if (tipos.has('dropped')) return { clave: 'descartado', texto: 'Descartado por el proveedor', tono: 'rojo' };
   if (tipos.has('hardbounce')) return { clave: 'rebote_duro', texto: 'Rebotó (permanente)', tono: 'rojo' };
   if (tipos.has('feedback_loop') || tipos.has('spam') || tipos.has('feedback')) return { clave: 'spam', texto: 'Marcado como spam', tono: 'rojo' };
   if (tipos.has('softbounce')) return { clave: 'rebote_suave', texto: 'Rebote temporal', tono: 'amarillo' };
@@ -48,6 +51,11 @@ export function estadoDeEntrega(aceptado: boolean, tiposDeEvento: string[]): Est
 }
 
 export const ETIQUETAS_EVENTO: Record<string, string> = {
+  processed: 'Procesado por el proveedor',
+  deferred: 'Diferido (el servidor del destinatario lo rechazó por ahora)',
+  dropped: 'Descartado por el proveedor',
+  unsubscribe: 'Se dio de baja',
+  resubscribe: 'Volvió a suscribirse',
   delivered: 'Entregado',
   email_open: 'Abierto',
   email_link_click: 'Clic en un enlace',
