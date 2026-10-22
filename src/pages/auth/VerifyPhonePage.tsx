@@ -2,6 +2,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { SmsPreferences } from '../../components/SmsPreferences';
+import { AgencySmsPreferences } from '../../components/AgencySmsPreferences';
 import PhoneOtpVerify from '../../components/PhoneOtpVerify';
 
 export default function VerifyPhonePage() {
@@ -26,7 +27,7 @@ export default function VerifyPhonePage() {
       <p>Si tampoco tienes acceso a tu correo o autenticación de dos pasos, contacta a soporte.</p>
       <button type="button" className="underline" onClick={async () => { await supabase.auth.signOut(); navigate('/login?redirect=%2Fverificar-telefono'); }}>Cerrar sesión e identificarme otra vez</button>
     </details>
-    <SmsPreferences />
+    {userRole === 'agency' ? <AgencySmsPreferences /> : <SmsPreferences />}
     <div className="mt-6 flex gap-4"><Link className="underline" to="/contact">Contactar a soporte</Link><Link className="underline" to="/profile">Volver a mi perfil</Link></div>
   </main>;
 }

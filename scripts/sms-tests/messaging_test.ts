@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { segmentosSms, plantillaOtp, plantillaConfirmacion, plantillaRecordatorio } from '../../supabase/functions/_shared/mensajeria/plantillas.ts';
+import { segmentosSms, plantillaOtp, plantillaConfirmacion, plantillaRecordatorio, plantillaAgenciaReserva, plantillaAgenciaCancelacion, plantillaAgenciaMensaje, textoDeNotificacion } from '../../supabase/functions/_shared/mensajeria/plantillas.ts';
 import { normalizarTelefonoSms } from '../../supabase/functions/_shared/mensajeria/telefono.ts';
 import { clasificarRespuesta, interpretarCallback, labsmobile } from '../../supabase/functions/_shared/mensajeria/proveedores/labsmobile.ts';
 import { mock } from '../../supabase/functions/_shared/mensajeria/proveedores/mock.ts';
@@ -23,6 +23,42 @@ Deno.test('worst-case templates fit one segment; links use real authenticated ro
   }
   assert.ok(plantillaConfirmacion('TR1','https://toursred.com').includes('/traveler/bookings'));
   assert.throws(()=>plantillaConfirmacion('TR1','http://example.invalid'));
+});
+Deno.test('avisos a agencias: un segmento GSM-7 en el peor caso y sin datos del viajero', () => {
+  const baseCorta = 'https://toursredmx.netlify.app';
+  const baseLarga = 'https://' + 'a'.repeat(55) + '.mx'; // el enlace roza el limite de 85 caracteres (82)
+  const peorTour = 'á😀'.repeat(100);
+  for (const base of [baseCorta, baseLarga]) {
+    for (const text of [
+      plantillaAgenciaReserva('F'.repeat(100), peorTour, base),
+      plantillaAgenciaCancelacion('F'.repeat(100), peorTour, base),
+      plantillaAgenciaMensaje(base),
+    ]) {
+      assert.equal(segmentosSms(text).encoding, 'GSM-7'); assert.equal(segmentosSms(text).segments, 1);
+    }
+  }
+  // Con un enlace corto trae el nombre del tour; con uno largo se omite en vez de partir el SMS.
+  assert.ok(plantillaAgenciaReserva('TRG-1', 'Tour a Teotihuacan', baseCorta).includes('Tour a Teotihuacan'));
+  assert.ok(plantillaAgenciaReserva('TRG-1', 'Tour a Teotihuacan', baseLarga).includes('Teotihuacan')); // aun cabe
+  const sinTour = plantillaAgenciaReserva('F'.repeat(20), 'T'.repeat(30), baseLarga); // folio y tour al maximo: no cabe, se omite el tour
+  assert.ok(!sinTour.includes('TTTT') && sinTour.includes('F'.repeat(20)));
+  assert.equal(segmentosSms(sinTour).segments, 1);
+  assert.ok(plantillaAgenciaReserva('TRG-1', 'x', baseCorta).includes('/agency/bookings'));
+  assert.ok(plantillaAgenciaCancelacion('TRG-1', 'x', baseCorta).includes('se cancelo'));
+  assert.ok(plantillaAgenciaMensaje(baseCorta).includes('/messages'));
+  assert.throws(() => plantillaAgenciaMensaje('http://example.invalid'));
+  assert.throws(() => plantillaAgenciaReserva('TRG-1', 'x', 'https://' + 'a'.repeat(80) + '.mx'));
+});
+Deno.test('textoDeNotificacion elige la plantilla por categoria y rechaza las desconocidas', () => {
+  const base = 'https://toursred.com';
+  const snap = { folio: 'TRG-9', tour: 'Tour X', meeting_point: 'Zocalo', departure_time: '07:30:00' };
+  assert.equal(textoDeNotificacion('reserva_confirmada', snap, base), plantillaConfirmacion('TRG-9', base));
+  assert.equal(textoDeNotificacion('recordatorio_tour', snap, base), plantillaRecordatorio('Tour X', 'Zocalo', 'TRG-9', '07:30:00'));
+  assert.equal(textoDeNotificacion('agencia_reserva', snap, base), plantillaAgenciaReserva('TRG-9', 'Tour X', base));
+  assert.equal(textoDeNotificacion('agencia_cancelacion', snap, base), plantillaAgenciaCancelacion('TRG-9', 'Tour X', base));
+  assert.equal(textoDeNotificacion('agencia_mensaje', {}, base), plantillaAgenciaMensaje(base));
+  assert.throws(() => textoDeNotificacion('otp', snap, base));
+  assert.throws(() => textoDeNotificacion('categoria_inventada', snap, base));
 });
 Deno.test('international normalization distinguishes countries and rejects unsupported ones', () => {
   assert.deepEqual(normalizarTelefonoSms('55 1234 5678','MX',['MX']),{e164:'+525512345678',country:'MX'});

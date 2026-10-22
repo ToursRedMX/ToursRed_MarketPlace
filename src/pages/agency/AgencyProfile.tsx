@@ -9,7 +9,7 @@ import ChangePasswordSection from '../../components/ChangePasswordSection';
 import AccountAccessSection from '../../components/AccountAccessSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import LinkedAccountsSection from '../../components/LinkedAccountsSection';
-import { SmsPreferences } from '../../components/SmsPreferences';
+import { AgencySmsPreferences } from '../../components/AgencySmsPreferences';
 import { mensajeDeError } from '../../lib/errores';
 
 interface AgencyProfile {
@@ -1328,7 +1328,7 @@ const AgencyProfile: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-lg shadow-xs border border-gray-100 overflow-hidden px-6 pb-6">
-            <SmsPreferences />
+            <AgencySmsPreferences />
           </div>
         </div>
       </div>
