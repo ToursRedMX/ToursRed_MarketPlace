@@ -16,6 +16,8 @@ const MessagingPage: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [conversationTitle] = useState<string>('');
   const [preselectedUserId, setPreselectedUserId] = useState<string | null>(null);
+  const [preselectedBookingId, setPreselectedBookingId] = useState<string | null>(null);
+  const [preselectedTourId, setPreselectedTourId] = useState<string | null>(null);
 
   useEffect(() => {
     const conversationFromUrl = searchParams.get('conversation');
@@ -43,6 +45,8 @@ const MessagingPage: React.FC = () => {
       }
     } else if (newConversationUserId) {
       setPreselectedUserId(newConversationUserId);
+      setPreselectedBookingId(searchParams.get('booking'));
+      setPreselectedTourId(searchParams.get('tour'));
       setIsCreateModalOpen(true);
     }
   }, [searchParams, user, queryClient]);
@@ -108,9 +112,13 @@ const MessagingPage: React.FC = () => {
         onClose={() => {
           setIsCreateModalOpen(false);
           setPreselectedUserId(null);
+          setPreselectedBookingId(null);
+          setPreselectedTourId(null);
         }}
         onConversationCreated={handleConversationCreated}
         preselectedUserId={preselectedUserId || undefined}
+        preselectedBookingId={preselectedBookingId || undefined}
+        preselectedTourId={preselectedTourId || undefined}
       />
     </div>
   );
