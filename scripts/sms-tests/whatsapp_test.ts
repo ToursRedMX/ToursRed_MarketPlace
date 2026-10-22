@@ -46,7 +46,7 @@ Deno.test('WhatsApp ignores SMS disable and fallback; LabsMobile cannot route Wh
 Deno.test('WhatsApp read callback preserves prefix for database channel binding', () => {
   const params = { AccountSid: config.accountSid, MessageSid: sid, To: 'whatsapp:'+message.destino, MessageStatus: 'read' };
   assert.equal(parseTwilioCallback(params, config.accountSid), null);
-  assert.deepEqual(parseTwilioCallback(params, config.accountSid, true), { sid, destination: params.To, state: 'entregado', code: null });
+  assert.deepEqual(parseTwilioCallback(params, config.accountSid, true), { sid, destination: params.To, state: 'leido', code: null });
 });
 Deno.test('WhatsApp readiness requires authentication approval and an online owned sender', async () => {
   let online = true;

@@ -286,3 +286,12 @@ verify_jwt = false
 # `Authorization: Bearer <ZOHO_WEBHOOK_TOKEN>` y sin ese secreto configurado responde 503.
 [functions."zoho-email-webhook"]
 verify_jwt = false
+
+# SendGrid y SMTP2GO avisan entregas/rebotes/aperturas y no mandan JWT de Supabase. SendGrid firma el cuerpo
+# (SENDGRID_WEBHOOK_PUBLIC_KEY) y SMTP2GO manda `Authorization: Bearer <SMTP2GO_WEBHOOK_TOKEN>`; sin su secreto
+# configurado, cada funcion responde 503 y no acepta nada.
+[functions."sendgrid-email-webhook"]
+verify_jwt = false
+
+[functions."smtp2go-email-webhook"]
+verify_jwt = false
