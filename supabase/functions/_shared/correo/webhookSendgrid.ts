@@ -21,7 +21,7 @@ import {
 } from "./eventosCorreo.ts";
 
 /** `true` solo si la firma corresponde a la llave publica, al timestamp y a estos mismos bytes. */
-export function verificarFirmaSendgrid(
+export function verifySendgridSignature(
   cuerpoCrudo: Uint8Array,
   timestamp: string | null,
   firmaBase64: string | null,

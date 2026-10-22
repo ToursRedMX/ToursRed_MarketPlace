@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createSign, generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { Buffer } from 'node:buffer';
-import { filasDeWebhookSendgrid, tipoDeEventoSendgrid, verificarFirmaSendgrid } from '../../supabase/functions/_shared/correo/webhookSendgrid.ts';
+import { filasDeWebhookSendgrid, tipoDeEventoSendgrid, verifySendgridSignature } from '../../supabase/functions/_shared/correo/webhookSendgrid.ts';
 import { filasDeWebhookSmtp2go, tipoDeEventoSmtp2go } from '../../supabase/functions/_shared/correo/webhookSmtp2go.ts';
 import { autorizadoPorToken } from '../../supabase/functions/_shared/correo/webhookZoho.ts';
 
@@ -28,17 +28,17 @@ Deno.test('SendGrid: la firma verifica solo con la llave, el timestamp y los byt
   const ts = '1761150000';
   const firma = firmar(privateKey, ts, cuerpo);
 
-  assert.equal(verificarFirmaSendgrid(enc(cuerpo), ts, firma, publicKey), true);
-  assert.equal(verificarFirmaSendgrid(enc(cuerpo + ' '), ts, firma, publicKey), false, 'un byte de mas');
-  assert.equal(verificarFirmaSendgrid(enc(cuerpo), '1761150001', firma, publicKey), false, 'otro timestamp');
-  assert.equal(verificarFirmaSendgrid(enc(cuerpo), ts, firma, otra.publicKey), false, 'otra llave');
+  assert.equal(verifySendgridSignature(enc(cuerpo), ts, firma, publicKey), true);
+  assert.equal(verifySendgridSignature(enc(cuerpo + ' '), ts, firma, publicKey), false, 'un byte de mas');
+  assert.equal(verifySendgridSignature(enc(cuerpo), '1761150001', firma, publicKey), false, 'otro timestamp');
+  assert.equal(verifySendgridSignature(enc(cuerpo), ts, firma, otra.publicKey), false, 'otra llave');
   // Faltantes o basura: nunca autoriza y nunca lanza.
-  assert.equal(verificarFirmaSendgrid(enc(cuerpo), null, firma, publicKey), false);
-  assert.equal(verificarFirmaSendgrid(enc(cuerpo), ts, null, publicKey), false);
-  assert.equal(verificarFirmaSendgrid(enc(cuerpo), ts, firma, null), false);
-  assert.equal(verificarFirmaSendgrid(enc(cuerpo), ts, firma, undefined), false);
-  assert.equal(verificarFirmaSendgrid(enc(cuerpo), ts, 'no-es-base64-%%%', publicKey), false);
-  assert.equal(verificarFirmaSendgrid(enc(cuerpo), ts, firma, 'llave-invalida'), false);
+  assert.equal(verifySendgridSignature(enc(cuerpo), null, firma, publicKey), false);
+  assert.equal(verifySendgridSignature(enc(cuerpo), ts, null, publicKey), false);
+  assert.equal(verifySendgridSignature(enc(cuerpo), ts, firma, null), false);
+  assert.equal(verifySendgridSignature(enc(cuerpo), ts, firma, undefined), false);
+  assert.equal(verifySendgridSignature(enc(cuerpo), ts, 'no-es-base64-%%%', publicKey), false);
+  assert.equal(verifySendgridSignature(enc(cuerpo), ts, firma, 'llave-invalida'), false);
 });
 
 Deno.test('SendGrid: cada evento se normaliza al vocabulario de la pantalla', () => {

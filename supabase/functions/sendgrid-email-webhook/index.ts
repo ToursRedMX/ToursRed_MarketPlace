@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
-import { filasDeWebhookSendgrid, verificarFirmaSendgrid } from "../_shared/correo/webhookSendgrid.ts";
+import { filasDeWebhookSendgrid, verifySendgridSignature } from "../_shared/correo/webhookSendgrid.ts";
 import { guardarEventosCorreo, resolverReferencias } from "../_shared/correo/guardarEventos.ts";
 
 // Receptor del Event Webhook de SendGrid: entregas, rebotes, aperturas, spam. Guarda cada evento en
@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
   try {
     // La firma cubre los BYTES del cuerpo: se lee crudo y se verifica antes de interpretarlo.
     const bytes = new Uint8Array(await req.arrayBuffer());
-    if (!verificarFirmaSendgrid(
+    if (!verifySendgridSignature(
       bytes,
       req.headers.get("X-Twilio-Email-Event-Webhook-Timestamp"),
       req.headers.get("X-Twilio-Email-Event-Webhook-Signature"),
