@@ -53,7 +53,8 @@ Deno.test('all provider delivery states have conservative mappings',()=>{
   for(const state of ['accepted','scheduled','queued','sending'])assert.equal(estadoTwilio(state),'aceptado');
   assert.equal(estadoTwilio('sent'),'enviado');assert.equal(estadoTwilio('delivered'),'entregado');
   for(const state of ['failed','undelivered','canceled'])assert.equal(estadoTwilio(state),'fallido');
-  assert.equal(estadoTwilio('read'),'entregado');
+  assert.equal(estadoTwilio('read'),'leido'); // WhatsApp: la lectura ya no se aplasta en "entregado"
+  assert.equal(estadoTwilio('delivered'),'entregado');
   assert.equal(permiteFallback(clasificarTwilio(201,{sid,status:'failed'},false)),false);
 });
 Deno.test('SDK signature validation binds public URL, query and every POST field',()=>{
@@ -69,6 +70,8 @@ Deno.test('SDK signature validation binds public URL, query and every POST field
 Deno.test('callback requires matching account, message identity, destination and status',()=>{
   const params={AccountSid:config.accountSid,MessageSid:sid,MessageStatus:'delivered',To:message.destino};
   assert.equal(parseTwilioCallback(params,config.accountSid)?.state,'entregado');
+  // WhatsApp: el acuse de lectura llega como `read` y se conserva como estado propio.
+  assert.equal(parseTwilioCallback({...params,MessageStatus:'read',To:'whatsapp:'+message.destino},config.accountSid,true)?.state,'leido');
   assert.equal(parseTwilioCallback({...params,AccountSid:'other'},config.accountSid),null);
   assert.equal(parseTwilioCallback({...params,MessageSid:'bad'},config.accountSid),null);
   assert.equal(parseTwilioCallback({...params,To:'whatsapp:'+message.destino},config.accountSid),null);

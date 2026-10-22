@@ -31,11 +31,13 @@ const phoneValid = (phone: string) => /^\+[1-9]\d{7,14}$/.test(phone);
 const serviceValid = (sid: string) => /^MG[0-9a-fA-F]{32}$/.test(sid);
 const record = (data: unknown): Record<string, unknown> => data !== null && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {};
 
-export function estadoTwilio(status: unknown): 'aceptado' | 'enviado' | 'entregado' | 'fallido' | null {
+export function estadoTwilio(status: unknown): 'aceptado' | 'enviado' | 'entregado' | 'leido' | 'fallido' | null {
   if (['accepted', 'scheduled', 'queued', 'sending'].includes(String(status))) return 'aceptado';
   if (status === 'sent') return 'enviado';
   if (status === 'delivered') return 'entregado';
-  if (status === 'read') return 'entregado';
+  // `read` solo existe en WhatsApp (y solo si el destinatario tiene los acuses activados). Antes se
+  // aplastaba en `entregado` y la lectura se perdia; la base lo distingue desde 22-oct-2026.
+  if (status === 'read') return 'leido';
   if (['failed', 'undelivered', 'canceled'].includes(String(status))) return 'fallido';
   return null;
 }
@@ -216,5 +218,5 @@ export function twilio(config: TwilioConfig, transport: typeof fetch = fetch): P
   };
 }
 export interface TwilioMessage {
-  sid: string; destination: string; state: 'aceptado' | 'enviado' | 'entregado' | 'fallido'; code: string | null; cost: number | null; unit: string | null;
+  sid: string; destination: string; state: 'aceptado' | 'enviado' | 'entregado' | 'leido' | 'fallido'; code: string | null; cost: number | null; unit: string | null;
 }
