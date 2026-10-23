@@ -13,6 +13,7 @@ import { normalizarPlanMembresia } from "../_shared/planMembresia.ts";
 import { motivoParaNoConfirmar } from "../_shared/cupoAlConfirmar.ts";
 import { centavosDeSuscripcion, lineasCompletasDeFactura, repartirComision } from "../_shared/repartoCobroMixto.ts";
 import { DefinicionParcialidad } from "../_shared/planesDePago.ts";
+import { procesarEventoNotificaciones } from "../_shared/suscripcionNotificaciones.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -299,6 +300,16 @@ Deno.serve(async (req) => {
         return { type: 'unknown', cardFunding: null };
       }
     };
+
+    // Las suscripciones de NOTIFICACIONES van antes que todo lo demas: traen su propia marca en el metadata, y si cayeran en los
+    // handlers de membresias (que leen metadata.user_id) se convertirian en una membresia ToursRed Plus. Si el evento es suyo se
+    // atiende aqui y no pasa al switch; si falla se lanza y Stripe lo reintenta.
+    if (await procesarEventoNotificaciones(supabase, stripe, event)) {
+      return new Response(
+        JSON.stringify({ success: true, received: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+      );
+    }
 
     switch (event.type) {
       case 'checkout.session.completed':

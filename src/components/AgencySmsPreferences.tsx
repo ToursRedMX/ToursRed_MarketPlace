@@ -2,8 +2,10 @@ import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
+import { useAgencyId } from '../hooks/useAgencyId';
 import { supabase } from '../lib/supabase';
 import { mensajeDeError } from '../lib/errores';
+import { useCobroNotificaciones } from '../lib/cobroNotificaciones';
 
 interface PreferenciasAgencia {
   reserva: boolean;
@@ -26,6 +28,8 @@ const AVISOS: { clave: keyof PreferenciasAgencia; titulo: string; detalle: strin
 export function AgencySmsPreferences() {
   const { user, phoneVerification } = useAuth();
   const queryClient = useQueryClient();
+  const { agencyId } = useAgencyId();
+  const cobro = useCobroNotificaciones('agencia', agencyId);
   const queryKey = ['agency-sms-preferences', user?.id];
   const todasRef = useRef<HTMLInputElement>(null);
 
@@ -81,7 +85,7 @@ export function AgencySmsPreferences() {
     <div className="pt-6">
       <h2 className="font-semibold text-gray-900">Avisos por SMS</h2>
       <p className="text-sm text-gray-600 mt-1">
-        Elige de qué quieres enterarte por mensaje de texto. Por ahora el servicio no tiene costo.
+        Elige de qué quieres enterarte por mensaje de texto.{!cobro.data?.activo && ' Por ahora el servicio no tiene costo.'}
       </p>
 
       {!telefonoVerificado && (
