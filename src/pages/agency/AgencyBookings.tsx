@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStepUp } from '../../context/StepUpContext';
 import ReviewForm from '../../components/ReviewForm';
+import TravelerRatingBadge from '../../components/TravelerRatingBadge';
 import { exportTourReportToExcel, exportTourReportToPDF } from '../../utils/reportExports';
 import TourMassMessageModal from '../../components/TourMassMessageModal';
 import AgencyAgenda from './AgencyAgenda';
@@ -96,6 +97,8 @@ const AgencyBookings: React.FC = () => {
   const [activeBookings, setActiveBookings] = useState<Booking[]>([]);
   const [pastBookings, setPastBookings] = useState<Booking[]>([]);
   const [cancelledBookings, setCancelledBookings] = useState<Booking[]>([]);
+  // Promedio y total de lo que otras agencias han calificado a cada viajero.
+  const [resumenViajeros, setResumenViajeros] = useState<Record<string, { promedio: number; total: number }>>({});
 
   const isBookingActive = (booking: Booking): boolean => {
     if (booking.status === 'cancelled' || booking.status === 'cancellation_processing') return false;
@@ -152,6 +155,22 @@ const AgencyBookings: React.FC = () => {
       setActiveBookings(active);
       setPastBookings(past);
       setCancelledBookings(cancelled);
+
+      // El resumen es un extra de la pantalla: si falla, la lista se ve igual.
+      const idsViajeros = [...new Set(allBookings.map((b) => b.user_id).filter((id): id is string => !!id))];
+      if (idsViajeros.length > 0) {
+        const { data: resumen, error: errorResumen } = await supabase
+          .rpc('resumen_calificaciones_viajeros', { p_traveler_ids: idsViajeros });
+        if (errorResumen) {
+          console.error('No se pudo leer el resumen de calificaciones de viajeros:', errorResumen);
+        } else {
+          const porViajero: Record<string, { promedio: number; total: number }> = {};
+          for (const fila of (resumen ?? []) as { traveler_id: string; promedio: number; total: number }[]) {
+            porViajero[fila.traveler_id] = { promedio: Number(fila.promedio), total: Number(fila.total) };
+          }
+          setResumenViajeros(porViajero);
+        }
+      }
 
       if (allBookings.length > 0) {
         const ids = allBookings.map((b) => b.id);
@@ -303,12 +322,23 @@ const AgencyBookings: React.FC = () => {
     }
   };
 
+  // Misma regla que calificar_viajero en la base: tour completado, o confirmado
+  // cuya fecha ya paso (una reserva pasada que nadie marco como completada).
   const canReviewTraveler = (booking: Booking) => {
-    if (booking.status !== 'completed') return false;
     if (booking.is_no_show) return false;
     if (booking.cancelled_at) return false;
+    if (booking.status === 'completed') return true;
+    if (booking.status !== 'confirmed' || !booking.selected_date) return false;
 
-    return true;
+    try {
+      const dia = parseDateFromDB(booking.selected_date);
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      dia.setHours(0, 0, 0, 0);
+      return dia < hoy;
+    } catch {
+      return false;
+    }
   };
 
   const getStatusBadge = (status: string, paymentStatus?: string) => {
@@ -1340,6 +1370,15 @@ const AgencyBookings: React.FC = () => {
                           <div className="font-medium">
                             {booking.users?.first_name} {booking.users?.last_name}
                           </div>
+                          {booking.user_id && resumenViajeros[booking.user_id] && (
+                            <div className="mt-1">
+                              <TravelerRatingBadge
+                                travelerId={booking.user_id}
+                                promedio={resumenViajeros[booking.user_id].promedio}
+                                total={resumenViajeros[booking.user_id].total}
+                              />
+                            </div>
+                          )}
                         </div>
                         {booking.approval_status !== 'pending' && booking.payment_status !== 'pending' && (
                           <div>
