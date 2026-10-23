@@ -6,7 +6,7 @@ import { mock } from './proveedores/mock.ts';
 import { twilio } from './proveedores/twilio.ts';
 import { twilioConfig } from './twilioConfig.ts';
 import { hmac, nuevaCorrelacion } from './seguridad.ts';
-import { segmentosSms } from './plantillas.ts';
+import { ocultarCodigoOtp, segmentosSms } from './plantillas.ts';
 import { normalizarTelefonoSms } from './telefono.ts';
 
 export interface RuntimeSms {
@@ -41,6 +41,12 @@ export async function enviarPersistido(client: SupabaseClient, runtime: RuntimeS
     });
     if (startError) return { estado: 'resultado_desconocido', codigo: 'persistencia_no_disponible' };
     if (!start?.allowed) return { estado: 'fallido', clase: 'permanente', codigo: String(start?.code ?? 'intento_no_autorizado') };
+    // Rastro para la bitacora de mensajes del admin: el texto (con el codigo de un OTP TACHADO) y a quien va. Mejor esfuerzo:
+    // si falla, el mensaje sale igual (la bitacora nunca debe impedir un envio) y solo se registra el codigo del error.
+    const { error: textError } = await client.rpc('record_sms_text', {
+      p_attempt: start.attempt_id, p_text: category === 'otp' ? ocultarCodigoOtp(text, otpCode) : text,
+    });
+    if (textError) console.error('record_sms_text_fallo', { codigo: textError.code });
     // Config may have changed since runtime was read; DB snapshot wins.
     const simulated = start.simulation === true;
     const { error: countryError } = await client.rpc('record_sms_country', { p_outbox: reference.outboxId ?? null, p_attempt: start.attempt_id, p_country: country });

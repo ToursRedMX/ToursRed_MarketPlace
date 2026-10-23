@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { segmentosSms, plantillaOtp, plantillaConfirmacion, plantillaRecordatorio, plantillaAgenciaReserva, plantillaAgenciaCancelacion, plantillaAgenciaMensaje, textoDeNotificacion } from '../../supabase/functions/_shared/mensajeria/plantillas.ts';
+import { segmentosSms, plantillaOtp, plantillaConfirmacion, plantillaRecordatorio, plantillaAgenciaReserva, plantillaAgenciaCancelacion, plantillaAgenciaMensaje, textoDeNotificacion, ocultarCodigoOtp } from '../../supabase/functions/_shared/mensajeria/plantillas.ts';
 import { normalizarTelefonoSms } from '../../supabase/functions/_shared/mensajeria/telefono.ts';
 import { clasificarRespuesta, interpretarCallback, labsmobile } from '../../supabase/functions/_shared/mensajeria/proveedores/labsmobile.ts';
 import { mock } from '../../supabase/functions/_shared/mensajeria/proveedores/mock.ts';
@@ -59,6 +59,28 @@ Deno.test('textoDeNotificacion elige la plantilla por categoria y rechaza las de
   assert.equal(textoDeNotificacion('agencia_mensaje', {}, base), plantillaAgenciaMensaje(base));
   assert.throws(() => textoDeNotificacion('otp', snap, base));
   assert.throws(() => textoDeNotificacion('categoria_inventada', snap, base));
+});
+Deno.test('bitacora: el codigo de un OTP se tacha y no queda en claro en ningun formato', () => {
+  const codigo = '482915';
+  const texto = plantillaOtp(codigo);
+  const guardado = ocultarCodigoOtp(texto, codigo);
+  assert.ok(!guardado.includes(codigo), 'el codigo exacto');
+  assert.ok(!/\d{4,8}/.test(guardado), 'ninguna secuencia de 4 a 8 digitos');
+  assert.ok(guardado.includes('••••••') && guardado.includes('ToursRed') && guardado.includes('10 min'), 'el resto del texto se conserva');
+  // Aunque quien llama olvide pasar el codigo, la regla general lo tacha igual.
+  assert.ok(!ocultarCodigoOtp(texto).includes(codigo));
+  // Un codigo de otro largo (el formato podria cambiar) tampoco queda.
+  assert.ok(!ocultarCodigoOtp('Tu codigo es 12345678.', '12345678').includes('12345678'));
+  assert.ok(!ocultarCodigoOtp('Tu codigo es 1234.', '1234').includes('1234'));
+  // Sin restos: un codigo largo se tacha ENTERO (una regla que corta en 8 dejaria el noveno digito a la vista).
+  assert.ok(!/\d/.test(ocultarCodigoOtp('Tu codigo es 123456789.', '123456789')));
+  assert.ok(!/\d/.test(ocultarCodigoOtp('Tu codigo es 123456789.')), 'tambien sin pasar el codigo');
+  // Cada capa hace falta por si sola: un codigo de 3 digitos solo lo tacha el valor exacto (la regla general pide 4 o mas),
+  // y un codigo que quien llama no pasa solo lo tacha la regla general.
+  assert.ok(!ocultarCodigoOtp('Tu codigo es 123.', '123').includes('123'));
+  assert.ok(!ocultarCodigoOtp(plantillaOtp('654321')).includes('654321'));
+  // Lo que no es un codigo no se toca.
+  assert.equal(ocultarCodigoOtp('Vence en 10 min.'), 'Vence en 10 min.');
 });
 Deno.test('international normalization distinguishes countries and rejects unsupported ones', () => {
   assert.deepEqual(normalizarTelefonoSms('55 1234 5678','MX',['MX']),{e164:'+525512345678',country:'MX'});

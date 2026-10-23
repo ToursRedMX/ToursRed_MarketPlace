@@ -14,6 +14,17 @@ export function plantillaOtp(code: string): string {
   if (!/^\d{6}$/.test(code)) throw new Error('codigo_invalido');
   return `Tu codigo ToursRed es ${code}. Vence en 10 min. No lo compartas con nadie.`;
 }
+/**
+ * El texto de un OTP con el codigo TACHADO, para guardarlo en la bitacora del admin. El codigo nunca se guarda: se tacha el
+ * valor exacto y, ademas, cualquier secuencia de 4 a 8 digitos (por si cambia el formato del codigo o del texto). La base
+ * (`record_sms_text`) vuelve a tacharlo: dos defensas, porque un codigo guardado en claro es una cuenta tomada.
+ */
+export function ocultarCodigoOtp(texto: string, codigo?: string): string {
+  const oculto = '••••••';
+  let t = texto;
+  if (codigo) t = t.split(codigo).join(oculto);
+  return t.replace(/\d{4,}/g, oculto);
+}
 export function enlacePlataforma(base: string, ruta: string): string {
   const url = new URL(base);
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('url_plataforma_invalida');
