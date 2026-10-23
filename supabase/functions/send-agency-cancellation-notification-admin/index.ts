@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
+import { fechaDelViaje, formatearFechaViaje } from "../_shared/fechaDelViaje.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,16 +87,6 @@ Deno.serve(async (req: Request) => {
 
     const appUrl = platformSettingsData?.platform_url || "https://toursredmx.netlify.app";
 
-    const formatDate = (dateStr: string) => {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('es-MX', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    };
-
     const formatDateTime = (dateStr: string) => {
       const date = new Date(dateStr);
       return date.toLocaleDateString('es-MX', {
@@ -107,7 +98,14 @@ Deno.serve(async (req: Request) => {
       });
     };
 
-    const originalTourDate = formatDate(cancellation.tour.start_date);
+    // Tour entero cancelado: si no tiene fecha propia (receptivo), van las fechas
+    // reservadas de las reservas canceladas.
+    const fechasReservadas = [...new Set((bookings ?? []).map((b) => b.selected_date).filter(Boolean))].sort();
+    const originalTourDate = cancellation.tour.start_date
+      ? formatearFechaViaje(cancellation.tour.start_date, { weekday: "long" })
+      : fechasReservadas.length
+        ? fechasReservadas.map((d) => formatearFechaViaje(d, { weekday: "long" })).join(" / ")
+        : formatearFechaViaje(null);
     const cancellationDateTime = formatDateTime(cancellation.cancelled_at);
 
     const bookingsList = bookings?.map(b => `

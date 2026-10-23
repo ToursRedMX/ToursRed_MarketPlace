@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireUser } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
+import { fechaDelViaje, formatearFechaViaje } from "../_shared/fechaDelViaje.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -100,21 +101,6 @@ Deno.serve(async (req: Request) => {
     const noShowCount = booking.traveler.no_show_count || 0;
     const isHighRisk = noShowCount > 3;
 
-    // Una fecha sola ('2026-10-17') se lee como medianoche UTC y en Mexico salia
-    // un dia antes; se ancla al mediodia y se formatea en hora de Mexico. Sin fecha
-    // (new Date(null) es 1970) no se inventa una.
-    const formatDate = (dateString: string | null | undefined) => {
-      if (!dateString) return "Por confirmar";
-      const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(dateString) ? `${dateString}T12:00:00Z` : dateString);
-      if (Number.isNaN(date.getTime())) return "Por confirmar";
-      return date.toLocaleDateString('es-MX', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        timeZone: 'America/Mexico_City'
-      });
-    };
-
     console.log(`Sending No Show notification for booking: ${booking_id}, traveler no_show_count: ${noShowCount}`);
 
     const travelerEmailHtml = `
@@ -166,7 +152,7 @@ Deno.serve(async (req: Request) => {
         </div>
         <div class="info-row">
           <span class="info-label">Fecha del tour:</span>
-          <span class="info-value">${formatDate(booking.selected_date ?? booking.tour.start_date)}</span>
+          <span class="info-value">${formatearFechaViaje(fechaDelViaje(booking, booking.tour))}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Agencia:</span>

@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
+import { fechaDelViaje, formatearFechaViaje } from "../_shared/fechaDelViaje.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,16 +88,6 @@ Deno.serve(async (req: Request) => {
 
     const appUrl = platformSettingsData?.platform_url || "https://toursredmx.netlify.app";
 
-    const formatDate = (dateStr: string) => {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('es-MX', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    };
-
     const formatDateTime = (dateStr: string) => {
       const date = new Date(dateStr);
       return date.toLocaleDateString('es-MX', {
@@ -108,7 +99,7 @@ Deno.serve(async (req: Request) => {
       });
     };
 
-    const tourDate = formatDate(booking.tour.start_date);
+    const tourDate = formatearFechaViaje(fechaDelViaje(booking, booking.tour), { weekday: "long" });
     const cancellationDateTime = formatDateTime(cancellation.cancelled_at);
     const bookingDateTime = formatDateTime(booking.created_at);
     const refundAmount = Number(cancellation.refund_amount_to_traveler || 0);

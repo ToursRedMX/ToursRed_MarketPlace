@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
+import { fechaDelViaje, formatearFechaViaje } from "../_shared/fechaDelViaje.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +27,7 @@ type ReservaCheckin = {
   deposit_amount: number;
   travelers_count: number;
   checkin_at: string | null;
+  selected_date: string | null;
   tour: {
     name: string;
     destination: string;
@@ -83,7 +85,7 @@ Deno.serve(async (req: Request) => {
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .select(`
-        id, booking_code, total_price, deposit_amount, travelers_count, checkin_at,
+        id, booking_code, total_price, deposit_amount, travelers_count, checkin_at, selected_date,
         tour:tours(name, destination, start_date, end_date),
         traveler:users!bookings_user_id_fkey(first_name, last_name, email),
         agency:agencies(name, contact_email, contact_phone)
@@ -143,12 +145,6 @@ Deno.serve(async (req: Request) => {
 
     // Las fechas del tour son nullables en la tabla; sin fecha se muestra un
     // guion en vez de "Invalid Date".
-    const formatDate = (dateString: string | null | undefined) => {
-      if (!dateString) return "—";
-      const date = new Date(dateString);
-      return date.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-    };
-
     const formatDateTime = (dateString: string) => {
       const date = new Date(dateString);
       return date.toLocaleString('es-MX', {
@@ -230,11 +226,11 @@ Deno.serve(async (req: Request) => {
         </div>
         <div class="info-row">
           <span class="info-label">Fecha de inicio:</span>
-          <span class="info-value">${formatDate(tour.start_date)}</span>
+          <span class="info-value">${formatearFechaViaje(fechaDelViaje(booking, tour))}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Fecha de finalización:</span>
-          <span class="info-value">${formatDate(tour.end_date)}</span>
+          <span class="info-value">${formatearFechaViaje(tour.end_date ?? fechaDelViaje(booking, tour))}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Total de viajeros:</span>
