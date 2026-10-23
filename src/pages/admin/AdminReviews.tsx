@@ -30,6 +30,8 @@ interface AdminReview {
   apelada_en?: string | null;
   apelacion_resultado?: 'mantenida' | 'ocultada' | null;
   apelacion_folio?: string | null;
+  // Solo en resenas de agencia: apelacion ("desacuerdo") o reporte de lenguaje.
+  apelacion_tipo?: 'desacuerdo' | 'lenguaje' | null;
 }
 
 const AdminReviews: React.FC = () => {
@@ -75,7 +77,28 @@ const AdminReviews: React.FC = () => {
           },
         ])
       );
-      setReviews((data || []).map((r) => (r.review_type === 'traveler' && porId.has(r.id) ? { ...r, ...porId.get(r.id) } : r)));
+      // Resenas de agencia (publicas): su solicitud vive en agency_review_appeals.
+      const { data: solicitudesAgencia, error: errorSolicitudes } = await supabase
+        .from('agency_review_appeals')
+        .select('review_id, tipo, resultado, created_at, ticket:support_tickets(folio)');
+      if (errorSolicitudes) throw errorSolicitudes;
+
+      const porIdAgencia = new Map(
+        (solicitudesAgencia ?? []).map((s) => [
+          s.review_id as string,
+          {
+            apelada_en: s.created_at as string,
+            apelacion_resultado: s.resultado as 'mantenida' | 'ocultada' | null,
+            apelacion_tipo: s.tipo as 'desacuerdo' | 'lenguaje',
+            apelacion_folio: (comoFilas<{ folio: string }>(s.ticket ? [s.ticket] : [])[0]?.folio) ?? null,
+          },
+        ])
+      );
+      setReviews((data || []).map((r) => {
+        if (r.review_type === 'traveler' && porId.has(r.id)) return { ...r, ...porId.get(r.id) };
+        if (r.review_type === 'agency' && porIdAgencia.has(r.id)) return { ...r, ...porIdAgencia.get(r.id) };
+        return r;
+      }));
     } catch (err) {
       console.error('❌ Error cargando reseñas:', err);
       setError(mensajeDeError(err) || 'Error al cargar las reseñas');
@@ -138,11 +161,14 @@ const AdminReviews: React.FC = () => {
     try {
       setIsUpdating(review.id);
       setError('');
-      const { data, error } = await supabase.rpc('resolver_apelacion_calificacion', {
+      const { data, error } = await supabase.rpc(
+        review.review_type === 'agency' ? 'resolver_apelacion_resena_agencia' : 'resolver_apelacion_calificacion',
+        {
         p_review_id: review.id,
         p_ocultar: ocultar,
         p_nota: nota,
-      });
+        }
+      );
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'No se pudo resolver la apelación');
       await fetchReviews();
@@ -495,8 +521,8 @@ const AdminReviews: React.FC = () => {
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
                             <Flag className="h-3 w-3 mr-1" />
                             {review.apelacion_resultado
-                              ? `Apelación ${review.apelacion_resultado === 'mantenida' ? 'mantenida' : 'ocultada'}`
-                              : 'Apelada'}
+                              ? `${review.apelacion_tipo === 'lenguaje' ? 'Reporte' : 'Apelación'} ${review.apelacion_resultado === 'mantenida' ? 'mantenido' : 'ocultado'}`
+                              : review.apelacion_tipo === 'lenguaje' ? 'Reportada por lenguaje' : 'Apelada'}
                             {review.apelacion_folio ? ` · ${review.apelacion_folio}` : ''}
                           </span>
                         )}
