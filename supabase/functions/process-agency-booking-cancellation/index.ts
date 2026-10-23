@@ -104,7 +104,7 @@ Deno.serve(async (req: Request) => {
       .from("bookings")
       .select(`
         id, status, deposit_amount, service_charge,
-        user_id, tour_id, agency_id, booking_code, cancelled_at,
+        user_id, tour_id, agency_id, booking_code, cancelled_at, selected_date,
         has_payment_plan, travel_insurance_included, travel_insurance_cost, travel_insurance_points_used,
         tours!bookings_tour_id_fkey(id, name, start_date)
       `)
@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
       travel_insurance_included?: boolean | null;
       travel_insurance_cost?: number | string | null;
     };
-    const tour = booking.tours as unknown as { id: string; name: string; start_date: string } | null;
+    const tour = booking.tours as unknown as { id: string; name: string; start_date: string | null } | null;
     if (!tour) return err("Información del tour no encontrada");
 
     // Security: verify the caller belongs to the agency that owns this tour
@@ -136,11 +136,22 @@ Deno.serve(async (req: Request) => {
     if (booking.status === "cancellation_processing") return err("Esta reserva ya tiene una cancelación en proceso");
     if (["pending", "confirmed"].includes(booking.status) === false) return err("Solo se pueden cancelar reservas pendientes o confirmadas");
 
-    const tourStartDate = new Date(tour.start_date);
-    const now = new Date();
-    tourStartDate.setHours(0, 0, 0, 0);
-    now.setHours(0, 0, 0, 0);
-    const daysBeforeTour = Math.floor((tourStartDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    // La fecha del viaje es la que reservo el viajero: tours.start_date es NULL en los
+    // tours receptivos (new Date(null) daba 1970 y el insert de booking_cancellations,
+    // con tour_start_date NOT NULL, fallaba DESPUES de haber reembolsado). Se valida
+    // aqui, antes de mover dinero. Mismo dia todavia se puede cancelar, como en la
+    // pantalla; un tour que ya paso no (la reserva ya se cumplio).
+    const fechaViaje = String(booking.selected_date ?? tour.start_date ?? "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaViaje)) {
+      return err("La reserva no tiene fecha de tour; no se puede cancelar");
+    }
+    const hoyMx = new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
+    if (fechaViaje < hoyMx) {
+      return err("El tour de esta reserva ya ocurrió; ya no se puede cancelar");
+    }
+    const daysBeforeTour = Math.round(
+      (Date.parse(`${fechaViaje}T00:00:00Z`) - Date.parse(`${hoyMx}T00:00:00Z`)) / (1000 * 60 * 60 * 24),
+    );
 
     // ============================================================
     // Calculate refund amounts — agency always refunds EVERYTHING
@@ -244,7 +255,7 @@ Deno.serve(async (req: Request) => {
         booking_id,
         cancelled_by_user_id: user.id,
         cancelled_at: new Date().toISOString(),
-        tour_start_date: tour.start_date,
+        tour_start_date: fechaViaje,
         days_before_tour: daysBeforeTour,
         cancellation_policy_type: "100_percent",
         original_deposit_amount: principalPaid,
