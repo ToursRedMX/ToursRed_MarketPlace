@@ -5,6 +5,7 @@ import { Mail, Server, Save, Loader, CheckCircle, AlertCircle, DollarSign, Perce
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { SecurityTogglesSection } from '../../components/SecurityTogglesSection';
+import { CobroNotificacionesSection } from '../../components/CobroNotificacionesSection';
 import { mensajeDeError } from '../../lib/errores';
 
 interface EmailSettings {
@@ -2845,6 +2846,7 @@ const AdminSettings: React.FC = () => {
         <SmsSettingsSection />
         <SmsMetricsSection />
         <SecurityTogglesSection />
+        <CobroNotificacionesSection />
 
         <div className="flex justify-end">
           <button

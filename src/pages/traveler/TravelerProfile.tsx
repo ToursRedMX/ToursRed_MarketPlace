@@ -13,6 +13,7 @@ import AccountAccessSection from '../../components/AccountAccessSection';
 import { MfaSettingsSection } from '../../components/MfaSettingsSection';
 import LinkedAccountsSection from '../../components/LinkedAccountsSection';
 import { SmsPreferences } from '../../components/SmsPreferences';
+import { SuscripcionNotificaciones } from '../../components/SuscripcionNotificaciones';
 import { mensajeDeError } from '../../lib/errores';
 
 interface TravelerProfile {
@@ -1439,7 +1440,8 @@ const TravelerProfile: React.FC = () => {
         </div>
 
         {/* Notificaciones por SMS (confirmacion y recordatorio de reserva) -- apagadas por default */}
-        <div className="mt-6">
+        <div className="mt-6 space-y-4">
+          <SuscripcionNotificaciones tipo="viajero" />
           <SmsPreferences />
         </div>
 
