@@ -4,7 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
-import { fechaDelViaje, formatearFechaViaje } from "../_shared/fechaDelViaje.ts";
+import { formatearFechaViaje } from "../_shared/fechaDelViaje.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
