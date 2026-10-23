@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, MapPin, Users, DollarSign, Clock, Eye, AlertCircle, Star, X, CreditCard as Edit, UserCheck, XCircle, CalendarX, Check, Wallet, Lock, UserMinus, Car, Globe, Tag, Plus, AlertTriangle, ShoppingBag, Shield, Loader2 } from 'lucide-react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import SeatReselectionModal from '../../components/SeatReselectionModal';
+import SeatChangeModal from '../../components/SeatChangeModal';
 import PaymentPlanCalendar from '../../components/PaymentPlanCalendar';
 import { useAuth } from '../../context/AuthContext';
 import { getUserBookings, getUserPastBookings, getUserCancelledBookings, parseDateFromDB, supabase, calculateCancellationPolicy, CancellationPolicy } from '../../lib/supabase';
@@ -389,6 +390,13 @@ const TravelerBookings: React.FC = () => {
     tourName: string;
     newDate: string;
     newTime: string;
+  } | null>(null);
+  const [seatChangeModal, setSeatChangeModal] = useState<{
+    bookingId: string;
+    tourId: string;
+    slotId: string | null;
+    currentSeats: number[];
+    tourName: string;
   } | null>(null);
 
   const [bookingTab, setBookingTab] = useState<'activas' | 'pasadas' | 'canceladas'>('activas');
@@ -2727,6 +2735,23 @@ const TravelerBookings: React.FC = () => {
                           ? '1 asiento reservado'
                           : `${booking.selected_seats.length} asientos reservados`}
                       </p>
+                      {(booking.status === 'confirmed' || booking.status === 'pending') && (
+                        <button
+                          onClick={() =>
+                            setSeatChangeModal({
+                              bookingId: booking.id,
+                              tourId: booking.tour_id,
+                              slotId: booking.slot_id || null,
+                              currentSeats: booking.selected_seats || [],
+                              tourName: booking.tours?.name || '',
+                            })
+                          }
+                          className="mt-3 px-3 py-1.5 bg-white border border-blue-300 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                        >
+                          <MapPin className="h-4 w-4" />
+                          Cambiar de asiento
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -4664,6 +4689,17 @@ const TravelerBookings: React.FC = () => {
             fetchBookings();
           }}
           onClose={() => setSeatReselectionModal(null)}
+        />
+      )}
+
+      {seatChangeModal && (
+        <SeatChangeModal
+          {...seatChangeModal}
+          onSuccess={() => {
+            setSeatChangeModal(null);
+            fetchBookings();
+          }}
+          onClose={() => setSeatChangeModal(null)}
         />
       )}
 
