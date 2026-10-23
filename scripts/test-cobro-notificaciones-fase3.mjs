@@ -1,7 +1,8 @@
 // Contratos de la FASE 3 del cobro de notificaciones (migracion 20261023030512 + generate-notification-cfdi): lo contable y lo fiscal.
 // Lo que se afirma aqui es lo que NO puede romperse sin que el libro mienta o se facture mal (patron 1: un numero que cuadra puede
 // estar en la cuenta equivocada, asi que se afirma la CLASIFICACION concepto por concepto, no solo la suma):
-//   1. cada cobro se asienta: Bancos neto de comision / 604 / 108 contra 410 (base) y 210 (IVA), y NO se copia el asiento de Plus;
+//   1. cada cobro se asienta: Bancos neto de comision / 604 / 108 contra 403 (base) y 210 (IVA); la fase 3 lo creo en 410 y la
+//      migracion 20261023043215 lo movio a 403 (Axel: membresias y notificaciones van juntas), asi que aqui se lee el estado FINAL;
 //   2. todo lo que conoce el contexto de membresia conoce el nuevo (CHECKs, vista de movimientos, conciliacion, auditoria);
 //   3. el CFDI solo sale de un pago confirmado, siempre se emite, y el importe sale de lo cobrado;
 //   4. el CFDI y el asiento parten el IVA igual (si no, el libro y el comprobante diferirian un centavo);
@@ -13,6 +14,7 @@ const leer = (ruta) => readFileSync(new URL('../' + ruta, import.meta.url), 'utf
 const sinComentarios = (t) => t.split('\n').filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('--') && !l.trim().startsWith('*')).join('\n');
 
 const sql = leer('supabase/migrations/20261023030512_cobro_notificaciones_fase3_fiscal_y_contable.sql');
+const a403 = leer('supabase/migrations/20261023043215_membresias_y_notificaciones_a_la_cuenta_403.sql');
 const cfdi = leer('supabase/functions/generate-notification-cfdi/index.ts');
 const compartido = leer('supabase/functions/_shared/suscripcionNotificaciones.ts');
 const correo = leer('supabase/functions/send-cfdi-email/index.ts');
@@ -29,22 +31,27 @@ const cuerpoDe = (firma) => {
   return sql.slice(i, sql.indexOf('$function$;', sql.indexOf('AS $function$', i) + 13));
 };
 
-prueba('cuenta de ingreso nueva 410, que no existia ya', () => {
+prueba('la fase 3 creo la 410 sin pisar nada, y la migracion de la 403 la retira', () => {
   assert.match(sql, /VALUES? ?\(?'410', '410', 'Ingresos por notificaciones', 'ingreso'|SELECT '410', '410', 'Ingresos por notificaciones', 'ingreso', '40'/);
   assert.match(sql, /WHERE NOT EXISTS \(SELECT 1 FROM public\.chart_of_accounts WHERE code = '410'\)/);
+  assert.match(a403, /DELETE FROM public\.chart_of_accounts WHERE code = '410'/);
+  assert.match(a403, /UPDATE public\.chart_of_accounts SET is_active = false WHERE code = '410'/, 'si ya tuviera partidas se desactiva, no se borra historia');
 });
 
 prueba('el asiento clasifica cada concepto en su cuenta, con la comision de Stripe y el IVA separado', () => {
   // Sin comentarios: un RAISE comentado no protege nada (patron 4: la mutacion cayo en un comentario y la prueba sobrevivio).
-  const f = sinComentarios(cuerpoDe('public.create_accounting_entry_for_notificaciones'));
+  // Estado FINAL: la funcion de la fase 3 con el cambio de cuenta que le aplica la migracion de la 403.
+  assert.match(a403, /viejo text := '''account_code'', ''410''';\s+nuevo text := '''account_code'', ''403''';/);
+  assert.match(a403, /IF veces <> 1 THEN\s+RAISE EXCEPTION 'create_accounting_entry_for_notificaciones cambio/);
+  const f = sinComentarios(cuerpoDe('public.create_accounting_entry_for_notificaciones')).replace("'account_code', '410'", "'account_code', '403'");
   // Debitos: Bancos NETO de comision, la comision (604) y su IVA (108).
   assert.match(f, /'account_code', '102'[^;]*'debit', v_total - v_fee/);
   assert.match(f, /'account_code', '604'[^;]*'debit', v_fee_base/);
   assert.match(f, /'account_code', '108'[^;]*'debit', v_fee_iva/);
-  // Creditos: el ingreso en 410 (NO en 401 ni 403) y el IVA trasladado en 210.
-  assert.match(f, /'account_code', '410'[^;]*'credit', v_base/);
+  // Creditos: el ingreso en 403 (junto con las membresias; NO en 401 comisiones) y el IVA trasladado en 210.
+  assert.match(f, /'account_code', '403'[^;]*'credit', v_base/);
   assert.match(f, /'account_code', '210'[^;]*'credit', v_iva/);
-  assert.ok(!/'account_code', '(401|403)'/.test(f), 'no se acredita a comisiones ni a membresias');
+  assert.ok(!/'account_code', '(401|410)'/.test(f), 'no se acredita a comisiones ni a la 410 retirada');
   // El precio ya incluye IVA.
   assert.match(f, /v_base := round\(v_total \/ 1\.16, 2\);/);
   assert.match(f, /v_iva := v_total - v_base;/);

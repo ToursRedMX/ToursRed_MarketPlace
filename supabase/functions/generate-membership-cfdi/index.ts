@@ -74,7 +74,8 @@ async function facturapiStamp(apiKey: string, organizationId: string, request: C
 
   const body: Record<string, unknown> = {
     type: request.tipo_de_comprobante,
-    payment_form: request.payment_form ?? "03",
+    // Cobrada con tarjeta por Stripe: forma de pago 04. Era "03" (transferencia) por omision.
+    payment_form: request.payment_form ?? "04",
     payment_method: "PUE",
     customer,
     use: request.receptor.uso_cfdi,
