@@ -113,7 +113,10 @@ export function CobroNotificacionesSection() {
 
       const cambiaAEncendido = activo && !ajustes.data?.cobro_notificaciones_activo;
       if (cambiaAEncendido) {
-        const cuando = fecha ? `el ${fechaLarga(fecha.toISOString())}` : 'AHORA MISMO (no pusiste fecha)';
+        // Una fecha que YA PASO empieza el cobro de inmediato (la cobertura mira «desde <= ahora»): la confirmacion lo dice sin rodeos.
+        const cuando = fecha && fecha.getTime() > Date.now()
+          ? `el ${fechaLarga(fecha.toISOString())}`
+          : fecha ? `AHORA MISMO (la fecha ${fechaLarga(fecha.toISOString())} ya pasó)` : 'AHORA MISMO (no pusiste fecha)';
         const ok = window.confirm(
           `Vas a encender el cobro de notificaciones ${cuando}.\n\nA partir de entonces se APAGAN las preferencias de SMS de todo viajero y agencia que no esté cubierto (los miembros ToursRed Plus conservan las suyas), y para volver a recibir avisos tendrán que pagar y reactivarlas. Se respaldan antes de apagarse.\n\n¿Continuar?`,
         );
@@ -166,6 +169,14 @@ export function CobroNotificacionesSection() {
   const fechaGuardada = guardado?.cobro_notificaciones_desde ? new Date(guardado.cobro_notificaciones_desde) : null;
   const avisoDisponible = Boolean(guardado?.cobro_notificaciones_activo && fechaGuardada && fechaGuardada.getTime() > ahora
     && guardado.stripe_price_notificaciones_viajero && guardado.stripe_price_notificaciones_agencia);
+
+  // POR QUE no esta disponible (lo guardado, uno por uno): decir solo «guarda el cobro encendido…» dejaba a quien ya habia pulsado
+  // el interruptor sin saber cual de las condiciones faltaba.
+  const motivosSinAviso: string[] = [];
+  if (!guardado?.cobro_notificaciones_activo) motivosSinAviso.push('el cobro está guardado como APAGADO (enciéndelo y pulsa «Guardar cobro de notificaciones»)');
+  if (!fechaGuardada) motivosSinAviso.push('la fecha de inicio guardada está vacía');
+  else if (fechaGuardada.getTime() <= ahora) motivosSinAviso.push(`la fecha de inicio guardada (${fechaLarga(fechaGuardada.toISOString())}) ya pasó: pon una fecha a FUTURO y guarda`);
+  if (!guardado?.stripe_price_notificaciones_viajero || !guardado?.stripe_price_notificaciones_agencia) motivosSinAviso.push('faltan los dos Price IDs guardados');
 
   const consultarAviso = useMutation({
     mutationFn: async () => invocarSuscripcion<ResumenAviso>('send-aviso-cobro-notificaciones', { modo: 'simular' }),
@@ -266,9 +277,12 @@ Quien ya lo recibió para esta fecha no lo recibe otra vez. ¿Enviar?`,
           Avisa con tiempo a quien perdería sus avisos por SMS al empezar el cobro: viajeros con avisos activos y sin Plus ni suscripción, y el dueño de cada agencia sin suscripción. Quien ya lo recibió para esta fecha no lo recibe otra vez.
         </p>
         {!avisoDisponible && (
-          <p className="mt-2 text-sm text-amber-700">
-            Para avisar, guarda el cobro encendido, con la fecha de inicio a futuro y los dos Price IDs.
-          </p>
+          <div className="mt-2 text-sm text-amber-700">
+            <p>Todavía no se puede avisar. Lo guardado hoy tiene:</p>
+            <ul className="list-disc pl-5">
+              {motivosSinAviso.map((m) => <li key={m}>{m}</li>)}
+            </ul>
+          </div>
         )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => consultarAviso.mutate()} disabled={!avisoDisponible || consultarAviso.isPending}
