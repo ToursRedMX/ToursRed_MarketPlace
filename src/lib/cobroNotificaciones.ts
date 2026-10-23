@@ -47,7 +47,7 @@ export function useCobroNotificaciones(tipo: TipoSuscripcionNotificaciones, agen
 }
 
 /** Llama a una Edge Function de suscripcion y devuelve el mensaje real del servidor, no el generico del cliente. */
-export async function invocarSuscripcion<T>(funcion: 'create-notification-subscription' | 'manage-notification-subscription', body: Record<string, unknown>): Promise<T> {
+export async function invocarSuscripcion<T>(funcion: 'create-notification-subscription' | 'manage-notification-subscription' | 'send-aviso-cobro-notificaciones', body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke(funcion, { body });
   if (error) {
     let mensaje = 'No se pudo completar la solicitud. Intenta de nuevo.';

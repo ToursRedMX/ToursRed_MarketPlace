@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BellRing, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { mensajeDeError } from '../lib/errores';
-import { dinero, fechaLarga } from '../lib/cobroNotificaciones';
+import { dinero, fechaLarga, invocarSuscripcion } from '../lib/cobroNotificaciones';
 
 interface Ajustes {
   cobro_notificaciones_activo: boolean;
@@ -34,6 +34,16 @@ function aCampoLocal(iso: string | null): string {
   const d = new Date(iso);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+interface ResumenAviso {
+  desde: string;
+  por_avisar: number;
+  viajeros: number;
+  agencias: number;
+  enviados?: number;
+  fallidos?: number;
+  faltan?: number;
 }
 
 const ETIQUETA_ESTADO: Record<string, string> = {
@@ -73,6 +83,9 @@ export function CobroNotificacionesSection() {
   const [priceViajero, setPriceViajero] = useState('');
   const [priceAgencia, setPriceAgencia] = useState('');
   const [aviso, setAviso] = useState('');
+  const [resumenAviso, setResumenAviso] = useState<ResumenAviso | null>(null);
+  // «Ahora» se toma al abrir la pantalla (Date.now en el render no es puro); el servidor vuelve a comprobar la fecha al enviar.
+  const [ahora] = useState(() => Date.now());
 
   useEffect(() => {
     const a = ajustes.data;
@@ -121,6 +134,29 @@ export function CobroNotificacionesSection() {
       window.setTimeout(() => setAviso(''), 3000);
       await queryClient.invalidateQueries({ queryKey: ['admin-cobro-notificaciones'] });
     },
+  });
+
+  // El aviso previo solo tiene sentido con el cobro encendido y la fecha de inicio a futuro (lo que esta GUARDADO, no el formulario).
+  const guardado = ajustes.data;
+  const fechaGuardada = guardado?.cobro_notificaciones_desde ? new Date(guardado.cobro_notificaciones_desde) : null;
+  const avisoDisponible = Boolean(guardado?.cobro_notificaciones_activo && fechaGuardada && fechaGuardada.getTime() > ahora
+    && guardado.stripe_price_notificaciones_viajero && guardado.stripe_price_notificaciones_agencia);
+
+  const consultarAviso = useMutation({
+    mutationFn: async () => invocarSuscripcion<ResumenAviso>('send-aviso-cobro-notificaciones', { modo: 'simular' }),
+    onSuccess: (r) => setResumenAviso(r),
+  });
+  const enviarAviso = useMutation({
+    mutationFn: async () => {
+      const ok = window.confirm(
+        `Se enviará un correo a ${resumenAviso?.por_avisar ?? 0} persona(s) (${resumenAviso?.viajeros ?? 0} viajeros y ${resumenAviso?.agencias ?? 0} agencias) avisando que el cobro empieza el ${fechaLarga(resumenAviso?.desde)}.
+
+Quien ya lo recibió para esta fecha no lo recibe otra vez. ¿Enviar?`,
+      );
+      if (!ok) throw new Error('Cancelado: no se envió ningún correo.');
+      return invocarSuscripcion<ResumenAviso>('send-aviso-cobro-notificaciones', { modo: 'enviar' });
+    },
+    onSuccess: (r) => setResumenAviso(r),
   });
 
   if (ajustes.isPending) {
@@ -187,6 +223,38 @@ export function CobroNotificacionesSection() {
             {guardar.isPending ? 'Guardando…' : 'Guardar cobro de notificaciones'}
           </button>
         </div>
+      </div>
+
+      <div className="mt-6 border-t border-slate-100 pt-4">
+        <h4 className="font-medium text-slate-900">Aviso previo por correo</h4>
+        <p className="mt-1 text-sm text-slate-500">
+          Avisa con tiempo a quien perdería sus avisos por SMS al empezar el cobro: viajeros con avisos activos y sin Plus ni suscripción, y el dueño de cada agencia sin suscripción. Quien ya lo recibió para esta fecha no lo recibe otra vez.
+        </p>
+        {!avisoDisponible && (
+          <p className="mt-2 text-sm text-amber-700">
+            Para avisar, guarda el cobro encendido, con la fecha de inicio a futuro y los dos Price IDs.
+          </p>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => consultarAviso.mutate()} disabled={!avisoDisponible || consultarAviso.isPending}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            {consultarAviso.isPending ? 'Calculando…' : 'Ver a quién se avisaría'}
+          </button>
+          <button type="button" onClick={() => enviarAviso.mutate()} disabled={!avisoDisponible || !resumenAviso || resumenAviso.por_avisar === 0 || enviarAviso.isPending}
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:bg-gray-400">
+            {enviarAviso.isPending ? 'Enviando…' : 'Enviar aviso'}
+          </button>
+        </div>
+        {resumenAviso && (
+          <p role="status" className="mt-2 text-sm text-slate-700">
+            {resumenAviso.enviados != null
+              ? `Enviados: ${resumenAviso.enviados}${resumenAviso.fallidos ? ` · No salieron: ${resumenAviso.fallidos} (se pueden reintentar)` : ''}${resumenAviso.faltan ? ` · Faltan ${resumenAviso.faltan}: vuelve a pulsar «Enviar aviso»` : ''}.`
+              : `Por avisar: ${resumenAviso.por_avisar} (${resumenAviso.viajeros} viajeros, ${resumenAviso.agencias} agencias). El cobro empieza el ${fechaLarga(resumenAviso.desde)}.`}
+          </p>
+        )}
+        {(consultarAviso.isError || enviarAviso.isError) && (
+          <p role="alert" className="mt-2 text-sm text-red-600">{mensajeDeError(enviarAviso.error ?? consultarAviso.error)}</p>
+        )}
       </div>
 
       <div className="mt-6 border-t border-slate-100 pt-4">
