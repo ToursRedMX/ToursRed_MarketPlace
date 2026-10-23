@@ -46,7 +46,8 @@ prueba('la categoria nueva entra a la cola exigiendo el fragmento exacto', () =>
 prueba('la categoria nueva entra a las DOS tablas que enumeran categorias: la cola y los INTENTOS (sin la segunda el aviso nunca salia)', () => {
   // 23-oct-2026: la cola la conocia y el CHECK de notification_attempts no; begin_sms_attempt fallaba al insertar el intento y el worker
   // (que traga el error a proposito) dejaba el aviso en resultado_desconocido, sin enviar.
-  assert.match(sinComentarios(intentos), /notification_attempts_category_check/);
+  assert.match(sinComentarios(intentos), /DROP CONSTRAINT notification_attempts_category_check/);
+  assert.match(sinComentarios(intentos), /ADD CONSTRAINT notification_attempts_category_check '/, 'la restriccion se vuelve a crear con el MISMO nombre');
   assert.match(sinComentarios(intentos), /replace\(def, viejo, viejo \|\| ' ''reserva_cancelada''::text,'\)/);
   assert.match(sinComentarios(intentos), /IF veces <> 1 THEN RAISE EXCEPTION 'notification_attempts_category_check cambio/);
   assert.match(sql, /notification_outbox_category_check/);
