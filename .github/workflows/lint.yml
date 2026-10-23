@@ -204,6 +204,9 @@ jobs:
       - name: Verify the pre-billing notice email (audience, no duplicates, admin only, simulate by default)
         run: node scripts/test-aviso-previo-cobro.mjs
 
+      - name: Verify read-only tables of the notification billing revoke authenticated's default write grants
+        run: node scripts/test-permisos-tablas-cobro.mjs
+
       - name: Verify the return screen after a partial payment (abono recibido)
         run: node scripts/test-abono-recibido.mjs
 
