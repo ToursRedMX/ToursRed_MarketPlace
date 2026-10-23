@@ -1416,7 +1416,11 @@ const TravelerProfile: React.FC = () => {
 
         {/* Calificaciones del Viajero */}
         <div className="mt-6">
-          <TravelerReviewsDisplay travelerId={profile.id} />
+          <TravelerReviewsDisplay
+            travelerId={profile.id}
+            solicitanteNombre={`${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim()}
+            solicitanteEmail={profile.email}
+          />
         </div>
 
         {/* Acceso: correo y celular (cambio con reautenticación y verificación del valor nuevo) */}
