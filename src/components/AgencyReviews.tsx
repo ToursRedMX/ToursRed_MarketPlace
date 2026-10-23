@@ -4,6 +4,8 @@ import { Star, User, Calendar, MessageSquare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { mensajeDeError } from '../lib/errores';
+import { comoFilas } from '../lib/relacionesSupabase';
+import AgencyReviewAppeal, { type SolicitudDeResena } from './AgencyReviewAppeal';
 
 interface Review {
   id: string;
@@ -80,6 +82,39 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
           last_name: review.traveler_last_name || ''
         }
       }));
+    },
+  });
+
+  // Solo el dueño de la agencia resenada puede apelar o reportar. Las solicitudes viven
+  // en una tabla privada (la resena es publica): el RLS solo las deja ver al dueño.
+  const appealsQueryKey = ['agency-review-appeals', agencyId, user?.id] as const;
+  const { data: apelaciones } = useQuery({
+    queryKey: appealsQueryKey,
+    enabled: !!user,
+    queryFn: async (): Promise<{ esDuenio: boolean; porResena: Record<string, SolicitudDeResena> }> => {
+      const { data: agencia, error: errorAgencia } = await supabase
+        .from('agencies')
+        .select('user_id')
+        .eq('id', agencyId)
+        .maybeSingle();
+      if (errorAgencia) throw errorAgencia;
+      if (!agencia || agencia.user_id !== user?.id) return { esDuenio: false, porResena: {} };
+
+      const { data, error: errorSolicitudes } = await supabase
+        .from('agency_review_appeals')
+        .select('review_id, tipo, resultado, ticket:support_tickets(folio)')
+        .eq('agency_id', agencyId);
+      if (errorSolicitudes) throw errorSolicitudes;
+
+      const porResena: Record<string, SolicitudDeResena> = {};
+      for (const fila of data ?? []) {
+        porResena[fila.review_id as string] = {
+          tipo: fila.tipo as SolicitudDeResena['tipo'],
+          resultado: fila.resultado as SolicitudDeResena['resultado'],
+          folio: comoFilas<{ folio: string }>(fila.ticket ? [fila.ticket] : [])[0]?.folio ?? null,
+        };
+      }
+      return { esDuenio: true, porResena };
     },
   });
 
@@ -383,6 +418,16 @@ export default function AgencyReviews({ agencyId, agencyName }: AgencyReviewsPro
               </div>
 
               <p className="text-gray-700 whitespace-pre-wrap">{review.comment}</p>
+
+              {apelaciones?.esDuenio && (
+                <AgencyReviewAppeal
+                  reviewId={review.id}
+                  agencyName={agencyName}
+                  rating={review.rating}
+                  solicitud={apelaciones.porResena[review.id] ?? null}
+                  onEnviada={() => queryClient.invalidateQueries({ queryKey: appealsQueryKey })}
+                />
+              )}
 
               {review.reply && (
                 <div className="mt-4 pl-4 border-l-4 border-blue-200 bg-blue-50 p-4 rounded">
