@@ -40,6 +40,14 @@ export function plantillaConfirmacion(folio: string, base: string): string {
   if (segmentosSms(text).segments > 1) throw new Error('plantilla_demasiado_larga');
   return text;
 }
+// Cancelacion de la reserva del VIAJERO (la cancele el o la agencia). Siempre un segmento: con el nombre del tour si cabe, y si no, sin el.
+export function plantillaCancelacion(folio: string, tour: string, base: string): string {
+  const link = enlaceReservas(base);
+  const f = clean(folio, 20);
+  return unSegmento(
+    `ToursRed: se cancelo tu reserva ${f} - ${clean(tour, 30)}. Detalles: ${link}`,
+    `ToursRed: se cancelo tu reserva ${f}. Detalles: ${link}`);
+}
 export function plantillaRecordatorio(tour: string, punto: string, folio: string, hora = ''): string {
   const time = /^\d{2}:\d{2}/.test(hora) ? ` ${hora.slice(0,5)}` : '';
   return `ToursRed: manana ${clean(tour, 35)}${time}. Encuentro: ${clean(punto, 35)}. Reserva ${clean(folio, 20)}.`;
@@ -77,6 +85,7 @@ export function plantillaAgenciaMensaje(base: string): string {
 export function textoDeNotificacion(categoria: string, snapshot: Record<string, string>, base: string): string {
   switch (categoria) {
     case 'reserva_confirmada': return plantillaConfirmacion(snapshot.folio, base);
+    case 'reserva_cancelada': return plantillaCancelacion(snapshot.folio, snapshot.tour, base);
     case 'recordatorio_tour': return plantillaRecordatorio(snapshot.tour, snapshot.meeting_point, snapshot.folio, snapshot.departure_time);
     case 'agencia_reserva': return plantillaAgenciaReserva(snapshot.folio, snapshot.tour, base);
     case 'agencia_cancelacion': return plantillaAgenciaCancelacion(snapshot.folio, snapshot.tour, base);

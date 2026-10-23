@@ -195,6 +195,9 @@ jobs:
       - name: Verify membership and notification entries go to account 403 (VAT split, Stripe fee, card payment form)
         run: node scripts/test-asiento-membresia-403.mjs
 
+      - name: Verify traveler SMS preferences by type and the cancellation notice (coverage, off by default, billing reset)
+        run: node scripts/test-sms-viajero-preferencias.mjs
+
       - name: Verify the return screen after a partial payment (abono recibido)
         run: node scripts/test-abono-recibido.mjs
 

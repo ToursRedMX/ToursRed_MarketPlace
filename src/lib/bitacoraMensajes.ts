@@ -15,6 +15,7 @@ export const ETIQUETAS_CATEGORIA: Record<string, string> = {
   recordatorio_tour: 'Recordatorio de tour',
   agencia_reserva: 'Nueva reserva (agencia)',
   agencia_cancelacion: 'Cancelación (agencia)',
+  reserva_cancelada: 'Reserva cancelada (viajero)',
   agencia_mensaje: 'Mensaje nuevo (agencia)',
 };
 
