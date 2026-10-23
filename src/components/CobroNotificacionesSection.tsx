@@ -136,6 +136,31 @@ export function CobroNotificacionesSection() {
     },
   });
 
+  // APAGAR el cobro es inmediato (como los demas interruptores de seguridad): es la accion segura y no debe depender de recordar un
+  // segundo boton. El 23-oct-2026 Axel lo apago aqui, pulso el «Guardar» de la pagina (que no guarda esta seccion) y el cobro siguio
+  // encendido: la tarjeta de suscripcion siguio saliendo a los usuarios. ENCENDER, en cambio, sigue exigiendo el boton y su confirmacion.
+  const apagar = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('platform_settings').update({ cobro_notificaciones_activo: false })
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      setAviso('Cobro apagado: las notificaciones vuelven a ser gratis');
+      window.setTimeout(() => setAviso(''), 4000);
+      await queryClient.invalidateQueries({ queryKey: ['admin-cobro-notificaciones'] });
+    },
+    onError: () => setActivo(true), // no se pudo apagar: el interruptor vuelve a decir la verdad
+  });
+
+  // Cambios sin guardar: lo que se ve en el formulario no es lo guardado. Sin este aviso se puede creer que algo ya aplico.
+  const hayCambios = Boolean(ajustes.data) && (
+    activo !== ajustes.data!.cobro_notificaciones_activo
+    || desde !== aCampoLocal(ajustes.data!.cobro_notificaciones_desde)
+    || gracia !== String(ajustes.data!.cobro_notificaciones_dias_gracia)
+    || priceViajero.trim() !== (ajustes.data!.stripe_price_notificaciones_viajero ?? '')
+    || priceAgencia.trim() !== (ajustes.data!.stripe_price_notificaciones_agencia ?? ''));
+
   // El aviso previo solo tiene sentido con el cobro encendido y la fecha de inicio a futuro (lo que esta GUARDADO, no el formulario).
   const guardado = ajustes.data;
   const fechaGuardada = guardado?.cobro_notificaciones_desde ? new Date(guardado.cobro_notificaciones_desde) : null;
@@ -188,7 +213,11 @@ Quien ya lo recibió para esta fecha no lo recibe otra vez. ¿Enviar?`,
             <span className="block font-medium text-slate-900">Cobrar las notificaciones</span>
             <span className="block text-sm text-slate-500">Apagado: todo es gratis y nada cambia. Encendido: desde la fecha de inicio solo reciben quienes estén cubiertos.</span>
           </span>
-          <input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} className="h-5 w-5" aria-label="Cobrar las notificaciones" />
+          <input type="checkbox" checked={activo} disabled={apagar.isPending}
+            onChange={(e) => {
+              setActivo(e.target.checked);
+              if (!e.target.checked && ajustes.data?.cobro_notificaciones_activo) apagar.mutate();
+            }} className="h-5 w-5" aria-label="Cobrar las notificaciones" />
         </label>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -215,6 +244,12 @@ Quien ya lo recibió para esta fecha no lo recibe otra vez. ¿Enviar?`,
           Crea cada precio en Stripe como recurrente mensual en MXN y pega su <strong>Price ID</strong> (empieza con <code>price_</code>), no el Product ID. Debe estar en la misma cuenta de Stripe que usan las llaves de las funciones. El monto que ven los usuarios se lee de Stripe.
         </p>
 
+        {hayCambios && !guardar.isPending && (
+          <p role="status" className="text-sm text-amber-800 bg-amber-50 rounded-lg p-3">
+            Tienes cambios sin guardar en esta sección. Pulsa «Guardar cobro de notificaciones»: el botón de guardar de la página NO los guarda.
+          </p>
+        )}
+        {apagar.isError && <p role="alert" className="text-sm text-red-600 bg-red-50 rounded-lg p-3">{mensajeDeError(apagar.error)}</p>}
         {guardar.isError && <p role="alert" className="text-sm text-red-600 bg-red-50 rounded-lg p-3">{mensajeDeError(guardar.error)}</p>}
         {aviso && <p role="status" className="text-sm text-green-700 bg-green-50 rounded-lg p-3">{aviso}</p>}
 

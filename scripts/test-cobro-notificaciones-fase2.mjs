@@ -98,4 +98,25 @@ prueba('el OTP no aparece en el codigo de la suscripcion: nunca entra al cobro',
   }
 });
 
+prueba('APAGAR el cobro desde el admin es inmediato; ENCENDER sigue exigiendo su boton y su confirmacion; y se avisa de lo que no esta guardado', () => {
+  // 23-oct-2026: Axel apago el interruptor, pulso el «Guardar» de la PAGINA (que no guarda esta seccion) y el cobro siguio encendido:
+  // la tarjeta de suscripcion siguio saliendo a los usuarios. Apagar es la accion segura y no puede depender de un segundo boton.
+  const seccion = sinComentarios(leer('src/components/CobroNotificacionesSection.tsx'));
+  assert.match(seccion, /const apagar = useMutation\(/);
+  assert.match(seccion, /\.update\(\{ cobro_notificaciones_activo: false \}\)/, 'apagar toca SOLO el interruptor, no el resto del formulario');
+  assert.match(seccion, /if \(!e\.target\.checked && ajustes\.data\?\.cobro_notificaciones_activo\) apagar\.mutate\(\);/);
+  assert.match(seccion, /onError: \(\) => setActivo\(true\)/, 'si no se pudo apagar, el interruptor no miente');
+  // Encender NO es inmediato: sigue por el boton de guardar, con su confirmacion.
+  const alCambiar = seccion.slice(seccion.indexOf('onChange={(e) => {'), seccion.indexOf('className="h-5 w-5"'));
+  assert.ok(alCambiar.includes('setActivo(e.target.checked)') && alCambiar.length < 400, 'se encontro el manejador del interruptor');
+  assert.ok(!/guardar\.mutate/.test(alCambiar), 'el interruptor jamas guarda ni enciende por si solo');
+  assert.equal((alCambiar.match(/\.mutate\(/g) ?? []).length, 1, 'lo unico que dispara es apagar');
+  assert.match(seccion, /const cambiaAEncendido = activo && !ajustes\.data\?\.cobro_notificaciones_activo;/);
+  assert.match(seccion, /Vas a encender el cobro de notificaciones/);
+  // Aviso de cambios sin guardar.
+  assert.match(seccion, /const hayCambios = Boolean\(ajustes\.data\) && \(/);
+  assert.match(seccion, /activo !== ajustes\.data!\.cobro_notificaciones_activo/);
+  assert.match(seccion, /el botón de guardar de la página NO los guarda/);
+});
+
 console.log(`OK: ${casos} casos del cobro de notificaciones, fase 2.`);
