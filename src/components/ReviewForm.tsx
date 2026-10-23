@@ -70,50 +70,39 @@ export default function ReviewForm({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No autenticado');
 
-      const table = reviewType === 'agency' ? 'agency_reviews' : 'traveler_reviews';
-
-      const reviewData: Record<string, unknown> = {
-        booking_id: bookingId,
-        rating,
-        comment: comment.trim()
-      };
-
-      if (reviewType === 'agency') {
-        reviewData.agency_id = revieweeId;
-        reviewData.traveler_id = user.id;
+      if (reviewType === 'traveler') {
+        // La agencia escribe solo por la funcion: ella valida que la reserva sea
+        // suya, que el tour ya haya terminado y que sea una sola calificacion.
+        const { data: resultado, error: errorRpc } = await supabase.rpc('calificar_viajero', {
+          p_booking_id: bookingId,
+          p_rating: rating,
+          p_comment: comment.trim(),
+        });
+        if (errorRpc) throw errorRpc;
+        if (!resultado?.success) throw new Error(resultado?.error || 'No se pudo guardar la calificación');
       } else {
-        const { data: agencyData, error: errorAgencia } = await supabase
-          .from('agencies')
-          .select('id')
-          .eq('user_id', user.id)
-          .single();
+        const reviewData = {
+          booking_id: bookingId,
+          rating,
+          comment: comment.trim(),
+          agency_id: revieweeId,
+          traveler_id: user.id,
+        };
 
-        // Falla cerrado, pero con el mensaje equivocado: "Agencia no
-        // encontrada" cuando lo que paso fue que no se pudo leer.
-        if (errorAgencia) {
-          console.error('ReviewForm: no se pudo leer la agencia', errorAgencia);
-          throw new Error('No pudimos verificar tu agencia. Intenta de nuevo.');
+        if (existingReview) {
+          const { error: updateError } = await supabase
+            .from('agency_reviews')
+            .update({ rating, comment: comment.trim() })
+            .eq('id', existingReview.id);
+
+          if (updateError) throw updateError;
+        } else {
+          const { error: insertError } = await supabase
+            .from('agency_reviews')
+            .insert([reviewData]);
+
+          if (insertError) throw insertError;
         }
-
-        if (!agencyData) throw new Error('Agencia no encontrada');
-
-        reviewData.traveler_id = revieweeId;
-        reviewData.agency_id = agencyData.id;
-      }
-
-      if (existingReview) {
-        const { error: updateError } = await supabase
-          .from(table)
-          .update({ rating, comment: comment.trim() })
-          .eq('id', existingReview.id);
-
-        if (updateError) throw updateError;
-      } else {
-        const { error: insertError } = await supabase
-          .from(table)
-          .insert([reviewData]);
-
-        if (insertError) throw insertError;
       }
 
       reviewFormPersistence.clearStorage();
@@ -170,7 +159,7 @@ export default function ReviewForm({
 
       <div>
         <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-2">
-          Comentario {reviewType === 'agency' ? '(público)' : '(privado)'}
+          Comentario (opcional)
         </label>
         <textarea
           id="comment"
@@ -187,7 +176,7 @@ export default function ReviewForm({
         <p className="mt-1 text-sm text-gray-500">
           {reviewType === 'agency'
             ? 'Tu comentario será visible para todos los usuarios'
-            : 'Tu comentario solo será visible para ti y el viajero'}
+            : 'Tu comentario lo verán el viajero y las demás agencias de ToursRed, no el público'}
         </p>
       </div>
 

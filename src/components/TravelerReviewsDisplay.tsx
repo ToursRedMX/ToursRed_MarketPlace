@@ -181,7 +181,7 @@ export default function TravelerReviewsDisplay({ travelerId }: TravelerReviewsDi
 
       <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <p className="text-sm text-blue-800">
-          <strong>Nota:</strong> Solo tú puedes ver estas calificaciones. Las agencias podrán verlas cuando reserves un tour con ellas.
+          <strong>Nota:</strong> Estas calificaciones las ven solo tú y las agencias de ToursRed; no son públicas.
         </p>
       </div>
     </div>
