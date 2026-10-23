@@ -13,6 +13,7 @@ const leer = (ruta) => readFileSync(new URL('../' + ruta, import.meta.url), 'utf
 const sinComentarios = (t) => t.split('\n').filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('--') && !l.trim().startsWith('*')).join('\n');
 
 const sql = leer('supabase/migrations/20261023052207_sms_viajero_preferencias_por_tipo_y_cancelacion.sql');
+const intentos = leer('supabase/migrations/20261023055536_sms_cancelacion_viajero_categoria_en_intentos.sql');
 const codigoSql = sinComentarios(sql);
 const pantalla = leer('src/components/SmsPreferences.tsx');
 const plantillas = leer('supabase/functions/_shared/mensajeria/plantillas.ts');
@@ -40,6 +41,16 @@ prueba('la categoria nueva entra a la cola exigiendo el fragmento exacto', () =>
   assert.match(sql, /viejo text := '''recordatorio_tour''::text,';/);
   assert.match(sql, /IF veces <> 1 THEN RAISE EXCEPTION 'notification_outbox_category_check cambio/);
   assert.match(sql, /viejo \|\| ' ''reserva_cancelada''::text,'/);
+});
+
+prueba('la categoria nueva entra a las DOS tablas que enumeran categorias: la cola y los INTENTOS (sin la segunda el aviso nunca salia)', () => {
+  // 23-oct-2026: la cola la conocia y el CHECK de notification_attempts no; begin_sms_attempt fallaba al insertar el intento y el worker
+  // (que traga el error a proposito) dejaba el aviso en resultado_desconocido, sin enviar.
+  assert.match(sinComentarios(intentos), /DROP CONSTRAINT notification_attempts_category_check/);
+  assert.match(sinComentarios(intentos), /ADD CONSTRAINT notification_attempts_category_check '/, 'la restriccion se vuelve a crear con el MISMO nombre');
+  assert.match(sinComentarios(intentos), /replace\(def, viejo, viejo \|\| ' ''reserva_cancelada''::text,'\)/);
+  assert.match(sinComentarios(intentos), /IF veces <> 1 THEN RAISE EXCEPTION 'notification_attempts_category_check cambio/);
+  assert.match(sql, /notification_outbox_category_check/);
 });
 
 prueba('encolar y despachar miran la preferencia de SU tipo (ya no el interruptor unico), con el fragmento exacto', () => {
