@@ -201,6 +201,9 @@ jobs:
       - name: Verify the points the payment step announces mirror award_points_for_booking (Plus only, double only without a gateway)
         run: node scripts/test-puntos-ganados.mjs
 
+      - name: Verify the pre-billing notice email (audience, no duplicates, admin only, simulate by default)
+        run: node scripts/test-aviso-previo-cobro.mjs
+
       - name: Verify the return screen after a partial payment (abono recibido)
         run: node scripts/test-abono-recibido.mjs
 
