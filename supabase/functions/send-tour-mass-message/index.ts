@@ -167,7 +167,15 @@ Deno.serve(async (req: Request) => {
       emailSettings = data;
     }
 
-    const { data: attendees, error: attendeesError } = await supabase.rpc(
+    // Los asistentes se piden con la SESION de quien envia, NO con el service role: get_tour_confirmed_attendees decide por auth.uid()
+    // (solo la agencia dueña del tour, su personal activo o un admin; endurecida el 31-ago-2026 porque entregaba el correo y el nombre
+    // de los viajeros de CUALQUIER tour). Con el service role auth.uid() es NULL y la funcion responde «No autorizado»: desde esa
+    // fecha ningun envio masivo funcionaba (23-oct-2026: «No se pudieron enviar los mensajes»). La funcion de base de datos NO se
+    // relaja: este cliente lleva el mismo Authorization que ya se valido arriba (dueño o personal con permiso).
+    const usuario = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: attendees, error: attendeesError } = await usuario.rpc(
       "get_tour_confirmed_attendees",
       { p_tour_id: tour_id, p_slot_id: slot_id ?? null }
     );
