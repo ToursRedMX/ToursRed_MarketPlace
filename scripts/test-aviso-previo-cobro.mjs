@@ -108,6 +108,18 @@ prueba('la pantalla: el aviso solo se habilita con el cobro encendido, fecha a f
   assert.match(ui, /disabled=\{!avisoDisponible \|\| !resumenAviso \|\| resumenAviso\.por_avisar === 0 \|\| enviarAviso\.isPending\}/);
 });
 
+prueba('si el aviso no esta disponible, la pantalla dice CUAL condicion falta (apagado, fecha vacia o pasada, sin Price IDs), y una fecha pasada no se confirma como futura', () => {
+  // 23-oct-2026: Axel tenia el interruptor encendido en pantalla pero GUARDADO apagado y con la fecha del 22-oct (ya pasada); el aviso
+  // solo decia «guarda el cobro encendido, con la fecha a futuro…» y no sabia cual faltaba. Y guardar «encendido» con una fecha pasada
+  // empieza el cobro DE INMEDIATO.
+  assert.match(ui, /el cobro está guardado como APAGADO/);
+  assert.match(ui, /la fecha de inicio guardada está vacía/);
+  assert.match(ui, /ya pasó: pon una fecha a FUTURO y guarda/);
+  assert.match(ui, /faltan los dos Price IDs guardados/);
+  assert.match(ui, /motivosSinAviso\.map\(\(m\) => <li key=\{m\}>\{m\}<\/li>\)/);
+  assert.match(ui, /fecha && fecha\.getTime\(\) > Date\.now\(\)\s+\? `el \$\{fechaLarga\(fecha\.toISOString\(\)\)\}`\s+: fecha \? `AHORA MISMO \(la fecha \$\{fechaLarga\(fecha\.toISOString\(\)\)\} ya pasó\)`/);
+});
+
 prueba('el codigo de verificacion (OTP) no entra a nada de esto', () => {
   for (const f of [codigoSql, fn, plantilla]) assert.ok(!/\botp\b/i.test(f), 'sin OTP en codigo');
 });
