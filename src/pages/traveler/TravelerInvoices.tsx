@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileText, Download, ExternalLink, CheckCircle, AlertCircle, Clock, XCircle, RefreshCw, Receipt, Star, Shield, Wallet, Package } from 'lucide-react';
+import { FileText, Download, ExternalLink, CheckCircle, AlertCircle, Clock, XCircle, RefreshCw, Receipt, Star, Shield, Wallet, Package, BellRing } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
@@ -26,7 +26,7 @@ const downloadCfdi = async (cfdiId: string, fileType: 'xml' | 'pdf') => {
 
 interface CfdiInvoice {
   id: string;
-  invoice_type: 'booking' | 'commission' | 'membership' | 'checkin_wallet' | 'supplement' | 'post_booking_insurance' | 'optional_service' | 'booking_installment' | 'post_booking_extras' | 'manual';
+  invoice_type: 'booking' | 'commission' | 'membership' | 'notification_subscription' | 'checkin_wallet' | 'supplement' | 'post_booking_insurance' | 'optional_service' | 'booking_installment' | 'post_booking_extras' | 'manual';
   uuid_fiscal: string | null;
   folio: string | null;
   serie: string | null;
@@ -284,7 +284,20 @@ const TravelerInvoices: React.FC = () => {
         );
       }
 
-      const all = [...bookingMine, ...membershipMine, ...checkinMine, ...supplementMine, ...insuranceMine, ...optionalMine, ...installmentMine].sort(
+      // Facturas de la suscripcion de notificaciones del viajero. La politica de lectura de cfdi_invoices ya las limita a las suyas.
+      const { data: notificationInvoices, error: error_notificationInvoices } = await supabase
+        .from('cfdi_invoices')
+        .select(`id, invoice_type, uuid_fiscal, folio, serie, receptor_rfc, subtotal, iva_amount, total, status, xml_url, pdf_url, stamped_at, created_at, booking_id, membership_id`)
+        .eq('invoice_type', 'notification_subscription')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error_notificationInvoices) {
+        console.error('TravelerInvoices: fallo la consulta de facturas de notificaciones', error_notificationInvoices);
+        fallos.push('notificaciones');
+      }
+      const notificationMine: CfdiInvoice[] = (notificationInvoices ?? []).map(comoFactura);
+
+      const all = [...bookingMine, ...membershipMine, ...notificationMine, ...checkinMine, ...supplementMine, ...insuranceMine, ...optionalMine, ...installmentMine].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
       setInvoices(all);
@@ -393,6 +406,7 @@ const TravelerInvoices: React.FC = () => {
             const tourName = booking?.tours?.name;
             const bookingCode = booking?.booking_code;
             const isMembership = inv.invoice_type === 'membership';
+            const isNotification = inv.invoice_type === 'notification_subscription';
             const isCheckin = inv.invoice_type === 'checkin_wallet';
             const isSupplement = inv.invoice_type === 'supplement';
             const isInsurance = inv.invoice_type === 'post_booking_insurance';
@@ -410,10 +424,12 @@ const TravelerInvoices: React.FC = () => {
                 className="bg-white rounded-xl border border-gray-200 hover:border-primary-200 hover:shadow-xs transition-all p-4 flex items-center gap-4"
               >
                 <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-                  isMembership ? 'bg-amber-100' : isCheckin ? 'bg-teal-100' : isSupplement ? 'bg-purple-100' : isInsurance ? 'bg-emerald-100' : isOptional ? 'bg-orange-100' : isInstallment ? 'bg-sky-100' : 'bg-primary-100'
+                  isMembership ? 'bg-amber-100' : isNotification ? 'bg-blue-100' : isCheckin ? 'bg-teal-100' : isSupplement ? 'bg-purple-100' : isInsurance ? 'bg-emerald-100' : isOptional ? 'bg-orange-100' : isInstallment ? 'bg-sky-100' : 'bg-primary-100'
                 }`}>
                   {isMembership
                     ? <Star className="h-5 w-5 text-amber-600" />
+                    : isNotification
+                    ? <BellRing className="h-5 w-5 text-blue-600" />
                     : isCheckin
                     ? <Wallet className="h-5 w-5 text-teal-600" />
                     : isSupplement
@@ -440,6 +456,12 @@ const TravelerInvoices: React.FC = () => {
                         Membresia ToursRed Plus
                       </span>
                     )}
+                    {isNotification && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                        <BellRing className="h-3 w-3" />
+                        Notificaciones por SMS
+                      </span>
+                    )}
                     {isCheckin && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
                         <Wallet className="h-3 w-3" />
@@ -452,7 +474,7 @@ const TravelerInvoices: React.FC = () => {
                         Suplemento
                       </span>
                     )}
-                    {!isMembership && !isCheckin && !isSupplement && !isInsurance && !isOptional && !isInstallment && (
+                    {!isMembership && !isNotification && !isCheckin && !isSupplement && !isInsurance && !isOptional && !isInstallment && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                         Reserva
                       </span>
@@ -486,6 +508,9 @@ const TravelerInvoices: React.FC = () => {
                   )}
                   {isMembership && !tourName && (
                     <div className="text-sm font-semibold text-gray-800">Suscripcion ToursRed Plus</div>
+                  )}
+                  {isNotification && (
+                    <div className="text-sm font-semibold text-gray-800">Suscripcion mensual de notificaciones</div>
                   )}
                   {isCheckin && !tourName && (
                     <div className="text-sm font-semibold text-gray-800">Cobro de saldo restante en check-in</div>

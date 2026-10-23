@@ -51,7 +51,7 @@ Deno.serve(async (req: Request) => {
 
     let query = supabase
       .from("cfdi_invoices")
-      .select("id, invoice_type, booking_id, payout_id, featured_slot_id, installment_id, membership_id, booking_optional_service_id, booking_supplement_id, retry_count")
+      .select("id, invoice_type, booking_id, payout_id, featured_slot_id, installment_id, membership_id, booking_optional_service_id, booking_supplement_id, stripe_invoice_id, retry_count")
       .eq("status", "error")
       .lt("retry_count", 3);
 
@@ -99,6 +99,12 @@ Deno.serve(async (req: Request) => {
         } else if (cfdi.invoice_type === "membership" && cfdi.membership_id) {
           const res = await supabase.functions.invoke("generate-membership-cfdi", {
             body: { membership_id: cfdi.membership_id },
+          });
+          results.push({ id: cfdi.id, success: !res.error });
+        } else if (cfdi.invoice_type === "notification_subscription" && cfdi.stripe_invoice_id) {
+          // Se reintenta por la factura de Stripe: generate-notification-cfdi reabre ESTE registro en error en vez de crear otro.
+          const res = await supabase.functions.invoke("generate-notification-cfdi", {
+            body: { stripe_invoice_id: cfdi.stripe_invoice_id },
           });
           results.push({ id: cfdi.id, success: !res.error });
         } else if (cfdi.invoice_type === "optional_service" && cfdi.booking_optional_service_id) {

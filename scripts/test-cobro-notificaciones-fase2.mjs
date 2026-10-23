@@ -45,7 +45,7 @@ prueba('la marca de notificaciones jamas usa la llave user_id de Plus', () => {
 
 prueba('stripe-webhook atiende las suscripciones de notificaciones ANTES del switch de membresias y pagos', () => {
   const importa = webhook.indexOf('procesarEventoNotificaciones } from "../_shared/suscripcionNotificaciones.ts"');
-  const llama = webhook.indexOf('if (await procesarEventoNotificaciones(supabase, stripe, event))');
+  const llama = webhook.indexOf('if (await procesarEventoNotificaciones(supabase, stripe, event, {');
   const cambio = webhook.indexOf('switch (event.type) {');
   const bitacora = webhook.indexOf("from('webhook_logs').insert");
   assert.ok(importa > -1 && llama > -1 && cambio > -1 && bitacora > -1);

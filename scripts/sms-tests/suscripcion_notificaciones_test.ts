@@ -1,31 +1,8 @@
 import assert from 'node:assert/strict';
 import {
-  accionDeGracia, estadoLocal, esSuscripcionDeNotificaciones, finDeGracia, procesarEventoNotificaciones, sujetoDeMetadata, suscripcionDeFactura,
+  accionDeGracia, estadoLocal, esSuscripcionDeNotificaciones, finDeGracia, sujetoDeMetadata, suscripcionDeFactura,
 } from '../../supabase/functions/_shared/suscripcionNotificaciones.ts';
-
-// Un cliente de Supabase de mentira que anota que se le pidio. Cada consulta devuelve `respuesta` (por tabla) y registra el encadenado.
-type Llamada = { tabla: string; ops: string[] };
-function falso(respuestas: Record<string, { data?: unknown; error?: { message: string } | null }> = {}) {
-  const llamadas: Llamada[] = [];
-  const cliente = {
-    from(tabla: string) {
-      const llamada: Llamada = { tabla, ops: [] };
-      llamadas.push(llamada);
-      const res = { data: null, error: null, ...(respuestas[tabla] ?? {}) };
-      const q: Record<string, unknown> = {};
-      for (const op of ['select', 'update', 'upsert', 'eq', 'neq', 'is', 'in', 'not', 'order', 'limit']) {
-        q[op] = (...args: unknown[]) => { llamada.ops.push(`${op}(${args.map((a) => JSON.stringify(a)).join(',')})`); return q; };
-      }
-      q.maybeSingle = () => { llamada.ops.push('maybeSingle'); return Promise.resolve(res); };
-      q.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve(res).then(ok, ko);
-      return q;
-    },
-  };
-  return { cliente: cliente as never, llamadas };
-}
-const stripeSinRed = { subscriptions: { retrieve: () => { throw new Error('no debe llamar a Stripe'); } } } as never;
-
-const MARCA = { tipo_suscripcion: 'notificaciones', sujeto: 'viajero', notif_user_id: 'u-1' };
+import { falso, procesar, stripeSinRed, MARCA } from './falsos_suscripcion.ts';
 
 Deno.test('la marca de notificaciones NO se parece a la de Plus: user_id solo, sin la marca, no es nuestra', () => {
   assert.equal(esSuscripcionDeNotificaciones({ user_id: 'u-1', plan_type: 'monthly' }), false);
@@ -64,18 +41,18 @@ Deno.test('la suscripcion de una factura se lee de las dos ubicaciones de Stripe
 Deno.test('un evento de Plus (sin la marca, sin fila nuestra) no se toca: devuelve false y no escribe', async () => {
   const { cliente, llamadas } = falso({ suscripciones_notificaciones: { data: null } });
   const sub = { type: 'customer.subscription.updated', data: { object: { id: 'sub_plus', metadata: { user_id: 'u-1', plan_type: 'monthly' } } } };
-  assert.equal(await procesarEventoNotificaciones(cliente, stripeSinRed, sub as never), false);
+  assert.equal(await procesar(cliente, stripeSinRed, sub as never), false);
   assert.equal(llamadas.length, 0, 'ni una consulta');
 
   const factura = { type: 'invoice.payment_succeeded', data: { object: { parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_plus', metadata: { user_id: 'u-1' } } } } } };
-  assert.equal(await procesarEventoNotificaciones(cliente, stripeSinRed, factura as never), false);
+  assert.equal(await procesar(cliente, stripeSinRed, factura as never), false);
   assert.ok(llamadas.every((l) => !l.ops.some((o) => o.startsWith('update') || o.startsWith('upsert'))), 'solo pregunto si era nuestra, no escribio');
 });
 
 Deno.test('una factura sin la marca pero con fila nuestra SI se atiende (el metadata de la factura puede faltar)', async () => {
   const { cliente, llamadas } = falso({ suscripciones_notificaciones: { data: { id: 'f-1' } } });
   const factura = { type: 'invoice.payment_succeeded', data: { object: { parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_n' } } } } };
-  assert.equal(await procesarEventoNotificaciones(cliente, stripeSinRed, factura as never), true);
+  assert.equal(await procesar(cliente, stripeSinRed, factura as never), true);
   assert.ok(llamadas.some((l) => l.ops.some((o) => o.startsWith('update({"en_gracia_hasta":null}'))), 'pagar limpia la gracia');
 });
 
@@ -86,7 +63,7 @@ Deno.test('pago fallido: abre la gracia UNA vez (is null), con los dias de la co
   });
   const factura = { type: 'invoice.payment_failed', data: { object: { billing_reason: 'subscription_cycle', parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_n', metadata: MARCA } } } } };
   const antes = Date.now();
-  assert.equal(await procesarEventoNotificaciones(cliente, stripeSinRed, factura as never), true);
+  assert.equal(await procesar(cliente, stripeSinRed, factura as never), true);
   const abre = llamadas.find((l) => l.tabla === 'suscripciones_notificaciones' && l.ops.some((o) => o.includes('"en_gracia_hasta":"')));
   assert.ok(abre, 'se escribio una fecha de gracia');
   assert.ok(abre.ops.includes('is("en_gracia_hasta",null)'), 'solo si no habia una abierta: los reintentos no la estiran');
@@ -97,26 +74,26 @@ Deno.test('pago fallido: abre la gracia UNA vez (is null), con los dias de la co
 Deno.test('el primer cobro que falla (subscription_create) NO da gracia: nunca estuvo cubierta', async () => {
   const { cliente, llamadas } = falso({ suscripciones_notificaciones: { data: { id: 'f-1' } } });
   const factura = { type: 'invoice.payment_failed', data: { object: { billing_reason: 'subscription_create', parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_n', metadata: MARCA } } } } };
-  assert.equal(await procesarEventoNotificaciones(cliente, stripeSinRed, factura as never), true);
+  assert.equal(await procesar(cliente, stripeSinRed, factura as never), true);
   assert.ok(llamadas.every((l) => !l.ops.some((o) => o.includes('en_gracia_hasta'))), 'no se toco la gracia');
 });
 
 Deno.test('subscription.deleted da de baja y limpia la gracia; un error al guardar se lanza para que Stripe reintente', async () => {
   const ok = falso();
   const evento = { type: 'customer.subscription.deleted', data: { object: { id: 'sub_n', metadata: MARCA } } };
-  assert.equal(await procesarEventoNotificaciones(ok.cliente, stripeSinRed, evento as never), true);
+  assert.equal(await procesar(ok.cliente, stripeSinRed, evento as never), true);
   const baja = ok.llamadas[0].ops.join(' ');
   assert.match(baja, /"status":"canceled"/);
   assert.match(baja, /"en_gracia_hasta":null/);
 
   const mal = falso({ suscripciones_notificaciones: { error: { message: 'boom' } } });
-  await assert.rejects(() => procesarEventoNotificaciones(mal.cliente, stripeSinRed, evento as never), /boom/);
+  await assert.rejects(() => procesar(mal.cliente, stripeSinRed, evento as never), /boom/);
 });
 
 Deno.test('el checkout de una suscripcion nuestra no cae en el handler de reservas', async () => {
   const { cliente } = falso();
   const nuestra = { type: 'checkout.session.completed', data: { object: { mode: 'subscription', metadata: MARCA } } };
-  assert.equal(await procesarEventoNotificaciones(cliente, stripeSinRed, nuestra as never), true);
+  assert.equal(await procesar(cliente, stripeSinRed, nuestra as never), true);
   const reserva = { type: 'checkout.session.completed', data: { object: { mode: 'payment', metadata: { booking_id: 'b-1' } } } };
-  assert.equal(await procesarEventoNotificaciones(cliente, stripeSinRed, reserva as never), false);
+  assert.equal(await procesar(cliente, stripeSinRed, reserva as never), false);
 });

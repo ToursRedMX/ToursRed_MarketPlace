@@ -151,6 +151,112 @@ async function esNuestra(
   return Boolean(data);
 }
 
+type ComisionStripe = { fee: number; net: number; base: number | null; iva: number | null };
+
+/** Lo que stripe-webhook ya sabe hacer y este modulo reutiliza en vez de duplicar. */
+export interface DependenciasCobro {
+  /** Comision real de Stripe de un payment intent (getStripeProcessorFee). */
+  comisionDePago: (stripe: Stripe, paymentIntentId: string) => Promise<ComisionStripe | null>;
+  /** Columnas de payment_transactions para esa comision (columnasDeComision). */
+  columnasDeComision: (c: ComisionStripe) => Record<string, number>;
+  /** Llama a otra Edge Function con el service role (el CFDI). */
+  invocarFuncion: (nombre: string, cuerpo: Record<string, unknown>) => Promise<void>;
+  /** Deja rastro en audit_errors de un fallo que no debe tumbar el webhook (registrarFallo). Se inyecta: ese modulo lee el entorno al importarse. */
+  registrarFallo: (contexto: string, detalle: unknown, datos?: Record<string, unknown>) => Promise<void>;
+  /** Corre algo sin bloquear la respuesta al webhook (EdgeRuntime.waitUntil). */
+  enSegundoPlano: (trabajo: Promise<unknown>) => void;
+}
+
+/** Id del payment intent de una factura. Stripe lo movio de `invoice.payment_intent` a `invoice.payments`; el evento no trae la lista. */
+async function paymentIntentDeFactura(stripe: Stripe, invoice: Stripe.Invoice): Promise<string | null> {
+  const f = invoice as unknown as {
+    payment_intent?: string | { id?: string } | null;
+    payments?: { data?: { payment?: { payment_intent?: string | { id?: string } | null } }[] };
+  };
+  let crudo = f.payment_intent ?? f.payments?.data?.[0]?.payment?.payment_intent ?? null;
+  if (!crudo) {
+    try {
+      const conPagos = await stripe.invoices.retrieve(invoice.id, { expand: ["payments"] });
+      crudo = conPagos.payments?.data.find((p) => p.payment?.type === "payment_intent" && p.payment?.payment_intent)?.payment?.payment_intent ?? null;
+    } catch (e) {
+      console.error(`suscripcion-notificaciones: no se pudo consultar la factura ${invoice.id} con sus pagos: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return typeof crudo === "string" ? crudo : crudo?.id ?? null;
+}
+
+/**
+ * Un cobro confirmado (factura pagada) deja: UNA transaccion, su comision real, su asiento y su CFDI. Cada paso es idempotente
+ * (Stripe reintenta): la transaccion se busca por la factura, el asiento por su origen y el CFDI por la factura de Stripe.
+ * Un fallo de base de datos se LANZA para que Stripe reintente; un fallo del CFDI solo se registra (lo reintenta retry-failed-cfdi).
+ */
+export async function registrarCobro(
+  supabase: SupabaseClient,
+  stripe: Stripe,
+  invoice: Stripe.Invoice,
+  subscriptionId: string,
+  deps: DependenciasCobro,
+): Promise<void> {
+  const centavos = invoice.amount_paid ?? 0;
+  if (centavos <= 0) return; // una factura en cero (prueba gratis, cupon total) no es un cobro: no hay ingreso ni CFDI
+
+  const { data: sub, error: errSub } = await supabase.from("suscripciones_notificaciones")
+    .select("id, tipo").eq("stripe_subscription_id", subscriptionId).maybeSingle();
+  if (errSub || !sub) throw new Error(`suscripcion-notificaciones: no se encontro la suscripcion ${subscriptionId} para registrar su cobro`);
+
+  const total = centavos / 100;
+  let { data: tx } = await supabase.from("payment_transactions").select("id")
+    .eq("charge_context", "notification_subscription").eq("metadata->>stripe_invoice_id", invoice.id).maybeSingle();
+
+  if (!tx) {
+    const paymentIntent = await paymentIntentDeFactura(stripe, invoice);
+    const { data: nueva, error } = await supabase.from("payment_transactions").insert({
+      stripe_payment_intent_id: paymentIntent,
+      amount: total,
+      currency: "mxn",
+      status: "succeeded",
+      payment_processor: "stripe",
+      processor_fee: 0,
+      net_amount: total,
+      charge_context: "notification_subscription",
+      charge_reference_id: sub.id,
+      metadata: { stripe_invoice_id: invoice.id, stripe_subscription_id: subscriptionId, tipo: sub.tipo, billing_reason: invoice.billing_reason },
+    }).select("id").single();
+    if (error) {
+      // 23505: otra entrega del mismo evento la inserto un instante antes. Se sigue con la que ya existe.
+      if ((error as { code?: string }).code !== "23505") throw new Error(`suscripcion-notificaciones: no se pudo registrar el cobro de ${invoice.id}: ${error.message}`);
+      const { data: existente } = await supabase.from("payment_transactions").select("id")
+        .eq("charge_context", "notification_subscription").eq("metadata->>stripe_invoice_id", invoice.id).maybeSingle();
+      tx = existente;
+    } else {
+      tx = nueva;
+    }
+    if (!tx) throw new Error(`suscripcion-notificaciones: el cobro de ${invoice.id} no quedo registrado`);
+
+    // La comision real, ANTES del asiento: el asiento la toma de la transaccion y no la estima.
+    if (paymentIntent) {
+      const comision = await deps.comisionDePago(stripe, paymentIntent);
+      if (comision) {
+        const { error: errFee } = await supabase.from("payment_transactions").update(deps.columnasDeComision(comision)).eq("id", tx.id);
+        if (errFee) throw new Error(`suscripcion-notificaciones: no se pudo guardar la comision de ${invoice.id}: ${errFee.message}`);
+      } else {
+        await deps.registrarFallo("suscripcion-notificaciones/sin-comision", `Stripe no devolvio la comision del cobro ${invoice.id}; el asiento queda sin ella y comisiones_no_asentadas la delata`, { invoiceId: invoice.id, paymentIntent });
+      }
+    } else {
+      await deps.registrarFallo("suscripcion-notificaciones/sin-payment-intent", `La factura ${invoice.id} no trae payment_intent: no se puede consultar la comision`, { invoiceId: invoice.id });
+    }
+  }
+
+  const { error: errAsiento } = await supabase.rpc("create_accounting_entry_for_notificaciones", { p_payment_transaction_id: tx.id });
+  if (errAsiento) throw new Error(`suscripcion-notificaciones: no se pudo asentar el cobro ${tx.id}: ${errAsiento.message}`);
+
+  // El CFDI se detona con el pago CONFIRMADO. Fire-and-forget: un PAC caido no debe tumbar el webhook.
+  deps.enSegundoPlano(
+    deps.invocarFuncion("generate-notification-cfdi", { payment_transaction_id: tx.id })
+      .catch((e) => deps.registrarFallo("suscripcion-notificaciones/cfdi", e, { paymentTransactionId: tx.id, invoiceId: invoice.id })),
+  );
+}
+
 /**
  * Punto de entrada desde stripe-webhook. Devuelve true si el evento era de una suscripcion de notificaciones y ya se atendio
  * (el webhook responde 200 y NO lo pasa a los handlers de membresias, reservas y pagos). false = no es nuestro.
@@ -160,6 +266,7 @@ export async function procesarEventoNotificaciones(
   supabase: SupabaseClient,
   stripe: Stripe,
   event: Stripe.Event,
+  deps: DependenciasCobro,
 ): Promise<boolean> {
   switch (event.type) {
     case "customer.subscription.created":
@@ -199,6 +306,7 @@ export async function procesarEventoNotificaciones(
         const { error } = await supabase.from("suscripciones_notificaciones")
           .update({ en_gracia_hasta: null }).eq("stripe_subscription_id", subscriptionId);
         if (error) throw new Error(`suscripcion-notificaciones: no se pudo limpiar la gracia de ${subscriptionId}: ${error.message}`);
+        await registrarCobro(supabase, stripe, invoice, subscriptionId, deps);
         return true;
       }
 

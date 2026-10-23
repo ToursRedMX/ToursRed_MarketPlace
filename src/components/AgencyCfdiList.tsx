@@ -26,7 +26,7 @@ const downloadCfdi = async (cfdiId: string, fileType: 'xml' | 'pdf') => {
 
 interface CfdiInvoice {
   id: string;
-  invoice_type: 'booking' | 'commission' | 'checkin_wallet';
+  invoice_type: 'booking' | 'commission' | 'checkin_wallet' | 'notification_subscription';
   uuid_fiscal: string | null;
   folio: string | null;
   serie: string | null;
@@ -173,10 +173,12 @@ const AgencyCfdiList: React.FC<Props> = ({ agencyId }) => {
                         ? 'bg-blue-100 text-blue-600'
                         : inv.invoice_type === 'checkin_wallet'
                         ? 'bg-teal-100 text-teal-600'
+                        : inv.invoice_type === 'notification_subscription'
+                        ? 'bg-sky-100 text-sky-600'
                         : 'bg-amber-100 text-amber-600'
                     }`}>
                       {inv.invoice_type === 'checkin_wallet' && <Wallet className="h-3 w-3" />}
-                      {inv.invoice_type === 'booking' ? 'Reserva' : inv.invoice_type === 'checkin_wallet' ? 'Check-in' : 'Comisión'}
+                      {inv.invoice_type === 'booking' ? 'Reserva' : inv.invoice_type === 'checkin_wallet' ? 'Check-in' : inv.invoice_type === 'notification_subscription' ? 'Notificaciones' : 'Comisión'}
                     </span>
                     {ref && <span className="text-xs text-gray-400 font-mono">{ref}</span>}
                   </div>
