@@ -3,6 +3,7 @@ import { Star, Search, Filter, Eye, EyeOff, MessageSquare, Trash2, Flag, Calenda
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { mensajeDeError } from '../../lib/errores';
+import { comoFilas } from '../../lib/relacionesSupabase';
 
 interface AdminReview {
   id: string;
@@ -25,6 +26,10 @@ interface AdminReview {
   tour_destination?: string;
   tour_image_url?: string;
   agency_name?: string;
+  // Solo en calificaciones de viajero: la apelacion que el viajero pidio a soporte.
+  apelada_en?: string | null;
+  apelacion_resultado?: 'mantenida' | 'ocultada' | null;
+  apelacion_folio?: string | null;
 }
 
 const AdminReviews: React.FC = () => {
@@ -53,7 +58,24 @@ const AdminReviews: React.FC = () => {
         throw error;
       }
 
-      setReviews(data || []);
+      // La vista no trae las apelaciones: se leen aparte y se pegan a su calificacion.
+      const { data: apelaciones, error: errorApelaciones } = await supabase
+        .from('traveler_reviews')
+        .select('id, apelada_en, apelacion_resultado, apelacion_ticket:support_tickets!traveler_reviews_apelacion_ticket_id_fkey(folio)')
+        .not('apelada_en', 'is', null);
+      if (errorApelaciones) throw errorApelaciones;
+
+      const porId = new Map(
+        (apelaciones ?? []).map((a) => [
+          a.id as string,
+          {
+            apelada_en: a.apelada_en as string,
+            apelacion_resultado: a.apelacion_resultado as 'mantenida' | 'ocultada' | null,
+            apelacion_folio: (comoFilas<{ folio: string }>(a.apelacion_ticket ? [a.apelacion_ticket] : [])[0]?.folio) ?? null,
+          },
+        ])
+      );
+      setReviews((data || []).map((r) => (r.review_type === 'traveler' && porId.has(r.id) ? { ...r, ...porId.get(r.id) } : r)));
     } catch (err) {
       console.error('❌ Error cargando reseñas:', err);
       setError(mensajeDeError(err) || 'Error al cargar las reseñas');
@@ -101,6 +123,32 @@ const AdminReviews: React.FC = () => {
     } catch (err) {
       console.error('❌ Error actualizando visibilidad:', err);
       setError(mensajeDeError(err) || 'Error al actualizar la visibilidad');
+    } finally {
+      setIsUpdating(null);
+    }
+  };
+
+  const handleResolverApelacion = async (review: AdminReview, ocultar: boolean) => {
+    const nota = window.prompt(
+      ocultar
+        ? 'Se ocultará la calificación. Nota para el ticket (opcional):'
+        : 'La calificación se mantendrá. Nota para el ticket (opcional):'
+    );
+    if (nota === null) return;
+    try {
+      setIsUpdating(review.id);
+      setError('');
+      const { data, error } = await supabase.rpc('resolver_apelacion_calificacion', {
+        p_review_id: review.id,
+        p_ocultar: ocultar,
+        p_nota: nota,
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'No se pudo resolver la apelación');
+      await fetchReviews();
+    } catch (err) {
+      console.error('❌ Error resolviendo la apelación:', err);
+      setError(mensajeDeError(err) || 'Error al resolver la apelación');
     } finally {
       setIsUpdating(null);
     }
@@ -443,6 +491,15 @@ const AdminReviews: React.FC = () => {
                         </h3>
                         {getReviewTypeBadge(review.review_type)}
                         {getVisibilityBadge(review.is_visible)}
+                        {review.apelada_en && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                            <Flag className="h-3 w-3 mr-1" />
+                            {review.apelacion_resultado
+                              ? `Apelación ${review.apelacion_resultado === 'mantenida' ? 'mantenida' : 'ocultada'}`
+                              : 'Apelada'}
+                            {review.apelacion_folio ? ` · ${review.apelacion_folio}` : ''}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-x-4 text-sm text-gray-600 mb-2">
@@ -471,6 +528,24 @@ const AdminReviews: React.FC = () => {
                   
                   {/* Actions */}
                   <div className="flex items-center gap-x-2">
+                    {review.apelada_en && !review.apelacion_resultado && (
+                      <>
+                        <button
+                          onClick={() => handleResolverApelacion(review, false)}
+                          disabled={isUpdating === review.id}
+                          className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50"
+                        >
+                          Mantener
+                        </button>
+                        <button
+                          onClick={() => handleResolverApelacion(review, true)}
+                          disabled={isUpdating === review.id}
+                          className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50"
+                        >
+                          Ocultar por apelación
+                        </button>
+                      </>
+                    )}
                     <button
                       onClick={() => handleToggleVisibility(review.id, review.is_visible, review.review_type)}
                       disabled={isUpdating === review.id}
