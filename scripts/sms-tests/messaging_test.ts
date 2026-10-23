@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { segmentosSms, plantillaOtp, plantillaConfirmacion, plantillaRecordatorio, plantillaAgenciaReserva, plantillaAgenciaCancelacion, plantillaAgenciaMensaje, textoDeNotificacion, ocultarCodigoOtp } from '../../supabase/functions/_shared/mensajeria/plantillas.ts';
+import { segmentosSms, plantillaOtp, plantillaConfirmacion, plantillaCancelacion, plantillaRecordatorio, plantillaAgenciaReserva, plantillaAgenciaCancelacion, plantillaAgenciaMensaje, textoDeNotificacion, ocultarCodigoOtp } from '../../supabase/functions/_shared/mensajeria/plantillas.ts';
 import { normalizarTelefonoSms } from '../../supabase/functions/_shared/mensajeria/telefono.ts';
 import { clasificarRespuesta, interpretarCallback, labsmobile } from '../../supabase/functions/_shared/mensajeria/proveedores/labsmobile.ts';
 import { mock } from '../../supabase/functions/_shared/mensajeria/proveedores/mock.ts';
@@ -54,6 +54,7 @@ Deno.test('textoDeNotificacion elige la plantilla por categoria y rechaza las de
   const snap = { folio: 'TRG-9', tour: 'Tour X', meeting_point: 'Zocalo', departure_time: '07:30:00' };
   assert.equal(textoDeNotificacion('reserva_confirmada', snap, base), plantillaConfirmacion('TRG-9', base));
   assert.equal(textoDeNotificacion('recordatorio_tour', snap, base), plantillaRecordatorio('Tour X', 'Zocalo', 'TRG-9', '07:30:00'));
+  assert.equal(textoDeNotificacion('reserva_cancelada', snap, base), plantillaCancelacion('TRG-9', 'Tour X', base));
   assert.equal(textoDeNotificacion('agencia_reserva', snap, base), plantillaAgenciaReserva('TRG-9', 'Tour X', base));
   assert.equal(textoDeNotificacion('agencia_cancelacion', snap, base), plantillaAgenciaCancelacion('TRG-9', 'Tour X', base));
   assert.equal(textoDeNotificacion('agencia_mensaje', {}, base), plantillaAgenciaMensaje(base));
@@ -140,4 +141,20 @@ Deno.test('cryptographic OTP and HMAC are bound to challenge/user/number', async
   assert.ok(await verificarFirma(secret,value,signature)); assert.equal(await verificarFirma(secret,datosOtp('other','challenge','+525512345678','012345'),signature),false);
   assert.equal(await verificarFirma(secret,value,'0'.repeat(64)),false);
   for(let i=0;i<100;i++){assert.match(nuevoCodigo(),/^\d{6}$/);assert.match(nuevaCorrelacion(),/^[a-f0-9]{20}$/);}
+});
+Deno.test('la cancelacion de reserva del viajero es de un solo segmento, con el tour si cabe y sin el si no', () => {
+  const base = 'https://toursred.com';
+  const normal = plantillaCancelacion('TRG-9', 'Tour X', base);
+  assert.match(normal, /^ToursRed: se cancelo tu reserva TRG-9 - Tour X\. Detalles: https:\/\/toursred\.com\/traveler\/bookings$/);
+  assert.equal(segmentosSms(normal).segments, 1);
+  // Con un enlace largo y un nombre de tour largo no cabe en un segmento: se manda sin el nombre en vez de partirlo en dos.
+  const baseLarga = 'https://' + 'a'.repeat(50) + '.mx';
+  const nombreLargo = 'Tour por las barrancas del cobre y el chepe express';
+  const sinTour = plantillaCancelacion('TRG-9', nombreLargo, baseLarga);
+  assert.equal(segmentosSms(sinTour).segments, 1);
+  assert.ok(!sinTour.includes('barrancas'), 'sin el nombre del tour cuando no cabe');
+  assert.ok(plantillaCancelacion('TRG-9', nombreLargo, base).includes('barrancas'), 'con la base normal si cabe');
+  // Nunca lleva datos de pago ni de otra persona: solo folio, tour y el enlace a Mis reservas.
+  assert.ok(!/\$|reembolso|tarjeta/i.test(normal));
+  assert.throws(() => plantillaCancelacion('TRG-9', 'x', 'http://toursred.com'), 'solo https');
 });
