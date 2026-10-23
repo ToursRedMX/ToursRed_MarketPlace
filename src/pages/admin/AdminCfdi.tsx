@@ -26,7 +26,7 @@ const downloadCfdi = async (cfdiId: string, fileType: 'xml' | 'pdf') => {
 
 interface CfdiInvoice {
   id: string;
-  invoice_type: 'booking' | 'commission' | 'membership' | 'checkin_wallet' | 'featured_slot';
+  invoice_type: 'booking' | 'commission' | 'membership' | 'notification_subscription' | 'checkin_wallet' | 'featured_slot';
   booking_id: string | null;
   payout_id: string | null;
   featured_slot_id: string | null;
@@ -332,6 +332,8 @@ const AdminCfdi: React.FC = () => {
                               ? 'bg-blue-100 text-blue-700'
                               : inv.invoice_type === 'membership'
                               ? 'bg-emerald-100 text-emerald-700'
+                              : inv.invoice_type === 'notification_subscription'
+                              ? 'bg-sky-100 text-sky-700'
                               : inv.invoice_type === 'checkin_wallet'
                               ? 'bg-teal-100 text-teal-700'
                               : inv.invoice_type === 'featured_slot'
@@ -342,6 +344,8 @@ const AdminCfdi: React.FC = () => {
                               ? 'Reserva'
                               : inv.invoice_type === 'membership'
                               ? 'Membresía'
+                              : inv.invoice_type === 'notification_subscription'
+                              ? 'Notificaciones'
                               : inv.invoice_type === 'checkin_wallet'
                               ? 'Check-in'
                               : inv.invoice_type === 'featured_slot'

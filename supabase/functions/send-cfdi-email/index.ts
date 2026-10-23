@@ -135,6 +135,23 @@ Deno.serve(async (req: Request) => {
         recipientEmail = traveler?.email || "";
         recipientName = [traveler?.first_name, traveler?.last_name].filter(Boolean).join(" ").trim();
       }
+    } else if (recipient_type === "traveler" && cfdi.suscripcion_notificacion_id) {
+      // Suscripcion de notificaciones del viajero: el CFDI no trae reserva ni membresia, solo su suscripcion.
+      const { data: suscripcion } = await supabase
+        .from("suscripciones_notificaciones")
+        .select("user_id")
+        .eq("id", cfdi.suscripcion_notificacion_id)
+        .maybeSingle();
+
+      if (suscripcion?.user_id) {
+        const { data: traveler } = await supabase
+          .from("users")
+          .select("email, first_name, last_name")
+          .eq("id", suscripcion.user_id)
+          .maybeSingle();
+        recipientEmail = traveler?.email || "";
+        recipientName = [traveler?.first_name, traveler?.last_name].filter(Boolean).join(" ").trim();
+      }
     } else if (recipient_type === "agency" && cfdi.agency_id) {
       const { data: agency } = await supabase
         .from("agencies")
@@ -154,6 +171,8 @@ Deno.serve(async (req: Request) => {
 
     const invoiceTypeLabel = cfdi.invoice_type === "membership"
       ? "Membresia ToursRed Plus"
+      : cfdi.invoice_type === "notification_subscription"
+      ? "Suscripcion de notificaciones"
       : cfdi.invoice_type === "commission"
       ? "Comision"
       : cfdi.invoice_type === "featured_slot"

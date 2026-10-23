@@ -304,7 +304,20 @@ Deno.serve(async (req) => {
     // Las suscripciones de NOTIFICACIONES van antes que todo lo demas: traen su propia marca en el metadata, y si cayeran en los
     // handlers de membresias (que leen metadata.user_id) se convertirian en una membresia ToursRed Plus. Si el evento es suyo se
     // atiende aqui y no pasa al switch; si falla se lanza y Stripe lo reintenta.
-    if (await procesarEventoNotificaciones(supabase, stripe, event)) {
+    if (await procesarEventoNotificaciones(supabase, stripe, event, {
+      comisionDePago: getStripeProcessorFee,
+      columnasDeComision,
+      registrarFallo,
+      enSegundoPlano: (trabajo) => EdgeRuntime.waitUntil(trabajo),
+      invocarFuncion: async (nombre, cuerpo) => {
+        const res = await fetch(`${supabaseUrl}/functions/v1/${nombre}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+          body: JSON.stringify(cuerpo),
+        });
+        if (!res.ok) throw new Error(`${nombre} respondio ${res.status}: ${(await res.text()).slice(0, 300)}`);
+      },
+    })) {
       return new Response(
         JSON.stringify({ success: true, received: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
