@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enviarPayloadSmtp2go, type PayloadSmtp2go } from "../_shared/correo/compat.ts";
+import { fechaDelViaje, formatearFechaViaje } from "../_shared/fechaDelViaje.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,7 +72,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select('user_id, tour_id')
+      .select('user_id, tour_id, selected_date')
       .eq('id', cancellation.booking_id)
       .single();
 
@@ -271,7 +272,7 @@ Deno.serve(async (req: Request) => {
                   </tr>
                   <tr>
                     <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Fecha del tour:</td>
-                    <td style="padding: 8px 0; color: #1f2937; font-size: 14px; text-align: right;">${new Date(tour.start_date).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
+                    <td style="padding: 8px 0; color: #1f2937; font-size: 14px; text-align: right;">${formatearFechaViaje(fechaDelViaje(booking, tour))}</td>
                   </tr>
                   ${!admin_cancellation ? `
                   <tr>

@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireUser } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
+import { fechaDelViaje, formatearFechaViaje } from "../_shared/fechaDelViaje.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -100,15 +101,6 @@ Deno.serve(async (req: Request) => {
     const noShowCount = booking.traveler.no_show_count || 0;
     const isHighRisk = noShowCount > 3;
 
-    const formatDate = (dateString: string) => {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('es-MX', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    };
-
     console.log(`Sending No Show notification for booking: ${booking_id}, traveler no_show_count: ${noShowCount}`);
 
     const travelerEmailHtml = `
@@ -160,7 +152,7 @@ Deno.serve(async (req: Request) => {
         </div>
         <div class="info-row">
           <span class="info-label">Fecha del tour:</span>
-          <span class="info-value">${formatDate(booking.tour.start_date)}</span>
+          <span class="info-value">${formatearFechaViaje(fechaDelViaje(booking, booking.tour))}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Agencia:</span>

@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
+import { fechaDelViaje, formatearFechaViaje } from "../_shared/fechaDelViaje.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,17 +110,7 @@ Deno.serve(async (req: Request) => {
     const insuranceRefundAmount = Number(cancellationRecord?.insurance_refund_amount || 0);
     const optionalServicesRefundAmount = Number(cancellationRecord?.optional_services_refund_amount || 0);
 
-    const formatDate = (dateStr: string) => {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('es-MX', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    };
-
-    const originalTourDate = formatDate(booking.tour.start_date);
+    const originalTourDate = formatearFechaViaje(fechaDelViaje(booking, booking.tour), { weekday: "long" });
 
     const htmlContent = `
 <!DOCTYPE html>

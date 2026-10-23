@@ -4,6 +4,7 @@ import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enviarPayloadSmtp2go } from "../_shared/correo/compat.ts";
+import { fechaDelViaje, formatearFechaViaje } from "../_shared/fechaDelViaje.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,7 +62,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: booking } = await supabase
       .from('bookings')
-      .select('user_id, tour_id, agency_id, booking_code, active_travelers_count, travelers_count')
+      .select('user_id, tour_id, agency_id, booking_code, active_travelers_count, travelers_count, selected_date')
       .eq('id', booking_id)
       .single();
 
@@ -167,7 +168,7 @@ Deno.serve(async (req: Request) => {
                   </tr>
                   <tr>
                     <td style="padding: 10px 16px; color: #6b7280; font-size: 13px; border-bottom: 1px solid #f3f4f6;">Fecha del tour:</td>
-                    <td style="padding: 10px 16px; color: #1f2937; font-size: 13px; border-bottom: 1px solid #f3f4f6;">${new Date(tour.start_date).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
+                    <td style="padding: 10px 16px; color: #1f2937; font-size: 13px; border-bottom: 1px solid #f3f4f6;">${formatearFechaViaje(fechaDelViaje(booking, tour))}</td>
                   </tr>
                   ${booking.booking_code ? `
                   <tr>
