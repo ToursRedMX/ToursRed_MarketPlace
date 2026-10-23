@@ -198,6 +198,9 @@ jobs:
       - name: Verify traveler SMS preferences by type and the cancellation notice (coverage, off by default, billing reset)
         run: node scripts/test-sms-viajero-preferencias.mjs
 
+      - name: Verify the points the payment step announces mirror award_points_for_booking (Plus only, double only without a gateway)
+        run: node scripts/test-puntos-ganados.mjs
+
       - name: Verify the return screen after a partial payment (abono recibido)
         run: node scripts/test-abono-recibido.mjs
 

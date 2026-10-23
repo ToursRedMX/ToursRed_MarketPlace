@@ -18,6 +18,7 @@ async function bloqueoDeMfa(resp: Response): Promise<boolean> {
 import { calcularPromocionDeGrupo } from '../../utils/promocionDeGrupo.ts';
 import { supabase } from '../../lib/supabase';
 import { formatCurrencyMXN } from '../../utils/formatCurrency';
+import { puntosGanados } from '../../lib/puntosGanados';
 import { totalTravelerCount } from '../../types/booking-flow';
 import { getMpDeviceId } from '../../utils/mercadopagoDevice';
 import PaymentProviderSelector, {
@@ -489,11 +490,15 @@ const BookingFlowStep4: React.FC = () => {
     && !flow.addMembership
     && walletBalance >= tentativeCashNeeded;
 
-  // Points to earn on this payment
-  const isDoublePoints = useWallet && hasMembership;
-  const pointsToEarn = isDoublePoints
-    ? Math.floor(amountToPay) * 2
-    : Math.floor(amountToPay);
+  // Puntos que gana este pago: el MISMO calculo del servidor (award_points_for_booking). Solo con ToursRed Plus activo, y al doble
+  // solo si NO interviene ninguna pasarela (100% Cash, o Cash + puntos). Antes bastaba `useWallet && hasMembership`: con una parte
+  // por Stripe prometia el doble y puntos de mas.
+  const { puntos: pointsToEarn, esDoble: isDoublePoints } = puntosGanados({
+    tieneMembresiaActiva: hasMembership,
+    pesosPasarela: amountToPay,
+    pesosCash: walletDiscount,
+    pesosConPuntos: pointsDiscount,
+  });
 
   if (!tour) return null;
 
@@ -1258,8 +1263,8 @@ const BookingFlowStep4: React.FC = () => {
         </div>
         )}
 
-        {/* ToursRed Points earned banner */}
-        {amountToPay > 0 && (
+        {/* ToursRed Points earned banner: solo si el servidor va a otorgar puntos (membresia activa) */}
+        {pointsToEarn > 0 && (
           <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl flex items-start gap-3">
             <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
               <Sparkles className="w-4 h-4 text-green-600" />
@@ -1281,7 +1286,7 @@ const BookingFlowStep4: React.FC = () => {
               </p>
               {isDoublePoints && (
                 <p className="text-xs text-green-600 mt-1">
-                  ¡Estás ganando el doble por pagar con ToursRed Cash y tener membresía activa!
+                  ¡Doble de puntos por pagar solo con ToursRed Cash y tener ToursRed Plus activo!
                 </p>
               )}
             </div>
@@ -1465,7 +1470,9 @@ const BookingFlowStep4: React.FC = () => {
               <div className="flex-1">
                 <span className="text-sm font-medium text-gray-800">Usar ToursRed Cash (Saldo: {formatCurrencyMXN(walletBalance)})</span>
                 <p className="text-xs text-gray-500">
-                  Se aplica hasta cubrir lo que debes hoy ({formatCurrencyMXN(netBeforeCharges)}); el resto del tour se paga después.
+                  {useWallet
+                    ? `Se descuentan ${formatCurrencyMXN(walletDiscount)} de tu saldo del pago de hoy (${formatCurrencyMXN(netBeforeCharges)} más cargos).${amountToPay > 0 ? ' Lo que falta de hoy lo pagas con el método de pago.' : ''} El resto del tour se paga antes de la salida.`
+                    : `Úsalo para pagar hoy: ${formatCurrencyMXN(netBeforeCharges)} más cargos. Tu saldo se descuenta de ese pago, y el resto del tour se paga antes de la salida.`}
                 </p>
               </div>
             </label>
