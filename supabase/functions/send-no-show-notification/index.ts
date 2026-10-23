@@ -100,12 +100,18 @@ Deno.serve(async (req: Request) => {
     const noShowCount = booking.traveler.no_show_count || 0;
     const isHighRisk = noShowCount > 3;
 
-    const formatDate = (dateString: string) => {
-      const date = new Date(dateString);
+    // Una fecha sola ('2026-10-17') se lee como medianoche UTC y en Mexico salia
+    // un dia antes; se ancla al mediodia y se formatea en hora de Mexico. Sin fecha
+    // (new Date(null) es 1970) no se inventa una.
+    const formatDate = (dateString: string | null | undefined) => {
+      if (!dateString) return "Por confirmar";
+      const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(dateString) ? `${dateString}T12:00:00Z` : dateString);
+      if (Number.isNaN(date.getTime())) return "Por confirmar";
       return date.toLocaleDateString('es-MX', {
         year: 'numeric',
         month: 'long',
-        day: 'numeric'
+        day: 'numeric',
+        timeZone: 'America/Mexico_City'
       });
     };
 
@@ -160,7 +166,7 @@ Deno.serve(async (req: Request) => {
         </div>
         <div class="info-row">
           <span class="info-label">Fecha del tour:</span>
-          <span class="info-value">${formatDate(booking.tour.start_date)}</span>
+          <span class="info-value">${formatDate(booking.selected_date ?? booking.tour.start_date)}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Agencia:</span>
