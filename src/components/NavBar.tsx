@@ -256,6 +256,7 @@ const NavBar: React.FC = () => {
     comunicacionesItems.push({ to: '/admin/newsletter', label: 'Newsletter', icon: <Mail className="h-4 w-4" /> });
     if (isSuperAdmin || permissions?.canManageSettings) {
       comunicacionesItems.push({ to: '/admin/bitacora-correo', label: 'Bitacora de Correo', icon: <Mail className="h-4 w-4" /> });
+      comunicacionesItems.push({ to: '/admin/bitacora-mensajes', label: 'Bitacora de Mensajes', icon: <MessageSquare className="h-4 w-4" /> });
       comunicacionesItems.push({ to: '/admin/costos-mensajeria', label: 'Costos de Mensajeria', icon: <Coins className="h-4 w-4" /> });
       comunicacionesItems.push({ to: '/admin/settings', label: 'Configuracion', icon: <Settings className="h-4 w-4" /> });
     }

@@ -180,6 +180,9 @@ jobs:
       - name: Verify the messaging costs screen and its monthly close
         run: node scripts/test-costos-mensajeria.mjs
 
+      - name: Verify the outgoing messages log (OTP code never stored, admin-only read)
+        run: node scripts/test-bitacora-mensajes-admin.mjs
+
       - name: Verify the return screen after a partial payment (abono recibido)
         run: node scripts/test-abono-recibido.mjs
 
