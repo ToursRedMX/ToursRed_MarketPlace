@@ -18,6 +18,8 @@ interface SeatMapPickerProps {
   onSeatsSelected: (seats: number[]) => void;
   selectedSeats?: number[];
   disabled?: boolean;
+  /** Al cambiar de asiento: los asientos de esta reserva cuentan como libres para quien los tiene. */
+  ownBookingId?: string;
 }
 
 const SEAT_SIZE = 36;
@@ -176,6 +178,7 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
   onSeatsSelected,
   selectedSeats = [],
   disabled = false,
+  ownBookingId,
 }) => {
   const [layout, setLayout] = useState<VehicleSeatLayout | null>(null);
   const [seatsWithStatus, setSeatsWithStatus] = useState<SeatWithStatus[]>([]);
@@ -271,12 +274,15 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
         statusMap[s.seat_number] = { status: normalized, booking_id: s.booking_id, block_note: s.block_note };
       });
 
-      const combined: SeatWithStatus[] = parsedLayout.seats.map(seat => ({
-        ...seat,
-        status: (statusMap[seat.number]?.status as SeatStatusType) || 'disponible',
-        booking_id: statusMap[seat.number]?.booking_id || null,
-        block_note: statusMap[seat.number]?.block_note || null,
-      }));
+      const combined: SeatWithStatus[] = parsedLayout.seats.map(seat => {
+        const esMio = !!ownBookingId && statusMap[seat.number]?.booking_id === ownBookingId;
+        return {
+          ...seat,
+          status: esMio ? 'disponible' : ((statusMap[seat.number]?.status as SeatStatusType) || 'disponible'),
+          booking_id: statusMap[seat.number]?.booking_id || null,
+          block_note: statusMap[seat.number]?.block_note || null,
+        };
+      });
 
       setSeatsWithStatus(combined);
     } catch {
@@ -284,7 +290,7 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [tourId, slotId]);
+  }, [tourId, slotId, ownBookingId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
