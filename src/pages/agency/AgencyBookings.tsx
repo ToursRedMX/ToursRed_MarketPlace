@@ -284,14 +284,18 @@ const AgencyBookings: React.FC = () => {
     }
   };
 
+  // La fecha que cuenta es la de la reserva: en un tour con salidas, tours.start_date
+  // es la primera y no la que reservo el viajero.
+  const fechaDelViaje = (booking: Booking) => booking.selected_date || booking.tours?.start_date;
+
   const canMarkAsNoShow = (booking: Booking) => {
-    if (!booking.tours?.start_date) return false;
+    if (!fechaDelViaje(booking)) return false;
     if (booking.is_no_show) return false;
     if (booking.cancelled_at) return false;
     if (booking.status !== 'confirmed') return false;
 
     try {
-      const tourStartDate = parseDateFromDB(booking.tours.start_date);
+      const tourStartDate = parseDateFromDB(fechaDelViaje(booking)!);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       tourStartDate.setHours(0, 0, 0, 0);
@@ -304,13 +308,13 @@ const AgencyBookings: React.FC = () => {
   };
 
   const canMarkAsCompleted = (booking: Booking) => {
-    if (!booking.tours?.start_date) return false;
+    if (!fechaDelViaje(booking)) return false;
     if (booking.status !== 'confirmed') return false;
     if (booking.is_no_show) return false;
     if (booking.cancelled_at) return false;
 
     try {
-      const tourStartDate = parseDateFromDB(booking.tours.start_date);
+      const tourStartDate = parseDateFromDB(fechaDelViaje(booking)!);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       tourStartDate.setHours(0, 0, 0, 0);
@@ -1772,7 +1776,7 @@ const AgencyBookings: React.FC = () => {
                       </button>
                     )}
 
-                    {booking.status !== 'cancelled' && !booking.cancelled_at && ['confirmed', 'pending'].includes(booking.status) && booking.payment_status === 'succeeded' && !booking.is_no_show && (
+                    {booking.status !== 'cancelled' && !booking.cancelled_at && ['confirmed', 'pending'].includes(booking.status) && booking.payment_status === 'succeeded' && !booking.is_no_show && isBookingActive(booking) && (
                       <button
                         onClick={() => handleOpenCancelBookingModal(booking)}
                         className="btn bg-orange-600 text-white hover:bg-orange-700 flex items-center justify-center"
