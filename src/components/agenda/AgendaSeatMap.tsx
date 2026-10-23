@@ -1,5 +1,6 @@
 import type { DepartureSeat } from '../../types/externalSales';
 import type { SeatDefinition, VehicleShape } from '../../types/seats';
+import SeatMapFeatures from '../seats/SeatMapFeatures';
 import { useLayout } from './seatMapData';
 import type { SeatOwner } from './seatMapData';
 
@@ -66,6 +67,7 @@ export default function AgendaSeatMap({ tourId, seats, resolve, activeGroupId, o
         <svg width={g.width} height={g.height} className="mx-auto block" role="img" aria-label="Mapa de asientos de la salida">
           <rect x={0} y={0} width={g.width} height={g.height} rx={18} fill="#f8fafc" stroke="#e2e8f0" strokeWidth={1.5} />
           <line x1={g.aisleX} y1={PAD} x2={g.aisleX} y2={g.height - PAD} stroke="#cbd5e1" strokeDasharray="4,4" />
+          <SeatMapFeatures features={shape.features} colX={g.colX} rowY={g.rowY} seatSize={SEAT} />
           {shape.hasDriver && shape.driverRow === 0 && (
             <g>
               <rect x={g.colX(shape.driverCol)} y={PAD} width={SEAT} height={SEAT} rx={8} fill="#cbd5e1" />

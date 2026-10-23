@@ -372,6 +372,9 @@ const AgencyTours: React.FC = () => {
   const VEHICLE_OPTIONS: { type: VehicleMapType; label: string; capacity: number; description: string }[] = [
     { type: 'sprinter_20', label: 'Sprinter / Van', capacity: 20, description: '20 pasajeros' },
     { type: 'bus_50', label: 'Autobus', capacity: 50, description: '50 pasajeros' },
+    { type: 'hiace_14', label: 'Toyota Hiace', capacity: 14, description: '14 pasajeros' },
+    { type: 'urvan_13', label: 'Nissan Urvan', capacity: 13, description: '13 pasajeros' },
+    { type: 'bus_60_2pisos', label: 'Autobus 2 pisos', capacity: 60, description: '60 pasajeros' },
   ];
 
   const [includes, setIncludes] = useState<string[]>(['']);
@@ -4818,7 +4821,7 @@ const AgencyTours: React.FC = () => {
                       Mapa de Asientos Interactivo
                       <span className="text-xs font-normal text-gray-400">Opcional</span>
                     </h4>
-                    <p className="text-xs text-gray-500">Permite que los viajeros elijan su asiento al reservar. Solo disponible para tours en autobús o sprinter.</p>
+                    <p className="text-xs text-gray-500">Permite que los viajeros elijan su asiento al reservar. Solo disponible para tours en autobús, sprinter o van.</p>
                     <div className={`rounded-xl border-2 p-4 transition-all ${formData.vehicle_map_type ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}>
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input
