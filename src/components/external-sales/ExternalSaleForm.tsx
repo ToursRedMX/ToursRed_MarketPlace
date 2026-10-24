@@ -41,7 +41,7 @@ export default function ExternalSaleForm({operations,existing,onSaved,onClose}:{
  // Asientos: lo elegido en este formulario (por id de viajero) manda sobre lo que ya hay guardado.
  const [chosen,setChosen]=useState<Record<string,number|null>>({});
  const [picking,setPicking]=useState<string|null>(null);
- const {hasMap}=useHasSeatMap(op?.tour_id??'');
+ const {hasMap}=useHasSeatMap(op?.tour_id??'',op?.slot_id);
  const seatsQ=useQuery({queryKey:['form-seats',op?.tour_id,op?.slot_id],enabled:!!op&&hasMap,queryFn:()=>loadDepartureSeats(op!.tour_id,op!.slot_id)});
  // Si cambia la salida de una venta existente, sus asientos se sueltan solos en la base.
  const sameDeparture=!existing||departure===operationKey(existing);
@@ -142,7 +142,7 @@ export default function ExternalSaleForm({operations,existing,onSaved,onClose}:{
    <span className="flex items-center gap-2">{n!==null?<span className="rounded bg-amber-50 px-2 py-0.5 text-sm font-semibold text-amber-900">Asiento {n}</span>:<span className="text-sm text-slate-400">Sin asiento</span>}
    <button type="button" className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={()=>setPicking(picking===id?null:id)}>{picking===id?'Cancelar':n!==null?'Cambiar':'Elegir asiento'}</button>
    {n!==null&&<button type="button" className="text-sm text-red-700 underline" onClick={()=>{setChosen(c=>({...c,[id]:null}));if(picking===id)setPicking(null);}}>Quitar</button>}</span></li>;})}</ul>
-  <AgendaSeatMap tourId={op.tour_id} seats={mapSeats} resolve={resolveSeat} activeGroupId={null} onSelectGroup={()=>undefined} hideHint
+  <AgendaSeatMap tourId={op.tour_id} slotId={op.slot_id} seats={mapSeats} resolve={resolveSeat} activeGroupId={null} onSelectGroup={()=>undefined} hideHint
    pick={picking?{prompt:'Elige un asiento libre para '+travelerLabel(travelers[Math.max(0,pickingIndex)],Math.max(0,pickingIndex)),busy:false,onPick:n=>{setChosen(c=>({...c,[picking]:n}));setPicking(null);},onCancel:()=>setPicking(null)}:null}/></>}
  </Section>}
 

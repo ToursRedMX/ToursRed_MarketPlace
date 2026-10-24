@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import SeatMapFeatures from './SeatMapFeatures';
+import { fetchSeatLayout } from '../agenda/seatMapData';
 import { SeatWithStatus, VehicleShape, VehicleSeatLayout, SeatStatusType } from '../../types/seats';
 
 /** Fila de `slot_seat_status`, igual para la consulta de slot que para la global. */
@@ -193,34 +194,21 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
     setIsLoading(true);
     setError('');
     try {
-      const { data: tourData, error: tourError } = await supabase
-        .from('tours')
-        .select('vehicle_map_type')
-        .eq('id', tourId)
-        .maybeSingle();
-
-      if (tourError || !tourData?.vehicle_map_type) {
-        setError('No se pudo cargar el tipo de vehiculo del tour.');
-        return;
-      }
-
-      const { data: layoutData, error: layoutError } = await supabase
-        .from('vehicle_seat_layouts')
-        .select('*')
-        .eq('type', tourData.vehicle_map_type)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (layoutError || !layoutData) {
+      let fetched;
+      try {
+        fetched = await fetchSeatLayout(tourId, slotId);
+      } catch {
         setError('No se pudo cargar el layout del vehiculo.');
         return;
       }
-
-      const parsedLayout: VehicleSeatLayout = {
-        ...layoutData,
-        seats: typeof layoutData.seats === 'string' ? JSON.parse(layoutData.seats) : layoutData.seats,
-        vehicle_shape: typeof layoutData.vehicle_shape === 'string' ? JSON.parse(layoutData.vehicle_shape) : layoutData.vehicle_shape,
-      };
+      if (!fetched.layout) {
+        setError('No se pudo cargar el tipo de vehiculo del tour.');
+        return;
+      }
+      const parsedLayout: VehicleSeatLayout = fetched.layout;
+      // Un bloqueo global (slot_id NULL) es por numero de asiento del mapa del tour: no aplica
+      // a una salida con vehiculo propio.
+      const aplicaBloqueoGlobal = !fetched.slotOverride;
       setLayout(parsedLayout);
 
       // When a slot is selected, fetch both slot-specific statuses AND global blocks (slot_id = null).
@@ -233,12 +221,14 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
             .select('seat_number, status, booking_id, block_note')
             .eq('tour_id', tourId)
             .eq('slot_id', slotId),
-          supabase
-            .from('slot_seat_status')
-            .select('seat_number, status, booking_id, block_note')
-            .eq('tour_id', tourId)
-            .is('slot_id', null)
-            .in('status', ['bloqueado_agencia']),
+          aplicaBloqueoGlobal
+            ? supabase
+                .from('slot_seat_status')
+                .select('seat_number, status, booking_id, block_note')
+                .eq('tour_id', tourId)
+                .is('slot_id', null)
+                .in('status', ['bloqueado_agencia'])
+            : Promise.resolve({ data: [] as SlotSeatStatusRow[], error: null }),
         ]);
         // F-1: si una de las dos consultas falla y se ignora, el mapa se pinta
         // con los asientos que SI se pudieron leer y el resto aparece LIBRE.

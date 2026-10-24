@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Lock, User, AlertCircle, Loader2, RefreshCw, X, Check, Calendar, Clock, ChevronDown } from 'lucide-react';
+import { Bus, Lock, User, AlertCircle, Loader2, RefreshCw, X, Check, Calendar, Clock, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { SeatWithStatus, VehicleSeatLayout } from '../../types/seats';
 import SeatMapFeatures from './SeatMapFeatures';
 import { comoFilas } from '../../lib/relacionesSupabase';
+import { fetchSeatLayout } from '../agenda/seatMapData';
+import SlotVehicleChangeModal from './SlotVehicleChangeModal';
 
 interface SlotSeatStatusRow {
   seat_number: number;
@@ -48,6 +50,7 @@ interface TourSlot {
   capacity: number;
   booked_count: number;
   status: string;
+  vehicle_map_type: string | null;
 }
 
 const SeatMapManager: React.FC<SeatMapManagerProps> = ({
@@ -68,6 +71,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
   const [hoveredSeat, setHoveredSeat] = useState<number | null>(null);
   const [actionFeedback, setActionFeedback] = useState<{ seat: number; message: string } | null>(null);
 
+  const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
   const [slots, setSlots] = useState<TourSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(slotIdProp || null);
@@ -81,7 +85,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
       const today = new Date().toISOString().split('T')[0];
       const { data, error: errSlots } = await supabase
         .from('tour_slots')
-        .select('id, slot_date, departure_time, capacity, booked_count, status')
+        .select('id, slot_date, departure_time, capacity, booked_count, status, vehicle_map_type')
         .eq('tour_id', tourId)
         .neq('status', 'cancelado')
         .gte('slot_date', today)
@@ -119,34 +123,18 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
     setIsLoading(true);
     setError('');
     try {
-      const { data: tourData, error: tourError } = await supabase
-        .from('tours')
-        .select('vehicle_map_type')
-        .eq('id', tourId)
-        .maybeSingle();
-
-      if (tourError || !tourData?.vehicle_map_type) {
-        setError('No se pudo cargar el tipo de vehiculo del tour.');
-        return;
-      }
-
-      const { data: layoutData, error: layoutError } = await supabase
-        .from('vehicle_seat_layouts')
-        .select('*')
-        .eq('type', tourData.vehicle_map_type)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (layoutError || !layoutData) {
+      let fetched;
+      try {
+        fetched = await fetchSeatLayout(tourId, activeSlotId);
+      } catch {
         setError('No se pudo cargar el layout del vehiculo.');
         return;
       }
-
-      const parsedLayout: VehicleSeatLayout = {
-        ...layoutData,
-        seats: typeof layoutData.seats === 'string' ? JSON.parse(layoutData.seats) : layoutData.seats,
-        vehicle_shape: typeof layoutData.vehicle_shape === 'string' ? JSON.parse(layoutData.vehicle_shape) : layoutData.vehicle_shape,
-      };
+      if (!fetched.layout) {
+        setError('No se pudo cargar el tipo de vehiculo del tour.');
+        return;
+      }
+      const parsedLayout: VehicleSeatLayout = fetched.layout;
       setLayout(parsedLayout);
 
       let query = supabase
@@ -495,7 +483,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
                 <option value="">-- Elige una salida --</option>
                 {slots.map(slot => (
                   <option key={slot.id} value={slot.id}>
-                    {formatSlotDate(slot.slot_date)}{slot.departure_time ? ` · ${formatSlotTime(slot.departure_time)}` : ''} — {slot.booked_count}/{slot.capacity} lugares
+                    {formatSlotDate(slot.slot_date)}{slot.departure_time ? ` · ${formatSlotTime(slot.departure_time)}` : ''} — {slot.booked_count}/{slot.capacity} lugares{slot.vehicle_map_type ? ' · vehiculo propio' : ''}
                   </option>
                 ))}
               </select>
@@ -528,6 +516,15 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
           Gestion de Asientos
           {!isReceptivo && tourDate && <span className="ml-2 text-sm font-normal text-gray-500">— {tourDate}{slotTime ? ` ${slotTime}` : ''}</span>}
         </h3>
+        {isReceptivo && slots.length > 0 && (
+          <button
+            onClick={() => setVehicleModalOpen(true)}
+            className="flex items-center gap-1.5 text-sm text-blue-700 hover:text-blue-900 font-medium transition-colors"
+          >
+            <Bus className="w-4 h-4" />
+            Cambiar vehiculo de salidas
+          </button>
+        )}
         {(!isReceptivo || selectedSlotId) && (
           <button
             onClick={loadData}
@@ -636,6 +633,16 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
             </>
           )}
         </>
+      )}
+
+      {vehicleModalOpen && (
+        <SlotVehicleChangeModal
+          tourId={tourId}
+          slots={slots}
+          initialSlotId={selectedSlotId}
+          onClose={() => setVehicleModalOpen(false)}
+          onDone={() => { setVehicleModalOpen(false); void loadSlots(); void loadData(); }}
+        />
       )}
 
       {blockModal.open && (

@@ -210,10 +210,16 @@ Deno.serve(async (req: Request) => {
 
       const updatePayload: Record<string, unknown> = { capacity: finalCapacity, status: "activo" };
       if (new_vehicle_map_type) {
-        await adminClient
-          .from("tours")
-          .update({ vehicle_map_type: new_vehicle_map_type })
-          .eq("id", tour_id);
+        // El vehiculo se cambia SOLO en la salida destino (antes se escribia en tours y movia
+        // todas las salidas). El nucleo valida la capacidad contra el vehiculo, suelta los
+        // asientos de esa salida y avisa a quienes ya tenian reserva en ella.
+        const { error: vehicleError } = await adminClient.rpc("slot_vehicle_change_core", {
+          p_tour_id: tour_id,
+          p_slot_ids: [target_slot_id],
+          p_vehicle_map_type: new_vehicle_map_type,
+          p_capacity: finalCapacity,
+        });
+        if (vehicleError) throw vehicleError;
       }
 
       const { error: updateCapacityError } = await adminClient

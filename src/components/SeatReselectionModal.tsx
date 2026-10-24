@@ -10,6 +10,8 @@ interface SeatReselectionModalProps {
   slotId: string;
   travelersCount: number;
   previousSeats: number[];
+  /** 'vehicle_change' = la agencia cambio el vehiculo; otro valor = reagendado de horario. */
+  reason?: string | null;
   tourName: string;
   newDate: string;
   newTime: string;
@@ -23,6 +25,7 @@ const SeatReselectionModal: React.FC<SeatReselectionModalProps> = ({
   slotId,
   travelersCount,
   previousSeats,
+  reason,
   tourName,
   newDate,
   newTime,
@@ -44,24 +47,8 @@ const SeatReselectionModal: React.FC<SeatReselectionModalProps> = ({
     setError('');
 
     try {
-      const { data: bookingData, error: bookingFetchError } = await supabase
-        .from('bookings')
-        .select('agency_id')
-        .eq('id', bookingId)
-        .maybeSingle();
-
-      if (bookingFetchError || !bookingData) {
-        throw new Error('No se pudo obtener la información de la reserva.');
-      }
-
       const { data: rpcResult, error: rpcError } = await supabase
-        .rpc('reserve_seats', {
-          p_tour_id: tourId,
-          p_slot_id: slotId,
-          p_agency_id: bookingData.agency_id,
-          p_booking_id: bookingId,
-          p_seat_numbers: selectedSeats,
-        });
+        .rpc('reselect_booking_seats', { p_booking_id: bookingId, p_seats: selectedSeats });
 
       if (rpcError) throw rpcError;
 
@@ -75,16 +62,6 @@ const SeatReselectionModal: React.FC<SeatReselectionModalProps> = ({
         }
         return;
       }
-
-      const { error: bookingError } = await supabase
-        .from('bookings')
-        .update({
-          selected_seats: selectedSeats,
-          needs_seat_reselection: false,
-        })
-        .eq('id', bookingId);
-
-      if (bookingError) throw bookingError;
 
       setSuccess(true);
       setTimeout(() => {
@@ -126,19 +103,29 @@ const SeatReselectionModal: React.FC<SeatReselectionModalProps> = ({
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-amber-900">Tus asientos anteriores ya no estan disponibles</p>
-                <p className="text-sm text-amber-800 mt-1">
-                  Los asientos {previousSeats.sort((a, b) => a - b).join(', ')} que tenias reservados ya fueron tomados por otros viajeros en el nuevo horario.
-                  Por favor selecciona {travelersCount} asiento{travelersCount !== 1 ? 's' : ''} disponible{travelersCount !== 1 ? 's' : ''}.
-                </p>
-              </div>
+              {reason === 'vehicle_change' ? (
+                <div>
+                  <p className="text-sm font-semibold text-amber-900">Cambio de transporte en tu salida</p>
+                  <p className="text-sm text-amber-800 mt-1">
+                    Por temas de logistica, la agencia cambio el transporte de esta salida y los asientos que tenias ya no corresponden al nuevo vehiculo.
+                    Por favor selecciona {travelersCount} asiento{travelersCount !== 1 ? 's' : ''} disponible{travelersCount !== 1 ? 's' : ''}.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm font-semibold text-amber-900">Tus asientos anteriores ya no estan disponibles</p>
+                  <p className="text-sm text-amber-800 mt-1">
+                    Los asientos {[...previousSeats].sort((a, b) => a - b).join(', ')} que tenias reservados ya fueron tomados por otros viajeros en el nuevo horario.
+                    Por favor selecciona {travelersCount} asiento{travelersCount !== 1 ? 's' : ''} disponible{travelersCount !== 1 ? 's' : ''}.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="bg-gray-50 rounded-xl p-4 flex items-center gap-4">
             <div className="flex-1">
-              <p className="text-xs text-gray-500 mb-0.5">Nuevo horario confirmado</p>
+              <p className="text-xs text-gray-500 mb-0.5">{reason === 'vehicle_change' ? 'Salida' : 'Nuevo horario confirmado'}</p>
               <p className="font-semibold text-gray-900 capitalize">{formattedDate}</p>
             </div>
             <div className="text-right">

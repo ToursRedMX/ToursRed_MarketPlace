@@ -32,13 +32,30 @@ interface SlotRescheduleRequest {
   available_spots_in_target: number | null;
 }
 
+async function vehiculoDistinto(
+  adminClient: SupabaseClient,
+  tourId: string,
+  origenSlotId: string | null,
+  destinoSlotId: string
+): Promise<boolean> {
+  const [origen, destino] = await Promise.all([
+    adminClient.rpc("effective_vehicle_map_type", { p_tour_id: tourId, p_slot_id: origenSlotId }),
+    adminClient.rpc("effective_vehicle_map_type", { p_tour_id: tourId, p_slot_id: destinoSlotId }),
+  ]);
+  // Si no se puede saber, lo seguro es pedir que elija de nuevo.
+  if (origen.error || destino.error) return true;
+  return origen.data !== destino.data;
+}
+
 async function handleSeatAssignment(
   adminClient: SupabaseClient,
   bookingId: string,
   targetSlotId: string,
   tourId: string,
   originalSeats: number[],
-  travelersCount: number
+  travelersCount: number,
+  // Las dos salidas tienen vehiculo distinto: los numeros de asiento no significan lo mismo.
+  forceReselection = false
 ): Promise<{ assigned: boolean; needsReselection: boolean }> {
   if (!originalSeats || originalSeats.length === 0) {
     return { assigned: false, needsReselection: false };
@@ -54,7 +71,7 @@ async function handleSeatAssignment(
   const occupiedNumbers = new Set((occupiedSeats || []).map((s: { seat_number: number }) => s.seat_number));
   const availableOriginalSeats = originalSeats.filter((n) => !occupiedNumbers.has(n));
 
-  if (availableOriginalSeats.length >= travelersCount) {
+  if (!forceReselection && availableOriginalSeats.length >= travelersCount) {
     const seatsToUse = availableOriginalSeats.slice(0, travelersCount);
     const seatRecords = seatsToUse.map((seatNum) => ({
       tour_id: tourId,
@@ -92,6 +109,7 @@ async function handleSeatAssignment(
       .from("bookings")
       .update({
         needs_seat_reselection: true,
+        seat_reselection_reason: null,
         previous_selected_seats: originalSeats,
         selected_seats: null,
       })
@@ -246,7 +264,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: booking, error: bookingError } = await adminClient
       .from("bookings")
-      .select("id, user_id, status, deposit_amount, toursred_cash_used, tour_id, has_pending_slot_reschedule, slot_reschedule_response, selected_seats, travelers_count")
+      .select("id, user_id, status, deposit_amount, toursred_cash_used, tour_id, has_pending_slot_reschedule, slot_reschedule_response, selected_seats, travelers_count, slot_id")
       .eq("id", booking_id)
       .single();
 
@@ -365,7 +383,8 @@ Deno.serve(async (req: Request) => {
         if (tourData?.vehicle_map_type && booking.selected_seats && booking.selected_seats.length > 0) {
           const seatResult = await handleSeatAssignment(
             adminClient, booking_id, altSlot.id, booking.tour_id,
-            booking.selected_seats, travelersCount
+            booking.selected_seats, travelersCount,
+            await vehiculoDistinto(adminClient, booking.tour_id, booking.slot_id ?? null, altSlot.id)
           );
           seatReselectionNeeded = seatResult.needsReselection;
         }
@@ -540,7 +559,8 @@ Deno.serve(async (req: Request) => {
             targetSlot.id,
             booking.tour_id,
             booking.selected_seats,
-            booking.travelers_count || booking.selected_seats.length
+            booking.travelers_count || booking.selected_seats.length,
+            await vehiculoDistinto(adminClient, booking.tour_id, booking.slot_id ?? null, targetSlot.id)
           );
           seatReselectionNeeded = seatResult.needsReselection;
         }
