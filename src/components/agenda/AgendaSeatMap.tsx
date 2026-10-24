@@ -25,6 +25,8 @@ function geometry(shape: VehicleShape) {
 
 type Props = {
   tourId: string;
+  /** Salida: si trae vehiculo propio, el mapa es el suyo y no el del tour. */
+  slotId?: string | null;
   seats: DepartureSeat[];
   resolve: (seat: DepartureSeat) => SeatOwner | null;
   activeGroupId: string | null;
@@ -35,8 +37,8 @@ type Props = {
   hideHint?: boolean;
 };
 
-export default function AgendaSeatMap({ tourId, seats, resolve, activeGroupId, onSelectGroup, pick, hideHint }: Props) {
-  const { data: layout, isPending, error } = useLayout(tourId);
+export default function AgendaSeatMap({ tourId, slotId, seats, resolve, activeGroupId, onSelectGroup, pick, hideHint }: Props) {
+  const { data: layout, isPending, error } = useLayout(tourId, slotId);
   if (isPending) return <div className="h-48 animate-pulse rounded-xl bg-slate-100" />;
   if (error) return <p role="alert" className="text-sm text-red-700">No se pudo cargar el mapa de asientos.</p>;
   if (!layout) return null;

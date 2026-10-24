@@ -500,6 +500,7 @@ export interface Booking {
   paypal_transaction_id?: string | null;
   active_travelers_count?: number;
   previous_selected_seats?: number[] | null;
+  seat_reselection_reason?: 'vehicle_change' | null;
   checkin_status?: 'full' | 'partial' | null;
   cancelled_by_agency_at?: string | null;
   cancellation_refund_amount?: number | null;
