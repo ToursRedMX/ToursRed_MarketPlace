@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Lock, User, AlertCircle, Loader2, RefreshCw, X, Check, Calendar, Clock, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { SeatWithStatus, VehicleSeatLayout } from '../../types/seats';
+import SeatMapFeatures from './SeatMapFeatures';
 import { comoFilas } from '../../lib/relacionesSupabase';
 
 interface SlotSeatStatusRow {
@@ -374,6 +375,8 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
         )}
 
         <line x1={aisleX} y1={PADDING} x2={aisleX} y2={totalHeight - PADDING} stroke="#cbd5e1" strokeWidth={1} strokeDasharray="4,4" />
+
+        <SeatMapFeatures features={shape.features} colX={getColX} rowY={getRowY} seatSize={SEAT_SIZE} />
 
         {shape.hasBathroom && shape.bathroomRow !== undefined && shape.bathroomCol !== undefined && (
           <g>

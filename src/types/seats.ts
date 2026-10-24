@@ -1,4 +1,4 @@
-export type VehicleMapType = 'sprinter_20' | 'bus_50';
+export type VehicleMapType = 'sprinter_20' | 'bus_50' | 'hiace_14' | 'urvan_13' | 'bus_60_2pisos';
 
 export type SeatStatusType = 'disponible' | 'reservado' | 'bloqueado';
 
@@ -8,6 +8,16 @@ export interface SeatDefinition {
   col: number;
   side: 'left' | 'right' | 'full';
   type: 'normal' | 'driver' | 'special' | 'wc';
+}
+
+/** Pieza que no es asiento: encabezado de piso, gradas, baños o equipaje. Ocupa celdas de la rejilla. */
+export interface SeatFeature {
+  kind: 'floor' | 'stairs' | 'wc' | 'luggage';
+  label: string;
+  row: number;
+  col: number;
+  colSpan?: number;
+  rowSpan?: number;
 }
 
 export interface VehicleShape {
@@ -21,6 +31,7 @@ export interface VehicleShape {
   bathroomRow?: number;
   bathroomCol?: number;
   aspectRatio: 'tall' | 'wide';
+  features?: SeatFeature[];
 }
 
 export interface VehicleSeatLayout {

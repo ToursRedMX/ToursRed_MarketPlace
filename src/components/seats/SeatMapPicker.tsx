@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import SeatMapFeatures from './SeatMapFeatures';
 import { SeatWithStatus, VehicleShape, VehicleSeatLayout, SeatStatusType } from '../../types/seats';
 
 /** Fila de `slot_seat_status`, igual para la consulta de slot que para la global. */
@@ -90,6 +91,8 @@ const SeatGrid: React.FC<SeatGridProps> = ({ seats, shape, selected, onSeatClick
         )}
 
         <line x1={aisleX} y1={PADDING} x2={aisleX} y2={totalHeight - PADDING} stroke="#cbd5e1" strokeWidth={1} strokeDasharray="4,4" />
+
+        <SeatMapFeatures features={shape.features} colX={getColX} rowY={getRowY} seatSize={SEAT_SIZE} />
 
         {shape.hasBathroom && shape.bathroomRow !== undefined && shape.bathroomCol !== undefined && (
           <g>
