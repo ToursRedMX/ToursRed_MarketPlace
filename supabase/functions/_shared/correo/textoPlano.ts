@@ -39,7 +39,7 @@ export function htmlATexto(html: string): string {
     .replace(/<li\b[^>]*>/gi, "- ")
     .replace(/<[^>]+>/g, "");
   return decodificar(texto)
-    .replace(/[ \t ]+/g, " ")
+    .replace(/[^\S\n]+/g, " ")
     .replace(/ *\n */g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

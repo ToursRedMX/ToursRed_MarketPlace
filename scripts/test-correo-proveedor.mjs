@@ -14,6 +14,7 @@ globalThis.Deno = { env: { get: (k) => env[k] } };
 
 const { separarRemitente, enviarPorSendgrid, enviarPorSmtp2go, enviarPorZoho } = await import('../supabase/functions/_shared/correo/proveedores.ts');
 const { enviarCorreo, leerAjustesCorreo, limpiarCacheAjustesCorreo } = await import('../supabase/functions/_shared/correo/enviarCorreo.ts');
+const { htmlATexto } = await import('../supabase/functions/_shared/correo/textoPlano.ts');
 
 let casos = 0;
 const prueba = async (nombre, fn) => {
@@ -235,6 +236,7 @@ await prueba('enviarCorreo: agrega texto plano cuando falta y respeta el que man
   assert.match(t, /Hola Ana,\ntu codigo es 123456\./, 'conserva los saltos de linea');
   assert.match(t, /Ver reserva \(https:\/\/toursred\.com\/x\)/, 'conserva el destino del enlace');
   assert.doesNotMatch(t, /color:red|<|>/, 'sin CSS ni etiquetas');
+  assert.equal(htmlATexto('<p>a&nbsp;&nbsp;b  c aa 00</p><p>d</p>'), 'a b c aa 00\nd', 'junta espacios (incluidos los duros) sin tocar el resto');
   simular(OK_SMTP2GO);
   await enviarCorreo({}, { ...conHtml, texto: 'mi texto' }, ajustes());
   assert.equal(llamadas[0].cuerpo.text_body, 'mi texto', 'el texto de la funcion no se pisa');
