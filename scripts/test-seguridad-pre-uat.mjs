@@ -100,6 +100,8 @@ prueba('la CSP va en Report-Only y deja pasar lo que el sitio carga hoy', () => 
     assert.ok(csp.includes(host), `la CSP no contempla ${host}`);
   }
   assert.match(csp, /object-src 'none'/);
+  // Observado en el preview del PR #484: el sitio crea workers desde blob: y, sin worker-src, caen en script-src.
+  assert.match(csp, /worker-src 'self' blob:/);
 });
 prueba('el sitio no usa camara, microfono ni geolocalizacion (si algun dia los usa, la Permissions-Policy los bloquearia)', () => {
   const fuentes = [];

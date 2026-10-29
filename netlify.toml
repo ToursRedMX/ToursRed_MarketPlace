@@ -28,7 +28,7 @@ NODE_VERSION = "24"
     X-Frame-Options = "SAMEORIGIN"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
-    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://www.googletagmanager.com https://sdk.mercadopago.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://huzsedewwzjywcpbkjkm.supabase.co wss://huzsedewwzjywcpbkjkm.supabase.co https://www.google-analytics.com https://*.analytics.google.com https://api.mercadopago.com; frame-src https://challenges.cloudflare.com https://www.mercadopago.com.mx https://www.mercadopago.com; object-src 'none'; base-uri 'self'; form-action 'self'"
+    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://www.googletagmanager.com https://sdk.mercadopago.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://huzsedewwzjywcpbkjkm.supabase.co wss://huzsedewwzjywcpbkjkm.supabase.co https://www.google-analytics.com https://*.analytics.google.com https://api.mercadopago.com; frame-src https://challenges.cloudflare.com https://www.mercadopago.com.mx https://www.mercadopago.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'"
 
 [[edge_functions]]
 function = "sentry-tunnel"
