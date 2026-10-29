@@ -1,9 +1,83 @@
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
+import { lineasDeCancelacionPorPagoIncompleto } from "../_shared/asientoPagoIncompleto.ts";
+import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
+
+/**
+ * Deja en el libro la cancelacion por pago incompleto y trata su CFDI (FIS-06 y CAN-07 del pre-UAT, 29-oct-2026).
+ * Antes el cron reembolsaba al monedero sin asiento y sin tocar el CFDI. Detalle y reglas en _shared/asientoPagoIncompleto.ts.
+ * NUNCA lanza: la reserva ya se cancelo y el reembolso ya se acredito, y eso no se puede deshacer por un fallo contable; lo que no
+ * se pueda asentar o cancelar queda en audit_errors para revision humana.
+ */
+async function asentarCancelacionPorPagoIncompleto(
+  supabase: Pick<SupabaseClient, "from" | "rpc" | "functions">,
+  booking: { id: string; booking_code: string },
+  pagado: number,
+  reembolsado: number,
+): Promise<void> {
+  const contexto = "process-incremental-payment-deadlines/cancelacion-pago-incompleto";
+  const datos = { booking_id: booking.id, booking_code: booking.booking_code, pagado, reembolsado };
+  try {
+    // Si la reserva ya tiene su asiento, la cancelacion no es el caso que esto cubre (cobro sin asentar): no se duplica nada.
+    const { data: previos } = await supabase
+      .from("accounting_entries")
+      .select("id")
+      .eq("source_type", "booking")
+      .eq("source_id", booking.id)
+      .limit(1)
+      .returns<{ id: string }[]>();
+    if (previos && previos.length > 0) {
+      await registrarFallo(contexto, "La reserva ya tiene asiento de reserva: la cancelacion no se asienta sola, revisar a mano", datos);
+    } else {
+      const { data: pagos, error: pagosErr } = await supabase
+        .from("payment_transactions")
+        .select("amount")
+        .eq("booking_id", booking.id)
+        .eq("status", "succeeded")
+        .returns<{ amount: number | string }[]>();
+      if (pagosErr) throw pagosErr;
+      const porPasarela = (pagos ?? []).reduce((suma, p) => suma + Number(p.amount || 0), 0);
+
+      const resultado = lineasDeCancelacionPorPagoIncompleto(pagado, porPasarela, reembolsado);
+      if (!resultado.ok) {
+        await registrarFallo(contexto, `La cancelacion no se asienta sola (${resultado.motivo}): revisar a mano`, { ...datos, porPasarela });
+      } else {
+        const { error: accErr } = await supabase.rpc("create_accounting_entry_atomic", {
+          p_entry_type: reembolsado > 0 ? "egreso" : "diario",
+          p_description: `Cancelacion por pago incompleto ${booking.booking_code}`,
+          p_source_type: "cancellation",
+          p_source_id: booking.id,
+          p_entry_date: new Date().toISOString().split("T")[0],
+          p_lines: resultado.lineas,
+        });
+        if (accErr) await registrarFallo(contexto, accErr.message, datos);
+      }
+    }
+  } catch (e) {
+    await registrarFallo(contexto, e, datos);
+  }
+
+  // CFDI vigentes de la reserva: lo normal es que no haya ninguno (un pago por debajo del anticipo no se timbra), pero si lo hay se
+  // cancela igual que en el resto de las cancelaciones. Es independiente del asiento: un fallo de uno no frena al otro.
+  try {
+    const { data: vigentes } = await supabase
+      .from("cfdi_invoices")
+      .select("id")
+      .eq("booking_id", booking.id)
+      .eq("status", "stamped")
+      .returns<{ id: string }[]>();
+    for (const cfdi of vigentes ?? []) {
+      const respuesta = await supabase.functions.invoke("cancel-cfdi", { body: { cfdi_invoice_id: cfdi.id, motivo: "03" } });
+      await vigilarResultado(respuesta, `${contexto}/cancel-cfdi`, { ...datos, cfdi_invoice_id: cfdi.id });
+    }
+  } catch (e) {
+    await registrarFallo(`${contexto}/cancel-cfdi`, e, datos);
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -214,6 +288,9 @@ Deno.serve(async (req: Request) => {
             });
             if (refundErr) throw refundErr;
           }
+
+          // Libro y CFDI de la cancelacion (antes no dejaba nada): si falla, la reserva ya esta cancelada y reembolsada.
+          await asentarCancelacionPorPagoIncompleto(supabase, { id: booking.id, booking_code: booking.booking_code }, paidAmount, refundAmount);
 
           if (userData?.email) {
             await fetch(`${supabaseUrl}/functions/v1/send-cancellation-notification-traveler`, {
