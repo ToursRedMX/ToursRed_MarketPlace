@@ -215,10 +215,39 @@ await prueba('enviarCorreo: si Zoho acepta con 201 NO se manda otra copia por el
 await prueba('enviarCorreo: remitente por defecto, el de la funcion y el de la base', async () => {
   simular(OK_SMTP2GO);
   await enviarCorreo({}, correo, ajustes({ contact_email: null }));
-  assert.equal(llamadas[0].cuerpo.sender, 'contacto@toursred.com');
+  assert.equal(llamadas[0].cuerpo.sender, 'ToursRed <contacto@toursred.com>');
   simular(OK_SMTP2GO);
   await enviarCorreo({}, { ...correo, remitente: 'soporte@toursred.com.mx' }, ajustes());
-  assert.equal(llamadas[0].cuerpo.sender, 'soporte@toursred.com.mx');
+  assert.equal(llamadas[0].cuerpo.sender, 'ToursRed <soporte@toursred.com.mx>');
+  simular(OK_SMTP2GO);
+  await enviarCorreo({}, { ...correo, remitente: 'Soporte ToursRed <soporte@toursred.com>' }, ajustes());
+  assert.equal(llamadas[0].cuerpo.sender, 'Soporte ToursRed <soporte@toursred.com>', 'un nombre que la funcion ya puso se respeta');
+});
+
+// NOT-02 (28-oct-2026): los correos salian solo-HTML y con el remitente a secas, y los de cancelacion cayeron en
+// cuarentena de Defender. Ahora todo correo lleva texto plano y nombre visible, en los tres proveedores.
+await prueba('enviarCorreo: agrega texto plano cuando falta y respeta el que mandan', async () => {
+  const conHtml = { ...correo, html: '<style>p{color:red}</style><h1>Reserva &amp; pago</h1><p>Hola <b>Ana</b>,<br>tu codigo es 123456.</p><p><a href="https://toursred.com/x">Ver reserva</a></p>' };
+  simular(OK_SMTP2GO);
+  await enviarCorreo({}, conHtml, ajustes());
+  const t = llamadas[0].cuerpo.text_body;
+  assert.match(t, /Reserva & pago/, 'decodifica entidades');
+  assert.match(t, /Hola Ana,\ntu codigo es 123456\./, 'conserva los saltos de linea');
+  assert.match(t, /Ver reserva \(https:\/\/toursred\.com\/x\)/, 'conserva el destino del enlace');
+  assert.doesNotMatch(t, /color:red|<|>/, 'sin CSS ni etiquetas');
+  simular(OK_SMTP2GO);
+  await enviarCorreo({}, { ...conHtml, texto: 'mi texto' }, ajustes());
+  assert.equal(llamadas[0].cuerpo.text_body, 'mi texto', 'el texto de la funcion no se pisa');
+  // Los tres proveedores lo reciben
+  env.SENDGRID_API_KEY = 'SG.env'; env.ZOHO_EMAIL_API_KEY = 'zk';
+  simular(OK_SENDGRID);
+  await enviarCorreo({}, conHtml, ajustes({ email_provider: 'sendgrid' }));
+  assert.equal(llamadas[0].cuerpo.content[0].type, 'text/plain', 'SendGrid: text/plain primero');
+  assert.deepEqual(llamadas[0].cuerpo.from, { email: 'contacto@toursred.com', name: 'ToursRed' });
+  simular(OK_ZOHO);
+  await enviarCorreo({}, conHtml, ajustes({ email_provider: 'zoho' }));
+  assert.match(llamadas[0].cuerpo.textbody, /tu codigo es 123456/, 'Zoho: textbody');
+  assert.deepEqual(llamadas[0].cuerpo.from, { address: 'contacto@toursred.com', name: 'ToursRed' });
 });
 
 await prueba('enviarCorreo: respaldo solo si el principal NO lo acepto con certeza', async () => {

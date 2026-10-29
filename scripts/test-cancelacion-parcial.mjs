@@ -27,7 +27,7 @@ const js = ts.transpileModule(readFileSync('supabase/functions/_shared/politicaC
 }).outputText;
 const contexto = { exports: {}, Date };
 vm.runInNewContext(js, contexto);
-const { politicaDelTour, salidaDelTour } = contexto.exports;
+const { politicaDelTour, salidaDelTour, zonaDelTour, instanteLocal } = contexto.exports;
 
 // ── 1. La politica del tour ────────────────────────────────────────────────
 const porDefecto = {};
@@ -63,11 +63,49 @@ s = salidaDelTour({ tour_type: 'receptivo' }, {}, ahora);
 assert.equal(s.fechaParaRegistro, '2026-09-26', 'receptivo sin nada: manana');
 assert.equal(salidaDelTour({ tour_type: 'grupal' }, {}, ahora), null, 'grupal sin fecha: null');
 
+// ── 2b. La salida se lee en la hora LOCAL del tour, no en UTC (CAN-11) ──────
+// Antes: new Date('2026-10-10T08:00:00') en el servidor (UTC) = 08:00 UTC, seis
+// horas despues de las 08:00 de Ciudad de Mexico, y los bordes salian corridos.
+const enZona = (zona) => [{ destinations: { time_zone: zona } }];
+const cdmx = { tour_type: 'receptivo', tour_destinations: enZona('America/Mexico_City') };
+const mazatlan = { tour_type: 'receptivo', tour_destinations: enZona('America/Mazatlan') };
+const reservaDelDia10 = { selected_date: '2026-10-10', selected_time: '08:00:00' };
+assert.equal(salidaDelTour(cdmx, reservaDelDia10, ahora).salida.toISOString(), '2026-10-10T14:00:00.000Z', '08:00 en CDMX son las 14:00 UTC');
+assert.equal(salidaDelTour(mazatlan, reservaDelDia10, ahora).salida.toISOString(), '2026-10-10T15:00:00.000Z', '08:00 en Mazatlan son las 15:00 UTC');
+assert.equal(
+  salidaDelTour({ tour_type: 'grupal', start_date: '2026-11-01', tour_destinations: enZona('America/Mexico_City') }, {}, ahora).salida.toISOString(),
+  '2026-11-01T06:00:00.000Z', 'start_date es una fecha sin hora: las 00:00 locales',
+);
+assert.equal(zonaDelTour({}), 'America/Mexico_City', 'sin destinos: Ciudad de Mexico');
+assert.equal(zonaDelTour({ tour_destinations: [...enZona('America/Mexico_City'), ...enZona('America/Mazatlan')] }), 'America/Mexico_City',
+  'destinos en zonas distintas: Ciudad de Mexico (igual que el SMS)');
+assert.equal(zonaDelTour({ tour_destinations: enZona('No/Existe') }), 'America/Mexico_City', 'zona invalida: Ciudad de Mexico');
+assert.equal(instanteLocal('2026-10-10', '08:00', 'America/Mexico_City').toISOString(), '2026-10-10T14:00:00.000Z', 'HH:MM sin segundos');
+
+// Los bordes de 48 h y 24 h contados desde la salida local de las 08:00 del dia 10.
+const salida = salidaDelTour(cdmx, reservaDelDia10, ahora).salida.getTime();
+const horasDesde = (iso) => (salida - new Date(iso).getTime()) / 3600000;
+const bordes = [
+  // [momento de la cancelacion (UTC), tipo, pct, nota]
+  ['2026-10-08T13:59:00Z', '100_percent', 1, '48 h 01 min antes: 100%'],
+  ['2026-10-08T14:00:00Z', '100_percent', 1, 'justo 48 h antes: 100%'],
+  ['2026-10-08T14:01:00Z', '50_percent', 0.5, '47 h 59 min antes: 50%'],
+  ['2026-10-09T13:59:00Z', '50_percent', 0.5, '24 h 01 min antes: 50%'],
+  ['2026-10-09T14:01:00Z', 'no_refund', 0, '23 h 59 min antes: nada'],
+];
+for (const [momento, tipo, pct, nota] of bordes) {
+  const r = politicaDelTour({}, horasDesde(momento));
+  assert.equal(r.policyType, tipo, `${nota}: tipo`);
+  assert.equal(r.refundPct, pct, `${nota}: porcentaje`);
+}
+
 // ── 3. Los llamadores usan las piezas compartidas ──────────────────────────
 const sinComentarios = (f) => readFileSync(f, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
 const parcial = sinComentarios('supabase/functions/process-partial-cancellation/index.ts');
 const total = sinComentarios('supabase/functions/process-traveler-cancellation/index.ts');
 
+assert.match(parcial, /tour_destinations\s*\(\s*destinations\s*\(\s*time_zone\s*\)\s*\)/, 'la parcial pide la zona horaria del tour');
+assert.match(total, /tour_destinations\(destinations\(time_zone\)\)/, 'la total pide la zona horaria del tour');
 assert.match(parcial, /politicaDelTour\(/, 'la parcial usa la politica del tour');
 assert.match(total, /politicaDelTour\(/, 'la total usa la politica del tour');
 assert.doesNotMatch(parcial, /daysBeforeTour\s*>=\s*(15|7)/, 'la parcial ya no usa dias fijos');
