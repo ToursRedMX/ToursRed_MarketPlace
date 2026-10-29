@@ -5,6 +5,7 @@ import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/context
 import { politicaDelTour, salidaDelTour, type TourConPolitica } from "../_shared/politicaCancelacion.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enforceReauth } from "../_shared/reauth.ts";
+import { registrarFallo } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -348,16 +349,24 @@ Deno.serve(async (req: Request) => {
 
     if (insertError) return err("Error registrando cancelación parcial: " + insertError.message);
 
-    // 3. Accounting entry when there's a retention (50% or no_refund)
-    if (policy.policyType === "50_percent" || policy.policyType === "no_refund") {
-      supabase
-        .rpc("create_accounting_entry_for_cancellation", {
+    // 3. Accounting entry for EVERY policy except pending_approval (no confirmed payment to account), awaited.
+    // Antes solo se asentaba con retencion (50% o sin reembolso) y sin await: una cancelacion parcial al 100% nunca llegaba al libro
+    // (3 reembolsos, 6,019.52, medidos en el pre-UAT del 29-oct, FIS-06) y la promesa sin await puede no ejecutarse antes de responder
+    // (mismo criterio que process-traveler-cancellation). Si la poliza falla la cancelacion ya se hizo: queda en audit_errors.
+    // OJO: se mira `tipoPolitica` (la politica original) y no `policy.policyType`: mas arriba una reserva pendiente de aprobacion se guarda
+    // como "100_percent" y no tiene pago confirmado, asi que NO debe asentarse.
+    if (tipoPolitica !== "pending_approval") {
+      try {
+        const { error: accErr } = await supabase.rpc("create_accounting_entry_for_cancellation", {
           p_cancellation_id: partialCancellation.id,
           p_cancellation_type: "partial",
-        })
-        .then(({ error: accErr }) => {
-          if (accErr) console.error("Error generando póliza contable de cancelación parcial:", accErr);
         });
+        if (accErr) {
+          await registrarFallo("process-partial-cancellation/poliza", accErr.message, { cancellation_id: partialCancellation.id, booking_id: bookingId });
+        }
+      } catch (e) {
+        await registrarFallo("process-partial-cancellation/poliza", e, { cancellation_id: partialCancellation.id, booking_id: bookingId });
+      }
     }
 
     // 4. Deduct points
