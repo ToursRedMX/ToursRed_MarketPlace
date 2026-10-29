@@ -90,8 +90,10 @@ prueba('netlify.toml define las cuatro cabeceras de seguridad para todas las rut
   assert.match(bloque, /X-Content-Type-Options = "nosniff"/);
   assert.match(bloque, /X-Frame-Options = "SAMEORIGIN"/);
   assert.match(bloque, /Referrer-Policy = "strict-origin-when-cross-origin"/);
-  // camera/microphone en (self), no en (): la barra de Netlify de los previews los sondea y con () el smoke falla (PR #484).
-  assert.match(bloque, /Permissions-Policy = "camera=\(self\), microphone=\(self\), geolocation=\(\), payment=\(\)"/);
+  assert.match(bloque, /Permissions-Policy = "geolocation=\(\), payment=\(\)"/);
+  // Ni camera ni microphone, con ningun valor: la barra de Netlify de los previews los sondea y el smoke tumba el PR (#484, probado con
+  // () y con (self)).
+  assert.doesNotMatch(bloque, /Permissions-Policy = "[^"]*\b(camera|microphone)\b/, 'camera/microphone en la Permissions-Policy tumban el smoke de los previews');
 });
 prueba('la CSP va en Report-Only y deja pasar lo que el sitio carga hoy', () => {
   assert.match(bloque, /Content-Security-Policy-Report-Only = "/);
