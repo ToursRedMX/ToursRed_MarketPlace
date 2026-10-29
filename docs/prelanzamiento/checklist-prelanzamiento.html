@@ -1,0 +1,462 @@
+<title>Checklist de prelanzamiento</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Tablero de trabajo: resumen y avance arriba, filtros fijos, casos agrupados por módulo y expandibles. */
+:root{
+  --bg:#f4f5f7; --surface:#ffffff; --surface2:#eceef2; --line:#d9dce3; --fg:#14171f; --muted:#5b6272;
+  --brand:#c8102e; --ink:#14171f; --on-ink:#ffffff;
+  --st-pend:#8b92a3; --st-run:#2f6bdc; --st-ok:#1f8a4c; --st-fail:#c4321f; --st-block:#b9770e;
+  --st-pend-bg:#eceef2; --st-run-bg:#e3ecfc; --st-ok-bg:#dff3e7; --st-fail-bg:#fbe3df; --st-block-bg:#f9ecd2;
+  --f-sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101216; --surface:#181b21; --surface2:#21252d; --line:#2c313b; --fg:#e8eaf0; --muted:#9aa1b0;
+  --brand:#ff4d63; --ink:#e8eaf0; --on-ink:#101216;
+  --st-pend:#8b92a3; --st-run:#6c9bff; --st-ok:#45c27a; --st-fail:#ff7a68; --st-block:#e5a73c;
+  --st-pend-bg:#262a33; --st-run-bg:#1c2a46; --st-ok-bg:#16301f; --st-fail-bg:#3a1c18; --st-block-bg:#3a2d12;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101216; --surface:#181b21; --surface2:#21252d; --line:#2c313b; --fg:#e8eaf0; --muted:#9aa1b0;
+  --brand:#ff4d63; --ink:#e8eaf0; --on-ink:#101216;
+  --st-pend:#8b92a3; --st-run:#6c9bff; --st-ok:#45c27a; --st-fail:#ff7a68; --st-block:#e5a73c;
+  --st-pend-bg:#262a33; --st-run-bg:#1c2a46; --st-ok-bg:#16301f; --st-fail-bg:#3a1c18; --st-block-bg:#3a2d12;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-sans);font-size:14px;line-height:1.45;
+  padding-block:20px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+header{display:flex;flex-direction:column;gap:6px}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.brand i{width:10px;height:10px;background:var(--brand);border-radius:2px;display:inline-block}
+h1{margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);max-width:68ch;margin:0}
+.bar{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--st-pend-bg);gap:1px}
+.bar span{display:block;height:100%;min-width:0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted)}
+.legend b{font-family:var(--f-mono);font-weight:500;color:var(--fg);font-variant-numeric:tabular-nums}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:baseline}
+.prog{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.prog .top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.pct{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.owners{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.own{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.own[aria-pressed="true"]{border-color:var(--fg);box-shadow:inset 0 0 0 1px var(--fg)}
+.own .n{font-family:var(--f-mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.own .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.own .d{font-size:12px;color:var(--muted)}
+.own .mini{height:4px;background:var(--st-pend-bg);border-radius:2px;overflow:hidden;margin-top:4px}
+.own .mini span{display:block;height:100%;background:var(--st-ok)}
+.filters{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid var(--line)}
+.filters input[type=search]{flex:1 1 200px;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:7px 10px}
+.filters select{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:7px 8px;min-width:0;max-width:100%}
+.filters label.chk{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.count{font-size:12px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.group+.group{margin-top:0}
+.gh{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;padding:12px 16px;cursor:pointer;text-align:left}
+.gh h2{margin:0;font-size:15px;font-weight:600;flex:1;min-width:0}
+.gh .gc{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.gh .gm{width:70px;height:4px;background:var(--st-pend-bg);border-radius:2px;overflow:hidden;flex:none}
+.gh .gm span{display:block;height:100%;background:var(--st-ok)}
+.gh .car{width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s;flex:none}
+.group[data-open="1"] .car{transform:rotate(45deg)}
+.cases{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.group[data-open="0"] .cases{display:none}
+.case{border-bottom:1px solid var(--line)}
+.case:last-child{border-bottom:0}
+.row{display:grid;grid-template-columns:70px minmax(0,1fr) auto auto;gap:6px 12px;align-items:center;padding:9px 16px;cursor:pointer}
+.row:hover{background:var(--surface2)}
+.id{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.ttl{min-width:0;overflow-wrap:anywhere}
+.ttl small{display:block;color:var(--muted);font-size:12px}
+.chips{display:flex;gap:6px;align-items:center}
+.chip{font-family:var(--f-mono);font-size:11px;padding:1px 7px;border-radius:3px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.chip.p0{border-color:var(--brand);color:var(--brand)}
+.chip.own-Claude{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+.chip.own-Axel{border-color:var(--fg);color:var(--fg)}
+.chip.own-Ambos{border-style:dashed;border-color:var(--fg);color:var(--fg)}
+select.st{border:1px solid var(--line);border-radius:4px;padding:4px 6px;font-size:12px;font-weight:500;cursor:pointer;min-width:104px}
+[data-st="pendiente"] select.st{background:var(--st-pend-bg);color:var(--muted)}
+[data-st="en curso"] select.st{background:var(--st-run-bg);color:var(--st-run);border-color:var(--st-run)}
+[data-st="pasó"] select.st{background:var(--st-ok-bg);color:var(--st-ok);border-color:var(--st-ok)}
+[data-st="falló"] select.st{background:var(--st-fail-bg);color:var(--st-fail);border-color:var(--st-fail)}
+[data-st="bloqueado"] select.st{background:var(--st-block-bg);color:var(--st-block);border-color:var(--st-block)}
+.det{display:none;padding:4px 16px 16px 16px;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 24px;background:var(--surface2)}
+.case[data-open="1"] .det{display:grid}
+.det h3{margin:0 0 2px;font-family:var(--f-mono);font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.det p{margin:0;max-width:62ch}
+.det .full{grid-column:1/-1}
+.det textarea{width:100%;min-height:62px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:8px;resize:vertical}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px;color:var(--muted)}
+.ctl select{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
+.meta{margin-left:auto}
+.foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{background:var(--ink);color:var(--on-ink);border:0;border-radius:5px;padding:8px 14px;cursor:pointer;font-weight:500}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.note{font-size:12px;color:var(--muted);max-width:70ch}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--on-ink);padding:9px 14px;border-radius:5px;font-size:13px;max-width:90vw;z-index:20}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+@media (max-width:640px){
+  h1{font-size:22px}
+  .row{grid-template-columns:62px minmax(0,1fr);}
+  .row .chips,.row select.st{grid-column:2}
+  .det{grid-template-columns:minmax(0,1fr)}
+  .gh .gm{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<style>
+[data-st="listo"] select.st{background:var(--st-ok-bg);color:var(--st-ok);border-color:var(--st-ok)}
+[data-st="no aplica"] select.st{background:var(--st-pend-bg);color:var(--muted)}
+[data-st="no aplica"] .ttl{color:var(--muted);text-decoration:line-through}
+.chip.own-Terceros{border-style:dotted;border-color:var(--fg);color:var(--fg)}
+.filters select{max-width:48%}
+.add{background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.add summary{cursor:pointer;padding:12px 16px;font-weight:600;font-size:15px}
+.add form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px;padding:4px 16px 16px;border-top:1px solid var(--line)}
+.add label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+.add input,.add select,.add textarea{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:7px 9px;min-width:0;width:100%}
+.add .wide{grid-column:1/-1}
+.add textarea{min-height:54px;resize:vertical}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><i></i>ToursRed · Lanzamiento</div>
+    <h1>Checklist de prelanzamiento</h1>
+    <p class="sub">Todo lo que hay que configurar, contratar o revisar antes de abrir ToursRed al público. No es parte de la UAT: aquí van las llaves de producción, las aplicaciones de acceso, lo fiscal, lo legal y las pruebas con dinero real. Lanzamiento objetivo: 23 de noviembre de 2026. Se pueden agregar puntos al final de la página.</p>
+  </header>
+
+  <section class="prog" aria-label="Avance general">
+    <div class="top"><span class="pct" id="pct">0%</span><span class="note" id="pctnote"></span></div>
+    <div class="bar" id="bar" role="img" aria-label="Distribución de estados"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section class="owners" id="owners" aria-label="Reparto por responsable"></section>
+
+  <div class="filters">
+    <input type="search" id="q" placeholder="Buscar por id, título o palabra" aria-label="Buscar">
+    <select id="fcat" aria-label="Categoría"></select>
+    <select id="fst" aria-label="Estado"></select>
+    <select id="fpri" aria-label="Prioridad"><option value="">Toda prioridad</option><option>P0</option><option>P1</option><option>P2</option></select>
+    <select id="fw" aria-label="Cuándo"></select>
+    <label class="chk"><input type="checkbox" id="fhide"> Ocultar listos</label>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div id="groups"></div>
+
+  <details class="add" id="addbox">
+    <summary>Agregar un punto a la lista</summary>
+    <form id="addform">
+      <label class="wide">Título<input id="nt" type="text" maxlength="120" placeholder="Qué hay que hacer, en pocas palabras" required></label>
+      <label>Categoría<select id="nc"></select></label>
+      <label>Responsable<select id="no"></select></label>
+      <label>Prioridad<select id="np"><option>P0</option><option selected>P1</option><option>P2</option></select></label>
+      <label>Cuándo<select id="nw"></select></label>
+      <label class="wide">Qué hay que hacer<textarea id="nh" maxlength="600"></textarea></label>
+      <label class="wide">Listo cuando<textarea id="nl" maxlength="300"></textarea></label>
+      <div class="wide"><button class="btn" type="submit" id="nadd">Agregar punto</button></div>
+    </form>
+  </details>
+
+  <div class="foot">
+    <button class="btn" id="csv" hidden>Exportar CSV</button>
+    <button class="btn ghost" id="copy">Copiar resumen</button>
+  </div>
+  <p class="note"><b>Claude</b>: lo hago yo con la base, la API, el navegador y el código. <b>Axel</b>: solo tú, por cuentas, contratos o decisiones que son tuyas. <b>Ambos</b>: tú haces la acción o la configuración y yo la verifico. <b>Terceros</b>: contador, abogado o un proveedor. P0 bloquea el lanzamiento, P1 es importante, P2 es menor. Los puntos marcados como no aplica no cuentan en el avance.</p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const CATS={INF:"Infraestructura y dominio",PAG:"Procesadores de pago",OAU:"Acceso e identidad",COM:"Correo y mensajería",FIS:"Fiscal y contable",SEG:"Seguridad y cumplimiento",DAT:"Datos y contenido",OPE:"Operación y soporte",LEG:"Legal y negocio",PRU:"Pruebas con dinero real",LAN:"Día del lanzamiento"};
+const ST=["pendiente","en curso","listo","bloqueado","no aplica"];
+const STC={"pendiente":"--st-pend","en curso":"--st-run","listo":"--st-ok","bloqueado":"--st-block","no aplica":"--st-pend"};
+const OWN=["Claude","Axel","Ambos","Terceros"];
+const W={par:"En paralelo a la UAT",des:"Después de la UAT",dia:"Día del lanzamiento"};
+// [id, título, qué hay que hacer, listo cuando, responsable, prioridad, cuándo]
+const B=[
+["INF-01","Dominio de producción y HTTPS","Apuntar toursred.com y toursred.com.mx al sitio de producción y verificar el certificado.","El sitio abre en el dominio final con HTTPS válido y las dos variantes redirigen bien.","Axel","P0","par"],
+["INF-02","Ambiente de producción separado","Decidir si se promueve el proyecto actual o se crea uno nuevo de Supabase y de Netlify para producción, y dejar staging como staging.","Producción y staging no comparten llaves ni datos.","Axel","P0","par"],
+["INF-03","Variables del sitio en producción","Cargar en Netlify VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, VITE_APP_URL, VITE_SENTRY_DSN y VITE_GA_MEASUREMENT_ID de producción.","El sitio de producción apunta solo a recursos de producción.","Ambos","P0","des"],
+["INF-04","URL de la plataforma en producción","Cambiar platform_url, SITE_URL y APP_URL (hoy staging) a toursred.com.","Ningún enlace de correo, SMS ni redirección abre staging.","Ambos","P0","des"],
+["INF-05","Respaldos y restauración","Activar respaldos diarios y PITR en Supabase y probar una restauración en un proyecto aparte.","Una restauración de prueba termina bien y se documenta cuánto tardó.","Ambos","P0","par"],
+["INF-06","Migraciones alineadas","Aplicar las migraciones al proyecto de producción con la versión de cada archivo y comprobar el ledger.","0 migraciones desalineadas entre el repo y el ledger.","Claude","P0","des"],
+["INF-07","Edge Functions en producción","Desplegar todas las funciones, cruzar verify_jwt contra la API (los webhooks en false) y mandar OPTIONS a cada una.","Todas con la versión esperada, verify_jwt correcto y OPTIONS en 2xx.","Claude","P0","des"],
+["INF-08","Tareas programadas activas","Confirmar en producción los cron de recordatorios, vencimientos de pago, liberación de puntos apartados, cierre mensual de mensajería y aviso de cobro.","Cada cron aparece activo y su última ejecución es reciente.","Claude","P0","des"],
+["INF-09","Configuración de Auth de Supabase","Site URL y Redirect URLs de producción, MFA habilitado, pedir la contraseña actual al cambiarla y protección contra contraseñas filtradas.","La configuración de producción coincide con la de staging salvo las URLs.","Ambos","P0","des"],
+["INF-10","Almacenamiento privado","Revisar políticas y límites de los buckets: los documentos de agencias y los adjuntos de WhatsApp no deben ser públicos.","Ningún archivo sensible se abre sin sesión.","Claude","P1","par"],
+["INF-11","Monitoreo y alertas","Sentry con entorno production (front y backend), alertas a un buzón o canal que alguien lea y alertas de salud de proveedores.","Un error de prueba llega a quien corresponde en menos de 5 minutos.","Ambos","P1","des"],
+["INF-12","Cabeceras de seguridad y redirecciones","Revisar CSP y cabeceras de netlify.toml con el dominio final.","Las cabeceras de seguridad están presentes en producción.","Claude","P1","des"],
+["INF-13","Analítica y cookies","Usar el ID de GA4 de producción y confirmar que el banner bloquea lo no esencial hasta aceptar.","Sin aceptar, no se envía analítica.","Axel","P2","par"],
+["INF-14","Carga básica","Probar catálogo, detalle y reserva con varios usuarios a la vez.","Sin errores ni tiempos fuera de lo razonable.","Claude","P2","par"],
+
+["PAG-01","Stripe: cuenta live activada","Completar la verificación de la cuenta live (acct_1Roc3UEakEqayEr8), la cuenta bancaria de depósito y el descriptor del cargo.","La cuenta live puede cobrar y depositar.","Axel","P0","par"],
+["PAG-02","Stripe: llave y webhook live","Cargar STRIPE_SECRET_KEY live, crear el endpoint del webhook en live con los mismos eventos que staging y cargar STRIPE_WEBHOOK_SECRET.","Un evento real llega con firma válida y recibe 2xx.","Ambos","P0","des"],
+["PAG-03","Stripe: precios live de Plus y notificaciones","Crear los precios live (price_...) y cargarlos en la membresía y en Configuración, en Cobro de notificaciones.","Cada suscripción live crea el cobro correcto.","Ambos","P0","des"],
+["PAG-04","PayPal: aplicación live","Crear la app live, cargar PAYPAL_CLIENT_ID y PAYPAL_CLIENT_SECRET, poner PAYPAL_SANDBOX en false y registrar el webhook con PAYPAL_WEBHOOK_ID.","Una captura real llega al webhook y se concilia.","Ambos","P0","des"],
+["PAG-05","MercadoPago: credenciales de producción","Cargar MERCADOPAGO_ACCESS_TOKEN y MERCADOPAGO_PUBLIC_KEY de producción, el webhook y MERCADOPAGO_WEBHOOK_SECRET.","Un pago real llega firmado y se concilia.","Ambos","P0","des"],
+["PAG-06","MercadoPago: medición de calidad","Hacer el pago productivo que pide el panel y pasar la evaluación de calidad de la integración.","La evaluación de calidad aparece aprobada.","Axel","P1","des"],
+["PAG-07","Conekta: llaves de producción","Cargar CONEKTA_PRIVATE_KEY, CONEKTA_API_BASE y CONEKTA_WEBHOOK_SIGNING_KEY de producción y registrar el webhook.","Un pago real llega firmado y trae la comisión del evento.","Ambos","P0","des"],
+["PAG-08","OpenPay: producción y SPEI","Poner OPENPAY_ENV en production con el merchant y la llave productivos, registrar el webhook y habilitar SPEI.","Un SPEI real acredita el monedero y se concilia.","Ambos","P0","des"],
+["PAG-09","Ninguna llave de prueba en producción","Buscar llaves sk_test, URLs sandbox y banderas de prueba en los secretos y en platform_settings de producción.","Ningún secreto ni URL de prueba queda activo.","Claude","P0","des"],
+["PAG-10","Tarifas contratadas de cada procesador","Confirmar la tarifa real de cada procesador y cargarla donde se estima la comisión. La de Stripe (4.176% más 3.48) ya cuadra.","La comisión estimada coincide con la real al centavo.","Ambos","P1","des"],
+["PAG-11","Cuentas de depósito y pago a agencias","Definir la cuenta bancaria de ToursRed por procesador y cómo se paga a las agencias: calendario y datos bancarios.","Una liquidación de prueba sale a una cuenta real.","Axel","P0","par"],
+["PAG-12","Contracargos y disputas","Definir quién atiende un contracargo, con qué evidencia y en qué plazo.","Procedimiento escrito y responsable asignado.","Axel","P1","par"],
+
+["OAU-01","Google: aplicación publicada","Pasar la app OAuth de prueba a producción, revisar la pantalla de consentimiento, los dominios autorizados y las URIs de redirección de producción.","Cualquier cuenta de Google puede entrar, no solo las de prueba.","Axel","P0","par"],
+["OAU-02","Microsoft (Azure): aplicación lista","Registrar las URIs de redirección de producción, publicar la app y anotar cuándo vence su secreto.","El login con Microsoft funciona con cualquier cuenta permitida.","Axel","P1","par"],
+["OAU-03","Facebook: aplicación en modo Live","Pasar la app a Live, completar la política de privacidad, la URL de borrado de datos y los permisos.","Entra una persona que no es administradora de la app.","Axel","P1","par"],
+["OAU-04","X: aplicación y nivel de acceso","Confirmar el nivel de acceso y las URLs de callback de producción.","El login con X funciona en producción.","Axel","P2","par"],
+["OAU-05","LinkedIn: producto aprobado","Aprobar el producto de inicio de sesión y registrar las URIs de redirección de producción.","El login con LinkedIn funciona en producción.","Axel","P2","par"],
+["OAU-06","Qué proveedores se ofrecen al lanzar","Decidir cuáles se muestran y ocultar los que no estén listos.","Cada botón visible funciona.","Axel","P1","par"],
+["OAU-07","Auth de Supabase con credenciales de producción","Cargar en Supabase las credenciales de producción de cada proveedor y probar el alta y el login con cada uno.","El alta como viajero y como agencia funciona con cada proveedor visible.","Ambos","P0","des"],
+["OAU-08","Caducidad de secretos","Poner en el calendario el vencimiento de los secretos de OAuth que caducan.","Cada secreto tiene su fecha de renovación en el calendario.","Axel","P2","par"],
+["OAU-09","Turnstile en producción","Registrar el sitio de producción en Turnstile y cargar TURNSTILE_SECRET_KEY.","Los formularios públicos validan el captcha en el dominio final.","Ambos","P0","des"],
+
+["COM-01","Proveedores de correo de producción","Elegir proveedor principal y de respaldo en Configuración y cargar sus llaves (SENDGRID_API_KEY, ZOHO_EMAIL_API_KEY o SMTP2GO).","Un correo sale por el principal y, si se apaga, por el respaldo.","Ambos","P0","des"],
+["COM-02","SPF, DKIM y DMARC del dominio final","Dejar en pass SPF, DKIM y DMARC de toursred.com y toursred.com.mx en cada proveedor y endurecer la política DMARC.","Los tres en pass en los encabezados de un correo real.","Axel","P0","par"],
+["COM-03","Buzones operativos","Crear contacto@, soporte@ y no-reply@ y definir quién atiende cada uno.","Un correo a cada buzón lo lee una persona asignada.","Axel","P0","par"],
+["COM-04","Webhooks de eventos de correo","Rotar ZOHO_WEBHOOK_TOKEN y revisar SMTP2GO_WEBHOOK_TOKEN y SENDGRID_WEBHOOK_PUBLIC_KEY apuntando a producción.","Los rebotes y las aperturas llegan a la bitácora de eventos.","Ambos","P1","des"],
+["COM-05","Entregabilidad con el dominio final","Probar correos reales a Gmail, Outlook (Defender) y otros, incluidos los de cancelación.","Llegan a la bandeja de entrada y no a cuarentena.","Ambos","P0","des"],
+["COM-06","Plantillas de correo","Revisar textos, logos alojados en un dominio propio, enlaces al dominio final y pie con baja.","Ninguna plantilla apunta a staging ni a un logo de supabase.co.","Ambos","P1","des"],
+["COM-07","Twilio de producción","Cuenta de producción, remitente de SMS y número de WhatsApp Business verificados, y plantillas de WhatsApp aprobadas.","Un OTP real llega por SMS y por WhatsApp.","Axel","P0","par"],
+["COM-08","Respaldo de SMS","Dejar LabsMobile con saldo y credenciales de producción como alterno.","El envío pasa a LabsMobile cuando Twilio falla.","Ambos","P1","des"],
+["COM-09","Costos reales de mensajería","Cargar en tarifas_mensajeria los costos reales de Twilio, LabsMobile y de cada proveedor de correo.","El primer cierre mensual deja un gasto correcto en la cuenta 607.","Ambos","P1","par"],
+["COM-10","Topes de gasto en mensajería","Configurar alertas de gasto y límites en Twilio para que un abuso de OTP no genere una factura enorme.","Hay alerta y límite activos.","Axel","P1","par"],
+["COM-11","WhatsApp entrante","Apuntar el webhook de entrada a producción y confirmar el aviso por correo a soporte.","Un mensaje entrante aparece en la bandeja y avisa por correo.","Ambos","P1","des"],
+["COM-12","Correos de autenticación de Supabase","Revisar remitente, textos y enlaces de los correos que envía Supabase Auth, si alguno sigue activo.","Ninguno sale con el remitente o el dominio por defecto.","Ambos","P1","par"],
+
+["FIS-01","Facturapi en modo live","Organización con RFC real, CSD vigente, series y folios, y llave live.","Un CFDI real se timbra ante el SAT.","Axel","P0","par"],
+["FIS-02","Datos fiscales del emisor","Razón social, RFC, régimen y código postal de ToursRed en la configuración.","El CFDI sale con el emisor correcto.","Axel","P0","par"],
+["FIS-03","Webhook de Facturapi","Registrar el webhook productivo con FACTURAPI_WEBHOOK_TOKEN y probar reintentos y cancelación.","Un cambio de estado en Facturapi actualiza el CFDI en la base.","Ambos","P0","des"],
+["FIS-04","Revisión de cuentas con el contador","Revisar el catálogo de cuentas y el tratamiento de 403, 210, 604, 108, 603 (descuento por puntos) y 607.","El contador confirma cada cuenta por escrito.","Terceros","P0","par"],
+["FIS-05","Quién factura qué","Confirmar con el contador qué CFDI emite cada parte: venta, comisión, penalización, cancelación y liquidación.","Documento con cada CFDI, su emisor y su receptor.","Terceros","P0","par"],
+["FIS-06","Retenciones a agencias","Decidir si aplican retenciones o CFDI de retenciones a las agencias.","Decisión escrita.","Terceros","P1","par"],
+["FIS-07","Cierres y reportes para el contador","Definir el calendario del cierre mensual y qué reporte recibe el contador (reporte maestro).","El contador recibe un cierre de prueba sin pedir nada más.","Ambos","P1","par"],
+["FIS-08","Numeración limpia","Depurar asientos y CFDI de prueba, incluidos los 4 asientos de Plus en la cuenta 401, para arrancar con folios y libros limpios.","El libro diario empieza con datos reales.","Ambos","P0","des"],
+
+["SEG-01","PCI: SAQ A y AOC","Firmar el SAQ A y archivar los 5 AOC, el inventario de componentes y los escaneos en docs/pci.","Documentación completa y a la mano para un QSA.","Axel","P0","par"],
+["SEG-02","Escaneo ASV","Contratar un ASV aprobado, correr el escaneo y calendarizar su repetición cada 90 días.","Escaneo aprobatorio archivado y siguiente fecha en el calendario.","Axel","P0","des"],
+["SEG-03","Secretos y acceso","Cargar las llaves live solo en producción y reconfirmar quién puede ver el Dashboard y los secretos live.","Lista escrita de quién tiene acceso a qué.","Axel","P0","des"],
+["SEG-04","Plan de recuperación del admin","Escribir y probar qué pasa si el admin pierde el correo y el TOTP a la vez, considerando también el teléfono verificado.","Se recupera una cuenta admin de prueba siguiendo el plan.","Axel","P0","par"],
+["SEG-05","Segundo super admin","Crear un segundo super admin con MFA para no depender de una sola persona.","Dos super admins con MFA activo.","Axel","P0","par"],
+["SEG-06","Cuentas de prueba fuera","Eliminar o bloquear las cuentas de prueba con rol admin, ejecutivo, contador o agencia.","Ninguna cuenta de prueba entra a producción.","Ambos","P0","des"],
+["SEG-07","RLS y permisos en producción","Repetir en producción las revisiones de permisos de tablas, RLS y advisors de Supabase.","Sin hallazgos críticos y sin escritura de authenticated donde no corresponde.","Claude","P0","des"],
+["SEG-08","Retención de datos","Definir cuánto tiempo se guardan las bitácoras, el registro de auditoría y los datos de usuarios que se dan de baja.","Política escrita y purgas programadas.","Ambos","P1","par"],
+["SEG-09","Derechos ARCO","Definir cómo se atiende una solicitud de acceso, rectificación, cancelación u oposición.","Procedimiento y correo de contacto publicados.","Axel","P0","par"],
+["SEG-10","Prueba de intrusión","Hacer el pentest interno como buena práctica. En SAQ A no cumple el requisito 11.4.","Informe con hallazgos cerrados o aceptados.","Claude","P2","par"],
+["SEG-11","Abuso y límites","Revisar los límites de OTP, Turnstile en formularios públicos y topes por IP.","Un intento de abuso se frena sin afectar a un usuario normal.","Claude","P1","des"],
+
+["DAT-01","Depurar datos de prueba","Decidir qué se conserva (destinos, categorías, puntos de salida) y borrar usuarios, reservas, pagos, saldos, puntos y archivos de prueba.","Las tablas operativas quedan vacías salvo lo conservado.","Ambos","P0","des"],
+["DAT-02","Datos maestros reales","Destinos con zona horaria, categorías, puntos de salida y los términos vigentes cargados.","El catálogo no muestra ningún dato de prueba.","Ambos","P0","par"],
+["DAT-03","Configuración de plataforma","Revisar en platform_settings el seguro (79 de venta, 59 de costo y 25% de comisión), el cargo por servicio del 5%, el anticipo, la ventana de aprobación y la fecha de inicio del cobro de notificaciones.","Cada valor coincide con lo acordado.","Ambos","P0","par"],
+["DAT-04","Textos legales y de marca","Aviso de privacidad, términos, cookies, Acerca de y Contacto con datos y logos reales.","Ninguna página muestra texto provisional.","Axel","P1","par"],
+["DAT-05","Agencias piloto","Aprobar las primeras agencias reales con sus documentos y contrato firmado.","Cada agencia piloto puede publicar un tour.","Axel","P0","par"],
+["DAT-06","Tours reales","Cargar y revisar los primeros tours: fotos, itinerario, precios y política de cancelación.","Cada tour pasa una revisión de calidad.","Axel","P0","par"],
+["DAT-07","Cuentas internas","Crear las cuentas del equipo (admin, soporte, ejecutivos, contador) con el rol y el MFA correctos.","Cada persona entra con su cuenta y solo ve lo suyo.","Axel","P0","par"],
+
+["OPE-01","Soporte listo","Configurar el service desk: categorías, agentes, horarios y a quién escala cada tipo de caso.","Un ticket de prueba se atiende de principio a fin.","Axel","P0","par"],
+["OPE-02","Guardia de lanzamiento","Definir quién vigila las primeras 72 horas, por qué canal se avisa un incidente y el plan de reversa.","Plan escrito con nombres y teléfonos.","Axel","P0","par"],
+["OPE-03","Liquidación a agencias","Definir el calendario, quién paga y cómo se concilia con el banco.","Una liquidación de prueba se paga y se concilia.","Ambos","P0","par"],
+["OPE-04","Reembolsos fallidos","Definir quién atiende el aviso de reembolso fallido y cómo se resuelve.","Un reembolso fallido de prueba se resuelve siguiendo el procedimiento.","Axel","P1","par"],
+["OPE-05","Conciliación periódica","Definir quién concilia pagos contra procesadores y asientos, y cada cuánto.","Primera conciliación hecha sin diferencias sin explicar.","Terceros","P1","par"],
+["OPE-06","Comunicación y capacitación","Preparar el anuncio, las guías y la capacitación para agencias y viajeros.","Material listo y enviado antes del lanzamiento.","Axel","P1","par"],
+["OPE-07","Runbooks","Escribir cómo desplegar funciones, aplicar migraciones, revisar el ledger y qué hacer cuando falla un webhook.","Alguien distinto a quien los escribió los sigue sin ayuda.","Claude","P1","par"],
+["OPE-08","Aviso del cobro de notificaciones","Confirmar que el aviso previo ya salió a quienes perderían SMS al empezar el cobro (1-ene-2027).","Audiencia pendiente en cero.","Claude","P1","des"],
+
+["LEG-01","Términos y Cláusula 16","Revisión legal de los términos, la cláusula de cancelación y el contrato con agencias.","Versión aprobada por el abogado y publicada.","Terceros","P0","par"],
+["LEG-02","Seguro de viaje","Contrato y póliza con la aseguradora, con el costo real y la comisión acordados.","Póliza vigente y condiciones visibles al viajero.","Axel","P0","par"],
+["LEG-03","Obligaciones de venta en línea","Confirmar con asesoría legal las obligaciones de vender servicios turísticos en línea, por ejemplo ante Profeco.","Lista de obligaciones y su estado.","Terceros","P1","par"],
+["LEG-04","Renovación automática","Revisar los términos de ToursRed Plus y de la suscripción de notificaciones: renovación, cobro y cómo cancelar.","El viajero ve las condiciones antes de pagar.","Terceros","P1","par"],
+["LEG-05","Tarjetas de regalo","Definir la vigencia y las condiciones de las tarjetas de regalo.","Condiciones publicadas.","Axel","P2","par"],
+["LEG-06","Marca","Registrar la marca ToursRed y los dominios.","Registro presentado.","Axel","P2","par"],
+
+["PRU-01","Stripe con dinero real","Pagar un monto bajo con tarjeta propia, ver la comisión real contra la API y reembolsarlo.","Pago, comisión, asiento y reembolso cuadran.","Ambos","P0","des"],
+["PRU-02","PayPal con dinero real","Pago y reembolso reales de monto bajo.","Pago, comisión y asiento cuadran.","Ambos","P0","des"],
+["PRU-03","MercadoPago con dinero real","Pago y reembolso reales; sirve también para la evaluación de calidad.","Pago, comisión y asiento cuadran.","Ambos","P0","des"],
+["PRU-04","Conekta con dinero real","Pago y reembolso reales de monto bajo.","Pago, comisión del evento y asiento cuadran.","Ambos","P0","des"],
+["PRU-05","OpenPay con dinero real","Recarga SPEI y pago con tarjeta reales de monto bajo.","Saldo acreditado y asientos cuadran.","Ambos","P0","des"],
+["PRU-06","ToursRed Plus real","Comprar y cancelar la membresía con cobro real.","Cobro, CFDI timbrado y asiento a 403 correctos.","Ambos","P0","des"],
+["PRU-07","Notificaciones con cobro real","Pagar la suscripción de notificaciones con cobro real.","Cobro, CFDI y asiento correctos.","Ambos","P0","des"],
+["PRU-08","Reserva completa con dinero real","Pago, correo, SMS, QR, check-in y liquidación a una agencia real.","Cada paso ocurre y deja su registro.","Ambos","P0","des"],
+["PRU-09","Cancelación real","Cancelar una reserva real con reembolso y revisar la reversa y la nota de crédito.","Reembolso en el procesador, asiento de reversa y CFDI de egreso correctos.","Ambos","P0","des"],
+["PRU-10","CFDI real","Timbrar, descargar XML y PDF y cancelar un CFDI real.","El SAT acepta el timbrado y la cancelación.","Ambos","P0","des"],
+["PRU-11","Mensajes reales con el dominio final","Correo, SMS y WhatsApp reales a números y buzones de varias compañías.","Todos llegan y ninguno cae en spam.","Ambos","P0","des"],
+["PRU-12","Dejar limpio lo probado","Reembolsar y anular lo cobrado en las pruebas, cancelar los CFDI de prueba y documentar para el contador cualquier asiento que quede.","El contador recibe un resumen y no queda dinero sin explicar.","Ambos","P0","des"],
+
+["LAN-01","Congelar cambios","Dejar de mergear a main, etiquetar la versión y confirmar cómo se revierte.","Etiqueta creada y plan de reversa probado.","Ambos","P0","dia"],
+["LAN-02","Cambio a llaves live","Activar las llaves de producción de cada procesador, una por una, comprobando el arranque tras cada cambio.","Cada procesador responde con su llave live.","Ambos","P0","dia"],
+["LAN-03","Prueba de humo en producción","Catálogo, login y una reserva de monto bajo.","Todo funciona en el dominio final.","Ambos","P0","dia"],
+["LAN-04","Salir de mantenimiento","Quitar el modo mantenimiento y el aviso de ambiente de pruebas, si los hay.","Cualquier visitante entra sin aviso.","Axel","P0","dia"],
+["LAN-05","Vigilar monitores","Revisar Sentry, las alertas, los webhooks y la cola de mensajes durante las primeras horas.","Sin errores nuevos sin explicar.","Claude","P0","dia"],
+["LAN-06","Comunicado","Enviar el anuncio a agencias y viajeros.","Comunicado enviado.","Axel","P1","dia"],
+["LAN-07","Revisión a las 24 y 72 horas","Revisar pagos, asientos, CFDI, correos y errores acumulados.","Informe corto con lo encontrado.","Claude","P0","dia"]
+];
+
+const $=s=>document.querySelector(s);
+const E=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const C=[], state={}, nodes={}, grp={};
+const filt={owner:"",cat:"",st:"",pri:"",w:"",q:"",hide:false};
+let db=null, dl=null;
+
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,3200)}
+function fmt(iso){if(!iso)return"";try{return new Date(iso).toLocaleString("es-MX",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}catch(e){return""}}
+function cur(c){const s=state[c.id]||{};return{status:s.status||"pendiente",owner:s.owner||c.o,notes:s.notes||"",by:s.by||"",at:s.at||""}}
+
+async function save(id,patch){
+  const c=C.find(x=>x.id===id),b=cur(c);
+  const next={status:b.status,owner:b.owner,notes:b.notes,...patch,by:"Axel (página)",at:new Date().toISOString()};
+  state[id]=next;paint(id);summary();
+  if(!db){toast("Sin conexión con la base: el cambio no se guardó.");return}
+  try{await db.doc("estado/"+id).set(next)}catch(e){toast(e&&e.code==="invalid_argument"?"Solo lectura: tu acceso no permite guardar.":"No se pudo guardar. Intenta de nuevo.")}
+}
+
+function addCase(c){
+  C.push(c);
+  const li=E("li","case");li.dataset.id=c.id;li.dataset.open="0";
+  const row=E("div","row");
+  const ttl=E("div","ttl",c.t);ttl.append(E("small","",W[c.w]||""));
+  const chips=E("div","chips");const cp=E("span","chip "+(c.p==="P0"?"p0":""),c.p);const co=E("span","chip");chips.append(cp,co);
+  const sel=E("select","st");sel.setAttribute("aria-label","Estado de "+c.id);ST.forEach(s=>sel.append(new Option(s,s)));
+  sel.onclick=e=>e.stopPropagation();sel.onchange=()=>save(c.id,{status:sel.value});
+  row.append(E("span","id",c.id),ttl,chips,sel);
+  row.onclick=()=>{li.dataset.open=li.dataset.open==="1"?"0":"1"};
+  const det=E("div","det");
+  const b=(h,txt,cls)=>{const d=E("div",cls||"");d.append(E("h3","",h),E("p","",txt||"—"));return d};
+  det.append(b("Qué hay que hacer",c.h),b("Listo cuando",c.l));
+  const nd=E("div","full");nd.append(E("h3","","Notas y evidencia"));
+  const ta=E("textarea");ta.id="n-"+c.id;ta.placeholder="Qué se hizo, enlace, fecha o quién lo confirmó…";
+  ta.onchange=()=>save(c.id,{notes:ta.value});nd.append(ta);
+  const ctl=E("div","ctl full");const ol=E("label","","Responsable ");const os=E("select");os.id="o-"+c.id;
+  OWN.forEach(o=>os.append(new Option(o,o)));os.onchange=()=>save(c.id,{owner:os.value});ol.append(os);
+  const meta=E("span","meta");ctl.append(ol,meta);
+  det.append(nd,ctl);li.append(row,det);
+  grp[c.cat].ul.append(li);
+  nodes[c.id]={li,sel,co,ta,os,meta};
+  paint(c.id);
+}
+
+function paint(id){
+  const c=C.find(x=>x.id===id),s=cur(c),n=nodes[id];if(!n)return;
+  n.li.dataset.st=s.status;n.sel.value=s.status;
+  n.co.textContent=s.owner;n.co.className="chip own-"+s.owner;
+  n.os.value=s.owner;
+  if(document.activeElement!==n.ta)n.ta.value=s.notes;
+  n.meta.textContent=s.by?("Último cambio: "+s.by+" · "+fmt(s.at)):"";
+}
+
+function visible(c,s){
+  if(filt.owner&&s.owner!==filt.owner)return false;
+  if(filt.cat&&c.cat!==filt.cat)return false;
+  if(filt.st&&s.status!==filt.st)return false;
+  if(filt.pri&&c.p!==filt.pri)return false;
+  if(filt.w&&c.w!==filt.w)return false;
+  if(filt.hide&&s.status==="listo")return false;
+  if(filt.q&&!(c.id+" "+c.t+" "+c.h+" "+c.l).toLowerCase().includes(filt.q))return false;
+  return true;
+}
+
+function summary(){
+  const tot={},own={};ST.forEach(s=>tot[s]=0);OWN.forEach(o=>own[o]={n:0,d:0});
+  const cat={};Object.keys(CATS).forEach(k=>cat[k]={n:0,d:0,v:0});
+  let shown=0;
+  C.forEach(c=>{
+    const s=cur(c);tot[s.status]++;
+    if(s.status!=="no aplica"){own[s.owner].n++;cat[c.cat].n++;if(s.status==="listo"){own[s.owner].d++;cat[c.cat].d++}}
+    const v=visible(c,s);nodes[c.id].li.hidden=!v;if(v){shown++;cat[c.cat].v++}
+  });
+  const N=C.length-tot["no aplica"];
+  $("#pct").textContent=(N?Math.round(tot["listo"]/N*100):0)+"% listo";
+  $("#pctnote").textContent=tot["listo"]+" de "+N+" puntos listos · "+tot["bloqueado"]+" bloqueados"+(tot["no aplica"]?" · "+tot["no aplica"]+" no aplican":"");
+  $("#bar").textContent="";
+  ["listo","bloqueado","en curso","pendiente"].forEach(k=>{const sp=E("span");sp.style.width=(N?tot[k]/N*100:0)+"%";sp.style.background="var("+STC[k]+")";$("#bar").append(sp)});
+  $("#legend").textContent="";
+  ST.forEach(k=>{const l=E("span");const i=E("i");i.style.background="var("+STC[k]+")";l.append(i,document.createTextNode(k+" "),Object.assign(E("b"),{textContent:tot[k]}));$("#legend").append(l)});
+  const ow=$("#owners");ow.textContent="";
+  [["","Todos","Toda la lista"],["Claude","Claude","Lo hago yo solo"],["Axel","Axel","Solo tú"],["Ambos","Ambos","Tú haces, yo verifico"],["Terceros","Terceros","Contador, abogado, proveedores"]].forEach(([k,lbl,d])=>{
+    const n=k?own[k].n:N,dn=k?own[k].d:tot["listo"];
+    const b=E("button","own");b.type="button";b.setAttribute("aria-pressed",String(filt.owner===k));
+    b.append(E("span","n",lbl),E("span","v",dn+" / "+n),E("span","d",d));
+    const m=E("div","mini");const f=E("span");f.style.width=(n?dn/n*100:0)+"%";m.append(f);b.append(m);
+    b.onclick=()=>{filt.owner=k;summary()};ow.append(b)});
+  Object.keys(CATS).forEach(k=>{
+    const g=grp[k];g.el.hidden=!cat[k].v;
+    g.el.querySelector(".gc").textContent=cat[k].d+"/"+cat[k].n;
+    g.el.querySelector(".gm span").style.width=(cat[k].n?cat[k].d/cat[k].n*100:0)+"%";
+  });
+  $("#count").textContent=shown+" de "+C.length+" puntos";
+}
+
+function csv(){
+  const q=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+  const rows=[["ID","Categoría","Título","Qué hay que hacer","Listo cuando","Prioridad","Cuándo","Responsable","Estado","Notas","Último cambio"]];
+  C.forEach(c=>{const s=cur(c);rows.push([c.id,CATS[c.cat],c.t,c.h,c.l,c.p,W[c.w],s.owner,s.status,s.notes,s.by?(s.by+" "+s.at):""])});
+  return String.fromCharCode(65279)+rows.map(r=>r.map(q).join(",")).join("\r\n");
+}
+async function copySummary(){
+  const t={};ST.forEach(s=>t[s]=0);C.forEach(c=>t[cur(c).status]++);
+  const txt="Prelanzamiento ToursRed: "+t["listo"]+"/"+(C.length-t["no aplica"])+" listos, "+t["bloqueado"]+" bloqueados, "+t["en curso"]+" en curso, "+t["pendiente"]+" pendientes.";
+  try{await navigator.clipboard.writeText(txt);toast("Resumen copiado.")}catch(e){toast(txt)}
+}
+
+function init(){
+  const g=$("#groups");
+  const opt=(sel,list,first)=>{if(first!=null)sel.append(new Option(first,""));list.forEach(([v,l])=>sel.append(new Option(l,v)))};
+  opt($("#fcat"),Object.entries(CATS),"Todas las categorías");
+  opt($("#fst"),ST.map(s=>[s,s]),"Todos los estados");
+  opt($("#fw"),Object.entries(W),"Cualquier momento");
+  opt($("#nc"),Object.entries(CATS));opt($("#no"),OWN.map(o=>[o,o]));opt($("#nw"),Object.entries(W));
+  Object.keys(CATS).forEach((k,i)=>{
+    const el=E("section","group");el.dataset.open=i===0?"1":"0";
+    const h=E("button","gh");h.type="button";
+    const gm=E("span","gm");gm.append(E("span"));
+    h.append(E("h2","",CATS[k]),E("span","gc"),gm,E("span","car"));
+    h.onclick=()=>{el.dataset.open=el.dataset.open==="1"?"0":"1"};
+    const ul=E("ul","cases");el.append(h,ul);g.append(el);grp[k]={el,ul};
+  });
+  B.forEach(r=>addCase({id:r[0],cat:r[0].slice(0,3),t:r[1],h:r[2],l:r[3],o:r[4],p:r[5],w:r[6]}));
+  summary();
+}
+
+init();
+$("#q").oninput=e=>{filt.q=e.target.value.trim().toLowerCase();summary()};
+$("#fcat").onchange=e=>{filt.cat=e.target.value;summary()};
+$("#fst").onchange=e=>{filt.st=e.target.value;summary()};
+$("#fpri").onchange=e=>{filt.pri=e.target.value;summary()};
+$("#fw").onchange=e=>{filt.w=e.target.value;summary()};
+$("#fhide").onchange=e=>{filt.hide=e.target.checked;summary()};
+$("#copy").onclick=copySummary;
+$("#csv").onclick=async()=>{try{await dl.save({filename:"checklist-prelanzamiento-toursred.csv",data:csv()})}catch(e){if(!e||e.code!=="declined")toast("No se pudo exportar el archivo.")}};
+$("#addform").onsubmit=async ev=>{
+  ev.preventDefault();
+  if(!db){toast("Sin conexión con la base: no se puede agregar.");return}
+  const t=$("#nt").value.trim();if(!t)return;
+  const id="EXT-"+Date.now().toString(36);
+  const doc={cat:$("#nc").value,t,h:$("#nh").value.trim(),l:$("#nl").value.trim(),o:$("#no").value,p:$("#np").value,w:$("#nw").value};
+  $("#nadd").disabled=true;
+  try{await db.doc("nuevos/"+id).set(doc);$("#nt").value="";$("#nh").value="";$("#nl").value="";toast("Punto agregado.")}
+  catch(e){toast(e&&e.code==="invalid_argument"?"Solo lectura: tu acceso no permite agregar.":"No se pudo agregar. Intenta de nuevo.")}
+  $("#nadd").disabled=false;
+};
+
+(async()=>{
+  try{dl=await claude.use("downloads");if(dl)$("#csv").hidden=false}catch(e){}
+  try{db=await claude.use("db")}catch(e){db=null}
+  if(!db){toast("Modo de solo vista: la base no está disponible aquí.");return}
+  db.collection("estado").onSnapshot(snap=>{
+    snap.docs.forEach(d=>{state[d.id]=d.data();if(nodes[d.id])paint(d.id)});
+    summary();
+  },()=>{toast("Se perdió la conexión con la base.")});
+  db.collection("nuevos").onSnapshot(snap=>{
+    snap.docs.forEach(d=>{const x=d.data();if(x&&!nodes[d.id]&&grp[x.cat])addCase({id:d.id,cat:x.cat,t:x.t||"",h:x.h||"",l:x.l||"",o:x.o||"Axel",p:x.p||"P1",w:x.w||"par"})});
+    summary();
+  },()=>{toast("Se perdió la conexión con la base.")});
+})();
+</script>

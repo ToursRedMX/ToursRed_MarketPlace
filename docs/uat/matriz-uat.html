@@ -155,7 +155,6 @@ const C=[
 ["PRE-03","Agencia","Un tour de prueba por escenario","Tour con aprobación, con plan de pagos, con último cupo, receptivo, con mapa de asientos y con política de cancelación distinta.","Cada escenario se puede reservar de principio a fin.","Ambos","P0","Reviso cupos, políticas y fechas de cada tour."],
 ["PRE-04","Axel","Tarjetas y cuentas sandbox a la mano","Tener a mano tarjetas de prueba y cuentas sandbox de Stripe, PayPal, MercadoPago, OpenPay y Conekta, y una tarjeta que se rechaza.","Ninguna prueba de pago se detiene por falta de credenciales.","Axel","P0",""],
 ["PRE-05","Admin","Zona horaria cargada en los destinos","Confirmar que cada destino activo tiene time_zone; los destinos nuevos nacen con la de Ciudad de México.","El recordatorio de un día antes y la hora de la política de cancelación usan la zona del tour.","Claude","P1","Reviso destinations.time_zone: el 28-oct los 7 destinos la tenían (migración 20261009163001)."],
-["PRE-06","Admin","Dominio de producción en enlaces y remitentes","Cambiar platform_url de staging a toursred.com cuando se pase a producción.","Los enlaces de los correos abren el dominio real.","Ambos","P1","Busco enlaces a netlify en las últimas plantillas enviadas."],
 
 ["ACC-01","Viajero","Registro con correo y verificación","Crear cuenta en /signup con un correo nuevo y abrir el enlace de verificación.","Cuenta activa, correo de bienvenida recibido, correo verificado en la base.","Ambos","P0","Reviso users y bitacora_envio_correo (proveedor y aceptación)."],
 ["ACC-02","Agencia","Registro de agencia, documentos y aprobación","Registrar una agencia en /agency-signup, subir documentos y aprobarla desde admin.","Pasa por pendiente de aprobación, recibe credenciales y entra a su panel.","Ambos","P0","Reviso estados de la agencia y los correos de aprobación."],
@@ -224,13 +223,12 @@ const C=[
 ["CAN-12","Todos","Correos de cancelación","Cancelar y revisar los correos de viajero, agencia y admin.","Llegan los tres con la fecha correcta y sin caer en spam.","Ambos","P1","Reviso la bitácora de envío y las fechas."],
 ["CAN-13","Viajero","Reprogramación de salida","Aceptar y rechazar una reprogramación.","Aceptar mueve la reserva; rechazar permite cancelar con reembolso.","Ambos","P1","Reviso la reserva antes y después."],
 
-["WAL-01","Viajero","Recargar ToursRed Cash con tarjeta","Recargar saldo con tarjeta.","Saldo acreditado y movimiento registrado.","Ambos","P1","Reviso saldo, movimiento y asiento."],
-["WAL-02","Viajero","Recargar con OpenPay","Recargar con efectivo o SPEI.","Saldo acreditado al confirmarse el pago.","Ambos","P2","Reviso el estado de la recarga."],
+["WAL-02","Viajero","Recargar ToursRed Cash con SPEI (OpenPay)","Desde el monedero, recargar un monto por transferencia SPEI y pagarla. Es la única recarga con dinero: no existe con tarjeta, efectivo ni CoDi.","Saldo acreditado al confirmarse el pago, movimiento topup_spei registrado y asiento correcto.","Ambos","P1","Reviso el estado de la recarga, el movimiento y el asiento; y que la función rechace cualquier método que no sea spei."],
 ["WAL-03","Todos","Saldo igual a los movimientos","Comparar el saldo con la suma de movimientos de cada usuario.","Coinciden y no hay saldos negativos.","Claude","P0","Consulta de conciliación por usuario."],
 ["WAL-04","Viajero","Comprar ToursRed Plus","Comprar la membresía con Stripe.","Cobro, CFDI y asiento a 403, 210, 604 y 108.","Ambos","P0","Reviso asiento y CFDI."],
 ["WAL-05","Viajero","Renovar, fallar y cancelar Plus","Renovar, simular un pago fallido y cancelar.","Estado y correos correctos.","Ambos","P1","Reviso estado y bitácora de correo."],
 ["WAL-06","Todos","Libro de puntos","Revisar el libro de puntos de todos los usuarios.","Sin negativos ni canjes duplicados; los apartados vencidos se liberan.","Claude","P0","Consulta de integridad del libro y de apartados."],
-["WAL-07","Viajero","Gift card","Comprar, recibir el correo y canjear.","El saldo llega al que canjea, una sola vez.","Ambos","P1","Reviso la gift card y el saldo."],
+["WAL-07","Viajero","Tarjeta de regalo: comprar y canjear en el monedero","Comprar una tarjeta de regalo, recibir el correo con el código y canjearla desde otra cuenta. El canje es la recarga del monedero con tarjeta de regalo.","El saldo llega a ToursRed Cash de quien canjea, una sola vez, y un segundo canje del mismo código se rechaza.","Ambos","P1","Reviso la gift card, el movimiento gift_card, el saldo y el asiento de la venta."],
 ["WAL-08","Viajero","Referidos","Registrarse con un código y completar una reserva.","Se otorga la recompensa una sola vez.","Ambos","P2","Reviso referrals y puntos."],
 ["WAL-09","Viajero","Suscripción de notificaciones","Pagar la suscripción en modo de prueba.","Cobro, CFDI y asiento a 403 y 210. El cobro empieza el 1-ene-2027.","Ambos","P1","Reviso asiento y la vista financiera."],
 
@@ -302,9 +300,6 @@ const C=[
 ["SEG-10","Plataforma","Límites de OTP y cambio de correo","Pedir códigos repetidos.","Cooldown de 60 s y topes por hora.","Claude","P1","Pruebo los límites contra las funciones."],
 ["SEG-11","Plataforma","Cabeceras y CSP","Revisar las cabeceras del sitio.","Cabeceras de seguridad presentes.","Claude","P2","Consulto las cabeceras de staging."],
 ["SEG-12","Plataforma","CI en verde","Revisar lint, tipos, contratos y guardias.","Todos en verde sobre main.","Claude","P0","Corro npm run lint y npm run typecheck y reviso los checks de main."],
-["SEG-13","Plataforma","Webhook de Stripe en producción","Crear el endpoint en la cuenta live.","Existe y responde. Bloquea cobrar dinero real.","Axel","P0",""],
-["SEG-14","Plataforma","Escaneo ASV y SAQ A","Contratar el ASV y archivar el SAQ A.","Escaneo aprobatorio cada 90 días.","Axel","P1",""],
-["SEG-15","Plataforma","Plan de recuperación del admin","Escribir qué pasa si el admin pierde el correo y el TOTP a la vez.","Plan escrito y probado.","Axel","P1",""]
 ];
 
 const $=s=>document.querySelector(s);

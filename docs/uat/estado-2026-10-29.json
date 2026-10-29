@@ -1,0 +1,314 @@
+{
+ "exportado": "2026-10-29",
+ "nota": "Pre-UAT: resultados de los casos de Claude sobre los datos actuales (sin depurar). Se repiten tras la depuracion. Un caso sin entrada sigue pendiente con su responsable original.",
+ "casos": {
+  "ACC-13": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: sin sesión, /traveler/dashboard, /traveler/wallet, /agency/dashboard, /admin/dashboard, /admin/settings y /accounting redirigen a /login?redirect=... Falta repetirlo con un rol equivocado (ACC-14, Axel).",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "ADM-06": {
+   "status": "en curso",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: la balanza cuadra (debe igual a haber, 0.00) en todos los períodos y el banco 102.03 queda en -2,786.12 por pagos de prueba. Falta revisar el reporte maestro en pantalla. La diferencia del monedero está en FIS-06.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "ADM-09": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: bitacora_envio_correo no tiene columna de cuerpo y los 35 envíos de 14 días salieron por Zoho aceptados. En notification_attempts el código de los 12 OTP aparece tachado y ningún texto trae 4 a 8 dígitos seguidos.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "ADM-10": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: 187 filas en 14 días con LOGIN, BOOKING_CREATED, PAYMENT_RECEIVED, PLATFORM_SETTINGS_UPDATED, STEP_UP_VERIFIED, cancelaciones y DELETE. 108 filas no traen actor (acciones del sistema).",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "ADM-14": {
+   "status": "en curso",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: avisos_cobro_notificaciones tiene 1 aviso enviado y 0 duplicados. La simulación en pantalla requiere sesión de admin y no la corrí.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "ADM-15": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: 3 recargas SPEI completadas por 51,600, las 3 acreditadas, y coinciden con los movimientos topup_spei del monedero y con el asiento de recargas. 2 esperando transferencia y 4 fallidas. conciliation_status está vacío en todas.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "CAN-07": {
+   "status": "falló",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: de 14 reservas canceladas con pago, 9 tienen asiento de cancelación o reversa (todos cuadran). 6 conservan un CFDI de ingreso vigente sin cancelar ni nota de crédito (no hay CFDI de egreso en toda la base); la más reciente es TRG-FQY5L83HUQR, cancelada el 17-oct, $550 por OpenPay. Hay que confirmar con el contador si corresponde: si hubo reembolso, debería haber nota de crédito. Repetir en la UAT con una cancelación nueva.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "CAN-11": {
+   "status": "en curso",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: la prueba de bordes (48 h 01 min, 48 h, 47 h 59 min, 24 h 01 min, 23 h 59 min desde las 08:00 locales) pasa, y el arreglo de zona horaria está desplegado en las dos funciones de cancelación. Falta una cancelación real cerca de un borde (CAN-02).",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "CAT-01": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: el inicio carga en staging sin errores en consola; todas las peticiones 200 (JS, CSS, imágenes, túnel de Sentry).",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "CAT-02": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: /tours lista los 2 tours activos (Ruta de los Chenes, Tour a Teotihuacan) con filtros, orden y categorías. No ejercité cada filtro uno por uno.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "CAT-03": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: el detalle muestra precio, punto de encuentro, qué incluye y la política (48+ h 100%, 24-48 h 60%, menos de 24 h 0%). Detalles de copy: dice Máx Sin límite viajeros, Fecha Límite de Reserva sale vacía y la agencia dice Información de la agencia no disponible.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "CAT-04": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: el perfil de AVENTOURAX carga con RNT, contacto y 4 tours. Observaciones: lista los tours Tlaxcala de julio y agosto (ya pasados) que el catálogo no muestra, y la calificación sale 4.5 aquí contra 5.0 en el catálogo.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "CAT-05": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: aviso de privacidad, términos (v2) y cookies cargan; el banner ofrece Solo esenciales y Aceptar todas y antes de aceptar no hay scripts de analítica. Observación: la política de cookies dice actualizada el 23-dic-2024.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "CAT-08": {
+   "status": "en curso",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: a 375 px no hay desborde horizontal en inicio, catálogo ni detalle del tour. El paso 1 de reserva redirige a /login, así que no lo pude evaluar sin sesión.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "CAT-09": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: una ruta inexistente muestra Página No Encontrada con enlace Volver al Inicio y sin errores en consola.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "CAT-10": {
+   "status": "en curso",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: DOMContentLoaded 326 ms y 28 recursos, pero con caché caliente, así que el peso de la primera visita no quedó medido. Repetir con caché vacía.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "FIS-01": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: 158 asientos, todos publicados y balanceados; ninguno sin líneas, sin líneas negativas ni con cuentas inexistentes, sin números repetidos; diferencia total debe-haber 0.00.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "FIS-02": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: reserva a 208, notificaciones a 403 y 210, comisión del procesador a 604 y 108, puntos a 603, tarjetas de regalo a 218-12. Pendiente conocido: 4 asientos de membresía anteriores al arreglo siguen en 401 (1,627.46) y se depuran.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "FIS-03": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: vista_movimientos_financieros manda membership y notification_subscription a ingreso con pasivo en 0; cualquier otro contexto de cobro va a pasivo.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "FIS-04": {
+   "status": "falló",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: de 65 pagos de reserva exitosos, 16 no tienen CFDI timbrado. 10 son MercadoPago del 5 y 6 de sept con error 400 de Facturapi (payment_form), 4 de julio y agosto, 1 de Stripe en processing y 1 cancelada del 20-oct. En los últimos 14 días no hay ninguno. Reintentar o depurar. Membresía, notificaciones y abonos sí tienen CFDI.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "FIS-05": {
+   "status": "en curso",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: en los últimos 14 días todos los cobros exitosos traen comisión; 18 históricos no (14 Conekta, 2 PayPal, 2 Stripe), y un job nocturno los reporta en audit_errors. Falta comparar contra la API de cada procesador: no tengo llaves de lectura.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "FIS-06": {
+   "status": "falló",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: (1) el pasivo del monedero en el libro (218-11) es 50,851.86 y los saldos reales suman 62,256.89: diferencia de 11,405.03, aún sin aislar la causa. (2) 2 reservas confirmadas y pagadas con Stripe el 26-ago sin asiento (TRG-84KJF6B7FMJ y TRG-8XEBZDR3CQ1), más 4 pagos de pruebas canceladas o en processing. Revisar antes de depurar.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "FIS-07": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: ningún error de snapshot de impuestos. audit_errors tiene 18 filas en 14 días de otros tipos: cobros sin comisión (detector nocturno), un asiento con más comisión que el cobro y 3 de cobertura insuficiente del 20-oct.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "FIS-08": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: de los 65 CFDI timbrados, 22 difieren de subtotal más IVA y los 22 se explican exactamente por el monto exento; ninguno sin explicar.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "FIS-09": {
+   "status": "pendiente",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: el cron cerrar-costos-mensajeria está activo pero corre el 1-nov. Las 6 tarifas están cargadas; los costos reales de Twilio siguen vacíos en notification_attempts.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "NOT-04": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: bitacora_evento_correo tiene 100 eventos de zoho (entregados, aperturas, clics, softbounce), sendgrid y smtp2go (incluido hardbounce y baja).",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "NOT-06": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: 9 recordatorios de tour entregados por SMS (el último el 24-oct), el cron sms-scheduler corre cada 5 minutos sin fallos y los 7 destinos ya tienen zona horaria.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "NOT-11": {
+   "status": "falló",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: platform_url sigue en https://toursredmx.netlify.app. Esperado: se cierra al pasar a producción (checklist de prelanzamiento, INF-04).",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "PRE-05": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: los 7 destinos tienen time_zone (America/Mexico_City y America/Mazatlan), la columna ya es NOT NULL y el recordatorio de un día antes entregó 9 SMS.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "RES-21": {
+   "status": "pendiente",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: no ejecutado a propósito. Probar create_booking_atomic implica crear una reserva (escritura) y no quise tocar datos antes de depurar.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-01": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: con la llave pública, 13 tablas sensibles (users, pagos, reservas, monederos, CFDI, asientos...) devuelven 0 filas y audit_logs y la bitácora de correo dan 401. Observación: platform_settings sí es legible por anónimos (122 columnas, incluido el costo real del seguro y las comisiones); confirmar que es intencional.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-02": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: las tablas del cobro y las bitácoras no dan escritura a authenticated ni a anon. Observación: 17 de las 21 tablas sensibles revisadas conservan los permisos por defecto de Supabase (INSERT, UPDATE, DELETE y TRUNCATE) y solo las protege RLS; la API REST no expone TRUNCATE, pero conviene un REVOKE antes de producción.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-03": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: simulando a un viajero con 3 reservas, ve solo lo suyo (0 reservas, monederos, movimientos, recargas o usuarios ajenos) y nada de asientos, webhook_logs ni liquidaciones.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-04": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: las 195 Edge Functions responden a OPTIONS con 2xx (178 con 200 y 17 con 204), tras el despliegue de las 75 afectadas.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-05": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: verify_jwt de la API coincide con config.toml en las 195 funciones: ningún webhook se pondría en true ni ninguna función protegida en false.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-06": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: con un evento sin firma, Stripe responde 400 y Conekta, MercadoPago, PayPal, SendGrid, SMTP2GO y Facturapi 401. OpenPay responde 200 pero no procesa: verifica cada cargo contra su API. Zoho responde 200 con autorizado false. Mi prueba dejó 1 fila de bitácora (evt_prueba_pre_uat) en OpenPay.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-07": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: supabase migration list --linked da 1020 pares iguales, 0 sin aplicar y 0 huérfanas.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-08": {
+   "status": "falló",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: 5 avisos de seguridad. ERROR: 8 vistas SECURITY DEFINER del esquema nature_stay. WARN: pg_net en public y 21 funciones SECURITY DEFINER ejecutables por anónimos. Lo más serio, por lectura de código y sin explotarlo: hold_seats es ejecutable por anónimos, sin sesión y con los minutos de apartado que decide quien llama, así que se podrían apartar lugares de cualquier tour por mucho tiempo. increment_featured_stat sí valida el campo.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-09": {
+   "status": "en curso",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: el repo no tiene archivos .env versionados, llaves reales ni service role en src/ (solo marcadores sk_live_... en formularios). No pude verificar a qué cuenta apunta STRIPE_SECRET_KEY ni escanear el bundle compilado.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-10": {
+   "status": "pendiente",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: no ejecutado a propósito. Probar el cooldown y los topes implica mandar OTP reales por SMS (costo) o correr la prueba con Docker.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-11": {
+   "status": "falló",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: staging solo manda Strict-Transport-Security. Faltan Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy y Permissions-Policy; netlify.toml no define cabeceras.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "SEG-12": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: npm run typecheck sin errores; npm run lint en 38 problemas, igual que la base (todos en BookingForm.tsx); los checks de main para 660f6be están en verde.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "WAL-03": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: 3 monederos, ninguno con saldo negativo y los 3 saldos coinciden con la suma de sus 44 movimientos (suma total 62,256.89). Ojo: el pasivo del monedero en el libro (cuenta 218-11) no coincide con esa suma, ver FIS-06.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  },
+  "WAL-06": {
+   "status": "pasó",
+   "owner": "Claude",
+   "notes": "Pre-UAT 29-oct: 94 movimientos de puntos, ningún saldo ni suma negativa, ningún canje duplicado y ningún apartado vencido sin liberar. Observación: la tabla de apartados está vacía, así que puntos más pasarela nunca se ha ejercitado con datos reales.",
+   "by": "Claude (pre-UAT)",
+   "at": "2026-10-29T05:40:00Z"
+  }
+ }
+}
