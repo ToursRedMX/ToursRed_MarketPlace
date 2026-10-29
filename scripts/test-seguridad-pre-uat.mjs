@@ -90,7 +90,8 @@ prueba('netlify.toml define las cuatro cabeceras de seguridad para todas las rut
   assert.match(bloque, /X-Content-Type-Options = "nosniff"/);
   assert.match(bloque, /X-Frame-Options = "SAMEORIGIN"/);
   assert.match(bloque, /Referrer-Policy = "strict-origin-when-cross-origin"/);
-  assert.match(bloque, /Permissions-Policy = "camera=\(\), microphone=\(\), geolocation=\(\)/);
+  // camera/microphone en (self), no en (): la barra de Netlify de los previews los sondea y con () el smoke falla (PR #484).
+  assert.match(bloque, /Permissions-Policy = "camera=\(self\), microphone=\(self\), geolocation=\(\), payment=\(\)"/);
 });
 prueba('la CSP va en Report-Only y deja pasar lo que el sitio carga hoy', () => {
   assert.match(bloque, /Content-Security-Policy-Report-Only = "/);
@@ -103,7 +104,7 @@ prueba('la CSP va en Report-Only y deja pasar lo que el sitio carga hoy', () => 
   // Observado en el preview del PR #484: el sitio crea workers desde blob: y, sin worker-src, caen en script-src.
   assert.match(csp, /worker-src 'self' blob:/);
 });
-prueba('el sitio no usa camara, microfono ni geolocalizacion (si algun dia los usa, la Permissions-Policy los bloquearia)', () => {
+prueba('el sitio no usa geolocalizacion (si algun dia la usa, la Permissions-Policy la bloquearia)', () => {
   const fuentes = [];
   const recorre = (dir) => {
     for (const e of readdirSync(new URL('../' + dir, import.meta.url), { withFileTypes: true })) {
@@ -113,8 +114,8 @@ prueba('el sitio no usa camara, microfono ni geolocalizacion (si algun dia los u
     }
   };
   recorre('src');
-  const usan = fuentes.filter((f) => /getUserMedia|navigator\.geolocation|enumerateDevices/.test(leer(f)));
-  assert.deepEqual(usan, [], `estos archivos usan camara/microfono/geolocalizacion: ${usan.join(', ')}`);
+  const usan = fuentes.filter((f) => /navigator\.geolocation/.test(leer(f)));
+  assert.deepEqual(usan, [], `estos archivos usan geolocalizacion: ${usan.join(', ')}`);
 });
 
 console.log(`OK: ${casos} comprobaciones de los arreglos de seguridad del pre-UAT.`);

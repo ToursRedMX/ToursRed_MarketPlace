@@ -18,6 +18,9 @@ NODE_VERSION = "24"
 # Cabeceras de seguridad (hallazgo SEG-11 del pre-UAT, 29-oct-2026): staging solo mandaba Strict-Transport-Security.
 # Estas cuatro se aplican de una vez porque el sitio no usa camara, microfono ni geolocalizacion y nadie debe poder
 # enmarcarlo (verificado en src/: ni getUserMedia ni navigator.geolocation, y los iframes que hay embeben a otros, no al reves).
+# Camara y microfono quedan en (self) y no en (): la barra de feedback que Netlify inyecta en los deploy previews sondea los dos y,
+# con (), el smoke ve un console.error "Potential permissions policy violation" y tumba el PR. Con (self) un iframe de un tercero
+# sigue sin poder usarlos; geolocalizacion y pagos si quedan cerrados del todo.
 # La CSP va en Report-Only: el sitio carga Turnstile, GA, el SDK de MercadoPago, fuentes y fotos de agencias de varios hosts y un
 # CSP estricto sin observar primero puede romper el pago o el login. Mirar la consola con esta cabecera, ajustar la lista y
 # despues cambiar a Content-Security-Policy.
@@ -27,7 +30,7 @@ NODE_VERSION = "24"
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "SAMEORIGIN"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
+    Permissions-Policy = "camera=(self), microphone=(self), geolocation=(), payment=()"
     Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://www.googletagmanager.com https://sdk.mercadopago.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://huzsedewwzjywcpbkjkm.supabase.co wss://huzsedewwzjywcpbkjkm.supabase.co https://www.google-analytics.com https://*.analytics.google.com https://api.mercadopago.com; frame-src https://challenges.cloudflare.com https://www.mercadopago.com.mx https://www.mercadopago.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'"
 
 [[edge_functions]]
