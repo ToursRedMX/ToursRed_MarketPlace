@@ -7,6 +7,7 @@
 //
 // Las llaves de SendGrid y Zoho son secretos de la Edge Function (SENDGRID_API_KEY, ZOHO_EMAIL_API_KEY), no columnas.
 import { enviarPorSendgrid, enviarPorSmtp2go, enviarPorZoho, lista, separarRemitente } from "./proveedores.ts";
+import { htmlATexto } from "./textoPlano.ts";
 import {
   PROVEEDORES_CORREO,
   type AjustesCorreo,
@@ -19,6 +20,13 @@ import {
 } from "./tipos.ts";
 
 export const REMITENTE_POR_DEFECTO = "contacto@toursred.com";
+export const NOMBRE_VISIBLE_REMITENTE = "ToursRed";
+
+/** Un remitente a secas (`a@b.com`) sale como `ToursRed <a@b.com>`; uno que ya trae nombre se respeta. */
+export function conNombreVisible(remitente: string): string {
+  const { email, name } = separarRemitente(remitente);
+  return name ? remitente : `${NOMBRE_VISIBLE_REMITENTE} <${email}>`;
+}
 
 function proveedorValido(valor: unknown): ProveedorCorreo | null {
   return PROVEEDORES_CORREO.includes(valor as ProveedorCorreo) ? (valor as ProveedorCorreo) : null;
@@ -95,13 +103,15 @@ const FALLBACK_SEGURO = new Set(["rechazo_confirmado", "no_disponible", "no_conf
  */
 export async function enviarCorreo(
   admin: ClienteCorreo,
-  correo: CorreoSaliente,
+  entrante: CorreoSaliente,
   ajustes?: AjustesCorreo | null,
 ): Promise<ResultadoCorreo> {
   const cfg = ajustes ?? await leerAjustesCorreo(admin);
   if (!cfg) return { ok: false, proveedor: "smtp2go", clase: "no_configurado", codigo: "email_settings_ilegible", respaldo: false };
 
-  const remitente = correo.remitente || cfg.contact_email || REMITENTE_POR_DEFECTO;
+  // Todo correo sale con parte de texto plano y con nombre visible: ver textoPlano.ts.
+  const correo: CorreoSaliente = { ...entrante, texto: entrante.texto || htmlATexto(entrante.html) };
+  const remitente = conNombreVisible(correo.remitente || cfg.contact_email || REMITENTE_POR_DEFECTO);
   const principal = cfg.email_provider;
 
   // Un intento = una fila de bitacora. `id` es la referencia que viaja al proveedor; `envio_id` agrupa el

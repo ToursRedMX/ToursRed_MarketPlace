@@ -1,0 +1,5 @@
+{
+  "exportado": "2026-10-28",
+  "nota": "Respaldo inicial vacio: todavia no se ha marcado ningun caso. Cada archivo estado-YYYY-MM-DD.json es una copia de la coleccion `casos` de la base de la matriz.",
+  "casos": {}
+}

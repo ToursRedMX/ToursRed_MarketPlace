@@ -1,0 +1,449 @@
+<title>Matriz UAT ToursRed</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Tablero de trabajo: resumen y avance arriba, filtros fijos, casos agrupados por módulo y expandibles. */
+:root{
+  --bg:#f4f5f7; --surface:#ffffff; --surface2:#eceef2; --line:#d9dce3; --fg:#14171f; --muted:#5b6272;
+  --brand:#c8102e; --ink:#14171f; --on-ink:#ffffff;
+  --st-pend:#8b92a3; --st-run:#2f6bdc; --st-ok:#1f8a4c; --st-fail:#c4321f; --st-block:#b9770e;
+  --st-pend-bg:#eceef2; --st-run-bg:#e3ecfc; --st-ok-bg:#dff3e7; --st-fail-bg:#fbe3df; --st-block-bg:#f9ecd2;
+  --f-sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101216; --surface:#181b21; --surface2:#21252d; --line:#2c313b; --fg:#e8eaf0; --muted:#9aa1b0;
+  --brand:#ff4d63; --ink:#e8eaf0; --on-ink:#101216;
+  --st-pend:#8b92a3; --st-run:#6c9bff; --st-ok:#45c27a; --st-fail:#ff7a68; --st-block:#e5a73c;
+  --st-pend-bg:#262a33; --st-run-bg:#1c2a46; --st-ok-bg:#16301f; --st-fail-bg:#3a1c18; --st-block-bg:#3a2d12;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101216; --surface:#181b21; --surface2:#21252d; --line:#2c313b; --fg:#e8eaf0; --muted:#9aa1b0;
+  --brand:#ff4d63; --ink:#e8eaf0; --on-ink:#101216;
+  --st-pend:#8b92a3; --st-run:#6c9bff; --st-ok:#45c27a; --st-fail:#ff7a68; --st-block:#e5a73c;
+  --st-pend-bg:#262a33; --st-run-bg:#1c2a46; --st-ok-bg:#16301f; --st-fail-bg:#3a1c18; --st-block-bg:#3a2d12;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-sans);font-size:14px;line-height:1.45;
+  padding-block:20px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+header{display:flex;flex-direction:column;gap:6px}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.brand i{width:10px;height:10px;background:var(--brand);border-radius:2px;display:inline-block}
+h1{margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);max-width:68ch;margin:0}
+.bar{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--st-pend-bg);gap:1px}
+.bar span{display:block;height:100%;min-width:0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted)}
+.legend b{font-family:var(--f-mono);font-weight:500;color:var(--fg);font-variant-numeric:tabular-nums}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:baseline}
+.prog{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.prog .top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.pct{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.owners{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.own{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.own[aria-pressed="true"]{border-color:var(--fg);box-shadow:inset 0 0 0 1px var(--fg)}
+.own .n{font-family:var(--f-mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.own .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.own .d{font-size:12px;color:var(--muted)}
+.own .mini{height:4px;background:var(--st-pend-bg);border-radius:2px;overflow:hidden;margin-top:4px}
+.own .mini span{display:block;height:100%;background:var(--st-ok)}
+.filters{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid var(--line)}
+.filters input[type=search]{flex:1 1 200px;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:7px 10px}
+.filters select{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:7px 8px;min-width:0;max-width:100%}
+.filters label.chk{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.count{font-size:12px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.group+.group{margin-top:0}
+.gh{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;padding:12px 16px;cursor:pointer;text-align:left}
+.gh h2{margin:0;font-size:15px;font-weight:600;flex:1;min-width:0}
+.gh .gc{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.gh .gm{width:70px;height:4px;background:var(--st-pend-bg);border-radius:2px;overflow:hidden;flex:none}
+.gh .gm span{display:block;height:100%;background:var(--st-ok)}
+.gh .car{width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s;flex:none}
+.group[data-open="1"] .car{transform:rotate(45deg)}
+.cases{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.group[data-open="0"] .cases{display:none}
+.case{border-bottom:1px solid var(--line)}
+.case:last-child{border-bottom:0}
+.row{display:grid;grid-template-columns:70px minmax(0,1fr) auto auto;gap:6px 12px;align-items:center;padding:9px 16px;cursor:pointer}
+.row:hover{background:var(--surface2)}
+.id{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.ttl{min-width:0;overflow-wrap:anywhere}
+.ttl small{display:block;color:var(--muted);font-size:12px}
+.chips{display:flex;gap:6px;align-items:center}
+.chip{font-family:var(--f-mono);font-size:11px;padding:1px 7px;border-radius:3px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.chip.p0{border-color:var(--brand);color:var(--brand)}
+.chip.own-Claude{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+.chip.own-Axel{border-color:var(--fg);color:var(--fg)}
+.chip.own-Ambos{border-style:dashed;border-color:var(--fg);color:var(--fg)}
+select.st{border:1px solid var(--line);border-radius:4px;padding:4px 6px;font-size:12px;font-weight:500;cursor:pointer;min-width:104px}
+[data-st="pendiente"] select.st{background:var(--st-pend-bg);color:var(--muted)}
+[data-st="en curso"] select.st{background:var(--st-run-bg);color:var(--st-run);border-color:var(--st-run)}
+[data-st="pasó"] select.st{background:var(--st-ok-bg);color:var(--st-ok);border-color:var(--st-ok)}
+[data-st="falló"] select.st{background:var(--st-fail-bg);color:var(--st-fail);border-color:var(--st-fail)}
+[data-st="bloqueado"] select.st{background:var(--st-block-bg);color:var(--st-block);border-color:var(--st-block)}
+.det{display:none;padding:4px 16px 16px 16px;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 24px;background:var(--surface2)}
+.case[data-open="1"] .det{display:grid}
+.det h3{margin:0 0 2px;font-family:var(--f-mono);font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.det p{margin:0;max-width:62ch}
+.det .full{grid-column:1/-1}
+.det textarea{width:100%;min-height:62px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:8px;resize:vertical}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px;color:var(--muted)}
+.ctl select{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
+.meta{margin-left:auto}
+.foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{background:var(--ink);color:var(--on-ink);border:0;border-radius:5px;padding:8px 14px;cursor:pointer;font-weight:500}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.note{font-size:12px;color:var(--muted);max-width:70ch}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--on-ink);padding:9px 14px;border-radius:5px;font-size:13px;max-width:90vw;z-index:20}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+@media (max-width:640px){
+  h1{font-size:22px}
+  .row{grid-template-columns:62px minmax(0,1fr);}
+  .row .chips,.row select.st{grid-column:2}
+  .det{grid-template-columns:minmax(0,1fr)}
+  .gh .gm{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><i></i>ToursRed · UAT</div>
+    <h1>Matriz de pruebas UAT</h1>
+    <p class="sub">Lanzamiento objetivo: 23 de noviembre de 2026. Cada caso tiene un responsable y un estado que se guarda al instante y lo ven los dos. Claude escribe aquí el resultado de lo que ejecuta; tú marcas lo tuyo.</p>
+  </header>
+
+  <section class="prog" aria-label="Avance general">
+    <div class="top"><span class="pct" id="pct">0%</span><span class="note" id="pctnote"></span></div>
+    <div class="bar" id="bar" role="img" aria-label="Distribución de estados"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section class="owners" id="owners" aria-label="Reparto por responsable"></section>
+
+  <div class="filters">
+    <input type="search" id="q" placeholder="Buscar por id, título o palabra" aria-label="Buscar">
+    <select id="fmod" aria-label="Módulo"></select>
+    <select id="fst" aria-label="Estado"><option value="">Todos los estados</option><option>pendiente</option><option>en curso</option><option>pasó</option><option>falló</option><option>bloqueado</option></select>
+    <select id="fpri" aria-label="Prioridad"><option value="">Toda prioridad</option><option>P0</option><option>P1</option><option>P2</option></select>
+    <label class="chk"><input type="checkbox" id="fhide"> Ocultar terminados</label>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div id="groups"></div>
+
+  <div class="foot">
+    <button class="btn" id="csv" hidden>Exportar CSV</button>
+    <button class="btn ghost" id="copy">Copiar resumen</button>
+  </div>
+  <p class="note"><b>Claude</b>: lo ejecuto solo, con la base, la API, el navegador y el código. <b>Axel</b>: solo tú puedes (login con TOTP u OTP, tarjetas, bandeja de entrada, la pantalla de un procesador). <b>Ambos</b>: tú haces la acción y yo verifico el resultado en la base, el ledger y los correos. P0 bloquea el lanzamiento, P1 es importante, P2 es menor.</p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const MODS={PRE:"Preparación",ACC:"Acceso y cuentas",CAT:"Sitio público",RES:"Reservas y pagos",CAN:"Cancelaciones y reembolsos",WAL:"Saldo, puntos y Plus",AGE:"Agencia",ADM:"Administración",NOT:"Notificaciones y mensajería",FIS:"Fiscal y contable",SEG:"Seguridad y plataforma"};
+const ST=["pendiente","en curso","pasó","falló","bloqueado"];
+const STC={"pendiente":"--st-pend","en curso":"--st-run","pasó":"--st-ok","falló":"--st-fail","bloqueado":"--st-block"};
+// [id, rol, título, qué hacer, resultado esperado, responsable, prioridad, cómo verifica Claude]
+const C=[
+["PRE-01","Todos","Depurar los datos de prueba","Borrar reservas, pagos, asientos, usuarios y tours de prueba que no se vayan a conservar, incluidos los 4 asientos de Plus en la cuenta 401.","La base queda con datos limpios y las cuentas base del UAT. Ninguna fila financiera rara.","Ambos","P0","Reviso conteos por tabla y que el invariante de caja cuadre en cero."],
+["PRE-02","Todos","Cuentas de prueba por rol","Dejar listas: viajero con Plus y MFA, viajero sin Plus, viajero sin MFA, agencia aprobada, personal de agencia, admin, ejecutivo y contador.","Cada cuenta entra y ve solo lo suyo.","Ambos","P0","Verifico roles, MFA y Plus en la base."],
+["PRE-03","Agencia","Un tour de prueba por escenario","Tour con aprobación, con plan de pagos, con último cupo, receptivo, con mapa de asientos y con política de cancelación distinta.","Cada escenario se puede reservar de principio a fin.","Ambos","P0","Reviso cupos, políticas y fechas de cada tour."],
+["PRE-04","Axel","Tarjetas y cuentas sandbox a la mano","Tener a mano tarjetas de prueba y cuentas sandbox de Stripe, PayPal, MercadoPago, OpenPay y Conekta, y una tarjeta que se rechaza.","Ninguna prueba de pago se detiene por falta de credenciales.","Axel","P0",""],
+["PRE-05","Admin","Zona horaria cargada en los destinos","Confirmar que cada destino activo tiene time_zone; los destinos nuevos nacen con la de Ciudad de México.","El recordatorio de un día antes y la hora de la política de cancelación usan la zona del tour.","Claude","P1","Reviso destinations.time_zone: el 28-oct los 7 destinos la tenían (migración 20261009163001)."],
+["PRE-06","Admin","Dominio de producción en enlaces y remitentes","Cambiar platform_url de staging a toursred.com cuando se pase a producción.","Los enlaces de los correos abren el dominio real.","Ambos","P1","Busco enlaces a netlify en las últimas plantillas enviadas."],
+
+["ACC-01","Viajero","Registro con correo y verificación","Crear cuenta en /signup con un correo nuevo y abrir el enlace de verificación.","Cuenta activa, correo de bienvenida recibido, correo verificado en la base.","Ambos","P0","Reviso users y bitacora_envio_correo (proveedor y aceptación)."],
+["ACC-02","Agencia","Registro de agencia, documentos y aprobación","Registrar una agencia en /agency-signup, subir documentos y aprobarla desde admin.","Pasa por pendiente de aprobación, recibe credenciales y entra a su panel.","Ambos","P0","Reviso estados de la agencia y los correos de aprobación."],
+["ACC-03","Viajero","Login con contraseña y TOTP","Entrar con correo y contraseña y luego con el código TOTP.","Primero aal1, después aal2 tras el TOTP.","Axel","P0",""],
+["ACC-04","Todos","Login por celular con OTP por SMS","Pedir código en /login con el teléfono verificado y entrar.","Entra, y el intento queda en la bitácora de mensajes sin guardar el código.","Axel","P0",""],
+["ACC-05","Todos","OTP por WhatsApp","Pedir el código por WhatsApp y verificarlo.","Llega por WhatsApp, estado entregado y verificación correcta.","Axel","P1",""],
+["ACC-06","Todos","Olvidé mi contraseña","Pedir el enlace, abrirlo y fijar una contraseña nueva.","Llega el correo, el enlace funciona y la contraseña nueva entra. Falta esta pasada con la regla de contraseña actual.","Axel","P0",""],
+["ACC-07","Viajero y agencia","Alta con Google","Registrarse como viajero y como agencia con Google.","Cuenta creada con el rol correcto y sin identidades huérfanas.","Axel","P1",""],
+["ACC-08","Todos","Alta con Facebook, X, LinkedIn y Azure","Probar cada proveedor o decidir ocultarlos si no se ofrecen en producción.","Cada botón visible funciona; los que no, se quitan.","Axel","P2",""],
+["ACC-09","Todos","Cambiar la contraseña exige la actual","Cambiar la contraseña desde el perfil.","Pide la contraseña actual y la nueva queda activa. Nadie usa updateUser directo.","Axel","P0",""],
+["ACC-10","Todos","Cambio de correo con confirmación","Pedir cambio de correo y confirmarlo desde el correo nuevo.","El correo cambia solo después de confirmar.","Axel","P1",""],
+["ACC-11","Todos","Cambio de teléfono","Cambiar el número y verificar el nuevo.","El número cambia solo al verificar el nuevo.","Axel","P1",""],
+["ACC-12","Todos","Códigos de recuperación","Generar los códigos, usar uno para entrar y ver que se invalida.","El código usado no sirve otra vez.","Ambos","P1","Reviso el consumo del código en la base."],
+["ACC-13","Visitante","Rutas protegidas sin sesión","Abrir /traveler/*, /agency/*, /admin/* y /accounting sin sesión.","Cada una redirige al login.","Claude","P0","Navego con el navegador integrado sin sesión."],
+["ACC-14","Todos","Rol cruzado","Con un viajero abrir /agency y /admin; con una agencia abrir /admin.","Bloquea y redirige, sin mostrar datos.","Axel","P0",""],
+["ACC-15","Agencia","Personal de agencia","Invitar a una persona, aceptar y entrar.","Ve solo lo permitido por su rol.","Ambos","P1","Reviso la invitación y los permisos en la base."],
+["ACC-16","Ejecutivo","Ejecutivo y sus comisiones","Entrar como ejecutivo y ver agencias, leads y comisiones.","Solo ve lo suyo.","Axel","P2",""],
+["ACC-17","Contador","Acceso del contador","Entrar a /accounting.","Ve contabilidad y no puede cambiar configuración.","Axel","P1",""],
+
+["CAT-01","Visitante","Inicio sin errores","Abrir el inicio en staging.","Carga completa, sin errores en consola ni peticiones fallidas.","Claude","P0","Navegador integrado, consola y red."],
+["CAT-02","Visitante","Catálogo: búsqueda y filtros","Buscar y filtrar en /tours.","Los resultados son coherentes con cada filtro.","Claude","P0","Navegador integrado y comparación con la base."],
+["CAT-03","Visitante","Detalle del tour","Abrir un tour.","Precio, fechas, itinerario y política de cancelación visibles y correctos.","Claude","P0","Comparo la pantalla con los datos del tour."],
+["CAT-04","Visitante","Perfil público de agencia","Abrir /agencies/:id.","Muestra datos reales de la agencia y sus tours.","Claude","P1","Navegador integrado."],
+["CAT-05","Visitante","Páginas legales y cookies","Abrir aviso de privacidad, términos y cookies; usar el banner.","Textos completos; rechazar cookies no esenciales funciona.","Claude","P0","Navegador integrado."],
+["CAT-06","Visitante","Formulario de contacto","Enviar el formulario de /contact.","Llega el correo al buzón de soporte.","Ambos","P1","Reviso la bitácora de envío de correo."],
+["CAT-07","Visitante","Tours internacionales","Abrir cada página internacional y enviar una consulta.","La consulta llega a admin.","Ambos","P2","Reviso international_inquiries."],
+["CAT-08","Visitante","Móvil de 375 px","Recorrer catálogo, detalle y paso 1 de reserva en móvil.","Sin desbordes ni controles tapados.","Claude","P1","Navegador integrado con viewport móvil."],
+["CAT-09","Visitante","Página 404","Abrir una ruta que no existe.","Muestra la página 404 con salida al inicio.","Claude","P2","Navegador integrado."],
+["CAT-10","Visitante","Rendimiento","Medir carga del inicio y del detalle.","Sin bloqueos largos; peso razonable.","Claude","P2","Mido tiempos y peso desde el navegador."],
+
+["RES-01","Viajero","Pago con Stripe","Reservar un tour y pagar con la 4242 4242 4242 4242.","Reserva pagada, comisión real en payment_transactions, asiento balanceado, CFDI y correo.","Ambos","P0","Cruzo la comisión contra la API de Stripe, el asiento y el CFDI."],
+["RES-02","Viajero","Pago con PayPal","Reservar y pagar con la cuenta sandbox.","Reserva pagada, webhook 2xx, comisión y asiento correctos.","Ambos","P0","Reviso webhook_logs, comisión y asiento."],
+["RES-03","Viajero","Pago con MercadoPago","Reservar y pagar en el checkout de MercadoPago.","Reserva pagada, base de comisión e IVA correctas.","Ambos","P0","Reviso webhook_logs, fee y asiento."],
+["RES-04","Viajero","Pago con OpenPay con tarjeta","Reservar y pagar con tarjeta en OpenPay.","Reserva pagada y webhook 2xx.","Ambos","P0","Reviso webhook_logs y asiento."],
+["RES-05","Viajero","OpenPay en efectivo o SPEI","Generar la referencia y pagarla.","Pendiente hasta que paga; vence y libera el cupo si no paga.","Ambos","P1","Sigo la reserva, el vencimiento y la conciliación."],
+["RES-06","Viajero","Pago con Conekta","Reservar y pagar con tarjeta de prueba.","Mismo resultado que el 16-oct: comisión de evento y asiento correcto.","Ambos","P1","Reviso processor_fee_origen y el asiento."],
+["RES-07","Viajero","Pago 100% con ToursRed Cash","Pagar con Cash usando un TOTP de un solo uso.","Pagada sin pasarela, sin cargo por servicio y TOTP consumido.","Ambos","P0","Reviso el TOTP spend consumido y el movimiento de saldo."],
+["RES-08","Viajero","Puntos más tarjeta","Pagar con puntos y tarjeta.","Los puntos cubren como máximo el 50%, se apartan al crear el cobro y se canjean una sola vez.","Ambos","P0","Reviso puntos apartados, canje único y total."],
+["RES-09","Viajero","Cash más puntos sin pasarela","Pagar con Cash y puntos.","Sin cargo por servicio y descuento por puntos en la cuenta 603.","Ambos","P1","Reviso el asiento y el descuento en el CFDI."],
+["RES-10","Viajero","Tarjeta rechazada","Pagar con 4000 0000 0000 0002.","Mensaje claro; la reserva queda pendiente y se reintenta desde Mis reservas.","Axel","P0",""],
+["RES-11","Viajero","Códigos de descuento","Probar código válido, inválido, vencido y agotado.","Cada caso responde con el mensaje correcto y el descuento baja lo que se cobra.","Ambos","P1","Pruebo preview_booking_breakdown con los cuatro casos."],
+["RES-12","Viajero","Desglose igual en pantalla, cobro y CFDI","Comparar el paso 4, lo cobrado y el CFDI.","Los tres coinciden en promoción, descuento, seguro y cargo por servicio.","Ambos","P0","Comparo breakdown, payment_transactions y XML."],
+["RES-13","Viajero","Seguro de viaje","Reservar con y sin seguro.","$79 por día, anticipo correcto y exención del cargo si paga con Cash.","Ambos","P1","Reviso platform_settings y el desglose."],
+["RES-14","Viajero","Reserva con aprobación de la agencia","Reservar, aprobar y pagar dentro de la ventana de 12 h.","Aprobar no mueve dinero; pasadas las 12 h la reserva vence.","Ambos","P1","Reviso la ventana y el vencimiento."],
+["RES-15","Viajero","Asientos","Elegir asiento en Hiace, Urvan y autobús de 2 pisos, y cambiarlo después.","El mapa es correcto y no hay asientos duplicados.","Axel","P1",""],
+["RES-16","Viajero","Datos de viajeros y acompañantes","Llenar /booking-travelers con acompañantes guardados.","Datos guardados y visibles para la agencia.","Axel","P1",""],
+["RES-17","Viajero","Plan de pagos","Pagar el primer abono y el siguiente.","Cada abono respeta el tope de puntos; hay recordatorio y vencimiento.","Ambos","P1","Reviso los abonos y los recordatorios."],
+["RES-18","Viajero y agencia","Suplemento","La agencia solicita, el viajero paga y la agencia lo ve pagado.","Suplemento pagado con cualquier procesador.","Ambos","P1","Reviso booking_supplements y el asiento."],
+["RES-19","Viajero","Extras y seguro después de reservar","Comprar un extra y un seguro después de reservar, con pasarela.","Cobro, asiento y CFDI correctos.","Ambos","P2","Reviso asiento y CFDI."],
+["RES-20","Viajero","Puntos otorgados","Pagar una reserva con y sin Plus.","Con Plus 1 punto por peso; sin Plus 0.","Ambos","P0","Reviso toursred_points_transactions."],
+["RES-21","Viajero","Sobreventa del último cupo","Intentar reservar más lugares de los que quedan.","El sistema rechaza y no sobrevende.","Claude","P0","Pruebo create_booking_atomic dentro de una transacción con ROLLBACK."],
+["RES-22","Viajero","Pago repetido del mismo evento","Reenviar un evento desde el panel de Stripe.","No duplica transacción ni asiento.","Ambos","P0","Cuento transacciones y asientos del evento."],
+["RES-23","Viajero","PayPal rechazado","Provocar un rechazo en el sandbox de PayPal.","Limitación conocida: error genérico sin reintento. Documentar el comportamiento.","Axel","P2",""],
+
+["CAN-01","Viajero","Cancelar con 48 h o más","Cancelar una reserva con más de 48 h de anticipación.","Reembolso del 100% a ToursRed Cash.","Ambos","P0","Reviso monto, saldo y asiento."],
+["CAN-02","Viajero","Cancelar entre 24 y 48 h","Cancelar en esa ventana.","Reembolso según la política del tour (50% por omisión).","Ambos","P0","Comparo con flexible_hours y moderate_hours del tour."],
+["CAN-03","Viajero","Cancelar con menos de 24 h","Cancelar en esa ventana.","Sin reembolso; la penalización se reparte 70% agencia y 30% plataforma.","Ambos","P0","Reviso el reparto 70/30."],
+["CAN-04","Viajero","Cancelación parcial","Cancelar a un solo viajero de la reserva.","Reembolso proporcional y reserva activa con el resto.","Ambos","P1","Reviso proporciones y asiento."],
+["CAN-05","Viajero","Puntos regresan como puntos","Cancelar una reserva pagada con puntos y Cash.","Los puntos regresan como puntos y el Cash como Cash.","Ambos","P0","Reviso el libro de puntos y de saldo."],
+["CAN-06","Viajero","Cancelar pide TOTP","Cancelar con una cuenta con MFA.","Pide reautenticación antes de cancelar.","Axel","P0",""],
+["CAN-07","Admin","Asiento de reversa y nota de crédito","Después de cancelar, revisar contabilidad y CFDI.","Reversa balanceada y nota de crédito timbrada.","Claude","P0","Reviso asiento y CFDI de las cancelaciones anteriores."],
+["CAN-08","Agencia","La agencia cancela una reserva","Cancelar una reserva desde el panel de agencia.","Reembolso total al viajero y correos a las tres partes.","Ambos","P0","Reviso reembolso y correos."],
+["CAN-09","Agencia","La agencia cancela o reprograma el tour","Cancelar un tour completo y reprogramar otro.","Todas las reservas se reembolsan o se mueven; los receptivos no quedan a medias.","Ambos","P1","Reviso el estado de cada reserva afectada."],
+["CAN-10","Agencia","No se cancela un tour pasado","Intentar cancelar un tour que ya pasó.","Sin botón en pantalla y el servidor lo rechaza.","Ambos","P1","Intento la cancelación contra la función."],
+["CAN-11","Viajero","Bordes de hora local","Probar 23:59, 24:01, 47:59 y 48:01 horas antes de la salida.","Las horas se miden en la hora local del tour (la zona de sus destinos). Corregido en el PR de la matriz; debe pasar.","Claude","P1","Evalúo politicaCancelacion con los cuatro bordes y reviso la reserva real de la prueba CAN-02."],
+["CAN-12","Todos","Correos de cancelación","Cancelar y revisar los correos de viajero, agencia y admin.","Llegan los tres con la fecha correcta y sin caer en spam.","Ambos","P1","Reviso la bitácora de envío y las fechas."],
+["CAN-13","Viajero","Reprogramación de salida","Aceptar y rechazar una reprogramación.","Aceptar mueve la reserva; rechazar permite cancelar con reembolso.","Ambos","P1","Reviso la reserva antes y después."],
+
+["WAL-01","Viajero","Recargar ToursRed Cash con tarjeta","Recargar saldo con tarjeta.","Saldo acreditado y movimiento registrado.","Ambos","P1","Reviso saldo, movimiento y asiento."],
+["WAL-02","Viajero","Recargar con OpenPay","Recargar con efectivo o SPEI.","Saldo acreditado al confirmarse el pago.","Ambos","P2","Reviso el estado de la recarga."],
+["WAL-03","Todos","Saldo igual a los movimientos","Comparar el saldo con la suma de movimientos de cada usuario.","Coinciden y no hay saldos negativos.","Claude","P0","Consulta de conciliación por usuario."],
+["WAL-04","Viajero","Comprar ToursRed Plus","Comprar la membresía con Stripe.","Cobro, CFDI y asiento a 403, 210, 604 y 108.","Ambos","P0","Reviso asiento y CFDI."],
+["WAL-05","Viajero","Renovar, fallar y cancelar Plus","Renovar, simular un pago fallido y cancelar.","Estado y correos correctos.","Ambos","P1","Reviso estado y bitácora de correo."],
+["WAL-06","Todos","Libro de puntos","Revisar el libro de puntos de todos los usuarios.","Sin negativos ni canjes duplicados; los apartados vencidos se liberan.","Claude","P0","Consulta de integridad del libro y de apartados."],
+["WAL-07","Viajero","Gift card","Comprar, recibir el correo y canjear.","El saldo llega al que canjea, una sola vez.","Ambos","P1","Reviso la gift card y el saldo."],
+["WAL-08","Viajero","Referidos","Registrarse con un código y completar una reserva.","Se otorga la recompensa una sola vez.","Ambos","P2","Reviso referrals y puntos."],
+["WAL-09","Viajero","Suscripción de notificaciones","Pagar la suscripción en modo de prueba.","Cobro, CFDI y asiento a 403 y 210. El cobro empieza el 1-ene-2027.","Ambos","P1","Reviso asiento y la vista financiera."],
+
+["AGE-01","Agencia","Crear un tour completo","Usar el asistente con fotos, itinerario, precios, cupos y política.","El tour se publica y se ve bien en el catálogo.","Ambos","P0","Reviso la fila del tour y su vista pública."],
+["AGE-02","Agencia","Editar un tour","Cambiar fechas, cupos, precios y política de cancelación.","Los cambios llegan al catálogo sin afectar reservas existentes.","Ambos","P1","Reviso el antes y el después."],
+["AGE-03","Agencia","Agenda","Bloquear fechas y ver reservas por día.","La agenda coincide con las reservas.","Axel","P2",""],
+["AGE-04","Agencia","Aprobar y rechazar reservas","Aprobar una y rechazar otra.","Cada resultado notifica al viajero.","Ambos","P1","Reviso estados y correos."],
+["AGE-05","Agencia","Check-in por QR","Hacer check-in en persona con el QR.","Reserva marcada con check-in y correo de confirmación.","Axel","P0",""],
+["AGE-06","Agencia","Cobro con wallet en el check-in","Cobrar con el OTP del viajero en persona.","Cobro correcto y saldo descontado.","Axel","P1",""],
+["AGE-07","Agencia","Completar y No Show","Marcar una como completada y otra como No Show.","Los correos llevan la fecha reservada, no 1970.","Ambos","P1","Reviso la fecha y el estado."],
+["AGE-08","Agencia","Códigos de descuento de la agencia","Crear, usar y agotar un código.","Respeta vigencia y usos.","Ambos","P1","Reviso usos y descuento."],
+["AGE-09","Agencia","Venta externa con QR","Registrar una venta externa y enviar su QR.","Llega el QR y se registra la venta.","Ambos","P2","Reviso la venta y el correo."],
+["AGE-10","Agencia","Finanzas y liquidación","Ver ventas, comisión y liquidación; admin paga.","La agencia ve su parte y el pago queda asentado.","Ambos","P0","Concilio ventas, liquidación y asiento."],
+["AGE-11","Agencia","Facturas descargables","Descargar XML y PDF de una factura.","Los archivos abren y corresponden al pago.","Ambos","P1","Reviso el XML contra el pago."],
+["AGE-12","Agencia","Destacar un tour","Comprar un espacio destacado.","Activa el espacio y emite CFDI.","Ambos","P2","Reviso el espacio y el CFDI."],
+["AGE-13","Agencia","Mensaje masivo a asistentes","Enviar un mensaje a los asistentes de un tour.","Se guarda, llega por correo y queda en la bitácora. No se ha visto funcionar desde agosto.","Ambos","P1","Reviso el mensaje, la bitácora y los correos."],
+["AGE-14","Agencia","Calificar al viajero y apelar","Calificar a un viajero y reportar una reseña.","Calificación visible a otras agencias; la apelación llega a soporte.","Ambos","P2","Reviso calificaciones y apelaciones."],
+["AGE-15","Agencia","Perfil y preferencias de SMS","Editar el perfil y revisar el SMS.","El SMS de reserva viene apagado por defecto.","Axel","P2",""],
+["AGE-16","Agencia","Firma de contrato con OTP","Firmar el contrato o enmienda.","Pide OTP y genera el contrato firmado.","Axel","P1",""],
+
+["ADM-01","Admin","Aprobar o rechazar agencias","Aprobar una agencia con sus documentos y rechazar otra.","Cada decisión notifica a la agencia.","Ambos","P0","Reviso estados y correos."],
+["ADM-02","Admin","Reservas y limpieza","Listar, filtrar y cancelar como admin.","Los datos son correctos y la cancelación reembolsa.","Axel","P1",""],
+["ADM-03","Admin","Configuración de la plataforma","Guardar ajustes sin romper nada.","Los valores se guardan y se aplican.","Axel","P1",""],
+["ADM-04","Admin","Pagos a agencias","Calcular y pagar una liquidación.","Pago asentado y correo de confirmación.","Ambos","P0","Reviso payout, asiento y correo."],
+["ADM-05","Admin","CFDI","Listar, reintentar fallidos, cancelar y crear uno manual.","Cada acción cambia el estado correcto.","Ambos","P0","Reviso cfdi_documents y audit_errors."],
+["ADM-06","Admin","Contabilidad cuadrada","Revisar libro diario, balanza y reporte maestro.","Débitos igual a créditos y totales coinciden.","Claude","P0","Consulto la balanza por período."],
+["ADM-07","Admin","Gastos","Crear un gasto y ver el borrador del cierre mensual.","El gasto aparece en la cuenta 607.","Ambos","P2","Reviso el asiento del gasto."],
+["ADM-08","Admin","Service desk","Crear un ticket, asignarlo, responderlo y cerrarlo.","Cada paso envía su correo.","Ambos","P1","Reviso ticket y correos."],
+["ADM-09","Admin","Bitácoras de correo y mensajes","Revisar lo enviado.","Sin cuerpo de correo ni código de OTP guardado.","Claude","P1","Consulto bitacora_envio_correo y notification_attempts."],
+["ADM-10","Admin","Registro de auditoría","Hacer acciones sensibles y revisar el registro.","Cada una deja su fila con quién y cuándo.","Claude","P1","Consulto el audit log tras las pruebas."],
+["ADM-11","Admin","Resolver apelaciones","Resolver una apelación de calificación y una de reseña.","El resultado se refleja y avisa a la parte.","Ambos","P2","Reviso el estado final."],
+["ADM-12","Admin","Newsletter y bajas","Enviar un newsletter y darse de baja.","La baja se respeta en el siguiente envío.","Ambos","P2","Reviso la lista de bajas."],
+["ADM-13","Admin","Ejecutivos y comisiones","Crear un ejecutivo, convertir un lead y ver comisiones.","Comisión calculada correctamente.","Ambos","P2","Reviso comisiones."],
+["ADM-14","Admin","Aviso previo del cobro de notificaciones","Simular el aviso.","No duplica y dice qué condición falta.","Claude","P1","Ejecuto la simulación y reviso avisos_cobro_notificaciones."],
+["ADM-15","Admin","Conciliación OpenPay","Abrir la conciliación.","Coincide con los pagos de OpenPay.","Claude","P2","Concilio contra payment_transactions."],
+["ADM-16","Admin","Destinos, categorías y puntos de salida","Crear, editar y desactivar cada uno.","Se reflejan en el catálogo.","Axel","P2",""],
+
+["NOT-01","Viajero y agencia","Correo de confirmación de reserva","Reservar y revisar la bandeja de viajero y agencia.","Llegan ambos con los datos correctos.","Ambos","P0","Reviso la bitácora de envío."],
+["NOT-02","Todos","Correos fuera de spam","Revisar en Gmail y Outlook; deberían llevar texto plano y nombre visible.","Llegan a la bandeja de entrada de Gmail y Outlook. Todos salen ya con texto plano y como ToursRed <correo>; si los de cancelación siguen en cuarentena de Defender, abrir otra vía.","Ambos","P1","Reviso SPF, DKIM y DMARC, el encabezado y que el envío lleve la parte text/plain."],
+["NOT-03","Admin","Cambiar de proveedor de correo","Cambiar el proveedor principal en Configuración.","El siguiente correo sale por el proveedor elegido.","Ambos","P1","Reviso el proveedor en la bitácora."],
+["NOT-04","Admin","Rebotes y aperturas","Enviar un correo que rebote.","El evento llega al webhook y queda registrado.","Claude","P2","Reviso bitacora_evento_correo."],
+["NOT-05","Viajero","SMS de reserva y opt-in","Reservar con y sin la preferencia encendida.","Sin preferencia no hay SMS; con ella sí.","Ambos","P1","Reviso la cola y los intentos."],
+["NOT-06","Viajero","Recordatorio de un día antes","Esperar el recordatorio de un tour.","Se envía una vez, a la hora correcta.","Claude","P1","Reviso el scheduler y la cola."],
+["NOT-07","Admin","Bandeja de WhatsApp","Responder desde /admin/whatsapp-entrantes.","Entrantes con adjuntos y respuestas con estado leído.","Axel","P1",""],
+["NOT-08","Viajero y agencia","Mensajes entre viajero y agencia","Chatear desde /messages.","El mensaje llega y avisa por correo.","Ambos","P1","Reviso el mensaje y el aviso."],
+["NOT-09","Todos","Notificaciones dentro de la app","Abrir /notifications.","Se listan y se marcan como leídas.","Axel","P2",""],
+["NOT-10","Todos","Baja de avisos","Usar /avisos/baja y /unsubscribe.","La baja se respeta.","Ambos","P1","Reviso la preferencia guardada."],
+["NOT-11","Todos","Enlaces del dominio correcto","Abrir los enlaces de los correos.","Apuntan al dominio de producción.","Claude","P1","Busco el dominio en las plantillas. Hoy apuntan a staging."],
+
+["FIS-01","Contabilidad","Cada asiento está balanceado","Revisar todos los asientos.","Débitos igual a créditos.","Claude","P0","Consulta de balance por asiento."],
+["FIS-02","Contabilidad","Clasificación concepto por concepto","Revisar la cuenta de cada concepto.","Reserva a 208, membresía a 403, notificaciones a 403 y 210, comisión a 604 y 108, puntos a 603.","Claude","P0","Afirmo la cuenta de cada concepto, no solo el total."],
+["FIS-03","Contabilidad","Vista financiera","Revisar la clasificación de notification_subscription.","No se clasifica como pasivo.","Claude","P0","Consulto vista_movimientos_financieros."],
+["FIS-04","Contabilidad","Un CFDI por cada pago","Cruzar pagos confirmados con CFDI.","Cada pago tiene su CFDI timbrado y su XML.","Claude","P0","Cruzo pagos contra CFDI."],
+["FIS-05","Contabilidad","Comisión igual a la del procesador","Comparar con la API de cada procesador.","Coincide al centavo.","Claude","P1","Consulto la API de cada procesador."],
+["FIS-06","Contabilidad","Sin huérfanos","Buscar pagos sin asiento y asientos sin pago.","Ninguno.","Claude","P0","Consulta de huérfanos en ambos sentidos."],
+["FIS-07","Contabilidad","Snapshot de impuestos","Revisar audit_errors de reservas nuevas.","Vacío.","Claude","P1","Consulto audit_errors."],
+["FIS-08","Contabilidad","Base más IVA igual al total","Revisar reservas, membresías y notificaciones.","Cuadra al centavo.","Claude","P0","Consulta de totales."],
+["FIS-09","Contabilidad","Cierre mensual de mensajería","Revisar el cierre del 1-nov.","Genera un gasto en borrador en la cuenta 607.","Claude","P1","Reviso el asiento después del 1-nov."],
+
+["SEG-01","Plataforma","Anónimo no lee tablas sensibles","Consultar users, payment_transactions y saldos con la llave pública.","Sin filas.","Claude","P0","Sondeo la API REST con la llave anon."],
+["SEG-02","Plataforma","Permisos de tablas","Revisar permisos de escritura de authenticated.","Solo lectura en las tablas del cobro.","Claude","P0","Corro has_table_privilege y scripts/test-permisos-tablas-cobro.mjs."],
+["SEG-03","Plataforma","Un usuario no ve datos de otro","Consultar como un usuario los datos de otro.","Sin acceso.","Claude","P0","Simulo el JWT de dos usuarios dentro de una transacción."],
+["SEG-04","Plataforma","Arranque de las Edge Functions","Mandar OPTIONS a cada una.","Ninguna falla al arrancar.","Claude","P0","Barrido de OPTIONS a las 196 funciones."],
+["SEG-05","Plataforma","verify_jwt correcto","Cruzar config.toml con la API.","Los webhooks en false y el resto en true.","Claude","P0","Comparo contra la API de funciones."],
+["SEG-06","Plataforma","Firmas inválidas en webhooks","Mandar un evento con firma inválida.","Responde 4xx, nunca 2xx ni 5xx.","Claude","P0","Pruebo cada webhook de pago."],
+["SEG-07","Plataforma","Ledger de migraciones","Comparar ledger y archivos.","0 desalineados.","Claude","P0","Corro scripts/check-migration-drift.mjs."],
+["SEG-08","Plataforma","Advisors de Supabase","Revisar seguridad y rendimiento.","Sin hallazgos críticos.","Claude","P1","Consulto get_advisors."],
+["SEG-09","Plataforma","Secretos","Revisar a qué cuenta apunta la llave de Stripe y que ninguna llave esté en el navegador.","Cuenta correcta; ningún secreto en el bundle.","Claude","P0","Consulto la cuenta y busco secretos en el bundle."],
+["SEG-10","Plataforma","Límites de OTP y cambio de correo","Pedir códigos repetidos.","Cooldown de 60 s y topes por hora.","Claude","P1","Pruebo los límites contra las funciones."],
+["SEG-11","Plataforma","Cabeceras y CSP","Revisar las cabeceras del sitio.","Cabeceras de seguridad presentes.","Claude","P2","Consulto las cabeceras de staging."],
+["SEG-12","Plataforma","CI en verde","Revisar lint, tipos, contratos y guardias.","Todos en verde sobre main.","Claude","P0","Corro npm run lint y npm run typecheck y reviso los checks de main."],
+["SEG-13","Plataforma","Webhook de Stripe en producción","Crear el endpoint en la cuenta live.","Existe y responde. Bloquea cobrar dinero real.","Axel","P0",""],
+["SEG-14","Plataforma","Escaneo ASV y SAQ A","Contratar el ASV y archivar el SAQ A.","Escaneo aprobatorio cada 90 días.","Axel","P1",""],
+["SEG-15","Plataforma","Plan de recuperación del admin","Escribir qué pasa si el admin pierde el correo y el TOTP a la vez.","Plan escrito y probado.","Axel","P1",""]
+];
+
+const $=s=>document.querySelector(s);
+const E=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const state={};      // id -> {status, owner, notes, by, at}
+const nodes={};      // id -> {li, sel, own, notes, meta, chip}
+const filt={owner:"",mod:"",st:"",pri:"",q:"",hide:false};
+let db=null, dl=null;
+
+function cur(c){const s=state[c[0]]||{};return{status:s.status||"pendiente",owner:s.owner||c[5],notes:s.notes||"",by:s.by||"",at:s.at||""}}
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,3200)}
+function fmt(iso){if(!iso)return"";try{return new Date(iso).toLocaleString("es-MX",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}catch(e){return""}}
+
+async function save(id,patch){
+  const c=C.find(x=>x[0]===id), base=cur(c);
+  const next={status:base.status,owner:base.owner,notes:base.notes,...patch,by:"Axel (página)",at:new Date().toISOString()};
+  state[id]=next; paint(id); summary();
+  if(!db){toast("Sin conexión con la base: el cambio no se guardó.");return}
+  try{await db.doc("casos/"+id).set(next)}catch(e){toast(e&&e.code==="invalid_argument"?"Solo lectura: tu acceso no permite guardar.":"No se pudo guardar. Intenta de nuevo.")}
+}
+
+function build(){
+  const g=$("#groups");g.textContent="";
+  const mods=Object.keys(MODS);
+  const fm=$("#fmod");fm.append(new Option("Todos los módulos",""));
+  mods.forEach(m=>fm.append(new Option(MODS[m],m)));
+  mods.forEach(m=>{
+    const grp=E("section","group");grp.dataset.open=m==="PRE"?"1":"0";grp.dataset.mod=m;
+    const h=E("button","gh");h.type="button";
+    const t=E("h2","",MODS[m]),gc=E("span","gc"),gm=E("span","gm"),car=E("span","car");gm.append(E("span"));
+    h.append(t,gc,gm,car);h.onclick=()=>{grp.dataset.open=grp.dataset.open==="1"?"0":"1"};
+    const ul=E("ul","cases");
+    C.filter(c=>c[0].startsWith(m+"-")).forEach(c=>{
+      const li=E("li","case");li.dataset.id=c[0];li.dataset.open="0";
+      const row=E("div","row");
+      const ttl=E("div","ttl",c[2]);ttl.append(E("small","",c[1]));
+      const chips=E("div","chips");const cp=E("span","chip "+(c[6]==="P0"?"p0":""),c[6]);const co=E("span","chip");chips.append(cp,co);
+      const sel=E("select","st");sel.setAttribute("aria-label","Estado de "+c[0]);ST.forEach(s=>sel.append(new Option(s,s)));
+      sel.onclick=e=>e.stopPropagation();sel.onchange=()=>save(c[0],{status:sel.value});
+      row.append(E("span","id",c[0]),ttl,chips,sel);
+      row.onclick=()=>{li.dataset.open=li.dataset.open==="1"?"0":"1"};
+      const det=E("div","det");
+      const b=(h3,txt,cls)=>{const d=E("div",cls||"");d.append(E("h3","",h3),E("p","",txt||"—"));return d};
+      det.append(b("Qué hacer",c[3]),b("Resultado esperado",c[4]));
+      if(c[7])det.append(b("Cómo lo verifica Claude",c[7],"full"));
+      const nd=E("div","full");nd.append(E("h3","","Notas y evidencia"));
+      const ta=E("textarea");ta.id="n-"+c[0];ta.placeholder="Qué pasó, enlace a la reserva o captura, número de reserva…";
+      ta.onchange=()=>save(c[0],{notes:ta.value});nd.append(ta);
+      const ctl=E("div","ctl full");const ol=E("label","","Responsable ");const os=E("select");os.id="o-"+c[0];
+      ["Claude","Axel","Ambos"].forEach(o=>os.append(new Option(o,o)));os.onchange=()=>save(c[0],{owner:os.value});ol.append(os);
+      const meta=E("span","meta");ctl.append(ol,meta);
+      det.append(nd,ctl);
+      li.append(row,det);ul.append(li);
+      nodes[c[0]]={li,sel,co,ta,os,meta};
+    });
+    grp.append(h,ul);g.append(grp);
+  });
+  C.forEach(c=>paint(c[0]));
+}
+
+function paint(id){
+  const c=C.find(x=>x[0]===id),s=cur(c),n=nodes[id];
+  n.li.dataset.st=s.status;n.sel.value=s.status;
+  n.co.textContent=s.owner;n.co.className="chip own-"+s.owner;
+  n.os.value=s.owner;
+  if(document.activeElement!==n.ta)n.ta.value=s.notes;
+  n.meta.textContent=s.by?("Último cambio: "+s.by+" · "+fmt(s.at)):"";
+}
+
+function visible(c,s){
+  if(filt.owner&&s.owner!==filt.owner)return false;
+  if(filt.mod&&!c[0].startsWith(filt.mod+"-"))return false;
+  if(filt.st&&s.status!==filt.st)return false;
+  if(filt.pri&&c[6]!==filt.pri)return false;
+  if(filt.hide&&s.status==="pasó")return false;
+  if(filt.q){const h=(c[0]+" "+c[1]+" "+c[2]+" "+c[3]+" "+c[4]).toLowerCase();if(!h.includes(filt.q))return false}
+  return true;
+}
+
+function summary(){
+  const tot={},own={Claude:{n:0,d:0},Axel:{n:0,d:0},Ambos:{n:0,d:0}},mod={};
+  ST.forEach(s=>tot[s]=0);let shown=0;
+  C.forEach(c=>{
+    const s=cur(c);tot[s.status]++;
+    own[s.owner].n++;if(s.status==="pasó")own[s.owner].d++;
+    const m=c[0].slice(0,3);mod[m]=mod[m]||{n:0,d:0,v:0};mod[m].n++;if(s.status==="pasó")mod[m].d++;
+    const v=visible(c,s);nodes[c[0]].li.hidden=!v;if(v){shown++;mod[m].v++}
+  });
+  const N=C.length;
+  $("#pct").textContent=Math.round(tot["pasó"]/N*100)+"% aprobado";
+  $("#pctnote").textContent=tot["pasó"]+" de "+N+" casos aprobados · "+tot["falló"]+" fallaron · "+tot["bloqueado"]+" bloqueados";
+  $("#bar").textContent="";
+  [["pasó"],["falló"],["bloqueado"],["en curso"],["pendiente"]].forEach(([k])=>{
+    const sp=E("span");sp.style.width=(tot[k]/N*100)+"%";sp.style.background="var("+STC[k]+")";$("#bar").append(sp)});
+  $("#legend").textContent="";
+  ST.forEach(k=>{const l=E("span");const i=E("i");i.style.background="var("+STC[k]+")";l.append(i,document.createTextNode(k+" "),Object.assign(E("b"),{textContent:tot[k]}));$("#legend").append(l)});
+  const ow=$("#owners");ow.textContent="";
+  [["","Todos","Todo el UAT"],["Claude","Claude","Los ejecuto yo solo"],["Axel","Axel","Solo tú puedes"],["Ambos","Ambos","Tú haces, yo verifico"]].forEach(([k,lbl,d])=>{
+    const n=k?own[k].n:N,dn=k?own[k].d:tot["pasó"];
+    const b=E("button","own");b.type="button";b.setAttribute("aria-pressed",String(filt.owner===k));
+    b.append(E("span","n",lbl),E("span","v",dn+" / "+n),E("span","d",d));
+    const m=E("div","mini");const f=E("span");f.style.width=(n?dn/n*100:0)+"%";m.append(f);b.append(m);
+    b.onclick=()=>{filt.owner=k;summary()};ow.append(b)});
+  document.querySelectorAll(".group").forEach(g=>{
+    const m=mod[g.dataset.mod];g.hidden=!m.v;
+    g.querySelector(".gc").textContent=m.d+"/"+m.n;
+    g.querySelector(".gm span").style.width=(m.d/m.n*100)+"%";
+  });
+  $("#count").textContent=shown+" de "+N+" casos";
+}
+
+function csv(){
+  const q=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+  const rows=[["ID","Módulo","Rol","Título","Qué hacer","Resultado esperado","Prioridad","Responsable","Estado","Notas","Último cambio"]];
+  C.forEach(c=>{const s=cur(c);rows.push([c[0],MODS[c[0].slice(0,3)],c[1],c[2],c[3],c[4],c[6],s.owner,s.status,s.notes,s.by?(s.by+" "+s.at):""])});
+  return "﻿"+rows.map(r=>r.map(q).join(",")).join("\r\n");
+}
+async function copySummary(){
+  const t={};ST.forEach(s=>t[s]=0);C.forEach(c=>t[cur(c).status]++);
+  const txt="UAT ToursRed: "+t["pasó"]+"/"+C.length+" aprobados, "+t["falló"]+" fallaron, "+t["bloqueado"]+" bloqueados, "+t["en curso"]+" en curso, "+t["pendiente"]+" pendientes.";
+  try{await navigator.clipboard.writeText(txt);toast("Resumen copiado.")}catch(e){toast(txt)}
+}
+
+build();summary();
+$("#q").oninput=e=>{filt.q=e.target.value.trim().toLowerCase();summary()};
+$("#fmod").onchange=e=>{filt.mod=e.target.value;summary()};
+$("#fst").onchange=e=>{filt.st=e.target.value;summary()};
+$("#fpri").onchange=e=>{filt.pri=e.target.value;summary()};
+$("#fhide").onchange=e=>{filt.hide=e.target.checked;summary()};
+$("#copy").onclick=copySummary;
+$("#csv").onclick=async()=>{try{await dl.save({filename:"matriz-uat-toursred.csv",data:csv()})}catch(e){if(!e||e.code!=="declined")toast("No se pudo exportar el archivo.")}};
+
+(async()=>{
+  try{dl=await claude.use("downloads");if(dl)$("#csv").hidden=false}catch(e){}
+  try{db=await claude.use("db")}catch(e){db=null}
+  if(!db){toast("Modo de solo vista: la base no está disponible aquí.");return}
+  db.collection("casos").onSnapshot(snap=>{
+    snap.docs.forEach(d=>{const id=d.id;if(nodes[id]){state[id]=d.data();paint(id)}});
+    summary();
+  },e=>{toast("Se perdió la conexión con la base.")});
+})();
+</script>

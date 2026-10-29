@@ -96,7 +96,8 @@ Deno.serve(async (req: Request) => {
         has_payment_plan, travel_insurance_included, travel_insurance_cost,
         selected_date, selected_time, approval_status, slot_id, selected_seats,
         tours (id, name, start_date, cancellation_not_allowed, tour_type,
-               flexible_hours, flexible_refund_percentage, moderate_hours, moderate_refund_percentage),
+               flexible_hours, flexible_refund_percentage, moderate_hours, moderate_refund_percentage,
+               tour_destinations (destinations (time_zone))),
         agencies (id, user_id)
       `)
       .eq("id", bookingId)
