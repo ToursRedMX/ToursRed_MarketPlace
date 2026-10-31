@@ -159,6 +159,9 @@ jobs:
       - name: Verify partial-cancellation CFDI state and totals (exempt concepts carry no VAT)
         run: node scripts/test-cfdi-parcial-estado-y-totales.mjs
 
+      - name: Verify vehicle change per departure with notice (migration, edge functions, front)
+        run: node scripts/test-vehiculo-por-salida-con-aviso.mjs
+
       - name: Verify seat map per slot and capacity as a cap (not above the vehicle)
         run: node scripts/test-mapa-por-horario.mjs
 

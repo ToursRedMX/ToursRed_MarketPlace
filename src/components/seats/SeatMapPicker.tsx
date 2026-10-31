@@ -213,6 +213,8 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
 
       // When a slot is selected, fetch both slot-specific statuses AND global blocks (slot_id = null).
       // Global blocks are created when the agency blocks a seat before any slots exist.
+      // Un bloqueo general (slot_id NULL) es por numero de asiento del mapa del TOUR: no aplica a una salida con vehiculo propio.
+      const aplicaBloqueoGlobal = !mapa.propio;
       let statusData: SlotSeatStatusRow[] = [];
       if (slotId) {
         const [slotResult, globalResult] = await Promise.all([
@@ -221,12 +223,14 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
             .select('seat_number, status, booking_id, block_note')
             .eq('tour_id', tourId)
             .eq('slot_id', slotId),
-          supabase
-            .from('slot_seat_status')
-            .select('seat_number, status, booking_id, block_note')
-            .eq('tour_id', tourId)
-            .is('slot_id', null)
-            .in('status', ['bloqueado_agencia']),
+          aplicaBloqueoGlobal
+            ? supabase
+                .from('slot_seat_status')
+                .select('seat_number, status, booking_id, block_note')
+                .eq('tour_id', tourId)
+                .is('slot_id', null)
+                .in('status', ['bloqueado_agencia'])
+            : Promise.resolve({ data: [] as SlotSeatStatusRow[], error: null }),
         ]);
         // F-1: si una de las dos consultas falla y se ignora, el mapa se pinta
         // con los asientos que SI se pudieron leer y el resto aparece LIBRE.

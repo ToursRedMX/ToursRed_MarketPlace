@@ -1,10 +1,12 @@
 -- Mapa de asientos por horario y capacidad como TOPE (31-oct-2026).
 --
 -- LO QUE SE ENCONTRO (medido contra la base):
---   1. `tour_slots.vehicle_map_type` existe desde hace meses (0 de 143 horarios futuros lo usan) y `effective_vehicle_map_type(tour, slot)`
---      tambien, pero NADIE la usaba: el selector de asientos, el gestor de la agencia y las dos funciones que validan asientos leian
+--   1. `tour_slots.vehicle_map_type` y `effective_vehicle_map_type(tour, slot)` existian en la base (0 de 143 horarios futuros usaban la columna)
+--      pero NADIE las usaba: el selector de asientos, el gestor de la agencia y las dos funciones que validan asientos leian
 --      `tours.vehicle_map_type`. Un tour con Sprinter por omision y un bus de 60 solo en los horarios de mucha demanda era imposible.
---      Ademas `effective_vehicle_map_type` NO estaba en ninguna migracion del repo: se creo fuera de el. Aqui pasa a ser del repo.
+--      CORRECCION (31-oct-2026): venian de la rama del PR #472 (migracion 20261024010100, aplicada a mano y a medias, sin pasar por el ledger), NO
+--      de «hace meses» ni de una creacion al azar. Ninguna migracion de main creaba la columna, asi que en una base nueva esta migracion fallaba:
+--      por eso el ADD COLUMN IF NOT EXISTS de abajo. En produccion no cambia nada. `effective_vehicle_map_type` pasa a ser del repo aqui.
 --   2. Nada impedia una capacidad mayor que los asientos del mapa (Tour a Teotihuacan: mapa de 60 y cupos de 20, sin ninguna senal), ni
 --      que `hold_seats` apartara el asiento 59 en una Sprinter de 20: solo cuenta lugares, no valida el numero contra el mapa.
 --
@@ -12,6 +14,13 @@
 -- nunca mayor. Y un asiento solo existe si esta en el mapa efectivo del horario.
 --
 -- NO cambia el calculo de disponibilidad (capacidad - reservas - externos - bloqueados - apartados): ver `toursred_ops.inventory`.
+
+-- 0. La columna que todo lo demas lee. Idempotente: en produccion ya existe (aplicada a mano desde el PR #472) y esta linea no hace nada; en una base
+-- nueva construida solo con las migraciones del repo es la unica que la crea.
+ALTER TABLE public.tour_slots
+  ADD COLUMN IF NOT EXISTS vehicle_map_type text REFERENCES public.vehicle_seat_layouts(type);
+COMMENT ON COLUMN public.tour_slots.vehicle_map_type IS
+  'Mapa de asientos propio de esta salida. NULL = el del tour (tours.vehicle_map_type).';
 
 -- 1. Mapa efectivo del horario: el del horario si tiene propio, y si no el del tour. (Misma definicion que ya existia en la base.)
 CREATE OR REPLACE FUNCTION public.effective_vehicle_map_type(p_tour_id uuid, p_slot_id uuid DEFAULT NULL::uuid)

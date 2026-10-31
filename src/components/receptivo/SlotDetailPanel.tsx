@@ -5,7 +5,8 @@ import { es } from 'date-fns/locale';
 import { supabase } from '../../lib/supabase';
 import { TourSlot, SlotStatus } from '../../types';
 import { mensajeDeError } from '../../lib/errores';
-import { OPCIONES_DE_VEHICULO, cuposSugeridos, evaluarCapacidad, mapaEfectivo, opcionDeVehiculo } from '../../lib/mapaDeAsientos';
+import { evaluarCapacidad, mapaEfectivo, opcionDeVehiculo } from '../../lib/mapaDeAsientos';
+import SlotVehicleChangeModal from '../seats/SlotVehicleChangeModal';
 
 interface SlotDetailPanelProps {
   tourId: string;
@@ -37,9 +38,9 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ tourId, dateKey, slot
   const [tourMap, setTourMap] = useState<string | null>(null);
   const [slotMaps, setSlotMaps] = useState<Record<string, string | null>>({});
   const [mapaVersion, setMapaVersion] = useState(0);
-  const [editingMap, setEditingMap] = useState<string | null>(null);
-  const [newMap, setNewMap] = useState('');
-  const [newMapCupos, setNewMapCupos] = useState('');
+  // Cambiar el vehiculo de una salida pasa SIEMPRE por el modal de cambio de vehiculo (change_slots_vehicle): suelta los asientos de la salida,
+  // marca a las reservas para elegir de nuevo y avisa a los viajeros. Un UPDATE directo dejaria reservas con numeros de asiento del vehiculo viejo.
+  const [vehicleModalSlot, setVehicleModalSlot] = useState<string | null>(null);
   const idsKey = slots.map(s => s.id).join(',');
   const [editingCapacity, setEditingCapacity] = useState<string | null>(null);
   const [newCapacity, setNewCapacity] = useState('');
@@ -103,63 +104,6 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ tourId, dateKey, slot
       onRefresh();
     } catch (err) {
       setError(mensajeDeError(err) || 'Error al actualizar la capacidad.');
-    } finally {
-      setIsUpdating(null);
-    }
-  };
-
-  const abrirEditorDeMapa = (slot: TourSlot) => {
-    setError('');
-    setEditingMap(slot.id);
-    setNewMap(slotMaps[slot.id] ?? '');
-    setNewMapCupos(String(slot.capacity));
-  };
-
-  const handleSaveMap = async (slot: TourSlot) => {
-    const nuevoTipo = newMap || null;
-    const asientos = opcionDeVehiculo(mapaEfectivo(nuevoTipo, tourMap))?.capacity ?? null;
-    const cupos = parseInt(newMapCupos);
-    if (!cupos || cupos < 1) {
-      setError('Los cupos deben ser mayores a 0.');
-      return;
-    }
-    if (cupos < (slot.booked_count || 0)) {
-      setError(`No se puede bajar a ${cupos} cupos porque ya hay ${slot.booked_count} reservados en este horario.`);
-      return;
-    }
-    const evaluacion = evaluarCapacidad(cupos, asientos);
-    if (evaluacion.estado === 'excede') {
-      setError(evaluacion.mensaje);
-      return;
-    }
-    setIsUpdating(slot.id);
-    setError('');
-    try {
-      // Un asiento ocupado o bloqueado que no existiria en el vehiculo nuevo se quedaria huerfano.
-      const { data: tomados, error: errTomados } = await supabase
-        .from('slot_seat_status')
-        .select('seat_number')
-        .eq('slot_id', slot.id)
-        .in('status', ['reservado_online', 'bloqueado_agencia'])
-        .order('seat_number', { ascending: false })
-        .limit(1);
-      if (errTomados) throw errTomados;
-      const mayor = tomados?.[0]?.seat_number as number | undefined;
-      if (asientos && mayor && mayor > asientos) {
-        setError(`Hay asientos ocupados o bloqueados (hasta el ${mayor}) que no existen en ese vehiculo. Cambia primero esas reservas.`);
-        return;
-      }
-      // Vehiculo y cupos en el MISMO update: el trigger que valida cupos <= asientos ve los dos valores juntos.
-      const { error: err } = await supabase
-        .from('tour_slots')
-        .update({ vehicle_map_type: nuevoTipo, capacity: cupos, updated_at: new Date().toISOString() })
-        .eq('id', slot.id);
-      if (err) throw err;
-      setEditingMap(null);
-      setMapaVersion(v => v + 1);
-      onRefresh();
-    } catch (err) {
-      setError(mensajeDeError(err) || 'Error al cambiar el vehiculo.');
     } finally {
       setIsUpdating(null);
     }
@@ -335,54 +279,17 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ tourId, dateKey, slot
                 {tourMap && !['cancelado', 'completado'].includes(slot.status) && (
                   <div className="mt-3 bg-gray-50 rounded-lg p-2.5 text-xs">
                     <p className="text-gray-400 mb-0.5">Vehiculo (mapa de asientos)</p>
-                    {editingMap === slot.id ? (
-                      <div className="flex flex-col gap-y-2 mt-1">
-                        <select
-                          value={newMap}
-                          onChange={e => {
-                            setNewMap(e.target.value);
-                            setNewMapCupos(cuposSugeridos(slot.capacity, mapaActual, mapaEfectivo(e.target.value || null, tourMap)));
-                          }}
-                          className="w-full border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-hidden focus:ring-1 focus:ring-red-500"
-                        >
-                          <option value="">Heredar del tour ({opcionDeVehiculo(tourMap)?.label ?? tourMap})</option>
-                          {OPCIONES_DE_VEHICULO.map(o => (
-                            <option key={o.type} value={o.type}>{o.label} ({o.capacity} asientos)</option>
-                          ))}
-                        </select>
-                        <label className="flex items-center gap-1.5 text-gray-500">
-                          Cupos de este horario
-                          <input
-                            type="number" min="1" value={newMapCupos}
-                            onChange={e => setNewMapCupos(e.target.value)}
-                            className="w-16 border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-hidden focus:ring-1 focus:ring-red-500"
-                          />
-                        </label>
-                        <div className="flex gap-1.5">
-                          <button onClick={() => handleSaveMap(slot)} disabled={isUpdatingThis}
-                            className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50">
-                            {isUpdatingThis ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <CheckCircle className="w-2.5 h-2.5" />}
-                            Guardar
-                          </button>
-                          <button onClick={() => setEditingMap(null)}
-                            className="px-2 py-1 border border-gray-300 text-gray-600 rounded hover:bg-gray-50 transition-colors">
-                            Cancelar
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-gray-700 text-sm">{opcionActual?.label ?? mapaActual}</span>
-                        {!slotMaps[slot.id] && <span className="text-[10px] text-gray-400">(del tour)</span>}
-                        <button
-                          onClick={() => abrirEditorDeMapa(slot)}
-                          title="Cambiar el vehiculo de este horario"
-                          className="p-0.5 text-gray-300 hover:text-gray-600 transition-colors">
-                          <Edit2 className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                    )}
-                    {(evaluacionCupos.estado === 'menor' || evaluacionCupos.estado === 'excede') && editingMap !== slot.id && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-gray-700 text-sm">{opcionActual?.label ?? mapaActual}</span>
+                      {!slotMaps[slot.id] && <span className="text-[10px] text-gray-400">(del tour)</span>}
+                      <button
+                        onClick={() => setVehicleModalSlot(slot.id)}
+                        title="Cambiar el vehiculo de este horario"
+                        className="p-0.5 text-gray-300 hover:text-gray-600 transition-colors">
+                        <Edit2 className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                    {(evaluacionCupos.estado === 'menor' || evaluacionCupos.estado === 'excede') && (
                       <p className={`mt-1 text-[11px] ${evaluacionCupos.estado === 'excede' ? 'text-red-600' : 'text-gray-500'}`}>{evaluacionCupos.mensaje}</p>
                     )}
                   </div>
@@ -419,6 +326,23 @@ const SlotDetailPanel: React.FC<SlotDetailPanelProps> = ({ tourId, dateKey, slot
             );
           })}
         </div>
+      )}
+
+      {vehicleModalSlot && (
+        <SlotVehicleChangeModal
+          tourId={tourId}
+          slots={slots.map(s => ({
+            id: s.id,
+            slot_date: s.slot_date,
+            departure_time: s.departure_time,
+            capacity: s.capacity,
+            booked_count: s.booked_count,
+            vehicle_map_type: slotMaps[s.id] ?? null,
+          }))}
+          initialSlotId={vehicleModalSlot}
+          onClose={() => setVehicleModalSlot(null)}
+          onDone={() => { setVehicleModalSlot(null); setMapaVersion(v => v + 1); onRefresh(); }}
+        />
       )}
     </div>
   );

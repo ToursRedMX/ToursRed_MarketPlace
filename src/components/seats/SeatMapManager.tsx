@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Lock, User, AlertCircle, Loader2, RefreshCw, X, Check, Calendar, Clock, ChevronDown } from 'lucide-react';
+import { Bus, Lock, User, AlertCircle, Loader2, RefreshCw, X, Check, Calendar, Clock, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { SeatWithStatus, VehicleSeatLayout } from '../../types/seats';
 import SeatMapFeatures from './SeatMapFeatures';
 import { comoFilas } from '../../lib/relacionesSupabase';
 import { tipoDeMapaEfectivo, cargarLayoutDeMapa } from '../../lib/mapaDeAsientos';
+import SlotVehicleChangeModal from './SlotVehicleChangeModal';
 
 interface SlotSeatStatusRow {
   seat_number: number;
@@ -49,6 +50,8 @@ interface TourSlot {
   capacity: number;
   booked_count: number;
   status: string;
+  /** Vehiculo propio de la salida; null = el del tour. */
+  vehicle_map_type: string | null;
 }
 
 const SeatMapManager: React.FC<SeatMapManagerProps> = ({
@@ -70,6 +73,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
   const [actionFeedback, setActionFeedback] = useState<{ seat: number; message: string } | null>(null);
 
   const [slots, setSlots] = useState<TourSlot[]>([]);
+  const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(slotIdProp || null);
 
@@ -82,7 +86,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
       const today = new Date().toISOString().split('T')[0];
       const { data, error: errSlots } = await supabase
         .from('tour_slots')
-        .select('id, slot_date, departure_time, capacity, booked_count, status')
+        .select('id, slot_date, departure_time, capacity, booked_count, status, vehicle_map_type')
         .eq('tour_id', tourId)
         .neq('status', 'cancelado')
         .gte('slot_date', today)
@@ -480,7 +484,7 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
                 <option value="">-- Elige una salida --</option>
                 {slots.map(slot => (
                   <option key={slot.id} value={slot.id}>
-                    {formatSlotDate(slot.slot_date)}{slot.departure_time ? ` · ${formatSlotTime(slot.departure_time)}` : ''} — {slot.booked_count}/{slot.capacity} lugares
+                    {formatSlotDate(slot.slot_date)}{slot.departure_time ? ` · ${formatSlotTime(slot.departure_time)}` : ''} — {slot.booked_count}/{slot.capacity} lugares{slot.vehicle_map_type ? ' · vehiculo propio' : ''}
                   </option>
                 ))}
               </select>
@@ -499,6 +503,17 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
                 )}
                 <span className="ml-auto text-gray-500">{selectedSlot.booked_count} reservados · {selectedSlot.capacity - selectedSlot.booked_count} disponibles</span>
               </div>
+            )}
+
+            {slots.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setVehicleModalOpen(true)}
+                className="self-start flex items-center gap-1.5 text-sm text-blue-700 hover:text-blue-900 font-medium transition-colors"
+              >
+                <Bus className="w-4 h-4" />
+                Cambiar vehiculo de salidas
+              </button>
             )}
           </div>
         )}
@@ -710,6 +725,16 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {vehicleModalOpen && (
+        <SlotVehicleChangeModal
+          tourId={tourId}
+          slots={slots}
+          initialSlotId={selectedSlotId}
+          onClose={() => setVehicleModalOpen(false)}
+          onDone={() => { setVehicleModalOpen(false); void loadSlots(); void loadData(); }}
+        />
       )}
     </div>
   );
