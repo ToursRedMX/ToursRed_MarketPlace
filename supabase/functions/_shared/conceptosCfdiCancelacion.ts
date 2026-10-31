@@ -1,20 +1,15 @@
-// Conceptos del CFDI nuevo que se emite cuando se cancela el original con motivo 03 (la operacion no se llevo a cabo).
+// Conceptos del CFDI nuevo que se emite cuando se cancela el original con motivo 03 (la operacion no se llevo a cabo) y, en la cancelacion
+// parcial, el que factura la penalizacion retenida.
 //
 // REGLA DEL CONTADOR (30-oct-2026, FIS-05):
 //   - El cargo por servicio retenido (5%) es ingreso 100% de ToursRed: se factura directo, SIN pago por terceros.
 //   - Si la cancelacion tiene penalizacion, se DIVIDE: la parte de la plataforma se factura directo (sin terceros) y la parte de la
 //     agencia lleva la informacion del tercero, porque es ingreso de la agencia y no de la plataforma.
+//   - TODO va al 16% de IVA, tambien la parte de la agencia (confirmado por el contador): no hereda el tratamiento exento o mixto del tour.
 //   - Si la cancelacion cae en otro mes que la factura, se procesa igual.
 //
-// Los importes entran BRUTOS (con el IVA incluido en la parte gravada), igual que se guardan en booking_cancellations. En un concepto
-// gravado `valor_unitario` es el NETO (bruto / 1.16, porque FacturAPI recibe tax_included = false); en uno exento es el importe completo.
-// Dividir un exento entre 1.16 desaparece dinero del CFDI (ver taxBreakdown.ts).
-//
-// SUPUESTO QUE HAY QUE CONFIRMAR CON EL CONTADOR: la parte de la agencia de la penalizacion hereda el tratamiento de IVA de la reserva
-// (tax_treatment / exempt_ratio, el snapshot), porque es ingreso de la agencia por el mismo tour. La parte de la plataforma y el cargo
-// por servicio van siempre al 16%, como la comision de ToursRed en cualquier otro CFDI.
-
-import { calculateTaxBreakdown, type TaxTreatment } from "./taxBreakdown.ts";
+// Los importes entran BRUTOS (con el IVA incluido), igual que se guardan en booking_cancellations. `valor_unitario` es el NETO
+// (bruto / 1.16) porque FacturAPI recibe tax_included = false.
 
 export interface TerceroCfdi {
   rfc: string;
@@ -29,7 +24,6 @@ export interface ConceptoCfdiCancelacion {
   clave_unidad: string;
   descripcion: string;
   valor_unitario: number;
-  exento?: boolean;
   tercero?: TerceroCfdi | null;
 }
 
@@ -42,8 +36,6 @@ export interface EntradaConceptosCancelacion {
   penalizacionAgencia: number;
   /** Datos de la agencia cuando su RFC es distinto del receptor; null si no hace falta tercero. */
   tercero: TerceroCfdi | null;
-  taxTreatment: TaxTreatment;
-  exemptRatio: number;
   /** "Reserva TRG-... (cancelada) - Nombre del tour" */
   referencia: string;
 }
@@ -91,39 +83,18 @@ export function conceptosDeCancelacion(e: EntradaConceptosCancelacion): Resultad
   }
 
   if (agencia > 0) {
-    const desglose = calculateTaxBreakdown({
-      grossAmount: agencia,
-      taxTreatment: e.taxTreatment,
-      exemptRatio: e.exemptRatio,
-      decimals: 6,
+    conceptos.push({
+      clave_prod_serv: "90121500",
+      cantidad: 1,
+      clave_unidad: "E48",
+      descripcion: `Penalizacion por cancelacion, parte de la agencia - ${e.referencia}`,
+      valor_unitario: r6(agencia / 1.16),
+      tercero: e.tercero,
     });
-    const descripcion = `Penalizacion por cancelacion, parte de la agencia - ${e.referencia}`;
-    if (desglose.taxableBase > 0) {
-      conceptos.push({
-        clave_prod_serv: "90121500",
-        cantidad: 1,
-        clave_unidad: "E48",
-        descripcion,
-        valor_unitario: desglose.taxableBase,
-        tercero: e.tercero,
-      });
-    }
-    if (desglose.exemptAmount > 0) {
-      conceptos.push({
-        clave_prod_serv: "90121500",
-        cantidad: 1,
-        clave_unidad: "E48",
-        descripcion,
-        valor_unitario: desglose.exemptAmount,
-        exento: true,
-        tercero: e.tercero,
-      });
-    }
   }
 
-  const gravadoNeto = conceptos.filter((c) => !c.exento).reduce((s, c) => s + c.valor_unitario * c.cantidad, 0);
-  const exento = conceptos.filter((c) => c.exento).reduce((s, c) => s + c.valor_unitario * c.cantidad, 0);
-  const total = redondea(gravadoNeto * 1.16 + exento);
-  const subtotal = redondea(gravadoNeto + exento);
+  const neto = conceptos.reduce((s, c) => s + c.valor_unitario * c.cantidad, 0);
+  const total = redondea(neto * 1.16);
+  const subtotal = redondea(neto);
   return { conceptos, subtotal, iva: redondea(total - subtotal), total };
 }

@@ -25,7 +25,7 @@ const prueba = (nombre, fn) => { try { fn(); casos++; } catch (e) { console.erro
 const redondea = (n) => Math.round(n * 100) / 100;
 
 const TERCERO = { rfc: 'AAA010101AAA', nombre: 'Agencia SA', regimen_fiscal: '601', domicilio_fiscal: '06000' };
-const base = { cargoRetenido: 0, penalizacionPlataforma: 0, penalizacionAgencia: 0, tercero: TERCERO, taxTreatment: 'taxable_16', exemptRatio: 0, referencia: 'Reserva TRG-X (cancelada)' };
+const base = { cargoRetenido: 0, penalizacionPlataforma: 0, penalizacionAgencia: 0, tercero: TERCERO, referencia: 'Reserva TRG-X (cancelada)' };
 
 // ── A. El calculo ───────────────────────────────────────────────────────────
 prueba('solo cargo por servicio: un concepto sin tercero que suma lo retenido', () => {
@@ -52,20 +52,14 @@ prueba('cargo + penalizacion en un solo comprobante: el total es la suma de lo r
   // Solo UNA clase de concepto lleva tercero: el de la agencia.
   assert.deepEqual(r.conceptos.filter((c) => c.tercero).map((c) => c.descripcion.includes('agencia')), [true]);
 });
-prueba('tour exento: la parte de la agencia sale como concepto EXENTO, por el importe completo y con tercero', () => {
-  const r = conceptosDeCancelacion({ ...base, penalizacionAgencia: 210, taxTreatment: 'exempt' });
+prueba('TODO va al 16%: la parte de la agencia lleva IVA aunque el tour sea exento o mixto (contador, 30-oct-2026)', () => {
+  const r = conceptosDeCancelacion({ ...base, penalizacionAgencia: 116 });
   assert.equal(r.conceptos.length, 1);
-  assert.equal(r.conceptos[0].exento, true);
-  assert.equal(r.conceptos[0].valor_unitario, 210, 'un exento NO se divide entre 1.16');
-  assert.equal(r.total, 210);
-  assert.equal(r.iva, 0);
-});
-prueba('tour mixto: la parte de la agencia se parte en gravado y exento y el total cuadra', () => {
-  const r = conceptosDeCancelacion({ ...base, penalizacionAgencia: 200, taxTreatment: 'mixed', exemptRatio: 0.25 });
-  assert.equal(r.conceptos.length, 2);
-  assert.deepEqual(r.conceptos.map((c) => !!c.exento).sort(), [false, true]);
-  assert.ok(r.conceptos.every((c) => c.tercero));
-  assert.equal(r.total, 200);
+  assert.equal(r.conceptos[0].valor_unitario, 100, 'neto = bruto / 1.16');
+  assert.equal(r.iva, 16);
+  assert.equal(r.total, 116);
+  assert.ok(!('exento' in r.conceptos[0]), 'no existe concepto exento en la cancelacion');
+  assert.ok(r.conceptos.every((c) => c.tercero === TERCERO || c.tercero == null));
 });
 prueba('si la agencia factura con el mismo RFC del receptor no hay tercero (null)', () => {
   const r = conceptosDeCancelacion({ ...base, penalizacionAgencia: 100, tercero: null });
@@ -107,19 +101,39 @@ prueba('el original puede estar cancelado o pendiente de cancelar (antes exigia 
   assert.match(generar, /\["stamped", "cancellation_pending", "cancelled"\]\.includes\(orig\.status\)/);
   assert.doesNotMatch(generar, /orig\.status !== "stamped"/, 'volvio la exigencia que impedia emitir el CFDI nuevo');
 });
-prueba('el CFDI nuevo incluye la penalizacion de la cancelacion y usa el snapshot fiscal de la reserva', () => {
+prueba('el CFDI nuevo incluye la penalizacion de la cancelacion, TODO al 16% (sin exentos ni snapshot fiscal del tour)', () => {
   assert.match(generar, /amount_to_agency, amount_to_platform/);
   assert.match(generar, /conceptosDeCancelacion\(\{/);
-  assert.match(generar, /tax_treatment, exempt_ratio/);
   assert.match(generar, /penalizacionAgencia/);
+  assert.doesNotMatch(generar, /tax_treatment|exempt_ratio|Exento|exento/, 'el contador confirmo que todo es 16%');
+  assert.doesNotMatch(sinComentarios(leer('supabase/functions/_shared/conceptosCfdiCancelacion.ts')), /exento|taxTreatment|calculateTaxBreakdown/);
 });
 prueba('solo se pide tercero para la parte de la agencia y solo si su RFC difiere del receptor', () => {
   assert.match(generar, /const necesitaTercero = penalizacionAgencia > 0 && !!agency\?\.rfc && agency\.rfc !== receptorRfc/);
   assert.match(generar, /La agencia debe completar su régimen fiscal y código postal/);
 });
-prueba('FacturAPI recibe third_party y el IVA exento en los conceptos que lo piden', () => {
+prueba('FacturAPI recibe third_party en los conceptos que lo piden, con IVA 16%', () => {
   assert.match(generar, /third_party: \{\s+tax_id: c\.tercero\.rfc/);
-  assert.match(generar, /factor: "Exento"/);
+  assert.match(generar, /taxes: \[\{ type: "IVA", rate: 0\.16 \}\]/);
+});
+
+// ── B2. La cancelacion PARCIAL con penalizacion ────────────────────────────
+// substitute-cfdi-for-partial-cancellation recalcula la parte viva del tour y jamas lee amount_to_agency/amount_to_platform: la penalizacion
+// retenida por una parcial no salia en NINGUN CFDI. Nunca se vio porque las 3 parciales que existen son al 100% (sin penalizacion).
+prueba('generate acepta la parcial: carga sus importes, sin cargo por servicio, y guarda la fila con booking_partial_cancellation_id', () => {
+  assert.match(generar, /const esParcial = !cancellation_id && !!partial_cancellation_id/);
+  assert.match(generar, /from\("booking_partial_cancellations"\)\s+\.select\("booking_id, amount_to_agency, amount_to_platform"\)/);
+  assert.match(generar, /booking_partial_cancellation_id: esParcial \? partial_cancellation_id : null/);
+  assert.match(generar, /cancellation_id: esParcial \? null : cancellation_id/);
+});
+prueba('la idempotencia de la parcial es por SU id, no por el de la cancelacion total', () => {
+  assert.match(generar, /\.eq\(esParcial \? "booking_partial_cancellation_id" : "cancellation_id", esParcial \? partial_cancellation_id : cancellation_id\)/);
+});
+const parcialCancel = sinComentarios(leer('supabase/functions/process-partial-cancellation/index.ts'));
+prueba('la parcial pide el CFDI de la penalizacion solo si retuvo algo, y sin bloquear la respuesta', () => {
+  assert.match(parcialCancel, /if \(policy\.amountToAgency > 0 \|\| policy\.amountToPlatform > 0\) \{\s+EdgeRuntime\.waitUntil\(\s+supabase\.functions\.invoke\("generate-cancellation-commission-cfdi", \{\s+body: \{ booking_id: bookingId, partial_cancellation_id: partialCancellation\.id \}/);
+  assert.match(parcialCancel, /registrarFallo\("process-partial-cancellation -> generate-cancellation-commission-cfdi"/);
+  assert.match(parcialCancel, /import \{ registrarFallo, vigilarResultado \}/);
 });
 prueba('sin cargo ni penalizacion retenidos no se emite nada', () => {
   assert.match(generar, /conservedAmount <= 0 && penalizacionPlataforma <= 0 && penalizacionAgencia <= 0/);
