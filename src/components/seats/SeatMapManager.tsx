@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { SeatWithStatus, VehicleSeatLayout } from '../../types/seats';
 import SeatMapFeatures from './SeatMapFeatures';
 import { comoFilas } from '../../lib/relacionesSupabase';
+import { tipoDeMapaEfectivo, cargarLayoutDeMapa } from '../../lib/mapaDeAsientos';
 
 interface SlotSeatStatusRow {
   seat_number: number;
@@ -119,34 +120,18 @@ const SeatMapManager: React.FC<SeatMapManagerProps> = ({
     setIsLoading(true);
     setError('');
     try {
-      const { data: tourData, error: tourError } = await supabase
-        .from('tours')
-        .select('vehicle_map_type')
-        .eq('id', tourId)
-        .maybeSingle();
-
-      if (tourError || !tourData?.vehicle_map_type) {
+      // El mapa es el del HORARIO si tiene uno propio, y si no el del tour.
+      const mapa = await tipoDeMapaEfectivo(supabase, tourId, activeSlotId);
+      if (mapa.error || !mapa.tipo) {
         setError('No se pudo cargar el tipo de vehiculo del tour.');
         return;
       }
 
-      const { data: layoutData, error: layoutError } = await supabase
-        .from('vehicle_seat_layouts')
-        .select('*')
-        .eq('type', tourData.vehicle_map_type)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (layoutError || !layoutData) {
+      const parsedLayout = await cargarLayoutDeMapa(supabase, mapa.tipo);
+      if (!parsedLayout) {
         setError('No se pudo cargar el layout del vehiculo.');
         return;
       }
-
-      const parsedLayout: VehicleSeatLayout = {
-        ...layoutData,
-        seats: typeof layoutData.seats === 'string' ? JSON.parse(layoutData.seats) : layoutData.seats,
-        vehicle_shape: typeof layoutData.vehicle_shape === 'string' ? JSON.parse(layoutData.vehicle_shape) : layoutData.vehicle_shape,
-      };
       setLayout(parsedLayout);
 
       let query = supabase

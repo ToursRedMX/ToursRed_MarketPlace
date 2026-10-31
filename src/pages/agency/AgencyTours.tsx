@@ -69,6 +69,7 @@ import type { TaxTreatment } from '../../utils/taxBreakdown';
 import DeparturePointSelector from '../../components/DeparturePointSelector';
 import DeparturePointForm from '../../components/DeparturePointForm';
 import { mensajeDeError } from '../../lib/errores';
+import { OPCIONES_DE_VEHICULO, cuposSugeridos, evaluarCapacidad, opcionDeVehiculo } from '../../lib/mapaDeAsientos';
 
 interface TourCategory {
   id: string;
@@ -369,13 +370,22 @@ const AgencyTours: React.FC = () => {
     late_payment_penalty_fixed: '0',
   });
 
-  const VEHICLE_OPTIONS: { type: VehicleMapType; label: string; capacity: number; description: string }[] = [
-    { type: 'sprinter_20', label: 'Sprinter / Van', capacity: 20, description: '20 pasajeros' },
-    { type: 'bus_50', label: 'Autobus', capacity: 50, description: '50 pasajeros' },
-    { type: 'hiace_14', label: 'Toyota Hiace', capacity: 14, description: '14 pasajeros' },
-    { type: 'urvan_13', label: 'Nissan Urvan', capacity: 13, description: '13 pasajeros' },
-    { type: 'bus_60_2pisos', label: 'Autobus 2 pisos', capacity: 60, description: '60 pasajeros' },
-  ];
+  // Las opciones viven en lib/mapaDeAsientos: las usa tambien el editor de vehiculo por horario.
+  const VEHICLE_OPTIONS = OPCIONES_DE_VEHICULO;
+
+  // Al elegir vehiculo los cupos lo siguen mientras no se hayan personalizado: vacios o iguales a los del vehiculo anterior se actualizan,
+  // un numero propio (20 en un autobus de 60) se respeta. Antes elegir el autobus de 60 dejaba los cupos en 20 sin ninguna senal.
+  const elegirVehiculo = (tipo: VehicleMapType | null) => {
+    const anterior = formData.vehicle_map_type;
+    setFormData(prev => ({
+      ...prev,
+      vehicle_map_type: tipo,
+      ...(tourType !== 'receptivo' && tipo ? { max_travelers: cuposSugeridos(prev.max_travelers, anterior, tipo) } : {}),
+    }));
+    if (tourType === 'receptivo' && tipo) {
+      setReceptivoData(prev => ({ ...prev, default_slot_capacity: cuposSugeridos(prev.default_slot_capacity, anterior, tipo) }));
+    }
+  };
 
   const [includes, setIncludes] = useState<string[]>(['']);
   const [excludes, setExcludes] = useState<string[]>(['']);
@@ -2134,6 +2144,14 @@ const AgencyTours: React.FC = () => {
       const isTransport = isReceptivo && activityType === 'transport';
       const isExperience = isReceptivo && activityType === 'experience';
       const isTicket = isReceptivo && activityType === 'ticket';
+
+      // La capacidad es un tope: puede ser menor que los asientos del vehiculo (un lugar con menos cupo que el autobus), nunca mayor.
+      // La base tambien lo rechaza; aqui se avisa antes de guardar.
+      if (formData.vehicle_map_type && !(isTransport && receptivoModality === 'privado')) {
+        const cupos = isReceptivo ? parseInt(receptivoData.default_slot_capacity || '0') : parseInt(formData.max_travelers || '0');
+        const evaluacion = evaluarCapacidad(cupos, opcionDeVehiculo(formData.vehicle_map_type)?.capacity);
+        if (evaluacion.estado === 'excede') throw new Error(evaluacion.mensaje);
+      }
 
       const tourData = {
         name: formData.name,
@@ -4827,7 +4845,7 @@ const AgencyTours: React.FC = () => {
                         <input
                           type="checkbox"
                           checked={!!formData.vehicle_map_type}
-                          onChange={(e) => setFormData({ ...formData, vehicle_map_type: e.target.checked ? 'sprinter_20' : null })}
+                          onChange={(e) => elegirVehiculo(e.target.checked ? 'sprinter_20' : null)}
                           className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
                         <div>
@@ -4842,13 +4860,17 @@ const AgencyTours: React.FC = () => {
                           <p className="text-xs font-semibold text-blue-700">Selecciona el tipo de vehiculo:</p>
                           <div className="grid grid-cols-2 gap-3">
                             {VEHICLE_OPTIONS.map(opt => {
-                              const capacidad = parseInt(formData.max_travelers || '0');
-                              const mismatch = capacidad > 0 && capacidad !== opt.capacity;
+                              // En receptivos lo que se vende es "Cupos por horario"; en excursiones, el maximo de viajeros. Antes el aviso miraba
+                              // siempre max_travelers, que en receptivos esta vacio: nunca se activaba.
+                              const capacidad = tourType === 'receptivo'
+                                ? parseInt(receptivoData.default_slot_capacity || '0')
+                                : parseInt(formData.max_travelers || '0');
+                              const evaluacion = evaluarCapacidad(capacidad, opt.capacity);
                               return (
                                 <button
                                   key={opt.type}
                                   type="button"
-                                  onClick={() => setFormData({ ...formData, vehicle_map_type: opt.type })}
+                                  onClick={() => elegirVehiculo(opt.type)}
                                   className={`relative p-4 rounded-xl border-2 text-left transition-all ${
                                     formData.vehicle_map_type === opt.type
                                       ? 'border-blue-600 bg-blue-100'
@@ -4860,10 +4882,10 @@ const AgencyTours: React.FC = () => {
                                     <span className={`text-sm font-semibold ${formData.vehicle_map_type === opt.type ? 'text-blue-800' : 'text-gray-700'}`}>{opt.label}</span>
                                   </div>
                                   <p className={`text-xs ${formData.vehicle_map_type === opt.type ? 'text-blue-600' : 'text-gray-500'}`}>{opt.description}</p>
-                                  {formData.vehicle_map_type === opt.type && mismatch && (
-                                    <div className="mt-2 flex items-start gap-1 text-amber-700 bg-amber-50 rounded-lg p-2">
+                                  {formData.vehicle_map_type === opt.type && (evaluacion.estado === 'excede' || evaluacion.estado === 'menor') && (
+                                    <div className={`mt-2 flex items-start gap-1 rounded-lg p-2 ${evaluacion.estado === 'excede' ? 'text-red-700 bg-red-50' : 'text-gray-600 bg-gray-100'}`}>
                                       <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                      <p className="text-xs">La capacidad configurada ({capacidad}) no coincide con la del vehiculo ({opt.capacity}). Se recomienda actualizarla.</p>
+                                      <p className="text-xs">{evaluacion.mensaje}</p>
                                     </div>
                                   )}
                                 </button>

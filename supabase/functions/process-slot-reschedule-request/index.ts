@@ -209,11 +209,10 @@ Deno.serve(async (req: Request) => {
       const finalCapacity = new_capacity ? Number(new_capacity) : targetSlot.capacity;
 
       const updatePayload: Record<string, unknown> = { capacity: finalCapacity, status: "activo" };
+      // El vehiculo nuevo es de ESTE horario, no del tour: antes se escribia en `tours` y cambiaba el mapa de TODAS las salidas.
+      // Va en el mismo UPDATE que la capacidad para que el trigger que valida capacidad <= asientos vea los dos valores juntos.
       if (new_vehicle_map_type) {
-        await adminClient
-          .from("tours")
-          .update({ vehicle_map_type: new_vehicle_map_type })
-          .eq("id", tour_id);
+        updatePayload.vehicle_map_type = new_vehicle_map_type;
       }
 
       const { error: updateCapacityError } = await adminClient

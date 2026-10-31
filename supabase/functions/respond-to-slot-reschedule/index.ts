@@ -52,7 +52,28 @@ async function handleSeatAssignment(
     .in("status", ["reservado_online", "bloqueado_agencia"]);
 
   const occupiedNumbers = new Set((occupiedSeats || []).map((s: { seat_number: number }) => s.seat_number));
-  const availableOriginalSeats = originalSeats.filter((n) => !occupiedNumbers.has(n));
+
+  // El horario destino puede tener OTRO vehiculo (mapa por horario): un asiento solo se conserva si existe en su mapa.
+  // Sin esto el 34 de un autobus de 60 se "conservaba" en una Sprinter de 20 y el guardado fallaba en silencio.
+  const { data: mapaDestino } = await adminClient.rpc("effective_vehicle_map_type", { p_tour_id: tourId, p_slot_id: targetSlotId });
+  let numerosDelMapa: Set<number> | null = null;
+  if (mapaDestino) {
+    const { data: layout } = await adminClient
+      .from("vehicle_seat_layouts")
+      .select("seats")
+      .eq("type", mapaDestino)
+      .eq("is_active", true)
+      .maybeSingle();
+    const asientos = typeof layout?.seats === "string" ? JSON.parse(layout.seats) : layout?.seats;
+    if (Array.isArray(asientos)) {
+      numerosDelMapa = new Set(
+        asientos
+          .filter((a: { type?: string }) => !["driver", "wc"].includes(a.type ?? "normal"))
+          .map((a: { number: number }) => Number(a.number)),
+      );
+    }
+  }
+  const availableOriginalSeats = originalSeats.filter((n) => !occupiedNumbers.has(n) && (!numerosDelMapa || numerosDelMapa.has(n)));
 
   if (availableOriginalSeats.length >= travelersCount) {
     const seatsToUse = availableOriginalSeats.slice(0, travelersCount);
@@ -355,14 +376,11 @@ Deno.serve(async (req: Request) => {
           .update({ booked_count: altSlot.booked_count + travelersCount })
           .eq("id", alternative_slot_id);
 
-        const { data: tourData } = await adminClient
-          .from("tours")
-          .select("vehicle_map_type")
-          .eq("id", booking.tour_id)
-          .single();
+        // El mapa es el del horario al que se mueve la reserva, y si no tiene propio, el del tour.
+        const { data: mapaEfectivo } = await adminClient.rpc("effective_vehicle_map_type", { p_tour_id: booking.tour_id, p_slot_id: altSlot.id });
 
         let seatReselectionNeeded = false;
-        if (tourData?.vehicle_map_type && booking.selected_seats && booking.selected_seats.length > 0) {
+        if (mapaEfectivo && booking.selected_seats && booking.selected_seats.length > 0) {
           const seatResult = await handleSeatAssignment(
             adminClient, booking_id, altSlot.id, booking.tour_id,
             booking.selected_seats, travelersCount
@@ -525,13 +543,9 @@ Deno.serve(async (req: Request) => {
       let seatReselectionNeeded = false;
 
       if (targetSlot) {
-        const { data: tourData } = await adminClient
-          .from("tours")
-          .select("vehicle_map_type")
-          .eq("id", booking.tour_id)
-          .single();
-
-        const hasSeatMap = !!(tourData?.vehicle_map_type);
+        // El mapa es el del horario destino, y si no tiene propio, el del tour.
+        const { data: mapaEfectivo } = await adminClient.rpc("effective_vehicle_map_type", { p_tour_id: booking.tour_id, p_slot_id: targetSlot.id });
+        const hasSeatMap = !!mapaEfectivo;
 
         if (hasSeatMap && booking.selected_seats && booking.selected_seats.length > 0) {
           const seatResult = await handleSeatAssignment(

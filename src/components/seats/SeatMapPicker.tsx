@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import SeatMapFeatures from './SeatMapFeatures';
+import { tipoDeMapaEfectivo, cargarLayoutDeMapa } from '../../lib/mapaDeAsientos';
 import { SeatWithStatus, VehicleShape, VehicleSeatLayout, SeatStatusType } from '../../types/seats';
 
 /** Fila de `slot_seat_status`, igual para la consulta de slot que para la global. */
@@ -184,6 +185,8 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
   ownBookingId,
 }) => {
   const [layout, setLayout] = useState<VehicleSeatLayout | null>(null);
+  // Cupos que vende este horario: pueden ser menos que los asientos del vehiculo (un lugar con menos cupo que el autobus).
+  const [capacidadHorario, setCapacidadHorario] = useState<number | null>(null);
   const [seatsWithStatus, setSeatsWithStatus] = useState<SeatWithStatus[]>([]);
   const [selected, setSelected] = useState<number[]>(selectedSeats);
   const [isLoading, setIsLoading] = useState(true);
@@ -193,34 +196,19 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
     setIsLoading(true);
     setError('');
     try {
-      const { data: tourData, error: tourError } = await supabase
-        .from('tours')
-        .select('vehicle_map_type')
-        .eq('id', tourId)
-        .maybeSingle();
-
-      if (tourError || !tourData?.vehicle_map_type) {
+      // El mapa es el del HORARIO si tiene uno propio, y si no el del tour.
+      const mapa = await tipoDeMapaEfectivo(supabase, tourId, slotId);
+      if (mapa.error || !mapa.tipo) {
         setError('No se pudo cargar el tipo de vehiculo del tour.');
         return;
       }
+      setCapacidadHorario(mapa.capacidadDelHorario);
 
-      const { data: layoutData, error: layoutError } = await supabase
-        .from('vehicle_seat_layouts')
-        .select('*')
-        .eq('type', tourData.vehicle_map_type)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (layoutError || !layoutData) {
+      const parsedLayout = await cargarLayoutDeMapa(supabase, mapa.tipo);
+      if (!parsedLayout) {
         setError('No se pudo cargar el layout del vehiculo.');
         return;
       }
-
-      const parsedLayout: VehicleSeatLayout = {
-        ...layoutData,
-        seats: typeof layoutData.seats === 'string' ? JSON.parse(layoutData.seats) : layoutData.seats,
-        vehicle_shape: typeof layoutData.vehicle_shape === 'string' ? JSON.parse(layoutData.vehicle_shape) : layoutData.vehicle_shape,
-      };
       setLayout(parsedLayout);
 
       // When a slot is selected, fetch both slot-specific statuses AND global blocks (slot_id = null).
@@ -375,6 +363,12 @@ const SeatMapPicker: React.FC<SeatMapPickerProps> = ({
           {selected.length} / {requiredSeats} asientos
         </div>
       </div>
+
+      {capacidadHorario !== null && capacidadHorario < layout.capacity && (
+        <p className="text-xs text-gray-500">
+          Este horario vende {capacidadHorario} de los {layout.capacity} asientos del vehiculo.
+        </p>
+      )}
 
       {!isComplete && (
         <p className="text-sm text-gray-500">

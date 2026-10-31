@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import type { VehicleSeatLayout } from '../../types/seats';
+import { tipoDeMapaEfectivo, cargarLayoutDeMapa } from '../../lib/mapaDeAsientos';
 
 // Quien ocupa un asiento. groupId agrupa los asientos de una misma reserva para resaltarlos juntos.
 export type SeatOwner = { groupId: string; label: string; color: string };
@@ -9,30 +10,24 @@ export const EXTERNAL_COLOR = '#d97706';
 // Una paleta corta que se repite: lo importante es distinguir reservas vecinas, no identificarlas.
 export const BOOKING_COLORS = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#0d9488', '#ca8a04', '#4f46e5', '#059669'];
 
-export function useLayout(tourId: string) {
+/** Mapa del HORARIO si tiene uno propio, y si no el del tour (cada salida puede usar otro vehiculo). */
+export function useLayout(tourId: string, slotId?: string | null) {
   return useQuery({
-    queryKey: ['agenda-seat-layout', tourId],
+    queryKey: ['agenda-seat-layout', tourId, slotId ?? null],
     staleTime: 5 * 60_000,
     enabled: !!tourId,
     queryFn: async (): Promise<VehicleSeatLayout | null> => {
-      const { data: tour, error: tourError } = await supabase.from('tours').select('vehicle_map_type').eq('id', tourId).maybeSingle();
-      if (tourError) throw tourError;
-      if (!tour?.vehicle_map_type) return null;
-      const { data, error } = await supabase.from('vehicle_seat_layouts').select('*').eq('type', tour.vehicle_map_type).eq('is_active', true).maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-      return {
-        ...data,
-        seats: typeof data.seats === 'string' ? JSON.parse(data.seats) : data.seats,
-        vehicle_shape: typeof data.vehicle_shape === 'string' ? JSON.parse(data.vehicle_shape) : data.vehicle_shape,
-      } as VehicleSeatLayout;
+      const mapa = await tipoDeMapaEfectivo(supabase, tourId, slotId);
+      if (mapa.error) throw new Error('No se pudo leer el mapa del horario');
+      if (!mapa.tipo) return null;
+      return cargarLayoutDeMapa(supabase, mapa.tipo);
     },
   });
 }
 
-/** Indica si el tour tiene mapa de asientos. Comparte cache con el mapa. */
-export function useHasSeatMap(tourId: string) {
-  const q = useLayout(tourId);
+/** Indica si la salida tiene mapa de asientos. Comparte cache con el mapa. */
+export function useHasSeatMap(tourId: string, slotId?: string | null) {
+  const q = useLayout(tourId, slotId);
   return { loading: q.isPending, hasMap: !!q.data, layout: q.data ?? null, error: q.error };
 }
 

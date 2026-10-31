@@ -49,7 +49,7 @@ export default function DepartureDetail({ op, agency, onClose, onRefresh }: Prop
   const keyBase = [agency, op.tour_id, op.slot_id];
   const manifest = useQuery({ queryKey: ['operational-manifest', ...keyBase], queryFn: () => loadManifest(op.tour_id, op.slot_id), refetchInterval: REFRESH_MS });
   const reservations = useQuery({ queryKey: ['departure-reservations', ...keyBase], queryFn: () => loadDepartureReservations(op.tour_id, op.slot_id), refetchInterval: REFRESH_MS });
-  const { hasMap } = useHasSeatMap(op.tour_id);
+  const { hasMap } = useHasSeatMap(op.tour_id, op.slot_id);
   const seats = useQuery({ queryKey: ['departure-seats', ...keyBase], enabled: hasMap, queryFn: () => loadDepartureSeats(op.tour_id, op.slot_id), refetchInterval: REFRESH_MS });
 
   useEffect(() => {
@@ -203,7 +203,7 @@ export default function DepartureDetail({ op, agency, onClose, onRefresh }: Prop
               {seats.error
                 ? <p role="alert" className="text-sm text-red-700">No se pudo cargar la ocupación de asientos; el mapa no se muestra para no enseñar lugares libres que no lo son. {errorText(seats.error)}</p>
                 : <AgendaSeatMap
-                    tourId={op.tour_id} seats={seats.data ?? []} resolve={resolveSeat} activeGroupId={active} onSelectGroup={setActive}
+                    tourId={op.tour_id} slotId={op.slot_id} seats={seats.data ?? []} resolve={resolveSeat} activeGroupId={active} onSelectGroup={setActive}
                     pick={assigning ? { prompt: `Elige un asiento libre para ${assigning.name}`, busy: seatBusy, onPick: n => void saveSeat(assigning.saleId, assigning.travelerId, n), onCancel: () => setAssigning(null) } : null} />}
               {seatMsg && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-2.5 text-sm text-red-800">{seatMsg}</p>}
               {unseatedExternal > 0 && <p className="mt-3 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900">{unseatedExternal} viajero(s) de ventas externas ocupan lugar en la salida pero aún no tienen asiento. {canAssign ? 'Asígnalos desde su reserva, más abajo.' : 'Quien administre la agencia puede asignárselos.'} Mientras tanto, los lugares libres del mapa pueden ser más que los disponibles reales ({op.available}).</p>}
