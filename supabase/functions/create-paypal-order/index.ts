@@ -1,6 +1,6 @@
 import { requireUser as requirePhoneUser } from "../_shared/auth.ts";
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { origenParaRedirigir } from "../_shared/cors.ts";
 import { exigibleAlProcesador } from "../_shared/exigible.ts";

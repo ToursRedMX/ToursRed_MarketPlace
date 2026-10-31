@@ -4,7 +4,7 @@
 // contraseña actual; falla cerrado) -> disponibilidad del correo -> codigo (HMAC, 15 min, 5 intentos,
 // 3 solicitudes por hora) -> envio. Si el correo ya es de otra cuenta se responde igual que si se
 // hubiera enviado: ni siquiera una sesion legitima puede usar esto para sondear que correos existen.
-import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { enforceReauth } from '../_shared/reauth.ts';
 import { hmac, nuevoCodigo } from '../_shared/mensajeria/seguridad.ts';

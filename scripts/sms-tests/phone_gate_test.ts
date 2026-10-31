@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.117.2';
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { phoneGate, type PhoneContext } from '../../supabase/functions/_shared/mensajeria/phoneGate.ts';
 function client(role:string,pending:boolean,error=false){
  const calls:string[]=[];

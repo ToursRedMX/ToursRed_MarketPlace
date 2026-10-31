@@ -12,7 +12,7 @@
 // la autenticidad es la firma `X-Twilio-Signature` sobre la URL publica
 // construida desde SUPABASE_URL (nunca desde el Host que llega) y TODOS los
 // parametros; los parametros duplicados se rechazan.
-import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { corsHeaders, ORIGEN_PRINCIPAL } from '../_shared/cors.ts';
 import { verifyTwilioSignature } from '../_shared/mensajeria/twilioWebhook.ts';
 import {

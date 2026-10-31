@@ -1,5 +1,5 @@
 // Guarda los eventos de un webhook de correo en `bitacora_evento_correo`, sin duplicados y cruzados con su envio.
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 import type { FilaEventoCorreo, ProveedorEventoCorreo } from "./eventosCorreo.ts";
 
 /**

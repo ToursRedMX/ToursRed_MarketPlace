@@ -4,7 +4,7 @@
 // correo en Auth (ya verificado), se sincroniza public.users (el trigger sync_user_email solo corre al
 // escribir esa fila, no cuando cambia auth.users), se avisa al correo ANTERIOR y se cierran las demas
 // sesiones de la cuenta. La reautenticacion se exigio al pedir el codigo; aqui la prueba es el codigo.
-import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { hmac } from '../_shared/mensajeria/seguridad.ts';
 import { opcionesConContexto, sinUserAgentDeNavegador } from '../_shared/contextoAuditoria.ts';

@@ -8,7 +8,7 @@
 // mandando en admin/contador/ejecutivo).
 //
 // Interruptor: platform_settings.phone_login_enabled (default false).
-import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { hmac, datosOtp } from '../_shared/mensajeria/seguridad.ts';
 

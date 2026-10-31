@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { phoneGate, type PhoneContext } from './mensajeria/phoneGate.ts';
 
 /**

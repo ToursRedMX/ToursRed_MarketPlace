@@ -1,4 +1,4 @@
-import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.117.2';
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0';
 import type { TwilioMessage } from './proveedores/twilio.ts';
 
 // Read-only provider operations. A missing SID is NEVER a reason to send again.

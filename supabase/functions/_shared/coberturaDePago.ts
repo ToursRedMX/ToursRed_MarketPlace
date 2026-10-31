@@ -63,7 +63,7 @@
 // migracion `20260909030735` de `confirm_booking_paid_with_wallet`, para no
 // pelear con redondeos de centavos.
 
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 
 const TOLERANCIA_MXN = 0.5;
 

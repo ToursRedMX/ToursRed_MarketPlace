@@ -7,7 +7,7 @@
 //
 // Ahora: si ligar falla se reintenta solo con el estado, y si tambien eso falla se avisa (`alFallar`, que en las funciones es registrarFallo)
 // en vez de callarlo. `alFallar` se inyecta para poder probar esto sin red.
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 
 export type EstadoCancelacionCfdi = "cancelled" | "cancellation_pending";
 
