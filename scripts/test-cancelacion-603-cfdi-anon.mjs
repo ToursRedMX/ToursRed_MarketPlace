@@ -82,13 +82,13 @@ prueba('el total del comprobante cuadra con lo retenido a centavos, tambien con 
 // ── B. Por que no se emitia ────────────────────────────────────────────────
 const cancelCfdi = sinComentarios(leer('supabase/functions/cancel-cfdi/index.ts'));
 prueba('cancel-cfdi pide el CFDI nuevo cuando el SAT acepta en el acto, SOLO con motivo 03 y una cancelacion', () => {
-  assert.match(cancelCfdi, /if \(motivo === "03" && cancellation_id && cfdi\.booking_id\) \{[\s\S]*?"generate-cancellation-commission-cfdi"/);
+  assert.match(cancelCfdi, /if \(motivo === "03" && cancellation_id && marca\.ligada && cfdi\.booking_id\) \{[\s\S]*?"generate-cancellation-commission-cfdi"/);
   assert.match(cancelCfdi, /replaces_cfdi_invoice_id: cfdi_invoice_id/);
 });
 prueba('el CFDI nuevo se pide DESPUES de marcar el original como cancelado, dentro de la rama aceptada', () => {
-  const cancelado = cancelCfdi.indexOf('status: "cancelled"');
+  const cancelado = cancelCfdi.indexOf('marcarCfdi(supabase, cfdi_invoice_id, "cancelled"');
   const pedido = cancelCfdi.indexOf('"generate-cancellation-commission-cfdi"');
-  const pendiente = cancelCfdi.indexOf('status: "cancellation_pending"');
+  const pendiente = cancelCfdi.indexOf('marcarCfdi(supabase, cfdi_invoice_id, "cancellation_pending"');
   assert.ok(cancelado > 0 && pedido > cancelado && pedido < pendiente, `orden: ${cancelado} ${pedido} ${pendiente}`);
 });
 prueba('el fallo de pedirlo no tumba la cancelacion: ya paso ante el SAT y no se deshace', () => {

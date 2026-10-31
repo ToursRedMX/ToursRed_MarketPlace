@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 
+// Los import de la funcion se quitan antes de evaluarla: lo que usa de modulos compartidos se inyecta aqui. marcarCfdi es el REAL.
+const { marcarCfdi } = await import('../supabase/functions/_shared/marcarCfdi.ts');
+
 const settings = { pac_provider: 'facturapi', pac_organization_id: 'org-test' };
 const secrets = { pac_api_key_encrypted: 'test-key' };
 const error = { message: 'private database diagnostic' };
@@ -52,6 +55,9 @@ for (const name of ['download-cfdi', 'cancel-cfdi']) {
       exports: {}, URL, URLSearchParams, Response, console,
       Deno: { env: { get: key => key === 'SENTRY_BACKEND_DSN' ? undefined : 'test-value' }, serve: fn => { handler = fn; } },
       createClient: () => client,
+      marcarCfdi,
+      registrarFallo: async () => {},
+      vigilarResultado: async () => {},
       authorizeCfdiRequest: async () => test.denied ? { allowed: false, response: new Response(null, { status: 403 }) } : { allowed: true, caller: { userId: 'caller' } },
       fetch: async (url, options) => {
         requests.push({ url, options });

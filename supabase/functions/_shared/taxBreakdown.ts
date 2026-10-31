@@ -183,6 +183,27 @@ export function verifyConceptosTotal(
   return { ok: Math.abs(diff) <= tolerance, computed, expected, diff };
 }
 
+/**
+ * Subtotal, IVA y total de un juego de conceptos, como los arma el PAC: el gravado lleva IVA y el exento NO.
+ *
+ * Existe porque `substitute-cfdi-for-partial-cancellation` sumaba el 16% a TODOS los conceptos, exentos incluidos: en una reserva con 20% exento
+ * guardaba 616.00 donde el comprobante es de 600.00 (31-oct-2026, TRG-JII15E7VX1A). Mismo criterio que `verifyConceptosTotal`.
+ */
+export function totalesDeConceptos(
+  conceptos: VerifiableConcepto[],
+): { subtotal: number; iva: number; total: number } {
+  let gravadoNeto = 0;
+  let exento = 0;
+  for (const c of conceptos) {
+    const neto = c.valor_unitario * c.cantidad - (c.descuento ?? 0);
+    if (c.exento) exento += neto;
+    else gravadoNeto += neto;
+  }
+  const total = Math.round((gravadoNeto * (1 + VAT_RATE) + exento) * 100) / 100;
+  const subtotal = Math.round((gravadoNeto + exento) * 100) / 100;
+  return { subtotal, iva: Math.round((total - subtotal) * 100) / 100, total };
+}
+
 // ═══════════ DESCUENTO POR PUNTOS (solo Deno, no va en la canonica) ═════════
 
 /**

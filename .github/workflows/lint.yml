@@ -156,6 +156,9 @@ jobs:
       - name: Verify cancellation CFDI (motivo 03), 603 accounting and definer functions closed to anon
         run: node scripts/test-cancelacion-603-cfdi-anon.mjs
 
+      - name: Verify partial-cancellation CFDI state and totals (exempt concepts carry no VAT)
+        run: node scripts/test-cfdi-parcial-estado-y-totales.mjs
+
       - name: Verify seat map per slot and capacity as a cap (not above the vehicle)
         run: node scripts/test-mapa-por-horario.mjs
 

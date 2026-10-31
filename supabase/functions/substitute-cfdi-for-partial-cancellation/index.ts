@@ -1,5 +1,5 @@
 ﻿import { requireServiceRole } from "../_shared/auth.ts";
-import { calculateTaxBreakdown, type TaxTreatment } from "../_shared/taxBreakdown.ts";
+import { calculateTaxBreakdown, totalesDeConceptos, type TaxTreatment } from "../_shared/taxBreakdown.ts";
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
@@ -472,12 +472,8 @@ Deno.serve(async (req: Request) => {
 
       if (conceptos.length === 0) continue;
 
-      const conceptosTotal = conceptos.reduce(
-        (sum, c) => sum + c.valor_unitario * c.cantidad * 1.16, 0
-      );
-      const iva = Math.round(conceptosTotal * 16 / 116 * 100) / 100;
-      const subtotal = Math.round((conceptosTotal - iva) * 100) / 100;
-      const total = Math.round(conceptosTotal * 100) / 100;
+      // El exento NO lleva IVA. Antes se sumaba el 16% a todos los conceptos y un tour con 20% exento guardaba 616.00 en vez de 600.00.
+      const { subtotal, iva, total } = totalesDeConceptos(conceptos);
 
       const serieToUse = isInstallment
         ? (settings.cfdi_serie_installment || "AI")
@@ -573,7 +569,8 @@ Deno.serve(async (req: Request) => {
             cfdi_invoice_id: originalCfdi.id,
             motivo: "01",
             uuid_sustitucion: cfdiResult.uuid_fiscal,
-            cancellation_id: partial_cancellation_id,
+            // Sin `cancellation_id`: esa columna es una llave foranea a las cancelaciones TOTALES y este id es de una parcial. Pasarlo hacia que
+            // el UPDATE que marca el CFDI como cancelado fallara en silencio y el original se quedaba `stamped` aunque el SAT ya lo cancelo.
           },
         });
       } catch (cancelErr) {
