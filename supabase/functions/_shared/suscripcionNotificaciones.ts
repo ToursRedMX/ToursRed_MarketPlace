@@ -7,7 +7,7 @@
 // `notif_user_id` / `notif_agency_id`, y `stripe-webhook` pregunta primero a este modulo si el evento es suyo.
 //
 // El OTP nunca entra al cobro (ni aqui ni en la cobertura): es de seguridad y siempre es gratis.
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 import type Stripe from "npm:stripe@22.3.0";
 
 export type TipoSuscripcion = "viajero" | "agencia";

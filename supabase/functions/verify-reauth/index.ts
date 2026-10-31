@@ -14,7 +14,7 @@
 // Limite de intentos: 5 fallidos en 10 minutos por cuenta (auth_attempts, como
 // verify-sensitive-action). Falla cerrado ante cualquier error.
 import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { corsHeaders } from "../_shared/cors.ts";
 import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/contextoAuditoria.ts";
 

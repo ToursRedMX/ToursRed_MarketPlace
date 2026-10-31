@@ -1,4 +1,4 @@
-﻿import type { SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+﻿import type { SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 
 // Solo se usa .from(). Pedir el SupabaseClient completo obligaba a que los
 // parametros genericos coincidieran exactamente: los llamadores construyen su

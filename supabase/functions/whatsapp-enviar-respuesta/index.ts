@@ -12,7 +12,7 @@
 // Se inserta la fila ANTES de llamar a Twilio, y si Twilio responde algo
 // ambiguo (timeout, 5xx) queda como 'desconocido' en vez de 'fallido': el
 // mensaje pudo haber salido y NO se reintenta a ciegas.
-import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requireAdmin } from '../_shared/auth.ts';
 import { clasificarEnvio } from '../_shared/mensajeria/whatsappBandeja.ts';

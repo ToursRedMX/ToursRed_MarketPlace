@@ -11,7 +11,7 @@
 //      correo+contraseña.
 //
 // Interruptor: platform_settings.phone_login_enabled (default false).
-import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { extraerIpDelCliente } from '../_shared/contextoAuditoria.ts';
 import { normalizarTelefonoSms } from '../_shared/mensajeria/telefono.ts';

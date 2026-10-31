@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import Stripe from "npm:stripe@22.3.0";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { corsHeaders as corsDe } from "../_shared/cors.ts";

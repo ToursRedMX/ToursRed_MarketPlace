@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { verifyTwilioSignature, parseTwilioCallback } from '../_shared/mensajeria/twilioWebhook.ts';
 

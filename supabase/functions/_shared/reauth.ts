@@ -9,7 +9,7 @@
 // ToursRed Cash. Este deja pasar a quien no tiene MFA siempre que pruebe su contraseña.
 //
 // Falla CERRADO: si no se puede consultar la base, se rechaza (503), nunca se deja pasar.
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 
 export type MetodoReauth = "totp" | "password";
 

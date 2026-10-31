@@ -16,7 +16,7 @@
 // que no pasa por ese ajuste.
 //
 // Un cambio real (la cuenta ya tenia contraseña) cierra las demás sesiones y avisa por correo.
-import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { enforceReauth } from '../_shared/reauth.ts';
 import { validarContrasena } from '../_shared/politicaContrasena.ts';

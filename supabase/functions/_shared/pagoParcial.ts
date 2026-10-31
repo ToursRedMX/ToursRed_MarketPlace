@@ -14,7 +14,7 @@
 // Cobros de seguro, extras, suplementos y cuotas del plan no son anticipo: el filtro
 // `charge_context = 'booking_deposit'` es el mismo de coberturaDePago.ts.
 
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 
 const aCentavos = (n: number): number => Math.round(n * 100) / 100;
 

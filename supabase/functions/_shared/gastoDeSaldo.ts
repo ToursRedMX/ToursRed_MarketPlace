@@ -16,7 +16,7 @@
 //
 // El codigo es de UN SOLO USO (consume_spend_step_up): cada intento de cobro con saldo exige uno
 // nuevo. Sin MFA configurado la respuesta es MFA_NOT_CONFIGURED, igual que el wallet al 100%.
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { enforceStepUp } from "./stepUpCheck.ts";
 
 export interface ReservaConSaldo {

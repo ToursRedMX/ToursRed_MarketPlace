@@ -1,4 +1,4 @@
-import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.117.2';
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0';
 import type { CanalOtp, Categoria, Proveedor, ResultadoEnvio, RoutingSettings } from './tipos.ts';
 import { enrutar } from './enrutador.ts';
 import { labsmobile } from './proveedores/labsmobile.ts';

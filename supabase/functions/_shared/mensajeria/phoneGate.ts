@@ -1,4 +1,4 @@
-import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.117.2';
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0';
 export type PhoneContext = 'traveler' | 'agency' | 'account' | 'administrative' | 'verification';
 const recovery = new Set(['request-phone-otp','verify-phone-otp','send-verification-email','verify-email-code','send-agency-registration-admin','send-agency-welcome','upload-agency-document','validate-agency-rfc']);
 export async function phoneGate(client: SupabaseClient, userId: string, resource: string, requested: PhoneContext = 'account'): Promise<'allowed' | 'pending' | 'unavailable'> {

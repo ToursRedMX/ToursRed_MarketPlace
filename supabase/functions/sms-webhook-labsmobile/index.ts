@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { interpretarCallback } from '../_shared/mensajeria/proveedores/labsmobile.ts';
 import { hmac, verificarFirma } from '../_shared/mensajeria/seguridad.ts';

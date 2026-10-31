@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 import { llamadaInterna } from "./auth.ts";
 
 /**
