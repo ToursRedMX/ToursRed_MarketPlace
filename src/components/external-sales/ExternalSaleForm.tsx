@@ -41,7 +41,7 @@ export default function ExternalSaleForm({operations,existing,onSaved,onClose}:{
  // Asientos: lo elegido en este formulario (por id de viajero) manda sobre lo que ya hay guardado.
  const [chosen,setChosen]=useState<Record<string,number|null>>({});
  const [picking,setPicking]=useState<string|null>(null);
- const {hasMap}=useHasSeatMap(op?.tour_id??'');
+ const {hasMap}=useHasSeatMap(op?.tour_id??'',op?.slot_id);
  const seatsQ=useQuery({queryKey:['form-seats',op?.tour_id,op?.slot_id],enabled:!!op&&hasMap,queryFn:()=>loadDepartureSeats(op!.tour_id,op!.slot_id)});
  // Si cambia la salida de una venta existente, sus asientos se sueltan solos en la base.
  const sameDeparture=!existing||departure===operationKey(existing);
