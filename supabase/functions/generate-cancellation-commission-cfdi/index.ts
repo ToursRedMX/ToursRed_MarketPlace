@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
+import { conceptosDeCancelacion, type TerceroCfdi } from "../_shared/conceptosCfdiCancelacion.ts";
+import type { TaxTreatment } from "../_shared/taxBreakdown.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +28,10 @@ interface CfdiConcepto {
   clave_unidad: string;
   descripcion: string;
   valor_unitario: number;
+  /** Concepto exento: valor_unitario es el importe COMPLETO, no el neto. */
+  exento?: boolean;
+  /** Solo la parte de la agencia de la penalizacion lleva tercero. */
+  tercero?: TerceroCfdi | null;
 }
 
 interface CfdiReceptor {
@@ -81,9 +87,21 @@ async function facturapiStamp(
         unit_key: c.clave_unidad,
         price: c.valor_unitario,
         tax_included: false,
-        taxes: [{ type: "IVA", rate: 0.16 }],
+        taxes: c.exento
+          ? [{ type: "IVA", factor: "Exento", rate: 0 }]
+          : [{ type: "IVA", rate: 0.16 }],
       },
       quantity: c.cantidad,
+      ...(c.tercero && c.tercero.domicilio_fiscal
+        ? {
+            third_party: {
+              tax_id: c.tercero.rfc,
+              legal_name: c.tercero.nombre,
+              tax_system: c.tercero.regimen_fiscal,
+              zip: c.tercero.domicilio_fiscal,
+            },
+          }
+        : {}),
     })),
   };
 
@@ -138,7 +156,7 @@ Deno.serve(async (req: Request) => {
     // porque el guard necesita saber de quien es la reserva.
     const { data: booking } = await supabase
       .from("bookings")
-      .select("booking_code, user_id, tour_id, tours(name)")
+      .select("booking_code, user_id, tour_id, tax_treatment, exempt_ratio, tours(name), agencies(id, rfc, razon_social, regimen_fiscal, postal_code)")
       .eq("id", booking_id)
       .maybeSingle();
 
@@ -190,7 +208,7 @@ Deno.serve(async (req: Request) => {
     // Load the cancellation record to get the exact amounts
     const { data: cancellation, error: cancellationError } = await supabase
       .from("booking_cancellations")
-      .select("booking_id, original_service_charge, service_charge_refunded_amount, refund_amount_to_traveler, total_principal_paid")
+      .select("booking_id, original_service_charge, service_charge_refunded_amount, refund_amount_to_traveler, total_principal_paid, amount_to_agency, amount_to_platform")
       .eq("id", cancellation_id)
       .maybeSingle();
 
@@ -230,9 +248,15 @@ Deno.serve(async (req: Request) => {
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (orig.status !== "stamped" || !orig.uuid_fiscal) {
+      // El original ya se cancelo ante el SAT (motivo 03) cuando se llega aqui:
+      // cancel-cfdi lo deja en `cancelled`, o en `cancellation_pending` mientras
+      // el SAT responde. Exigir `stamped` hacia que esta llamada fallara SIEMPRE
+      // con 400 y el CFDI nuevo nunca se emitiera (medido el 30-oct-2026: ningun
+      // `cancellation_commission` en toda la base). Lo que importa es que haya
+      // sido un CFDI real, con UUID.
+      if (!["stamped", "cancellation_pending", "cancelled"].includes(orig.status) || !orig.uuid_fiscal) {
         return new Response(
-          JSON.stringify({ error: `Solo se puede sustituir un CFDI timbrado (estado actual: ${orig.status})` }),
+          JSON.stringify({ error: `Solo se puede reemplazar un CFDI timbrado o ya cancelado (estado actual: ${orig.status})` }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -252,10 +276,17 @@ Deno.serve(async (req: Request) => {
     const serviceChargeRefunded = Number(cancellation.service_charge_refunded_amount || 0);
     const conservedAmount = originalServiceCharge - serviceChargeRefunded;
 
+    // La penalizacion se factura en el mismo comprobante, dividida: lo de la
+    // plataforma directo y lo de la agencia a cuenta de terceros (contador,
+    // 30-oct-2026). Se valida con `> 0` y no con el signo del total para que
+    // un importe negativo suelto no cuele un concepto.
+    const penalizacionPlataforma = Math.max(0, Number(cancellation.amount_to_platform || 0));
+    const penalizacionAgencia = Math.max(0, Number(cancellation.amount_to_agency || 0));
+
     // If nothing was retained, no replacement CFDI needed
-    if (conservedAmount <= 0) {
+    if (conservedAmount <= 0 && penalizacionPlataforma <= 0 && penalizacionAgencia <= 0) {
       return new Response(
-        JSON.stringify({ success: true, message: "No service charge retained — no replacement CFDI needed" }),
+        JSON.stringify({ success: true, message: "Nothing retained (service charge or penalty) — no replacement CFDI needed" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -331,21 +362,45 @@ Deno.serve(async (req: Request) => {
     const tourName = (booking.tours as unknown as { name?: string } | null)?.name || "";
     const bookingRef = booking.booking_code || booking_id;
 
-    // Build CFDI: single concept for the retained service charge
-    // This is a direct income CFDI (no tercero/agency pass-through)
-    const r6 = (n: number) => Math.round(n * 1000000) / 1000000;
-    const subtotalBruto = r6(conservedAmount / 1.16);
-    const iva = Math.round(conservedAmount * 16 / 116 * 100) / 100;
-    const subtotal = Math.round((conservedAmount - iva) * 100) / 100;
-    const total = conservedAmount;
+    // El cargo por servicio retenido y la parte de la plataforma de la
+    // penalizacion son ingreso 100% de ToursRed: SIN tercero. La parte de la
+    // agencia lleva a la agencia como tercero (ingreso de ella, no nuestro).
+    const agency = booking.agencies as unknown as { rfc?: string | null; razon_social?: string | null; regimen_fiscal?: string | null; postal_code?: string | null } | null;
+    const necesitaTercero = penalizacionAgencia > 0 && !!agency?.rfc && agency.rfc !== receptorRfc;
+    if (necesitaTercero && (!agency?.regimen_fiscal || !agency?.postal_code)) {
+      return new Response(
+        JSON.stringify({
+          error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const terceroAgencia: TerceroCfdi | null = necesitaTercero && agency?.rfc && agency.regimen_fiscal && agency.postal_code
+      ? {
+          rfc: agency.rfc,
+          nombre: agency.razon_social || "Agencia",
+          regimen_fiscal: agency.regimen_fiscal,
+          domicilio_fiscal: agency.postal_code,
+        }
+      : null;
 
-    const conceptos: CfdiConcepto[] = [{
-      clave_prod_serv: "81141600",
-      cantidad: 1,
-      clave_unidad: "E48",
-      descripcion: `Cargo por servicio de plataforma - Reserva ${bookingRef} (cancelada)${tourName ? ` - ${tourName}` : ""}`,
-      valor_unitario: subtotalBruto,
-    }];
+    const { conceptos, subtotal, iva, total } = conceptosDeCancelacion({
+      cargoRetenido: Math.max(0, conservedAmount),
+      penalizacionPlataforma,
+      penalizacionAgencia,
+      tercero: terceroAgencia,
+      // El snapshot de la reserva, no la config viva del tour: lo que se cobro
+      // se factura con el tratamiento con que se cobro.
+      taxTreatment: ((booking as { tax_treatment?: TaxTreatment | null }).tax_treatment ?? "taxable_16"),
+      exemptRatio: Number((booking as { exempt_ratio?: number | string | null }).exempt_ratio ?? 0),
+      referencia: `Reserva ${bookingRef} (cancelada)${tourName ? ` - ${tourName}` : ""}`,
+    });
+    if (conceptos.length === 0 || total <= 0) {
+      return new Response(
+        JSON.stringify({ success: true, message: "Nothing to invoice after rounding — no replacement CFDI needed" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const cfdiRequest: CfdiRequest = {
       tipo_de_comprobante: "I",

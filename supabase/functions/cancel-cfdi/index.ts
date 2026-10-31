@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js@2.112.4/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
+import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -145,7 +146,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: cfdi, error: cfdiError } = await supabase
       .from("cfdi_invoices")
-      .select("id, pac_provider, pac_invoice_id, status")
+      .select("id, pac_provider, pac_invoice_id, status, booking_id")
       .eq("id", cfdi_invoice_id)
       .maybeSingle();
 
@@ -251,6 +252,26 @@ Deno.serve(async (req: Request) => {
           ...(cancellation_id ? { cancellation_id } : {}),
         })
         .eq("id", cfdi_invoice_id);
+
+      // Motivo 03 = la operacion no se llevo a cabo. Lo que ToursRed y la agencia
+      // SI conservan (cargo por servicio, penalizacion) se vuelve a facturar en un
+      // CFDI nuevo. Esto solo ocurria por el webhook de FacturAPI, que llega
+      // cuando el SAT responde DESPUES; si responde en el acto (el caso comun) el
+      // CFDI nuevo nunca se pedia. Con motivo 01 (sustitucion) no: ese flujo ya
+      // trae su propio sustituto. Idempotente por cancelacion.
+      if (motivo === "03" && cancellation_id && cfdi.booking_id) {
+        EdgeRuntime.waitUntil(
+          supabase.functions.invoke("generate-cancellation-commission-cfdi", {
+            body: {
+              booking_id: cfdi.booking_id,
+              cancellation_id,
+              replaces_cfdi_invoice_id: cfdi_invoice_id,
+            },
+          })
+            .then((r: unknown) => vigilarResultado(r, "cancel-cfdi -> generate-cancellation-commission-cfdi", { cfdi_invoice_id, cancellation_id }))
+            .catch((e: unknown) => registrarFallo("cancel-cfdi -> generate-cancellation-commission-cfdi", e, { cfdi_invoice_id, cancellation_id })),
+        );
+      }
 
       return new Response(
         JSON.stringify({ success: true, cancellation_id: cancellationRecord.id, cfdi_status: "cancelled" }),
