@@ -101,9 +101,9 @@ export async function tipoDeMapaEfectivo(
   cliente: Cliente,
   tourId: string,
   slotId?: string | null,
-): Promise<{ tipo: string | null; capacidadDelHorario: number | null; error: boolean }> {
+): Promise<{ tipo: string | null; capacidadDelHorario: number | null; propio: boolean; error: boolean }> {
   const { data: tour, error: errTour } = await cliente.from('tours').select('vehicle_map_type').eq('id', tourId).maybeSingle();
-  if (errTour) return { tipo: null, capacidadDelHorario: null, error: true };
+  if (errTour) return { tipo: null, capacidadDelHorario: null, propio: false, error: true };
   let mapaDelHorario: string | null = null;
   let capacidadDelHorario: number | null = null;
   if (slotId) {
@@ -113,11 +113,17 @@ export async function tipoDeMapaEfectivo(
       .eq('id', slotId)
       .eq('tour_id', tourId)
       .maybeSingle();
-    if (errSlot) return { tipo: null, capacidadDelHorario: null, error: true };
+    if (errSlot) return { tipo: null, capacidadDelHorario: null, propio: false, error: true };
     mapaDelHorario = (slot?.vehicle_map_type as string | null | undefined) ?? null;
     capacidadDelHorario = typeof slot?.capacity === 'number' ? slot.capacity : null;
   }
-  return { tipo: mapaEfectivo(mapaDelHorario, tour?.vehicle_map_type as string | null | undefined), capacidadDelHorario, error: false };
+  // `propio`: el horario trae su vehiculo (si no, hereda el del tour). Lo necesita el selector para saber si los bloqueos generales aplican.
+  return {
+    tipo: mapaEfectivo(mapaDelHorario, tour?.vehicle_map_type as string | null | undefined),
+    capacidadDelHorario,
+    propio: !!mapaDelHorario,
+    error: false,
+  };
 }
 
 export async function cargarLayoutDeMapa(cliente: Cliente, tipo: string): Promise<VehicleSeatLayout | null> {

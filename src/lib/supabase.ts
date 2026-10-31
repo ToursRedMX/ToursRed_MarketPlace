@@ -1373,7 +1373,7 @@ const BOOKING_SELECT_FIELDS = `
   toursred_cash_used, points_used, points_earned, has_pending_reschedule, reschedule_response,
   reschedule_responded_at, has_pending_slot_reschedule, slot_reschedule_response,
   slot_reschedule_responded_at, selected_date, selected_time, slot_id, selected_seats,
-  previous_selected_seats, needs_seat_reselection, discount_amount, discount_code_id,
+  previous_selected_seats, needs_seat_reselection, seat_reselection_reason, discount_amount, discount_code_id,
   travel_insurance_included, travel_insurance_cost, insurance_days,
   has_payment_plan, payment_plan_total, payment_plan_paid, payment_plan_status,
   discount_codes:discount_code_id(code, discount_type, discount_value), created_at, updated_at,

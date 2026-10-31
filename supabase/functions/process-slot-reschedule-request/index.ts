@@ -209,10 +209,17 @@ Deno.serve(async (req: Request) => {
       const finalCapacity = new_capacity ? Number(new_capacity) : targetSlot.capacity;
 
       const updatePayload: Record<string, unknown> = { capacity: finalCapacity, status: "activo" };
-      // El vehiculo nuevo es de ESTE horario, no del tour: antes se escribia en `tours` y cambiaba el mapa de TODAS las salidas.
-      // Va en el mismo UPDATE que la capacidad para que el trigger que valida capacidad <= asientos vea los dos valores juntos.
+      // El vehiculo nuevo es de ESTE horario, no del tour: antes se escribia en `tours` y cambiaba el mapa de TODAS las salidas. Pasa por el
+      // nucleo del cambio de vehiculo, que valida la capacidad contra el vehiculo, suelta los asientos de la salida (los numeros del vehiculo
+      // viejo ya no significan lo mismo) y avisa a quienes ya tenian reserva en ella. Solo cambia la salida destino.
       if (new_vehicle_map_type) {
-        updatePayload.vehicle_map_type = new_vehicle_map_type;
+        const { error: vehicleError } = await adminClient.rpc("slot_vehicle_change_core", {
+          p_tour_id: tour_id,
+          p_slot_ids: [target_slot_id],
+          p_vehicle_map_type: new_vehicle_map_type,
+          p_capacity: finalCapacity,
+        });
+        if (vehicleError) throw vehicleError;
       }
 
       const { error: updateCapacityError } = await adminClient

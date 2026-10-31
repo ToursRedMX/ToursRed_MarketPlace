@@ -387,6 +387,7 @@ const TravelerBookings: React.FC = () => {
     slotId: string;
     travelersCount: number;
     previousSeats: number[];
+    reason?: string | null;
     tourName: string;
     newDate: string;
     newTime: string;
@@ -3096,7 +3097,9 @@ const TravelerBookings: React.FC = () => {
                         <div className="flex-1">
                           <p className="font-semibold text-amber-900 text-sm">Debes seleccionar nuevos asientos</p>
                           <p className="text-xs text-amber-800 mt-1 mb-3">
-                            Tus asientos anteriores ({(booking.previous_selected_seats || []).sort((a: number, b: number) => a - b).join(', ')}) ya no estan disponibles en el nuevo horario. Por favor elige nuevos asientos.
+                            {booking.seat_reselection_reason === 'vehicle_change'
+                              ? 'Por temas de logistica, la agencia cambio el transporte de tu salida. Por favor elige de nuevo tus asientos en el nuevo vehiculo.'
+                              : `Tus asientos anteriores (${[...(booking.previous_selected_seats || [])].sort((a: number, b: number) => a - b).join(', ')}) ya no estan disponibles en el nuevo horario. Por favor elige nuevos asientos.`}
                           </p>
                           <button
                             onClick={() => {
@@ -3107,6 +3110,7 @@ const TravelerBookings: React.FC = () => {
                                 slotId: booking.slot_id || '',
                                 travelersCount: booking.travelers_count || 1,
                                 previousSeats: booking.previous_selected_seats || [],
+                                reason: booking.seat_reselection_reason,
                                 tourName: booking.tours?.name || '',
                                 newDate: booking.selected_date || '',
                                 newTime: booking.selected_time || '',
@@ -4681,6 +4685,7 @@ const TravelerBookings: React.FC = () => {
           slotId={seatReselectionModal.slotId}
           travelersCount={seatReselectionModal.travelersCount}
           previousSeats={seatReselectionModal.previousSeats}
+          reason={seatReselectionModal.reason}
           tourName={seatReselectionModal.tourName}
           newDate={seatReselectionModal.newDate}
           newTime={seatReselectionModal.newTime}

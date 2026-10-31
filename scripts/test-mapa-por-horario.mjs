@@ -107,7 +107,7 @@ prueba('la lectura del mapa del horario filtra por tour Y horario (un horario aj
 const responder = sinComentarios(leer('supabase/functions/respond-to-slot-reschedule/index.ts'));
 const solicitar = sinComentarios(leer('supabase/functions/process-slot-reschedule-request/index.ts'));
 prueba('al aceptar una reprogramacion el mapa es el del horario DESTINO, en las dos ramas', () => {
-  assert.equal((responder.match(/rpc\("effective_vehicle_map_type"/g) || []).length, 3, 'una en handleSeatAssignment y una por rama');
+  assert.equal((responder.match(/rpc\("effective_vehicle_map_type"/g) || []).length, 5, 'una en handleSeatAssignment, una por rama y dos (origen y destino) en vehiculoDistinto');
   assert.match(responder, /p_slot_id: altSlot\.id/);
   assert.match(responder, /p_slot_id: targetSlot\.id/);
   assert.doesNotMatch(responder, /\.from\("tours"\)\s*\.select\("vehicle_map_type"\)/);
@@ -116,9 +116,10 @@ prueba('los asientos que se conservan al cambiar de horario tienen que existir e
   assert.match(responder, /!occupiedNumbers\.has\(n\) && \(!numerosDelMapa \|\| numerosDelMapa\.has\(n\)\)/);
   assert.match(responder, /!\["driver", "wc"\]\.includes\(a\.type \?\? "normal"\)/);
 });
-prueba('el vehiculo nuevo de una reprogramacion se escribe en el HORARIO, no en el tour (cambiaba todas las salidas)', () => {
-  assert.match(solicitar, /updatePayload\.vehicle_map_type = new_vehicle_map_type/);
+prueba('el vehiculo nuevo de una reprogramacion se aplica SOLO al horario destino y por el nucleo (antes se escribia en tours y cambiaba todas las salidas)', () => {
+  assert.match(solicitar, /rpc\("slot_vehicle_change_core", \{\s+p_tour_id: tour_id,\s+p_slot_ids: \[target_slot_id\],\s+p_vehicle_map_type: new_vehicle_map_type,\s+p_capacity: finalCapacity,/);
   assert.doesNotMatch(solicitar, /\.from\("tours"\)\s*\.update\(\{ vehicle_map_type/);
+  assert.doesNotMatch(solicitar, /updatePayload\.vehicle_map_type/, 'el UPDATE directo no suelta los asientos ni avisa a los viajeros');
 });
 
 // ── D. La migracion ────────────────────────────────────────────────────────
@@ -183,15 +184,12 @@ prueba('no se guarda un tour con cupos mayores que su vehiculo (excepto traslado
   assert.match(tours, /if \(evaluacion\.estado === 'excede'\) throw new Error\(evaluacion\.mensaje\);/);
 });
 const panel = sinComentarios(leer('src/components/receptivo/SlotDetailPanel.tsx'));
-prueba('el editor de vehiculo por horario guarda vehiculo y cupos en el MISMO update', () => {
-  assert.match(panel, /\.update\(\{ vehicle_map_type: nuevoTipo, capacity: cupos, updated_at: new Date\(\)\.toISOString\(\) \}\)/);
-  assert.match(panel, /\.from\('tour_slots'\)\s*\.update\(\{ vehicle_map_type: nuevoTipo/);
-});
-prueba('antes de cambiar el vehiculo se valida: cupos > 0, no bajar de lo reservado, capacidad <= asientos y asientos tomados que no existirian', () => {
-  assert.match(panel, /cupos < \(slot\.booked_count \|\| 0\)/);
-  assert.match(panel, /evaluarCapacidad\(cupos, asientos\)/);
-  assert.match(panel, /mayor && mayor > asientos/);
-  assert.match(panel, /\.in\('status', \['reservado_online', 'bloqueado_agencia'\]\)/);
+prueba('el panel NO cambia el vehiculo con un UPDATE directo: abre el modal de cambio de vehiculo (que suelta asientos y avisa)', () => {
+  assert.doesNotMatch(panel, /\.update\(\{[^}]*vehicle_map_type/, 'un UPDATE directo dejaria reservas con numeros de asiento del vehiculo viejo');
+  assert.match(panel, /import SlotVehicleChangeModal from '\.\.\/seats\/SlotVehicleChangeModal';/);
+  assert.match(panel, /onClick=\{\(\) => setVehicleModalSlot\(slot\.id\)\}/);
+  assert.match(panel, /<SlotVehicleChangeModal\s+tourId=\{tourId\}/);
+  assert.match(panel, /initialSlotId=\{vehicleModalSlot\}/);
 });
 prueba('editar solo la capacidad de un horario tambien respeta el tope del vehiculo', () => {
   assert.match(panel, /evaluarCapacidad\(cap, asientosDelVehiculo\)/);
