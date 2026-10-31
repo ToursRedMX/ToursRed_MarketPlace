@@ -153,6 +153,9 @@ jobs:
       - name: Verify shared CFDI and step-up authorization
         run: node scripts/test-shared-authorization.mjs
 
+      - name: Verify cancellation CFDI (motivo 03), 603 accounting and definer functions closed to anon
+        run: node scripts/test-cancelacion-603-cfdi-anon.mjs
+
       - name: Verify x-correlation-id reaches PostgREST but not Edge Functions
         run: node scripts/test-correlacion-front.mjs
 

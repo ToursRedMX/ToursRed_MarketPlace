@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import * as Sentry from "npm:@sentry/deno@9.47.1";
 import { authorizeCfdiRequest } from "../_shared/cfdiAuth.ts";
 import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
+import { conceptosDeCancelacion, type TerceroCfdi } from "../_shared/conceptosCfdiCancelacion.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +27,8 @@ interface CfdiConcepto {
   clave_unidad: string;
   descripcion: string;
   valor_unitario: number;
+  /** Solo la parte de la agencia de la penalizacion lleva tercero. */
+  tercero?: TerceroCfdi | null;
 }
 
 interface CfdiReceptor {
@@ -84,6 +87,16 @@ async function facturapiStamp(
         taxes: [{ type: "IVA", rate: 0.16 }],
       },
       quantity: c.cantidad,
+      ...(c.tercero && c.tercero.domicilio_fiscal
+        ? {
+            third_party: {
+              tax_id: c.tercero.rfc,
+              legal_name: c.tercero.nombre,
+              tax_system: c.tercero.regimen_fiscal,
+              zip: c.tercero.domicilio_fiscal,
+            },
+          }
+        : {}),
     })),
   };
 
@@ -125,11 +138,16 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { booking_id, cancellation_id, replaces_cfdi_invoice_id } = await req.json();
+    const { booking_id, cancellation_id, partial_cancellation_id, replaces_cfdi_invoice_id } = await req.json();
 
-    if (!booking_id || !cancellation_id) {
+    // Cancelacion total (cancellation_id) o parcial (partial_cancellation_id).
+    // La parcial no cancela el CFDI de la reserva ni cobra cargo por servicio:
+    // aqui solo se factura la penalizacion que retuvo. El sustituto de la parte
+    // que sigue viva lo emite substitute-cfdi-for-partial-cancellation.
+    const esParcial = !cancellation_id && !!partial_cancellation_id;
+    if (!booking_id || (!cancellation_id && !partial_cancellation_id)) {
       return new Response(
-        JSON.stringify({ error: "booking_id and cancellation_id are required" }),
+        JSON.stringify({ error: "booking_id and cancellation_id (or partial_cancellation_id) are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -138,7 +156,7 @@ Deno.serve(async (req: Request) => {
     // porque el guard necesita saber de quien es la reserva.
     const { data: booking } = await supabase
       .from("bookings")
-      .select("booking_code, user_id, tour_id, tours(name)")
+      .select("booking_code, user_id, tour_id, tours(name), agencies(id, rfc, razon_social, regimen_fiscal, postal_code)")
       .eq("id", booking_id)
       .maybeSingle();
 
@@ -175,7 +193,7 @@ Deno.serve(async (req: Request) => {
     const { data: existing } = await supabase
       .from("cfdi_invoices")
       .select("id, status")
-      .eq("cancellation_id", cancellation_id)
+      .eq(esParcial ? "booking_partial_cancellation_id" : "cancellation_id", esParcial ? partial_cancellation_id : cancellation_id)
       .eq("invoice_type", "cancellation_commission")
       .in("status", ["stamped", "pending"])
       .maybeSingle();
@@ -187,12 +205,19 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Load the cancellation record to get the exact amounts
-    const { data: cancellation, error: cancellationError } = await supabase
-      .from("booking_cancellations")
-      .select("booking_id, original_service_charge, service_charge_refunded_amount, refund_amount_to_traveler, total_principal_paid")
-      .eq("id", cancellation_id)
-      .maybeSingle();
+    // Load the cancellation record to get the exact amounts. En la parcial no hay
+    // cargo por servicio retenido: solo la penalizacion.
+    const { data: cancellation, error: cancellationError } = esParcial
+      ? await supabase
+        .from("booking_partial_cancellations")
+        .select("booking_id, amount_to_agency, amount_to_platform")
+        .eq("id", partial_cancellation_id)
+        .maybeSingle()
+      : await supabase
+        .from("booking_cancellations")
+        .select("booking_id, original_service_charge, service_charge_refunded_amount, refund_amount_to_traveler, total_principal_paid, amount_to_agency, amount_to_platform")
+        .eq("id", cancellation_id)
+        .maybeSingle();
 
     if (cancellationError || !cancellation) {
       return new Response(
@@ -206,7 +231,7 @@ Deno.serve(async (req: Request) => {
     // receptor del comprobante seria el viajero de la otra.
     if (cancellation.booking_id !== booking_id) {
       console.warn(
-        `CFDI de cancelacion denegado: la cancelacion ${cancellation_id} pertenece a la reserva ${cancellation.booking_id}, no a ${booking_id}`
+        `CFDI de cancelacion denegado: la cancelacion ${esParcial ? partial_cancellation_id : cancellation_id} pertenece a la reserva ${cancellation.booking_id}, no a ${booking_id}`
       );
       return new Response(
         JSON.stringify({ error: "La cancelacion no pertenece a esta reserva" }),
@@ -230,9 +255,15 @@ Deno.serve(async (req: Request) => {
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (orig.status !== "stamped" || !orig.uuid_fiscal) {
+      // El original ya se cancelo ante el SAT (motivo 03) cuando se llega aqui:
+      // cancel-cfdi lo deja en `cancelled`, o en `cancellation_pending` mientras
+      // el SAT responde. Exigir `stamped` hacia que esta llamada fallara SIEMPRE
+      // con 400 y el CFDI nuevo nunca se emitiera (medido el 30-oct-2026: ningun
+      // `cancellation_commission` en toda la base). Lo que importa es que haya
+      // sido un CFDI real, con UUID.
+      if (!["stamped", "cancellation_pending", "cancelled"].includes(orig.status) || !orig.uuid_fiscal) {
         return new Response(
-          JSON.stringify({ error: `Solo se puede sustituir un CFDI timbrado (estado actual: ${orig.status})` }),
+          JSON.stringify({ error: `Solo se puede reemplazar un CFDI timbrado o ya cancelado (estado actual: ${orig.status})` }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -248,14 +279,23 @@ Deno.serve(async (req: Request) => {
     }
 
     // Calculate the retained service charge using the explicit field
-    const originalServiceCharge = Number(cancellation.original_service_charge || 0);
-    const serviceChargeRefunded = Number(cancellation.service_charge_refunded_amount || 0);
+    // La parcial no trae estas dos columnas: undefined -> 0, sin cargo retenido.
+    const cargos = cancellation as { original_service_charge?: number | string | null; service_charge_refunded_amount?: number | string | null };
+    const originalServiceCharge = Number(cargos.original_service_charge || 0);
+    const serviceChargeRefunded = Number(cargos.service_charge_refunded_amount || 0);
     const conservedAmount = originalServiceCharge - serviceChargeRefunded;
 
+    // La penalizacion se factura en el mismo comprobante, dividida: lo de la
+    // plataforma directo y lo de la agencia a cuenta de terceros (contador,
+    // 30-oct-2026). Se valida con `> 0` y no con el signo del total para que
+    // un importe negativo suelto no cuele un concepto.
+    const penalizacionPlataforma = Math.max(0, Number(cancellation.amount_to_platform || 0));
+    const penalizacionAgencia = Math.max(0, Number(cancellation.amount_to_agency || 0));
+
     // If nothing was retained, no replacement CFDI needed
-    if (conservedAmount <= 0) {
+    if (conservedAmount <= 0 && penalizacionPlataforma <= 0 && penalizacionAgencia <= 0) {
       return new Response(
-        JSON.stringify({ success: true, message: "No service charge retained — no replacement CFDI needed" }),
+        JSON.stringify({ success: true, message: "Nothing retained (service charge or penalty) — no replacement CFDI needed" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -331,21 +371,41 @@ Deno.serve(async (req: Request) => {
     const tourName = (booking.tours as unknown as { name?: string } | null)?.name || "";
     const bookingRef = booking.booking_code || booking_id;
 
-    // Build CFDI: single concept for the retained service charge
-    // This is a direct income CFDI (no tercero/agency pass-through)
-    const r6 = (n: number) => Math.round(n * 1000000) / 1000000;
-    const subtotalBruto = r6(conservedAmount / 1.16);
-    const iva = Math.round(conservedAmount * 16 / 116 * 100) / 100;
-    const subtotal = Math.round((conservedAmount - iva) * 100) / 100;
-    const total = conservedAmount;
+    // El cargo por servicio retenido y la parte de la plataforma de la
+    // penalizacion son ingreso 100% de ToursRed: SIN tercero. La parte de la
+    // agencia lleva a la agencia como tercero (ingreso de ella, no nuestro).
+    const agency = booking.agencies as unknown as { rfc?: string | null; razon_social?: string | null; regimen_fiscal?: string | null; postal_code?: string | null } | null;
+    const necesitaTercero = penalizacionAgencia > 0 && !!agency?.rfc && agency.rfc !== receptorRfc;
+    if (necesitaTercero && (!agency?.regimen_fiscal || !agency?.postal_code)) {
+      return new Response(
+        JSON.stringify({
+          error: "La agencia debe completar su régimen fiscal y código postal en su expediente antes de poder facturar a cuenta de terceros.",
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const terceroAgencia: TerceroCfdi | null = necesitaTercero && agency?.rfc && agency.regimen_fiscal && agency.postal_code
+      ? {
+          rfc: agency.rfc,
+          nombre: agency.razon_social || "Agencia",
+          regimen_fiscal: agency.regimen_fiscal,
+          domicilio_fiscal: agency.postal_code,
+        }
+      : null;
 
-    const conceptos: CfdiConcepto[] = [{
-      clave_prod_serv: "81141600",
-      cantidad: 1,
-      clave_unidad: "E48",
-      descripcion: `Cargo por servicio de plataforma - Reserva ${bookingRef} (cancelada)${tourName ? ` - ${tourName}` : ""}`,
-      valor_unitario: subtotalBruto,
-    }];
+    const { conceptos, subtotal, iva, total } = conceptosDeCancelacion({
+      cargoRetenido: Math.max(0, conservedAmount),
+      penalizacionPlataforma,
+      penalizacionAgencia,
+      tercero: terceroAgencia,
+      referencia: `Reserva ${bookingRef} (cancelada)${tourName ? ` - ${tourName}` : ""}`,
+    });
+    if (conceptos.length === 0 || total <= 0) {
+      return new Response(
+        JSON.stringify({ success: true, message: "Nothing to invoice after rounding — no replacement CFDI needed" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const cfdiRequest: CfdiRequest = {
       tipo_de_comprobante: "I",
@@ -367,7 +427,8 @@ Deno.serve(async (req: Request) => {
       .insert({
         invoice_type: "cancellation_commission",
         booking_id,
-        cancellation_id,
+        cancellation_id: esParcial ? null : cancellation_id,
+        booking_partial_cancellation_id: esParcial ? partial_cancellation_id : null,
         replaces_cfdi_invoice_id: replaces_cfdi_invoice_id || null,
         pac_provider: settings.pac_provider,
         serie: settings.cfdi_serie_booking || "A",

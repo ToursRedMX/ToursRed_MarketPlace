@@ -12,7 +12,7 @@
 // la autenticidad es la firma `X-Twilio-Signature` sobre la URL publica
 // construida desde SUPABASE_URL (nunca desde el Host que llega) y TODOS los
 // parametros; los parametros duplicados se rechazan.
-import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.117.2';
 import { corsHeaders, ORIGEN_PRINCIPAL } from '../_shared/cors.ts';
 import { verifyTwilioSignature } from '../_shared/mensajeria/twilioWebhook.ts';
 import {
@@ -29,7 +29,10 @@ const twiml = (cors: Record<string, string>) =>
 
 interface Adjunto { id: string; url: string; tipo: string }
 
-type Cliente = ReturnType<typeof createClient>;
+// Exactamente lo que devuelve createClient(url, key). `ReturnType<typeof createClient>` NO: sin argumentos de tipo usa los valores por
+// defecto (Database = unknown) y las tablas se resuelven a `never`, lo que daba 6 errores de tipos en este archivo.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Cliente = SupabaseClient<any, 'public', 'public', any, any>;
 
 /** Baja UN adjunto de Twilio y lo guarda en el bucket privado. Nunca lanza: deja el motivo en la fila. */
 async function guardarAdjunto(client: Cliente, adj: Adjunto, telefono: string, mensajeId: string, accountSid: string, authToken: string) {

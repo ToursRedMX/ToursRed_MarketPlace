@@ -5,7 +5,7 @@ import { opcionesConContexto, sinUserAgentDeNavegador } from "../_shared/context
 import { politicaDelTour, salidaDelTour, type TourConPolitica } from "../_shared/politicaCancelacion.ts";
 import { mensajeDeError } from "../_shared/errores.ts";
 import { enforceReauth } from "../_shared/reauth.ts";
-import { registrarFallo } from "../_shared/falloSilencioso.ts";
+import { registrarFallo, vigilarResultado } from "../_shared/falloSilencioso.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -531,6 +531,20 @@ Deno.serve(async (req: Request) => {
         body: { booking_id: bookingId, partial_cancellation_id: partialCancellation.id },
       }).catch((err) => console.error("Error substituting CFDIs (no crítico):", err))
     );
+
+    // 11. La penalizacion retenida se factura en su propio CFDI (contador, 30-oct-2026):
+    // la parte de la plataforma sin tercero y la de la agencia a cuenta de terceros.
+    // El sustituto de arriba solo recalcula la parte del tour que sigue viva; nunca
+    // leyo la penalizacion, asi que sin esto ese dinero no salia en ningun CFDI.
+    if (policy.amountToAgency > 0 || policy.amountToPlatform > 0) {
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke("generate-cancellation-commission-cfdi", {
+          body: { booking_id: bookingId, partial_cancellation_id: partialCancellation.id },
+        })
+          .then((r: unknown) => vigilarResultado(r, "process-partial-cancellation -> generate-cancellation-commission-cfdi", { partial_cancellation_id: partialCancellation.id }))
+          .catch((e: unknown) => registrarFallo("process-partial-cancellation -> generate-cancellation-commission-cfdi", e, { partial_cancellation_id: partialCancellation.id }))
+      );
+    }
 
     return ok({
       success: true,
